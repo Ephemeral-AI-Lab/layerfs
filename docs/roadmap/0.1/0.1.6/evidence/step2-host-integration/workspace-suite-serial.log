@@ -1,0 +1,1092 @@
+warning: fields `id` and `size` are never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:12:9
+   |
+11 | pub(super) struct Lease {
+   |                   ----- fields in this struct
+12 |     pub id: u64,
+   |         ^^
+13 |     pub size: u64,
+   |         ^^^^
+   |
+   = note: `Lease` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `writeback_order` is never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:19:16
+   |
+16 | pub(super) struct State {
+   |                   ----- field in this struct
+...
+19 |     pub(super) writeback_order: AsyncMutex<()>,
+   |                ^^^^^^^^^^^^^^^
+   |
+   = note: `State` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: method `writeback_owned` is never used
+  --> crates/layerfs-fuse/src/host_coherence.rs:56:25
+   |
+55 | impl HostClient {
+   | --------------- method in this implementation
+56 |     pub(super) async fn writeback_owned(
+   |                         ^^^^^^^^^^^^^^^
+
+warning: `layerfs-fuse` (lib) generated 3 warnings
+warning: fields `disk_bytes` and `files` are never read
+  --> crates/layerfs-workspace/src/candidate_capacity.rs:27:16
+   |
+24 | pub(crate) struct CandidateCapacity {
+   |                   ----------------- fields in this struct
+...
+27 |     pub(crate) disk_bytes: u64,
+   |                ^^^^^^^^^^
+28 |     pub(crate) files: usize,
+   |                ^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: method `placement` is never used
+  --> crates/layerfs-workspace/src/candidate_capacity.rs:83:19
+   |
+30 | impl CandidateCapacity {
+   | ---------------------- method in this implementation
+...
+83 |     pub(crate) fn placement(&self) -> std::path::PathBuf {
+   |                   ^^^^^^^^^
+
+warning: associated function `empty` is never used
+  --> crates/layerfs-workspace/src/snapshot_candidate.rs:32:19
+   |
+31 | impl PublishedCorrespondence {
+   | ---------------------------- associated function in this implementation
+32 |     pub(crate) fn empty(
+   |                   ^^^^^
+
+warning: field `full_comparisons` is never read
+   --> crates/layerfs-workspace/src/snapshot_candidate.rs:145:9
+    |
+136 | pub(crate) struct SnapshotCandidateDiagnostics {
+    |                   ---------------------------- field in this struct
+...
+145 |     pub full_comparisons: u64,
+    |         ^^^^^^^^^^^^^^^^
+    |
+    = note: `SnapshotCandidateDiagnostics` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: field `diagnostics` is never read
+  --> crates/layerfs-workspace/src/commit_attempt.rs:23:16
+   |
+21 | pub(crate) struct Completion {
+   |                   ---------- field in this struct
+22 |     pub(crate) receipt: WorkspacePublicationReceipt,
+23 |     pub(crate) diagnostics: Option<SnapshotCandidateDiagnostics>,
+   |                ^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> crates/layerfs-workspace/src/commit_attempt.rs:55:19
+   |
+54 | impl CommitCoordinator {
+   | ---------------------- associated function in this implementation
+55 |     pub(crate) fn new(
+   |                   ^^^
+
+warning: associated function `new` is never used
+  --> crates/layerfs-workspace/src/correspondence.rs:67:19
+   |
+66 | impl OriginSequence {
+   | ------------------- associated function in this implementation
+67 |     pub(crate) fn new(workspace: [u8; 16]) -> Self {
+   |                   ^^^
+
+warning: field `old_root` is never read
+   --> crates/layerfs-workspace/src/correspondence.rs:521:9
+    |
+518 | pub(crate) struct Plan {
+    |                   ---- field in this struct
+...
+521 |     pub old_root: ObjectId,
+    |         ^^^^^^^^
+    |
+    = note: `Plan` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: constant `PAGE` is never used
+  --> crates/layerfs-workspace/src/host_directories.rs:13:7
+   |
+13 | const PAGE: usize = 128;
+   |       ^^^^
+
+warning: type alias `Page` is never used
+  --> crates/layerfs-workspace/src/host_directories.rs:14:6
+   |
+14 | type Page = Vec<(u64, Attr, Vec<u8>)>;
+   |      ^^^^
+
+warning: method `cookie_rows` is never used
+   --> crates/layerfs-workspace/src/host_directories.rs:115:8
+    |
+65  | impl Mutation<'_> {
+    | ----------------- method in this implementation
+...
+115 |     fn cookie_rows(
+    |        ^^^^^^^^^^^
+
+warning: method `directory_cookies` is never used
+   --> crates/layerfs-workspace/src/host_directories.rs:151:19
+    |
+150 | impl HostOverlay {
+    | ---------------- method in this implementation
+151 |     pub(crate) fn directory_cookies(&self, node: NodeId, after: u64, kernel: bool) -> Result<Page> {
+    |                   ^^^^^^^^^^^^^^^^^
+
+warning: fields `tree` and `reader` are never read
+  --> crates/layerfs-workspace/src/host_operations.rs:21:5
+   |
+20 | struct LeasedFile {
+   |        ---------- fields in this struct
+21 |     tree: crate::overlay_ranges::Tree,
+   |     ^^^^
+22 |     reader: layerfs_layerstack_store::SnapshotReader,
+   |     ^^^^^^
+
+warning: field `replay` is never read
+  --> crates/layerfs-workspace/src/host_operations.rs:42:5
+   |
+40 | pub(crate) struct HostOperations {
+   |                   -------------- field in this struct
+41 |     pub(crate) host: Arc<HostOverlay>,
+42 |     replay: Mutex<Option<([u8; 16], ReplayWindow)>>,
+   |     ^^^^^^
+
+warning: associated items `new`, `retain_read_lease`, `request`, `response`, and `dispatch` are never used
+   --> crates/layerfs-workspace/src/host_operations.rs:48:19
+    |
+47  | impl HostOperations {
+    | ------------------- associated items in this implementation
+48  |     pub(crate) fn new(host: Arc<HostOverlay>) -> Self {
+    |                   ^^^
+...
+146 |     pub(crate) fn retain_read_lease(
+    |                   ^^^^^^^^^^^^^^^^^
+...
+165 |     pub(crate) fn request(&self, bytes: &[u8]) -> PortResult<Vec<u8>> {
+    |                   ^^^^^^^
+...
+219 |     fn response(&self, operation: Operation<'_>, sequence: u64) -> PortResult<Vec<u8>> {
+    |        ^^^^^^^^
+...
+229 |     fn dispatch(&self, operation: Operation<'_>) -> Result<Vec<u8>> {
+    |        ^^^^^^^^
+
+warning: struct `DirectoryPage` is never constructed
+  --> crates/layerfs-workspace/src/host_overlay.rs:25:19
+   |
+25 | pub(crate) struct DirectoryPage {
+   |                   ^^^^^^^^^^^^^
+
+warning: enum `CapturedNode` is never used
+  --> crates/layerfs-workspace/src/host_overlay.rs:32:6
+   |
+32 | enum CapturedNode {
+   |      ^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+    --> crates/layerfs-workspace/src/host_overlay.rs:51:19
+     |
+50   | impl HostOverlay {
+     | ---------------- associated items in this implementation
+51   |     pub(crate) fn new(
+     |                   ^^^
+...
+146  |     pub(crate) fn attr(&self, node: NodeId) -> Result<Attr> {
+     |                   ^^^^
+...
+154  |     pub(crate) fn parent_of(&self, node: NodeId) -> Result<NodeId> {
+     |                   ^^^^^^^^^
+...
+262  |     pub(crate) fn lookup(&self, parent: NodeId, name: &[u8]) -> Result<Attr> {
+     |                   ^^^^^^
+...
+299  |     fn write_tree(&self, bytes: &[u8]) -> Result<Tree> {
+     |        ^^^^^^^^^^
+...
+306  |     fn spool_check(&self, added: u64) -> Result<()> {
+     |        ^^^^^^^^^^^
+...
+328  |     fn touch_parent(&self, m: &mut Mutation<'_>, parent: NodeId) -> Result<()> {
+     |        ^^^^^^^^^^^^
+...
+332  |     fn create(
+     |        ^^^^^^
+...
+344  |     fn create_in(
+     |        ^^^^^^^^^
+...
+379  |     pub(crate) fn create_file(&self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
+     |                   ^^^^^^^^^^^
+...
+389  |     pub(crate) fn create_file_open(&self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
+     |                   ^^^^^^^^^^^^^^^^
+...
+399  |     pub(crate) fn mkdir(&self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
+     |                   ^^^^^
+...
+409  |     pub(crate) fn symlink(&self, parent: NodeId, name: &[u8], target: &[u8]) -> Result<Attr> {
+     |                   ^^^^^^^
+...
+423  |     pub(crate) fn readlink(&self, node: NodeId) -> Result<Vec<u8>> {
+     |                   ^^^^^^^^
+...
+428  |     pub(crate) fn read_into(&self, node: NodeId, offset: u64, output: &mut [u8]) -> Result<usize> {
+     |                   ^^^^^^^^^
+...
+431  |     pub(crate) fn read_snapshot(
+     |                   ^^^^^^^^^^^^^
+...
+445  |     pub(crate) fn read_snapshot_path(
+     |                   ^^^^^^^^^^^^^^^^^^
+...
+530  |     pub(crate) fn write(&self, node: NodeId, offset: u64, bytes: &[u8]) -> Result<usize> {
+     |                   ^^^^^
+...
+562  |     pub(crate) fn append(&self, node: NodeId, bytes: &[u8]) -> Result<usize> {
+     |                   ^^^^^^
+...
+582  |     pub(crate) fn edit_many(
+     |                   ^^^^^^^^^
+...
+590  |     pub(crate) fn edit_many_snapshot(
+     |                   ^^^^^^^^^^^^^^^^^^
+...
+649  |     pub(crate) fn truncate(&self, node: NodeId, size: u64) -> Result<()> {
+     |                   ^^^^^^^^
+...
+660  |     pub(crate) fn chmod(&self, node: NodeId, mode: u32) -> Result<()> {
+     |                   ^^^^^
+...
+667  |     pub(crate) fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> Result<()> {
+     |                   ^^^^^^^^^
+...
+679  |     pub(crate) fn link(&self, node: NodeId, parent: NodeId, name: &[u8]) -> Result<Attr> {
+     |                   ^^^^
+...
+682  |     fn link_in(
+     |        ^^^^^^^
+...
+706  |     fn empty_directory(&self, snapshot: &Snapshot, node: NodeId) -> Result<bool> {
+     |        ^^^^^^^^^^^^^^^
+...
+744  |     fn retire_binding(
+     |        ^^^^^^^^^^^^^^
+...
+765  |     pub(crate) fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> Result<()> {
+     |                   ^^^^^^
+...
+781  |     pub(crate) fn rename(
+     |                   ^^^^^^
+...
+873  |     pub(crate) fn pin(&self, node: NodeId, truncate: bool) -> Result<()> {
+     |                   ^^^
+...
+876  |     pub(crate) fn pin_directory(&self, node: NodeId) -> Result<()> {
+     |                   ^^^^^^^^^^^^^
+...
+879  |     fn pin_kind(&self, node: NodeId, kind: Kind, truncate: bool) -> Result<()> {
+     |        ^^^^^^^^
+...
+916  |     pub(crate) fn directory_page(
+     |                   ^^^^^^^^^^^^^^
+...
+926  |     pub(super) fn directory_page_in(
+     |                   ^^^^^^^^^^^^^^^^^
+...
+973  |     pub(super) fn retain_kernel_in(&self, m: &mut Mutation<'_>, node: NodeId) -> Result<()> {
+     |                   ^^^^^^^^^^^^^^^^
+...
+1022 |     pub(crate) fn kernel_entry(
+     |                   ^^^^^^^^^^^^
+...
+1096 |     pub(crate) fn kernel_directory_page(
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+1116 |     pub(crate) fn kernel_forget(&self, node: NodeId, count: u64) -> Result<()> {
+     |                   ^^^^^^^^^^^^^
+...
+1120 |     pub(crate) fn kernel_forget_batch(&self, entries: &[(NodeId, u64)]) -> Result<()> {
+     |                   ^^^^^^^^^^^^^^^^^^^
+
+warning: associated items `start`, `start_with_admission`, `covered_sequence`, and `prepare_shutdown` are never used
+   --> crates/layerfs-workspace/src/host_runtime.rs:31:19
+    |
+30  | impl HostRuntime {
+    | ---------------- associated items in this implementation
+31  |     pub(crate) fn start(
+    |                   ^^^^^
+...
+40  |     fn start_with_admission(
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+136 |     pub(crate) fn covered_sequence(&self) -> Result<u64> {
+    |                   ^^^^^^^^^^^^^^^^
+...
+147 |     pub(crate) fn prepare_shutdown(&self) -> Result<()> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> crates/layerfs-workspace/src/host_sdk.rs:58:19
+   |
+57 | impl HostSdk {
+   | ------------ associated function in this implementation
+58 |     pub(crate) fn new(operations: Arc<HostOperations>) -> Self {
+   |                   ^^^
+
+warning: associated functions `temporary` and `from_index` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:205:19
+    |
+204 | impl Overlay {
+    | ------------ associated functions in this implementation
+205 |     pub(crate) fn temporary(directory: &Path, base_root: ObjectId, limits: Limits) -> Result<Self> {
+    |                   ^^^^^^^^^
+...
+210 |     pub(crate) fn from_index(index: Index, base_root: ObjectId) -> Result<Self> {
+    |                   ^^^^^^^^^^
+
+warning: methods `put_inode` and `put_binding` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:417:19
+    |
+361 | impl Mutation<'_> {
+    | ----------------- methods in this implementation
+...
+417 |     pub(crate) fn put_inode(&mut self, inode: NodeId, record: &[u8]) -> Result<()> {
+    |                   ^^^^^^^^^
+...
+537 |     pub(crate) fn put_binding(
+    |                   ^^^^^^^^^^^
+
+warning: fields `session`, `watermark`, `max_requests`, `max_bytes`, `reserved_bytes`, and `slots` are never read
+   --> crates/layerfs-workspace/src/overlay.rs:658:5
+    |
+657 | pub(crate) struct ReplayWindow {
+    |                   ------------ fields in this struct
+658 |     session: [u8; 16],
+    |     ^^^^^^^
+659 |     watermark: u64,
+    |     ^^^^^^^^^
+660 |     max_requests: usize,
+    |     ^^^^^^^^^^^^
+661 |     max_bytes: usize,
+    |     ^^^^^^^^^
+662 |     reserved_bytes: usize,
+    |     ^^^^^^^^^^^^^^
+663 |     slots: BTreeMap<u64, ReplaySlot>,
+    |     ^^^^^
+
+warning: fields `reserved`, `request_digest`, and `result` are never read
+   --> crates/layerfs-workspace/src/overlay.rs:667:5
+    |
+666 | struct ReplaySlot {
+    |        ---------- fields in this struct
+667 |     reserved: usize,
+    |     ^^^^^^^^
+668 |     request_digest: [u8; 32],
+    |     ^^^^^^^^^^^^^^
+669 |     result: Option<Arc<[u8]>>,
+    |     ^^^^^^
+
+warning: enum `ReplayAdmission` is never used
+   --> crates/layerfs-workspace/src/overlay.rs:672:17
+    |
+672 | pub(crate) enum ReplayAdmission {
+    |                 ^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `admit`, `finish`, and `acknowledge` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:679:19
+    |
+678 | impl ReplayWindow {
+    | ----------------- associated items in this implementation
+679 |     pub(crate) fn new(session: [u8; 16], max_requests: usize, max_bytes: usize) -> Result<Self> {
+    |                   ^^^
+...
+693 |     pub(crate) fn admit(
+    |                   ^^^^^
+...
+733 |     pub(crate) fn finish(&mut self, sequence: u64, result: Arc<[u8]>) -> Result<()> {
+    |                   ^^^^^^
+...
+745 |     pub(crate) fn acknowledge(&mut self, session: [u8; 16], through: u64) -> Result<()> {
+    |                   ^^^^^^^^^^^
+
+warning: constant `PAGE` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:12:7
+   |
+12 | const PAGE: u64 = 4096;
+   |       ^^^^
+
+warning: constant `CATALOG_PER_PAGE` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:13:7
+   |
+13 | const CATALOG_PER_PAGE: u64 = 256;
+   |       ^^^^^^^^^^^^^^^^
+
+warning: constant `MOVE` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:14:7
+   |
+14 | const MOVE: u64 = 64 * 1024;
+   |       ^^^^
+
+warning: constant `RECORD_BYTES` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:16:7
+   |
+16 | const RECORD_BYTES: usize = 8192; // Existing symlinks are <=4096; inode/range records are fixed.
+   |       ^^^^^^^^^^^^
+
+warning: function `mul` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:29:4
+   |
+29 | fn mul(a: u64, b: u64) -> io::Result<u64> {
+   |    ^^^
+
+warning: function `align` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:33:4
+   |
+33 | fn align(bytes: u64) -> io::Result<u64> {
+   |    ^^^^^
+
+warning: associated items `new`, `shared`, and `usage` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:84:19
+    |
+83  | impl HostAdmission {
+    | ------------------ associated items in this implementation
+84  |     pub(crate) fn new(scheduler: Scheduler, limits: HostLimits) -> io::Result<Arc<Self>> {
+    |                   ^^^
+...
+94  |     pub(crate) fn shared() -> io::Result<Arc<Self>> {
+    |                   ^^^^^^
+...
+111 |     pub(crate) fn usage(&self) -> Usage {
+    |                   ^^^^^
+
+warning: fields `index`, `payload`, and `ranges` are never read
+   --> crates/layerfs-workspace/src/overlay_budget.rs:118:9
+    |
+117 | pub(crate) struct Components {
+    |                   ---------- fields in this struct
+118 |     pub index: IndexLimits,
+    |         ^^^^^
+119 |     pub payload: PayloadLimits,
+    |         ^^^^^^^
+120 |     pub ranges: RangeLimits,
+    |         ^^^^^^
+    |
+    = note: `Components` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `index_limits` is never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:124:4
+    |
+124 | fn index_limits(bytes: u64, roots: usize) -> io::Result<IndexLimits> {
+    |    ^^^^^^^^^^^^
+
+warning: function `index_bytes` is never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:147:4
+    |
+147 | fn index_bytes(pages: u64) -> io::Result<u64> {
+    |    ^^^^^^^^^^^
+
+warning: function `components` is never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:150:4
+    |
+150 | fn components(policy: ResourcePolicy) -> io::Result<Components> {
+    |    ^^^^^^^^^^
+
+warning: struct `Resources` is never constructed
+   --> crates/layerfs-workspace/src/overlay_budget.rs:219:19
+    |
+219 | pub(crate) struct Resources {
+    |                   ^^^^^^^^^
+
+warning: variant `Read` is never constructed
+   --> crates/layerfs-workspace/src/overlay_budget.rs:242:5
+    |
+241 | pub(crate) enum Operation {
+    |                 --------- variant in this enum
+242 |     Read,
+    |     ^^^^
+    |
+    = note: `Operation` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `reserve`, `open`, `policy`, and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:282:8
+    |
+281 | impl Budget {
+    | ----------- associated items in this implementation
+282 |     fn reserve(policy: ResourcePolicy, host: Arc<HostAdmission>) -> io::Result<Arc<Self>> {
+    |        ^^^^^^^
+...
+306 |     pub(crate) fn open(
+    |                   ^^^^
+...
+350 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+353 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: struct `HeaderCensus` is never constructed
+  --> crates/layerfs-workspace/src/overlay_index.rs:51:19
+   |
+51 | pub(crate) struct HeaderCensus {
+   |                   ^^^^^^^^^^^^
+   |
+   = note: `HeaderCensus` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: struct `Census` is never constructed
+  --> crates/layerfs-workspace/src/overlay_index.rs:64:19
+   |
+64 | pub(crate) struct Census {
+   |                   ^^^^^^
+   |
+   = note: `Census` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: fields `data_pages`, `catalog_bytes`, `relocated_pages`, `root_leases`, `page_reads`, and `page_writes` are never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:80:9
+   |
+77 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+80 |     pub data_pages: u64,
+   |         ^^^^^^^^^^
+81 |     pub catalog_bytes: u64,
+   |         ^^^^^^^^^^^^^
+82 |     pub relocated_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+83 |     pub pending_roots: usize,
+84 |     pub root_leases: usize,
+   |         ^^^^^^^^^^^
+85 |     pub page_reads: u64,
+   |         ^^^^^^^^^^
+86 |     pub page_writes: u64,
+   |         ^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `temporary`, `temporary_with_owner`, `create`, and `sync_data` are never used
+   --> crates/layerfs-workspace/src/overlay_index.rs:248:19
+    |
+247 | impl Index {
+    | ---------- associated items in this implementation
+248 |     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+    |                   ^^^^^^^^^
+...
+251 |     pub(crate) fn temporary_with_owner(
+    |                   ^^^^^^^^^^^^^^^^^^^^
+...
+258 |     fn create(
+    |        ^^^^^^
+...
+740 |     pub(crate) fn sync_data(&self) -> io::Result<()> {
+    |                   ^^^^^^^^^
+
+warning: field `readers` is never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:30:9
+   |
+24 | pub(crate) struct Limits {
+   |                   ------ field in this struct
+...
+30 |     pub readers: usize,
+   |         ^^^^^^^
+   |
+   = note: `Limits` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: multiple fields are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:37:9
+   |
+36 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+37 |     pub physical_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+38 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+39 |     pub index_physical_bytes: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+40 |     pub live_block_bytes: u64,
+   |         ^^^^^^^^^^^^^^^^
+...
+43 |     pub chargeable_bytes: u64,
+   |         ^^^^^^^^^^^^^^^^
+...
+46 |     pub owners: usize,
+   |         ^^^^^^
+...
+49 |     pub persisted_tokens: usize,
+   |         ^^^^^^^^^^^^^^^^
+50 |     /// Payload-index pages still live (records plus unreclaimed old versions).
+51 |     pub index_live_pages: u64,
+   |         ^^^^^^^^^^^^^^^^
+52 |     /// Highest payload-index page slot ever allocated in this arena.
+53 |     pub index_allocated_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^^
+54 |     /// Payload-index pages actually returned to the free list.
+55 |     pub index_reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^^
+56 |     /// Retired payload-index roots awaiting reference release.
+57 |     pub index_pending_roots: usize,
+   |         ^^^^^^^^^^^^^^^^^^^
+58 |     /// Payload-index reclamation backlog flag.
+59 |     pub index_reclamation_pending: bool,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+60 |     pub readers: usize,
+   |         ^^^^^^^
+61 |     pub pending_releases: usize,
+   |         ^^^^^^^^^^^^^^^^
+62 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+63 |     pub interval_visits: u64,
+   |         ^^^^^^^^^^^^^^^
+64 |     pub relocated_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+65 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+66 |     pub cleanup_pending: bool,
+67 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: methods `offset`, `subrange`, and `read_exact_at` are never used
+   --> crates/layerfs-workspace/src/overlay_payload.rs:156:19
+    |
+146 | impl OwnedRange {
+    | --------------- methods in this implementation
+...
+156 |     pub(crate) fn offset(&self) -> u64 {
+    |                   ^^^^^^
+...
+159 |     pub(crate) fn subrange(&self, offset: u64, len: u64) -> io::Result<Self> {
+    |                   ^^^^^^^^
+...
+162 |     pub(crate) fn read_exact_at(&self, output: &mut [u8], offset: u64) -> io::Result<()> {
+    |                   ^^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+    --> crates/layerfs-workspace/src/overlay_payload.rs:245:19
+     |
+244  | impl Payload {
+     | ------------ associated items in this implementation
+245  |     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+     |                   ^^^^^^^^^
+...
+248  |     pub(crate) fn temporary_with_lifetime(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^
+...
+255  |     fn create(
+     |        ^^^^^^
+...
+361  |     pub(crate) fn write_from(&self, reader: &mut impl Read, len: u64) -> io::Result<OwnedRange> {
+     |                   ^^^^^^^^^^
+...
+534  |     pub(crate) fn append_to(
+     |                   ^^^^^^^^^
+...
+548  |     pub(crate) fn append(
+     |                   ^^^^^^
+...
+729  |     pub(crate) fn join(&self, left: &OwnedRange, right: &OwnedRange) -> io::Result<OwnedRange> {
+     |                   ^^^^
+...
+736  |     pub(crate) fn join_tokens(&self, left: u64, right: u64) -> io::Result<OwnedRange> {
+     |                   ^^^^^^^^^^^
+...
+1460 |     pub(crate) fn sync_data(&self) -> io::Result<()> {
+     |                   ^^^^^^^^^
+
+warning: function `arena` is never used
+    --> crates/layerfs-workspace/src/overlay_payload.rs:1572:4
+     |
+1572 | fn arena(directory: &Path) -> io::Result<File> {
+     |    ^^^^^
+
+warning: struct `Stats` is never constructed
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:49:19
+   |
+49 | pub(crate) struct Stats {
+   |                   ^^^^^
+   |
+   = note: `Stats` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: method `descriptor` is never used
+   --> crates/layerfs-workspace/src/overlay_ranges.rs:152:19
+    |
+80  | impl OwnedPiece {
+    | --------------- method in this implementation
+...
+152 |     pub(crate) fn descriptor(&self, offset: u64) -> Descriptor {
+    |                   ^^^^^^^^^^
+
+warning: associated items `new` and `stats` are never used
+   --> crates/layerfs-workspace/src/overlay_ranges.rs:409:19
+    |
+408 | impl Ranges {
+    | ----------- associated items in this implementation
+409 |     pub(crate) fn new(index: Index, payload: Payload, limits: Limits) -> io::Result<Self> {
+    |                   ^^^
+...
+631 |     pub(crate) fn stats(&self) -> Stats {
+    |                   ^^^^^
+
+warning: methods `truncate`, `append_from`, `last`, and `read_piece` are never used
+   --> crates/layerfs-workspace/src/overlay_ranges.rs:779:19
+    |
+642 | impl Ranges {
+    | ----------- methods in this implementation
+...
+779 |     pub(crate) fn truncate(&self, tree: &Tree, length: u64) -> io::Result<Tree> {
+    |                   ^^^^^^^^
+...
+790 |     pub(crate) fn append_from(
+    |                   ^^^^^^^^^^^
+...
+835 |     fn last(&self, tree: &Tree) -> io::Result<Option<(Tree, Node)>> {
+    |        ^^^^
+...
+897 |     pub(crate) fn read_piece(
+    |                   ^^^^^^^^^^
+
+warning: method `bindings` is never used
+   --> crates/layerfs-workspace/src/snapshot.rs:196:19
+    |
+19  | impl Snapshot {
+    | ------------- method in this implementation
+...
+196 |     pub(crate) fn bindings(
+    |                   ^^^^^^^^
+
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/layerfs-workspace/src/overlay_index.rs:758:13
+    |
+758 |         let mut storage = self.0.storage.lock().unwrap();
+    |             ----^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: method `prepare_shutdown` is never used
+   --> crates/layerfs-workspace/src/host_runtime.rs:147:19
+    |
+30  | impl HostRuntime {
+    | ---------------- method in this implementation
+...
+147 |     pub(crate) fn prepare_shutdown(&self) -> Result<()> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: methods `policy` and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:350:19
+    |
+281 | impl Budget {
+    | ----------- methods in this implementation
+...
+350 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+353 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: field `high_water` is never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:52:9
+   |
+51 | pub(crate) struct HeaderCensus {
+   |                   ------------ field in this struct
+52 |     pub high_water: u64,
+   |         ^^^^^^^^^^
+   |
+   = note: `HeaderCensus` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `reserved_bytes`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:38:9
+   |
+36 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+37 |     pub physical_bytes: u64,
+38 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+62 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+65 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+66 |     pub cleanup_pending: bool,
+67 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `deep_reclaim` is never used
+    --> crates/layerfs-workspace/src/overlay_payload.rs:1231:19
+     |
+244  | impl Payload {
+     | ------------ method in this implementation
+...
+1231 |     pub(crate) fn deep_reclaim(&self) -> io::Result<usize> {
+     |                   ^^^^^^^^^^^^
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib) generated 54 warnings
+warning: `layerfs-workspace` (lib test) generated 10 warnings (1 duplicate) (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-093cac1b352d88b6)
+
+running 180 tests
+test candidate_capacity::tests::actual_private_output_and_admission_keep_resource_owner_until_both_drop ... ok
+test changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2 ... ok
+test changes::snapshot_candidate::tests::shared_builder_holds_owned_c1_cut_and_reuses_c1_for_localized_c2 ... ok
+test changes::snapshot_candidate::tests::zero_gap_deletion_reuses_large_zero_span_and_insertion_reads_only_new_byte ... ok
+test changes::tests::backward_write_invalidates_capture_and_uses_exact_fallback ... ok
+test changes::tests::checkpoint_checks_final_references_and_preserves_payload_limit ... ok
+test changes::tests::clean_workspace_commit_is_immediately_up_to_date ... ok
+test changes::tests::coalesced_spill_keeps_tombstones_and_reference_updates_across_merge_failure ... ok
+test changes::tests::dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases ... ok
+test changes::tests::detached_changed_inputs_preserve_cut_without_a_live_workspace ... ok
+test changes::tests::dirty_checkpoint_keeps_rejected_edit_accounting_and_unseen_pinned_alias ... ok
+test changes::tests::existing_file_mutations_are_exact_and_bounded ... ok
+test changes::tests::file_result_journals_restore_reverse_completion_and_reject_missing_slots ... ok
+test changes::tests::final_records_match_in_memory_spill_and_small_budget_builders ... ok
+test changes::tests::fully_charged_new_file_reads_directly_from_retained_spool ... ok
+test changes::tests::new_complete_file_streams_without_private_spill_and_preserves_history ... ok
+test changes::tests::owner_prepend_scans_only_replacement_and_retains_every_base_payload ... ok
+test changes::tests::paged_release_keeps_prior_moves_and_repeated_unseen_aliases ... ok
+test changes::tests::parallel_predecessor_plan_keeps_correspondence_and_native_prefixes ... ok
+test changes::tests::preview_stays_private_and_streamed_commit_has_the_same_root ... ok
+test changes::tests::producer_workers_preserve_roots_alias_capture_and_empty_inputs ... ok
+test changes::tests::production_budget_spill_boundaries_stay_bounded ... ignored, production-budget spill proof; select explicitly
+test changes::tests::production_budget_spill_quadratic_crossover ... ignored, structural sweep to 64B; run explicitly when collecting Stage 3 evidence
+test changes::tests::reduced_budget_real_workspace_uses_one_tree_fallback_and_reopens_exactly ... ok
+test changes::tests::reduced_budget_workspace_commit_spills_exactly ... ignored, reduced-budget integration proof; run explicitly when collecting Stage 3 evidence
+test changes::tests::reference_journal_rewind_keeps_prior_edges_and_latest_alias_counts ... ok
+test changes::tests::removed_small_candidates_preserve_identity_history_and_bounds ... ok
+test changes::tests::sequential_new_file_capture_is_canonical_and_commit_ready ... ok
+test changes::tests::structural_frontier_keeps_unrelated_namespace_out_of_budget ... ok
+test changes::tests::tiered_spill_crosses_the_old_highest_tier_without_prefix_rewrites ... ok
+test changes::tests::tiered_spill_flush_failure_keeps_runs_and_map_intact ... ok
+test changes::tests::tiered_spill_partial_writes_and_final_merge_are_retryable_and_clean ... ok
+test changes::tests::tiered_spill_resolution_matches_the_model_for_every_key_order ... ok
+test changes::tests::tiered_spill_revision_outside_the_newest_tier_keeps_the_latest_value ... ok
+test changes::tests::tiered_spill_traffic_is_logarithmic_and_below_the_quadratic_control ... ok
+test commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected ... ok
+test commit_attempt::maintenance::tests::concurrent_c2_publication_keeps_new_pending_context_and_later_write ... ok
+test commit_attempt::maintenance::tests::maintenance_caps_nodes_and_covered_keys_without_bumping_live_sequence ... ok
+test commit_attempt::tests::definite_head_conflict_can_abandon_stage_without_losing_live_writes ... ok
+test commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent ... ok
+test commit_attempt::tests::lost_publication_and_stage_replies_retry_exact_input_without_recapture ... ok
+test container::tests::create_input_and_exact_identity_are_bounded ... ok
+test correspondence::tests::descriptor_validation_quota_and_origin_exhaustion_preserve_old_inputs ... ok
+test correspondence::tests::indexed_overlap_seek_and_streamed_fragments_do_not_expand_payload ... ok
+test correspondence::tests::persisted_description_owns_only_metadata_and_restores_complete_indexes ... ok
+test correspondence::tests::shifted_partial_ranges_and_fresh_occurrence_lineage ... ok
+test correspondence::tests::zero_insertion_and_deletion_are_bounded_by_nonzero_anchors ... ok
+test cow_tree::tests::batch_inode_acquisition_reuses_typed_portable_metadata ... ok
+test cow_tree::tests::failed_spool_io_does_not_advance_the_overlay ... ok
+test cow_tree::tests::portable_metadata_rejects_short_canonical_mtime ... ok
+test cow_tree::tests::rename_validates_every_noop_and_rejection_before_mutation ... ok
+test cow_tree::tests::reserved_directory_consumes_the_exact_node_once ... ok
+test cow_tree::tests::resolution_fingerprint_ignores_unrelated_paths_and_tracks_affected_state ... ok
+test cow_tree::tests::spool_write_metrics_are_aggregate_and_reset ... ok
+test daemon::tests::daemon_exec_selects_the_required_live_daemon_mount_by_default ... ok
+test daemon::tests::tcp_daemon_container_id_is_exact_and_bounded ... ok
+test execution::tests::container_execution_starts_without_a_ready_handshake ... ok
+test file_io::tests::backing_service_appends_only_its_exact_reserved_range_without_live_state ... ok
+test file_io::tests::discard_reclaims_one_live_base_inline_zero_spool_composition ... ok
+test file_io::tests::edit_limit_and_sparse_physical_charge_are_exact ... ok
+test file_io::tests::failed_tail_cleanup_keeps_discarded_physical_bytes_charged ... ok
+test file_io::tests::generation_overflow_rejects_without_logical_or_physical_change ... ok
+test file_io::tests::issue116_compact_form_scaling_probe ... ignored, issue116 root-cause probe
+test file_io::tests::issue116_fact_ceiling_probe ... ignored, issue116 root-cause probe
+test file_io::tests::issue116_fact_charge_probe ... ignored, issue116 root-cause probe
+test file_io::tests::issue116_many_changed_files_charge_probe ... ignored, issue116 phase-1 capacity probe
+test file_io::tests::issue116_pending_set_rss_probe ... ignored, issue116 root-cause probe
+test file_io::tests::issue116_per_file_charge_probe ... ignored, issue116 phase-1 capacity probe
+test file_io::tests::issue116_piece_charge_rca ... ignored, issue116 root-cause probe
+test file_io::tests::issue116_splice_shape_charge_probe ... ignored, issue116 phase-1 capacity probe
+test file_io::tests::physical_spool_peak_survives_short_append_reclaim_and_discard ... ok
+test file_io::tests::shared_segments_keep_interleaved_rollback_reads_and_open_unlinked_lifetime ... ok
+test file_io::tests::short_spool_append_restores_high_water_and_piece_root ... ok
+test file_io::tests::stale_prepared_append_is_not_repeated_and_keeps_its_physical_charge ... ok
+test file_io::tests::workspace_inline_limit_accepts_eight_mib_and_rejects_the_next_byte ... ok
+test host_canonicalize::tests::canonical_inline_substitution_releases_only_current_equivalent_inline_charge ... ok
+test host_canonicalize::tests::piece_cap_defers_partial_c1_backing_until_complete_c2_is_available ... ok
+test host_canonicalize::tests::published_ranges_replace_only_proven_raw_bytes_around_later_edit ... ok
+test host_canonicalize::tests::sixty_four_mib_capture_reclaims_to_one_later_write_block ... ok
+test host_canonicalize::tests::stale_substitution_preserves_unrelated_write_and_retries_leased_root ... ok
+test host_canonicalize::tests::whole_piece_substitution_proceeds_when_neighbor_prefix_hits_cap ... ok
+test host_directories::tests::cold_directory_cookies_survive_partial_pages_removal_and_bounded_churn ... ok
+test host_operations::tests::lost_replies_bind_exact_requests_and_keep_kernel_owned_orphans_readable ... ok
+test host_operations::tests::sdk_read_leases_hold_exact_bytes_and_capacity_until_last_reader_releases ... ok
+test host_operations::tests::sdk_reader_is_reserved_before_mutation_and_activates_exact_installed_candidate ... ok
+test host_overlay::tests::authenticated_client_and_sdk_share_one_host_root_and_owned_snapshots ... ok
+test host_overlay::tests::canonical_cold_snapshot_alias_write_splice_and_failed_batch_are_isolated ... ok
+test host_overlay::tests::directory_pages_advance_over_tombstones_without_materializing_namespace ... ok
+test host_overlay::tests::kernel_lookup_forget_and_detach_own_open_unlinked_inodes_atomically ... ok
+test host_overlay::tests::logical_spool_and_inline_limits_remain_distinct_and_failure_atomic ... ok
+test host_overlay::tests::many_ordinary_files_do_not_exhaust_payload_owner_admission ... ignored, scale reproduction; select explicitly: cargo test -p layerfs-workspace many_ordinary_files
+test host_overlay::tests::namespace_rename_snapshots_and_open_unlinked_handles_keep_identity ... ok
+test host_overlay::tests::sdk_candidate_snapshot_has_installed_generation_and_survives_later_write ... ok
+test host_runtime::tests::local_and_tcp_runtime_share_live_authority_and_published_coverage ... ok
+test host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input ... ignored, requires an explicitly owned Linux Docker correctness container and sealed FUSE helper
+test host_sdk::tests::invalid_sdk_path_is_rejected_before_control_or_target_pin ... ok
+test host_sdk::tests::preinstall_cancel_failure_retains_pin_and_failed_edit_changes_no_content ... ok
+test host_sdk::tests::sdk_reader_capacity_is_reserved_before_begin_or_content_installation ... ok
+test host_sdk::tests::unknown_control_retries_pin_exact_target_and_never_reapply_installed_edit ... ok
+test host_sdk::tests::verified_detach_retires_undelivered_sdk_owners_but_preserves_other_snapshots ... ok
+test lifecycle::tests::busy_commit_with_resume_failure_requires_explicit_presentation_recovery ... ok
+test lifecycle::tests::callback_and_execution_reject_owner_edit_without_state_change ... ok
+test lifecycle::tests::continuing_workspace_installs_its_returned_snapshot_after_later_publication ... ok
+test lifecycle::tests::failed_projection_refresh_restores_exact_state_and_retry_once ... ok
+test lifecycle::tests::head_movement_retains_stage_and_freezes_mutation_until_discard ... ok
+test lifecycle::tests::host_authority_commit_in_flight_keeps_live_operations_and_owned_cut ... ok
+test lifecycle::tests::host_authority_dirty_tracks_covered_sequence_not_nonzero_generation ... ok
+test lifecycle::tests::host_authority_discard_resolves_publication_instead_of_erasing_it ... ok
+test lifecycle::tests::host_authority_head_movement_retains_stage_without_freezing_mutation ... ok
+test lifecycle::tests::owner_drop_discards_only_its_workspace_without_branch_exclusion ... ok
+test lifecycle::tests::partial_checkpoint_retry_preserves_identity_aliases_and_pinned_spools ... ok
+test lifecycle::tests::pinned_target_rejects_owner_edit_without_state_change ... ok
+test lifecycle::tests::published_install_failure_recovers_without_second_commit ... ok
+test lifecycle::tests::refreshed_workspace_keeps_held_segment_charge_until_read_finishes ... ok
+test lifecycle::verification_fault_scope_is_one_shot ... ok
+test live_backing::tests::append_consumes_only_its_exact_reservation ... ok
+test live_backing::tests::backing_batch_chunked_fact_failures_remain_unpublished_until_complete ... ok
+test live_backing::tests::backing_batch_failed_physical_append_preserves_error_and_consumes_tail ... ok
+test live_backing::tests::backing_batch_preserves_append_facts_and_last_reference_ownership ... ok
+test live_backing::tests::backing_batch_rejects_malformed_envelopes_before_append_or_fact_mutation ... ok
+test live_backing::tests::backing_batch_reports_completed_prefix_and_stops_at_each_fallible_sync_step ... ok
+test live_backing::tests::cold_grouped_reads_preserve_alias_mutations_and_peer_isolation ... ok
+test live_backing::tests::live_owner_builds_and_checkpoints_through_real_host_backing ... ok
+test live_backing::tests::local_owner_builds_and_checkpoints_through_direct_host_backing ... ok
+test live_backing::tests::metadata_lookup_preserves_requested_node_without_acquiring_siblings ... ok
+test live_backing::tests::sdk_k100_point_lookup_captures_only_changes_and_preserves_untouched_siblings ... ok
+test output::tests::one_large_write_never_enters_the_live_tail_above_one_mib ... ok
+test overlay::cleanup::tests::cleanup_counts_every_removed_row_and_keeps_live_base_masks ... ok
+test overlay::cleanup::tests::deleted_directory_masks_retire_without_changing_retained_snapshots ... ok
+test overlay::tests::bounded_fifo_preparation_keeps_snapshot_acquisition_independent ... ok
+test overlay::tests::cached_base_identity_and_alias_indexes_do_not_create_dirty_history ... ok
+test overlay::tests::failed_preparation_never_installs_partial_state ... ok
+test overlay::tests::fixed_inode_metadata_and_linked_ranges_remain_owned_after_live_drop ... ok
+test overlay::tests::owned_snapshot_outlives_live_owner_and_acquires_without_index_io ... ok
+test overlay::tests::ownership_only_install_keeps_generation_but_still_rejects_stale_root ... ok
+test overlay::tests::replay_retains_lost_reply_and_never_reapplies_stale_or_unknown_request ... ok
+test overlay::tests::snapshot_reads_exact_owned_payload_after_live_replacement_and_owner_drop ... ok
+test overlay::tests::stale_disjoint_writer_reprepares_without_losing_updates_or_retained_roots ... ok
+test overlay::tests::tracking_replaces_old_sequence_and_cleanup_keeps_masks_and_newer_changes ... ok
+test overlay_budget::tests::aggregate_counter_and_policy_overflow_are_rejected_without_wraparound ... ok
+test overlay_budget::tests::detached_snapshot_and_payload_range_retain_aggregate_admission ... ok
+test overlay_budget::tests::fixed_resident_base_charges_the_snapshot_reader_cache ... ok
+test overlay_budget::tests::full_index_capacity_and_operation_limits_accept_exact_reject_plus_one ... ok
+test overlay_budget::tests::two_workspaces_share_aggregate_reservation_and_failed_op_does_not_leak ... ok
+test overlay_index::tests::disk_owned_links_and_payload_tokens_survive_root_drop_and_failed_reclaim ... ok
+test overlay_index::tests::explicit_sync_flushes_data_and_catalog_and_preserves_root_ownership ... ok
+test overlay_index::tests::failed_copy_verification_and_truncation_preserve_source_and_charges ... ok
+test overlay_index::tests::floor_descends_without_scanning_predecessor_prefix_and_batches_bound_bytes ... ok
+test overlay_index::tests::maximum_sized_leaf_keeps_fixed_inode_records_inline ... ok
+test overlay_index::tests::physical_pages_relocate_and_reclaim_under_a_retained_snapshot ... ok
+test overlay_index::tests::queued_root_releases_are_reported_as_pending_cleanup ... ok
+test overlay_index::tests::quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages ... ok
+test overlay_index::tests::reclaim_header_faults_never_double_release_or_lose_cleanup ... ok
+test overlay_index::tests::relocation_faults_keep_a_live_tail_page_readable ... ok
+test overlay_index::tests::repeated_linked_reads_reuse_admitted_root_tickets ... ok
+test overlay_index::tests::repeated_prefix_insertions_release_every_retired_page ... ok
+test overlay_index::tests::retained_roots_split_merge_seek_and_release_without_resident_page_graph ... ok
+test overlay_index::tests::root_admission_and_foreign_roots_fail_before_installation ... ok
+test overlay_index::tests::uncertain_ownership_write_readback_cannot_leak_a_child_reference ... ok
+test overlay_index::tests::uncertain_read_lease_and_cleanup_retry_keep_the_source_owned ... ok
+test overlay_payload::tests::append_frontier_coalesces_without_rewriting_retained_prefix ... ok
+test overlay_payload::tests::chargeable_spool_counts_clipped_shared_coverage_and_excludes_sdk_inline ... ok
+test overlay_payload::tests::explicit_sync_flushes_both_private_arenas_and_returns_io_failures ... ok
+test overlay_payload::tests::one_byte_write_index_page_cost ... ok
+test overlay_payload::tests::oversized_slot_limits_return_resource_error ... ok
+test overlay_payload::tests::partial_retention_disk_owner_reader_quota_and_short_write ... ok
+test overlay_payload::tests::tiny_owner_cap_bounds_resident_handles_not_persisted_tokens ... ok
+test overlay_payload::tests::writes_continue_while_old_source_reader_defers_truncation ... ok
+test overlay_ranges::tests::append_frontier_coalesces_without_reusing_truncated_origin_coordinates ... ok
+test overlay_ranges::tests::disk_child_links_and_exact_payload_slice_own_bytes_without_old_tree ... ok
+test overlay_ranges::tests::exact_zero_limit_and_cached_backing_aggregates_survive_disk_restore ... ok
+test overlay_ranges::tests::logical_inline_charge_survives_payload_backing_and_splits ... ok
+test overlay_ranges::tests::repeated_snapshot_reads_allocate_no_per_buffer_payload_owners ... ok
+test overlay_ranges::tests::thousand_piece_small_edit_and_read_follow_paths_without_suffix_rekey ... ok
+test overlay_ranges::tests::unequal_edits_split_merge_truncate_and_snapshot_match_byte_oracle ... ok
+test projection::tests::failed_cleanup_moves_the_projection_off_placement_and_retains_retry_path ... ok
+test projection::tests::failed_materialization_never_publishes_or_leaves_a_stage ... ok
+test projection::tests::failed_publish_removes_the_complete_stage ... ok
+test reconcile::tests::only_intersecting_later_mutations_invalidate_a_resolution ... ok
+test registry::tests::retention_evicts_oldest_by_age_count_and_bytes ... ok
+
+test result: ok. 167 passed; 0 failed; 13 ignored; 0 measured; 0 filtered out; finished in 38.64s
+
+     Running tests/file_edit.rs (target/debug/deps/file_edit-32513209f60f434f)
+
+running 12 tests
+test group_1_descending_overlapping_repeated_and_up_to_date_normalize_exactly ... ok
+test group_1_range_piece_eof_noop_and_repeated_boundaries ... ok
+test group_2_projection_refresh_commit_and_reopen_are_exact ... ok
+test group_3_hard_link_aliases_share_one_edited_inode ... ok
+test group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact ... ok
+test group_4_invalid_type_range_overflow_and_limits_are_atomic ... ok
+test group_5_candidate_admission_and_publication_failures_retry_once ... ok
+test group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date ... ok
+test group_6_discard_mixed_inline_zero_and_spool_state_leaves_no_durable_change ... ok
+test group_7_stale_head_and_posix_owner_composition_are_exact ... ok
+test stale_head_with_resume_failure_requires_explicit_presentation_recovery ... ok
+test whole_file_empty_generation_reclaims_edit_budget ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.34s
+
+     Running tests/issue116_capacity.rs (target/debug/deps/issue116_capacity-6c581d6d135b430e)
+
+running 6 tests
+test probe_a_repeated_overwrite_of_one_file ... ignored, issue116 phase-1 capacity probe
+test probe_b_repeated_append_growth_of_one_file ... ignored, issue116 phase-1 capacity probe
+test probe_c_many_changed_files ... ignored, issue116 phase-1 capacity probe
+test probe_d_wide_single_directory ... ignored, issue116 phase-1 capacity probe
+test probe_e_pending_set_charges ... ignored, issue116 phase-1 capacity probe
+test probe_f_edit_cost ... ignored, issue116 phase-1 capacity probe
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/reconciliation.rs (target/debug/deps/reconciliation-4c9d79710a2076f5)
+
+running 2 tests
+test materialized_resolution_ignores_unrelated_edits_and_remains_writable_after_commit ... ok
+test published_commit_reports_projection_failure_and_recovers_without_recommit ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

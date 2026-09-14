@@ -148,3 +148,25 @@ PR#126 MERGED at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`. Remote main contain
 ## Authorized balanced Clippy follow-up
 
 Owner approved making style/complexity/unused-code warnings advisory while keeping compilation, correctness, suspicious-code and unused_must_use failures fatal. Workflow and development guidance now agree. Replaced equivalent manual State::default with derive; removed one stale documentation comment caught by suspicious lint. Balanced workspace Clippy PASS, focused existing shutdown/initialization test PASS1, fmt/whitespace PASS. Raw initial failure and targeted passes are retained in evidence/ci/balanced-clippy/. The180s test gate and all product/benchmark correctness obligations are unchanged. No broader Snapshot work or benchmark case was executed.
+
+## Owner constraint: third-party libraries are not to be patched (2026-09-14)
+
+Owner instruction: "third party lib must not be patched."
+
+Verified state at this checkpoint, so the constraint is not just a promise:
+
+- `crates/layerfs-fuse` is a **first-party** workspace member (its own source),
+  not a third-party library. It is currently unmodified: `git status` and
+  `git diff HEAD` under that path are both empty.
+- The third-party FUSE library is `fuser = "=0.18.0"` from crates.io. There is no
+  `[patch]`/`[replace]` in any `Cargo.toml`, no `.cargo/config.toml` source
+  replacement, and no `vendor/`/`upstream/` copy in the tree. The cached crate
+  `~/.cargo/registry/cache/.../fuser-0.18.0.crate` hashes to
+  `b82b6597d216503555ead6b358f341ef748869bf5c6fbae6a0cb9dd231baecfd`, exactly the
+  `Cargo.lock` checksum, so Cargo builds the pristine registry crate.
+- Shipped commits in this run touch only `crates/layerfs-workspace`,
+  `crates/layerfs-workspace-core`, `crates/layerfs-layerstack-store` and `docs/`.
+
+Rule for this and all successor work: a needed behavior change goes in our own
+crate; if a change genuinely requires the third-party library, raise it upstream
+or with the owner instead of patching, vendoring or source-replacing it.

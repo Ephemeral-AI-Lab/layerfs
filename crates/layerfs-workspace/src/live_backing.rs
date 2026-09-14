@@ -2228,6 +2228,11 @@ pub(crate) fn install_checkpoint(
 }
 
 pub(crate) fn generation(worker: &crate::worker::WorkspaceWorker) -> crate::WorkspaceResult<u64> {
+    if let Some(host) = worker.host_runtime()? {
+        // The host sequence never resets; it is the live position the published
+        // covered sequence is compared against, not a dirty flag.
+        return Ok(host.generation()?);
+    }
     let remote = worker
         .remote
         .lock()

@@ -132,6 +132,40 @@ impl HostRuntime {
         self.sdk.edit(path, edits, |frame| self.control(frame))
     }
 
+    /// The same owner, reached by the ordinary status and dirty routes.
+    pub(crate) fn covered_sequence(&self) -> Result<u64> {
+        Ok(self.commits.published()?.correspondence.covered_sequence)
+    }
+
+    /// Published head/base context, used for the public session's pinned head.
+    pub(crate) fn published_head(&self) -> Result<Option<layerfs_layerstack_store::CommitId>> {
+        Ok(self.commits.published()?.branch.head_commit_id)
+    }
+
+    /// Release the preopened mount descriptor before the verified unmount. The
+    /// authority itself stays installed until End/Discard settles its owners.
+    pub(crate) fn prepare_shutdown(&self) -> Result<()> {
+        self.server
+            .control("shutdown")
+            .map_err(|_| StoreError::Integrity("host shutdown"))
+    }
+
+    /// Bounded explicit maintenance drain. A retained attempt or an active
+    /// Commit makes every step report remaining work, so that condition stops
+    /// the drain and the next lifecycle call continues it.
+    pub(crate) fn maintain(&self) -> Result<()> {
+        const MAX_STEPS: usize = 4096;
+        if self.commits.has_pending()? {
+            return Ok(());
+        }
+        for _ in 0..MAX_STEPS {
+            if !self.maintenance_step()? {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn recover_sdk(&self) -> Result<crate::host_sdk::Recovery> {
         self.sdk.recover(|frame| self.control(frame))
     }
@@ -156,34 +190,69 @@ impl HostRuntime {
     }
 
     pub(crate) fn commit(&self, capture: impl FnOnce() -> Result<Snapshot>) -> Result<Completion> {
-        let host = &self.operations.host;
-        self.commits.commit(
-            || {
-                let snapshot = capture()?;
-                if !host.index.owns(&snapshot.root.index) {
-                    return Err(StoreError::InvalidInput("foreign Workspace snapshot"));
-                }
-                Ok(snapshot)
-            },
-            |snapshot, previous| {
-                SnapshotCandidateInputs {
-                    snapshot,
-                    budget: &host.budget,
-                    ranges: &host.ranges,
-                    index: &host.index,
-                    origins: host.origins(),
-                    comparison: &previous.correspondence,
-                    store: &self.store,
-                    workspace_id: self.workspace,
-                    scope: self.scope,
-                    serials: self.serials.clone(),
-                    policy: host.policy,
-                    spool: &self.spool,
-                }
-                .build(1)
-            },
-        )
+        self.commits.commit(capture, |snapshot, previous| {
+            #[cfg(test)]
+            self.reach_build_latch();
+            self.build_candidate(snapshot, previous)
+        })
     }
+
+    /// The exact production candidate construction. Separated from `commit` so
+    /// a test can hold one attempt in flight while ordinary operations run.
+    pub(crate) fn build_candidate(
+        &self,
+        snapshot: &Snapshot,
+        previous: &PublishedContext,
+    ) -> Result<crate::changes::PreparedSnapshotCommit> {
+        let host = &self.operations.host;
+        if !host.index.owns(&snapshot.root.index) {
+            return Err(StoreError::InvalidInput("foreign Workspace snapshot"));
+        }
+        SnapshotCandidateInputs {
+            snapshot,
+            budget: &host.budget,
+            ranges: &host.ranges,
+            index: &host.index,
+            origins: host.origins(),
+            comparison: &previous.correspondence,
+            store: &self.store,
+            workspace_id: self.workspace,
+            scope: self.scope,
+            serials: self.serials.clone(),
+            policy: host.policy,
+            spool: &self.spool,
+        }
+        .build(1)
+    }
+
+    #[cfg(test)]
+    fn reach_build_latch(&self) {
+        let armed = BUILD_LATCH.lock().expect("host runtime build latch").take();
+        if let Some((started, resume)) = armed {
+            let _ = started.send(());
+            let _ = resume.lock().expect("host runtime build latch").recv();
+        }
+    }
+}
+
+#[cfg(test)]
+type BuildLatch = (
+    std::sync::mpsc::Sender<()>,
+    Mutex<std::sync::mpsc::Receiver<()>>,
+);
+
+#[cfg(test)]
+static BUILD_LATCH: Mutex<Option<BuildLatch>> = Mutex::new(None);
+
+/// Arm one build-phase pause for the next Commit construction on this process.
+/// Tests run single-threaded; with no latch armed the production path is exact.
+#[cfg(test)]
+pub(crate) fn arm_build_latch() -> (std::sync::mpsc::Receiver<()>, std::sync::mpsc::Sender<()>) {
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+    *BUILD_LATCH.lock().expect("host runtime build latch") =
+        Some((started_tx, Mutex::new(resume_rx)));
+    (started_rx, resume_tx)
 }
 
 #[cfg(test)]

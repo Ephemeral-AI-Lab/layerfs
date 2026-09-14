@@ -68,34 +68,55 @@ pub(crate) fn attach(
             #[cfg(all(target_os = "linux", feature = "host-fuse"))]
             {
                 std::fs::create_dir_all(root)?;
-                let remote = {
-                    let mut workspace = worker
-                        .workspace
-                        .lock()
-                        .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-                    let remote = crate::live_backing::RemoteWorkspace::start_local(&workspace)?;
-                    workspace.remote = Some(remote.clone());
-                    *worker
-                        .remote
-                        .lock()
-                        .map_err(|_| WorkspaceError::WorkspaceBusy)? = Some(remote.clone());
-                    remote
-                };
+                // One host authority is constructed before attachment and then
+                // mounted through. There is no legacy owner and no fallback: a
+                // failed construction fails the attach.
+                let runtime = start_host_authority(worker)?;
                 let owner = Arc::new(
-                    remote
+                    runtime
                         .server
-                        .local_owner()
+                        .host_owner()
                         .ok_or(WorkspaceError::InvalidPlacement)?,
                 );
                 let mount = layerfs_fuse::mount_host(owner.clone(), root, 0, 0)?;
                 owner.set_notifier(mount.notifier()?)?;
                 owner.set_kernel_root(std::fs::File::open(root)?)?;
+                worker.install_host_runtime(runtime)?;
                 Ok(ProjectionHandle::Fuse(mount))
             }
             #[cfg(not(all(target_os = "linux", feature = "host-fuse")))]
             Err(WorkspaceError::InvalidPlacement)
         }
     }
+}
+
+/// Construct the host authority from the pinned Workspace identity and the
+/// installed base root, under the session's own runtime directory. The mounted
+/// client, SDK ranges, status and lifecycle share this single owner; it never
+/// reads the legacy `Workspace.live` mirror.
+#[cfg(any(test, all(target_os = "linux", feature = "host-fuse")))]
+pub(crate) fn start_host_authority(
+    worker: &Arc<WorkspaceWorker>,
+) -> WorkspaceResult<Arc<crate::host_runtime::HostRuntime>> {
+    let workspace = worker
+        .workspace
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+    let runtime = crate::host_runtime::HostRuntime::start(
+        crate::cow_tree::WorkspaceSnapshot {
+            store: workspace.store.clone(),
+            workspace_id: workspace.workspace_id,
+            branch_id: workspace.branch_id,
+            expected_head: workspace.expected_head,
+            expected_base: workspace.expected_base,
+            root: workspace.base_root,
+            reader: workspace.reader.clone(),
+        },
+        &workspace.spool,
+        workspace.live.policy,
+        true,
+    )?;
+    Ok(Arc::new(runtime))
 }
 
 pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
@@ -194,14 +215,20 @@ pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
         .clone();
-    let transport = remote
-        .map(|remote| {
+    let transport = match (remote, worker.host_runtime()?) {
+        (Some(remote), _) => Some(
             remote
                 .server
                 .take_write_metrics()
-                .map_err(|_| WorkspaceError::InvalidExecution)
-        })
-        .transpose()?;
+                .map_err(|_| WorkspaceError::InvalidExecution)?,
+        ),
+        (None, Some(host)) => Some(
+            host.server
+                .take_write_metrics()
+                .map_err(|_| WorkspaceError::InvalidExecution)?,
+        ),
+        (None, None) => None,
+    };
     let Some(transport) = transport else {
         return Ok(());
     };
@@ -266,14 +293,20 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
         .clone();
-    let transport = remote
-        .map(|remote| {
+    let transport = match (remote, worker.host_runtime()?) {
+        (Some(remote), _) => Some(
             remote
                 .server
                 .take_read_metrics()
-                .map_err(|_| WorkspaceError::InvalidExecution)
-        })
-        .transpose()?;
+                .map_err(|_| WorkspaceError::InvalidExecution)?,
+        ),
+        (None, Some(host)) => Some(
+            host.server
+                .take_read_metrics()
+                .map_err(|_| WorkspaceError::InvalidExecution)?,
+        ),
+        (None, None) => None,
+    };
     let Some(transport) = transport else {
         return Ok(());
     };
@@ -370,6 +403,9 @@ pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
 }
 
 pub(crate) fn is_dirty(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<bool> {
+    if let Some(host) = worker.host_runtime()? {
+        return Ok(host.is_dirty()?);
+    }
     if let Some(remote) = worker
         .remote
         .lock()
@@ -408,7 +444,11 @@ pub(crate) fn end(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
     }
     #[cfg(all(target_os = "linux", feature = "host-fuse"))]
     if let Some(ProjectionHandle::Fuse(mount)) = handle.as_mut() {
-        if let Some(remote) = worker
+        if let Some(host) = worker.host_runtime()? {
+            // Release the preopened mount descriptor so the verified unmount can
+            // proceed; End/Discard settles the authority afterwards.
+            host.prepare_shutdown()?;
+        } else if let Some(remote) = worker
             .remote
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
