@@ -60,6 +60,28 @@ Trajectory evidence originally lived on `codex/step6-capacity-trajectory`; this
 handoff preserves it on main as historical artifacts, with its original source
 identities. It is not reclassified as new candidate evidence.
 
+**P130.2 executed (2026-09-14).** Source delivered to main as
+`2786b9c81da131ddd78fea9dd2de309d745082fc` (PR #137 product commits
+`9bfcbc768`, `0a4e55540`, `12745110a`, first-party only). Implemented local
+payload reclamation (indexed unclaimed intervals, location splitting, tail
+truncation, one bounded relocation per step with a byte-charged amortized bound,
+reader-pinned ranges) replacing the release-triggered whole-arena evacuation,
+plus prepared Index records (range leaf and ordinary change log) through a
+bounded `Index::set_batch`, plus cost instrumentation. Measured: pre-repair
+source relocated 33,030,144 B for 524,288 B freed on the 64-file counterexample;
+delivered source relocates exactly the freed bytes at 16/32/64 files; per-100
+tiny creates the ordinary path drops 8,455 → 6,889 metadata page writes and
+50,455 → 39,060 page reads. Gates: `tools/test-fast.sh` PASS (157 s and 149 s,
+4 bounded jobs, Rust 1.85.1); `layerfs-workspace` lib suite 173 passed serially.
+Next executable #130 task: the measured remaining metadata cost (48.2 page
+writes / 280 page reads per tiny create) — prepare the operation's inode,
+binding, reverse/cookie binding, parent and change records together in one
+bounded batch, then re-measure. Public five/20-case comparison is BLOCKED on
+#124's container-placement host-authority wiring (container placement still
+mounts through `RemoteWorkspace`/`DockerProjection`); no case was run and no
+case/control receipt is claimed. 25k/two-second and million-file stay
+DEFERRED/OPEN. #130/#124/#125 remain OPEN; V1 remains open.
+
 Next #130 implementation task: the focused whole-arena reclamation counterexample
 and local-reclamation repair (P130.2), then bounded metadata preparation.
 P130.1 pins the five tier-500 comparator/cost instrumentation in parallel.
