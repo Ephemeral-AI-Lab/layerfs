@@ -3,6 +3,12 @@
 Status: promoted implementation plan, 2026-09-14. Architecture/feasibility review,
 not implemented or performance-qualified. No new benchmark was run for this plan.
 
+Execution entry point:
+[execute the full current #130 rollout](overlay-minimal-overhead-execution-handoff.md).
+It requires actual implementation/qualification, per-package issue updates,
+first-party-only changes and verified main delivery. It preserves deferred scale
+cases and the separate #124/#125 responsibilities described here.
+
 Latest owner direction supersedes both the former after-closure scheduling and
 subsequent two-second milestone: **promote #130 now and evaluate closeness to the
 existing tiny-* benchmarks. Defer the 25,000-file and million-file cases.**

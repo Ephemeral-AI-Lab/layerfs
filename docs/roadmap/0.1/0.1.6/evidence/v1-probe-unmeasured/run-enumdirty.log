@@ -1,0 +1,21 @@
+Linux 22a6ad71a5a8 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+e5bc032fb0c0d2dfd760e672bdc7ad26b5eaf0839e8b3add3edace2e0a5ca841  /tmp/v1un-bin
+probe: page_size=4096 pages=32
+child: mapped and wrote pages 1 and 5 only
+ED-1 /proc/<pid>/maps open=ok
+ED-1 maps_line=ffff95e50000-ffff95e70000 rw-s 00000000 00:4b 2                          /dev/shm/v1un-edirty
+RESULT ED1 mapping_existence_learnable=1 range=0xffff95e50000-0xffff95e70000
+ED-2 clear_refs=4 write rc=1 errno=0 (Success)
+RESULT ED2 soft_dirty_clear_available=1 errno=0
+ED-3 pagemap open=ok errno=0
+ED-3 PAGEMAP_SCAN(PAGE_IS_WRITTEN) rc=2 errno=0 (Success) walk_end=0xffff95e70000
+ED-3 region[0] 0xffff95e51000-0xffff95e52000 categories=WRITTEN|FILE|PRESENT|
+ED-3 region[1] 0xffff95e55000-0xffff95e56000 categories=WRITTEN|FILE|PRESENT|
+RESULT ED3 scan_rc=2 pages_reported=2 pages_reported_WRITTEN=2 pages_actually_written_by_the_mapping=2
+ED-4 page 0 present=0 soft_dirty_bit55=0 file_bit61=0 uffd_wp_bit57=0
+ED-4 page 1 present=1 soft_dirty_bit55=0 file_bit61=1 uffd_wp_bit57=0
+ED-4 page 5 present=1 soft_dirty_bit55=0 file_bit61=1 uffd_wp_bit57=0
+RESULT ED4 pages_present=2 pages_with_soft_dirty_bit=0x0
+probe: done
+EXIT=0

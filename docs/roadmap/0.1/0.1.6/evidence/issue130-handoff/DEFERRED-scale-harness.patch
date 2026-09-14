@@ -1,0 +1,79 @@
+diff --git a/crates/layerfs-workspace/src/host_overlay.rs b/crates/layerfs-workspace/src/host_overlay.rs
+index fdbb9a024..4a9af60b1 100644
+--- a/crates/layerfs-workspace/src/host_overlay.rs
++++ b/crates/layerfs-workspace/src/host_overlay.rs
+@@ -1747,14 +1747,21 @@ pub(crate) mod tests {
+     #[test]
+     #[ignore = "scale reproduction; select explicitly: cargo test -p layerfs-workspace many_ordinary_files"]
+     fn many_ordinary_files_do_not_exhaust_payload_owner_admission() {
++        // Scale regression with a configurable count so the capacity trajectory
++        // toward the #123 million-file target can be measured without editing
++        // source. Defaults to the originally selected 8,193-file boundary.
+         const FILES: usize = 8193;
++        let files: usize = std::env::var("LAYERFS_SCALE_FILES")
++            .ok()
++            .and_then(|value| value.parse().ok())
++            .unwrap_or(FILES);
+         let fixture = Fixture::new(|_| {}, ResourcePolicy::default());
+         let host = &fixture.host;
+         let mut peak_owners: usize = 0;
+         let mut peak_pending: usize = 0;
+         let mut peak_persisted: usize = 0;
+         let mut failure: Option<(usize, String)> = None;
+-        for index in 0..FILES {
++        for index in 0..files {
+             let name = format!("file-{index:05}");
+             let node = host
+                 .create_file(ROOT, name.as_bytes(), 0o600)
+@@ -1784,7 +1791,7 @@ pub(crate) mod tests {
+             peak_owners = peak_owners.max(stats.owners);
+             peak_pending = peak_pending.max(stats.pending_releases);
+             peak_persisted = peak_persisted.max(stats.persisted_tokens);
+-            if index % 1000 == 999 || index == FILES - 1 {
++            if index % 1000 == 999 || index == files - 1 {
+                 println!(
+                     "REPRODUCER census file={index} keys={:?}",
+                     host.payload.catalog_census().unwrap()
+@@ -1819,7 +1826,7 @@ pub(crate) mod tests {
+         }
+         let stats = host.payload.stats().unwrap();
+         println!(
+-            "REPRODUCER files={FILES} peak_resident_owners={peak_owners} \
++            "REPRODUCER files={files} peak_resident_owners={peak_owners} \
+              peak_pending_releases={peak_pending} peak_persisted_tokens={peak_persisted} \
+              owners={} persisted_tokens={} pending_releases={} chargeable={} physical={} \
+              index_physical={}",
+@@ -1833,7 +1840,7 @@ pub(crate) mod tests {
+         // Whichever file the failure landed on stays empty, and every earlier
+         // acknowledged byte is still readable: a rejected admission may not
+         // corrupt retained ownership.
+-        let acknowledged = failure.as_ref().map_or(FILES, |(index, _)| *index);
++        let acknowledged = failure.as_ref().map_or(files, |(index, _)| *index);
+         for index in 0..acknowledged {
+             let attr = host
+                 .lookup(ROOT, format!("file-{index:05}").as_bytes())
+@@ -1852,13 +1859,13 @@ pub(crate) mod tests {
+                 .unwrap();
+             assert_eq!(attr.size, 0, "rejected ordinary write was not atomic");
+             panic!(
+-                "ordinary write {index}/{FILES} rejected: {error}; earlier acknowledged bytes and \
++                "ordinary write {index}/{files} rejected: {error}; earlier acknowledged bytes and \
+                  the rejected file's emptiness verified"
+             );
+         }
+         let settled = host.payload.stats().unwrap();
+         assert_eq!(
+-            settled.persisted_tokens, FILES,
++            settled.persisted_tokens, files,
+             "every live file retains exactly one persisted payload token"
+         );
+         assert!(
+@@ -1866,7 +1873,7 @@ pub(crate) mod tests {
+             "resident owners exceeded the configured cap: {peak_owners}"
+         );
+         println!(
+-            "REPRODUCER PASS files={FILES} verified_bytes={acknowledged} \
++            "REPRODUCER PASS files={files} verified_bytes={acknowledged} \
+              peak_resident_owners={peak_owners} peak_pending_releases={peak_pending} \
+              resident_owners={} persisted_tokens={}",
+             settled.owners, settled.persisted_tokens

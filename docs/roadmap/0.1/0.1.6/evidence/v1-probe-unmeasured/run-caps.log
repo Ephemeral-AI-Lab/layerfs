@@ -1,0 +1,30 @@
+Linux 3df0c7642824 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+ccac40ddc9a88e4e9c0fc7b947db71bcee950fd85f52bc5a91d4ab4f12554835  /tmp/v1un-bin
+caps: env uid=0 euid=0 page_size=4096
+caps: sizeof struct(un_fuse_init_out)=64 (kernel expects 64)
+caps: SESSION_A init_seen=1 major=7 minor=41 max_readahead=131072 flags=0x73fffffb flags2=0x000001fd
+caps:   kernel-advertised bit FUSE_ASYNC_READ                (yes)
+caps:   kernel-advertised bit FUSE_BIG_WRITES                (yes)
+caps:   kernel-advertised bit FUSE_WRITEBACK_CACHE           (yes)
+caps:   kernel-advertised bit FUSE_MAX_PAGES                 (yes)
+caps:   kernel-advertised bit FUSE_INIT_EXT                  (yes)
+caps:   kernel-advertised bit FUSE_DIRECT_IO_ALLOW_MMAP      (yes)
+caps:   kernel-advertised bit FUSE_PASSTHROUGH               (yes)
+caps:   kernel-advertised bit FUSE_HAS_RESEND                (yes)
+caps:   kernel-advertised bit FUSE_MAP_ALIGNMENT             (NO)
+caps:   kernel-advertised bit FUSE_HAS_INODE_DAX             (NO)
+caps:   kernel-advertised bit FUSE_SUBMOUNTS                 (NO)
+caps:   kernel-advertised bit FUSE_ALLOW_IDMAP               (NO)
+caps: SESSION_A reply_flags=0x400021 (passthrough not negotiated)
+CAPS-2 control BACKING_OPEN_without_negotiated_passthrough rc=-1 errno=1 (Operation not permitted)
+RESULT CAPS2 control_rc=-1 control_errno=1 control_errno_name=EPERM
+caps: SESSION_B init_seen=1 major=7 minor=41 flags=0x73fffffb flags2=0x000001fd
+caps: SESSION_B reply_flags=0x2040400021 FUSE_INIT_EXT=1 FUSE_PASSTHROUGH=1 max_stack_depth=1
+CAPS-3 BACKING_OPEN_with_negotiated_passthrough rc=1 errno=0 (Success)
+CAPS-3 BACKING_CLOSE id=1 rc=0 errno=0
+RESULT CAPS3 backing_id=1 rc_errno=0 verdict=PASSTHROUGH_AVAILABLE_AND_NEGOTIABLE
+CAPS-4 userfaultfd(2) rc=-1 errno=1 (Operation not permitted)
+RESULT CAPS4 userfaultfd_available=0 errno_name=EPERM
+caps: done
+EXIT=0

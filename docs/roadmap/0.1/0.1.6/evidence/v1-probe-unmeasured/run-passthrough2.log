@@ -1,0 +1,48 @@
+Linux 3bd972461606 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+b4fa9946aed72dfc3f12178c95205dd3546fe99e7b0009b2c74a761bcdee5de3  /tmp/v1un-bin
+probe: argv1=(none)
+PAS-0 BACKING_OPEN file=data rc=1 errno=0 (Success)
+PAS-0 BACKING_OPEN file=data2 rc=2 errno=0 (Success)
+PAS-0 BACKING_OPEN file=data3 rc=3 errno=0 (Success)
+PAS-0 BACKING_OPEN file=data4 rc=4 errno=0 (Success)
+probe: negotiated minor=31 flags=0x40400021 flags2=0x20 FUSE_PASSTHROUGH_reply_bit=1 max_stack_depth=1 max_write=1048576
+server: OPEN nodeid=2 -> open_flags=0x80 backing_id=1 (cached_replies=0 passthrough_replies=1)
+PAS-1 client open /mnt/v1unpas/data rc=8 errno=0
+PAS-1 mmap(MAP_SHARED|PROT_WRITE) rc=ok errno=0
+PAS-1 daemon pread(backing_fd)=131072/131072 words_seen page0=[148202..148225] then [205646..205646] fuse_read_requests_delta=0 fuse_write_requests_delta=0
+RESULT PAS1 daemon_reads_mapped_dirty_bytes=1 without_client_cooperation=1 without_fsync=1 fuse_requests_for_that_read=0 values_advanced=1
+PAS-2 trial=1 pread_ns=6416 breaks=1 in_page=1 first_break_word=96 delta=1 violating_pairs=39936 distinct_rounds=2 range=120687..120688
+PAS-2 trial=3 pread_ns=5875 breaks=1 in_page=1 first_break_word=480 delta=1 violating_pairs=15360 distinct_rounds=2 range=120811..120812
+PAS-2 trial=5 pread_ns=5875 breaks=1 in_page=1 first_break_word=384 delta=1 violating_pairs=49152 distinct_rounds=2 range=120916..120917
+PAS-2 trial=6 pread_ns=5625 breaks=1 in_page=1 first_break_word=45 delta=1 violating_pairs=21015 distinct_rounds=2 range=120975..120976
+PAS-2 trial=11 pread_ns=4458 breaks=1 in_page=1 first_break_word=13 delta=1 violating_pairs=6487 distinct_rounds=2 range=121349..121350
+PAS-2 trial=13 pread_ns=4833 breaks=1 in_page=1 first_break_word=128 delta=1 violating_pairs=49152 distinct_rounds=2 range=121456..121457
+PAS-2 trial=15 pread_ns=4500 breaks=1 in_page=1 first_break_word=23 delta=1 violating_pairs=11247 distinct_rounds=2 range=121549..121550
+PAS-2 trial=16 pread_ns=5000 breaks=1 in_page=1 first_break_word=412 delta=1 violating_pairs=41200 distinct_rounds=2 range=121608..121609
+RESULT PAS2 daemon_read_trials=50 reads_that_are_NOT_a_single_instant=19 max_delta_rounds=1 max_violating_pairs=65500
+RESULT PAS2b fsync_backing_then_read_trials=20 still_not_single_instant=11 max_delta_rounds=1
+PAS-3 50x pread_128KiB took 253166 ns; writer rounds during them=430; idle 200 ms yields 505111 rounds
+RESULT PAS3 writer_rounds_per_ms_during_reads=1699604 writer_rounds_per_ms_idle=2525555 stall_ratio_pct=67
+PAS-4 daemon_fds baseline=5 after_opening_4_backing_files=9 after_registering_them_with_the_kernel=9 during_1_passthrough_opens=10 (the kernel additionally allocates one backing_file per passthrough open, fs/fuse/passthrough.c:328-330, and one unbounded idr entry per registration)
+RESULT PAS4 daemon_fd_delta_for_4_backing_files=4 daemon_fds_per_passthrough_inode=4 client_passthrough_opens=1
+server: OPEN nodeid=3 -> open_flags=0x0 backing_id=0 (cached_replies=1 passthrough_replies=1)
+PAS-5a cached open /mnt/v1unpas/data2 rc=9 errno=0
+server: OPEN nodeid=3 -> open_flags=0x80 backing_id=2 (cached_replies=1 passthrough_replies=2)
+PAS-5a after a cached handle is open, passthrough open rc=-1 errno=5 (Input/output error)
+server: OPEN nodeid=3 -> open_flags=0x80 backing_id=2 (cached_replies=1 passthrough_replies=3)
+PAS-5a after closing the cached handle, passthrough open rc=9 errno=0 (Success)
+RESULT PAS5a passthrough_open_while_cached_handle_open_rc=-1 errno=5 passthrough_open_after_close_rc=9 errno=0
+server: OPEN nodeid=4 -> open_flags=0x80 backing_id=3 (cached_replies=1 passthrough_replies=4)
+PAS-5b passthrough open /mnt/v1unpas/data3 rc=9
+server: OPEN nodeid=4 -> open_flags=0x0 backing_id=0 (cached_replies=2 passthrough_replies=4)
+PAS-5b while a passthrough handle is open, cached open rc=-1 errno=5 (Input/output error)
+RESULT PAS5b cached_open_while_passthrough_handle_open_rc=-1 errno=5
+server: OPEN nodeid=5 -> open_flags=0x80 backing_id=4 (cached_replies=2 passthrough_replies=5)
+PAS-6 open+mmap /mnt/v1unpas/data4 rc=9 mmap=ok
+server: UNLINK data4 (idx=3) -> 0
+PAS-6 unlink rc=0 errno=5
+PAS-6 after unlink: backing read 1 = 0x1122334455667788, 2 = 0x99aabbccddeeff00, reopen-by-path rc=-1 errno=2
+RESULT PAS6 mapping_survives_unlink=1 daemon_still_reads_its_own_backing=1 reopen_after_unlink_errno=2
+RESULT PAS7 fuse_read_requests_total=0 fuse_write_requests_total=0 fuse_other_requests_total=6 mapped_io_reached_the_daemon=0
+EXIT=0

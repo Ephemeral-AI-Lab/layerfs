@@ -1,0 +1,1159 @@
+diff --git a/crates/layerfs-workspace/src/lifecycle.rs b/crates/layerfs-workspace/src/lifecycle.rs
+index 3a7976447..d0b7ca75f 100644
+--- a/crates/layerfs-workspace/src/lifecycle.rs
++++ b/crates/layerfs-workspace/src/lifecycle.rs
+@@ -386,7 +386,7 @@ impl Workspaces {
+         } else {
+             (workspace.backing.segments.len(), workspace.backing.bytes)
+         };
+-        Ok(VerificationWorkspaceState {
++        let legacy = VerificationWorkspaceState {
+             spool_bytes: workspace.live.spool_bytes,
+             spool_peak_bytes: workspace.live.spool_bytes_peak,
+             physical_spool_allocated_bytes: physical_current,
+@@ -396,6 +396,55 @@ impl Workspaces {
+             mutation_generation: workspace.live.mutation_generation,
+             open_spool_files,
+             spool_segment_bytes,
++            ..VerificationWorkspaceState::empty()
++        };
++        drop(workspace);
++        let Some(host) = worker.host_runtime()? else {
++            // No host authority: every host-domain figure is genuinely
++            // unavailable and stays `None`, never a zero a reader could mistake
++            // for a measured host value.
++            return Ok(legacy);
++        };
++        Ok(legacy.with_host(self.host_verification_domain(id, &host)?))
++    }
++
++    #[cfg(feature = "test-instrumentation")]
++    fn host_verification_domain(
++        &self,
++        id: WorkspaceId,
++        host: &crate::host_runtime::HostRuntime,
++    ) -> WorkspaceResult<VerificationHostDomain> {
++        let overlay = &host.operations.host;
++        // An unavailable sample (a failed arena observation) stays `None` for
++        // every payload figure rather than becoming a partial set of zeros.
++        let payload = overlay.payload.stats().ok();
++        let index = overlay.index.stats().ok();
++        let ranges = overlay.ranges.stats();
++        let attempt = self.host_attempt(id)?;
++        Ok(VerificationHostDomain {
++            authority: VerificationAuthority::HostOverlay,
++            host_payload_chargeable_bytes: payload.as_ref().map(|stats| stats.chargeable_bytes),
++            host_payload_physical_bytes: payload.as_ref().map(|stats| stats.physical_bytes),
++            host_payload_live_block_bytes: payload.as_ref().map(|stats| stats.live_block_bytes),
++            host_payload_resident_owners: payload.as_ref().map(|stats| stats.owners),
++            host_payload_persisted_tokens: payload.as_ref().map(|stats| stats.persisted_tokens),
++            host_payload_pending_releases: payload.as_ref().map(|stats| stats.pending_releases),
++            host_index_physical_bytes: index.as_ref().map(|stats| stats.physical_bytes),
++            host_index_live_pages: index.as_ref().map(|stats| stats.live_pages),
++            host_index_allocated_pages: index.as_ref().map(|stats| stats.allocated_pages),
++            host_index_pending_roots: index.as_ref().map(|stats| stats.pending_roots),
++            host_range_node_reads: Some(ranges.node_reads),
++            host_range_node_writes: Some(ranges.node_writes),
++            attempt_scratch_peak_reserved_bytes: attempt
++                .map(|report| report.scratch_peak_reserved_bytes),
++            attempt_scratch_peak_allocated_bytes: attempt
++                .map(|report| report.scratch_peak_allocated_bytes),
++            attempt_scratch_peak_reserved_files: attempt
++                .map(|report| report.scratch_peak_reserved_files),
++            attempt_changed_keys: attempt.map(|report| report.changed_keys),
++            attempt_changed_inodes: attempt.map(|report| report.changed_inodes),
++            attempt_replacement_bytes: attempt.map(|report| report.replacement_bytes),
++            attempt_reused_bytes: attempt.map(|report| report.reused_bytes),
+         })
+     }
+ 
+@@ -787,6 +836,27 @@ impl Workspaces {
+             // the authoritative End/Discard resolution.
+             eprintln!("layerfs-workspace: retained publication receipt cleanup: {error}");
+         }
++        // Host-domain resource report. The legacy edit counters describe a
++        // `Workspace.live` mirror and are not applicable to a host overlay, so
++        // they are left unset instead of being reported as zeros; the retained
++        // whole-attempt sample below is the host route's own observation.
++        if let Some(diagnostics) = &completion.diagnostics {
++            if diagnostics.attempt_peak_sampled {
++                self.note_host_attempt(
++                    worker.id,
++                    crate::registry::HostAttemptReport {
++                        attempt_peak_sampled: true,
++                        scratch_peak_reserved_bytes: diagnostics.attempt_peak_reserved_bytes,
++                        scratch_peak_allocated_bytes: diagnostics.attempt_peak_allocated_bytes,
++                        scratch_peak_reserved_files: diagnostics.attempt_peak_reserved_files,
++                        changed_keys: diagnostics.changed_keys,
++                        changed_inodes: diagnostics.changed_inodes,
++                        replacement_bytes: diagnostics.replacement_bytes,
++                        reused_bytes: diagnostics.reused_bytes,
++                    },
++                )?;
++            }
++        }
+         let observations = worker
+             .workspace
+             .lock()
+@@ -815,6 +885,15 @@ impl Workspaces {
+             .lifecycle
+             .lock()
+             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
++        if worker.host_runtime()?.is_some() {
++            // The host authority publishes and presents as one owned operation,
++            // so it never records `presentation_failed`. This legacy recovery
++            // (pause, quiesce, end, reinstall the pending checkpoint, reattach)
++            // would tear down a live authority that has nothing to recover. The
++            // supported host recovery is an explicit End/Discard that settles
++            // the coordinator and then a fresh attach.
++            return Err(WorkspaceError::InvalidExecution);
++        }
+         if worker.has_executions()?
+             || !worker
+                 .workspace
+@@ -2436,6 +2515,289 @@ mod tests {
+             })
+             .unwrap_or(false)
+     }
++
++    // ---- Explicit fsync / cache control on the host authority -------------------
++
++    /// The mounted client's explicit `fsync` reaches the host authority as one
++    /// bounded `Fsync` request. It must flush the private arenas and index,
++    /// publish nothing, surface a real I/O error, and never drain callbacks or
++    /// writers.
++    #[test]
++    fn host_authority_explicit_fsync_flushes_without_publishing_or_draining() {
++        use layerfs_fuse::host_wire::{self as wire, Operation, Reply};
++        use layerfs_fuse::FilesystemPort;
++        let (root, workspaces, branch, store) = fixture("host-explicit-fsync");
++        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
++        // The same authenticated transport session the mounted client uses: a
++        // foreign session is correctly refused by the replay window.
++        let transport = runtime.server.host_session().unwrap();
++        let frame = |sequence: u64, operation: Operation<'_>| {
++            wire::encode_request(wire::Request {
++                session: transport,
++                sequence,
++                acknowledged: 0,
++                operation,
++            })
++            .unwrap()
++        };
++        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
++        assert_eq!(client.write(node, 0, b"Z").unwrap(), 1);
++        assert_eq!(client.read(node, 0, 16).unwrap(), b"Zbcdef");
++        let commits_before = store.store_counts().unwrap().commits;
++        let covered_before = runtime.covered_sequence().unwrap();
++        let head_before = runtime.published_head().unwrap();
++        assert!(workspaces.diff(session.id).unwrap().dirty);
++
++        // A held callback and an open writer: a draining implementation would
++        // block here until its one-second quiesce deadline.
++        let worker = workspaces.worker(session.id).unwrap();
++        let callback = worker.enter_callback().unwrap();
++        worker.note_writer(true).unwrap();
++        let started = std::time::Instant::now();
++        let reply = runtime
++            .operations
++            .request(&frame(11, Operation::Fsync(Some(node))))
++            .unwrap();
++        let elapsed = started.elapsed();
++        match wire::decode_reply(&reply, 11).unwrap() {
++            Reply::Known(Ok(_)) => {}
++            Reply::Known(Err(error)) => panic!("explicit host fsync failed: {error:?}"),
++            Reply::Unknown => panic!("explicit host fsync returned an unknown reply"),
++        }
++        assert!(
++            elapsed < std::time::Duration::from_millis(500),
++            "explicit fsync must not drain writers or callbacks: {elapsed:?}"
++        );
++        worker.note_writer(false).unwrap();
++        drop(callback);
++
++        // Explicit fsync alone: no publication, no coverage, no byte change.
++        assert_eq!(store.store_counts().unwrap().commits, commits_before);
++        assert_eq!(runtime.covered_sequence().unwrap(), covered_before);
++        assert_eq!(runtime.published_head().unwrap(), head_before);
++        assert_eq!(client.read(node, 0, 16).unwrap(), b"Zbcdef");
++        assert!(workspaces.diff(session.id).unwrap().dirty);
++        let reply = runtime
++            .operations
++            .request(&frame(12, Operation::Fsync(Some(node))))
++            .unwrap();
++        assert!(matches!(
++            wire::decode_reply(&reply, 12).unwrap(),
++            Reply::Known(Ok(_))
++        ));
++        assert_eq!(store.store_counts().unwrap().commits, commits_before);
++
++        // A real I/O error is surfaced to the caller, and the failed flush
++        // still publishes nothing and leaves the acknowledged bytes intact.
++        let missing = layerfs_fuse::NodeId(9_999);
++        let reply = runtime
++            .operations
++            .request(&frame(13, Operation::Fsync(Some(missing))))
++            .unwrap();
++        match wire::decode_reply(&reply, 13).unwrap() {
++            Reply::Known(Err(error)) => {
++                assert_eq!(error, layerfs_fuse::PortError::NotFound, "{error:?}");
++            }
++            other => panic!(
++                "an fsync of an unknown inode must fail, got {}",
++                if matches!(other, Reply::Unknown) {
++                    "an unknown operation"
++                } else {
++                    "a successful reply"
++                }
++            ),
++        }
++        assert_eq!(store.store_counts().unwrap().commits, commits_before);
++        assert_eq!(runtime.covered_sequence().unwrap(), covered_before);
++        assert_eq!(client.read(node, 0, 16).unwrap(), b"Zbcdef");
++
++        // A whole-filesystem fsync (no inode) is the same explicit route.
++        let reply = runtime
++            .operations
++            .request(&frame(14, Operation::Fsync(None)))
++            .unwrap();
++        assert!(matches!(
++            wire::decode_reply(&reply, 14).unwrap(),
++            Reply::Known(Ok(_))
++        ));
++        assert_eq!(store.store_counts().unwrap().commits, commits_before);
++        assert!(workspaces.diff(session.id).unwrap().dirty);
++
++        // The explicit flush did not become an implicit one: the Commit that
++        // follows is what publishes, and it publishes exactly the live bytes.
++        assert!(matches!(
++            workspaces.commit_workspace_session(session.id).unwrap(),
++            WorkspaceCommitResult::Created { .. }
++        ));
++        assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
++        assert_eq!(
++            committed_file(&store, store.pin_branch(branch).unwrap().root),
++            b"Zbcdef"
++        );
++        assert!(!workspaces.diff(session.id).unwrap().dirty);
++        workspaces
++            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
++            .unwrap();
++        std::fs::remove_dir_all(root).unwrap();
++        println!(
++            "HOST FSYNC PASS: explicit Fsync flushed through the host authority in {elapsed:?} with a held callback and open writer, published nothing, surfaced NotFound for an unknown inode, and the later Commit published exactly the live bytes"
++        );
++    }
++
++    #[cfg(feature = "test-instrumentation")]
++    #[test]
++    fn verification_state_reports_the_host_domain_and_never_a_fabricated_zero() {
++        use layerfs_fuse::FilesystemPort;
++        // A session with no host authority: every host-domain figure is
++        // unavailable and is reported as `None`, not as zero.
++        let (plain_root, plain, branch, _store) = fixture("verification-no-host");
++        let plain_session = session(&plain_root, &plain, branch);
++        let state = plain
++            .verification_workspace_state(plain_session.id)
++            .unwrap();
++        assert_eq!(state.authority, VerificationAuthority::WorkspaceLive);
++        assert_eq!(state.host.host_payload_chargeable_bytes, None);
++        assert_eq!(state.host.host_payload_physical_bytes, None);
++        assert_eq!(state.host.host_payload_resident_owners, None);
++        assert_eq!(state.host.host_payload_persisted_tokens, None);
++        assert_eq!(state.host.host_index_physical_bytes, None);
++        assert_eq!(state.host.host_index_live_pages, None);
++        assert_eq!(state.host.host_range_node_reads, None);
++        assert_eq!(state.host.host_range_node_writes, None);
++        assert_eq!(state.host.attempt_changed_keys, None);
++        assert_eq!(state.host.attempt_scratch_peak_allocated_bytes, None);
++        plain
++            .end_workspace_session(plain_session.id, EndWorkspaceMode::Discard)
++            .unwrap();
++        std::fs::remove_dir_all(plain_root).unwrap();
++
++        // A host-authority session: the same fields carry the authority's own
++        // figures, and the whole-attempt sample is absent until an attempt has
++        // completed.
++        let (root, workspaces, branch, _store) = fixture("verification-host-domain");
++        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
++        let before = workspaces.verification_workspace_state(session.id).unwrap();
++        assert_eq!(before.authority, VerificationAuthority::HostOverlay);
++        assert_eq!(
++            before.host.attempt_changed_keys, None,
++            "no attempt has completed yet"
++        );
++        assert_eq!(before.host.attempt_scratch_peak_allocated_bytes, None);
++
++        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
++        assert_eq!(client.write(node, 0, b"Q").unwrap(), 1);
++        assert!(matches!(
++            workspaces.commit_workspace_session(session.id).unwrap(),
++            WorkspaceCommitResult::Created { .. }
++        ));
++        let after = workspaces.verification_workspace_state(session.id).unwrap();
++        assert_eq!(after.authority, VerificationAuthority::HostOverlay);
++        assert_eq!(
++            after.host.host_payload_chargeable_bytes,
++            Some(1),
++            "one live byte of payload charge, taken from the host overlay"
++        );
++        assert!(
++            after.host.host_payload_resident_owners.is_some(),
++            "resident ownership is measured, not unavailable: {after:?}"
++        );
++        assert!(
++            after.host.host_payload_persisted_tokens.is_some(),
++            "persisted tokens are measured, not unavailable: {after:?}"
++        );
++        assert_eq!(
++            after.host.host_payload_live_block_bytes,
++            Some(4096),
++            "the one-byte live range is charged as one touched 4-KiB payload block"
++        );
++        let physical = after.host.host_payload_physical_bytes.unwrap();
++        assert!(
++            physical >= 4096,
++            "the payload arena is really allocated: {physical}"
++        );
++        assert!(after.host.host_index_live_pages.unwrap() > 0);
++        assert!(after.host.host_index_allocated_pages.unwrap() > 0);
++        assert!(after.host.host_index_physical_bytes.unwrap() > 0);
++        assert_eq!(
++            after.host.attempt_changed_keys,
++            Some(1),
++            "the whole-attempt sample counts the changed inode"
++        );
++        assert_eq!(after.host.attempt_changed_inodes, Some(1));
++        assert!(
++            after.host.attempt_reused_bytes.is_some(),
++            "reuse is measured for the whole attempt"
++        );
++        assert_eq!(
++            after.host.attempt_replacement_bytes,
++            Some(1),
++            "the one-byte overwrite is exactly one replacement byte"
++        );
++        assert!(after.host.attempt_scratch_peak_allocated_bytes.is_some());
++        assert!(after.host.attempt_scratch_peak_reserved_bytes.is_some());
++        assert_ne!(
++            after.host.host_payload_chargeable_bytes,
++            Some(after.spool_bytes),
++            "the host charge is not the legacy spool field"
++        );
++        let range_reads = after.host.host_range_node_reads.unwrap();
++        assert!(runtime.operations.host.ranges.stats().node_reads >= range_reads);
++        workspaces
++            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
++            .unwrap();
++        std::fs::remove_dir_all(root).unwrap();
++        println!(
++            "HOST DOMAIN METRICS PASS: no host authority -> every host figure None (unavailable); host authority -> chargeable/owners/tokens/physical/index/range from the overlay, whole-attempt sample present only after an attempt"
++        );
++    }
++
++    /// Recovery on a host-authority session is explicit End/Discard plus a fresh
++    /// attach; the legacy presentation recovery must refuse rather than run its
++    /// pause/quiesce/end/checkpoint-install/attach sequence against a live
++    /// authority that has nothing to recover.
++    #[test]
++    fn host_authority_presentation_recovery_refuses_without_touching_the_authority() {
++        use layerfs_fuse::FilesystemPort;
++        let (root, workspaces, branch, store) = fixture("host-presentation-recovery");
++        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
++        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
++        assert_eq!(client.write(node, 0, b"R").unwrap(), 1);
++        let sequence = runtime.generation().unwrap();
++        let commits = store.store_counts().unwrap().commits;
++        match workspaces.recover_workspace_presentation(session.id) {
++            Err(WorkspaceError::InvalidExecution) => {}
++            other => panic!("host presentation recovery must refuse: {other:?}"),
++        }
++        // Nothing was paused, unmounted, reattached or published.
++        assert_eq!(runtime.generation().unwrap(), sequence);
++        assert_eq!(store.store_counts().unwrap().commits, commits);
++        assert_eq!(client.read(node, 0, 16).unwrap(), b"Rbcdef");
++        assert_eq!(
++            workspaces
++                .worker(session.id)
++                .unwrap()
++                .host_runtime()
++                .unwrap()
++                .is_some(),
++            true,
++            "the authority is still installed"
++        );
++        assert!(matches!(
++            workspaces.commit_workspace_session(session.id).unwrap(),
++            WorkspaceCommitResult::Created { .. }
++        ));
++        assert_eq!(
++            committed_file(&store, store.pin_branch(branch).unwrap().root),
++            b"Rbcdef"
++        );
++        workspaces
++            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
++            .unwrap();
++        std::fs::remove_dir_all(root).unwrap();
++        println!(
++            "HOST RECOVERY PASS: legacy presentation recovery refused on a host session, authority/sequence/bytes/commit count unchanged, the ordinary Commit route still published"
++        );
++    }
+ }
+ 
+ #[cfg(feature = "test-instrumentation")]
+@@ -2446,6 +2808,51 @@ pub enum VerificationFault {
+     ShortAppend,
+     NoSpace,
+ }
++/// Which authority produced a verification sample. A host-authority session's
++/// live charge, payload residency and index residency live in the host overlay
++/// (the `host_*` fields below); the legacy `Workspace.live` mirror and its host
++/// spool fields are *not* its live charge and must not be read as one.
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum VerificationAuthority {
++    /// The legacy `Workspace.live` mirror and the host spool it owns. This
++    /// covers Materialize projection, reconciliation and container sessions.
++    WorkspaceLive,
++    /// The installed host overlay authority. Every `host_*` figure is present.
++    HostOverlay,
++}
++
++/// Host-authority resource figures, each independently optional. `None` is
++/// "unavailable for this session", never a fabricated zero.
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub struct VerificationHostDomain {
++    pub authority: VerificationAuthority,
++    /// Live charge clipped to source high-water, the host analogue of the
++    /// legacy ordinary-spool charge.
++    pub host_payload_chargeable_bytes: Option<u64>,
++    pub host_payload_physical_bytes: Option<u64>,
++    pub host_payload_live_block_bytes: Option<u64>,
++    pub host_payload_resident_owners: Option<usize>,
++    pub host_payload_persisted_tokens: Option<usize>,
++    pub host_payload_pending_releases: Option<usize>,
++    pub host_index_physical_bytes: Option<u64>,
++    pub host_index_live_pages: Option<u64>,
++    pub host_index_allocated_pages: Option<u64>,
++    pub host_index_pending_roots: Option<usize>,
++    pub host_range_node_reads: Option<u64>,
++    pub host_range_node_writes: Option<u64>,
++    /// Whole-attempt scratch sample retained from the last completed host
++    /// Commit. The construction-only group is deliberately not reported.
++    pub attempt_scratch_peak_reserved_bytes: Option<u64>,
++    pub attempt_scratch_peak_allocated_bytes: Option<u64>,
++    pub attempt_scratch_peak_reserved_files: Option<usize>,
++    pub attempt_changed_keys: Option<u64>,
++    pub attempt_changed_inodes: Option<u64>,
++    pub attempt_replacement_bytes: Option<u64>,
++    pub attempt_reused_bytes: Option<u64>,
++}
++
+ #[cfg(feature = "test-instrumentation")]
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+ pub struct VerificationWorkspaceState {
+@@ -2458,6 +2865,63 @@ pub struct VerificationWorkspaceState {
+     pub mutation_generation: u64,
+     pub open_spool_files: usize,
+     pub spool_segment_bytes: u64,
++    /// `WorkspaceLive` when the fields above describe the legacy workspace and
++    /// its host spool; `HostOverlay` when the host domain below is the live one.
++    pub authority: VerificationAuthority,
++    pub host: VerificationHostDomain,
++}
++
++#[cfg(feature = "test-instrumentation")]
++impl VerificationWorkspaceState {
++    fn empty() -> Self {
++        Self {
++            spool_bytes: 0,
++            spool_peak_bytes: 0,
++            physical_spool_allocated_bytes: None,
++            physical_spool_peak_bytes: None,
++            physical_spool_observation_errors: 0,
++            physical_spool_observation_count: 0,
++            mutation_generation: 0,
++            open_spool_files: 0,
++            spool_segment_bytes: 0,
++            authority: VerificationAuthority::WorkspaceLive,
++            host: VerificationHostDomain::unavailable(),
++        }
++    }
++
++    fn with_host(mut self, domain: VerificationHostDomain) -> Self {
++        self.authority = domain.authority;
++        self.host = domain;
++        self
++    }
++}
++
++#[cfg(feature = "test-instrumentation")]
++impl VerificationHostDomain {
++    fn unavailable() -> Self {
++        Self {
++            authority: VerificationAuthority::WorkspaceLive,
++            host_payload_chargeable_bytes: None,
++            host_payload_physical_bytes: None,
++            host_payload_live_block_bytes: None,
++            host_payload_resident_owners: None,
++            host_payload_persisted_tokens: None,
++            host_payload_pending_releases: None,
++            host_index_physical_bytes: None,
++            host_index_live_pages: None,
++            host_index_allocated_pages: None,
++            host_index_pending_roots: None,
++            host_range_node_reads: None,
++            host_range_node_writes: None,
++            attempt_scratch_peak_reserved_bytes: None,
++            attempt_scratch_peak_allocated_bytes: None,
++            attempt_scratch_peak_reserved_files: None,
++            attempt_changed_keys: None,
++            attempt_changed_inodes: None,
++            attempt_replacement_bytes: None,
++            attempt_reused_bytes: None,
++        }
++    }
+ }
+ #[cfg(feature = "test-instrumentation")]
+ #[derive(Clone, Debug)]
+diff --git a/crates/layerfs-workspace/src/projection.rs b/crates/layerfs-workspace/src/projection.rs
+index 0ba74b7ab..77c7503f9 100644
+--- a/crates/layerfs-workspace/src/projection.rs
++++ b/crates/layerfs-workspace/src/projection.rs
+@@ -232,6 +232,11 @@ pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<
+     let Some(transport) = transport else {
+         return Ok(());
+     };
++    // Domain: `spool` below is the legacy host spool's own write accounting. On a
++    // host-authority session that spool is genuinely unused, so its fields are a
++    // true zero for *that* spool and are deliberately not relabeled with the
++    // host overlay's payload arena figures; the payload/index/range figures of a
++    // host session are reported through `verification_workspace_state` instead.
+     let spool = {
+         let mut workspace = worker
+             .workspace
+diff --git a/crates/layerfs-workspace/src/reconcile.rs b/crates/layerfs-workspace/src/reconcile.rs
+index 3847ce00c..9c8a22b0e 100644
+--- a/crates/layerfs-workspace/src/reconcile.rs
++++ b/crates/layerfs-workspace/src/reconcile.rs
+@@ -1,7 +1,34 @@
++//! Reconciliation creation, conflict choices and the invalidation of a recorded
++//! choice.
++//!
++//! Authority. A reconciliation Workspace is created from
++//! `LayerStackStore::prepare_reconciliation` and owns that prepared object graph
++//! through `LayerStackStore::reconciliation_reader`: the private candidate
++//! objects are *not* part of the committed Store, so this reader is the only way
++//! to reach them and it is retained for the whole session, not reconstructed
++//! from a pin. Creation therefore pins the prepared root, head and base layer
++//! (never a fresh branch pin and never the accepted layer) and installs exactly
++//! the prepared conflict set.
++//!
++//! Choice invalidation is identity based and bounded, never a global sequence
++//! comparison: a recorded choice is invalidated only when a path it actually
++//! covers was mutated, or when the captured identity of its affected closure
++//! changed. The closure walk is bounded to the affected paths, so the whole live
++//! manifest is never re-fingerprinted and an unrelated mutation at any later
++//! generation leaves every unrelated conflict resolved.
++//!
++//! A host-authority session owns live state in `HostOverlay`, not in the legacy
++//! `Workspace.live` mirror this module reads. The identity source is therefore
++//! the workspace's own live overlay; a session whose live authority is a host
++//! overlay must supply that overlay as the identity source rather than reading
++//! the stale mirror. No reconciliation session owns a host authority today:
++//! creation stays on the explicit Materialize projection and publication stays
++//! on its own explicit route, so this module has no host-authority caller yet.
++
+ use crate::{
+-    cow_tree::WorkspaceSnapshot, worker::WorkspaceWorker, CreateWorkspaceSession, ResourcePolicy,
+-    Workspace, WorkspaceError, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
+-    WorkspaceResult, Workspaces,
++    cow_tree::WorkspaceSnapshot, worker::WorkspaceWorker, CreateWorkspaceSession, Kind, NodeId,
++    ResourcePolicy, Workspace, WorkspaceError, WorkspaceId, WorkspacePlacement,
++    WorkspaceProjection, WorkspaceResult, Workspaces, ROOT,
+ };
+ use layerfs_content::CanonicalPath;
+ use layerfs_layerstack_store::{
+@@ -115,7 +142,196 @@ struct ResolutionConflict {
+     value: WorkspaceConflict,
+     choice: Option<ResolveChoice>,
+     resolved_generation: Option<u64>,
+-    resolved_fingerprint: Option<[u8; 32]>,
++    resolved_identity: Option<PathIdentity>,
++}
++
++/// Captured identity of one path inside a conflict's affected closure. The
++/// comparison is deliberately made of facts that survive a rebuild of the live
++/// workspace (the legacy Materialize capture replaces it wholesale, so inode
++/// numbers and revisions are *not* comparable across captures): the entry kind,
++/// size, mode, link count, mtime, the inode's bounded alias set, and an exact
++/// digest of the file's bytes. `aliases` is what makes an edit through a
++/// hardlink alias visible from the other name.
++#[derive(Clone, Debug, Eq, PartialEq)]
++struct PathIdentityEntry {
++    /// Raw canonical path bytes. Kept as bytes so two names that are not valid
++    /// UTF-8 can never be folded into one identity.
++    path: Vec<u8>,
++    present: bool,
++    kind: u8,
++    size: u64,
++    mode: u32,
++    links: u32,
++    mtime_seconds: i64,
++    mtime_nanoseconds: u32,
++    aliases: Vec<String>,
++    content: [u8; 32],
++}
++
++/// The captured closure for every affected path of one conflict.
++#[derive(Clone, Debug, Eq, PartialEq)]
++struct PathIdentity {
++    entries: Vec<PathIdentityEntry>,
++    /// The bounded walk stopped with work remaining, so the capture cannot
++    /// prove the closure unchanged. A truncated capture invalidates.
++    truncated: bool,
++}
++
++/// Bounded closure walk. One conflict's affected paths are a small set, and the
++/// walk stops at this many entries instead of reading file bytes or the whole
++/// live manifest.
++const IDENTITY_BOUND: usize = 4096;
++
++impl PathIdentity {
++    fn capture(workspace: &mut Workspace, affected: &[CanonicalPath]) -> StoreResult<Self> {
++        let mut capture = Self {
++            entries: Vec::new(),
++            truncated: false,
++        };
++        let mut affected = affected.to_vec();
++        affected.sort();
++        affected.dedup();
++        for path in &affected {
++            capture.walk(workspace, path.as_str().as_bytes())?;
++            if capture.truncated {
++                break;
++            }
++        }
++        capture
++            .entries
++            .sort_by(|left, right| left.path.cmp(&right.path));
++        Ok(capture)
++    }
++
++    fn walk(&mut self, workspace: &mut Workspace, path: &[u8]) -> StoreResult<()> {
++        if self.entries.len() >= IDENTITY_BOUND {
++            self.truncated = true;
++            return Ok(());
++        }
++        match resolve_identity_node(workspace, path)? {
++            Some(node) => {
++                self.entries
++                    .push(identity_entry(workspace, path.to_vec(), node)?);
++                let is_directory = matches!(
++                    workspace.live.nodes.get(&node).map(|value| &value.data),
++                    Some(crate::cow_tree::Data::Directory(_))
++                );
++                if is_directory {
++                    let mut children = workspace.readdir(node)?;
++                    children.sort_by(|left, right| left.2.cmp(&right.2));
++                    for (_, _, name) in children {
++                        if name == b"." || name == b".." {
++                            continue;
++                        }
++                        let child = child_path(path, &name);
++                        self.walk(workspace, &child)?;
++                        if self.truncated {
++                            return Ok(());
++                        }
++                    }
++                }
++            }
++            // An absent affected path is itself an identity: a later appearance
++            // or disappearance must invalidate the recorded choice.
++            None => self.entries.push(PathIdentityEntry {
++                path: path.to_vec(),
++                present: false,
++                kind: 0,
++                size: 0,
++                mode: 0,
++                links: 0,
++                mtime_seconds: 0,
++                mtime_nanoseconds: 0,
++                aliases: Vec::new(),
++                content: [0; 32],
++            }),
++        }
++        Ok(())
++    }
++}
++
++/// One page of file bytes read while digesting an affected file.
++const IDENTITY_READ_BYTES: usize = 1024 * 1024;
++
++fn identity_entry(
++    workspace: &mut Workspace,
++    path: Vec<u8>,
++    node: NodeId,
++) -> StoreResult<PathIdentityEntry> {
++    let names = workspace
++        .live
++        .nodes
++        .get(&node)
++        .ok_or(StoreError::Integrity("resolution identity node"))?
++        .paths
++        .iter()
++        .cloned()
++        .collect::<Vec<_>>();
++    let attr = Workspace::attr(workspace, node)?;
++    let mut content = [0_u8; 32];
++    if matches!(attr.kind, Kind::File) {
++        let mut digest = layerfs_content::object::ContentDigestWriter::new();
++        let mut offset = 0_u64;
++        loop {
++            let page = workspace.read(node, offset, IDENTITY_READ_BYTES)?;
++            if page.is_empty() {
++                break;
++            }
++            offset = offset.saturating_add(page.len() as u64);
++            std::io::Write::write_all(&mut digest, &page)
++                .map_err(|_| StoreError::Integrity("resolution identity digest"))?;
++            if offset >= attr.size {
++                break;
++            }
++        }
++        content = digest.finish();
++    }
++    Ok(PathIdentityEntry {
++        path,
++        present: true,
++        kind: match attr.kind {
++            Kind::File => 1,
++            Kind::Directory => 2,
++            Kind::Symlink => 3,
++        },
++        size: attr.size,
++        mode: attr.mode,
++        links: attr.links,
++        mtime_seconds: attr.mtime_seconds,
++        mtime_nanoseconds: attr.mtime_nanoseconds,
++        aliases: names,
++        content,
++    })
++}
++
++/// Resolve one canonical path to its live node. `None` means the path does not
++/// exist in the live overlay, which is a comparable identity in itself.
++fn resolve_identity_node(workspace: &mut Workspace, path: &[u8]) -> StoreResult<Option<NodeId>> {
++    let mut node = ROOT;
++    if path.is_empty() {
++        return Ok(Some(node));
++    }
++    for component in path.split(|byte| *byte == b'/') {
++        if component.is_empty() {
++            return Err(StoreError::InvalidInput("reconciliation identity path"));
++        }
++        match workspace.lookup_node(node, component) {
++            Ok(child) => node = child,
++            Err(StoreError::NotFound(_)) => return Ok(None),
++            Err(error) => return Err(error),
++        }
++    }
++    Ok(Some(node))
++}
++
++fn child_path(parent: &[u8], name: &[u8]) -> Vec<u8> {
++    if parent.is_empty() {
++        return name.to_vec();
++    }
++    let mut path = parent.to_vec();
++    path.push(b'/');
++    path.extend_from_slice(name);
++    path
+ }
+ 
+ impl ResolutionState {
+@@ -137,7 +353,7 @@ impl ResolutionState {
+                 },
+                 choice: None,
+                 resolved_generation: None,
+-                resolved_fingerprint: None,
++                resolved_identity: None,
+             })
+             .collect();
+         Self {
+@@ -180,17 +396,24 @@ impl ResolutionConflict {
+         let Some(resolved) = self.resolved_generation else {
+             return Ok(());
+         };
++        // Two independent detectors, neither of them a global sequence compare:
++        // a per-path mutation record for this conflict's own affected paths,
++        // and the captured inode identity (revision plus bounded alias set) of
++        // the affected closure. An unrelated path at any later sequence leaves
++        // the choice intact.
+         let path_was_mutated = self.path_was_mutated(&workspace.live.mutation_paths, resolved);
+-        let fingerprint_changed = match self.resolved_fingerprint {
+-            Some(expected) => {
+-                workspace.resolution_fingerprint(&self.value.affected_paths)? != expected
++        let identity_changed = match &self.resolved_identity {
++            Some(captured) => {
++                let current =
++                    PathIdentity::capture(workspace, self.value.affected_paths.as_slice())?;
++                current.truncated || current != *captured
+             }
+             None => false,
+         };
+-        if path_was_mutated || fingerprint_changed {
++        if path_was_mutated || identity_changed {
+             self.choice = None;
+             self.resolved_generation = None;
+-            self.resolved_fingerprint = None;
++            self.resolved_identity = None;
+         }
+         Ok(())
+     }
+@@ -369,7 +592,7 @@ impl Workspaces {
+                 .value
+                 .affected_paths
+                 .clone();
+-            let fingerprint = workspace.resolution_fingerprint(&affected_paths)?;
++            let fingerprint = PathIdentity::capture(&mut workspace, &affected_paths)?;
+             let generation = workspace.live.mutation_generation;
+             let resolution = workspace
+                 .resolution
+@@ -382,7 +605,7 @@ impl Workspaces {
+                 .ok_or(WorkspaceError::NotFound)?;
+             conflict.choice = Some(choice);
+             conflict.resolved_generation = Some(generation);
+-            conflict.resolved_fingerprint = Some(fingerprint);
++            conflict.resolved_identity = Some(fingerprint);
+             Ok(ResolveResult {
+                 conflict_id,
+                 remaining: resolution.unresolved() as u64,
+@@ -414,6 +637,91 @@ fn hex(value: u8) -> WorkspaceResult<u8> {
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use layerfs_content::filesystem::ContentChange;
++    use layerfs_layerstack_store::{
++        apply_changes, AddLayerResult, CommitOutcome, EntityName, LayerStackInitialization,
++        LocalForkSource,
++    };
++    use std::time::SystemTime;
++
++    fn committed(reconciliation: &LayerStackStore, branch: BranchId, value: &[u8]) {
++        let pinned = reconciliation.pin_branch(branch).unwrap();
++        let built = apply_changes(
++            &pinned.reader,
++            pinned.root,
++            &[ContentChange::Write {
++                path: "z".to_owned(),
++                bytes: value.to_vec(),
++                mode: 0o644,
++            }],
++            [9; 32],
++        )
++        .unwrap();
++        assert!(matches!(
++            reconciliation
++                .commit_candidate(
++                    &pinned.branch,
++                    pinned.root,
++                    pinned.branch.base_layer_id,
++                    built
++                )
++                .unwrap(),
++            CommitOutcome::Committed { .. }
++        ));
++    }
++
++    /// Real conflict state: an accepted layer and a stale branch that both
++    /// changed `z`, so `z` is a content conflict.
++    fn fixture(
++        label: &str,
++    ) -> (
++        std::path::PathBuf,
++        LayerStackStore,
++        BranchId,
++        LayerId,
++        BranchId,
++    ) {
++        let root = std::env::temp_dir().join(format!(
++            "layerfs-reconcile-{label}-{}-{}",
++            std::process::id(),
++            SystemTime::now()
++                .duration_since(SystemTime::UNIX_EPOCH)
++                .unwrap()
++                .as_nanos()
++        ));
++        let source = root.join("source");
++        std::fs::create_dir_all(&source).unwrap();
++        std::fs::write(source.join("z"), b"base").unwrap();
++        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
++        let initialized = store
++            .initialize_layerstack(
++                EntityName::new("project").unwrap(),
++                LayerStackInitialization::Directory(source),
++            )
++            .unwrap();
++        let accepted = store
++            .fork_branch(
++                EntityName::new("accepted").unwrap(),
++                LocalForkSource::Layer {
++                    layer_id: initialized.genesis_layer_id,
++                },
++            )
++            .unwrap();
++        let stale = store
++            .fork_branch(
++                EntityName::new("stale").unwrap(),
++                LocalForkSource::Layer {
++                    layer_id: initialized.genesis_layer_id,
++                },
++            )
++            .unwrap();
++        committed(&store, accepted, b"layer");
++        let AddLayerResult::Added { layer_id: current } = store.add_layer(accepted).unwrap() else {
++            panic!("accepted Add")
++        };
++        committed(&store, stale, b"branch");
++        (root, store, stale, current, accepted)
++    }
+ 
+     #[test]
+     fn only_intersecting_later_mutations_invalidate_a_resolution() {
+@@ -425,7 +733,7 @@ mod tests {
+             },
+             choice: Some(ResolveChoice::WorkingTree),
+             resolved_generation: Some(4),
+-            resolved_fingerprint: Some([1; 32]),
++            resolved_identity: None,
+         };
+         let unrelated = conflict();
+         assert!(!unrelated.path_was_mutated(&BTreeMap::from([("other".to_owned(), 5)]), 4));
+@@ -441,4 +749,138 @@ mod tests {
+         let older = conflict();
+         assert!(!older.path_was_mutated(&BTreeMap::from([("dir/file".to_owned(), 4)]), 4));
+     }
++
++    /// Creation is bound to the prepared reconciliation object graph: the
++    /// prepared root, head and base layer, with exactly the prepared conflicts
++    /// installed, and the private reader that owns the deferred candidate
++    /// objects. Nothing here reads the accepted layer or a fresh branch pin.
++    #[test]
++    fn creation_pins_the_private_reconciliation_objects() {
++        let (root, store, stale, current, accepted) = fixture("creation-private-objects");
++        let accepted_root = store.pin_branch(accepted).unwrap().root;
++        let prepared = store.prepare_reconciliation(stale, current).unwrap();
++        let prepared_root = prepared.root_id;
++        let prepared_head = prepared.expected_head;
++        let prepared_base = prepared.old_base_layer_id;
++        let prepared_conflicts = prepared.conflicts.len();
++        assert!(
++            prepared_conflicts > 0,
++            "the fixture must produce a conflict"
++        );
++        // The production creation route is exactly this construction; reaching
++        // a resolution at all depends on the deferred private objects the
++        // reconciliation reader owns.
++        let _reader = store.reconciliation_reader(&prepared);
++
++        let spool = root.join("spool");
++        let mut workspace =
++            Workspace::open_resolution(store.clone(), WorkspaceId::new(), prepared, &spool)
++                .unwrap();
++        assert_eq!(workspace.base_root, prepared_root);
++        assert_eq!(workspace.expected_head, Some(prepared_head));
++        assert_eq!(workspace.expected_base, prepared_base);
++        assert_ne!(workspace.base_root, accepted_root);
++        let node = resolve_identity_node(&mut workspace, b"z")
++            .unwrap()
++            .unwrap();
++        let bytes = workspace.read(node, 0, 16).unwrap();
++        assert_eq!(bytes, b"branch", "the stale branch side is the live view");
++        let resolution = workspace.resolution.as_ref().unwrap();
++        assert_eq!(resolution.conflicts.len(), prepared_conflicts);
++        assert_eq!(resolution.unresolved(), prepared_conflicts);
++        assert_eq!(
++            resolution.prepared.conflicts.len(),
++            prepared_conflicts,
++            "the prepared conflict set is retained for publication"
++        );
++        drop(workspace);
++        drop(store);
++        std::fs::remove_dir_all(root).unwrap();
++        println!(
++            "RECONCILIATION CREATION PASS: prepared root/head/base pinned, {prepared_conflicts} conflicts installed, live view is the stale branch side, private prepared conflict set retained"
++        );
++    }
++
++    /// The required invalidation semantics against real conflict state: an
++    /// unrelated-path mutation leaves the choice alone even at a later
++    /// generation, while an edit to the same inode through a hardlink alias
++    /// invalidates it.
++    #[test]
++    fn choice_survives_an_unrelated_edit_and_alias_edit_invalidates_it() {
++        let (root, store, stale, current, _accepted) = fixture("choice-identity");
++        let prepared = store.prepare_reconciliation(stale, current).unwrap();
++        let spool = root.join("spool");
++        let mut workspace =
++            Workspace::open_resolution(store.clone(), WorkspaceId::new(), prepared, &spool)
++                .unwrap();
++        let affected = vec![CanonicalPath::new("z").unwrap()];
++        let node = resolve_identity_node(&mut workspace, b"z")
++            .unwrap()
++            .unwrap();
++        // A second name for the same inode, inside the live overlay.
++        workspace.link(node, ROOT, b"alias").unwrap();
++        assert!(workspace.live.nodes[&node].paths.contains("alias"));
++
++        let generation = workspace.live.mutation_generation;
++        let count = workspace.resolution.as_ref().unwrap().conflicts.len();
++        let captured = (0..count)
++            .map(|index| {
++                let affected = workspace.resolution.as_ref().unwrap().conflicts[index]
++                    .value
++                    .affected_paths
++                    .clone();
++                PathIdentity::capture(&mut workspace, &affected).unwrap()
++            })
++            .collect::<Vec<_>>();
++        for (index, conflict) in workspace
++            .resolution
++            .as_mut()
++            .unwrap()
++            .conflicts
++            .iter_mut()
++            .enumerate()
++        {
++            conflict.choice = Some(ResolveChoice::Layer);
++            conflict.resolved_generation = Some(generation);
++            conflict.resolved_identity = Some(captured[index].clone());
++        }
++        assert_eq!(workspace.resolution.as_ref().unwrap().unresolved(), 0);
++
++        // Unrelated path: a later generation, but nothing the conflict covers.
++        workspace.create_file(ROOT, b"other", 0o644).unwrap();
++        assert!(workspace.live.mutation_generation > generation);
++        let mut resolution = workspace.resolution.take().unwrap();
++        resolution.invalidate_if_mutated(&mut workspace).unwrap();
++        workspace.resolution = Some(resolution);
++        assert_eq!(
++            workspace.resolution.as_ref().unwrap().unresolved(),
++            0,
++            "an unrelated-path edit must not invalidate an unrelated conflict"
++        );
++
++        // Intersecting alias: the same inode, reached by its other name.
++        workspace.write(node, 0, b"X").unwrap();
++        assert_eq!(workspace.read(node, 0, 1).unwrap(), b"X");
++        let identity_now = PathIdentity::capture(&mut workspace, &affected).unwrap();
++        assert!(identity_now.entries[0]
++            .aliases
++            .contains(&"alias".to_owned()));
++        let mut resolution = workspace.resolution.take().unwrap();
++        resolution.invalidate_if_mutated(&mut workspace).unwrap();
++        workspace.resolution = Some(resolution);
++        assert_eq!(
++            workspace.resolution.as_ref().unwrap().unresolved(),
++            1,
++            "an edit to the affected inode through a hardlink alias must invalidate the choice"
++        );
++        assert!(workspace.resolution.as_ref().unwrap().conflicts[0]
++            .resolved_identity
++            .is_none());
++        drop(workspace);
++        drop(store);
++        std::fs::remove_dir_all(root).unwrap();
++        println!(
++            "RECONCILIATION CHOICE PASS: unrelated later mutation kept the choice, an alias edit of the same inode invalidated it, the captured identity carries the alias set"
++        );
++    }
+ }
+diff --git a/crates/layerfs-workspace/src/registry.rs b/crates/layerfs-workspace/src/registry.rs
+index 60c93ac59..e8ebd4ecb 100644
+--- a/crates/layerfs-workspace/src/registry.rs
++++ b/crates/layerfs-workspace/src/registry.rs
+@@ -23,6 +23,23 @@ pub(crate) enum SessionRecord {
+     Retained(RetainedSession),
+ }
+ 
++/// Whole-attempt resource sample retained from the last completed host-authority
++/// Commit. Only the full-attempt (`attempt_*`) peak group is retained: the
++/// construction-only group describes a partial attempt and is never relabeled.
++/// A session with no host authority never has one, so the report stays absent
++/// (unavailable) rather than becoming a fabricated zero.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub(crate) struct HostAttemptReport {
++    pub(crate) attempt_peak_sampled: bool,
++    pub(crate) scratch_peak_reserved_bytes: u64,
++    pub(crate) scratch_peak_allocated_bytes: u64,
++    pub(crate) scratch_peak_reserved_files: usize,
++    pub(crate) changed_keys: u64,
++    pub(crate) changed_inodes: u64,
++    pub(crate) replacement_bytes: u64,
++    pub(crate) reused_bytes: u64,
++}
++
+ #[derive(Clone)]
+ pub(crate) struct RetainedSession {
+     pub(crate) session: WorkspaceSession,
+@@ -48,6 +65,9 @@ pub struct Workspaces {
+     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+     pub(crate) mount_route: crate::daemon::MountRoute,
+     pub(crate) daemon: Option<crate::daemon::DaemonOwner>,
++    /// Last completed whole-attempt host sample per session. Absent key or
++    /// absent map entry means "unavailable", never "zero".
++    host_attempts: Mutex<BTreeMap<WorkspaceId, HostAttemptReport>>,
+ }
+ 
+ impl Drop for Workspaces {
+@@ -114,9 +134,37 @@ impl Workspaces {
+             execution_route: daemon.route,
+             mount_route: daemon.mount_route,
+             daemon: daemon.owner,
++            host_attempts: Mutex::new(BTreeMap::new()),
+         })
+     }
+ 
++    /// Retain one completed whole-attempt host sample for reporting.
++    pub(crate) fn note_host_attempt(
++        &self,
++        id: WorkspaceId,
++        report: HostAttemptReport,
++    ) -> WorkspaceResult<()> {
++        self.host_attempts
++            .lock()
++            .map_err(|_| WorkspaceError::WorkspaceBusy)?
++            .insert(id, report);
++        Ok(())
++    }
++
++    /// The retained whole-attempt host sample, or `None` when this session has
++    /// never completed a host-authority attempt.
++    pub(crate) fn host_attempt(
++        &self,
++        id: WorkspaceId,
++    ) -> WorkspaceResult<Option<HostAttemptReport>> {
++        Ok(self
++            .host_attempts
++            .lock()
++            .map_err(|_| WorkspaceError::WorkspaceBusy)?
++            .get(&id)
++            .copied())
++    }
++
+     pub(crate) fn worker(
+         &self,
+         id: WorkspaceId,
+@@ -200,6 +248,10 @@ impl Workspaces {
+             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+         if !removed_sessions.is_empty() {
+             executions.retain(|_, execution| !removed_sessions.contains(&execution.session_id()));
++            self.host_attempts
++                .lock()
++                .map_err(|_| WorkspaceError::WorkspaceBusy)?
++                .retain(|id, _| !removed_sessions.contains(id));
+         }
+         prune_executions(&mut executions, now);
+         Ok(())
