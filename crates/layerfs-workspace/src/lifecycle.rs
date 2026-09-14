@@ -2013,7 +2013,7 @@ mod tests {
             })
             .unwrap();
         let worker = workspaces.worker(session.id).unwrap();
-        let runtime = crate::projection::start_host_authority(&worker).unwrap();
+        let runtime = crate::projection::start_host_authority(&worker, true).unwrap();
         worker.install_host_runtime(runtime.clone()).unwrap();
         let client = runtime.server.host_owner().unwrap();
         (session, runtime, client)
@@ -2413,6 +2413,75 @@ mod tests {
         assert!(!is_mounted_mountpoint(&root.join("mount")));
         std::fs::remove_dir_all(root).unwrap();
         println!("MOUNTED HOST AUTHORITY PASS: production attach, held Commit, concurrent SDK splice with stable inode, C1 excludes the splice while C2 includes it, verified unmount");
+    }
+
+    /// Real container-placement host authority: a host-side session whose
+    /// Workspace root lives inside a Linux container must mount through the one
+    /// installed host authority (no legacy remote owner), capture an ordinary
+    /// in-container write, keep the inode and unmount cleanly. Requires a
+    /// running container with /dev/fuse, SYS_ADMIN and the helper binary; gated
+    /// by `LAYERFS_TEST_CONTAINER`.
+    #[cfg(unix)]
+    #[test]
+    fn container_placement_mounts_through_the_host_authority() {
+        let Ok(container) = std::env::var("LAYERFS_TEST_CONTAINER") else {
+            return;
+        };
+        let mount = "/var/tmp/layerfs-container-authority";
+        let exec = |script: &str| -> String {
+            let output = std::process::Command::new("docker")
+                .args(["exec", &container, "/bin/sh", "-c", script])
+                .output()
+                .expect("docker exec");
+            assert!(
+                output.status.success(),
+                "docker exec failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+        };
+        let (root, workspaces, branch, store) = fixture("container-host-authority");
+        let session = workspaces
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Container {
+                    container_id: crate::ContainerId(container.clone()),
+                    root: std::path::PathBuf::from(mount),
+                },
+                projection: Some(WorkspaceProjection::Fuse),
+            })
+            .unwrap();
+        let worker = workspaces.worker(session.id).unwrap();
+        assert!(
+            worker.host_runtime().unwrap().is_some(),
+            "container placement must own the installed host authority"
+        );
+        assert!(
+            worker.remote.lock().unwrap().is_none(),
+            "container placement must not create the legacy remote owner"
+        );
+        assert_eq!(exec(&format!("cat {mount}/file")), "abcdef");
+        let inode_before = exec(&format!("stat -c %i {mount}/file"));
+        // An ordinary kernel write from inside the container.
+        exec(&format!(
+            "printf Z | dd of={mount}/file bs=1 seek=0 conv=notrunc status=none"
+        ));
+        assert_eq!(exec(&format!("cat {mount}/file")), "Zbcdef");
+        let committed = workspaces.commit_workspace_session(session.id).unwrap();
+        assert!(matches!(committed, WorkspaceCommitResult::Created { .. }));
+        let published = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, published), b"Zbcdef");
+        assert_eq!(exec(&format!("stat -c %i {mount}/file")), inode_before);
+        assert!(!workspaces.diff(session.id).unwrap().dirty);
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        assert_eq!(exec(&format!("findmnt -rn -M {mount} | wc -l")), "0");
+        std::fs::remove_dir_all(root).unwrap();
+        println!(
+            "CONTAINER HOST AUTHORITY PASS: container placement owns one host authority, \
+             in-container write captured as Created, inode stable, verified unmount"
+        );
     }
 
     #[cfg(all(target_os = "linux", feature = "host-fuse"))]
