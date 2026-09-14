@@ -539,6 +539,23 @@ mod tests {
         let diagnostics = second.diagnostics.unwrap();
         assert_eq!(diagnostics.full_comparisons, 0);
         assert!(diagnostics.reused_bytes >= 64 * 1024 - 2);
+        // Full-attempt peaks are a distinct domain from construction-only
+        // peaks: the attempt sample is taken after synchronous admission and
+        // may never be below what construction alone already reserved.
+        assert!(diagnostics.attempt_peak_sampled);
+        assert!(
+            diagnostics.attempt_peak_reserved_bytes >= diagnostics.scratch_peak_reserved_bytes,
+            "attempt peak {} below construction peak {}",
+            diagnostics.attempt_peak_reserved_bytes,
+            diagnostics.scratch_peak_reserved_bytes
+        );
+        assert!(diagnostics.attempt_peak_reserved_files >= diagnostics.scratch_peak_reserved_files);
+        assert!(
+            diagnostics.attempt_peak_reserved_bytes <= diagnostics.construction_memory_reservation,
+            "attempt peak {} exceeds the admitted construction reservation {}",
+            diagnostics.attempt_peak_reserved_bytes,
+            diagnostics.construction_memory_reservation
+        );
         let third = fixture.commit().unwrap();
         assert!(third.receipt.up_to_date);
         assert_eq!(third.receipt.head_after, second.receipt.head_after);

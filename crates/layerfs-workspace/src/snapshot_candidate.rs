@@ -145,10 +145,22 @@ pub(crate) struct SnapshotCandidateDiagnostics {
     pub full_comparisons: u64,
     pub full_builds: u64,
     pub cdc_bytes_scanned: u64,
+    /// Construction-only peaks: sampled when canonical construction finished
+    /// and before Store admission ran. They do not describe the whole attempt.
     pub scratch_peak_reserved_bytes: u64,
     pub scratch_peak_allocated_bytes: u64,
     pub scratch_peak_reserved_files: usize,
     pub construction_memory_reservation: u64,
+    /// Full-attempt peaks. These are sampled after synchronous Store admission
+    /// and staging have returned, so they include the retained admission's own
+    /// private scratch rather than construction alone. A separate field group
+    /// is deliberate: construction-only values are never relabeled.
+    pub attempt_peak_reserved_bytes: u64,
+    pub attempt_peak_allocated_bytes: u64,
+    pub attempt_peak_reserved_files: usize,
+    /// Tenant of the full-attempt sample, so a reader can tell construction-end
+    /// figures from a completed synchronous admission without inspecting code.
+    pub attempt_peak_sampled: bool,
 }
 pub(crate) struct PreparedSnapshotCommit {
     pub(crate) built: BuiltRoot,
@@ -604,6 +616,15 @@ impl SnapshotCandidateInputs<'_> {
         drop(view.reader);
         let mut admission = self.store.workspace_admission(self.workspace_id)?;
         capacity.retain_admission(&mut admission)?;
+        // Full-attempt peaks: the admission above performs its synchronous
+        // staging here, so its private scratch is now included. The capacity
+        // scope is still alive (retained by the admission), so this sample
+        // covers construction plus admission rather than construction alone.
+        let attempt = capacity.usage();
+        diagnostics.attempt_peak_reserved_bytes = attempt.peak_reserved_bytes;
+        diagnostics.attempt_peak_allocated_bytes = attempt.peak_observed_allocated_bytes;
+        diagnostics.attempt_peak_reserved_files = attempt.peak_reserved_files;
+        diagnostics.attempt_peak_sampled = true;
         Ok(PreparedSnapshotCommit {
             built,
             admission,

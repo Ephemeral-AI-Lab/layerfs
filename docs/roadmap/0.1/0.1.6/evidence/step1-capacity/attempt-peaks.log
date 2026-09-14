@@ -1,0 +1,905 @@
+warning: fields `id` and `size` are never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:12:9
+   |
+11 | pub(super) struct Lease {
+   |                   ----- fields in this struct
+12 |     pub id: u64,
+   |         ^^
+13 |     pub size: u64,
+   |         ^^^^
+   |
+   = note: `Lease` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `writeback_order` is never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:19:16
+   |
+16 | pub(super) struct State {
+   |                   ----- field in this struct
+...
+19 |     pub(super) writeback_order: AsyncMutex<()>,
+   |                ^^^^^^^^^^^^^^^
+   |
+   = note: `State` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: method `writeback_owned` is never used
+  --> crates/layerfs-fuse/src/host_coherence.rs:56:25
+   |
+55 | impl HostClient {
+   | --------------- method in this implementation
+56 |     pub(super) async fn writeback_owned(
+   |                         ^^^^^^^^^^^^^^^
+
+warning: `layerfs-fuse` (lib) generated 3 warnings
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: fields `disk_bytes` and `files` are never read
+  --> crates/layerfs-workspace/src/candidate_capacity.rs:27:16
+   |
+24 | pub(crate) struct CandidateCapacity {
+   |                   ----------------- fields in this struct
+...
+27 |     pub(crate) disk_bytes: u64,
+   |                ^^^^^^^^^^
+28 |     pub(crate) files: usize,
+   |                ^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: method `placement` is never used
+  --> crates/layerfs-workspace/src/candidate_capacity.rs:83:19
+   |
+30 | impl CandidateCapacity {
+   | ---------------------- method in this implementation
+...
+83 |     pub(crate) fn placement(&self) -> std::path::PathBuf {
+   |                   ^^^^^^^^^
+
+warning: associated function `empty` is never used
+  --> crates/layerfs-workspace/src/snapshot_candidate.rs:32:19
+   |
+31 | impl PublishedCorrespondence {
+   | ---------------------------- associated function in this implementation
+32 |     pub(crate) fn empty(
+   |                   ^^^^^
+
+warning: field `full_comparisons` is never read
+   --> crates/layerfs-workspace/src/snapshot_candidate.rs:145:9
+    |
+136 | pub(crate) struct SnapshotCandidateDiagnostics {
+    |                   ---------------------------- field in this struct
+...
+145 |     pub full_comparisons: u64,
+    |         ^^^^^^^^^^^^^^^^
+    |
+    = note: `SnapshotCandidateDiagnostics` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: field `diagnostics` is never read
+  --> crates/layerfs-workspace/src/commit_attempt.rs:23:16
+   |
+21 | pub(crate) struct Completion {
+   |                   ---------- field in this struct
+22 |     pub(crate) receipt: WorkspacePublicationReceipt,
+23 |     pub(crate) diagnostics: Option<SnapshotCandidateDiagnostics>,
+   |                ^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> crates/layerfs-workspace/src/commit_attempt.rs:55:19
+   |
+54 | impl CommitCoordinator {
+   | ---------------------- associated function in this implementation
+55 |     pub(crate) fn new(
+   |                   ^^^
+
+warning: associated function `new` is never used
+  --> crates/layerfs-workspace/src/correspondence.rs:67:19
+   |
+66 | impl OriginSequence {
+   | ------------------- associated function in this implementation
+67 |     pub(crate) fn new(workspace: [u8; 16]) -> Self {
+   |                   ^^^
+
+warning: field `old_root` is never read
+   --> crates/layerfs-workspace/src/correspondence.rs:521:9
+    |
+518 | pub(crate) struct Plan {
+    |                   ---- field in this struct
+...
+521 |     pub old_root: ObjectId,
+    |         ^^^^^^^^
+    |
+    = note: `Plan` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: constant `PAGE` is never used
+  --> crates/layerfs-workspace/src/host_directories.rs:13:7
+   |
+13 | const PAGE: usize = 128;
+   |       ^^^^
+
+warning: type alias `Page` is never used
+  --> crates/layerfs-workspace/src/host_directories.rs:14:6
+   |
+14 | type Page = Vec<(u64, Attr, Vec<u8>)>;
+   |      ^^^^
+
+warning: method `cookie_rows` is never used
+   --> crates/layerfs-workspace/src/host_directories.rs:115:8
+    |
+65  | impl Mutation<'_> {
+    | ----------------- method in this implementation
+...
+115 |     fn cookie_rows(
+    |        ^^^^^^^^^^^
+
+warning: method `directory_cookies` is never used
+   --> crates/layerfs-workspace/src/host_directories.rs:151:19
+    |
+150 | impl HostOverlay {
+    | ---------------- method in this implementation
+151 |     pub(crate) fn directory_cookies(&self, node: NodeId, after: u64, kernel: bool) -> Result<Page> {
+    |                   ^^^^^^^^^^^^^^^^^
+
+warning: fields `tree` and `reader` are never read
+  --> crates/layerfs-workspace/src/host_operations.rs:21:5
+   |
+20 | struct LeasedFile {
+   |        ---------- fields in this struct
+21 |     tree: crate::overlay_ranges::Tree,
+   |     ^^^^
+22 |     reader: layerfs_layerstack_store::SnapshotReader,
+   |     ^^^^^^
+
+warning: field `replay` is never read
+  --> crates/layerfs-workspace/src/host_operations.rs:42:5
+   |
+40 | pub(crate) struct HostOperations {
+   |                   -------------- field in this struct
+41 |     pub(crate) host: Arc<HostOverlay>,
+42 |     replay: Mutex<Option<([u8; 16], ReplayWindow)>>,
+   |     ^^^^^^
+
+warning: associated items `new`, `retain_read_lease`, `request`, `response`, and `dispatch` are never used
+   --> crates/layerfs-workspace/src/host_operations.rs:48:19
+    |
+47  | impl HostOperations {
+    | ------------------- associated items in this implementation
+48  |     pub(crate) fn new(host: Arc<HostOverlay>) -> Self {
+    |                   ^^^
+...
+146 |     pub(crate) fn retain_read_lease(
+    |                   ^^^^^^^^^^^^^^^^^
+...
+165 |     pub(crate) fn request(&self, bytes: &[u8]) -> PortResult<Vec<u8>> {
+    |                   ^^^^^^^
+...
+219 |     fn response(&self, operation: Operation<'_>, sequence: u64) -> PortResult<Vec<u8>> {
+    |        ^^^^^^^^
+...
+229 |     fn dispatch(&self, operation: Operation<'_>) -> Result<Vec<u8>> {
+    |        ^^^^^^^^
+
+warning: struct `DirectoryPage` is never constructed
+  --> crates/layerfs-workspace/src/host_overlay.rs:25:19
+   |
+25 | pub(crate) struct DirectoryPage {
+   |                   ^^^^^^^^^^^^^
+
+warning: enum `CapturedNode` is never used
+  --> crates/layerfs-workspace/src/host_overlay.rs:32:6
+   |
+32 | enum CapturedNode {
+   |      ^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+    --> crates/layerfs-workspace/src/host_overlay.rs:51:19
+     |
+50   | impl HostOverlay {
+     | ---------------- associated items in this implementation
+51   |     pub(crate) fn new(
+     |                   ^^^
+...
+146  |     pub(crate) fn attr(&self, node: NodeId) -> Result<Attr> {
+     |                   ^^^^
+...
+154  |     pub(crate) fn parent_of(&self, node: NodeId) -> Result<NodeId> {
+     |                   ^^^^^^^^^
+...
+262  |     pub(crate) fn lookup(&self, parent: NodeId, name: &[u8]) -> Result<Attr> {
+     |                   ^^^^^^
+...
+299  |     fn write_tree(&self, bytes: &[u8]) -> Result<Tree> {
+     |        ^^^^^^^^^^
+...
+306  |     fn spool_check(&self, added: u64) -> Result<()> {
+     |        ^^^^^^^^^^^
+...
+328  |     fn touch_parent(&self, m: &mut Mutation<'_>, parent: NodeId) -> Result<()> {
+     |        ^^^^^^^^^^^^
+...
+332  |     fn create(
+     |        ^^^^^^
+...
+344  |     fn create_in(
+     |        ^^^^^^^^^
+...
+379  |     pub(crate) fn create_file(&self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
+     |                   ^^^^^^^^^^^
+...
+389  |     pub(crate) fn create_file_open(&self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
+     |                   ^^^^^^^^^^^^^^^^
+...
+399  |     pub(crate) fn mkdir(&self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
+     |                   ^^^^^
+...
+409  |     pub(crate) fn symlink(&self, parent: NodeId, name: &[u8], target: &[u8]) -> Result<Attr> {
+     |                   ^^^^^^^
+...
+423  |     pub(crate) fn readlink(&self, node: NodeId) -> Result<Vec<u8>> {
+     |                   ^^^^^^^^
+...
+428  |     pub(crate) fn read_into(&self, node: NodeId, offset: u64, output: &mut [u8]) -> Result<usize> {
+     |                   ^^^^^^^^^
+...
+431  |     pub(crate) fn read_snapshot(
+     |                   ^^^^^^^^^^^^^
+...
+445  |     pub(crate) fn read_snapshot_path(
+     |                   ^^^^^^^^^^^^^^^^^^
+...
+530  |     pub(crate) fn write(&self, node: NodeId, offset: u64, bytes: &[u8]) -> Result<usize> {
+     |                   ^^^^^
+...
+562  |     pub(crate) fn append(&self, node: NodeId, bytes: &[u8]) -> Result<usize> {
+     |                   ^^^^^^
+...
+582  |     pub(crate) fn edit_many(
+     |                   ^^^^^^^^^
+...
+590  |     pub(crate) fn edit_many_snapshot(
+     |                   ^^^^^^^^^^^^^^^^^^
+...
+649  |     pub(crate) fn truncate(&self, node: NodeId, size: u64) -> Result<()> {
+     |                   ^^^^^^^^
+...
+660  |     pub(crate) fn chmod(&self, node: NodeId, mode: u32) -> Result<()> {
+     |                   ^^^^^
+...
+667  |     pub(crate) fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> Result<()> {
+     |                   ^^^^^^^^^
+...
+679  |     pub(crate) fn link(&self, node: NodeId, parent: NodeId, name: &[u8]) -> Result<Attr> {
+     |                   ^^^^
+...
+682  |     fn link_in(
+     |        ^^^^^^^
+...
+706  |     fn empty_directory(&self, snapshot: &Snapshot, node: NodeId) -> Result<bool> {
+     |        ^^^^^^^^^^^^^^^
+...
+744  |     fn retire_binding(
+     |        ^^^^^^^^^^^^^^
+...
+765  |     pub(crate) fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> Result<()> {
+     |                   ^^^^^^
+...
+781  |     pub(crate) fn rename(
+     |                   ^^^^^^
+...
+873  |     pub(crate) fn pin(&self, node: NodeId, truncate: bool) -> Result<()> {
+     |                   ^^^
+...
+876  |     pub(crate) fn pin_directory(&self, node: NodeId) -> Result<()> {
+     |                   ^^^^^^^^^^^^^
+...
+879  |     fn pin_kind(&self, node: NodeId, kind: Kind, truncate: bool) -> Result<()> {
+     |        ^^^^^^^^
+...
+916  |     pub(crate) fn directory_page(
+     |                   ^^^^^^^^^^^^^^
+...
+926  |     pub(super) fn directory_page_in(
+     |                   ^^^^^^^^^^^^^^^^^
+...
+973  |     pub(super) fn retain_kernel_in(&self, m: &mut Mutation<'_>, node: NodeId) -> Result<()> {
+     |                   ^^^^^^^^^^^^^^^^
+...
+1022 |     pub(crate) fn kernel_entry(
+     |                   ^^^^^^^^^^^^
+...
+1096 |     pub(crate) fn kernel_directory_page(
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+...
+1116 |     pub(crate) fn kernel_forget(&self, node: NodeId, count: u64) -> Result<()> {
+     |                   ^^^^^^^^^^^^^
+...
+1120 |     pub(crate) fn kernel_forget_batch(&self, entries: &[(NodeId, u64)]) -> Result<()> {
+     |                   ^^^^^^^^^^^^^^^^^^^
+
+warning: associated items `start`, `start_with_admission`, `covered_sequence`, and `prepare_shutdown` are never used
+   --> crates/layerfs-workspace/src/host_runtime.rs:31:19
+    |
+30  | impl HostRuntime {
+    | ---------------- associated items in this implementation
+31  |     pub(crate) fn start(
+    |                   ^^^^^
+...
+40  |     fn start_with_admission(
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+136 |     pub(crate) fn covered_sequence(&self) -> Result<u64> {
+    |                   ^^^^^^^^^^^^^^^^
+...
+147 |     pub(crate) fn prepare_shutdown(&self) -> Result<()> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> crates/layerfs-workspace/src/host_sdk.rs:58:19
+   |
+57 | impl HostSdk {
+   | ------------ associated function in this implementation
+58 |     pub(crate) fn new(operations: Arc<HostOperations>) -> Self {
+   |                   ^^^
+
+warning: associated functions `temporary` and `from_index` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:205:19
+    |
+204 | impl Overlay {
+    | ------------ associated functions in this implementation
+205 |     pub(crate) fn temporary(directory: &Path, base_root: ObjectId, limits: Limits) -> Result<Self> {
+    |                   ^^^^^^^^^
+...
+210 |     pub(crate) fn from_index(index: Index, base_root: ObjectId) -> Result<Self> {
+    |                   ^^^^^^^^^^
+
+warning: methods `put_inode` and `put_binding` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:417:19
+    |
+361 | impl Mutation<'_> {
+    | ----------------- methods in this implementation
+...
+417 |     pub(crate) fn put_inode(&mut self, inode: NodeId, record: &[u8]) -> Result<()> {
+    |                   ^^^^^^^^^
+...
+537 |     pub(crate) fn put_binding(
+    |                   ^^^^^^^^^^^
+
+warning: fields `session`, `watermark`, `max_requests`, `max_bytes`, `reserved_bytes`, and `slots` are never read
+   --> crates/layerfs-workspace/src/overlay.rs:658:5
+    |
+657 | pub(crate) struct ReplayWindow {
+    |                   ------------ fields in this struct
+658 |     session: [u8; 16],
+    |     ^^^^^^^
+659 |     watermark: u64,
+    |     ^^^^^^^^^
+660 |     max_requests: usize,
+    |     ^^^^^^^^^^^^
+661 |     max_bytes: usize,
+    |     ^^^^^^^^^
+662 |     reserved_bytes: usize,
+    |     ^^^^^^^^^^^^^^
+663 |     slots: BTreeMap<u64, ReplaySlot>,
+    |     ^^^^^
+
+warning: fields `reserved`, `request_digest`, and `result` are never read
+   --> crates/layerfs-workspace/src/overlay.rs:667:5
+    |
+666 | struct ReplaySlot {
+    |        ---------- fields in this struct
+667 |     reserved: usize,
+    |     ^^^^^^^^
+668 |     request_digest: [u8; 32],
+    |     ^^^^^^^^^^^^^^
+669 |     result: Option<Arc<[u8]>>,
+    |     ^^^^^^
+
+warning: enum `ReplayAdmission` is never used
+   --> crates/layerfs-workspace/src/overlay.rs:672:17
+    |
+672 | pub(crate) enum ReplayAdmission {
+    |                 ^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `admit`, `finish`, and `acknowledge` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:679:19
+    |
+678 | impl ReplayWindow {
+    | ----------------- associated items in this implementation
+679 |     pub(crate) fn new(session: [u8; 16], max_requests: usize, max_bytes: usize) -> Result<Self> {
+    |                   ^^^
+...
+693 |     pub(crate) fn admit(
+    |                   ^^^^^
+...
+733 |     pub(crate) fn finish(&mut self, sequence: u64, result: Arc<[u8]>) -> Result<()> {
+    |                   ^^^^^^
+...
+745 |     pub(crate) fn acknowledge(&mut self, session: [u8; 16], through: u64) -> Result<()> {
+    |                   ^^^^^^^^^^^
+
+warning: constant `PAGE` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:12:7
+   |
+12 | const PAGE: u64 = 4096;
+   |       ^^^^
+
+warning: constant `CATALOG_PER_PAGE` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:13:7
+   |
+13 | const CATALOG_PER_PAGE: u64 = 256;
+   |       ^^^^^^^^^^^^^^^^
+
+warning: constant `MOVE` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:14:7
+   |
+14 | const MOVE: u64 = 64 * 1024;
+   |       ^^^^
+
+warning: constant `RECORD_BYTES` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:16:7
+   |
+16 | const RECORD_BYTES: usize = 8192; // Existing symlinks are <=4096; inode/range records are fixed.
+   |       ^^^^^^^^^^^^
+
+warning: function `mul` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:29:4
+   |
+29 | fn mul(a: u64, b: u64) -> io::Result<u64> {
+   |    ^^^
+
+warning: function `align` is never used
+  --> crates/layerfs-workspace/src/overlay_budget.rs:33:4
+   |
+33 | fn align(bytes: u64) -> io::Result<u64> {
+   |    ^^^^^
+
+warning: associated items `new`, `shared`, and `usage` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:84:19
+    |
+83  | impl HostAdmission {
+    | ------------------ associated items in this implementation
+84  |     pub(crate) fn new(scheduler: Scheduler, limits: HostLimits) -> io::Result<Arc<Self>> {
+    |                   ^^^
+...
+94  |     pub(crate) fn shared() -> io::Result<Arc<Self>> {
+    |                   ^^^^^^
+...
+111 |     pub(crate) fn usage(&self) -> Usage {
+    |                   ^^^^^
+
+warning: fields `index`, `payload`, and `ranges` are never read
+   --> crates/layerfs-workspace/src/overlay_budget.rs:118:9
+    |
+117 | pub(crate) struct Components {
+    |                   ---------- fields in this struct
+118 |     pub index: IndexLimits,
+    |         ^^^^^
+119 |     pub payload: PayloadLimits,
+    |         ^^^^^^^
+120 |     pub ranges: RangeLimits,
+    |         ^^^^^^
+    |
+    = note: `Components` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `index_limits` is never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:124:4
+    |
+124 | fn index_limits(bytes: u64, roots: usize) -> io::Result<IndexLimits> {
+    |    ^^^^^^^^^^^^
+
+warning: function `index_bytes` is never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:147:4
+    |
+147 | fn index_bytes(pages: u64) -> io::Result<u64> {
+    |    ^^^^^^^^^^^
+
+warning: function `components` is never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:150:4
+    |
+150 | fn components(policy: ResourcePolicy) -> io::Result<Components> {
+    |    ^^^^^^^^^^
+
+warning: struct `Resources` is never constructed
+   --> crates/layerfs-workspace/src/overlay_budget.rs:219:19
+    |
+219 | pub(crate) struct Resources {
+    |                   ^^^^^^^^^
+
+warning: variant `Read` is never constructed
+   --> crates/layerfs-workspace/src/overlay_budget.rs:242:5
+    |
+241 | pub(crate) enum Operation {
+    |                 --------- variant in this enum
+242 |     Read,
+    |     ^^^^
+    |
+    = note: `Operation` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `reserve`, `open`, `policy`, and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:282:8
+    |
+281 | impl Budget {
+    | ----------- associated items in this implementation
+282 |     fn reserve(policy: ResourcePolicy, host: Arc<HostAdmission>) -> io::Result<Arc<Self>> {
+    |        ^^^^^^^
+...
+306 |     pub(crate) fn open(
+    |                   ^^^^
+...
+350 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+353 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: struct `HeaderCensus` is never constructed
+  --> crates/layerfs-workspace/src/overlay_index.rs:51:19
+   |
+51 | pub(crate) struct HeaderCensus {
+   |                   ^^^^^^^^^^^^
+   |
+   = note: `HeaderCensus` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: struct `Census` is never constructed
+  --> crates/layerfs-workspace/src/overlay_index.rs:64:19
+   |
+64 | pub(crate) struct Census {
+   |                   ^^^^^^
+   |
+   = note: `Census` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: fields `data_pages`, `catalog_bytes`, `relocated_pages`, `root_leases`, `page_reads`, and `page_writes` are never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:80:9
+   |
+77 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+80 |     pub data_pages: u64,
+   |         ^^^^^^^^^^
+81 |     pub catalog_bytes: u64,
+   |         ^^^^^^^^^^^^^
+82 |     pub relocated_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+83 |     pub pending_roots: usize,
+84 |     pub root_leases: usize,
+   |         ^^^^^^^^^^^
+85 |     pub page_reads: u64,
+   |         ^^^^^^^^^^
+86 |     pub page_writes: u64,
+   |         ^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `temporary`, `temporary_with_owner`, `create`, and `sync_data` are never used
+   --> crates/layerfs-workspace/src/overlay_index.rs:248:19
+    |
+247 | impl Index {
+    | ---------- associated items in this implementation
+248 |     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+    |                   ^^^^^^^^^
+...
+251 |     pub(crate) fn temporary_with_owner(
+    |                   ^^^^^^^^^^^^^^^^^^^^
+...
+258 |     fn create(
+    |        ^^^^^^
+...
+740 |     pub(crate) fn sync_data(&self) -> io::Result<()> {
+    |                   ^^^^^^^^^
+
+warning: field `readers` is never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:30:9
+   |
+24 | pub(crate) struct Limits {
+   |                   ------ field in this struct
+...
+30 |     pub readers: usize,
+   |         ^^^^^^^
+   |
+   = note: `Limits` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: multiple fields are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:37:9
+   |
+36 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+37 |     pub physical_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+38 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+39 |     pub index_physical_bytes: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+40 |     pub live_block_bytes: u64,
+   |         ^^^^^^^^^^^^^^^^
+...
+43 |     pub chargeable_bytes: u64,
+   |         ^^^^^^^^^^^^^^^^
+...
+46 |     pub owners: usize,
+   |         ^^^^^^
+...
+49 |     pub persisted_tokens: usize,
+   |         ^^^^^^^^^^^^^^^^
+50 |     /// Payload-index pages still live (records plus unreclaimed old versions).
+51 |     pub index_live_pages: u64,
+   |         ^^^^^^^^^^^^^^^^
+52 |     /// Highest payload-index page slot ever allocated in this arena.
+53 |     pub index_allocated_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^^
+54 |     /// Payload-index pages actually returned to the free list.
+55 |     pub index_reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^^
+56 |     /// Retired payload-index roots awaiting reference release.
+57 |     pub index_pending_roots: usize,
+   |         ^^^^^^^^^^^^^^^^^^^
+58 |     /// Payload-index reclamation backlog flag.
+59 |     pub index_reclamation_pending: bool,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^
+60 |     pub readers: usize,
+   |         ^^^^^^^
+61 |     pub pending_releases: usize,
+   |         ^^^^^^^^^^^^^^^^
+62 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+63 |     pub interval_visits: u64,
+   |         ^^^^^^^^^^^^^^^
+64 |     pub relocated_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+65 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+66 |     pub cleanup_pending: bool,
+67 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: methods `offset`, `subrange`, and `read_exact_at` are never used
+   --> crates/layerfs-workspace/src/overlay_payload.rs:156:19
+    |
+146 | impl OwnedRange {
+    | --------------- methods in this implementation
+...
+156 |     pub(crate) fn offset(&self) -> u64 {
+    |                   ^^^^^^
+...
+159 |     pub(crate) fn subrange(&self, offset: u64, len: u64) -> io::Result<Self> {
+    |                   ^^^^^^^^
+...
+162 |     pub(crate) fn read_exact_at(&self, output: &mut [u8], offset: u64) -> io::Result<()> {
+    |                   ^^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+    --> crates/layerfs-workspace/src/overlay_payload.rs:245:19
+     |
+244  | impl Payload {
+     | ------------ associated items in this implementation
+245  |     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+     |                   ^^^^^^^^^
+...
+248  |     pub(crate) fn temporary_with_lifetime(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^
+...
+255  |     fn create(
+     |        ^^^^^^
+...
+361  |     pub(crate) fn write_from(&self, reader: &mut impl Read, len: u64) -> io::Result<OwnedRange> {
+     |                   ^^^^^^^^^^
+...
+534  |     pub(crate) fn append_to(
+     |                   ^^^^^^^^^
+...
+548  |     pub(crate) fn append(
+     |                   ^^^^^^
+...
+729  |     pub(crate) fn join(&self, left: &OwnedRange, right: &OwnedRange) -> io::Result<OwnedRange> {
+     |                   ^^^^
+...
+736  |     pub(crate) fn join_tokens(&self, left: u64, right: u64) -> io::Result<OwnedRange> {
+     |                   ^^^^^^^^^^^
+...
+1460 |     pub(crate) fn sync_data(&self) -> io::Result<()> {
+     |                   ^^^^^^^^^
+
+warning: function `arena` is never used
+    --> crates/layerfs-workspace/src/overlay_payload.rs:1572:4
+     |
+1572 | fn arena(directory: &Path) -> io::Result<File> {
+     |    ^^^^^
+
+warning: struct `Stats` is never constructed
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:49:19
+   |
+49 | pub(crate) struct Stats {
+   |                   ^^^^^
+   |
+   = note: `Stats` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+
+warning: method `descriptor` is never used
+   --> crates/layerfs-workspace/src/overlay_ranges.rs:152:19
+    |
+80  | impl OwnedPiece {
+    | --------------- method in this implementation
+...
+152 |     pub(crate) fn descriptor(&self, offset: u64) -> Descriptor {
+    |                   ^^^^^^^^^^
+
+warning: associated items `new` and `stats` are never used
+   --> crates/layerfs-workspace/src/overlay_ranges.rs:409:19
+    |
+408 | impl Ranges {
+    | ----------- associated items in this implementation
+409 |     pub(crate) fn new(index: Index, payload: Payload, limits: Limits) -> io::Result<Self> {
+    |                   ^^^
+...
+631 |     pub(crate) fn stats(&self) -> Stats {
+    |                   ^^^^^
+
+warning: methods `truncate`, `append_from`, `last`, and `read_piece` are never used
+   --> crates/layerfs-workspace/src/overlay_ranges.rs:779:19
+    |
+642 | impl Ranges {
+    | ----------- methods in this implementation
+...
+779 |     pub(crate) fn truncate(&self, tree: &Tree, length: u64) -> io::Result<Tree> {
+    |                   ^^^^^^^^
+...
+790 |     pub(crate) fn append_from(
+    |                   ^^^^^^^^^^^
+...
+835 |     fn last(&self, tree: &Tree) -> io::Result<Option<(Tree, Node)>> {
+    |        ^^^^
+...
+897 |     pub(crate) fn read_piece(
+    |                   ^^^^^^^^^^
+
+warning: method `bindings` is never used
+   --> crates/layerfs-workspace/src/snapshot.rs:196:19
+    |
+19  | impl Snapshot {
+    | ------------- method in this implementation
+...
+196 |     pub(crate) fn bindings(
+    |                   ^^^^^^^^
+
+warning: method `install_host_runtime` is never used
+  --> crates/layerfs-workspace/src/worker.rs:76:19
+   |
+36 | impl WorkspaceWorker {
+   | -------------------- method in this implementation
+...
+76 |     pub(crate) fn install_host_runtime(
+   |                   ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/layerfs-workspace/src/overlay_index.rs:758:13
+    |
+758 |         let mut storage = self.0.storage.lock().unwrap();
+    |             ----^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: method `prepare_shutdown` is never used
+   --> crates/layerfs-workspace/src/host_runtime.rs:147:19
+    |
+30  | impl HostRuntime {
+    | ---------------- method in this implementation
+...
+147 |     pub(crate) fn prepare_shutdown(&self) -> Result<()> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: methods `policy` and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:350:19
+    |
+281 | impl Budget {
+    | ----------- methods in this implementation
+...
+350 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+353 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: field `high_water` is never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:52:9
+   |
+51 | pub(crate) struct HeaderCensus {
+   |                   ------------ field in this struct
+52 |     pub high_water: u64,
+   |         ^^^^^^^^^^
+   |
+   = note: `HeaderCensus` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `reserved_bytes`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:38:9
+   |
+36 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+37 |     pub physical_bytes: u64,
+38 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+62 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+65 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+66 |     pub cleanup_pending: bool,
+67 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `deep_reclaim` is never used
+    --> crates/layerfs-workspace/src/overlay_payload.rs:1231:19
+     |
+244  | impl Payload {
+     | ------------ method in this implementation
+...
+1231 |     pub(crate) fn deep_reclaim(&self) -> io::Result<usize> {
+     |                   ^^^^^^^^^^^^
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Default`, `Debug`, and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib) generated 55 warnings
+warning: `layerfs-workspace` (lib test) generated 10 warnings (1 duplicate) (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.74s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-093cac1b352d88b6)
+
+running 6 tests
+test commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected ... ok
+test commit_attempt::maintenance::tests::concurrent_c2_publication_keeps_new_pending_context_and_later_write ... ok
+test commit_attempt::maintenance::tests::maintenance_caps_nodes_and_covered_keys_without_bumping_live_sequence ... ok
+test commit_attempt::tests::definite_head_conflict_can_abandon_stage_without_losing_live_writes ... definite conflict rollback witness permits exact stage abandonment; live writes and winning branch remain intact: PASS
+ok
+test commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent ... held builder live write/read/pins; fresh-reopen C1=Xa C2=XY; C2 diagnostics=SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 10, correspondence_fragments: 3, replacement_bytes: 1, reused_bytes: 65535, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 0, scratch_peak_reserved_bytes: 1081344, scratch_peak_allocated_bytes: 12288, scratch_peak_reserved_files: 4, construction_memory_reservation: 100663296, attempt_peak_reserved_bytes: 1081344, attempt_peak_allocated_bytes: 12288, attempt_peak_reserved_files: 4, attempt_peak_sampled: true }; C3 no-op PASS
+ok
+test commit_attempt::tests::lost_publication_and_stage_replies_retry_exact_input_without_recapture ... exact stage/lost Created/lost UpToDate retries and known-success cleanup; fresh reopen: PASS
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 173 filtered out; finished in 2.61s
+
+     Running tests/file_edit.rs (target/debug/deps/file_edit-32513209f60f434f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/issue116_capacity.rs (target/debug/deps/issue116_capacity-6c581d6d135b430e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/reconciliation.rs (target/debug/deps/reconciliation-4c9d79710a2076f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
