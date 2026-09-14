@@ -713,24 +713,45 @@ impl Index {
         Ok(result)
     }
     pub(crate) fn remove(&self, root: &Root, key: &[u8]) -> io::Result<Root> {
-        self.check(root, key)?;
-        let Some(page) = root.0.page else {
+        self.remove_keys(root, &[key])
+    }
+    /// Bounded batch removal (#144 R3a). The per-key tree work is unchanged —
+    /// this is not a deferred-page-write rewrite — but the batch validates
+    /// every key up front, pays one reclamation duty and takes the storage
+    /// lock once, so a maintenance batch of pending keys stops paying
+    /// per-key admission for keys it already owns. Roots are immutable, so
+    /// the caller only ever observes the returned root.
+    pub(crate) fn remove_batch(&self, root: &Root, keys: &[Vec<u8>]) -> io::Result<Root> {
+        let refs: Vec<&[u8]> = keys.iter().map(|key| key.as_slice()).collect();
+        self.remove_keys(root, &refs)
+    }
+    fn remove_keys(&self, root: &Root, keys: &[&[u8]]) -> io::Result<Root> {
+        for key in keys {
+            self.check(root, key)?;
+        }
+        if root.0.page.is_none() || keys.is_empty() {
             return Ok(root.clone());
-        };
+        }
         self.reclaim(16)?;
         let mut storage = self.0.storage.lock().unwrap();
-        let Some((node, holds)) = self.delete(&mut storage, page, key, 0)? else {
-            return Ok(root.clone());
-        };
-        let result = match node {
-            Node::Leaf(ref entries) if entries.is_empty() => self.empty_root(),
-            Node::Branch(ref children) if children.len() == 1 => {
-                self.retain(&mut storage, children[0].page)
-            }
-            _ => self.write(&mut storage, node),
-        };
-        drop(holds);
-        result
+        let mut current = root.clone();
+        for key in keys {
+            let Some(page) = current.0.page else {
+                break;
+            };
+            let Some((node, holds)) = self.delete(&mut storage, page, key, 0)? else {
+                continue;
+            };
+            current = match node {
+                Node::Leaf(ref entries) if entries.is_empty() => self.empty_root(),
+                Node::Branch(ref children) if children.len() == 1 => {
+                    self.retain(&mut storage, children[0].page)
+                }
+                _ => self.write(&mut storage, node),
+            }?;
+            drop(holds);
+        }
+        Ok(current)
     }
     fn delete(
         &self,
@@ -1790,6 +1811,45 @@ mod tests {
         }
         panic!("reclamation did not drain");
     }
+    /// #144 R3a: a batch removal is exactly the sequential removal it
+    /// replaces, observed through the returned immutable root.
+    #[test]
+    fn batch_removal_matches_sequential_removal_and_tolerates_missing_keys() {
+        let index = index(4096);
+        let mut root = index.empty_root().unwrap();
+        for i in 0u32..257 {
+            root = index
+                .set(&root, &i.to_be_bytes(), &vec![(i % 251) as u8; 37])
+                .unwrap();
+        }
+        let keys = (0u32..257)
+            .filter(|i| i % 3 == 0)
+            .map(|i| i.to_be_bytes().to_vec())
+            .collect::<Vec<_>>();
+        let mut sequential = root.clone();
+        for key in &keys {
+            sequential = index.remove(&sequential, key).unwrap();
+        }
+        let batched = index.remove_batch(&root, &keys).unwrap();
+        for i in 0u32..257 {
+            let key = i.to_be_bytes();
+            assert_eq!(
+                index.get(&batched, &key).unwrap(),
+                index.get(&sequential, &key).unwrap(),
+                "batched removal must match sequential removal"
+            );
+        }
+        // Absent keys and an empty batch are no-ops, never errors.
+        let missing = vec![vec![0xff; 8], vec![0xfe; 8]];
+        let same = index.remove_batch(&batched, &missing).unwrap();
+        assert_eq!(index.get(&same, &[0, 0, 0, 0]).unwrap(), None);
+        assert_eq!(
+            index.remove_batch(&batched, &[]).unwrap().0.page,
+            batched.0.page
+        );
+        let _ = drain(&index);
+    }
+
     #[test]
     fn retained_roots_split_merge_seek_and_release_without_resident_page_graph() {
         let index = index(4096);

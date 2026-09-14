@@ -84,8 +84,19 @@ impl PublishedCorrespondence {
             .collect()
     }
     pub(crate) fn maintenance_complete(&mut self, node: NodeId) -> Result<()> {
-        let key = [vec![DIRTY_NODE], node.0.to_be_bytes().to_vec()].concat();
-        self.pending = self.index.remove(&self.pending, &key)?;
+        self.maintenance_complete_batch(std::slice::from_ref(&node))
+    }
+    /// One bounded batch removal per maintenance step (#144 R3a): the pending
+    /// queue is updated once for the whole batch instead of once per node.
+    pub(crate) fn maintenance_complete_batch(&mut self, nodes: &[NodeId]) -> Result<()> {
+        if nodes.is_empty() {
+            return Ok(());
+        }
+        let keys = nodes
+            .iter()
+            .map(|node| [vec![DIRTY_NODE], node.0.to_be_bytes().to_vec()].concat())
+            .collect::<Vec<_>>();
+        self.pending = self.index.remove_batch(&self.pending, &keys)?;
         Ok(())
     }
     fn queue_maintenance(&mut self, node: NodeId) -> Result<()> {

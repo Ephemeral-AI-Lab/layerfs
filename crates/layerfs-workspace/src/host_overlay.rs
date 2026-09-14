@@ -1173,6 +1173,11 @@ impl HostOverlay {
     /// operations retired: a fixed handful of pages per step would otherwise
     /// let obsolete page versions outrun reclamation and exhaust the catalog
     /// quota long before any inode, owner or disk bound is reached.
+    /// Root preparations observed by this host overlay (#144 R3a counter).
+    pub(crate) fn preparation_attempts(&self) -> u64 {
+        self.overlay.preparation_attempts()
+    }
+
     pub(crate) fn maintain(&self) -> Result<bool> {
         if self.overlay.directory_cleanup_pending()? {
             self.mutate(|m| m.cleanup_deleted_directory())?;
@@ -1185,7 +1190,17 @@ impl HostOverlay {
             }
             self.index.reclaim(RECLAIM_BATCH)?;
         }
-        self.payload.reclaim_step()?;
+        // #144 R3a: the payload release queue is per-write work that advances
+        // one job per `reclaim_step`. A drain step calls this once, so the
+        // queue, not the pending correspondence batch, bounded how much real
+        // work a step could retire. A bounded multi-job duty keeps every call
+        // finite while letting one batched step retire one batch of jobs.
+        const RELEASE_STEPS: usize = 8;
+        for _ in 0..RELEASE_STEPS {
+            if !self.payload.reclaim_step()? {
+                break;
+            }
+        }
         let index = self.index.stats()?;
         Ok(self.overlay.directory_cleanup_pending()?
             || index.reclamation_pending

@@ -235,6 +235,13 @@ impl Overlay {
         })
     }
 
+    /// Root preparations observed by this overlay. A bounded maintenance batch
+    /// installs every planned node through one preparation (#144 R3a); the
+    /// counter makes that amortization observable in a test.
+    pub(crate) fn preparation_attempts(&self) -> u64 {
+        self.preparation_attempts.load(Ordering::Relaxed)
+    }
+
     pub(crate) fn acquire(&self) -> Result<Arc<OverlayRoot>> {
         let current = self
             .current
