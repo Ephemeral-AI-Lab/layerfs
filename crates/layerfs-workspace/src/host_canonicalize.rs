@@ -2,12 +2,18 @@
 //! Logical contents, origin coordinates and inode revision never change here.
 use crate::correspondence::{self, Description, Span};
 use crate::host_overlay::HostOverlay;
+use crate::overlay::InodeRecord;
 use crate::overlay_budget::{Charge, Operation};
 use crate::overlay_ranges::{OwnedPiece, Source};
+use crate::snapshot::Snapshot;
 use layerfs_content::file::content::{self, FileContentRoot};
 use layerfs_layerstack_store::{CoreReader, Result, StoreError};
 use layerfs_workspace_core::{Kind, NodeId};
 use std::path::Path;
+
+/// Per-request retained state inside one bounded maintenance batch: a decoded
+/// inode record plus its replacement range root.
+pub(crate) const BATCH_NODE_BYTES: u64 = 4096;
 
 impl HostOverlay {
     /// The caller supplies only a completed, published description. Current
@@ -27,6 +33,15 @@ impl HostOverlay {
         self.canonicalize_file_before_install(node, published, spool, || {})
     }
 
+    /// Bounded batch entry point used by the maintenance drain (#144 R3a).
+    pub(crate) fn canonicalize_batch(
+        &self,
+        requests: &[(NodeId, &Description)],
+        spool: &Path,
+    ) -> Result<Vec<bool>> {
+        self.canonicalize_batch_before_install(requests, spool, || {})
+    }
+
     fn canonicalize_file_before_install(
         &self,
         node: NodeId,
@@ -34,12 +49,30 @@ impl HostOverlay {
         spool: &Path,
         before_install: impl FnOnce(),
     ) -> Result<bool> {
-        if published.inode != node {
-            return Err(StoreError::InvalidInput("canonical maintenance inode"));
+        let mut done =
+            self.canonicalize_batch_before_install(&[(node, published)], spool, before_install)?;
+        Ok(done.pop().unwrap_or(true))
+    }
+
+    /// Bounded batch of correspondence maintenance (#144 R3a). Every request is
+    /// planned against one captured overlay root and all replacements install
+    /// through a single `prepare`/`install` pair, so a maintenance step no
+    /// longer pays one mutation transaction, root install and change batch per
+    /// node. Each returned flag corresponds to one request in order: `true`
+    /// means that node's work for this published comparison is done, `false`
+    /// means a newer root won installation and the caller retains its pending
+    /// entry for retry. Exact correspondence semantics are unchanged — the
+    /// batch never weakens a comparison, it only amortizes its installation.
+    fn canonicalize_batch_before_install(
+        &self,
+        requests: &[(NodeId, &Description)],
+        spool: &Path,
+        before_install: impl FnOnce(),
+    ) -> Result<Vec<bool>> {
+        let mut done = vec![true; requests.len()];
+        if requests.is_empty() {
+            return Ok(done);
         }
-        let canonical = published.canonical_root.ok_or(StoreError::InvalidInput(
-            "canonical maintenance requires published content",
-        ))?;
         // Two bounded journals can coexist. Leave allocation-block rounding
         // inside the reservation, rather than counting only their logical rows.
         let scratch = self.policy.overlay.max_scratch_bytes;
@@ -52,18 +85,65 @@ impl HostOverlay {
         let _permit = self.budget.enter(
             Operation::Prepare,
             Charge {
-                memory_bytes: correspondence::PLAN_BUFFER_BYTES as u64,
+                // One journal buffer is live at a time; each request retains a
+                // bounded record plus its replacement root.
+                memory_bytes: correspondence::PLAN_BUFFER_BYTES as u64
+                    + requests.len() as u64 * BATCH_NODE_BYTES,
                 scratch_bytes: scratch,
                 files: 2,
                 ..Charge::default()
             },
         )?;
         let snapshot = self.snapshot()?;
+        let mut installs = Vec::new();
+        for (index, (node, published)) in requests.iter().enumerate() {
+            match self.plan_canonical(&snapshot, *node, published, spool, journal_limit)? {
+                Some((record, replacement)) => {
+                    done[index] = false;
+                    installs.push((record, replacement));
+                }
+                None => {}
+            }
+        }
+        if installs.is_empty() {
+            return Ok(done);
+        }
+        let prepared = self.overlay.prepare(snapshot.root.clone(), |m| {
+            for (record, replacement) in &installs {
+                m.cache_inode_record(record.clone(), replacement.root())?;
+            }
+            Ok(())
+        })?;
+        before_install();
+        if self.overlay.install(prepared)? {
+            for flag in done.iter_mut().filter(|flag| !**flag) {
+                *flag = true;
+            }
+        }
+        Ok(done)
+    }
+
+    /// Plan one node's replacement. `None` means this node needs no
+    /// installation for the supplied published comparison.
+    fn plan_canonical(
+        &self,
+        snapshot: &Snapshot,
+        node: NodeId,
+        published: &Description,
+        spool: &Path,
+        journal_limit: u64,
+    ) -> Result<Option<(InodeRecord, crate::overlay_ranges::Tree)>> {
+        if published.inode != node {
+            return Err(StoreError::InvalidInput("canonical maintenance inode"));
+        }
+        let canonical = published.canonical_root.ok_or(StoreError::InvalidInput(
+            "canonical maintenance requires published content",
+        ))?;
         let Some((record, root)) = snapshot.inode_record(node)? else {
-            return Ok(true);
+            return Ok(None);
         };
         if record.attr.kind != Kind::File {
-            return Ok(true);
+            return Ok(None);
         }
         let original = self.ranges.restore(root)?;
         if original.len() != record.attr.size {
@@ -77,7 +157,7 @@ impl HostOverlay {
             ));
         }
         if original.payload_bytes() == 0 && original.inline_bytes() == 0 {
-            return Ok(true);
+            return Ok(None);
         }
         let mut cursor = self.ranges.cursor(&original, 0, original.len())?;
         let current = Description::build(
@@ -89,7 +169,7 @@ impl HostOverlay {
             std::iter::from_fn(|| cursor.next_descriptor().transpose()),
         )?;
         let plan = correspondence::plan(published, &current, spool, journal_limit)?;
-        if plan.counters.journal_physical_bytes > scratch {
+        if plan.counters.journal_physical_bytes > self.policy.overlay.max_scratch_bytes {
             return Err(StoreError::InvalidInput(
                 "canonical maintenance allocated journal budget",
             ));
@@ -146,15 +226,13 @@ impl HostOverlay {
             }
         }
         if !changed {
-            return Ok(true);
+            return Ok(None);
         }
-        let prepared = self.overlay.prepare(snapshot.root.clone(), |m| {
-            m.cache_inode_record(record, replacement.root())
-        })?;
-        // No FIFO turn or root-install lock is held during planning or this
-        // seam. Unrelated writes invalidate the whole leased source as required.
-        before_install();
-        self.overlay.install(prepared)
+        // No FIFO turn or root-install lock is held during planning or the
+        // caller's install seam. Unrelated writes invalidate the whole leased
+        // source as required; the caller installs every planned replacement of
+        // this batch through one `prepare`/`install` pair.
+        Ok(Some((record, replacement)))
     }
 }
 

@@ -1,14 +1,18 @@
 //! Optional bounded work against an idle published comparison context.
 use super::{Attempt, CommitCoordinator, PublishedContext};
+use crate::correspondence::Description;
 use crate::host_overlay::HostOverlay;
 use crate::overlay_budget::{Charge, Operation};
 use layerfs_layerstack_store::{Result, StoreError};
+use layerfs_workspace_core::NodeId;
 use std::path::Path;
 use std::sync::{Arc, MutexGuard, TryLockError};
 
-// One file may contain bounded range metadata; do not hide a pending-node scan
-// behind a single maintenance call. Two index rows belong to each covered key.
-const NODES_PER_STEP: usize = 1;
+// #144 R3a: one maintenance step processes a bounded batch of pending nodes
+// through a single `prepare`/`install` pair. The drain stays O(D) — batching
+// changes the per-node constant, not the bound — and the batch is small enough
+// that a step remains an interruptible, bounded unit of work.
+const NODES_PER_STEP: usize = 64;
 const COVERED_KEYS_PER_STEP: usize = 64;
 
 impl CommitCoordinator {
@@ -46,11 +50,13 @@ impl CommitCoordinator {
             self.published()?
         };
         // Snapshot::changes owns at most128 encoded keys plus decoded names;
-        // this allowance also covers the64-node cursor and context bookkeeping.
+        // this allowance also covers the pending batch, its decoded
+        // descriptions and the context bookkeeping.
         let _work = host.budget.enter(
             Operation::Scratch,
             Charge {
-                memory_bytes: 128 * 1024,
+                memory_bytes: 128 * 1024
+                    + NODES_PER_STEP as u64 * crate::host_canonicalize::BATCH_NODE_BYTES,
                 ..Charge::default()
             },
         )?;
@@ -58,22 +64,36 @@ impl CommitCoordinator {
         // I/O. A new Commit may start here; its owned snapshot stays unchanged.
         let mut replacement: Option<PublishedContext> = None;
         let mut retry = false;
+        let mut complete: Vec<NodeId> = Vec::new();
+        let mut batch: Vec<(NodeId, Description)> = Vec::new();
         for node in context
             .correspondence
             .maintenance_nodes(None)?
             .into_iter()
             .take(NODES_PER_STEP)
         {
-            let done = match context.correspondence.description(node)? {
-                Some(description) => host.canonicalize_file(node, &description, spool)?,
-                None => true,
-            };
+            match context.correspondence.description(node)? {
+                Some(description) => batch.push((node, description)),
+                // No published descriptor: this node needs no installation for
+                // this comparison and its pending entry is complete.
+                None => complete.push(node),
+            }
+        }
+        let requests: Vec<_> = batch
+            .iter()
+            .map(|(node, description)| (*node, description))
+            .collect();
+        let done = host.canonicalize_batch(&requests, spool)?;
+        for ((node, _), done) in batch.iter().zip(done) {
             if done {
-                let next = replacement.get_or_insert_with(|| (*context).clone());
-                next.correspondence.maintenance_complete(node)?;
+                complete.push(*node);
             } else {
                 retry = true;
             }
+        }
+        if !complete.is_empty() {
+            let next = replacement.get_or_insert_with(|| (*context).clone());
+            next.correspondence.maintenance_complete_batch(&complete)?;
         }
         let covered_sequence = context.correspondence.covered_sequence;
         let covered = {
@@ -222,6 +242,38 @@ mod tests {
             change_count(&before),
             keys,
             "retained snapshot bookkeeping stays immutable"
+        );
+    }
+
+    /// #144 R3a: one step drains a bounded batch of pending nodes through a
+    /// single root preparation, and the pending queue drops by the whole batch.
+    #[test]
+    fn one_step_installs_a_bounded_batch_through_a_single_root_preparation() {
+        let fixture = OwnedFixture::new();
+        for n in 0..130 {
+            fixture
+                .host
+                .create_file(ROOT, format!("new{n:03}").as_bytes(), 0o600)
+                .unwrap();
+        }
+        fixture.commit().unwrap();
+        let before = pending_count(&fixture.coordinator.published().unwrap());
+        assert!(
+            before > NODES_PER_STEP,
+            "the batch bound must actually bind"
+        );
+        let preparations = fixture.host.preparation_attempts();
+        assert!(fixture
+            .coordinator
+            .maintenance_step(&fixture.host, &fixture.directory)
+            .unwrap());
+        let attempts = fixture.host.preparation_attempts() - preparations;
+        let after = pending_count(&fixture.coordinator.published().unwrap());
+        assert_eq!(before - after, NODES_PER_STEP);
+        assert!(
+            attempts <= 4,
+            "one bounded batch installs through one preparation per batch, not one per node: {attempts} preparations for {} nodes",
+            before - after
         );
     }
 
