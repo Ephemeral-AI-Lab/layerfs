@@ -107,6 +107,8 @@ Kept the structural model; corrected which quantity bounds which resource.
 | Tiny-cap oracle | `tiny_owner_cap_bounds_resident_handles_not_persisted_tokens` (`owners = 4`) | PASS: 4 simultaneous handles admitted and the 5th rejected with `StorageFull` while admitted owners stay usable; 64 independently retained tokens admitted at `peak_resident=3`, catalog 119 live pages; dropping the retaining metadata root converges to `persisted_tokens=0`, `owners=0`, `index_live_pages=0`, `cleanup_pending=false` |
 | Index-level invariant | `repeated_prefix_insertions_release_every_retired_page` | PASS: pages reachable from the live root equal live pages; no unreachable-but-live page after a drained reclaim |
 | One-byte page cost diagnostic | `one_byte_write_index_page_cost` | PASS (non-gating measurement) |
+| Snapshot-reader cache charge | `fixed_resident_base_charges_the_snapshot_reader_cache` | PASS: fixed base 14,234,624 B for the 8 MiB reader cache under the 128 MiB aggregate; the aggregate still admits several Workspaces |
+| Scratch placement / seen-scope | see §6 | PASS |
 
 The 8,193-file case is an explicitly selected scale regression. It is **not** the
 #123 million-changed-file qualification: it uses one byte per file, keeps no
@@ -125,15 +127,53 @@ snapshot per file, and never Commits.
   receipts are likewise untouched by the payload-index and reclaim-budget changes.
 - The original failure is preserved exactly as observed; it is not relabeled.
 
-## 6. Honest remaining gaps
+## 6. Scratch placement and admission-owned spill lifetime
 
+Both are now scoped to the owning Workspace rather than the shared process
+temporary directory.
+
+- `ScratchBudget::with_directory(limits, owner, Option<PathBuf>)` adds an explicit
+  placement directory. An explicitly configured directory must already exist; a
+  missing placement is rejected rather than silently redirected, and no ambient
+  context can redirect private scratch. `ScratchBudget::new` keeps its existing
+  meaning (process temporary directory).
+- Scoped spill output creates its named file through the scope's `directory()`,
+  and `CandidateCapacity::acquire_in(budget, policy, placement)` receives the
+  owning Workspace spool directory from `snapshot_candidate`.
+- The admission-owned seen index (`SpillableObjectSet`) is built by the Store's
+  own admission path and only later learns which Workspace admits it.
+  `set_scratch` attaches the owning scope **only before the index holds a row**
+  and refuses afterwards, so private scratch ownership can never silently change.
+  `WorkspaceAdmission::retain_private_scratch` is what the candidate scope calls.
+- Custody is unchanged: named allocations stay identity-bound, unlinked on drop,
+  `0600`, single-link, and their descriptor/named-owner charges are the same.
+
+| Check | Result |
+| --- | --- |
+| `named_scope_scratch_is_placed_in_the_owning_directory` (path parent is the owning directory, `0600`, `nlink == 1`) | PASS |
+| `explicit_scratch_placement_rejects_a_missing_directory` | PASS |
+| `seen_scratch_scope_attaches_only_before_use` (attach before use, refused after; `None` is a no-op legacy path) | PASS |
+| Candidate scope placement assertion | PASS |
+| Full `layerfs-layerstack-store` + `layerfs-workspace` suites serially | 163 + 162 + 12 + 2 + 8 + 1 + 1 passed, **0 failed** |
+
+Logs: `suite-scratch-placement.log`, `suite-seen-spill-scope.log`.
+
+## 7. Honest remaining gaps
+
+- **Canonical construction/admission reservations and the real full-attempt peak
+  envelope** remain open. The 96 MiB `CandidateCapacity::MEMORY` figure is an
+  analysis draft, not a verified minimum: it admits only one default construction
+  under the 128 MiB aggregate. Diagnostics are still sampled at construction end,
+  before admission, so full-attempt peaks are not yet recorded.
+- **Concurrent Workspace admission under real concurrent load** is unverified;
+  what exists is a two-Workspace accounting check, not a load result.
+- **Bounded cleanup/reclamation driven from runtime `End`** is not yet integrated;
+  only `CandidateCapacity::acquire` and explicit maintenance drive retries.
 - The million-changed-file proof (#123 contract) is NOT_RUN. Its fixture, declared
   RAM allowance and explicit disk quota must be frozen before the definitive run,
   and it requires the public-path integration and V1 resolution that this record
   does not claim.
-- Snapshot-reader cache accounting, canonical construction/admission
-  reservations, admission-owned seen-spill lifetime and full-attempt peak
-  sampling remain open; they are separate Step 1 obligations from this defect.
 - `Stats::persisted_tokens`, the index censuses (`catalog_census`,
   `catalog_tree_census`, `catalog_header_census`, `deep_reclaim`) are
   test-only diagnostics; `HeaderCensus`/`Census` do not participate in admission.
+
