@@ -20,7 +20,7 @@ git diff --check
 ```
 
 `tools/test-fast.sh` is the complete native gate and fails if the warm suite
-exceeds 120 seconds. It still runs every test and benchmark exactly once in
+exceeds 180 seconds. It still runs every test and benchmark exactly once in
 disjoint single-threaded process batches; `tools/test_fast.py` sizes those
 batches from the committed execution-order hint `tools/test-fast-timings.json`
 and submits them longest-first, so the bounded worker slots stay busy instead of

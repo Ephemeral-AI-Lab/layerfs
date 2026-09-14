@@ -194,14 +194,16 @@ impl DaemonOwner {
         root: &Path,
         endpoint: &str,
         capability: [u8; 32],
+        host_owned: bool,
     ) -> std::io::Result<DaemonMount> {
         use std::os::unix::ffi::OsStrExt;
         self.client
-            .mount(
+            .mount_with_authority(
                 workspace_id.bytes(),
                 root.as_os_str().as_bytes().to_vec(),
                 endpoint.as_bytes().to_vec(),
                 capability,
+                host_owned,
             )
             .map(DaemonMount)
     }

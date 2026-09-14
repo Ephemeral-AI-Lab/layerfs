@@ -1,0 +1,13 @@
+{
+  "result": "PASS1",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_canonicalize::tests::published_ranges_replace_only_proven_raw_bytes_around_later_edit",
+    "--exact",
+    "--nocapture"
+  ],
+  "source": "canonical-substitution-cap-attempt02-source.json",
+  "binary_sha256": "8ec696135f683251ab4e04d2dc1ca6be05270ef6bf9bc13fa37124755fd216d0",
+  "raw": "canonical-substitution-small-attempt02.log",
+  "invalidation": "prior pass invalidated: eligibility loop now predicts boundaries and seeks current replacement root"
+}

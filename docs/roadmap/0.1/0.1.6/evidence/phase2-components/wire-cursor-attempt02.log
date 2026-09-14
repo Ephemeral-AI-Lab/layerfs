@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-1044a66fea371f40)
+
+running 3 tests
+test live_wire::compact_pending_tests::bounded_pending_sequence_set_fits_the_publication_budget ... ok
+test live_wire::compact_pending_tests::bounded_pending_inline_round_trips_within_its_declared_bound ... ok
+test live_wire::compact_pending_tests::bounded_pending_spool_round_trips_within_its_declared_bound ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s
+

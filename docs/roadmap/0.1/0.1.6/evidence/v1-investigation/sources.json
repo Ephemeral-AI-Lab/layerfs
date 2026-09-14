@@ -1,0 +1,37 @@
+{
+  "reviewed_sources": [
+    {
+      "repository": "gregkh/linux",
+      "tag": "v6.12.76",
+      "commit": "39b686f8d57d7506af7789e915fe7fd103b0fe57",
+      "files": [
+        "fs/fuse/dev.c",
+        "fs/fuse/file.c",
+        "include/linux/userfaultfd_k.h",
+        "fs/proc/task_mmu.c",
+        "fs/fuse/virtio_fs.c"
+      ]
+    },
+    {
+      "repository": "torvalds/linux",
+      "tag": "v6.12",
+      "commit": "adc218676eef25575469234709c2d87185ca223a",
+      "files": [
+        "fs/fuse/passthrough.c",
+        "fs/fuse/dax.c",
+        "fs/btrfs/reflink.c"
+      ]
+    }
+  ],
+  "probe_source_sha256": "1e377e18ce88913e9f0b1633752ba2a1cc2e2739ab7cff46c41a92584e3f8600",
+  "reused_original_source_sha256": "bd38ad8020c0011fd68b186dd483e1f31adee4c0d827626f532eeff28d8d608a",
+  "probe_binary_sha256": "bde2b5ed16b534acbe9ef2852209105745f54c2cbdfda838232d2db16ba39db9",
+  "kernel": "6.12.76-linuxkit",
+  "architecture": "aarch64",
+  "product_source_at_investigation_start": "554b866838e50468b312f9d8e9ef70dc2988a38e",
+  "product_binary_used": null,
+  "result": "mechanism assertions PASS; V1 snapshot acceptance OPEN",
+  "retention_hypothesis": "REFUTED",
+  "commands_in": "run-01.json",
+  "benchmark_cases_executed": []
+}

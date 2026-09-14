@@ -4,6 +4,8 @@ mod comparison_reuse_tests;
 mod delta;
 mod diagnostic;
 pub(crate) mod metadata;
+#[cfg(unix)]
+pub mod scratch;
 pub(crate) use admission::PreparedAdmission;
 mod pack;
 mod read;
@@ -13,7 +15,10 @@ mod whole;
 #[cfg(test)]
 use spill::SeenStorage;
 pub use spill::SpillableObjectSet;
-use spill::{temporary_file, IdOrder, SpillObjects, TempPath};
+use spill::{
+    temporary_file, temporary_output_file, IdOrder, ScratchContext, SpillFile, SpillObjects,
+    TempPath,
+};
 
 use crate::{Result, StoreError};
 use layerfs_content::filesystem::{self, ContentChange, ReconcileConflict};
@@ -1192,6 +1197,9 @@ pub struct DeferredObjectStore {
         std::sync::Arc<std::sync::atomic::AtomicU64>,
         bool,
     )>,
+    scratch: ScratchContext,
+    // Drop last: private buffers and predecessor readers remain accounted first.
+    private_owner: Option<std::sync::Arc<dyn Send + Sync>>,
 }
 
 #[cfg(test)]
@@ -1327,7 +1335,7 @@ impl AppendOnlyInitializationWriter {
         Ok(Self {
             writer,
             reader,
-            path: TempPath(path),
+            path: TempPath::new(path),
             pending: Vec::with_capacity(pending_limit),
             pending_limit,
             end: 0,
@@ -1623,7 +1631,7 @@ impl CompactInodePairWriter {
             width,
             writer,
             reader,
-            path: TempPath(path),
+            path: TempPath::new(path),
             pending: Vec::with_capacity(pending_limit),
             pending_limit,
             end: 0,
@@ -2672,6 +2680,8 @@ impl DeferredObjectStore {
             index_limit: CANDIDATE_INDEX_BYTES,
             spill_buffer_bytes: CANDIDATE_SPILL_BUFFER_BYTES - 2 * spill::ID_BUFFER_BYTES,
             order_memory_bytes: CANDIDATE_MEMORY_BYTES,
+            private_owner: None,
+            scratch: None,
             diagnostic_file_context: false,
             small_predecessor: None,
             predecessor: None,
@@ -2720,7 +2730,7 @@ impl DeferredObjectStore {
             let known = missing.membership(page)?;
             for &id in page {
                 if known.contains(&id) {
-                    output.push_bounded(id, self.index_limit)?;
+                    output.push_scoped(id, self.index_limit, &self.scratch)?;
                     count += 1;
                 }
             }
@@ -3014,7 +3024,7 @@ impl DeferredObjectStore {
         if let DeferredObjects::Spill(spill) = &mut self.storage {
             spill.flush()?;
         }
-        let mut seen = SpillableObjectSet::bounded(self.index_limit)?;
+        let mut seen = SpillableObjectSet::bounded_scoped(self.index_limit, self.scratch.clone())?;
         seen.insert_page(&[root])?;
         let mut active = BTreeSet::new();
         let mut stack = vec![(root, false)];
@@ -3030,7 +3040,7 @@ impl DeferredObjectStore {
             if expanded {
                 active.remove(&id);
                 if let Some(order) = &mut order {
-                    order.push_bounded(id, self.index_limit)?;
+                    order.push_scoped(id, self.index_limit, &self.scratch)?;
                 }
                 count += 1;
                 encoded_bytes = encoded_bytes
@@ -3154,7 +3164,8 @@ impl DeferredObjectStore {
             }
             DeferredObjects::Spill(spill) => spill.put(&object)?,
         }
-        self.reachable.push_bounded(id, self.index_limit)?;
+        self.reachable
+            .push_scoped(id, self.index_limit, &self.scratch)?;
         self.count += 1;
         self.encoded_bytes = self
             .encoded_bytes
@@ -3184,8 +3195,14 @@ impl DeferredObjectStore {
         ) else {
             return Ok(());
         };
-        let (file, path) = temporary_file("candidate-objects")?;
-        let reader = std::fs::File::open(&path)?;
+        let (file, path) = temporary_output_file("candidate-objects", &self.scratch)?;
+        let reader = if self.scratch.is_some() {
+            let reader = file.try_clone()?;
+            std::fs::remove_file(&path)?;
+            reader
+        } else {
+            SpillFile::Native(std::fs::File::open(&path)?)
+        };
         let mut spill = SpillObjects {
             writer: Some(file),
             reader: Mutex::new(reader),
@@ -3200,6 +3217,7 @@ impl DeferredObjectStore {
             buffer_bytes: self.spill_buffer_bytes,
             order_memory_bytes: self.order_memory_bytes,
             failed: false,
+            scratch: self.scratch.clone(),
         };
         for id in order {
             spill.put(
@@ -3422,6 +3440,53 @@ impl<'a> ObjectBuffer<'a> {
         Ok(output)
     }
 
+    /// Configure charged private scratch before any canonical output exists.
+    /// Released callers retain their existing default backend and allowances.
+    #[cfg(unix)]
+    pub fn set_private_scratch(
+        &mut self,
+        scratch: std::sync::Arc<scratch::ScratchBudget>,
+    ) -> Result<()> {
+        if self.objects.count != 0 || self.objects.scratch.is_some() {
+            return Err(StoreError::InvalidInput(
+                "private scratch context already active",
+            ));
+        }
+        self.objects.scratch = Some(scratch);
+        Ok(())
+    }
+
+    /// Lower private index allowances before construction, keeping the existing
+    /// disk spill implementation and its fixed 4-MiB SQLite cache. This changes
+    /// neither canonical encoding nor the released defaults for other callers.
+    pub fn limit_private_indexes(&mut self, index_bytes: usize, order_bytes: usize) -> Result<()> {
+        if self.objects.count != 0
+            || index_bytes > self.objects.index_limit
+            || order_bytes > self.objects.order_memory_bytes
+            || !(4 * 1024 * 1024..=CANDIDATE_INDEX_BYTES).contains(&index_bytes)
+            || !(spill::ID_BUFFER_BYTES..=CANDIDATE_MEMORY_BYTES).contains(&order_bytes)
+        {
+            return Err(StoreError::InvalidInput(
+                "private candidate index allowance",
+            ));
+        }
+        self.objects.index_limit = index_bytes;
+        self.objects.order_memory_bytes = order_bytes;
+        Ok(())
+    }
+
+    /// Retain the caller's aggregate admission with the actual private output.
+    /// A finished BuiltRoot keeps this owner until consumed or discarded.
+    pub fn retain_private_owner(&mut self, owner: std::sync::Arc<dyn Send + Sync>) -> Result<()> {
+        if self.objects.private_owner.is_some() {
+            return Err(StoreError::InvalidInput(
+                "private candidate owner already set",
+            ));
+        }
+        self.objects.private_owner = Some(owner);
+        Ok(())
+    }
+
     /// Partition the existing aggregate candidate allowances, including spill
     /// buffers and indexes. The SQLite fallback's fixed cache must still fit.
     pub fn partition_output(&mut self, partitions: usize) -> Result<()> {
@@ -3455,9 +3520,9 @@ impl<'a> ObjectBuffer<'a> {
         {
             let mut order = IdOrder::empty();
             self.objects.reachable.seal()?;
-            self.objects
-                .reachable
-                .visit(|id| order.push_bounded(id, self.objects.index_limit))?;
+            self.objects.reachable.visit(|id| {
+                order.push_scoped(id, self.objects.index_limit, &self.objects.scratch)
+            })?;
             order.seal()?;
             self.objects.reachable = order;
         }
@@ -4453,6 +4518,7 @@ pub struct WorkspaceAdmission {
     pub(crate) db: crate::schema::StoreDb,
     pub(crate) workspace_id: [u8; 16],
     admission: CheckedOutputAdmission,
+    private_owner: Option<std::sync::Arc<dyn Send + Sync>>,
 }
 
 impl crate::LayerStackStore {
@@ -4460,6 +4526,7 @@ impl crate::LayerStackStore {
         Ok(WorkspaceAdmission {
             db: self.db.clone(),
             workspace_id,
+            private_owner: None,
             admission: CheckedOutputAdmission::with_session(
                 &self.db,
                 AdmissionSession::with_coalescing(&self.db, true)?,
@@ -4544,6 +4611,18 @@ impl crate::LayerStackStore {
 }
 
 impl WorkspaceAdmission {
+    /// Keep construction resources accounted while admission retains encoded
+    /// pages after the source DeferredObjectStore has been consumed.
+    pub fn retain_private_owner(&mut self, owner: std::sync::Arc<dyn Send + Sync>) -> Result<()> {
+        if self.private_owner.is_some() {
+            return Err(StoreError::InvalidInput(
+                "private admission owner already set",
+            ));
+        }
+        self.private_owner = Some(owner);
+        Ok(())
+    }
+
     pub(crate) fn admit_remaining(
         self,
         objects: DeferredObjectStore,
@@ -4917,7 +4996,9 @@ mod tests {
         assert_eq!(seen.insert_page(&ids[..2]).unwrap(), ids[..2]);
         seen.spill().unwrap();
         let path = match &seen.storage {
-            SeenStorage::Spill { connection, _path } => {
+            SeenStorage::Spill {
+                connection, _path, ..
+            } => {
                 let connection = connection.lock().unwrap();
                 let plan: String = connection
                     .query_row(

@@ -1,0 +1,10 @@
+   Compiling layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.41s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-1044a66fea371f40)
+
+running 2 tests
+test host_client::coherence::tests::sdk_error_retains_exact_protection_and_scope_until_retry ... ok
+test host_client::coherence::tests::shifted_terabyte_suffix_reads_only_queued_folio_and_release_retry_reuses_cut ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s
+

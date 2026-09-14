@@ -1,0 +1,16 @@
+{
+  "identity": "commit_attempt::tests::definite_head_conflict_can_abandon_stage_without_losing_live_writes",
+  "source": "capacity-compile-attempt03-source.json",
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "commit_attempt::tests::definite_head_conflict_can_abandon_stage_without_losing_live_writes",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "result": "PASS",
+  "wall_seconds": 0.12672575004398823,
+  "raw": "coordinator-conflict-attempt01.log",
+  "invalidation": "New definite-rollback witness test; original captured stage can be abandoned after branch moves without discarding live writes."
+}

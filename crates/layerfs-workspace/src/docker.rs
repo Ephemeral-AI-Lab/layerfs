@@ -21,7 +21,9 @@ start=$(awk '{print $22}' "/proc/$$/stat")
 printf '%s %s %s\n' "$$" "$start" "$created_root" > "$5"
 if test -n "$6"; then test -x "$6"; ln -- "$6" "$1" 2>/dev/null || cp -- "$6" "$1"; else cat > "$1"; fi
 chmod 0555 "$1"
-LAYERFS_OWNED_HELPER="$1" LAYERFS_OWNED_ROOT="$2" LAYERFS_OWNED_CAPABILITY="$4" exec "$1" "$3" "$4" "$2""#;
+export LAYERFS_OWNED_HELPER="$1" LAYERFS_OWNED_ROOT="$2" LAYERFS_OWNED_CAPABILITY="$4"
+if test -n "$7"; then exec "$1" "$3" "$4" "$2" "$7"; fi
+exec "$1" "$3" "$4" "$2""#;
 
 const FALLBACK_CLEANUP_SCRIPT: &str = r#"set -eu
 helper=$1
@@ -127,6 +129,7 @@ impl DockerProjection {
             .arg(&capability)
             .arg(&identity)
             .arg(container_helper.as_deref().unwrap_or(""))
+            .arg(proxy.host_session().map(hex).unwrap_or_default())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -247,7 +250,19 @@ impl DockerProjection {
             proxy.port()
         );
         let started = std::time::Instant::now();
-        let mount = daemon.mount(id, &root, &endpoint, proxy.capability())?;
+        if proxy
+            .host_session()
+            .is_some_and(|session| session != id.bytes())
+        {
+            return Err(WorkspaceError::InvalidPlacement);
+        }
+        let mount = daemon.mount(
+            id,
+            &root,
+            &endpoint,
+            proxy.capability(),
+            proxy.host_session().is_some(),
+        )?;
         let mount_ready_ns = elapsed_ns(started);
         std::fs::write(
             runtime.join("mountinfo.txt"),
@@ -601,11 +616,11 @@ fn configured_endpoint_host() -> WorkspaceResult<Option<String>> {
     Ok(Some(host))
 }
 
-fn hex(bytes: [u8; 32]) -> String {
+fn hex<const N: usize>(bytes: [u8; N]) -> String {
     use std::fmt::Write as _;
     bytes
         .iter()
-        .fold(String::with_capacity(64), |mut text, byte| {
+        .fold(String::with_capacity(2 * N), |mut text, byte| {
             let _ = write!(text, "{byte:02x}");
             text
         })

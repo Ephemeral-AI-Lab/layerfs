@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_sdk::tests::",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "source_seal": "docs/roadmap/0.1/0.1.6/evidence/phase4-candidate/capacity-compile-attempt03-source.json",
+  "source_seal_sha256": "b3c1e1591d74fa2db402b5abf012e6b16d31834e63bd2490d0af5e47a119945d",
+  "started_unix": 1789345443.653156,
+  "elapsed_seconds": 2.299158811569214,
+  "returncode": 0,
+  "reason": "First execution of new SDK coordinator / exact installed snapshot checks; reuse existing shared compiled candidate without rebuild.",
+  "result": "PASS",
+  "passed": 4,
+  "failed": 0,
+  "validity": "current for exact source seal and dependencies",
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "mode": "native component test; one existing canonical Store fixture per test; no benchmark or #122 workload"
+}

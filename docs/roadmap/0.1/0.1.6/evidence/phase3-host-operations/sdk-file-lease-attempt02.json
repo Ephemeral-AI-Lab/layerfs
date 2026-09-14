@@ -1,0 +1,16 @@
+{
+  "identity": "host_operations::tests::sdk_read_leases_hold_exact_bytes_and_capacity_until_last_reader_releases",
+  "source": "../phase4-candidate/capacity-compile-attempt03-source.json",
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_operations::tests::sdk_read_leases_hold_exact_bytes_and_capacity_until_last_reader_releases",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "result": "PASS",
+  "wall_seconds": 0.07654145802371204,
+  "raw": "sdk-file-lease-attempt02.log",
+  "invalidation": "ReadLease creation was split into pre-admission and activation; exact candidate generation borrowed from successful installed host edit."
+}

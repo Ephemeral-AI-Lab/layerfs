@@ -1,0 +1,14 @@
+Linux 1ee42b07a520 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+Copyright (C) 2022 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+bde2b5ed16b534acbe9ef2852209105745f54c2cbdfda838232d2db16ba39db9  /tmp/retrieve-probe
+probe: negotiated minor=31 flags=0x21 max_write=1048576
+probe: H1 dirty retrieve cookie=101 size=4096 byte=65 writes=0
+probe: H2 notify returned; later mapped store completed before daemon read
+probe: H2 retained page cookie=102 size=4096 byte=66 writes=0 notification_time_byte=65 later_store_byte=66
+probe: H3 open-unlinked retrieve cookie=103 size=4096 byte=67 writes=0
+probe: all mechanism assertions passed; V1 snapshot acceptance remains OPEN
+probe: server read returned -1 errno=19 (No such device)

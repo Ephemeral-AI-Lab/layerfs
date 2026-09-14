@@ -27,8 +27,7 @@ pub(crate) fn is_mixed(case: &Case) -> bool {
 }
 
 fn plan_of(case: &Case) -> AnyResult<MixedCase> {
-    stages::mixed_case(&case.id)?
-        .ok_or_else(|| format!("not a v0.1.6 M1 case: {}", case.id).into())
+    stages::mixed_case(&case.id)?.ok_or_else(|| format!("not a v0.1.6 M1 case: {}", case.id).into())
 }
 
 fn tier_of(name: &str) -> AnyResult<&'static v016::LoadTier> {
@@ -87,9 +86,7 @@ struct Budget {
 impl Budget {
     fn check(&self, phase: &str) -> AnyResult<()> {
         if super::elapsed_ns(self.started) > self.limit_ns {
-            return Err(
-                format!("v0.1.6 complete-command deadline exceeded during {phase}").into(),
-            );
+            return Err(format!("v0.1.6 complete-command deadline exceeded during {phase}").into());
         }
         Ok(())
     }
@@ -144,10 +141,14 @@ impl Shared {
         let rows = self.intervals.lock().map_err(|_| "v0.1.6 interval lock")?;
         let mut rounds = 0usize;
         for (index, (left_worker, left_start, left_end)) in rows.iter().enumerate() {
-            if rows.iter().skip(index + 1).any(|(right_worker, right_start, right_end)| {
-                left_worker != right_worker
-                    && (*left_end).min(*right_end) > (*left_start).max(*right_start)
-            }) {
+            if rows
+                .iter()
+                .skip(index + 1)
+                .any(|(right_worker, right_start, right_end)| {
+                    left_worker != right_worker
+                        && (*left_end).min(*right_end) > (*left_start).max(*right_start)
+                })
+            {
                 rounds += 1;
             }
         }
@@ -177,14 +178,14 @@ impl Shared {
         Ok(())
     }
     fn pure_call_sum_ns(&self) -> AnyResult<u64> {
-        Ok(*self
-            .pure_call_ns
-            .lock()
-            .map_err(|_| "v0.1.6 timer lock")?)
+        Ok(*self.pure_call_ns.lock().map_err(|_| "v0.1.6 timer lock")?)
     }
     fn samples(&self) -> AnyResult<(Vec<u64>, Vec<u64>)> {
         Ok((
-            self.commit_ns.lock().map_err(|_| "v0.1.6 timer lock")?.clone(),
+            self.commit_ns
+                .lock()
+                .map_err(|_| "v0.1.6 timer lock")?
+                .clone(),
             self.execution_ns
                 .lock()
                 .map_err(|_| "v0.1.6 timer lock")?
@@ -309,9 +310,7 @@ fn expect_counter(rows: &BTreeMap<String, String>, name: &str) -> AnyResult<usiz
 /// The live modes of the directories one stage created, measured by the helper
 /// and reported as `path:mode` pairs. An empty list means the stage created no
 /// directory; a malformed entry is a hard error.
-fn parse_created_directory_modes(
-    rows: &BTreeMap<String, String>,
-) -> AnyResult<Vec<(String, u32)>> {
+fn parse_created_directory_modes(rows: &BTreeMap<String, String>) -> AnyResult<Vec<(String, u32)>> {
     let raw = rows
         .get("m1_created_directory_modes")
         .ok_or("v0.1.6 helper receipt is missing m1_created_directory_modes")?;
@@ -492,7 +491,11 @@ fn run_stage(
         stage,
     );
     let started = Instant::now();
-    let output = match super::execute(runtime.client.as_ref(), worker.session.ok_or("v0.1.6 stage session")?, argv.clone()) {
+    let output = match super::execute(
+        runtime.client.as_ref(),
+        worker.session.ok_or("v0.1.6 stage session")?,
+        argv.clone(),
+    ) {
         Ok(output) => output,
         Err(error) => {
             emit(
@@ -584,7 +587,9 @@ fn run_stage(
     let commit_start = runtime.elapsed();
     let commit_started = Instant::now();
     let session = worker.session.ok_or("v0.1.6 commit session")?;
-    let status = runtime.client.commit_workspace_session_with_status(session)?;
+    let status = runtime
+        .client
+        .commit_workspace_session_with_status(session)?;
     let commit_ns = super::elapsed_ns(commit_started);
     let commit_id = expect_created(&status, local_commit)?;
     // The declared per-cycle counters count one published Commit and one POSIX
@@ -593,7 +598,9 @@ fn run_stage(
     bump_observed_counter("posix_helper_executions", 1)?;
     let pinned = runtime.store.pin_branch(worker.branch)?;
     let commit_end = runtime.elapsed();
-    runtime.shared.record(worker.index, commit_start, commit_end)?;
+    runtime
+        .shared
+        .record(worker.index, commit_start, commit_end)?;
     emit(
         "v016-commit",
         &[
@@ -615,7 +622,9 @@ fn run_stage(
     add_observed_counters(&stages::stage_counters(stage))?;
     runtime.shared.add_pure_call(execution_ns)?;
     runtime.shared.add_pure_call(commit_ns)?;
-    runtime.shared.record_stage(StageKind::Execution, execution_ns)?;
+    runtime
+        .shared
+        .record_stage(StageKind::Execution, execution_ns)?;
     runtime.shared.record_stage(StageKind::Commit, commit_ns)?;
     Ok(StageOutcome {
         commit_id,
@@ -658,8 +667,7 @@ pub(crate) fn declared_commits_for(mixed: MixedCase, workers: usize) -> usize {
 
 /// The declared operation counters of the selected invocation, as observed by
 /// the stage helpers.
-static OBSERVED: std::sync::OnceLock<Mutex<BTreeMap<String, usize>>> =
-    std::sync::OnceLock::new();
+static OBSERVED: std::sync::OnceLock<Mutex<BTreeMap<String, usize>>> = std::sync::OnceLock::new();
 
 fn observed_counters_cell() -> &'static Mutex<BTreeMap<String, usize>> {
     OBSERVED.get_or_init(|| Mutex::new(BTreeMap::new()))
@@ -997,7 +1005,10 @@ fn report_heads(runtime: &Runtime, sessions: &[Worker]) -> AnyResult<()> {
                 ("branch", worker.index.to_string()),
                 ("branch_id", quote(&worker.branch.to_string())),
                 ("local_commits", worker.commits.len().to_string()),
-                ("head", quote(&format!("{:?}", pinned.branch.head_commit_id))),
+                (
+                    "head",
+                    quote(&format!("{:?}", pinned.branch.head_commit_id)),
+                ),
                 ("root", quote(&pinned.root.to_string())),
                 (
                     "commit_ids",
@@ -1017,10 +1028,9 @@ fn report_heads(runtime: &Runtime, sessions: &[Worker]) -> AnyResult<()> {
     let mixed = runtime.plan.mixed;
     let declared = runtime.plan.declared_commits();
     if total != declared {
-        return Err(format!(
-            "v0.1.6 observed Created commits {total} != declared {declared}"
-        )
-        .into());
+        return Err(
+            format!("v0.1.6 observed Created commits {total} != declared {declared}").into(),
+        );
     }
     if total != mixed.topology.total_commits(mixed.k) {
         return Err(format!(
@@ -1145,7 +1155,10 @@ pub(crate) fn run_case(
     let path = root.join("store.sqlite");
     let store = Arc::new(LayerStackStore::connect(&path)?);
     let binding = super::workspace_bench::sample_binding(root, &container)?;
-    let client = Arc::new(super::workspace_bench::sample_client(store.clone(), &binding)?);
+    let client = Arc::new(super::workspace_bench::sample_client(
+        store.clone(),
+        &binding,
+    )?);
     let pristine = store.pin_branch(
         std::fs::read_to_string(root.join("branch-id"))?
             .trim()
@@ -1188,10 +1201,7 @@ pub(crate) fn run_case(
                 "declared_total_commits",
                 mixed.topology.total_commits(mixed.k).to_string(),
             ),
-            (
-                "declared_roots",
-                mixed.topology.roots(mixed.k).to_string(),
-            ),
+            ("declared_roots", mixed.topology.roots(mixed.k).to_string()),
             (
                 "declared_longest_ancestry",
                 mixed.topology.longest_ancestry(mixed.k).to_string(),
@@ -1209,7 +1219,6 @@ pub(crate) fn run_case(
                     "selected"
                 }),
             ),
-
             (
                 "declared_live_envelope",
                 format!(

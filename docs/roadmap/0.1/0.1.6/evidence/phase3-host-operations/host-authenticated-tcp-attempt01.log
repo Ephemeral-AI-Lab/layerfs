@@ -1,0 +1,7 @@
+
+running 1 test
+authenticated TCP HostClient/HostOperations PASS: sharedSDK/FUSEoperationauthority,snapshots,canonicalalias,open-unlinked,actualfsync,numericcookies,partialkernelreplyanddetach
+test host_overlay::tests::authenticated_client_and_sdk_share_one_host_root_and_owned_snapshots ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 147 filtered out; finished in 0.08s
+

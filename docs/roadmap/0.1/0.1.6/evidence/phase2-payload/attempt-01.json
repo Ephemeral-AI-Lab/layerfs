@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "overlay_payload::tests::partial_retention_disk_owner_reader_quota_and_short_write",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_payload.rs": "a2e70f6852469bf179ef1df48a0919489feb15dd316719f237899dd3e45dd288",
+    "crates/layerfs-workspace/src/overlay_index.rs": "9240034894bafd45dbe4cb9eec1b5189d2d89c1de5e7c0e086476d45929dbe64",
+    "crates/layerfs-workspace/src/lib.rs": "213bee1f41dc3bbd05916491a3ad13c4200b3d189a406494b8f3ed6628425f6a",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789330682.734921,
+  "returncode": 0
+}

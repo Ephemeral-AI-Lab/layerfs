@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_fuse-9248761547e86e27",
+    "host_client::coherence::tests::sdk_error_retains_exact_protection_and_scope_until_retry",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "binary_sha256": "4e071d193091409ea83246a879c5ea7198e303896a1317a70fd5283f151b9454",
+  "source_seal": "docs/roadmap/0.1/0.1.6/evidence/phase3-host-operations/sdk-shutdown-compile-attempt01-source.json",
+  "source_seal_sha256": "1677a26973eacae1dce1ff2f34bc8b8a2b9ebb18447f9535b57aa6c032f3c08c",
+  "started_unix": 1789346357.15914,
+  "elapsed_seconds": 0.016635894775390625,
+  "returncode": 0,
+  "result": "PASS",
+  "reason": "Changed CANCEL settlement invalidates the original cancellation path; smallest affected prior protection regression.",
+  "validity": "current for stated source and unchanged dependencies",
+  "performance": "N/A component correctness; no benchmark or #122 scenario"
+}

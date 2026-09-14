@@ -110,3 +110,59 @@ pub fn mount_host(
         mountpoint,
     })
 }
+
+#[cfg(feature = "live")]
+pub enum MountedOwner {
+    Legacy(std::sync::Arc<crate::live_owner::LiveOwner>),
+    Host(std::sync::Arc<crate::host_client::HostClient>),
+}
+#[cfg(feature = "live")]
+impl MountedOwner {
+    pub fn prepare_shutdown(&self) -> std::io::Result<()> {
+        match self {
+            Self::Legacy(owner) => owner.prepare_shutdown(),
+            Self::Host(owner) => owner.prepare_shutdown(),
+        }
+    }
+}
+
+/// The host chooses the authority before mounting. A failed connection or
+/// operation never changes that choice or falls back to a different owner.
+#[cfg(feature = "live")]
+pub fn mount_remote(
+    endpoint: String,
+    capability: [u8; 32],
+    host_session: Option<[u8; 16]>,
+    root: &Path,
+) -> std::io::Result<(MountedOwner, crate::live_owner::LiveControl, HostMount)> {
+    use std::sync::Arc;
+    let runtime = crate::live_runtime::LiveRuntime::shared()?;
+    if let Some(session) = host_session {
+        let owner = Arc::new(runtime.block_on(crate::host_client::HostClient::connect(
+            endpoint.clone(),
+            capability,
+            session,
+            runtime.scheduler(),
+        ))?);
+        let control = owner.serve_control(endpoint, capability)?;
+        let mount = mount_host(owner.clone(), root, 0, 0)?;
+        owner.set_notifier(mount.notifier()?)?;
+        owner.set_kernel_root(std::fs::File::open(root)?)?;
+        Ok((MountedOwner::Host(owner), control, mount))
+    } else {
+        let owner = Arc::new(
+            runtime
+                .block_on(crate::live_owner::LiveOwner::connect(
+                    endpoint.clone(),
+                    capability,
+                    runtime.scheduler(),
+                ))
+                .map_err(|error| std::io::Error::other(format!("live owner: {error:?}")))?,
+        );
+        let control = owner.serve_control(endpoint, capability)?;
+        let mount = mount_host(owner.clone(), root, 0, 0)?;
+        owner.set_notifier(mount.notifier()?)?;
+        owner.set_kernel_root(std::fs::File::open(root)?)?;
+        Ok((MountedOwner::Legacy(owner), control, mount))
+    }
+}

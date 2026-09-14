@@ -1,0 +1,8 @@
+   Compiling layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+error[E0463]: can't find crate for `std`
+  |
+  = note: the `aarch64-unknown-linux-musl` target may not be installed
+  = help: consider downloading the target with `rustup target add aarch64-unknown-linux-musl`
+
+For more information about this error, try `rustc --explain E0463`.
+error: could not compile `layerfs-fuse` (lib) due to 1 previous error

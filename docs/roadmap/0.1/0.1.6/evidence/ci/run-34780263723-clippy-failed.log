@@ -1,0 +1,124 @@
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	﻿2026-09-13T20:19:52.4850852Z ##[group]Run cargo +1.96.0 clippy --workspace --locked -- -D warnings
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.4851235Z [36;1mcargo +1.96.0 clippy --workspace --locked -- -D warnings[0m
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.4882665Z shell: /usr/bin/bash -e {0}
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.4882881Z ##[endgroup]
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.5977570Z    Compiling proc-macro2 v1.0.107
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.5978133Z    Compiling quote v1.0.47
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.5987918Z    Compiling unicode-ident v1.0.24
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.6013485Z    Compiling libc v0.2.189
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.6432563Z    Compiling shlex v2.0.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.7394038Z    Compiling find-msvc-tools v0.1.11
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.8854950Z    Compiling pkg-config v0.3.34
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:52.9573047Z     Checking cfg-if v1.0.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.2853440Z    Compiling cfg_aliases v0.2.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.3123210Z    Compiling equivalent v1.0.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.3353310Z    Compiling hashbrown v0.17.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.4203020Z    Compiling syn v2.0.119
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.5733000Z    Compiling jobserver v0.1.35
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.7792914Z    Compiling cc v1.4.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.7845348Z     Checking bitflags v2.13.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:53.8573319Z    Compiling autocfg v1.5.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.1153685Z    Compiling winnow v1.0.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.1363052Z    Compiling memoffset v0.9.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.2123240Z    Compiling indexmap v2.14.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.7153300Z    Compiling toml_datetime v1.1.1+spec-1.1.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.8349343Z     Checking arrayvec v0.7.8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.9543579Z     Checking arrayref v0.3.9
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.9723415Z     Checking cpufeatures v0.3.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:54.9941686Z     Checking constant_time_eq v0.4.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.0373374Z    Compiling toml_parser v1.1.3+spec-1.1.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.0426588Z    Compiling blake3 v1.8.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.0903542Z     Checking smallvec v1.15.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.2176567Z    Compiling parking_lot_core v0.9.12
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.3173310Z    Compiling rustversion v1.0.23
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.4539189Z    Compiling toml_edit v0.25.13+spec-1.1.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:55.5319332Z    Compiling syn v3.0.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.1973790Z     Checking layerfs-content v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-content)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.2903907Z    Compiling proc-macro-crate v3.5.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.6103322Z    Compiling nix v0.31.3
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.7883592Z    Compiling ref-cast v1.0.27
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.8253086Z    Compiling zerocopy v0.8.56
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.9230250Z     Checking scopeguard v1.2.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:56.9479858Z     Checking lock_api v0.4.14
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:57.0563112Z    Compiling zerocopy-derive v0.8.56
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:57.0613867Z    Compiling num_enum_derive v0.7.6
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:57.3163323Z    Compiling ref-cast-impl v1.0.27
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:57.6733234Z    Compiling nix v0.29.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:57.8843484Z    Compiling fuser v0.18.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:57.9791859Z     Checking parking_lot v0.12.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.0042812Z     Checking num_enum v0.7.6
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.0901126Z    Compiling tokio-macros v2.6.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.4958928Z     Checking mio v1.2.3
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.5449699Z     Checking socket2 v0.6.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.6843216Z     Checking page_size v0.6.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.7063141Z     Checking bytes v1.12.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:58.7133154Z    Compiling vcpkg v0.2.15
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.0013376Z     Checking log v0.4.34
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.0671235Z     Checking memchr v2.8.3
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.1843336Z     Checking pin-project-lite v0.2.17
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.2103036Z     Checking tokio v1.48.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.3483189Z    Compiling libsqlite3-sys v0.38.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.4713567Z     Checking layerfs-workspace-core v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:19:59.8739771Z     Checking foldhash v0.2.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:00.2831137Z    Compiling zstd-sys v2.0.16+zstd.1.5.7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:00.9627716Z     Checking hashlink v0.12.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.0787414Z     Checking fallible-iterator v0.3.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.2273293Z     Checking fallible-streaming-iterator v0.1.9
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.2763223Z     Checking rusqlite v0.40.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.5743660Z     Checking layerfs-materialization v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-materialization)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.6903435Z     Checking utf8parse v0.2.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.7203043Z     Checking anstyle-parse v0.2.7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.7843236Z     Checking colorchoice v1.0.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.8077348Z     Checking anstyle-query v1.1.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.8306695Z     Checking is_terminal_polyfill v1.70.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.8533668Z     Checking anstyle v1.0.14
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.8603160Z    Compiling rustix v0.38.44
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.9365978Z     Checking anstream v0.6.21
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:01.9916781Z     Checking strsim v0.11.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:02.0312894Z    Compiling heck v0.5.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:02.0723264Z     Checking clap_lex v0.7.7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:02.1303452Z     Checking clap_builder v4.5.48
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:02.1423896Z    Compiling clap_derive v4.5.47
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:02.6420660Z     Checking layerfs-fuse v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-fuse)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:03.2307542Z     Checking linux-raw-sys v0.4.15
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:03.2429664Z     Checking clap v4.5.48
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.0064069Z     Checking layerfs-daemon v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-daemon)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.7944757Z     Checking layerfs-layerstack-store v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-layerstack-store)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9832024Z error: redundant field names in struct initialization
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9834632Z    --> crates/layerfs-layerstack-store/src/workspace.rs:725:17
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9835018Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9835223Z 725 |                 counters: counters,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9835548Z     |                 ^^^^^^^^^^^^^^^^^^ help: replace it with: `counters`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9836143Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9836765Z     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#redundant_field_names
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9837534Z     = note: `-D clippy::redundant-field-names` implied by `-D warnings`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9838085Z     = help: to override `-D warnings` add `#[allow(clippy::redundant_field_names)]`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:05.9838420Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7162319Z error: large size difference between variants
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7163027Z    --> crates/layerfs-layerstack-store/src/staging.rs:181:1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7163409Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7163675Z 181 | / pub enum WorkspacePublicationResolution {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7164064Z 182 | |     Published(WorkspacePublicationReceipt),
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7164579Z     | |     -------------------------------------- the largest variant contains at least 280 bytes
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7165063Z 183 | |     NotPublished,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7165452Z     | |     ------------ the second-largest variant carries no data at all
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7165819Z 184 | |     Unknown,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7166059Z 185 | | }
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7166274Z     | |_^ the entire enum is at least 280 bytes
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7166562Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7166857Z note: boxing a variant would require the type no longer be `Copy`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7167318Z    --> crates/layerfs-layerstack-store/src/staging.rs:181:10
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7167682Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7167946Z 181 | pub enum WorkspacePublicationResolution {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7168310Z     |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7168940Z help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7169641Z    --> crates/layerfs-layerstack-store/src/staging.rs:182:5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7170029Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7170305Z 182 |     Published(WorkspacePublicationReceipt),
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7170685Z     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7171377Z     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#large_enum_variant
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7172610Z     = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7173190Z     = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.7173545Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.9684522Z error: could not compile `layerfs-layerstack-store` (lib) due to 2 previous errors
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:20:07.9800180Z ##[error]Process completed with exit code 101.

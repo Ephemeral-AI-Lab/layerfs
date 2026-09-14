@@ -1,0 +1,61 @@
+{
+  "source_sha256": {
+    "host_directories.rs": "85f5440e8d8d6e42ebf6a756316d44f8ca4d80391681667ee420f90b8792232c",
+    "host_operations.rs": "e5f5039e25f111f6c0d5187c3c638c7b17de1e17a38d6c18aae303257fc54fc1",
+    "host_overlay.rs": "8491e91c739cce143c8742815f3933108df38c88761d720157d4b75a9068fd46",
+    "overlay.rs": "371377754091b42435654ba3d22d5847f1fd665fa84ed50579248ab176b31c7a",
+    "overlay_budget.rs": "222dcd2623e95288fbabc576c7287c25791e6e3f391b1fc818f46124d77c5c83",
+    "overlay_index.rs": "6b75be37d139b6358a43ef89955a59063828a4eec2e269a15f9631134e2e0c60",
+    "overlay_payload.rs": "bd8b2cf3e350d2ae1f0bc56a679971b18bd804b04e221ce2367dafc52030aae1",
+    "overlay_ranges.rs": "61c5bdbb1d5a1f5617f2aa57c16ba577d0e9579ec064f9b42b293fb6f823b925",
+    "snapshot.rs": "231d2472396ce4d4826cc8c405fe03d608242ce91a5bb8bced8b98270f8841ee",
+    "projection.rs": "591ab74241728df3f36730f225308fd99c01da270c2073495387a26b5a97c814",
+    "lib.rs": "1ec35ac4c65ec1105aa842a09402996a5fc79b85b12a303ddc93247169ccaabc"
+  },
+  "wire_sha256": "75974393268348f9c4131e3dad8caf97127bcef38810317ad2d72ede635ea978",
+  "timestamp_unix": 1789337047.750525,
+  "reason": "First exact numeric-cookie and host replay dispatch integration; new production paths, no prior pass.",
+  "compile_returncode": 0,
+  "compile_command": [
+    "cargo",
+    "+1.96.0",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "--lib",
+    "--no-run",
+    "--message-format=json"
+  ],
+  "binary_sha256": "7d46bf9a47c50d7a967459b8372227dac86636084c9c01202eda0e1fac88a10f",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "tests": [
+    {
+      "identity": "host_directories::tests::cold_directory_cookies_survive_partial_pages_removal_and_bounded_churn",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "host_directories::tests::cold_directory_cookies_survive_partial_pages_removal_and_bounded_churn",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "result": "PASS",
+      "raw": "directory-cookies-attempt01.log"
+    },
+    {
+      "identity": "host_operations::tests::lost_replies_bind_exact_requests_and_keep_kernel_owned_orphans_readable",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "host_operations::tests::lost_replies_bind_exact_requests_and_keep_kernel_owned_orphans_readable",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "result": "PASS",
+      "raw": "host-dispatch-attempt01.log"
+    }
+  ]
+}

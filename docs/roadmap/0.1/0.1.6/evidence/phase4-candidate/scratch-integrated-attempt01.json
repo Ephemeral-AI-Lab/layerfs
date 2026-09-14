@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_layerstack_store-1df70e3f7470c3b7",
+    "objects::scratch::tests::",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "returncode": 0,
+  "elapsed_seconds": 2.0818471908569336,
+  "expected_active_test_count": 5,
+  "binary_sha256": "89b16632c6734f15792b8e9050077e353111dc7efea485362366fb0773910dfc",
+  "compiled_source": "capacity-compile-attempt03-source.json",
+  "raw": "scratch-integrated-attempt01.log",
+  "validity": "current for exact sealed compiled inputs"
+}

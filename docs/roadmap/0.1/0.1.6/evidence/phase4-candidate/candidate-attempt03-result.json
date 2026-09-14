@@ -1,0 +1,47 @@
+{
+  "result": "PASS",
+  "tests": 2,
+  "elapsed_tests_seconds": 0.84,
+  "source": "candidate-attempt03-source.json",
+  "end_source_changes": [],
+  "binary_path": "target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "d535bc0f3ba6b6926beb819a298da678d692a9f4d86de0c7362d6ab3cf8c9754",
+  "readback": "Both tests dropped original HostOverlay and LayerStackStore before reconnecting; intermediate reads use fresh SnapshotReader on the original Store to respect exclusive Store ownership.",
+  "statistics": [
+    {
+      "case": "held_existing_16MiB",
+      "commit": "C1",
+      "logical_bytes": 16777216,
+      "replacement_bytes": 1,
+      "reused_bytes": 16777215,
+      "cdc_bytes_scanned": 1,
+      "full_builds": 0,
+      "full_comparisons": 0,
+      "correspondence_visits": 6,
+      "fragments": 2
+    },
+    {
+      "case": "held_existing_16MiB",
+      "commit": "C2",
+      "logical_bytes": 16777216,
+      "replacement_bytes": 1,
+      "reused_bytes": 16777215,
+      "cdc_bytes_scanned": 1,
+      "full_builds": 0,
+      "full_comparisons": 0,
+      "correspondence_visits": 14,
+      "fragments": 3
+    },
+    {
+      "case": "new_inode_128KiB",
+      "commit": "C2",
+      "logical_bytes": 131072,
+      "replacement_bytes": 1,
+      "reused_bytes": 131071,
+      "cdc_bytes_scanned": 1,
+      "binding_deltas": 2,
+      "full_builds": 0,
+      "full_comparisons": 0
+    }
+  ]
+}

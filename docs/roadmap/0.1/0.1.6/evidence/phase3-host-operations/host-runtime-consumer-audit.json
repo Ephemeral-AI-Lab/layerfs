@@ -1,0 +1,21 @@
+{
+  "recorded_utc": "2026-09-13T23:55:52.189173+00:00",
+  "source_head": "f35e0039ba8f11fb97feb608b2bc179fc0e9bc04",
+  "scope": "read-only current Workspace/RemoteWorkspace/Workspaces non-Commit integration consumers",
+  "sources": {
+    "crates/layerfs-workspace/src/cow_tree.rs": "228f12205f917ff24461f8f5f209d6dae9e1b463e1e008d32e05ab796198a180",
+    "crates/layerfs-workspace/src/lifecycle.rs": "6c0bb5e8401cff352de44d37b9739fb845d788342031de5013233ac1f883956e",
+    "crates/layerfs-workspace/src/worker.rs": "16e54b816b8ee80d6baebf90e3af7e8d12dcf2224632291ee52b58513b513df7",
+    "crates/layerfs-workspace/src/registry.rs": "678c17a430f6dad61d2997d0fc77b262030f3d398ee76e28ce6bb021a3fe8b0d",
+    "crates/layerfs-workspace/src/reconcile.rs": "2f4b83a103213dd6d634343bbda9d6fa260d4e2b3bcac8ebced1cd93fff15273",
+    "crates/layerfs-workspace/src/projection.rs": "591ab74241728df3f36730f225308fd99c01da270c2073495387a26b5a97c814",
+    "crates/layerfs-workspace/src/live_backing.rs": "3c507957a49f7e9b215adbf700b0d65557feda8149b7fa90bfa04f2591549e63",
+    "crates/layerfs-workspace/src/execution.rs": "fd3511444d074cba50d253fac2a8b4362ae4d1cbffd6fbca2e790df6998478dc",
+    "crates/layerfs-workspace/src/changes.rs": "76cedcce24f6e7dd747ac171b27f8520ba5485ec319f4d701526c28560523c8e",
+    "crates/layerfs-workspace/src/commit_attempt.rs": "bd973ce91fa60a7675683c7102f05d7cf6bfa80ce3d1e2bbeb67c8f70158922c",
+    "crates/layerfs-workspace/src/host_operations.rs": "673b3a649b5a9578e643a3cf89924410529a65895f0d53747cbb074182a12e5d"
+  },
+  "artifact": "host-runtime-consumer-audit.md",
+  "product_edits": false,
+  "tests_run": false
+}

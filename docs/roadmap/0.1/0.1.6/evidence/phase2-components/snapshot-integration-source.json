@@ -1,0 +1,39 @@
+{
+  "command": "cargo test -p layerfs-workspace --lib overlay::tests -- --skip replay_retains_lost_reply_and_never_reapplies_stale_or_unknown_request --nocapture",
+  "result": "8 PASS; replay pass reused",
+  "raw": "snapshot-content-attempt01.log",
+  "head": "6d907bc43361c76583314f476854f328c790baee",
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "files": [
+    {
+      "path": "crates/layerfs-workspace/src/overlay.rs",
+      "sha256": "2c3f3fea1234d896762145eab3da9748e2c50e3b063875cf0abc3d2008ff8550",
+      "blob": "96b9a32c2ae7a7c596cc5baebb9129ac5262b9f0"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/snapshot.rs",
+      "sha256": "aa2c3caad45c342528de059fea7e44bbfc48be1b03f1be04f185c461eed3c88a",
+      "blob": "1118ca72f0951f3bd04ece73404c8e6b3b7656ad"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_index.rs",
+      "sha256": "023b463b31c3ab29347123dd2da01e4247efd4352f008f0291c718b6d4c8dcd4",
+      "blob": "da9eff967602acbdee497614f58b2d721e52a47a"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_payload.rs",
+      "sha256": "cc25e6a7dba97a604eda493ea56c37d57aa83f3f111f575e70bbd9e034c771a4",
+      "blob": "687abbf96e7c40c04f208ad5a08d1a976725b38c"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_ranges.rs",
+      "sha256": "0f9040dbb4f303356d6a31aceb7fad7568f6b4811c68f98e808a43d380515e65",
+      "blob": "1b14ef0ec49548baf634567d7618957223af4037"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/correspondence.rs",
+      "sha256": "b6d94da394c0e1fd6a3554d6cb5804a164c9baebaac1bf8a2ed00d91ea056f1a",
+      "blob": "200a1ba71d4a7cc0bdc5d949dcf4ea27686dc347"
+    }
+  ]
+}

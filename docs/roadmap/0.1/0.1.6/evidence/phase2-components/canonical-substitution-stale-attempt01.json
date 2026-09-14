@@ -1,0 +1,12 @@
+{
+  "result": "PASS1",
+  "command": [
+    "target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_canonicalize::tests::stale_substitution_preserves_unrelated_write_and_retries_leased_root",
+    "--exact",
+    "--nocapture"
+  ],
+  "source": "canonical-substitution-attempt01-source.json",
+  "binary_sha256": "8e975629bb1e46065b59cb489446ec03e09ecf0fd80b501e1425374725bbbe23",
+  "raw": "canonical-substitution-stale-attempt01.log"
+}

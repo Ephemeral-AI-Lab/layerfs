@@ -1,0 +1,20 @@
+{
+  "recorded_utc": "2026-09-14T00:45:06.125915+00:00",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected",
+    "--exact",
+    "--nocapture"
+  ],
+  "result": "PASS1",
+  "exit_code": 0,
+  "source": "../phase3-host-operations/sdk-path-compile-attempt02-source.json",
+  "binary_sha256": "cbabe2def5568d913f95c2b4f21506d490dd138f8c206894f946b8cd36971b06",
+  "raw": "maintenance-attempt02.log",
+  "prior_failure": "maintenance-attempt01.json",
+  "invalidation": "Only the failing active/retained-attempt test oracle changed: pre-stage failure correctly clears its attempt; an injected publication failure now proves a real retained canonical stage before testing the skip. No production maintenance code changed.",
+  "reused_passes": [
+    "maintenance_caps_nodes_and_covered_keys_without_bumping_live_sequence from maintenance-attempt01.log",
+    "concurrent_c2_publication_keeps_new_pending_context_and_later_write from maintenance-attempt01.log"
+  ]
+}

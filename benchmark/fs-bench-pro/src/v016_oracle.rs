@@ -6,9 +6,9 @@
 // final retained root. Nothing here reads the mutated Store to decide what the
 // expected value is.
 use super::*;
+use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use layerfs_content::ObjectId;
 use workload_source::v016_common as v016;
 use workload_source::v016_stages::{self as stages, Topology};
 use workload_source::workspace_common::{Content, Entry, EntryKind};
@@ -140,7 +140,8 @@ impl ShadowState {
             .filter(|(path, _)| path.starts_with(&prefix))
             .map(|(path, value)| (format!("{destination}/{}", &path[prefix.len()..]), *value))
             .collect();
-        self.directory_modes.retain(|path, _| !path.starts_with(&prefix));
+        self.directory_modes
+            .retain(|path, _| !path.starts_with(&prefix));
         for (path, value) in moved_modes {
             self.directory_modes.insert(path, value);
         }
@@ -413,7 +414,9 @@ fn apply_stage4(
     // declaration follows the branch that performed the stage.
     let mtime = v016::attribute_mtime(cycle, branch_tag);
     for path in v016::attribute_targets(fixture)? {
-        shadow.modes.insert(path.clone(), v016::attribute_mode(cycle, true));
+        shadow
+            .modes
+            .insert(path.clone(), v016::attribute_mode(cycle, true));
         shadow.mtimes.insert(path, mtime);
     }
     // Four 64-byte writes on the four distinct 4 KiB alias targets.
@@ -451,9 +454,10 @@ fn apply_stage5(
     observed: &BTreeMap<String, u32>,
 ) -> AnyResult<()> {
     let deletion_root = fixture.roles.deletion_root.clone();
-    shadow
-        .directory_modes
-        .insert(deletion_root.clone(), observed_directory_mode(observed, &deletion_root)?);
+    shadow.directory_modes.insert(
+        deletion_root.clone(),
+        observed_directory_mode(observed, &deletion_root)?,
+    );
     let (link_parent, symlink_parent) = link_layout(fixture, cycle);
     for index in 0..v016::DELETION_SUBTREE_FILES {
         let path = fixture
@@ -525,14 +529,10 @@ fn apply_stage3(
 }
 
 /// One directory the stage helper created, with the live mode it measured.
-fn observed_directory_mode(
-    observed: &BTreeMap<String, u32>,
-    path: &str,
-) -> AnyResult<u32> {
-    observed
-        .get(path)
-        .copied()
-        .ok_or_else(|| format!("v0.1.6 created directory {path} has no live mode observation").into())
+fn observed_directory_mode(observed: &BTreeMap<String, u32>, path: &str) -> AnyResult<u32> {
+    observed.get(path).copied().ok_or_else(|| {
+        format!("v0.1.6 created directory {path} has no live mode observation").into()
+    })
 }
 
 fn apply_cycle(
@@ -684,8 +684,9 @@ fn verify_root_against_shadow(
                 ranges,
             } => {
                 if ranges.is_empty() {
-                    return Err(format!("v0.1.6 {label} large path has no declared range: {path}")
-                        .into());
+                    return Err(
+                        format!("v0.1.6 {label} large path has no declared range: {path}").into(),
+                    );
                 }
                 for (offset, length) in ranges {
                     let start = (*offset).min(*len);
@@ -1039,7 +1040,12 @@ pub(crate) fn verify_case(
     if counters.get("created_commits").copied().unwrap_or(0) != declared_commits {
         return Err("v0.1.6 published Created commit count differs from the declared total".into());
     }
-    if counters.get("posix_helper_executions").copied().unwrap_or(0) != declared_commits {
+    if counters
+        .get("posix_helper_executions")
+        .copied()
+        .unwrap_or(0)
+        != declared_commits
+    {
         return Err("v0.1.6 POSIX helper execution count differs from the declared total".into());
     }
     super::v016_mixed::emit(

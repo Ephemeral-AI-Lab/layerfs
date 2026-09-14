@@ -1,0 +1,37 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-sdk-invalidation-probe",
+    "--device",
+    "/dev/fuse",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--cpus",
+    "1",
+    "--memory",
+    "512m",
+    "--pids-limit",
+    "128",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.6/evidence:/evidence:ro",
+    "-w",
+    "/evidence/phase3-host-operations",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "sh",
+    "-c",
+    "uname -a && gcc --version && gcc -std=c11 -O1 -pthread -Wall -Wextra -o /tmp/sdk-invalidation-probe sdk-invalidation-probe.c && sha256sum /tmp/sdk-invalidation-probe && /tmp/sdk-invalidation-probe"
+  ],
+  "source_sha256": {
+    "sdk-invalidation-probe.c": "e5d88b25056db74f1a1a75be7a2ca3228de56a5af7e704e92b005bacd9be2e45",
+    "reused_original_probe.c": "bd38ad8020c0011fd68b186dd483e1f31adee4c0d827626f532eeff28d8d608a"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "timestamp_unix": 1789340266.002918,
+  "benchmark_cases_executed": [],
+  "hypothesis": "SDK no eagerSTORE uses protectedfolio writeback+invalidation; actualsyncfs must expose launderingfailure. NotCommitV1snapshotcapture.",
+  "returncode": 0,
+  "measurement_lock": "heldonlyforchangedmechanismprobe;noexistingbenchmarkcaseexecuted"
+}

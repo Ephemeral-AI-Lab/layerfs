@@ -1,23 +1,38 @@
 #![forbid(unsafe_code)]
 
+mod candidate_capacity;
 mod capture;
 mod changes;
+mod commit_attempt;
 mod container;
+mod correspondence;
 mod daemon;
 mod docker;
 mod docker_engine;
 mod execution;
 pub(crate) use layerfs_workspace_core::file_edit;
 mod file_io;
+mod host_canonicalize;
+mod host_directories;
+mod host_operations;
+mod host_overlay;
+mod host_runtime;
+mod host_sdk;
 mod lifecycle;
 mod live_backing;
 
 mod cow_tree;
 mod output;
+mod overlay;
+mod overlay_budget;
+mod overlay_index;
+mod overlay_payload;
+mod overlay_ranges;
 mod projection;
 mod reconcile;
 mod registry;
 mod session;
+mod snapshot;
 mod worker;
 
 pub use container::{

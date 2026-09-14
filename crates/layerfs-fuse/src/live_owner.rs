@@ -406,11 +406,11 @@ fn note_edit(diagnostic: &mut Option<EditDiagnostic>, field: EditMetric, started
     }
 }
 
-struct KernelEdit {
-    node: NodeId,
-    file: layerfs_workspace_core::FileData,
-    ranges: Vec<std::ops::Range<u64>>,
-    _charge: crate::live_runtime::LiveReservation,
+pub(crate) struct KernelEdit<Source = layerfs_workspace_core::FileData> {
+    pub(crate) node: NodeId,
+    pub(crate) file: Source,
+    pub(crate) ranges: Vec<std::ops::Range<u64>>,
+    pub(crate) _charge: crate::live_runtime::LiveReservation,
 }
 
 struct KernelEditGuard<'a>(&'a Mutex<Option<Arc<KernelEdit>>>);
@@ -820,7 +820,7 @@ impl LiveOwner {
             }
         }
         Ok(KernelReferences {
-            owner: Some(self.clone()),
+            owner: Some(self.clone().into()),
             nodes,
         })
     }
@@ -912,6 +912,7 @@ impl LiveOwner {
         let policy = ResourcePolicy {
             max_spool_bytes: input.u64().map_err(io)?,
             max_final_delta_memory_bytes: input.u64().map_err(io)?,
+            ..ResourcePolicy::default()
         };
         let (id, node) = wire::node_in(input.0, |_, _, _| Err(wire::invalid())).map_err(io)?;
         if id != ROOT {
@@ -1915,7 +1916,7 @@ impl FilesystemPort for LiveOwner {
             Ok((
                 attr,
                 KernelReferences {
-                    owner: Some(self.clone()),
+                    owner: Some(self.clone().into()),
                     nodes: vec![attr.node],
                 },
             ))
@@ -3365,15 +3366,35 @@ impl LiveOwner {
         endpoint: String,
         capability: [u8; 32],
     ) -> std::io::Result<LiveControl> {
+        LiveControl::serve(self.clone(), self.0.scheduler.clone(), endpoint, capability)
+    }
+}
+
+pub(crate) trait ControlHandler: Send + Sync {
+    fn request<'a>(&'a self, bytes: &'a [u8]) -> crate::PortFuture<'a, Vec<u8>>;
+}
+impl ControlHandler for LiveOwner {
+    fn request<'a>(&'a self, bytes: &'a [u8]) -> crate::PortFuture<'a, Vec<u8>> {
+        Box::pin(self.local_control(bytes))
+    }
+}
+impl LiveControl {
+    pub(crate) fn serve(
+        handler: impl ControlHandler + 'static,
+        scheduler: Scheduler,
+        endpoint: String,
+        capability: [u8; 32],
+    ) -> std::io::Result<Self> {
         use std::net::ToSocketAddrs;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let address = endpoint
             .to_socket_addrs()?
             .next()
             .ok_or_else(wire::invalid)?;
-        let observer_owner = self.clone();
+        let owner = Arc::new(handler);
+        let observer_owner = owner.clone();
         let observer: tokio::task::JoinHandle<std::io::Result<()>> =
-            self.0.scheduler.handle.spawn(async move {
+            scheduler.handle.spawn(async move {
                 let mut stream = tokio::net::TcpStream::connect(address).await?;
                 stream.set_nodelay(true)?;
                 stream.write_all(&capability).await?;
@@ -3386,7 +3407,7 @@ impl LiveOwner {
                         return Err(wire::invalid());
                     }
                     let result = observer_owner
-                        .control_request(&[wire::OBSERVE])
+                        .request(&[wire::OBSERVE])
                         .await
                         .map_err(|_| wire::invalid())?;
                     crate::live_transport::write_frame(&mut stream, Some(0), &result).await?;
@@ -3400,8 +3421,8 @@ impl LiveOwner {
         let stopped_control = stopped.clone();
         let stopped_wake = wake.clone();
         let (finished, mut finish) = tokio::sync::oneshot::channel();
-        let owner = self.clone();
-        let thread = self.0.scheduler.handle.spawn(async move {
+        let control_scheduler = scheduler.clone();
+        let thread = scheduler.handle.spawn(async move {
             let result = async {
                 let mut stream = tokio::net::TcpStream::connect(address).await?;
                 stream.set_nodelay(true)?;
@@ -3415,9 +3436,7 @@ impl LiveOwner {
                     if len == 0 || len > wire::MAX_FRAME {
                         return Err(wire::invalid());
                     }
-                    let _admitted = owner
-                        .0
-                        .scheduler
+                    let _admitted = control_scheduler
                         .admit_lifecycle(len + wire::MAX_FRAME)
                         .await?;
                     let mut bytes = vec![0; len];
@@ -3435,18 +3454,8 @@ impl LiveOwner {
                             Err(PortError::Io)
                         }
                     } else {
-                        owner.control_request(&bytes).await
+                        owner.request(&bytes).await
                     };
-                    if result.is_err()
-                        && matches!(
-                            bytes.first(),
-                            Some(&wire::EDIT_BEGIN)
-                                | Some(&wire::EDIT_PART)
-                                | Some(&wire::EDIT_END)
-                        )
-                    {
-                        owner.0.edit.lock().map_err(|_| wire::invalid())?.take();
-                    }
                     match result {
                         Ok(bytes) => {
                             crate::live_transport::write_frame(&mut stream, Some(0), &bytes)
@@ -3563,6 +3572,52 @@ fn ns(started: Instant) -> u64 {
 
 #[cfg(test)]
 mod immutable_acquisition_tests {
+    #[test]
+    fn shared_control_handler_preserves_authentication_roles_and_shutdown_ack() {
+        struct Handler;
+        impl super::ControlHandler for Handler {
+            fn request<'a>(&'a self, bytes: &'a [u8]) -> crate::PortFuture<'a, Vec<u8>> {
+                Box::pin(async move {
+                    match bytes {
+                        [crate::live_wire::OBSERVE] => Ok(b"observed".to_vec()),
+                        [crate::live_wire::WRITE_METRICS] => Ok(b"metrics".to_vec()),
+                        _ => Err(crate::PortError::Invalid),
+                    }
+                })
+            }
+        }
+        let runtime = crate::live_runtime::LiveRuntime::shared().unwrap();
+        let server = std::sync::Arc::new(
+            crate::live_transport::BackingServer::start(|_| Err(crate::PortError::Invalid))
+                .unwrap(),
+        );
+        let control = super::LiveControl::serve(
+            Handler,
+            runtime.scheduler(),
+            format!("127.0.0.1:{}", server.port()),
+            server.capability(),
+        )
+        .unwrap();
+        assert_eq!(server.observe().unwrap(), b"observed");
+        assert_eq!(
+            server.request(&[crate::live_wire::WRITE_METRICS]).unwrap(),
+            b"metrics"
+        );
+        assert_eq!(
+            server.request(&[crate::live_wire::FREEZE]),
+            Err(crate::PortError::Invalid)
+        );
+        let request = {
+            let server = server.clone();
+            std::thread::spawn(move || server.request(&[crate::live_wire::SHUTDOWN]))
+        };
+        assert!(control
+            .poll_shutdown(std::time::Duration::from_secs(5))
+            .unwrap());
+        control.finish_shutdown(true).unwrap();
+        assert!(request.join().unwrap().unwrap().is_empty());
+    }
+
     use super::*;
     use layerfs_content::{
         file::content::FileContentRoot, tree::directory::DirectoryStateRoot, tree::inode::InodeId,

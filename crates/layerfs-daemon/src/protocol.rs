@@ -123,6 +123,7 @@ pub struct MountRequest {
     pub root: Vec<u8>,
     pub endpoint: Vec<u8>,
     pub capability: [u8; 32],
+    pub host_owned: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -675,7 +676,7 @@ impl ExecRequest {
 impl MountRequest {
     pub fn encode(&self) -> io::Result<Vec<u8>> {
         validate_mount(&self.root, &self.endpoint)?;
-        let length = 72_usize
+        let length = (72_usize + usize::from(self.host_owned))
             .checked_add(self.root.len())
             .and_then(|length| length.checked_add(self.endpoint.len()))
             .ok_or_else(|| invalid("daemon Mount overflow"))?;
@@ -688,6 +689,9 @@ impl MountRequest {
         push_bytes(&mut bytes, &self.root)?;
         push_bytes(&mut bytes, &self.endpoint)?;
         bytes.extend_from_slice(&self.capability);
+        if self.host_owned {
+            bytes.push(1);
+        }
         if bytes.len() > MAX_CONTROL {
             return Err(invalid("daemon Mount aggregate"));
         }
@@ -704,6 +708,14 @@ impl MountRequest {
         let root = cursor.bytes(MAX_CONTROL)?;
         let endpoint = cursor.bytes(MAX_ARG)?;
         let capability = cursor.take(32)?.try_into().expect("Mount capability width");
+        let host_owned = if cursor.done() {
+            false
+        } else {
+            if cursor.take(1)? != [1] {
+                return Err(invalid("daemon Mount authority"));
+            }
+            true
+        };
         if !cursor.done() {
             return Err(invalid("daemon Mount trailing bytes"));
         }
@@ -714,6 +726,7 @@ impl MountRequest {
             root,
             endpoint,
             capability,
+            host_owned,
         })
     }
 }
@@ -968,8 +981,21 @@ mod tests {
             root: b"/workspace/x".to_vec(),
             endpoint: b"127.0.0.1:1234".to_vec(),
             capability: [3; 32],
+            host_owned: false,
         };
         let mount_payload = mount.encode().unwrap();
+        let mut host_mount = mount.clone();
+        host_mount.host_owned = true;
+        let host_payload = host_mount.encode().unwrap();
+        assert_eq!(&host_payload[..mount_payload.len()], mount_payload);
+        assert_eq!(host_payload.last(), Some(&1));
+        assert_eq!(MountRequest::decode(&host_payload).unwrap(), host_mount);
+        let mut invalid_authority = mount_payload.clone();
+        invalid_authority.push(0);
+        assert!(MountRequest::decode(&invalid_authority).is_err());
+        let mut trailing = host_payload;
+        trailing.push(1);
+        assert!(MountRequest::decode(&trailing).is_err());
         let resource = ResourceSampleRequest {
             owner_id: [1; 16],
             workspace_id: [2; 16],

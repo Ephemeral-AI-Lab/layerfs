@@ -3,9 +3,136 @@ use super::*;
 use rusqlite::limits::Limit;
 use std::io::BufWriter;
 
+#[cfg(unix)]
+pub(super) type ScratchContext = Option<std::sync::Arc<super::scratch::ScratchBudget>>;
+#[cfg(not(unix))]
+#[derive(Clone, Default)]
+pub(super) struct NoScratch;
+#[cfg(not(unix))]
+pub(super) type ScratchContext = Option<NoScratch>;
+
+pub(super) enum SpillFile {
+    Native(std::fs::File),
+    #[cfg(unix)]
+    Charged(super::scratch::ScratchFile),
+}
+impl SpillFile {
+    pub(super) fn try_clone(&self) -> std::io::Result<Self> {
+        match self {
+            Self::Native(f) => Ok(Self::Native(f.try_clone()?)),
+            #[cfg(unix)]
+            Self::Charged(f) => Ok(Self::Charged(f.try_clone()?)),
+        }
+    }
+}
+#[cfg(unix)]
+impl std::os::unix::fs::FileExt for SpillFile {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+        match self {
+            Self::Native(f) => std::os::unix::fs::FileExt::read_at(f, buf, offset),
+            Self::Charged(f) => std::os::unix::fs::FileExt::read_at(f, buf, offset),
+        }
+    }
+    fn write_at(&self, buf: &[u8], offset: u64) -> std::io::Result<usize> {
+        match self {
+            Self::Native(f) => std::os::unix::fs::FileExt::write_at(f, buf, offset),
+            Self::Charged(f) => std::os::unix::fs::FileExt::write_at(f, buf, offset),
+        }
+    }
+}
+impl Read for SpillFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Native(f) => f.read(buf),
+            #[cfg(unix)]
+            Self::Charged(f) => f.read(buf),
+        }
+    }
+}
+impl Write for SpillFile {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Native(f) => f.write(buf),
+            #[cfg(unix)]
+            Self::Charged(f) => f.write(buf),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Native(f) => f.flush(),
+            #[cfg(unix)]
+            Self::Charged(f) => f.flush(),
+        }
+    }
+}
+impl Seek for SpillFile {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        match self {
+            Self::Native(f) => f.seek(pos),
+            #[cfg(unix)]
+            Self::Charged(f) => f.seek(pos),
+        }
+    }
+}
+
+pub(super) fn temporary_output_file(
+    label: &str,
+    scratch: &ScratchContext,
+) -> Result<(SpillFile, PathBuf)> {
+    #[cfg(unix)]
+    if let Some(scratch) = scratch {
+        static SERIAL: AtomicU64 = AtomicU64::new(0);
+        for _ in 0..32 {
+            let id = SERIAL
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+                .map_err(|_| StoreError::Integrity("private scratch serial exhausted"))?;
+            let path = std::env::temp_dir()
+                .join(format!("layerfs-owned-{label}-{}-{id}", std::process::id()));
+            match super::scratch::ScratchFile::create(&path, Some(scratch)) {
+                Ok((file, allocation)) => {
+                    drop(allocation);
+                    return Ok((SpillFile::Charged(file), path));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        return Err(StoreError::Integrity("private scratch collision"));
+    }
+    #[cfg(not(unix))]
+    let _ = scratch;
+    let (file, path) = temporary_file(label)?;
+    Ok((SpillFile::Native(file), path))
+}
+
+pub(super) enum DatabaseScope {
+    None,
+    #[cfg(unix)]
+    Charged {
+        observer: super::scratch::ScratchFile,
+        charge: super::scratch::DatabaseCharge,
+    },
+}
+impl DatabaseScope {
+    fn before_rows(&self, connection: &Connection, rows: usize) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            #[cfg(unix)]
+            Self::Charged { charge, .. } => charge.before_rows(connection, rows),
+        }
+    }
+    fn settle(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            #[cfg(unix)]
+            Self::Charged { observer, charge } => charge.settle_file(observer),
+        }
+    }
+}
+
 pub(super) struct SpillObjects {
-    pub(super) writer: Option<std::fs::File>,
-    pub(super) reader: Mutex<std::fs::File>,
+    pub(super) writer: Option<SpillFile>,
+    pub(super) reader: Mutex<SpillFile>,
     pub(super) path: PathBuf,
     pub(super) pending: Vec<u8>,
     pub(super) pending_index: BTreeMap<ObjectId, (usize, usize)>,
@@ -17,33 +144,48 @@ pub(super) struct SpillObjects {
     pub(super) buffer_bytes: usize,
     pub(super) order_memory_bytes: usize,
     pub(super) failed: bool,
+    pub(super) scratch: ScratchContext,
 }
 
 pub(super) struct SpillDiskIndex {
     // Drop the connection before its owned temporary path.
     connection: Mutex<Connection>,
     _path: TempPath,
+    scope: DatabaseScope,
 }
 
 impl Drop for SpillObjects {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+        if self.scratch.is_none() {
+            let _ = std::fs::remove_file(&self.path);
+        }
     }
 }
 
 pub(super) enum IdOrder {
     Memory(Vec<ObjectId>),
     Spill {
-        writer: Option<BufWriter<std::fs::File>>,
+        writer: Option<BufWriter<SpillFile>>,
         path: TempPath,
+        reader: Option<SpillFile>,
     },
 }
 
-pub(super) struct TempPath(pub(super) PathBuf);
+pub(super) struct TempPath(pub(super) PathBuf, bool);
+impl TempPath {
+    pub(super) fn new(path: PathBuf) -> Self {
+        Self(path, true)
+    }
+    fn managed(path: PathBuf) -> Self {
+        Self(path, false)
+    }
+}
 
 impl Drop for TempPath {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        if self.1 {
+            let _ = std::fs::remove_file(&self.0);
+        }
     }
 }
 
@@ -54,14 +196,30 @@ impl IdOrder {
         Self::Memory(Vec::new())
     }
 
-    pub(super) fn push_bounded(&mut self, id: ObjectId, limit: usize) -> Result<()> {
+    pub(super) fn push_scoped(
+        &mut self,
+        id: ObjectId,
+        limit: usize,
+        scratch: &ScratchContext,
+    ) -> Result<()> {
         if matches!(self, Self::Memory(ids) if ids.len().saturating_add(1).saturating_mul(32) > limit)
         {
             let Self::Memory(ids) = std::mem::replace(self, Self::Memory(Vec::new())) else {
                 unreachable!()
             };
-            let (file, path) = temporary_file("candidate-order")?;
-            let path = TempPath(path);
+            let (file, path) = temporary_output_file("candidate-order", scratch)?;
+            let reader = if scratch.is_some() {
+                let reader = file.try_clone()?;
+                std::fs::remove_file(&path)?;
+                Some(reader)
+            } else {
+                None
+            };
+            let path = if scratch.is_some() {
+                TempPath::managed(path)
+            } else {
+                TempPath::new(path)
+            };
             let mut writer = BufWriter::with_capacity(ID_BUFFER_BYTES, file);
             for id in ids {
                 writer.write_all(id.as_bytes())?;
@@ -69,16 +227,25 @@ impl IdOrder {
             *self = Self::Spill {
                 writer: Some(writer),
                 path,
+                reader,
             };
         }
         match self {
             Self::Memory(ids) => ids.push(id),
-            Self::Spill { writer, path } => {
+            Self::Spill {
+                writer,
+                path,
+                reader,
+            } => {
                 if writer.is_none() {
-                    *writer = Some(BufWriter::with_capacity(
-                        ID_BUFFER_BYTES,
-                        std::fs::OpenOptions::new().append(true).open(&path.0)?,
-                    ));
+                    let mut file = match reader {
+                        Some(reader) => reader.try_clone()?,
+                        None => SpillFile::Native(
+                            std::fs::OpenOptions::new().append(true).open(&path.0)?,
+                        ),
+                    };
+                    file.seek(SeekFrom::End(0))?;
+                    *writer = Some(BufWriter::with_capacity(ID_BUFFER_BYTES, file));
                 }
                 writer
                     .as_mut()
@@ -106,12 +273,20 @@ impl IdOrder {
                     visitor(*id)?;
                 }
             }
-            Self::Spill { writer, path } => {
+            Self::Spill {
+                writer,
+                path,
+                reader,
+            } => {
                 if writer.is_some() {
                     return Err(StoreError::Integrity("unsealed candidate order"));
                 }
-                let mut file =
-                    BufReader::with_capacity(ID_BUFFER_BYTES, std::fs::File::open(&path.0)?);
+                let mut file = match reader {
+                    Some(reader) => reader.try_clone()?,
+                    None => SpillFile::Native(std::fs::File::open(&path.0)?),
+                };
+                file.seek(SeekFrom::Start(0))?;
+                let mut file = BufReader::with_capacity(ID_BUFFER_BYTES, file);
                 loop {
                     let mut bytes = [0; 32];
                     // Only zero bytes before a record is clean EOF; a partial ID fails.
@@ -151,6 +326,7 @@ pub struct SpillableObjectSet {
     pub(super) count: usize,
     pub(super) memory_limit: usize,
     failed: bool,
+    scratch: ScratchContext,
 }
 
 // Preserve inline spill ownership; Connection/Mutex layout varies by platform.
@@ -160,6 +336,7 @@ pub(super) enum SeenStorage {
     Spill {
         connection: Mutex<Connection>,
         _path: TempPath,
+        scope: DatabaseScope,
     },
 }
 
@@ -219,7 +396,13 @@ impl SpillableObjectSet {
             count: 0,
             memory_limit,
             failed: false,
+            scratch: None,
         })
+    }
+    pub(super) fn bounded_scoped(memory_limit: usize, scratch: ScratchContext) -> Result<Self> {
+        let mut set = Self::bounded(memory_limit)?;
+        set.scratch = scratch;
+        Ok(set)
     }
     fn healthy(&self) -> Result<()> {
         if self.failed {
@@ -267,24 +450,30 @@ impl SpillableObjectSet {
         let SeenStorage::Memory(known) = &self.storage else {
             return Ok(());
         };
-        let (mut connection, path) = scratch_index(
+        let (mut connection, path, scope) = scratch_index_scoped(
             "candidate-seen",
             "CREATE TABLE seen (id BLOB PRIMARY KEY CHECK(length(id)=32)) WITHOUT ROWID;",
+            &self.scratch,
         )?;
         let mut page = Vec::with_capacity(OBJECT_PAGE_COUNT);
         for &id in known {
             page.push(id);
             if page.len() == OBJECT_PAGE_COUNT {
+                scope.before_rows(&connection, page.len())?;
                 insert_seen(&mut connection, &page)?;
+                scope.settle()?;
                 page.clear();
             }
         }
         if !page.is_empty() {
+            scope.before_rows(&connection, page.len())?;
             insert_seen(&mut connection, &page)?;
+            scope.settle()?;
         }
         self.storage = SeenStorage::Spill {
             connection: Mutex::new(connection),
             _path: path,
+            scope,
         };
         Ok(())
     }
@@ -302,12 +491,17 @@ impl SpillableObjectSet {
                 SeenStorage::Memory(known) => {
                     ids.iter().copied().filter(|id| known.insert(*id)).collect()
                 }
-                SeenStorage::Spill { connection, .. } => insert_seen(
-                    connection
+                SeenStorage::Spill {
+                    connection, scope, ..
+                } => {
+                    let connection = connection
                         .get_mut()
-                        .map_err(|_| StoreError::Integrity("candidate seen index"))?,
-                    ids,
-                )?,
+                        .map_err(|_| StoreError::Integrity("candidate seen index"))?;
+                    scope.before_rows(connection, ids.len())?;
+                    let inserted = insert_seen(connection, ids)?;
+                    scope.settle()?;
+                    inserted
+                }
             };
             Ok(inserted)
         })();
@@ -345,7 +539,7 @@ impl SpillObjects {
                 .take()
                 .ok_or(StoreError::Integrity("candidate index transfer"))?;
             let mut pending = std::mem::take(&mut self.pending_index);
-            let mut disk = SpillDiskIndex::new()?;
+            let mut disk = SpillDiskIndex::new(self.scratch.clone())?;
             let mut page = Vec::with_capacity(OBJECT_PAGE_COUNT);
             while let Some((id, location)) = old.pop_first() {
                 if let Some((relative, length)) = pending.remove(&id) {
@@ -400,7 +594,9 @@ impl SpillObjects {
         self.writer = None;
         self.pending = Vec::new();
         #[cfg(unix)]
-        std::fs::remove_file(&self.path)?;
+        if self.scratch.is_none() {
+            std::fs::remove_file(&self.path)?;
+        }
         Ok(())
     }
 
@@ -686,12 +882,38 @@ impl SpillObjects {
 
 pub(super) fn scratch_index(label: &str, schema: &str) -> Result<(Connection, TempPath)> {
     let (temporary, path) = temporary_file(label)?;
-    let path = TempPath(path);
+    let path = TempPath::new(path);
     drop(temporary);
     let connection = Connection::open(&path.0)?;
     configure_scratch(&connection)?;
     connection.execute_batch(schema)?;
     Ok((connection, path))
+}
+
+fn scratch_index_scoped(
+    label: &str,
+    schema: &str,
+    scratch: &ScratchContext,
+) -> Result<(Connection, TempPath, DatabaseScope)> {
+    #[cfg(unix)]
+    if scratch.is_some() {
+        let (file, path) = temporary_output_file(label, scratch)?;
+        let SpillFile::Charged(observer) = file else {
+            return Err(StoreError::Integrity("private database ownership"));
+        };
+        let charge = super::scratch::DatabaseCharge::for_file(&observer)?;
+        let connection = Connection::open(&path)?;
+        configure_scratch(&connection)?;
+        connection.execute_batch(schema)?;
+        charge.settle_file(&observer)?;
+        return Ok((
+            connection,
+            TempPath::managed(path),
+            DatabaseScope::Charged { observer, charge },
+        ));
+    }
+    let (connection, path) = scratch_index(label, schema)?;
+    Ok((connection, path, DatabaseScope::None))
 }
 
 pub(super) fn configure_scratch(connection: &Connection) -> Result<()> {
@@ -726,14 +948,16 @@ impl SpillDiskIndex {
         self.connection.lock().unwrap()
     }
 
-    fn new() -> Result<Self> {
-        let (connection, path) = scratch_index(
+    fn new(scratch: ScratchContext) -> Result<Self> {
+        let (connection,path,scope)=scratch_index_scoped(
             "candidate-index",
             "CREATE TABLE offsets (id BLOB PRIMARY KEY CHECK(length(id)=32), offset INTEGER NOT NULL CHECK(offset>=0), length INTEGER NOT NULL CHECK(length>=0)) WITHOUT ROWID;",
+            &scratch,
         )?;
         Ok(Self {
             connection: Mutex::new(connection),
             _path: path,
+            scope,
         })
     }
 
@@ -746,6 +970,7 @@ impl SpillDiskIndex {
             .get_mut()
             .map_err(|_| StoreError::Integrity("candidate index lock"))?;
         let count = sql_rows(connection, 3, 80, 8)?;
+        self.scope.before_rows(connection, entries.len())?;
         let transaction = connection.transaction()?;
         for page in entries.chunks(count) {
             let sql = format!(
@@ -767,6 +992,7 @@ impl SpillDiskIndex {
             transaction.execute(&sql, params_from_iter(values))?;
         }
         transaction.commit()?;
+        self.scope.settle()?;
         Ok(())
     }
 
@@ -859,7 +1085,9 @@ mod scratch_tests {
         assert!(seen.insert_page(&ids).unwrap().is_empty());
         assert_eq!(seen.membership(&ids).unwrap().len(), ids.len());
         let path = match &seen.storage {
-            SeenStorage::Spill { connection, _path } => {
+            SeenStorage::Spill {
+                connection, _path, ..
+            } => {
                 let connection = connection.lock().unwrap();
                 let journal: String = connection
                     .pragma_query_value(None, "journal_mode", |row| row.get(0))
@@ -899,7 +1127,7 @@ mod scratch_tests {
     #[test]
     fn private_scratch_off_configuration_restores_defensive_mode() {
         let (file, path) = temporary_file("journal-config-probe").unwrap();
-        let path = TempPath(path);
+        let path = TempPath::new(path);
         drop(file);
         let connection = Connection::open(&path.0).unwrap();
         use rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE;

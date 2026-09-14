@@ -1,0 +1,305 @@
+    Checking layerfs-daemon v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-daemon)
+    Checking layerfs-workspace-core v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace-core)
+    Checking layerfs-layerstack-store v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+error: unused variable: `edits`
+   --> crates/layerfs-workspace-core/src/lib.rs:342:43
+    |
+342 |         let Data::File(FileData::Edited { edits, .. }) =
+    |                                           ^^^^^ help: try ignoring the field: `edits: _`
+    |
+    = note: `-D unused-variables` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(unused_variables)]`
+
+error: items after a test module
+   --> crates/layerfs-workspace-core/src/lib.rs:191:1
+    |
+191 | mod tests {
+    | ^^^^^^^^^
+...
+421 | pub struct LiveWorkspace {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+440 | impl LiveWorkspace {
+    | ^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#items_after_test_module
+    = note: `-D clippy::items-after-test-module` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::items_after_test_module)]`
+    = help: move the items to before the test module was defined
+
+    Checking layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+error: returning the result of a `let` binding from a block
+  --> crates/layerfs-workspace-core/src/namespace.rs:48:9
+   |
+30 | /         let live = LiveWorkspace::new(
+31 | |             Node {
+32 | |                 revision: 0,
+33 | |                 canonical: None,
+...  |
+46 | |             layerfs_content::ObjectId::for_bytes(b"base namespace"),
+47 | |         );
+   | |__________- unnecessary `let` binding
+48 |           live
+   |           ^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#let_and_return
+   = note: `-D clippy::let-and-return` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::let_and_return)]`
+help: return the expression directly
+   |
+30 ~         
+31 ~         LiveWorkspace::new(
+32 +             Node {
+33 +                 revision: 0,
+34 +                 canonical: None,
+35 +                 paths: [String::new()].into(),
+36 +                 mode: 0o755,
+37 +                 links: 2,
+38 +                 pins: 0,
+39 +                 mtime_seconds: 0,
+40 +                 mtime_nanoseconds: 0,
+41 +                 data: Data::Directory(DirectoryData {
+42 +                     base: None,
+43 +                     changes: BTreeMap::new(),
+44 +                 }),
+45 +             },
+46 +             ResourcePolicy::default(),
+47 +             layerfs_content::ObjectId::for_bytes(b"base namespace"),
+48 +         )
+   |
+
+error: could not compile `layerfs-workspace-core` (lib test) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: variable does not need to be mutable
+   --> crates/layerfs-layerstack-store/src/objects/admission/metadata_tests.rs:265:9
+    |
+265 |     let mut f = Fixture::new();
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `-D unused-mut` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(unused_mut)]`
+
+error: fields `id` and `size` are never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:12:9
+   |
+11 | pub(super) struct Lease {
+   |                   ----- fields in this struct
+12 |     pub id: u64,
+   |         ^^
+13 |     pub size: u64,
+   |         ^^^^
+   |
+   = note: `Lease` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `-D dead-code` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: field `writeback_order` is never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:18:16
+   |
+15 | pub(super) struct State {
+   |                   ----- field in this struct
+...
+18 |     pub(super) writeback_order: AsyncMutex<()>,
+   |                ^^^^^^^^^^^^^^^
+
+error: method `writeback_owned` is never used
+  --> crates/layerfs-fuse/src/host_coherence.rs:70:25
+   |
+69 | impl HostClient {
+   | --------------- method in this implementation
+70 |     pub(super) async fn writeback_owned(
+   |                         ^^^^^^^^^^^^^^^
+
+error: this `impl` can be derived
+  --> crates/layerfs-fuse/src/host_coherence.rs:26:1
+   |
+26 | / impl Default for State {
+27 | |     fn default() -> Self {
+28 | |         Self {
+29 | |             book: Default::default(),
+...  |
+40 | | }
+   | |_^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#derivable_impls
+   = note: `-D clippy::derivable-impls` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::derivable_impls)]`
+help: replace the manual implementation with a derive attribute
+   |
+15 + #[derive(Default)]
+16 | pub(super) struct State {
+   |
+
+error: could not compile `layerfs-fuse` (lib) due to 4 previous errors
+error: very complex type used. Consider factoring parts into `type` definitions
+  --> crates/layerfs-fuse/src/host_coherence.rs:24:13
+   |
+24 |     kernel: Mutex<Option<Arc<dyn Fn(NodeId) -> PortFuture<'static, ()> + Send + Sync>>>,
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#type_complexity
+   = note: `-D clippy::type-complexity` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: an array of `Range` that is only one element
+   --> crates/layerfs-fuse/src/host_coherence.rs:607:71
+    |
+607 |             let apply = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16..17]).unwrap();
+    |                                                                       ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#single_range_in_vec_init
+    = note: `-D clippy::single-range-in-vec-init` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::single_range_in_vec_init)]`
+help: if you wanted a `Vec` that contains the entire range, try
+    |
+607 -             let apply = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16..17]).unwrap();
+607 +             let apply = wire::coherence_apply(1, 7, NodeId(2), 4096, &(16..17).collect::<std::vec::Vec<u64>>()).unwrap();
+    |
+help: if you wanted an array of len 17, try
+    |
+607 -             let apply = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16..17]).unwrap();
+607 +             let apply = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16; 17]).unwrap();
+    |
+
+error: an array of `Range` that is only one element
+   --> crates/layerfs-fuse/src/host_coherence.rs:623:73
+    |
+623 |             let changed = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16..18]).unwrap();
+    |                                                                         ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#single_range_in_vec_init
+help: if you wanted a `Vec` that contains the entire range, try
+    |
+623 -             let changed = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16..18]).unwrap();
+623 +             let changed = wire::coherence_apply(1, 7, NodeId(2), 4096, &(16..18).collect::<std::vec::Vec<u64>>()).unwrap();
+    |
+help: if you wanted an array of len 18, try
+    |
+623 -             let changed = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16..18]).unwrap();
+623 +             let changed = wire::coherence_apply(1, 7, NodeId(2), 4096, &[16; 18]).unwrap();
+    |
+
+error: an array of `Range` that is only one element
+   --> crates/layerfs-fuse/src/host_coherence.rs:747:84
+    |
+747 |                 wire::coherence_apply(1, 7, NodeId(2), 1024 * 1024 * 1024 * 1024, &[1..u64::MAX])
+    |                                                                                    ^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#single_range_in_vec_init
+help: if you wanted a `Vec` that contains the entire range, try
+    |
+747 -                 wire::coherence_apply(1, 7, NodeId(2), 1024 * 1024 * 1024 * 1024, &[1..u64::MAX])
+747 +                 wire::coherence_apply(1, 7, NodeId(2), 1024 * 1024 * 1024 * 1024, &(1..u64::MAX).collect::<std::vec::Vec<u64>>())
+    |
+
+error: very complex type used. Consider factoring parts into `type` definitions
+    --> crates/layerfs-fuse/src/host_client.rs:1034:20
+     |
+1034 |         completed: Mutex<BTreeMap<u64, (Vec<u8>, Vec<u8>)>>,
+     |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#type_complexity
+
+error: very complex type used. Consider factoring parts into `type` definitions
+    --> crates/layerfs-layerstack-store/src/layerstack.rs:4063:10
+     |
+4063 |       ) -> (
+     |  __________^
+4064 | |         std::collections::BTreeMap<
+4065 | |             String,
+...    |
+4073 | |         Vec<Vec<String>>,
+4074 | |     ) {
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#type_complexity
+     = note: `-D clippy::type-complexity` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: very complex type used. Consider factoring parts into `type` definitions
+  --> crates/layerfs-layerstack-store/src/objects/admission.rs:18:37
+   |
+18 |     static INPUT_ASSOCIATION_TRACE: std::cell::RefCell<Option<Vec<(usize, bool, usize, usize)>>> = const { std::cell::RefCell::new(N...
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#type_complexity
+
+error: using `clone` on type `PhysicalHints` which implements the `Copy` trait
+   --> crates/layerfs-layerstack-store/src/objects/admission/small_candidate_tests.rs:214:14
+    |
+214 |         (id, slab.objects[0].1.clone())
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^ help: try removing the `clone` call: `slab.objects[0].1`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#clone_on_copy
+    = note: `-D clippy::clone-on-copy` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::clone_on_copy)]`
+
+error: a `Vec` of `Range` that is only one element
+    --> crates/layerfs-fuse/src/live_owner.rs:4527:21
+     |
+4527 |             ranges: vec![1..2],
+     |                     ^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#single_range_in_vec_init
+help: if you wanted a `Vec` that contains the entire range, try
+     |
+4527 -             ranges: vec![1..2],
+4527 +             ranges: (1..2).collect::<std::vec::Vec<u64>>(),
+     |
+help: if you wanted a `Vec` of len 2, try
+     |
+4527 -             ranges: vec![1..2],
+4527 +             ranges: vec![1; 2],
+     |
+
+error: a `Vec` of `Range` that is only one element
+    --> crates/layerfs-fuse/src/live_owner.rs:4588:21
+     |
+4588 |             ranges: vec![2..u64::MAX],
+     |                     ^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#single_range_in_vec_init
+help: if you wanted a `Vec` that contains the entire range, try
+     |
+4588 -             ranges: vec![2..u64::MAX],
+4588 +             ranges: (2..u64::MAX).collect::<std::vec::Vec<u64>>(),
+     |
+
+error: using `SeekFrom::Current` to start from current position
+   --> crates/layerfs-layerstack-store/src/objects/scratch.rs:653:20
+    |
+653 |         assert_eq!(reader.seek(SeekFrom::Current(0)).unwrap(), 3);
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `reader.stream_position()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#seek_from_current
+    = note: `-D clippy::seek-from-current` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::seek_from_current)]`
+
+error: could not compile `layerfs-fuse` (lib test) due to 8 previous errors
+error: enclosing `Ok` and `?` operator are unneeded
+    --> crates/layerfs-layerstack-store/src/objects.rs:5702:13
+     |
+5702 | /             Ok(ids
+5703 | |                 .iter()
+5704 | |                 .map(|id| {
+5705 | |                     self.0
+...    |
+5710 | |                 })
+5711 | |                 .collect::<Result<Vec<_>>>()?)
+     | |______________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#needless_question_mark
+     = note: `-D clippy::needless-question-mark` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::needless_question_mark)]`
+help: remove the enclosing `Ok` and `?` operator
+     |
+5702 ~             ids
+5703 |                 .iter()
+ ...
+5710 |                 })
+5711 ~                 .collect::<Result<Vec<_>>>()
+     |
+
+error: could not compile `layerfs-layerstack-store` (lib test) due to 7 previous errors

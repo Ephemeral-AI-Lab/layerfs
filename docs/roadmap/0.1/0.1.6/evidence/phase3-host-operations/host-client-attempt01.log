@@ -1,0 +1,10 @@
+   Compiling layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.82s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-1044a66fea371f40)
+
+running 2 tests
+test host_client::tests::cancelled_entry_and_partial_page_keep_pre_admitted_cleanup ... ok
+test host_client::tests::host_acknowledgment_and_unknown_recovery_keep_one_exact_mutation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out; finished in 0.00s
+

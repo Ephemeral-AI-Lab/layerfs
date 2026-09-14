@@ -1,0 +1,20 @@
+{
+  "captured_ns": 1789335920010129000,
+  "head": "c95588f30760e08235d56b513e48b92a9defd9b7",
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_ranges.rs": "61c5bdbb1d5a1f5617f2aa57c16ba577d0e9579ec064f9b42b293fb6f823b925",
+    "crates/layerfs-workspace/src/correspondence.rs": "c48b173ad66684c7b3e4025214b9277615ab5148e3452b62541521d45e00acc3",
+    "crates/layerfs-workspace/src/snapshot.rs": "231d2472396ce4d4826cc8c405fe03d608242ce91a5bb8bced8b98270f8841ee",
+    "crates/layerfs-workspace/src/overlay.rs": "5176f6e57b0f2306cbe4dac2cd00f2041d7aade881869ebf73fdec6c9111b176",
+    "crates/layerfs-workspace/src/overlay_index.rs": "023b463b31c3ab29347123dd2da01e4247efd4352f008f0291c718b6d4c8dcd4",
+    "crates/layerfs-workspace/src/overlay_payload.rs": "41ee21a13c17acfc8b5a1a70136dd9223102e7806aa2e76878a3ea0d21879c21",
+    "crates/layerfs-workspace/src/host_overlay.rs": "d1a7532c0dd3630e46d225ca48c92081f628f16bd2d04f7931e2041790decdb3",
+    "crates/layerfs-workspace/src/changes.rs": "66615d430105326b4fadc7f0a6c4340ab78462e3e9124cd2eba4c6d0db6a2946",
+    "crates/layerfs-workspace-core/src/limits.rs": "604661247b88ac821329243505814083946672a61ab4e91aeab37efeb79aa69d",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: aarch64-apple-darwin\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "command": "cargo test -p layerfs-workspace --lib overlay_ranges::tests:: -- --nocapture",
+  "invalidation": "Range Summary codec changed40\u219264 with zero/inline/payload aggregates; logical SDK-inline class persisted independent of backing. All4 prior range cases exercise changed codec. Added3 missing coverage tests; Snapshot now calls no-owner read_range. Existing V3 algorithm tests remain unaffected."
+}

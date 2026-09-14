@@ -1,0 +1,72 @@
+{
+  "recorded_utc": "2026-09-13T23:25:11.586341+00:00",
+  "status": "PASS6 for canonical substitution with prospective piece-cap admission; integration/final campaign status unchanged",
+  "supersedes_capacity_edge": "canonical-substitution-manifest.json remaining_capacity_edge; initial4passes there retained as historical evidence and superseded for this changed eligibility path",
+  "source": {
+    "crates/layerfs-workspace/src/host_canonicalize.rs": {
+      "sha256": "d9b4a4f0654e8dab14535b63142cb8f84599066281d6f39159a0672579bf0d2c",
+      "git_blob": "010c63e537b9ff7dee23c5068d5efda1842752c9"
+    },
+    "crates/layerfs-workspace/src/overlay_ranges.rs": {
+      "sha256": "386873a0a109e20396e228113393283ac10fb663a13e1e6eaeb4c7b2fa85e76a",
+      "git_blob": "bb9743226e21a175b0282d199dd045f031104ead"
+    }
+  },
+  "compiled_source": "canonical-substitution-cap-attempt02-source.json",
+  "binary_sha256": "8ec696135f683251ab4e04d2dc1ca6be05270ef6bf9bc13fa37124755fd216d0",
+  "change": "Compute actual new left/right piece boundaries using current candidate range cursor; if count+boundaries exceeds unchanged max_pieces, skip only that partial substitution. Whole pieces proceed. Checked arithmetic, malformed span, I/O, height and allocation errors still propagate.",
+  "proof_of_deferral": [
+    "Published C1 Description owns only captured origin intervals. append_from extends the same origin only at its never-rewound logical+physical source frontier; appended coordinates lie outsideC1 and must remain replacement bytes.",
+    "When C2 captures the complete current piece, its Description covers that whole interval. Wholepiece canonical substitution adds0boundaries, so the existing count cap remains valid.",
+    "Both tests explicitly consume C1 pending-file entry and confirm actual C2 publication requeues that changed file.",
+    "Contract-resolution section2.10 explicitly keeps unsafe-to-install raw ranges charged. No cap raised, no new waiver, no skipped byte reported reclaimed."
+  ],
+  "cases": [
+    {
+      "identity": "cap1 append4\u21925B: initial optional C1 partial conversion",
+      "result": "FAIL",
+      "receipt": "canonical-substitution-cap-attempt01.json",
+      "raw": "canonical-substitution-cap-attempt01.log",
+      "reason": "old unconditional replacement hit StorageFull range tree limits; retained originalfailure"
+    },
+    {
+      "identity": "cap1 append4\u21925B, currentrawstill5charged, actualC2requeue/fullconversion, retainedC1snapshot andrawphysical0",
+      "result": "PASS1",
+      "receipt": "canonical-substitution-cap-attempt02-result.json",
+      "raw": "canonical-substitution-cap-attempt02.log"
+    },
+    {
+      "identity": "cap2: wholeInline neighbor converts while partialPayload prefix waits; C2convertsremaining wholepiece, rawphysical0",
+      "result": "PASS1",
+      "receipt": "canonical-substitution-cap-neighbor-attempt01.json",
+      "raw": "canonical-substitution-cap-neighbor-attempt01.log"
+    },
+    {
+      "identity": "256KiB+later1B\u2192onephysicalblock",
+      "result": "PASS1",
+      "receipt": "canonical-substitution-small-attempt02.json",
+      "raw": "canonical-substitution-small-attempt02.log"
+    },
+    {
+      "identity": "unrelatedrootwrite invalidates leasedsource, retry preservesit",
+      "result": "PASS1",
+      "receipt": "canonical-substitution-stale-attempt02.json",
+      "raw": "canonical-substitution-stale-attempt02.log"
+    },
+    {
+      "identity": "SDKinline currentcharge release withretainedoldbytes andinvalidlength rejection",
+      "result": "PASS1",
+      "receipt": "canonical-substitution-inline-attempt02.json",
+      "raw": "canonical-substitution-inline-attempt02.log"
+    },
+    {
+      "identity": "64MiB\u21924096B actualpayload allocation, actualC2 1replacement/67108863reuse/1CDCbyte",
+      "result": "PASS1",
+      "receipt": "canonical-substitution-64m-attempt02.json",
+      "raw": "canonical-substitution-64m-attempt02.log"
+    }
+  ],
+  "invalidation": "Prior4 substitution passes were invalidated because their shared eligible-fragment loop and selected cursor source changed; all4 targeted reruns passed. Other unaffected Index/Payload/Description algorithms and full suites were not rerun.",
+  "environment": "native macOS arm64, Rust1.96.0 debug correctness tests; toymaxpieces1/2 use actualRangesconstructor; no benchmark or #122 scenarios",
+  "remaining": "No open issue in this bounded piece-cap fix; public maintenance scheduling and other global #124/#125 obligations remain with root."
+}

@@ -1,0 +1,9 @@
+
+running 1 test
+MAPPED 2
+
+MOUNTED HOST COMPONENT PASS: SDK visible through retained mapping/descriptor, unrelated dirty mmap byte preserved, stable inode/hardlink/rename/open-unlinked, owned C1/C2 and actual helper unmount; generic Commit dirty-mmap acquisition remains unproven
+test host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 170 filtered out; finished in 0.94s
+

@@ -1,0 +1,11 @@
+   Compiling layerfs-workspace-core v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace-core)
+   Compiling layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.85s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-1044a66fea371f40)
+
+running 2 tests
+test host_wire::tests::acknowledged_operation_errors_and_unknown_are_distinct ... ok
+test host_wire::tests::mutation_replay_identity_and_full_write_bounds_are_validated ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s
+

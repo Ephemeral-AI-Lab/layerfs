@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "overlay_payload::tests::writes_continue_while_old_source_reader_defers_truncation",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_payload.rs": "8dc2ed8af0bd23cd27f17efc81006cfa4851e69bd3f4a9078ae47c654eece9a5",
+    "crates/layerfs-workspace/src/overlay_index.rs": "0861934291ed15995e334419de26927a5e8c33d504084ea59e9fb9afa5af538a",
+    "crates/layerfs-workspace/src/lib.rs": "cee4f8a05e3a8c17500a635657e1d3a7b0ed4c662cb476ccd0d647ca88b073ed",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789332236.4076428,
+  "purpose": "New exact P1 hypothesis: old-source reader blocks unrelated active-arena write despite quota. Faulty predicate retained.",
+  "returncode": 101
+}

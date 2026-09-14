@@ -1384,20 +1384,12 @@ mod linux {
         let mounted = (|| -> io::Result<_> {
             let endpoint = String::from_utf8(request.endpoint)
                 .map_err(|_| protocol::invalid("backing endpoint"))?;
-            let runtime = layerfs_fuse::live_runtime::LiveRuntime::shared()?;
-            let owner = Arc::new(
-                runtime
-                    .block_on(layerfs_fuse::live_owner::LiveOwner::connect(
-                        endpoint.clone(),
-                        request.capability,
-                        runtime.scheduler(),
-                    ))
-                    .map_err(|error| io::Error::other(format!("live owner: {error:?}")))?,
-            );
-            let control = owner.serve_control(endpoint, request.capability)?;
-            let mount = layerfs_fuse::mount_host(owner.clone(), &root, 0, 0)?;
-            owner.set_notifier(mount.notifier()?)?;
-            owner.set_kernel_root(fs::File::open(&root)?)?;
+            let (owner, control, mount) = layerfs_fuse::mount_remote(
+                endpoint,
+                request.capability,
+                request.host_owned.then_some(request.workspace_id),
+                &root,
+            )?;
             let mountinfo = live_fuse_mount_line(&request.root)?
                 .ok_or_else(|| protocol::invalid("live FUSE mount"))?;
             Ok((owner, control, mount, mountinfo))

@@ -1,0 +1,30 @@
+   Compiling layerfs-layerstack-store v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+warning: variable does not need to be mutable
+   --> crates/layerfs-layerstack-store/src/objects/admission/metadata_tests.rs:265:9
+    |
+265 |     let mut f = Fixture::new();
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `layerfs-layerstack-store` (lib test) generated 1 warning (run `cargo fix --lib -p layerfs-layerstack-store --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.37s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_layerstack_store-1df70e3f7470c3b7)
+
+running 1 test
+
+thread 'objects::scratch::tests::private_off_journal_sqlite_keeps_owned_unlinked_file_through_paging' (11990098) panicked at crates/layerfs-layerstack-store/src/objects/scratch.rs:614:14:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: SystemIoFailure, extended_code: 6922 }, Some("disk I/O error"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test objects::scratch::tests::private_off_journal_sqlite_keeps_owned_unlinked_file_through_paging ... FAILED
+
+failures:
+
+failures:
+    objects::scratch::tests::private_off_journal_sqlite_keeps_owned_unlinked_file_through_paging
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 158 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-layerstack-store --lib`

@@ -333,7 +333,7 @@ pub fn node_out(id: NodeId, node: &Node) -> io::Result<Vec<u8>> {
             out.extend_from_slice(
                 &(u32::try_from(pieces.count()).map_err(|_| invalid())?).to_be_bytes(),
             );
-            for piece in pieces.pieces() {
+            for piece in pieces.cursor() {
                 match piece {
                     Piece::Base { root, offset, len } => {
                         out.push(0);

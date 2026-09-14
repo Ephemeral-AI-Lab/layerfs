@@ -1,0 +1,15 @@
+{
+  "started_ns": 1789329901692568000,
+  "head": "554b866838e50468b312f9d8e9ef70dc2988a38e",
+  "command": "cargo test -p layerfs-layerstack-store --lib publication_ -- --nocapture",
+  "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: aarch64-apple-darwin\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "sources": {
+    "crates/layerfs-layerstack-store/src/workspace.rs": "4e654ec2b9ae7e1437b5a525bf66ccdb69fb96e7a2e18dac9d4a8711e33b6cbd",
+    "crates/layerfs-layerstack-store/src/staging.rs": "070725b09f3263111843b6ec3784fedb40096f9142615b850a24497fd039198d",
+    "crates/layerfs-layerstack-store/src/schema.rs": "c4798b04aa9e5552c9404c72b64fb30a76a9ff3b6f1281e084745e450ffbafd5",
+    "crates/layerfs-layerstack-store/src/statements.rs": "c94dc8099d89a9479292a9ff123609b98a2a383c13354383a13cb8a828ae760c",
+    "crates/layerfs-layerstack-store/src/lib.rs": "d897e76a7b2bd1e005abb3c20c3462f0337bc295906b5cf0beea323a9d58aeb3",
+    "crates/layerfs-layerstack-store/sql/schema/workspace_publications.sql": "9c66467b6f90de50589f08ba16b3ddf5e2ed9574c1591f658b10b1f607312013"
+  }
+}

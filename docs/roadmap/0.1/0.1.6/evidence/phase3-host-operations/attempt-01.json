@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "--lib",
+    "host_overlay::tests",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "source_sha256": {
+    "host_overlay.rs": "b9c4fda7561bf05c3aa381ac98e5af70f36c487ff95de89fe8614961313dca34",
+    "overlay.rs": "bf1c2b788d56e19056681447f6f19acb063d4651dccd4eb31a60545f8f1297dc",
+    "snapshot.rs": "a8fb619ea156faabb611d25884cad92ef3f1d705e82c96e4387671f0f1fe1da6",
+    "overlay_budget.rs": "222dcd2623e95288fbabc576c7287c25791e6e3f391b1fc818f46124d77c5c83",
+    "overlay_index.rs": "023b463b31c3ab29347123dd2da01e4247efd4352f008f0291c718b6d4c8dcd4",
+    "overlay_payload.rs": "bedda0147dddecb013097b62c12362f9330d45487ef5c52414bc5ce080a65b4c",
+    "overlay_ranges.rs": "9fcaa8ae1f35edc63e63ce2f166b4da96ab1c2cfa47671bba8050919740fc3b6",
+    "correspondence.rs": "c48b173ad66684c7b3e4025214b9277615ab5148e3452b62541521d45e00acc3",
+    "lib.rs": "bc959a9f21433599b81e5546dfec688fe7fdcb6434330c3f515729b44f43fcf9",
+    "core/limits.rs": "604661247b88ac821329243505814083946672a61ab4e91aeab37efeb79aa69d"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789334882.283267,
+  "fixture": "Temporary canonical Store initialized from deterministic tiny files/hardlinks; original initialization tree removed before all HostOverlay reads. No FUSE or benchmark run.",
+  "returncode": 101
+}

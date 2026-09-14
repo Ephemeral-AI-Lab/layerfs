@@ -1,0 +1,14 @@
+warning: field `reclaimed_pages` is never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:61:9
+   |
+51 | pub(crate) struct Stats {
+   |                   ----- field in this struct
+...
+61 |     pub reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: 1 warning emitted
+

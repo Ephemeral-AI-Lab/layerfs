@@ -1,0 +1,123 @@
+   Compiling layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+warning: fields `id` and `size` are never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:12:9
+   |
+11 | pub(super) struct Lease {
+   |                   ----- fields in this struct
+12 |     pub id: u64,
+   |         ^^
+13 |     pub size: u64,
+   |         ^^^^
+   |
+   = note: `Lease` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `writeback_order` is never read
+  --> crates/layerfs-fuse/src/host_coherence.rs:18:16
+   |
+15 | pub(super) struct State {
+   |                   ----- field in this struct
+...
+18 |     pub(super) writeback_order: AsyncMutex<()>,
+   |                ^^^^^^^^^^^^^^^
+
+warning: method `writeback_owned` is never used
+  --> crates/layerfs-fuse/src/host_coherence.rs:70:25
+   |
+69 | impl HostClient {
+   | --------------- method in this implementation
+70 |     pub(super) async fn writeback_owned(
+   |                         ^^^^^^^^^^^^^^^
+
+warning: `layerfs-fuse` (lib) generated 3 warnings
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `disk_bytes` and `files` are never read
+  --> crates/layerfs-workspace/src/candidate_capacity.rs:27:16
+   |
+24 | pub(crate) struct CandidateCapacity {
+   |                   ----------------- fields in this struct
+...
+27 |     pub(crate) disk_bytes: u64,
+   |                ^^^^^^^^^^
+28 |     pub(crate) files: usize,
+   |                ^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `recover_sdk` and `maintenance_step` are never used
+   --> crates/layerfs-workspace/src/host_runtime.rs:135:19
+    |
+ 30 | impl HostRuntime {
+    | ---------------- methods in this implementation
+...
+135 |     pub(crate) fn recover_sdk(&self) -> Result<crate::host_sdk::Recovery> {
+    |                   ^^^^^^^^^^^
+...
+153 |     pub(crate) fn maintenance_step(&self) -> Result<bool> {
+    |                   ^^^^^^^^^^^^^^^^
+
+warning: methods `policy` and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:334:19
+    |
+272 | impl Budget {
+    | ----------- methods in this implementation
+...
+334 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+337 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: fields `reserved_bytes`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:35:9
+   |
+33 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+34 |     pub physical_bytes: u64,
+35 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+44 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+47 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+48 |     pub cleanup_pending: bool,
+49 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib test) generated 7 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.98s
+  Executable unittests src/lib.rs (target/debug/deps/layerfs_fuse-9248761547e86e27)
+  Executable unittests src/lib.rs (target/debug/deps/layerfs_workspace-79f458ce1bbf884f)

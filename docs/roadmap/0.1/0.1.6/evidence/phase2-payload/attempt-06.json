@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "overlay_payload::tests",
+    "--",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_payload.rs": "b6bff5a1b568ada35f53b865070d38e800178b78977e7167dee5b776b707072f",
+    "crates/layerfs-workspace/src/overlay_index.rs": "0861934291ed15995e334419de26927a5e8c33d504084ea59e9fb9afa5af538a",
+    "crates/layerfs-workspace/src/lib.rs": "231bc1aad9853ca04c1a99cb0ca608cc6a68d8b5e30ad2923acbc78ddc5ba20e",
+    "crates/layerfs-workspace/src/overlay_ranges.rs": "0f9040dbb4f303356d6a31aceb7fad7568f6b4811c68f98e808a43d380515e65",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789332476.003509,
+  "invalidates_previous_reason": "Retry attempt05 after unrelated overlay_ranges closure index compile repair; no payload tests ran in attempt05. Same payload predicate/constructor and shared physical-index dependency invalidations recorded there apply.",
+  "returncode": 0
+}

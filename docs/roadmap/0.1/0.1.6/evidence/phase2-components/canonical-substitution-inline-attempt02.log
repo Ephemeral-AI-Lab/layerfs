@@ -1,0 +1,6 @@
+
+running 1 test
+test host_canonicalize::tests::canonical_inline_substitution_releases_only_current_equivalent_inline_charge ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 154 filtered out; finished in 0.03s
+

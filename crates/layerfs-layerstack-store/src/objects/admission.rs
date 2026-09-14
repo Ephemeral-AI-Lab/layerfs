@@ -1210,7 +1210,7 @@ impl PreparedAdmission {
         // The existing private temporary-file owner avoids a second resident
         // multi-MiB canonical copy. Its exact-byte digest is held only here.
         let (mut file, path) = super::spill::temporary_file("prepared-pack")?;
-        let _path = super::spill::TempPath(path);
+        let _path = super::spill::TempPath::new(path);
         let mut digest = blake3::Hasher::new();
         digest.update(&prefix);
         digest.update(&object.bytes);

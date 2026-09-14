@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "+1.96.0",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "--lib",
+    "host_operations::tests::lost_replies_bind_exact_requests_and_keep_kernel_owned_orphans_readable",
+    "--",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "source": {
+    "crates/layerfs-workspace/src/host_operations.rs": "d97818dfc7e9de308a10eeb50118fd1d6e2e63bd63f2958f1c1951311cc6cebd",
+    "crates/layerfs-workspace/src/overlay.rs": "371377754091b42435654ba3d22d5847f1fd665fa84ed50579248ab176b31c7a",
+    "crates/layerfs-fuse/src/host_wire.rs": "011514dff42438673535e8b152db205a7ae3922257794a5f846cd4d9d3919e0f"
+  },
+  "reason": "Repair proven attempt01 failure: bind operation digest under separately keyed session+sequence; cumulative acknowledgment may advance on same-operation retry. Only affected server check rerun; directorycookie/wirecodec previous passes retained.",
+  "timestamp_unix": 1789337470.278018,
+  "returncode": 0,
+  "result": "PASS"
+}

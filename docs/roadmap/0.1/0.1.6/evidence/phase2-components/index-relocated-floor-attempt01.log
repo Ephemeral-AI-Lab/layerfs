@@ -1,0 +1,6 @@
+
+running 1 test
+test tests::floor_descends_without_scanning_predecessor_prefix_and_batches_bound_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.08s
+

@@ -1,0 +1,656 @@
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	﻿2026-09-13T20:35:54.8024132Z ##[group]Run cargo +1.96.0 clippy --workspace --locked -- -D warnings
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.8024639Z [36;1mcargo +1.96.0 clippy --workspace --locked -- -D warnings[0m
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.8046810Z shell: /usr/bin/bash -e {0}
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.8047107Z ##[endgroup]
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.9293351Z    Compiling proc-macro2 v1.0.107
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.9294253Z    Compiling unicode-ident v1.0.24
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.9294891Z    Compiling quote v1.0.47
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:54.9295484Z    Compiling libc v0.2.189
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.0937222Z    Compiling pkg-config v0.3.34
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.2617021Z    Compiling shlex v2.0.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.3876819Z    Compiling find-msvc-tools v0.1.11
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.5966891Z     Checking cfg-if v1.0.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.8967854Z    Compiling syn v2.0.119
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.9157146Z    Compiling cfg_aliases v0.2.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:55.9467311Z     Checking bitflags v2.13.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:56.0507011Z    Compiling hashbrown v0.17.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:56.2396815Z    Compiling jobserver v0.1.35
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:56.5261551Z    Compiling cc v1.4.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:56.6012251Z    Compiling equivalent v1.0.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:56.6320293Z    Compiling autocfg v1.5.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:56.9547163Z    Compiling winnow v1.0.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:57.0176957Z    Compiling memoffset v0.9.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:57.1036927Z    Compiling indexmap v2.14.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:57.7807441Z     Checking arrayvec v0.7.8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:57.9194853Z    Compiling toml_datetime v1.1.1+spec-1.1.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.1264241Z     Checking constant_time_eq v0.4.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.1877264Z    Compiling toml_parser v1.1.3+spec-1.1.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.2127100Z    Compiling blake3 v1.8.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.2569304Z     Checking cpufeatures v0.3.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.2897266Z     Checking arrayref v0.3.9
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.3134297Z     Checking smallvec v1.15.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.4966887Z    Compiling parking_lot_core v0.9.12
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.6149686Z    Compiling toml_edit v0.25.13+spec-1.1.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:58.8276684Z    Compiling rustversion v1.0.23
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:59.1089897Z    Compiling nix v0.31.3
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:59.4047609Z    Compiling proc-macro-crate v3.5.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:59.4307776Z     Checking layerfs-content v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-content)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:59.7007083Z    Compiling syn v3.0.4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:59.9197042Z     Checking scopeguard v1.2.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:35:59.9597273Z    Compiling ref-cast v1.0.27
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:00.1410191Z    Compiling zerocopy v0.8.56
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:00.4317341Z    Compiling zerocopy-derive v0.8.56
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:00.4318538Z    Compiling num_enum_derive v0.7.6
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:01.3266885Z     Checking lock_api v0.4.14
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:01.9864212Z    Compiling nix v0.29.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:02.1057090Z    Compiling fuser v0.18.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:02.1887081Z    Compiling ref-cast-impl v1.0.27
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:02.2326445Z     Checking num_enum v0.7.6
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:02.2858000Z     Checking parking_lot v0.12.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:02.5806851Z    Compiling tokio-macros v2.6.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:02.7852218Z     Checking socket2 v0.6.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:03.0487209Z     Checking page_size v0.6.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:03.0866950Z     Checking mio v1.2.3
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:03.1797157Z     Checking log v0.4.34
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:03.2766845Z     Checking bytes v1.12.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:03.3559622Z    Compiling vcpkg v0.2.15
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:03.7387161Z     Checking memchr v2.8.3
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:04.0297229Z     Checking pin-project-lite v0.2.17
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:04.0616974Z     Checking tokio v1.48.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:04.1606905Z    Compiling libsqlite3-sys v0.38.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:04.3187569Z     Checking layerfs-workspace-core v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:04.8847269Z     Checking foldhash v0.2.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:05.4997247Z    Compiling zstd-sys v2.0.16+zstd.1.5.7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:06.4315112Z     Checking hashlink v0.12.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:06.6179106Z     Checking fallible-streaming-iterator v0.1.9
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:06.6735132Z     Checking fallible-iterator v0.3.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:06.9189293Z     Checking rusqlite v0.40.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.4237622Z     Checking layerfs-materialization v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-materialization)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.5887226Z     Checking utf8parse v0.2.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.6287420Z     Checking anstyle-parse v0.2.7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.6918009Z     Checking is_terminal_polyfill v1.70.2
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.7135253Z     Checking anstyle-query v1.1.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.7185591Z     Checking colorchoice v1.0.5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.7428958Z     Checking anstyle v1.0.14
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.7489333Z     Checking clap_lex v0.7.7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.8407392Z    Compiling rustix v0.38.44
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:07.8757255Z     Checking anstream v0.6.21
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:08.0303621Z    Compiling heck v0.5.0
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:08.0680577Z     Checking strsim v0.11.1
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:08.1731217Z     Checking clap_builder v4.5.48
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:08.2103010Z    Compiling clap_derive v4.5.47
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:08.5881812Z     Checking layerfs-fuse v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-fuse)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:09.6601886Z     Checking linux-raw-sys v0.4.15
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:09.7335543Z     Checking clap v4.5.48
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:12.1647699Z     Checking layerfs-daemon v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-daemon)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:13.6141817Z     Checking layerfs-layerstack-store v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-layerstack-store)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:16.4698630Z     Checking layerfs-workspace v0.1.5 (/home/runner/work/layerfs/layerfs/crates/layerfs-workspace)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8684973Z error: constant `INODE` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8685787Z   --> crates/layerfs-workspace/src/overlay.rs:14:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8686640Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8687020Z 14 | const INODE: u8 = 1;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8687879Z    |       ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8688273Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8688723Z    = note: `-D dead-code` implied by `-D warnings`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8689600Z    = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8690247Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8690474Z error: constant `BINDING` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8691108Z   --> crates/layerfs-workspace/src/overlay.rs:15:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8691688Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8692048Z 15 | const BINDING: u8 = 2;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8692490Z    |       ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8692719Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8692932Z error: constant `CHANGE_KEY` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8693552Z   --> crates/layerfs-workspace/src/overlay.rs:16:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8694098Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8694460Z 16 | const CHANGE_KEY: u8 = 3;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8694937Z    |       ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8695194Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8695423Z error: constant `CHANGE_SEQUENCE` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8696199Z   --> crates/layerfs-workspace/src/overlay.rs:17:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8696760Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8697137Z 17 | const CHANGE_SEQUENCE: u8 = 4;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8697625Z    |       ^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8697905Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8698118Z error: constant `CHANGE_BATCH` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8698730Z   --> crates/layerfs-workspace/src/overlay.rs:18:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8699265Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8699634Z 18 | const CHANGE_BATCH: usize = 128;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8700125Z    |       ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8700392Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8700600Z error: enum `ChangeKey` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8701190Z   --> crates/layerfs-workspace/src/overlay.rs:21:17
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8701763Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8702151Z 21 | pub(crate) enum ChangeKey {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8702654Z    |                 ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8702966Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8703376Z error: associated items `encode` and `decode` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8704110Z   --> crates/layerfs-workspace/src/overlay.rs:27:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8704489Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8704991Z 26 | impl ChangeKey {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8705396Z    | -------------- associated items in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8706093Z 27 |     fn encode(&self) -> Result<Vec<u8>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8706555Z    |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8706872Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8707226Z 45 |     fn decode(bytes: &[u8]) -> Result<Self> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8707702Z    |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8707893Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8708016Z error: struct `OverlayRoot` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8708349Z   --> crates/layerfs-workspace/src/overlay.rs:60:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8708624Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8708819Z 60 | pub(crate) struct OverlayRoot {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8709076Z    |                   ^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8709241Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8709364Z error: struct `Overlay` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8709685Z   --> crates/layerfs-workspace/src/overlay.rs:67:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8709958Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8710148Z 67 | pub(crate) struct Overlay {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8710392Z    |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8710543Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8710741Z error: struct `PreparedMutation` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8711332Z   --> crates/layerfs-workspace/src/overlay.rs:72:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8711820Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8712160Z 72 | pub(crate) struct PreparedMutation {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8712620Z    |                   ^^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8712908Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8713103Z error: struct `Mutation` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8713538Z   --> crates/layerfs-workspace/src/overlay.rs:78:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8713813Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8714002Z 78 | pub(crate) struct Mutation<'a> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8714248Z    |                   ^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8714398Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8714518Z error: multiple associated items are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8715027Z    --> crates/layerfs-workspace/src/overlay.rs:84:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8715312Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8715573Z  83 | impl Overlay {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8716110Z     | ------------ associated items in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8716983Z  84 |     pub(crate) fn temporary(directory: &Path, base_root: ObjectId, limits: Limits) -> Result<Self> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8717767Z     |                   ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8718172Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8718598Z  98 |     pub(crate) fn acquire(&self) -> Result<Arc<OverlayRoot>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8719158Z     |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8719515Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8719826Z 106 |     pub(crate) fn prepare(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8720241Z     |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8720619Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8721140Z 132 |     pub(crate) fn install(&self, prepared: PreparedMutation) -> Result<bool> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8721797Z     |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8722048Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8722388Z 147 |     pub(crate) fn inode(&self, root: &OverlayRoot, inode: NodeId) -> Result<Option<Vec<u8>>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8722963Z     |                   ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8723326Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8723642Z 154 |     pub(crate) fn binding(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8724045Z     |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8724424Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8724816Z 174 |     pub(crate) fn changes(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8725327Z     |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8725484Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8725778Z error: methods `allocate_inode`, `put_inode`, `put_binding`, `changed`, and `forget_covered` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8726500Z    --> crates/layerfs-workspace/src/overlay.rs:216:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8726796Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8727004Z 215 | impl Mutation<'_> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8727275Z     | ----------------- methods in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8727638Z 216 |     pub(crate) fn allocate_inode(&mut self) -> Result<NodeId> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8727983Z     |                   ^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8728215Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8728786Z 224 |     pub(crate) fn put_inode(&mut self, inode: NodeId, record: &[u8]) -> Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8729166Z     |                   ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8729406Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8729597Z 230 |     pub(crate) fn put_binding(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8729848Z     |                   ^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8730076Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8730303Z 248 |     fn changed(&mut self, key: &[u8]) -> Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8730603Z     |        ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8730799Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8731121Z 270 |     pub(crate) fn forget_covered(&mut self, key: &ChangeKey, sequence: u64) -> Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8731526Z     |                   ^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8731701Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8731813Z error: function `sequence_key` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8732154Z    --> crates/layerfs-workspace/src/overlay.rs:285:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8732439Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8732685Z 285 | fn sequence_key(sequence: u64, key: &[u8]) -> Vec<u8> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8732990Z     |    ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8733116Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8733242Z error: function `decode_sequence` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8733562Z    --> crates/layerfs-workspace/src/overlay.rs:293:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8733841Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8734079Z 293 | fn decode_sequence(bytes: &[u8]) -> Result<u64> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8756592Z     |    ^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8756902Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8757096Z error: struct `ReplayWindow` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8757502Z    --> crates/layerfs-workspace/src/overlay.rs:303:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8757807Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8758026Z 303 | pub(crate) struct ReplayWindow {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8758298Z     |                   ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8758467Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8758593Z error: struct `ReplaySlot` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8759237Z    --> crates/layerfs-workspace/src/overlay.rs:312:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8759549Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8759760Z 312 | struct ReplaySlot {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8759999Z     |        ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8760135Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8760268Z error: enum `ReplayAdmission` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8760595Z    --> crates/layerfs-workspace/src/overlay.rs:317:17
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8760935Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8761162Z 317 | pub(crate) enum ReplayAdmission {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8761425Z     |                 ^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8761585Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8761805Z error: associated items `new`, `admit`, `finish`, and `acknowledge` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8762228Z    --> crates/layerfs-workspace/src/overlay.rs:324:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8762515Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8762709Z 323 | impl ReplayWindow {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8762997Z     | ----------------- associated items in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8763475Z 324 |     pub(crate) fn new(session: [u8; 16], max_requests: usize, max_bytes: usize) -> Result<Self> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8763951Z     |                   ^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8764169Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8764366Z 338 |     pub(crate) fn admit(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8764608Z     |                   ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8764858Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8765178Z 373 |     pub(crate) fn finish(&mut self, sequence: u64, result: Arc<[u8]>) -> Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8765572Z     |                   ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8765800Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8766243Z 385 |     pub(crate) fn acknowledge(&mut self, session: [u8; 16], through: u64) -> Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8766654Z     |                   ^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8766823Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8766961Z error: constant `PAGE_BYTES` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8767298Z   --> crates/layerfs-workspace/src/overlay_index.rs:13:18
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8767607Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8767836Z 13 | pub(crate) const PAGE_BYTES: usize = 4096;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8768130Z    |                  ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8768400Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8768512Z error: constant `HEADER_BYTES` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8768853Z   --> crates/layerfs-workspace/src/overlay_index.rs:14:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8769151Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8769363Z 14 | const HEADER_BYTES: usize = 64;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8769628Z    |       ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8769773Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8770018Z error: constant `BODY_OFFSET` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8770340Z   --> crates/layerfs-workspace/src/overlay_index.rs:15:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8770636Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8770856Z 15 | const BODY_OFFSET: usize = 2 * HEADER_BYTES;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8771135Z    |       ^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8771270Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8771376Z error: constant `BODY_BYTES` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8771701Z   --> crates/layerfs-workspace/src/overlay_index.rs:16:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8771995Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8772237Z 16 | const BODY_BYTES: usize = PAGE_BYTES - BODY_OFFSET;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8772545Z    |       ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8772669Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8772782Z error: constant `MAX_KEYS` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8773091Z   --> crates/layerfs-workspace/src/overlay_index.rs:17:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8773374Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8773573Z 17 | const MAX_KEYS: usize = 7;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8773809Z    |       ^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8774002Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8774119Z error: constant `MIN_KEYS` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8774438Z   --> crates/layerfs-workspace/src/overlay_index.rs:18:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8774719Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8774915Z 18 | const MIN_KEYS: usize = 3;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8775162Z    |       ^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8775285Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8775411Z error: constant `MAX_CHILDREN` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8775735Z   --> crates/layerfs-workspace/src/overlay_index.rs:19:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8776398Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8776590Z 19 | const MAX_CHILDREN: usize = 8;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8776837Z    |       ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8776981Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8777099Z error: constant `MIN_CHILDREN` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8777439Z   --> crates/layerfs-workspace/src/overlay_index.rs:20:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8777737Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8777939Z 20 | const MIN_CHILDREN: usize = 4;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8778181Z    |       ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8778307Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8778422Z error: constant `MAX_KEY_BYTES` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8778739Z   --> crates/layerfs-workspace/src/overlay_index.rs:21:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8779019Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8779212Z 21 | const MAX_KEY_BYTES: usize = 384;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8779465Z    |       ^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8779598Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8779712Z error: constant `INLINE_BYTES` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8780024Z   --> crates/layerfs-workspace/src/overlay_index.rs:22:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8780308Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8780499Z 22 | const INLINE_BYTES: usize = 64;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8780749Z    |       ^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8780882Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8780994Z error: constant `MAX_HEIGHT` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8781308Z   --> crates/layerfs-workspace/src/overlay_index.rs:23:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8781585Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8781785Z 23 | const MAX_HEIGHT: usize = 64;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8782021Z    |       ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8782152Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8782257Z error: constant `NONE` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8782636Z   --> crates/layerfs-workspace/src/overlay_index.rs:24:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8782922Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8783132Z 24 | const NONE: u64 = u64::MAX;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8783378Z    |       ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8783494Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8783597Z error: constant `FREE` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8783897Z   --> crates/layerfs-workspace/src/overlay_index.rs:25:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8784187Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8784377Z 25 | const FREE: u64 = 0;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8784596Z    |       ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8784721Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8784969Z error: constant `LIVE` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8785286Z   --> crates/layerfs-workspace/src/overlay_index.rs:26:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8785582Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8785770Z 26 | const LIVE: u64 = 1;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8786081Z    |       ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8786193Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8786307Z error: constant `RECLAIM` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8786627Z   --> crates/layerfs-workspace/src/overlay_index.rs:27:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8786930Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8787133Z 27 | const RECLAIM: u64 = 2;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8787381Z    |       ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8787518Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8787625Z error: constant `MAGIC` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8787950Z   --> crates/layerfs-workspace/src/overlay_index.rs:28:7
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8788246Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8788447Z 28 | const MAGIC: u64 = 0x3158495357464c;
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8788706Z    |       ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8788823Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8788939Z error: struct `Limits` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8789266Z   --> crates/layerfs-workspace/src/overlay_index.rs:31:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8789553Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8789743Z 31 | pub(crate) struct Limits {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8789984Z    |                   ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8790133Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8790236Z error: struct `Stats` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8790563Z   --> crates/layerfs-workspace/src/overlay_index.rs:48:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8790843Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8791027Z 48 | pub(crate) struct Stats {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8791264Z    |                   ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8791400Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8791516Z error: struct `Index` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8791833Z   --> crates/layerfs-workspace/src/overlay_index.rs:60:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8792119Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8792310Z 60 | pub(crate) struct Index(Arc<Inner>);
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8792691Z    |                   ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8792841Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8792943Z error: struct `Inner` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8793268Z   --> crates/layerfs-workspace/src/overlay_index.rs:61:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8793558Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8793738Z 61 | struct Inner {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8793943Z    |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8794056Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8794173Z error: struct `Root` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8794494Z   --> crates/layerfs-workspace/src/overlay_index.rs:68:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8794779Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8794979Z 68 | pub(crate) struct Root(Arc<RootOwner>);
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8795246Z    |                   ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8795391Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8795506Z error: struct `RootOwner` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8795937Z   --> crates/layerfs-workspace/src/overlay_index.rs:69:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8796235Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8796436Z 69 | struct RootOwner {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8796676Z    |        ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8796801Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8796929Z error: struct `Storage` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8797267Z   --> crates/layerfs-workspace/src/overlay_index.rs:87:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8797568Z    |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8797770Z 87 | struct Storage {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8797994Z    |        ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8798128Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8798237Z error: struct `Header` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8798573Z    --> crates/layerfs-workspace/src/overlay_index.rs:104:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8798869Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8799054Z 104 | struct Header {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8799260Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8799371Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8799472Z error: enum `Value` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8799769Z    --> crates/layerfs-workspace/src/overlay_index.rs:112:6
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8800059Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8800236Z 112 | enum Value {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8800431Z     |      ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8800553Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8800653Z error: struct `Entry` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8800967Z    --> crates/layerfs-workspace/src/overlay_index.rs:117:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8801376Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8801555Z 117 | struct Entry {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8801754Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8801867Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8801979Z error: struct `Child` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8802289Z    --> crates/layerfs-workspace/src/overlay_index.rs:122:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8802571Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8802757Z 122 | struct Child {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8802958Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8803080Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8803173Z error: enum `Node` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8803476Z    --> crates/layerfs-workspace/src/overlay_index.rs:127:6
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8803766Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8803947Z 127 | enum Node {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8804146Z     |      ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8804262Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8804473Z error: methods `references`, `lower`, `underfull`, and `can_lend` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8804896Z    --> crates/layerfs-workspace/src/overlay_index.rs:133:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8805183Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8805363Z 132 | impl Node {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8805594Z     | --------- methods in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8806066Z 133 |     fn references(&self) -> Vec<u64> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8806425Z     |        ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8806639Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8806869Z 146 |     fn lower(&self) -> io::Result<&[u8]> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8807147Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8807344Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8807550Z 154 |     fn underfull(&self) -> bool {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8807807Z     |        ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8808012Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8808218Z 161 |     fn can_lend(&self) -> bool {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8808467Z     |        ^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8808599Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8808698Z error: function `corrupt` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8809018Z    --> crates/layerfs-workspace/src/overlay_index.rs:169:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8809441Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8809660Z 169 | fn corrupt(message: &str) -> io::Error {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8809946Z     |    ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8810058Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8810170Z error: function `quota` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8810488Z    --> crates/layerfs-workspace/src/overlay_index.rs:172:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8810789Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8811002Z 172 | fn quota(message: &str) -> io::Error {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8811270Z     |    ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8811391Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8811513Z error: multiple associated items are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8811885Z    --> crates/layerfs-workspace/src/overlay_index.rs:177:19
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8812186Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8812371Z 176 | impl Index {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8812627Z     | ---------- associated items in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8813069Z 177 |     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8813460Z     |                   ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8813684Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8813893Z 232 |     fn ticket(&self) -> io::Result<Root> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8814167Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8814364Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8814606Z 244 |     pub(crate) fn empty_root(&self) -> io::Result<Root> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8814926Z     |                   ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8815155Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8815408Z 247 |     fn check(&self, root: &Root, key: &[u8]) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8815720Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8816093Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8816438Z 262 |     pub(crate) fn get(&self, root: &Root, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8816818Z     |                   ^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8817040Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8817351Z 287 |     pub(crate) fn set(&self, root: &Root, key: &[u8], value: &[u8]) -> io::Result<Root> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8817729Z     |                   ^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8817959Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8818141Z 336 |     fn insert(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8818352Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8818668Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8818966Z 377 |     pub(crate) fn remove(&self, root: &Root, key: &[u8]) -> io::Result<Root> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8819338Z     |                   ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8819565Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8819754Z 397 |     fn delete(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8819968Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8820175Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8820478Z 449 |     fn retain(&self, storage: &mut Storage, page: u64) -> io::Result<Root> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8820874Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8821085Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8821372Z 455 |     fn write(&self, storage: &mut Storage, node: Node) -> io::Result<Root> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8821723Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8821912Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8822099Z 463 |     pub(crate) fn scan(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8822336Z     |                   ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8822560Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8822873Z 492 |     fn release_retired(&self, storage: &mut Storage, limit: usize) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8823267Z     |        ^^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8823482Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8823769Z 509 |     pub(crate) fn reclaim(&self, max_pages: usize) -> io::Result<usize> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8824114Z     |                   ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8824325Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8824552Z 529 |     pub(crate) fn stats(&self) -> io::Result<Stats> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8824844Z     |                   ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8824988Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8825105Z error: function `child_position` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8825437Z    --> crates/layerfs-workspace/src/overlay_index.rs:543:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8825733Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8826130Z 543 | fn child_position(children: &[Child], key: &[u8]) -> io::Result<usize> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8826495Z     |    ^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8826624Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8826740Z error: function `rebalance` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8827244Z    --> crates/layerfs-workspace/src/overlay_index.rs:551:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8827545Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8827877Z 551 | fn rebalance(child: &mut Node, sibling: &mut Node, before: bool) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8828260Z     |    ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8828385Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8828485Z error: function `merge` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8828797Z    --> crates/layerfs-workspace/src/overlay_index.rs:571:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8829085Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8829380Z 571 | fn merge(child: Node, sibling: Node, before: bool) -> io::Result<Node> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8829736Z     |    ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8829848Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8829958Z error: multiple methods are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8830268Z    --> crates/layerfs-workspace/src/overlay_index.rs:591:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8830557Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8830743Z 590 | impl Storage {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8830988Z     | ------------ methods in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8831341Z 591 |     fn header(&self, page: u64) -> io::Result<Option<Header>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8831662Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8831897Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8832148Z 608 |     fn live_header(&self, page: u64) -> io::Result<Header> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8832476Z     |        ^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8832688Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8832965Z 615 |     fn raw_write(&mut self, bytes: &[u8], offset: u64) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8833313Z     |        ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8833520Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8833812Z 628 |     fn put_header(&mut self, page: u64, mut header: Header) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8834181Z     |        ^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8834395Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8834642Z 649 |     fn increment(&mut self, page: u64) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8834941Z     |        ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8835143Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8835376Z 660 |     fn decrement(&mut self, page: u64) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8835678Z     |        ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8835969Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8836353Z 677 |     fn allocate(&mut self, node: &Node, max_pages: u64) -> io::Result<u64> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8836708Z     |        ^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8836907Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8837137Z 718 |     fn retry_rollback(&mut self) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8837431Z     |        ^^^^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8837653Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8837896Z 729 |     fn free_page(&mut self, page: u64) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8838216Z     |        ^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8838411Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8838642Z 745 |     fn node(&mut self, page: u64) -> io::Result<Node> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8838932Z     |        ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8839121Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8839364Z 756 |     fn child(&mut self, root: &Root) -> io::Result<Child> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8839665Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8839853Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8840141Z 763 |     fn value(&mut self, value: &Value, maximum: usize) -> io::Result<Vec<u8>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8840494Z     |        ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8840682Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8840865Z 793 |     fn scan(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8841061Z     |        ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8841254Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8841487Z 837 |     fn reclaim_one(&mut self) -> io::Result<bool> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8841786Z     |        ^^^^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8841919Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8842027Z error: function `below` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8842348Z    --> crates/layerfs-workspace/src/overlay_index.rs:864:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8842639Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8842871Z 864 | fn below(key: &[u8], start: Bound<&[u8]>) -> bool {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8843164Z     |    ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8843287Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8843390Z error: function `above` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8843706Z    --> crates/layerfs-workspace/src/overlay_index.rs:871:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8844099Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8844329Z 871 | fn above(key: &[u8], end: Bound<&[u8]>) -> bool {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8844613Z     |    ^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8844725Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8844886Z error: associated items `encode` and `decode` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8845265Z    --> crates/layerfs-workspace/src/overlay_index.rs:879:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8845569Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8845757Z 878 | impl Header {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8846240Z     | ----------- associated items in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8846642Z 879 |     fn encode(self) -> [u8; HEADER_BYTES] {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8846913Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8847108Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8847318Z 899 |     fn decode(bytes: &[u8]) -> Option<Self> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8847617Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8847735Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8847852Z error: function `checksum` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8848168Z    --> crates/layerfs-workspace/src/overlay_index.rs:913:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8848460Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8848661Z 913 | fn checksum(bytes: &[u8]) -> u64 {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8848919Z     |    ^^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8849049Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8849199Z error: associated items `encode` and `decode` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8849567Z    --> crates/layerfs-workspace/src/overlay_index.rs:919:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8849853Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8850034Z 918 | impl Node {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8850286Z     | --------- associated items in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8850628Z 919 |     fn encode(&self) -> io::Result<[u8; BODY_BYTES]> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8850913Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8851101Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8851312Z 969 |     fn decode(bytes: &[u8]) -> io::Result<Self> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8851585Z     |        ^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8851704Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8851807Z error: function `put_key` is never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8852120Z     --> crates/layerfs-workspace/src/overlay_index.rs:1025:4
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8852415Z      |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8852683Z 1025 | fn put_key(body: &mut Vec<u8>, key: &[u8]) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8853001Z      |    ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8853283Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8853408Z error: struct `Decoder` is never constructed
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8853742Z     --> crates/layerfs-workspace/src/overlay_index.rs:1033:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8854042Z      |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8854241Z 1033 | struct Decoder<'a>(&'a [u8]);
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8854488Z      |        ^^^^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8854623Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8854784Z error: methods `take`, `byte`, `u32`, `u64`, and `key` are never used
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8855171Z     --> crates/layerfs-workspace/src/overlay_index.rs:1035:8
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8855475Z      |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8855684Z 1034 | impl<'a> Decoder<'a> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8856150Z      | -------------------- methods in this implementation
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8856582Z 1035 |     fn take(&mut self, len: usize) -> io::Result<&'a [u8]> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8856908Z      |        ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8857112Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8857326Z 1043 |     fn byte(&mut self) -> io::Result<u8> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8857608Z      |        ^^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8857802Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8858015Z 1046 |     fn u32(&mut self) -> io::Result<u32> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8858288Z      |        ^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8858477Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8858688Z 1049 |     fn u64(&mut self) -> io::Result<u64> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8858954Z      |        ^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8859141Z ...
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8859355Z 1052 |     fn key(&mut self) -> io::Result<Vec<u8>> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8859633Z      |        ^^^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:17.8859741Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2566787Z error: this function has too many arguments (8/7)
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2567797Z    --> crates/layerfs-workspace/src/overlay_index.rs:793:5
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2568580Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2568981Z 793 | /     fn scan(
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2569352Z 794 | |         &mut self,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2570197Z 795 | |         page: u64,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2570606Z 796 | |         start: Bound<&[u8]>,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2571033Z ...   |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2571366Z 801 | |         maximum: usize,
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2571803Z 802 | |     ) -> io::Result<()> {
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2572255Z     | |_______________________^
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2572662Z     |
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2573518Z     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#too_many_arguments
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2574537Z     = note: `-D clippy::too-many-arguments` implied by `-D warnings`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2575410Z     = help: to override `-D warnings` add `#[allow(clippy::too_many_arguments)]`
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.2576187Z 
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.4022656Z error: could not compile `layerfs-workspace` (lib) due to 64 previous errors
+rust	Run cargo +1.96.0 clippy --workspace --locked -- -D warnings	2026-09-13T20:36:18.4139298Z ##[error]Process completed with exit code 101.

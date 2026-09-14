@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.96.0",
+    "zigbuild",
+    "-p",
+    "layerfs-fuse",
+    "--features",
+    "proxy",
+    "--bin",
+    "layerfs-fuse",
+    "--target",
+    "aarch64-unknown-linux-musl"
+  ],
+  "exit_code": 101,
+  "wall_seconds": 1.3679260420030914,
+  "raw": "linux-helper.log",
+  "source": "source-before.json"
+}

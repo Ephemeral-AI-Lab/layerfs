@@ -1,0 +1,66 @@
+{
+  "recorded_utc": "2026-09-14T00:46:40.530616+00:00",
+  "status": "COMPONENT_PASS; not phase, feature, V1, capacity or benchmark completion",
+  "implementation": {
+    "api": "CommitCoordinator::maintenance_step(host,spool)->Result<bool>",
+    "bounded_work": "One pending correspondence node; at most64 covered keys (=128 change-index row removals); one existing Host maintenance/reclamation step. No logical generation bump.",
+    "ownership": "Captures published Arc under idle attempt try-lock, performs backing I/O without attempt/published locks, reacquires idle attempt and compares exact Arc before bookkeeping install; retained/active attempt skips. Exact Host Workspace identity validated first.",
+    "caller_contract": "true means remaining or deferred work, not proof of progress. Caller must reschedule/yield and must not spin on retained/active attempts."
+  },
+  "sources": {
+    "crates/layerfs-workspace/src/commit_maintenance.rs": {
+      "git_blob": "fd880ef886f048eceacbd4ea69412d83d174c6b7",
+      "sha256": "7268078fd7aae05ffdead85ae14ee3c3a4cd1af5e7b560b6c307ccb4d28b1aba"
+    },
+    "crates/layerfs-workspace/src/correspondence.rs": {
+      "git_blob": "31e59bb092512d3c59ac7541b1e5b336dd89fbb3",
+      "sha256": "15e1d267950819bc5742e2520b5f604697339e72eae04f3d378ddb2936e8fe95"
+    },
+    "crates/layerfs-workspace/src/host_canonicalize.rs": {
+      "git_blob": "010c63e537b9ff7dee23c5068d5efda1842752c9",
+      "sha256": "d9b4a4f0654e8dab14535b63142cb8f84599066281d6f39159a0672579bf0d2c"
+    },
+    "crates/layerfs-workspace/src/overlay_cleanup.rs": {
+      "git_blob": "580e9f41685a9914d83e6ede32322371933c372a",
+      "sha256": "082d3712d7eb8128a585cdb9f9229205dd2f34c15e4a257d3ea86632d87060ff"
+    }
+  },
+  "attempts": [
+    {
+      "record": "maintenance-attempt01.json",
+      "raw": "maintenance-attempt01.log",
+      "result": "2PASS/1FAIL",
+      "preserved_failure": "Incorrect test oracle expected pre-stage construction failure to retain an attempt; actual coordinator correctly removed it.",
+      "source": "capacity-compile-attempt03-source.json",
+      "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7"
+    },
+    {
+      "record": "maintenance-attempt02.json",
+      "raw": "maintenance-attempt02.log",
+      "result": "PASS1",
+      "source": "../phase3-host-operations/sdk-path-compile-attempt02-source.json",
+      "binary_sha256": "cbabe2def5568d913f95c2b4f21506d490dd138f8c206894f946b8cd36971b06",
+      "targeted_fix": "Only failed test oracle: retain an actual workspace stage with the existing injected publication failure, assert stage and attempt exist, then test maintenance skip and authoritative abandon. Pre-stage error clearing still asserted."
+    }
+  ],
+  "current_rows": [
+    {
+      "test": "commit_attempt::maintenance::tests::maintenance_caps_nodes_and_covered_keys_without_bumping_live_sequence",
+      "result": "PASS_REUSED",
+      "record": "maintenance-attempt01.json"
+    },
+    {
+      "test": "commit_attempt::maintenance::tests::concurrent_c2_publication_keeps_new_pending_context_and_later_write",
+      "result": "PASS_REUSED",
+      "record": "maintenance-attempt01.json"
+    },
+    {
+      "test": "commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected",
+      "result": "PASS",
+      "record": "maintenance-attempt02.json"
+    }
+  ],
+  "reuse_reason": "Production maintenance code and both passing test bodies were unchanged. Correspondence, canonicalization, Index, Payload, Ranges and CommitCoordinator source hashes are identical between the two source seals. candidate_capacity.rs changed only a cfg(test) spill fixture (uniform bytes to deterministic varied bytes), confirmed by its owner. Host SDK/cache/shutdown deltas do not participate in these direct HostOverlay+coordinator cases; exact remaining source scope is recorded in maintenance-handoff.md. Root confirmed HostRuntime changes only SDK composition/after_detach/spool mkdir and tests outside these cases; Host owner confirmed HostOverlay create/write/snapshot/maintain production paths unchanged, with only pin_path documentation clarified.",
+  "deferred": "Payload persisted-token vs resident-handle cap defect is audited only; see ../phase3-host-operations/payload-token-capacity-audit.md. No new Payload edit, 8193-file test or capacity run. Public lifecycle integration, V1 and final campaign remain root/successor work.",
+  "worktree_state": "commit_maintenance.rs, host_canonicalize.rs, overlay_cleanup.rs untracked at handoff; correspondence.rs has shared unstaged edits including our workspace_id getter and prior PLAN_BUFFER_BYTES extraction plus construction agent ScratchFile integration. No files staged/committed by this agent."
+}

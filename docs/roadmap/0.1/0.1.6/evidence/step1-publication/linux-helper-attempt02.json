@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "zigbuild",
+    "-p",
+    "layerfs-fuse",
+    "--features",
+    "proxy",
+    "--bin",
+    "layerfs-fuse",
+    "--target",
+    "aarch64-unknown-linux-musl"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 3.278569750022143,
+  "toolchain": "stable-aarch64-apple-darwin (default)",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: aarch64-apple-darwin\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "raw": "linux-helper-attempt02.log",
+  "source": "source-before.json",
+  "source_changes": [],
+  "correction": "Named +1.96.0 lacks installed Linux std; use the existing successfully configured default toolchain and Zig. Original failed build remains retained; its artifacts listing was existing on-disk artifacts, not proof it built the helper.",
+  "helper_sha256": "29f56dcd24aad94149510d8f0474a2d9895b96ea7904465404aa39172a33e513"
+}

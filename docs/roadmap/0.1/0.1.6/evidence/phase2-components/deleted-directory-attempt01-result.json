@@ -1,0 +1,7 @@
+{
+  "result": "FAIL",
+  "reason": "64 unreachable binding masks remain after existing maintenance returns drained",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "a10d8640969fddb7c3492303e280f11e21894dc308052eaec7cf9cd06289dd95",
+  "raw": "deleted-directory-attempt01.log"
+}

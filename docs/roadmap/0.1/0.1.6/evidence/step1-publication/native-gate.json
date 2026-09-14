@@ -1,0 +1,10 @@
+{
+  "command": [
+    "tools/test-fast.sh"
+  ],
+  "toolchain": "1.85.1",
+  "exit_code": 1,
+  "wall_seconds": 192.1446775830118,
+  "raw": "native-gate.log",
+  "source": "source-before.json"
+}

@@ -549,7 +549,7 @@ impl Workspace {
                 .ok_or(StoreError::NotFound("node"))?
                 .data
             {
-                for piece in pieces.pieces() {
+                for piece in pieces.cursor() {
                     if let Piece::Spool { segment, .. } = piece {
                         segments.insert(segment.id(), segment);
                     }

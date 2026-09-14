@@ -224,12 +224,24 @@ mod client {
             endpoint: Vec<u8>,
             capability: [u8; 32],
         ) -> io::Result<Mount> {
+            self.mount_with_authority(workspace_id, root, endpoint, capability, false)
+        }
+
+        pub fn mount_with_authority(
+            &self,
+            workspace_id: [u8; 16],
+            root: Vec<u8>,
+            endpoint: Vec<u8>,
+            capability: [u8; 32],
+            host_owned: bool,
+        ) -> io::Result<Mount> {
             let payload = MountRequest {
                 owner_id: self.owner_id,
                 workspace_id,
                 root,
                 endpoint,
                 capability,
+                host_owned,
             }
             .encode()?;
             let mut stream = self.connect_bound(Kind::Mount, &payload, Duration::from_secs(10))?;

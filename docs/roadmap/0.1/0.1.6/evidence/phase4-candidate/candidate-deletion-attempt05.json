@@ -1,0 +1,17 @@
+{
+  "identity": "changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2",
+  "command": [
+    "target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "source_manifest": "../phase2-components/deleted-directory-attempt02-source.json",
+  "binary_sha256": "6007082d4f1be482dd9db4140e95f081eafc7379c42829c6d7b3e25ffa818d82",
+  "result": "PASS",
+  "raw_evidence": "candidate-deletion-attempt05.log",
+  "reason": "Actual new cleanup source changes remove_inode_record final deletion path; earlier a10d rerun explicitly invalid for this fix",
+  "validity": "current affected cleanup/candidate integration component evidence",
+  "environment": "macOS26.4.1 aarch64; default Cargo debug tests"
+}

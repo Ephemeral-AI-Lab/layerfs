@@ -1,0 +1,16 @@
+{
+  "identity": "commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent",
+  "source": "capacity-compile-attempt03-source.json",
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "result": "PASS",
+  "wall_seconds": 0.12944504199549556,
+  "raw": "coordinator-c1-c2-attempt02.log",
+  "invalidation": "Canonical candidate now uses charged scratch and separate shared host resource reservation; exercise live progress and C1/C2 through affected construction."
+}

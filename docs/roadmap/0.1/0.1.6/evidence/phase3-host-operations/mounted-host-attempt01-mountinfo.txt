@@ -1,0 +1,1 @@
+88 142 0:64 / /var/tmp/layerfs-host-w:ceb6ea4c655d7f2658d4c90d6e1d6b14 rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions

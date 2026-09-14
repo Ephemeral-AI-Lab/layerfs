@@ -1,0 +1,15 @@
+
+running 1 test
+
+thread 'host_canonicalize::tests::piece_cap_defers_partial_c1_backing_until_complete_c2_is_available' (11971834) panicked at crates/layerfs-workspace/src/host_canonicalize.rs:191:14:
+optional C1 maintenance cannot add a boundary beyond the cap: Io(Custom { kind: StorageFull, error: "range tree limits" })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test host_canonicalize::tests::piece_cap_defers_partial_c1_backing_until_complete_c2_is_available ... FAILED
+
+failures:
+
+failures:
+    host_canonicalize::tests::piece_cap_defers_partial_c1_backing_until_complete_c2_is_available
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.03s
+

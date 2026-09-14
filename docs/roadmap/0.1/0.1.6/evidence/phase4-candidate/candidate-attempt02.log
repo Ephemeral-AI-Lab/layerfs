@@ -1,0 +1,97 @@
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `abandon` is never used
+   --> crates/layerfs-workspace/src/commit_attempt.rs:262:19
+    |
+ 52 | impl CommitCoordinator {
+    | ---------------------- method in this implementation
+...
+262 |     pub(crate) fn abandon(&self) -> Result<()> {
+    |                   ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `policy` and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:302:19
+    |
+256 | impl Budget {
+    | ----------- methods in this implementation
+...
+302 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+305 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: fields `reserved_bytes`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:35:9
+   |
+33 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+34 |     pub physical_bytes: u64,
+35 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+44 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+47 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+48 |     pub cleanup_pending: bool,
+49 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib test) generated 6 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.84s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-7a70d4db173d6a6f)
+
+running 2 tests
+
+thread 'changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2' (11865678) panicked at crates/layerfs-workspace/src/snapshot_candidate.rs:1437:87:
+called `Result::unwrap()` on an `Err` value: StoreBusy
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2 ... FAILED
+
+thread 'changes::snapshot_candidate::tests::shared_builder_holds_owned_c1_cut_and_reuses_c1_for_localized_c2' (11865679) panicked at crates/layerfs-workspace/src/snapshot_candidate.rs:1448:87:
+called `Result::unwrap()` on an `Err` value: StoreBusy
+test changes::snapshot_candidate::tests::shared_builder_holds_owned_c1_cut_and_reuses_c1_for_localized_c2 ... FAILED
+
+failures:
+
+failures:
+    changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2
+    changes::snapshot_candidate::tests::shared_builder_holds_owned_c1_cut_and_reuses_c1_for_localized_c2
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 142 filtered out; finished in 5.97s
+
+error: test failed, to rerun pass `-p layerfs-workspace --lib`

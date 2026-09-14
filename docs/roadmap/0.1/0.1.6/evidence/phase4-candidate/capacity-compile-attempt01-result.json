@@ -1,0 +1,15 @@
+{
+  "returncode": 101,
+  "source_changes": [],
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-layerstack-store",
+    "--lib",
+    "--no-run"
+  ],
+  "raw": "capacity-compile-attempt01.log"
+}

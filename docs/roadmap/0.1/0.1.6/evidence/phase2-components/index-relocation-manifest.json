@@ -1,0 +1,183 @@
+{
+  "scope": "Phase2 private host COW metadata index component; not full filesystem/Commit acceptance",
+  "source": {
+    "path": "crates/layerfs-workspace/src/overlay_index.rs",
+    "sha256": "023b463b31c3ab29347123dd2da01e4247efd4352f008f0291c718b6d4c8dcd4",
+    "git_blob": "da9eff967602acbdee497614f58b2d721e52a47a",
+    "base_head": "6d907bc43361c76583314f476854f328c790baee"
+  },
+  "environment": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "release": "25.4.0",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "private_format": {
+    "page_bytes": 4096,
+    "page_body_bytes": 3968,
+    "header_slot_bytes": 64,
+    "header_copies": 2,
+    "catalog_records_per_admitted_page": 2,
+    "max_key_bytes": 384,
+    "inline_value_bytes": 128,
+    "leaf_entries": 7,
+    "branch_children": 8,
+    "retained_page_cache_bytes": 0,
+    "max_height": 64,
+    "max_scan_records": 1024,
+    "max_scan_bytes": "4MiB plus one <=384-byte key for one maximum-sized value",
+    "files": 2
+  },
+  "ownership": "Arc Root lease pins disk refcount graph, leaf external payload token and same-index child; root drop only enqueues an already-admitted release slot; linked reads assist one retired root before ticket admission.",
+  "physical_reclaim": "Stable PageID -> double-buffered disk catalog location; reverse disk slot map; RETIRING prevents stale-body decoding; evacuate/verify at most one4KiB tail page per free; publish source location before physical truncate; pending I/O stays charged; reusable IDs are bounded by max_pages and catalog highwater, not mutation history.",
+  "quota": "N data pages plus fixed catalog ceiling256*N bytes with filesystem block rounding; Stats reports actual allocated blocks of both files. Integration must budget the catalog overhead.",
+  "reproduction": "rustc --edition 2021 --test crates/layerfs-workspace/src/overlay_index.rs -o /tmp/overlay-index-tests; /tmp/overlay-index-tests tests::<identity> --exact --nocapture",
+  "final_standalone_binary": {
+    "path": "/tmp/layerfs-overlay-index-readiness-tests",
+    "sha256": "4bb7688ada06595c49760714a9e2155d6be89bd764aff9431563f42917ba2670",
+    "executed_cases": [
+      "queued_root_releases_are_reported_as_pending_cleanup"
+    ]
+  },
+  "source_custody": "Development passes are reused only for unchanged exercised paths: physical/max-inline/write-fault checks preceded the isolated linked-read ticket fix; relevant linked-path regressions were rerun. Final additions were disabled-by-default test hooks and the pending-roots predicate in Stats; earlier checks assert unchanged populated/empty states. Earlier binary evidence is not labeled final-candidate evidence. Phase6/7 custody remains separate.",
+  "results": [
+    {
+      "identity": "retained_roots_split_merge_seek_and_release_without_resident_page_graph",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocated-graph-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::retained_roots_split_merge_seek_and_release_without_resident_page_graph --exact --nocapture"
+    },
+    {
+      "identity": "quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocated-quota-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages --exact --nocapture"
+    },
+    {
+      "identity": "floor_descends_without_scanning_predecessor_prefix_and_batches_bound_bytes",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocated-floor-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::floor_descends_without_scanning_predecessor_prefix_and_batches_bound_bytes --exact --nocapture"
+    },
+    {
+      "identity": "disk_owned_links_and_payload_tokens_survive_root_drop_and_failed_reclaim",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocated-external-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::disk_owned_links_and_payload_tokens_survive_root_drop_and_failed_reclaim --exact --nocapture"
+    },
+    {
+      "identity": "uncertain_ownership_write_readback_cannot_leak_a_child_reference",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocated-ownership-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::uncertain_ownership_write_readback_cannot_leak_a_child_reference --exact --nocapture"
+    },
+    {
+      "identity": "uncertain_read_lease_and_cleanup_retry_keep_the_source_owned",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocated-lease-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::uncertain_read_lease_and_cleanup_retry_keep_the_source_owned --exact --nocapture"
+    },
+    {
+      "identity": "reclaim_header_faults_never_double_release_or_lose_cleanup",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocation-faults-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::reclaim_header_faults_never_double_release_or_lose_cleanup --exact --nocapture"
+    },
+    {
+      "identity": "physical_pages_relocate_and_reclaim_under_a_retained_snapshot",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocation-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::physical_pages_relocate_and_reclaim_under_a_retained_snapshot --exact --nocapture"
+    },
+    {
+      "identity": "maximum_sized_leaf_keeps_fixed_inode_records_inline",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-inline128-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::maximum_sized_leaf_keeps_fixed_inode_records_inline --exact --nocapture"
+    },
+    {
+      "identity": "repeated_linked_reads_reuse_admitted_root_tickets",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-read-retirement-attempt02.log",
+      "command": "/tmp/layerfs-overlay-index-relocation-tests tests::repeated_linked_reads_reuse_admitted_root_tickets --exact --nocapture"
+    },
+    {
+      "identity": "relocation_faults_keep_a_live_tail_page_readable",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocation-live-faults-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-final-tests tests::relocation_faults_keep_a_live_tail_page_readable --exact --nocapture"
+    },
+    {
+      "identity": "failed_copy_verification_and_truncation_preserve_source_and_charges",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-relocation-copy-truncate-attempt01.log",
+      "command": "/tmp/layerfs-overlay-index-final-tests tests::failed_copy_verification_and_truncation_preserve_source_and_charges --exact --nocapture"
+    },
+    {
+      "identity": "queued_root_releases_are_reported_as_pending_cleanup",
+      "mode": "host-only standalone Rust unit check",
+      "result": "PASS",
+      "validity": "compatible component evidence; final candidate custody not asserted",
+      "raw": "index-readiness-attempt02.log",
+      "command": "/tmp/layerfs-overlay-index-readiness-tests tests::queued_root_releases_are_reported_as_pending_cleanup --exact --nocapture"
+    }
+  ],
+  "reused_passes": [
+    {
+      "identity": "root_admission_and_foreign_roots_fail_before_installation",
+      "result": "PASS",
+      "raw": "index-ownership-attempt01.log",
+      "reason": "Root ticket admission and foreign-owner rejection unchanged; these checks do not traverse the modified physical page backend; sustained linked ticket reclamation has separate current evidence."
+    }
+  ],
+  "retained_failures": [
+    {
+      "raw": "index-uncertain-header-attempt02.log",
+      "result": "FAIL",
+      "root_cause": "completed child ref increment with failed receipt/readback was not rollback-owned; three overflow pages leaked",
+      "fix": "bounded exact desired-header write intent, idempotent replay and deferred original error; attempt03 plus relocated-ownership pass"
+    },
+    {
+      "raw": "index-read-retirement-attempt01.log",
+      "result": "FAIL",
+      "root_cause": "linked read/drop queued admitted root tickets without bounded reader-side retirement assist",
+      "fix": "retire one queued root before admitting a read root; attempt02 pass"
+    },
+    {
+      "raw": "index-readiness-attempt01.log",
+      "result": "FAIL",
+      "root_cause": "cleanup predicate omitted queued retired-root owners",
+      "fix": "include pending_roots in reclamation_pending; attempt02 pass"
+    }
+  ],
+  "earlier_evidence": "index-ownership-recovery-manifest.json retains previous compile/filter failures and exact original header bug attempts",
+  "remaining": [
+    "Host protocol/current FUSE and SDK authority integration belongs to the parent implementation.",
+    "This component does not satisfy unresolved V1 mmap visibility or complete V2-V4/product acceptance.",
+    "No benchmarks or issue122 scenarios executed."
+  ]
+}

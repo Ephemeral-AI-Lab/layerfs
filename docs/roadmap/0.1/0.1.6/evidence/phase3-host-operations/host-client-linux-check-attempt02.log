@@ -1,0 +1,53 @@
+   Compiling blake3 v1.8.5
+    Checking fuser v0.18.0
+warning: blake3@1.8.5: Compiler family detection failed due to error: ToolExecError: command did not execute successfully (status code exit status: 1): env -u CC_SHIM_OUT_DIR -u CC_SHIM_OUT_FILES "zig" "-E" "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/aarch64-unknown-linux-musl/debug/build/blake3-8378494934ceec9c/out/3264050382922797869detect_compiler_family.c"
+warning: blake3@1.8.5: Compiler family detection failed due to error: ToolExecError: command did not execute successfully (status code exit status: 1): env -u CC_SHIM_OUT_DIR -u CC_SHIM_OUT_FILES "zig" "-E" "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/aarch64-unknown-linux-musl/debug/build/blake3-8378494934ceec9c/out/10286288068418054959detect_compiler_family.c"
+warning: blake3@1.8.5: error: unable to parse target query 'aarch64-unknown-linux-musl': UnknownOperatingSystem
+error: failed to run custom build command for `blake3 v1.8.5`
+
+Caused by:
+  process didn't exit successfully: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/build/blake3-9c071111d2a9ed27/build-script-build` (exit status: 1)
+  --- stdout
+  cargo:rustc-check-cfg=cfg(blake3_sse2_ffi, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_sse2_rust, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_sse41_ffi, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_sse41_rust, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_avx2_ffi, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_avx2_rust, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_avx512_ffi, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_neon, values(none()))
+  cargo:rustc-check-cfg=cfg(blake3_wasm32_simd, values(none()))
+  cargo:rerun-if-env-changed=CARGO_FEATURE_PURE
+  cargo:rerun-if-env-changed=CARGO_FEATURE_NO_NEON
+  cargo:rerun-if-env-changed=CARGO_FEATURE_NEON
+  cargo:rerun-if-env-changed=CARGO_FEATURE_NEON
+  cargo:rerun-if-env-changed=CARGO_FEATURE_NO_NEON
+  cargo:rerun-if-env-changed=CARGO_FEATURE_PURE
+  cargo:rustc-cfg=blake3_neon
+  CC_FORCE_DISABLE = None
+  CC_aarch64-unknown-linux-musl = None
+  CC_aarch64_unknown_linux_musl = Some(zig cc -target aarch64-linux-musl)
+  CC_KNOWN_WRAPPER_CUSTOM = None
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  cargo:warning=Compiler family detection failed due to error: ToolExecError: command did not execute successfully (status code exit status: 1): env -u CC_SHIM_OUT_DIR -u CC_SHIM_OUT_FILES "zig" "-E" "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/aarch64-unknown-linux-musl/debug/build/blake3-8378494934ceec9c/out/3264050382922797869detect_compiler_family.c"
+  CRATE_CC_NO_DEFAULTS = None
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  cargo:warning=Compiler family detection failed due to error: ToolExecError: command did not execute successfully (status code exit status: 1): env -u CC_SHIM_OUT_DIR -u CC_SHIM_OUT_FILES "zig" "-E" "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/aarch64-unknown-linux-musl/debug/build/blake3-8378494934ceec9c/out/10286288068418054959detect_compiler_family.c"
+  CRATE_CC_NO_DEFAULTS = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_aarch64_unknown_linux_musl = None
+  CFLAGS_aarch64-unknown-linux-musl = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_aarch64_unknown_linux_musl = None
+  CFLAGS_aarch64-unknown-linux-musl = None
+  cargo:warning=error: unable to parse target query 'aarch64-unknown-linux-musl': UnknownOperatingSystem
+
+  --- stderr
+
+
+  error occurred in cc-rs: command did not execute successfully (status code exit status: 1): LC_ALL="C" "zig" "cc" "-target" "aarch64-linux-musl" "-O0" "-ffunction-sections" "-fdata-sections" "-fPIC" "-g" "-gdwarf-4" "-fno-omit-frame-pointer" "--target=aarch64-unknown-linux-musl" "-Wall" "-Wextra" "-std=c11" "-o" "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/aarch64-unknown-linux-musl/debug/build/blake3-8378494934ceec9c/out/a1edd97dd51cd48d-blake3_neon.o" "-c" "c/blake3_neon.c"
+
+
+warning: build failed, waiting for other jobs to finish...

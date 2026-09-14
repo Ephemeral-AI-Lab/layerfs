@@ -1,0 +1,41 @@
+{
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "a10d8640969fddb7c3492303e280f11e21894dc308052eaec7cf9cd06289dd95",
+  "compile_source_manifest": "../phase2-components/deleted-directory-attempt01-source.json",
+  "source": {
+    "commit_attempt.rs": "ed7b3e7456badc39ddcf5177e8790cade1fbc6df5ff88f20e2f97d1649a575db",
+    "snapshot_candidate.rs": "bbaf6fefd98da24cf2601a802a699e6234aa6b897fafd319d4d2328c871b1179",
+    "changes.rs": "083a4936a124e316b275bdaf702dac1b68aa7f2e921a75aa7428f3d151c5361b"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "timestamp_unix": 1789338577.664499,
+  "reason": "First coordinator integration checks using alreadycompiledcandidate+host sources; fixture usesindependentreaders untilactualfreshStore reopen afterdroppingallowners.",
+  "tests": [
+    {
+      "identity": "commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "result": "PASS",
+      "raw": "coordinator-c1-c2-attempt01.log"
+    },
+    {
+      "identity": "commit_attempt::tests::lost_publication_and_stage_replies_retry_exact_input_without_recapture",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "commit_attempt::tests::lost_publication_and_stage_replies_retry_exact_input_without_recapture",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "result": "PASS",
+      "raw": "coordinator-retry-attempt01.log"
+    }
+  ]
+}

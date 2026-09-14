@@ -1,0 +1,109 @@
+   Compiling layerfs-layerstack-store v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-layerstack-store/src/objects/scratch.rs:356:85
+    |
+356 |         let page_size: u64 = connection.pragma_query_value(None, "page_size", |r| r.get(0))?;
+    |                                                                                     ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-layerstack-store/src/objects/scratch.rs:360:82
+    |
+360 |         let pages: u64 = connection.pragma_query_value(None, "page_count", |r| r.get(0))?;
+    |                                                                                  ^^^ the trait `FromSql` is not implemented for `u64`
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+error[E0277]: the trait bound `u64: ToSql` is not satisfied
+   --> crates/layerfs-layerstack-store/src/objects/scratch.rs:370:58
+    |
+370 |         connection.pragma_update(None, "max_page_count", ceiling)?;
+    |                    -------------                         ^^^^^^^ the trait `ToSql` is not implemented for `u64`
+    |                    |
+    |                    required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `ToSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::pragma::<impl rusqlite::Connection>::pragma_update`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/pragma.rs:234:12
+    |
+227 |     pub fn pragma_update<V>(
+    |            ------------- required by a bound in this associated function
+...
+234 |         V: ToSql,
+    |            ^^^^^ required by this bound in `rusqlite::pragma::<impl Connection>::pragma_update`
+
+error[E0277]: the trait bound `u64: FromSql` is not satisfied
+   --> crates/layerfs-layerstack-store/src/objects/scratch.rs:524:76
+    |
+524 |                 .query_row("SELECT count(*) FROM rows", [], |r| r.get::<_, u64>(0))
+    |                                                                   ---      ^^^ the trait `FromSql` is not implemented for `u64`
+    |                                                                   |
+    |                                                                   required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `FromSql`:
+              f32
+              f64
+              i16
+              i32
+              i64
+              i8
+              isize
+              u16
+            and 2 others
+note: required by a bound in `rusqlite::Row::<'_>::get`
+   --> /Users/yifanxu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rusqlite-0.40.2/src/row.rs:285:32
+    |
+285 |     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+    |                                ^^^^^^^ required by this bound in `Row::<'_>::get`
+
+warning: variable does not need to be mutable
+   --> crates/layerfs-layerstack-store/src/objects/admission/metadata_tests.rs:265:9
+    |
+265 |     let mut f = Fixture::new();
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `layerfs-layerstack-store` (lib test) generated 1 warning
+error: could not compile `layerfs-layerstack-store` (lib test) due to 4 previous errors; 1 warning emitted

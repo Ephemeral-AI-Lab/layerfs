@@ -1,0 +1,20 @@
+{
+  "result": "PASS1",
+  "source": "canonical-substitution-64m-attempt01-source.json",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "6f832cd31ec904ba78d71db044da71a3fae7c088c5f215854821190e285a4a96",
+  "raw": "canonical-substitution-64m-attempt01.log",
+  "fixture_bytes": 67108864,
+  "retained_physical_before": 68157440,
+  "physical_after": 4096,
+  "cleanup_steps": 1039,
+  "c2": {
+    "replacement_bytes": 1,
+    "reused_bytes": 67108863,
+    "full_comparisons": 0,
+    "full_builds": 0,
+    "cdc_bytes_scanned": 1
+  },
+  "wall_seconds": 7.36,
+  "measurement_kind": "correctness/component test wall; not benchmark"
+}

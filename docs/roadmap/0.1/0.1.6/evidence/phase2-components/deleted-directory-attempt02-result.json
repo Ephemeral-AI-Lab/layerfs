@@ -1,0 +1,9 @@
+{
+  "result": "PASS",
+  "tests": 2,
+  "wall_seconds": 1.3,
+  "reason": "64 covered masks reclaimed,129 changed masks cleaned in4 steps at<=128 total index-row removals/step; live base mask and retained snapshots stay readable",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "6007082d4f1be482dd9db4140e95f081eafc7379c42829c6d7b3e25ffa818d82",
+  "raw": "deleted-directory-attempt02.log"
+}

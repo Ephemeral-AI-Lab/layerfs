@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-daemon",
+    "--lib",
+    "protocol::tests::fragmented_and_coalesced_frames_and_exec_bounds",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 2.8017942500300705,
+  "source_changes": {},
+  "log": "mount-authority-codec-attempt01.log",
+  "source": "mount-authority-codec-attempt01-source.json"
+}

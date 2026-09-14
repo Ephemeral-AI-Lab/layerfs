@@ -1,0 +1,36 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-v1-retrieve-probe",
+    "--device",
+    "/dev/fuse",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--cpus",
+    "1",
+    "--memory",
+    "512m",
+    "--pids-limit",
+    "128",
+    "-v",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.6/evidence:/evidence:ro",
+    "-w",
+    "/evidence/v1-investigation",
+    "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "sh",
+    "-c",
+    "uname -a && gcc --version && gcc -std=c11 -O1 -pthread -Wall -Wextra -o /tmp/retrieve-probe retrieve_probe.c && sha256sum /tmp/retrieve-probe && /tmp/retrieve-probe"
+  ],
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "returncode": 0,
+  "runtime_limits": {
+    "cpus": 1,
+    "memory": "512m",
+    "pids": 128
+  },
+  "measurement_lock": "held for probe only; no benchmark executed",
+  "timestamp_unix": 1789329585.631488
+}

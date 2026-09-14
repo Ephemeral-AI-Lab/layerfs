@@ -1,0 +1,6 @@
+{
+  "result": "PASS1",
+  "source": "canonical-substitution-cap-attempt02-source.json",
+  "raw": "canonical-substitution-cap-attempt02.log",
+  "binary_sha256": "8ec696135f683251ab4e04d2dc1ca6be05270ef6bf9bc13fa37124755fd216d0"
+}

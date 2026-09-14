@@ -990,12 +990,19 @@ pub(crate) fn storage_port_error(error: layerfs_layerstack_store::StoreError) ->
         }
         layerfs_layerstack_store::StoreError::InvalidInput("name exists") => PortError::Exists,
         layerfs_layerstack_store::StoreError::InvalidInput(
-            "workspace spool limit" | "workspace live allocation",
+            "workspace spool limit" | "workspace live allocation" | "workspace inline limit",
         ) => PortError::NoSpace,
         layerfs_layerstack_store::StoreError::InvalidInput("workspace inactive") => {
             PortError::ReadOnly
         }
         layerfs_layerstack_store::StoreError::InvalidInput(_) => PortError::Invalid,
+        layerfs_layerstack_store::StoreError::StoreBusy => PortError::Busy,
+        layerfs_layerstack_store::StoreError::Io(error) => match error.kind() {
+            std::io::ErrorKind::StorageFull => PortError::NoSpace,
+            std::io::ErrorKind::WouldBlock => PortError::Busy,
+            std::io::ErrorKind::InvalidInput => PortError::Invalid,
+            _ => PortError::Io,
+        },
         _ => PortError::Io,
     }
 }

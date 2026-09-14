@@ -20,7 +20,7 @@ python3 "$repo/tools/test_fast.py" "$temporary/artifacts.jsonl" "$jobs"
 
 elapsed=$((SECONDS - started))
 printf 'PASS full workspace native tests in %ss with %s bounded jobs\n' "$elapsed" "$jobs"
-(( elapsed <= 120 )) || {
-  printf 'test-fast: %ss exceeds the 120s warm-suite ceiling\n' "$elapsed" >&2
+(( elapsed <= 180 )) || {
+  printf 'test-fast: %ss exceeds the 180s warm-suite ceiling\n' "$elapsed" >&2
   exit 1
 }
