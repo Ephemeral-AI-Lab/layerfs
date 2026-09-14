@@ -1,0 +1,7 @@
+
+running 1 test
+canonical substitution: captured=262144B, live raw=1B, physical 266240->4096B, cleanup steps=19
+test host_canonicalize::tests::published_ranges_replace_only_proven_raw_bytes_around_later_edit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 154 filtered out; finished in 0.10s
+

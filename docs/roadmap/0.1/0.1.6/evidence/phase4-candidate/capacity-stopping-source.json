@@ -1,0 +1,64 @@
+{
+  "status": "source stable, no new profile/admission/Prepared.scratch changes implemented",
+  "head": "f35e0039ba8f11fb97feb608b2bc179fc0e9bc04",
+  "files": [
+    {
+      "path": "crates/layerfs-workspace/src/changes.rs",
+      "sha256": "76cedcce24f6e7dd747ac171b27f8520ba5485ec319f4d701526c28560523c8e",
+      "git_blob": "71ba383ce6ba2b38da6aa92384bb8afe5d761ca5"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/snapshot_candidate.rs",
+      "sha256": "861d30c4277befd57378e03baf8438b34299c6cf513350acc65403414a267d97",
+      "git_blob": "e8278bce1291758e7cc9a47c2a42673dc321aa07"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/candidate_capacity.rs",
+      "sha256": "20a823e404cd9be4a5c0752f91a081a90e9df33ec4022f2e927a58712a71dd6d",
+      "git_blob": "39c7fce52fceb1695866447d9b8b67da10a5aaa8"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects.rs",
+      "sha256": "5b358b8db06f29120b4b1a3d0271a28e4a0596ec86836dc3490609d42491210a",
+      "git_blob": "5a3fa3cc723b2835330444751d7e500949e7d2b1"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/spill.rs",
+      "sha256": "11979bf3a3d7a54bad9fe7f559204a17357ef6d9b30b67c51a23bbe84efc588c",
+      "git_blob": "8ad63c5d941204cc2f8998af6b619bab2f204a18"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/scratch.rs",
+      "sha256": "da9550cedcec81464fcbb12721938ca90bbe9c0ec04351adb55c46bbd71e5398",
+      "git_blob": "7562843738b133dfd08c88fa35f42ab59796edad"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/admission.rs",
+      "sha256": "c4e57ea99610521bc63d3cf159942a3ab8c6f30ffa36336a64fbd4084fc18e3f",
+      "git_blob": "c537d6f0f6f279a4eb7bfd5efb181a3a8d642aa3"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/whole_tests.rs",
+      "sha256": "e21e05de056426ec897b0cb4dd1ae29d204cffbad260c3878718825c836d79af",
+      "git_blob": "a3a1c33c405703c45bb089ae6f0e6f04809ec0dd"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/lib.rs",
+      "sha256": "e6705eb7a0f9ba873fd981ebf02336a4b8f137188f388935c4a20fb60dbbacec",
+      "git_blob": "f4e2d5256ebf99ec89dde6a4e409f571e0ce1492"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/correspondence.rs",
+      "sha256": "15e1d267950819bc5742e2520b5f604697339e72eae04f3d378ddb2936e8fe95",
+      "git_blob": "31e59bb092512d3c59ac7541b1e5b336dd89fbb3"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_budget.rs",
+      "sha256": "24ff979ebcdf639eac4fccfefa91eee2237782326c23c8fc878c43b0e19db1c3",
+      "git_blob": "ea4cb03c506db2f4fa0a3a3f1b143917eb54d792"
+    }
+  ],
+  "shared_files": "correspondence.rs and overlay_budget.rs contain coordinated edits; do not overwrite sibling/root changes",
+  "validated_fixture": "capacity-owner-attempt02.json",
+  "validated_provider": "scratch-integrated-attempt01.json"
+}

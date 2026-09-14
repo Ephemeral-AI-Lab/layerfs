@@ -159,6 +159,9 @@ impl HostOverlay {
                 let directory = self.directory(&m.view(), node)?;
                 let state_key = prefix(COOKIE_STATE, node);
                 let mut state = State::decode(m.index.get(&m.candidate.index, &state_key)?)?;
+                if after >= state.next {
+                    return Err(StoreError::InvalidInput("directory offset not issued"));
+                }
                 let mut rows = m.cookie_rows(node, after.max(2), PAGE)?;
                 if rows.len() < PAGE && !state.complete {
                     let imported = self.directory_page_in(m, node, state.after.as_deref())?;
@@ -218,6 +221,19 @@ mod tests {
             ResourcePolicy::default(),
         );
         let host = &fixture.host;
+        let before_invalid = host.snapshot().unwrap();
+        let index_before = host.index.stats().unwrap();
+        assert!(host
+            .directory_cookies(ROOT, i64::MAX as u64, false)
+            .is_err());
+        assert_eq!(
+            host.index.stats().unwrap().page_writes,
+            index_before.page_writes
+        );
+        assert_eq!(
+            host.snapshot().unwrap().root.installation_sequence,
+            before_invalid.root.installation_sequence
+        );
         // Acquiring a late lexical name first must not cause lazy enumeration
         // to skip the earlier canonical names or merge hardlink cookies.
         let alias = host.lookup(ROOT, b"n200").unwrap().node;

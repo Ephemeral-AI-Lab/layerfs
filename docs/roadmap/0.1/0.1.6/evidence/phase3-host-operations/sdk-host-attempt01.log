@@ -1,0 +1,13 @@
+
+running 4 tests
+test host_sdk::tests::preinstall_cancel_failure_retains_pin_and_failed_edit_changes_no_content ... SDK cancellation PASS: unknown BEGIN can cancel; failed edit keeps old bytes; unknown CANCEL retains pin until known result
+ok
+test host_sdk::tests::sdk_reader_capacity_is_reserved_before_begin_or_content_installation ... SDK admission PASS: existing reader/request capacity enforced before BEGIN, no payload change or leaked pin
+ok
+test host_sdk::tests::unknown_control_retries_pin_exact_target_and_never_reapply_installed_edit ... SDK retry PASS: lost BEGIN, pinned rename target, same-body retry, exact reader, lost APPLY after later write, no duplicate edit
+ok
+test host_sdk::tests::verified_detach_retires_undelivered_sdk_owners_but_preserves_other_snapshots ... SDK verified-detach PASS: unresolved BEGIN and undelivered APPLY owners retire; last pin releases orphan; independent snapshot retains exact bytes
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 164 filtered out; finished in 0.10s
+

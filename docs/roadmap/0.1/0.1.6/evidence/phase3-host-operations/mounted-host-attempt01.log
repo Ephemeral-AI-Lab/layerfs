@@ -1,0 +1,17 @@
+
+running 1 test
+MAPPED 2
+
+
+thread 'host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input' (12114090) panicked at crates/layerfs-workspace/src/host_runtime.rs:459:26:
+called `Result::unwrap()` on an `Err` value: InvalidPlacement
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input ... FAILED
+
+failures:
+
+failures:
+    host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.94s
+

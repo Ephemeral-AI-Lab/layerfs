@@ -1,0 +1,7 @@
+
+running 1 test
+test host_sdk::tests::unknown_control_retries_pin_exact_target_and_never_reapply_installed_edit ... SDK retry PASS: lost BEGIN, pinned rename target, same-body retry, exact reader, lost APPLY after later write, no duplicate edit
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 168 filtered out; finished in 0.04s
+

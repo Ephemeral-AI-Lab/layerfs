@@ -1,0 +1,17 @@
+
+running 3 tests
+test commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected ... 
+thread 'commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected' (12101390) panicked at crates/layerfs-workspace/src/commit_maintenance.rs:305:9:
+assertion failed: fixture.coordinator.attempt.lock().unwrap().is_some()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test commit_attempt::maintenance::tests::concurrent_c2_publication_keeps_new_pending_context_and_later_write ... ok
+test commit_attempt::maintenance::tests::maintenance_caps_nodes_and_covered_keys_without_bumping_live_sequence ... ok
+
+failures:
+
+failures:
+    commit_attempt::maintenance::tests::active_or_retained_attempt_is_skipped_and_foreign_host_is_rejected
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 165 filtered out; finished in 1.79s
+

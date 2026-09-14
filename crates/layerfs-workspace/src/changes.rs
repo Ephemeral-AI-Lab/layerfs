@@ -1,3 +1,12 @@
+#[path = "snapshot_candidate.rs"]
+mod snapshot_candidate;
+#[cfg(test)]
+pub(crate) use snapshot_candidate::tests::Fixture as SnapshotCandidateFixture;
+pub(crate) use snapshot_candidate::{
+    PreparedSnapshotCommit, PublishedCorrespondence, SnapshotCandidateDiagnostics,
+    SnapshotCandidateInputs,
+};
+
 use crate::cow_tree::{portable_metadata, Attr, Data, FileData, Kind, NodeId, Workspace, ROOT};
 use layerfs_content::file::content::{self, FileContentRoot};
 use layerfs_content::file::rope::{self, FileMutationBatch, ObjectStore, RopeCounters};
@@ -20,8 +29,8 @@ use layerfs_content::{CanonicalName, CanonicalPath};
 use layerfs_layerstack_store::{
     BuiltRoot, CoreReader, ObjectBuffer, Result, StoreError as StorageError, WorkspaceCommitPhase,
 };
+use layerfs_layerstack_store::{ScratchBudget, ScratchFile as File};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
 use std::time::Instant;
@@ -38,15 +47,16 @@ struct FinalEntry {
 }
 
 fn anonymous_journal(directory: &std::path::Path) -> Result<File> {
-    use std::os::unix::fs::OpenOptionsExt;
+    scoped_journal(directory, None)
+}
+fn scoped_journal(
+    directory: &std::path::Path,
+    budget: Option<&std::sync::Arc<ScratchBudget>>,
+) -> Result<File> {
     let path = directory.join(format!("candidate-{}", crate::WorkspaceId::new()));
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&path)?;
+    let (file, allocation) = File::create(&path, budget)?;
     std::fs::remove_file(path)?;
+    drop(allocation); // the unlinked file's descriptors now own its allocation
     Ok(file)
 }
 
@@ -61,6 +71,7 @@ struct ReferenceJournal<'a> {
     io_bytes: usize,
     writer: Option<BufWriter<File>>,
     count: u64,
+    scratch: Option<std::sync::Arc<ScratchBudget>>,
 }
 
 impl<'a> ReferenceJournal<'a> {
@@ -70,6 +81,7 @@ impl<'a> ReferenceJournal<'a> {
             io_bytes,
             writer: None,
             count: 0,
+            scratch: None,
         }
     }
 
@@ -80,7 +92,7 @@ impl<'a> ReferenceJournal<'a> {
         if self.writer.is_none() {
             self.writer = Some(BufWriter::with_capacity(
                 self.io_bytes,
-                anonymous_journal(self.directory)?,
+                scoped_journal(self.directory, self.scratch.as_ref())?,
             ));
         }
         let mut row = [0; 65];
@@ -2204,6 +2216,7 @@ struct FrontierInodes {
     // skips the tier scan entirely without changing which records are visible.
     filter: Vec<u64>,
     filter_bits: u64,
+    scratch: Option<std::sync::Arc<ScratchBudget>>,
     #[cfg(test)]
     stats: SpillStats,
 }
@@ -2261,6 +2274,7 @@ impl FrontierInodes {
             generation: 0,
             filter,
             filter_bits,
+            scratch: None,
             #[cfg(test)]
             stats: SpillStats::default(),
         }
@@ -2674,7 +2688,7 @@ impl FrontierInodes {
 
     fn write_batch(&self) -> Result<SpillRun> {
         let buffer = self.merge_buffer_bytes()?;
-        let file = anonymous_journal(&self.directory)?;
+        let file = scoped_journal(&self.directory, self.scratch.as_ref())?;
         let mut writer = BufWriter::with_capacity(buffer, file);
         let count = self.pending.len() as u64;
         spill_peak!(
@@ -2720,7 +2734,7 @@ impl FrontierInodes {
             .filter(|count| *count <= u64::MAX / RUN_ROW_BYTES as u64)
             .ok_or(StorageError::Integrity("frontier spill bytes"))?;
         let buffer = self.merge_buffer_bytes()?;
-        let file = anonymous_journal(&self.directory)?;
+        let file = scoped_journal(&self.directory, self.scratch.as_ref())?;
         // One-row reads use direct output writes under very small policies.
         let mut writer =
             BufWriter::with_capacity(if buffer == RUN_ROW_BYTES { 0 } else { buffer }, file);

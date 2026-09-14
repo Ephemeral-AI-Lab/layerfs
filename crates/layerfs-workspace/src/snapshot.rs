@@ -91,8 +91,18 @@ impl Snapshot {
         output: &mut [u8],
     ) -> Result<usize> {
         let tree = self.file_ranges(ranges, inode)?;
+        Self::read_tree(ranges, &tree, reader, offset, output)
+    }
+
+    pub(crate) fn read_tree(
+        ranges: &crate::overlay_ranges::Ranges,
+        tree: &crate::overlay_ranges::Tree,
+        reader: &layerfs_layerstack_store::SnapshotReader,
+        offset: u64,
+        output: &mut [u8],
+    ) -> Result<usize> {
         Ok(
-            ranges.read_range(&tree, output, offset, |root, bytes, offset| {
+            ranges.read_range(tree, output, offset, |root, bytes, offset| {
                 let len = bytes.len() as u64;
                 let mut target = bytes;
                 let counters = layerfs_content::file::content::read_range(

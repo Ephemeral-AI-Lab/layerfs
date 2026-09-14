@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "zigbuild",
+    "-p",
+    "layerfs-fuse",
+    "-p",
+    "layerfs-daemon",
+    "--features",
+    "layerfs-fuse/proxy",
+    "--bin",
+    "layerfs-fuse",
+    "--bin",
+    "layerfs-daemon",
+    "--target",
+    "aarch64-unknown-linux-musl"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 27.229409374995157,
+  "source_before": "mount-authority-linux-attempt01-source.json",
+  "source_changes": {},
+  "artifacts": {
+    "target/aarch64-unknown-linux-musl/debug/layerfs-fuse": "ed690820d4437aad700e4d7a2b1974206c2ccd69dc6e1c5deca7be6b77c23e2c",
+    "target/aarch64-unknown-linux-musl/debug/layerfs-daemon": "6fb684d896132ed841269496898b8bf79f6c5f085f4f4b0ee0312e1c10eb5614"
+  }
+}

@@ -1,0 +1,93 @@
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `abandon` is never used
+   --> crates/layerfs-workspace/src/commit_attempt.rs:262:19
+    |
+ 52 | impl CommitCoordinator {
+    | ---------------------- method in this implementation
+...
+262 |     pub(crate) fn abandon(&self) -> Result<()> {
+    |                   ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `ConstructionReservation` is never constructed
+   --> crates/layerfs-workspace/src/overlay_budget.rs:259:19
+    |
+259 | pub(crate) struct ConstructionReservation {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `reserve_construction`, `policy`, and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:318:19
+    |
+272 | impl Budget {
+    | ----------- methods in this implementation
+...
+318 |     pub(crate) fn reserve_construction(
+    |                   ^^^^^^^^^^^^^^^^^^^^
+...
+334 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+337 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: fields `reserved_bytes`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:35:9
+   |
+33 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+34 |     pub physical_bytes: u64,
+35 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+44 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+47 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+48 |     pub cleanup_pending: bool,
+49 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib test) generated 7 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.08s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-7a70d4db173d6a6f)
+
+running 1 test
+canonical substitution: captured=67108864B, live raw=1B, physical 68157440->4096B, cleanup steps=1039
+C2 after canonical substitution: SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 10, correspondence_fragments: 3, replacement_bytes: 1, reused_bytes: 67108863, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 1 }
+test host_canonicalize::tests::sixty_four_mib_capture_reclaims_to_one_later_write_block ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 152 filtered out; finished in 7.36s
+

@@ -1,0 +1,7 @@
+
+running 1 test
+SDK pre-reservation rejects overcapacity before mutation; activation owns exact SDKcandidate despite laterlivewrite and preserves failed tickets: PASS
+test host_operations::tests::sdk_reader_is_reserved_before_mutation_and_activates_exact_installed_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.02s
+

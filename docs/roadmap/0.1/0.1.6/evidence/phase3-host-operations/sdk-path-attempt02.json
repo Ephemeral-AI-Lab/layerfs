@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_sdk::tests::invalid_sdk_path_is_rejected_before_control_or_target_pin",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "binary_sha256": "cbabe2def5568d913f95c2b4f21506d490dd138f8c206894f946b8cd36971b06",
+  "source_seal": "docs/roadmap/0.1/0.1.6/evidence/phase3-host-operations/sdk-path-compile-attempt02-source.json",
+  "source_seal_sha256": "2f07974e1a0106b0a3fbb6d6611e57b6fa9037cc80d00dbe114b165c865db25d",
+  "started_unix": 1789346654.336836,
+  "returncode": 0,
+  "result": "PASS",
+  "reason": "Previously failing invalid-path check after existing CanonicalPath validator restored.",
+  "validity": "current for stated source and unchanged dependencies",
+  "performance": "N/A component correctness"
+}

@@ -1,0 +1,13 @@
+{
+  "result": "FAIL",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_canonicalize::tests::piece_cap_defers_partial_c1_backing_until_complete_c2_is_available",
+    "--exact",
+    "--nocapture"
+  ],
+  "source": "../phase3-host-operations/lease-ci-attempt02-source.json",
+  "binary_sha256": "13b51d2ce155a98d9362900306ddb1840e368f26998824b3f1c9cf49bb45c627",
+  "raw": "canonical-substitution-cap-attempt01.log",
+  "reason": "first exact reproduction from root successful shared compile; canonicalizer still has no piece-boundary preflight"
+}

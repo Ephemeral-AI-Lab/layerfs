@@ -1,0 +1,7 @@
+
+running 1 test
+held builder live write/read/pins; fresh-reopen C1=Xa C2=XY; C2 diagnostics=SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 10, correspondence_fragments: 3, replacement_bytes: 1, reused_bytes: 65535, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 0, scratch_peak_reserved_bytes: 1081344, scratch_peak_allocated_bytes: 12288, scratch_peak_reserved_files: 4, construction_memory_reservation: 100663296 }; C3 no-op PASS
+test commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.09s
+

@@ -1,0 +1,9 @@
+{
+  "binary": "target/debug/deps/layerfs_layerstack_store-1df70e3f7470c3b7",
+  "binary_sha256": "4167ebea9a14d455a3a7a937718bc0a1f6c989005eb6ecdcd747ea9c0d6674ac",
+  "source_manifest": "scratch-attempt02-source.json",
+  "result": "PASS",
+  "tests": 3,
+  "scope": "scratch provider only; no candidate budget integration claim",
+  "source_after_run": "Named inode identity validation added after run; next integration checkpoint must verify its affected named-open path."
+}

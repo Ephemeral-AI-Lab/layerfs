@@ -1,0 +1,69 @@
+{
+  "recorded_utc": "2026-09-13T22:58:57.348680+00:00",
+  "status": "component PASS4; public lifecycle scheduling, complete capacity boundaries, generic FUSE V1 and final campaign remain open",
+  "source": {
+    "crates/layerfs-workspace/src/host_canonicalize.rs": {
+      "sha256": "f1ff80d091ad0a87c0fcf3af9e10382918952c53c184b15a5ba7375fa1a8bf6a",
+      "git_blob": "f1cc6a4d5d3f1ed0ed056412edb81b06beaba9e5"
+    },
+    "crates/layerfs-workspace/src/overlay_ranges.rs": {
+      "sha256": "323d8e0570d56e7dfa4e491a642273cc3551d91ee9c33b2c87b4b788c87f4fce",
+      "git_blob": "86ebfaeddb8075b2509fc24a71bc82d423c03feb"
+    },
+    "crates/layerfs-workspace/src/correspondence.rs": {
+      "sha256": "b26f0680060842eb2966392cb2890e5951ca9a5e3fe5138271f7c9912810cfd8",
+      "git_blob": "185fcf79f943c5e1e80e066841e2aa22865b42ca"
+    }
+  },
+  "compiled_source_seals": [
+    "canonical-substitution-attempt01-source.json",
+    "canonical-substitution-64m-attempt01-source.json"
+  ],
+  "last_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "last_binary_sha256": "6f832cd31ec904ba78d71db044da71a3fae7c088c5f215854821190e285a4a96",
+  "api": "HostOverlay::canonicalize_file(node,&published Description,spool)->Result<bool>; true means this published comparison processed, false means leased-root installation lost to a newer live root and must retry",
+  "mechanism": [
+    "Caller supplies verified completed published context; inode and authenticated canonical content length validated. Published branch/stage records retain objects under existing append-only canonical Store ownership; SnapshotReader holds StoreDb.",
+    "Acquire current immutable root; build current bounded metadata Description; use existing correspondence::plan; seek raw cursor only over proven Base spans and replace only Payload/Inline slices. No file-content copying, hashing or comparison and no copied snapshot tree.",
+    "Preserve live inode attributes/revision, origin IDs and coordinates, zeros, existing Base ranges and unmatched later writes. Proven Base conversion clears extension frontier and current raw SDK-inline charge in line with existing checkpoint::finish_checkpoint/file_edit current inline accounting.",
+    "Prepare outside mutation FIFO; installation compares exact leased source root. Stale/failed preparation keeps later writes and original raw owners. No Commit freeze, remount, checkpoint/reset or public kernel-visibility claim.",
+    "Existing Overlay Budget reserves Prepare/range working set, exact existing PLAN_BUFFER_BYTES,2 scratchFDs and bounded journal scratch; original roots retain all raw backing until their replacements/readers release."
+  ],
+  "attempts": [
+    {
+      "identity": "256KiB C1+later1B physical replacement and cleanup",
+      "result": "PASS1",
+      "source": "canonical-substitution-attempt01-source.json",
+      "raw": "canonical-substitution-attempt01.log",
+      "result_receipt": "canonical-substitution-attempt01-result.json"
+    },
+    {
+      "identity": "unrelated live write between prepare/install; false then successful retry",
+      "result": "PASS1",
+      "source": "canonical-substitution-attempt01-source.json",
+      "raw": "canonical-substitution-stale-attempt01.log",
+      "result_receipt": "canonical-substitution-stale-attempt01.json"
+    },
+    {
+      "identity": "SDK inline64\u21921 onlyforconverted current bytes; retained64B snapshot; invalid canonical length rejected atomically",
+      "result": "PASS1",
+      "source": "canonical-substitution-attempt01-source.json",
+      "raw": "canonical-substitution-inline-attempt01.log",
+      "result_receipt": "canonical-substitution-inline-attempt01.json"
+    },
+    {
+      "identity": "64MiB captured payload\u2192one later-write block; actualC2 afterphysicalsubstitution",
+      "result": "PASS1",
+      "source": "canonical-substitution-64m-attempt01-source.json",
+      "raw": "canonical-substitution-64m-attempt01.log",
+      "result_receipt": "canonical-substitution-64m-attempt01-result.json"
+    }
+  ],
+  "validity": [
+    "No production substitution/accessor code changed after the first3 passes. Only test helper return and previously-unrun64MiB case extended to continue through actualC2; first3 passes retained, not repeated.",
+    "Existing Range split/read/ownership algorithms unchanged; only raw-cursor visibility plus new canonical_slice constructor. Existing Description planner algorithm unchanged; same buffer formula extracted to const for admission. Earlier relevant ownership and planner passes remain compatible.",
+    "No original product test failed in this subtask; no failure is fabricated."
+  ],
+  "remaining_capacity_edge": "At existing8193-piece limit, converting part of a coalesced payload piece can need an extra range node; current limits safely reject with source unchanged. Root notified for explicit boundary proof/physical fragmentation handling; no cap raised or semantics waived.",
+  "environment": "macOS arm64; Rust1.96.0 debug component tests, no #122 or other benchmark execution"
+}

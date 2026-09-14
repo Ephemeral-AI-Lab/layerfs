@@ -1,0 +1,79 @@
+{
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "a10d8640969fddb7c3492303e280f11e21894dc308052eaec7cf9cd06289dd95",
+  "source_manifest": "../phase2-components/deleted-directory-attempt01-source.json",
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "tests": [
+    {
+      "identity": "changes::snapshot_candidate::tests::zero_gap_deletion_reuses_large_zero_span_and_insertion_reads_only_new_byte",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "changes::snapshot_candidate::tests::zero_gap_deletion_reuses_large_zero_span_and_insertion_reads_only_new_byte",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "result": "PASS",
+      "returncode": 0,
+      "raw": "candidate-zero-attempt01.log",
+      "reason": "New explicit-zero shared-engine adapter proof"
+    },
+    {
+      "identity": "changes::tests::file_result_journals_restore_reverse_completion_and_reject_missing_slots",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "changes::tests::file_result_journals_restore_reverse_completion_and_reject_missing_slots",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "result": "PASS",
+      "returncode": 0,
+      "raw": "legacy-results-attempt01.log",
+      "reason": "Shared FileResultWriter write_result extraction changed exercised result writing"
+    },
+    {
+      "identity": "changes::tests::removed_small_candidates_preserve_identity_history_and_bounds",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "changes::tests::removed_small_candidates_preserve_identity_history_and_bounds",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "result": "PASS",
+      "returncode": 0,
+      "raw": "legacy-predecessor-attempt01.log",
+      "reason": "Shared RemovedSmallDiscovery reader/table parameter adaptation"
+    },
+    {
+      "identity": "changes::tests::paged_release_keeps_prior_moves_and_repeated_unseen_aliases",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "changes::tests::paged_release_keeps_prior_moves_and_repeated_unseen_aliases",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "result": "PASS",
+      "returncode": 0,
+      "raw": "legacy-release-attempt01.log",
+      "reason": "Shared release observer/no-op legacy wrapper changed deletion caller"
+    },
+    {
+      "identity": "changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2",
+      "command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+        "changes::snapshot_candidate::tests::published_new_inode_identity_binding_suffix_and_pending_set_survive_c2",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "result": "PASS",
+      "returncode": 0,
+      "raw": "candidate-deletion-attempt04.log",
+      "reason": "Agent believed root compile included latest cleanup source; root corrected that custody assumption after process completed.",
+      "validity": "INVALID for new cleanup verification: ran old a10d binary; latest directory-removal queue code was written after that compile. This unnecessary old-source passing rerun is retained and must not replace the pending affected check on the next sealed cleanup binary."
+    }
+  ]
+}

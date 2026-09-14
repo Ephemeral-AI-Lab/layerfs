@@ -63,8 +63,20 @@ pub type PortFuture<'a, T> =
 #[cfg(feature = "live")]
 #[derive(Default)]
 pub struct KernelReferences {
-    pub(crate) owner: Option<crate::live_owner::LiveOwner>,
+    pub(crate) owner: Option<KernelOwner>,
     pub(crate) nodes: Vec<NodeId>,
+}
+
+#[cfg(feature = "live")]
+pub(crate) enum KernelOwner {
+    Live(crate::live_owner::LiveOwner),
+    Host(crate::host_client::ReferenceCleanup),
+}
+#[cfg(feature = "live")]
+impl From<crate::live_owner::LiveOwner> for KernelOwner {
+    fn from(owner: crate::live_owner::LiveOwner) -> Self {
+        Self::Live(owner)
+    }
 }
 
 #[cfg(feature = "live")]
@@ -74,9 +86,15 @@ impl KernelReferences {
         if emitted > self.nodes.len() {
             return Err(PortError::Invalid);
         }
+        if let Some(KernelOwner::Host(cleanup)) = &mut self.owner {
+            // The one reserved cleanup job is dispatched by submitted/Drop.
+            // No await/cancellation point separates this update from the reply.
+            cleanup.emitted = emitted;
+            return Ok(());
+        }
         while self.nodes.len() > emitted {
             let node = self.nodes.pop().unwrap();
-            if let Some(owner) = &self.owner {
+            if let Some(KernelOwner::Live(owner)) = &self.owner {
                 owner.kernel_forget(node, 1)?;
             }
         }
@@ -85,6 +103,10 @@ impl KernelReferences {
 
     /// The reply was attempted; FORGET or drained detach now owns cleanup.
     pub fn submitted(mut self) {
+        if let Some(KernelOwner::Host(cleanup)) = self.owner.take() {
+            cleanup.release(std::mem::take(&mut self.nodes), true);
+            return;
+        }
         self.nodes.clear();
         self.owner.take();
     }
@@ -93,8 +115,15 @@ impl KernelReferences {
 #[cfg(feature = "live")]
 impl Drop for KernelReferences {
     fn drop(&mut self) {
+        match self.owner.take() {
+            Some(KernelOwner::Host(cleanup)) => {
+                cleanup.release(std::mem::take(&mut self.nodes), false);
+                return;
+            }
+            other => self.owner = other,
+        }
         while let Some(node) = self.nodes.pop() {
-            if let Some(owner) = &self.owner {
+            if let Some(KernelOwner::Live(owner)) = &self.owner {
                 let _ = owner.kernel_forget(node, 1);
             }
         }
@@ -189,6 +218,26 @@ pub trait FilesystemPort: Send + Sync {
     #[cfg(feature = "live")]
     fn lookup_async<'a>(&'a self, parent: NodeId, name: &'a [u8]) -> PortFuture<'a, Attr> {
         Box::pin(async move { self.lookup(parent, name) })
+    }
+    #[cfg(feature = "live")]
+    fn attr_async(&self, node: NodeId) -> PortFuture<'_, Attr> {
+        Box::pin(async move { self.attr(node) })
+    }
+    #[cfg(feature = "live")]
+    fn readlink_async(&self, node: NodeId) -> PortFuture<'_, Vec<u8>> {
+        Box::pin(async move { self.readlink(node) })
+    }
+    #[cfg(feature = "live")]
+    fn unpin_async(&self, node: NodeId, writable: bool) -> PortFuture<'_, ()> {
+        Box::pin(async move { self.unpin(node, writable) })
+    }
+    #[cfg(feature = "live")]
+    fn pin_directory_async(&self, node: NodeId) -> PortFuture<'_, ()> {
+        Box::pin(async move { self.pin_directory(node) })
+    }
+    #[cfg(feature = "live")]
+    fn unpin_directory_async(&self, node: NodeId) -> PortFuture<'_, ()> {
+        Box::pin(async move { self.unpin_directory(node) })
     }
     #[cfg(feature = "live")]
     fn create_file_async<'a>(

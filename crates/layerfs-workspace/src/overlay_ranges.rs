@@ -69,7 +69,8 @@ pub(crate) struct Piece {
     // A logical origin may extend only on its original never-rewound source.
     // Equivalent canonical substitution never grants a new extension frontier.
     extend_source: Option<u64>,
-    // Public SDK inline accounting survives transfer to disk/canonical backing.
+    // SDK inline accounting survives private disk transfer until an exact,
+    // admitted canonical backing substitution releases the current inline bytes.
     inline_charge: bool,
 }
 pub(crate) struct OwnedPiece {
@@ -150,6 +151,32 @@ impl OwnedPiece {
     }
     pub(crate) fn descriptor(&self, offset: u64) -> Descriptor {
         self.piece.descriptor(offset)
+    }
+
+    /// Caller proves byte equivalence through published origin correspondence.
+    /// Preserve occurrence coordinates; canonical backing owns no raw inline
+    /// allocation and cannot extend the original mutable source frontier.
+    pub(crate) fn canonical_slice(
+        piece: Piece,
+        local: u64,
+        length: u64,
+        root: ObjectId,
+        offset: u64,
+    ) -> io::Result<Self> {
+        if !matches!(piece.source, Source::Payload { .. } | Source::Inline { .. })
+            || length == 0
+            || add(local, length)? > piece.length
+        {
+            return Err(invalid("canonical replacement slice"));
+        }
+        Self::plain(Piece {
+            source: Source::Base { root, offset },
+            length,
+            origin: piece.origin,
+            origin_offset: add(piece.origin_offset, local)?,
+            extend_source: None,
+            inline_charge: false,
+        })
     }
 }
 impl Piece {
@@ -408,6 +435,9 @@ impl Ranges {
     }
     pub(crate) fn empty(&self) -> Tree {
         Tree::default()
+    }
+    pub(crate) fn max_pieces(&self) -> u64 {
+        self.0.limits.max_pieces
     }
     pub(crate) fn restore(&self, root: Option<Root>) -> io::Result<Tree> {
         match root {
@@ -936,7 +966,7 @@ impl Cursor {
         }
         Ok(())
     }
-    fn next_raw(&mut self) -> io::Result<Option<(u64, Piece, u64, u64)>> {
+    pub(crate) fn next_raw(&mut self) -> io::Result<Option<(u64, Piece, u64, u64)>> {
         if self.done {
             return Ok(None);
         }

@@ -2,20 +2,25 @@
 //! backing substitution; this plan is never installed into live file contents.
 use crate::overlay_index::{Index, Root};
 use layerfs_content::ObjectId;
+use layerfs_layerstack_store::{ScratchBudget, ScratchFile as File};
 use layerfs_workspace_core::NodeId;
 use std::collections::VecDeque;
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::io::{self, BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::ops::Bound;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 const BATCH: usize = 64;
 const JOURNAL_BUFFER: usize = 16 * 1024;
 const DESCRIPTOR_BYTES: usize = 49;
 const PLAN_BYTES: usize = 25;
 const ANCHOR_BYTES: usize = 24;
+pub(crate) const PLAN_BUFFER_BYTES: usize = 2 * JOURNAL_BUFFER
+    + 3 * BATCH * (DESCRIPTOR_BYTES + 32 + 2 * std::mem::size_of::<Vec<u8>>())
+    + 4 * DESCRIPTOR_BYTES;
 
 fn invalid(message: &'static str) -> io::Error {
     io::Error::new(ErrorKind::InvalidData, message)
@@ -64,6 +69,9 @@ impl OriginSequence {
             workspace,
             next: AtomicU64::new(1),
         }
+    }
+    pub(crate) fn workspace_id(&self) -> [u8; 16] {
+        self.workspace
     }
     pub(crate) fn allocate(&self) -> io::Result<OriginId> {
         let serial = self
@@ -470,7 +478,7 @@ impl Anchor {
         }
     }
 }
-fn temporary(directory: &Path) -> io::Result<File> {
+fn temporary(directory: &Path, scratch: Option<&Arc<ScratchBudget>>) -> io::Result<File> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     loop {
         let path = directory.join(format!(
@@ -478,15 +486,10 @@ fn temporary(directory: &Path) -> io::Result<File> {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        match OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-        {
-            Ok(file) => {
+        match File::create(&path, scratch) {
+            Ok((file, allocation)) => {
                 fs::remove_file(path)?;
+                drop(allocation);
                 return Ok(file);
             }
             Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
@@ -595,6 +598,15 @@ pub(crate) fn plan(
     directory: &Path,
     journal_limit: u64,
 ) -> io::Result<Plan> {
+    plan_scoped(old, current, directory, journal_limit, None)
+}
+pub(crate) fn plan_scoped(
+    old: &Description,
+    current: &Description,
+    directory: &Path,
+    journal_limit: u64,
+    scratch: Option<&Arc<ScratchBudget>>,
+) -> io::Result<Plan> {
     if old.inode != current.inode {
         return Err(invalid("correspondence inode mismatch"));
     }
@@ -602,12 +614,10 @@ pub(crate) fn plan(
         .canonical_root
         .ok_or_else(|| invalid("missing canonical predecessor root"))?;
     let mut counters = Counters {
-        buffer_bound_bytes: 2 * JOURNAL_BUFFER
-            + 3 * BATCH * (DESCRIPTOR_BYTES + 32 + 2 * std::mem::size_of::<Vec<u8>>())
-            + 4 * DESCRIPTOR_BYTES,
+        buffer_bound_bytes: PLAN_BUFFER_BYTES,
         ..Counters::default()
     };
-    let mut anchors = BufWriter::with_capacity(JOURNAL_BUFFER, temporary(directory)?);
+    let mut anchors = BufWriter::with_capacity(JOURNAL_BUFFER, temporary(directory, scratch)?);
     let mut cursor = current.cursor();
     let mut old_end = 0_u64;
     while let Some(descriptor) = cursor.next(&mut counters.new_descriptor_visits)? {
@@ -683,7 +693,7 @@ pub(crate) fn plan(
     anchor_file.seek(SeekFrom::Start(0))?;
     let mut anchors = BufReader::with_capacity(JOURNAL_BUFFER, anchor_file);
     let mut output = Emitter {
-        writer: BufWriter::with_capacity(JOURNAL_BUFFER, temporary(directory)?),
+        writer: BufWriter::with_capacity(JOURNAL_BUFFER, temporary(directory, scratch)?),
         pending: None,
         position: 0,
         old_end: 0,

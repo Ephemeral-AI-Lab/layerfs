@@ -9,6 +9,121 @@ pub const VERSION: u8 = 1;
 pub const MAX_IO: usize = 1024 * 1024;
 pub const MAX_PAGE: usize = 128;
 pub const MAX_REPLAY_REPLY: usize = 64 * 1024;
+pub const SDK_COHERENCE_BEGIN: u8 = 45;
+pub const SDK_COHERENCE_APPLY: u8 = 46;
+pub const SDK_COHERENCE_CANCEL: u8 = 47;
+// Derived from the existing control-frame bound, not an operation-count gate.
+pub const MAX_EDIT_RANGES: usize = (crate::live_wire::MAX_FRAME - 38) / 16;
+
+#[derive(Clone, Copy)]
+pub enum Coherence<'a> {
+    Begin {
+        scope: u64,
+        node: NodeId,
+    },
+    Apply {
+        scope: u64,
+        lease: u64,
+        node: NodeId,
+        size: u64,
+        ranges: &'a [u8],
+    },
+    Cancel {
+        scope: u64,
+    },
+}
+pub fn decode_coherence(bytes: &[u8]) -> io::Result<Coherence<'_>> {
+    if bytes.len() > crate::live_wire::MAX_FRAME {
+        return Err(invalid());
+    }
+    let mut input = Input(bytes);
+    let opcode = input.byte()?;
+    if input.byte()? != VERSION {
+        return Err(invalid());
+    }
+    let scope = input.u64()?;
+    if scope == 0 {
+        return Err(invalid());
+    }
+    let request = match opcode {
+        SDK_COHERENCE_BEGIN => Coherence::Begin {
+            scope,
+            node: node(&mut input)?,
+        },
+        SDK_COHERENCE_CANCEL => Coherence::Cancel { scope },
+        SDK_COHERENCE_APPLY => {
+            let lease = input.u64()?;
+            let node = node(&mut input)?;
+            let size = input.u64()?;
+            if lease == 0 || size > layerfs_workspace_core::file_edit::MAX_RESULT_BYTES {
+                return Err(invalid());
+            }
+            let ranges = input.bytes()?;
+            if ranges.len() % 16 != 0 || ranges.len() / 16 > MAX_EDIT_RANGES {
+                return Err(invalid());
+            }
+            let mut previous = None;
+            for range in coherence_ranges(ranges) {
+                if range.start >= range.end || previous.is_some_and(|end| end >= range.start) {
+                    return Err(invalid());
+                }
+                previous = Some(range.end);
+            }
+            Coherence::Apply {
+                scope,
+                lease,
+                node,
+                size,
+                ranges,
+            }
+        }
+        _ => return Err(invalid()),
+    };
+    input.done()?;
+    Ok(request)
+}
+pub fn coherence_ranges(bytes: &[u8]) -> impl Iterator<Item = std::ops::Range<u64>> + '_ {
+    bytes.chunks_exact(16).map(|range| {
+        u64::from_be_bytes(range[..8].try_into().unwrap())
+            ..u64::from_be_bytes(range[8..].try_into().unwrap())
+    })
+}
+pub fn coherence_begin(scope: u64, node: NodeId) -> io::Result<Vec<u8>> {
+    let mut out = vec![SDK_COHERENCE_BEGIN, VERSION];
+    u64_out(&mut out, scope);
+    u64_out(&mut out, node.0);
+    decode_coherence(&out)?;
+    Ok(out)
+}
+pub fn coherence_cancel(scope: u64) -> io::Result<Vec<u8>> {
+    let mut out = vec![SDK_COHERENCE_CANCEL, VERSION];
+    u64_out(&mut out, scope);
+    decode_coherence(&out)?;
+    Ok(out)
+}
+pub fn coherence_apply(
+    scope: u64,
+    lease: u64,
+    node: NodeId,
+    size: u64,
+    ranges: &[std::ops::Range<u64>],
+) -> io::Result<Vec<u8>> {
+    if ranges.len() > MAX_EDIT_RANGES {
+        return Err(invalid());
+    }
+    let mut out = Vec::with_capacity(38 + ranges.len() * 16);
+    out.extend_from_slice(&[SDK_COHERENCE_APPLY, VERSION]);
+    for value in [scope, lease, node.0, size] {
+        u64_out(&mut out, value);
+    }
+    out.extend_from_slice(&((ranges.len() * 16) as u32).to_be_bytes());
+    for range in ranges {
+        u64_out(&mut out, range.start);
+        u64_out(&mut out, range.end);
+    }
+    decode_coherence(&out)?;
+    Ok(out)
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Operation<'a> {
@@ -105,6 +220,14 @@ pub enum Operation<'a> {
     ForgetBatch {
         entries: &'a [u8],
     },
+    ReadLease {
+        lease: u64,
+        offset: u64,
+        size: u32,
+    },
+    ReleaseLease {
+        lease: u64,
+    },
 }
 
 impl Operation<'_> {
@@ -136,13 +259,14 @@ impl Operation<'_> {
             Self::Attr(_)
                 | Self::Readlink(_)
                 | Self::Read { .. }
+                | Self::ReadLease { .. }
                 | Self::Lookup { kernel: false, .. }
                 | Self::Directory { kernel: false, .. }
         )
     }
     pub fn response_bound(self) -> usize {
         match self {
-            Self::Read { size, .. } => size as usize + 10,
+            Self::Read { size, .. } | Self::ReadLease { size, .. } => size as usize + 10,
             Self::Readlink(_) => 4096 + 10,
             Self::Directory { .. } => MAX_REPLAY_REPLY,
             _ => 64,
@@ -323,6 +447,26 @@ pub fn decode_request(bytes: &[u8]) -> io::Result<Request<'_>> {
             let entries = input.bytes()?;
             validate_forget_batch(entries)?;
             Operation::ForgetBatch { entries }
+        }
+        22 => {
+            let lease = input.u64()?;
+            let offset = input.u64()?;
+            let size = input.u32()?;
+            if lease == 0 || size as usize > MAX_IO || offset.checked_add(size as u64).is_none() {
+                return Err(invalid());
+            }
+            Operation::ReadLease {
+                lease,
+                offset,
+                size,
+            }
+        }
+        23 => {
+            let lease = input.u64()?;
+            if lease == 0 {
+                return Err(invalid());
+            }
+            Operation::ReleaseLease { lease }
         }
         _ => return Err(invalid()),
     };
@@ -526,6 +670,20 @@ pub fn encode_request(request: Request<'_>) -> io::Result<Vec<u8>> {
         Operation::ForgetBatch { entries } => {
             out.push(21);
             bytes!(entries);
+        }
+        Operation::ReadLease {
+            lease,
+            offset,
+            size,
+        } => {
+            out.push(22);
+            u64_out(&mut out, lease);
+            u64_out(&mut out, offset);
+            out.extend_from_slice(&size.to_be_bytes());
+        }
+        Operation::ReleaseLease { lease } => {
+            out.push(23);
+            u64_out(&mut out, lease);
         }
     }
     decode_request(&out)?;

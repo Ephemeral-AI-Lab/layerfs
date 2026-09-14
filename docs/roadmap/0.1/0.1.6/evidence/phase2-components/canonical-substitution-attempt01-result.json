@@ -1,0 +1,11 @@
+{
+  "result": "PASS1",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "8e975629bb1e46065b59cb489446ec03e09ecf0fd80b501e1425374725bbbe23",
+  "source": "canonical-substitution-attempt01-source.json",
+  "raw": "canonical-substitution-attempt01.log",
+  "fixture_bytes": 262144,
+  "retained_physical_before": 266240,
+  "physical_after": 4096,
+  "cleanup_steps": 19
+}

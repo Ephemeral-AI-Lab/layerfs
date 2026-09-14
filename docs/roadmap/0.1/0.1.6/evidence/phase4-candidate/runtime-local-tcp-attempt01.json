@@ -1,0 +1,16 @@
+{
+  "identity": "host_runtime::tests::local_and_tcp_runtime_share_live_authority_and_published_coverage",
+  "source": "capacity-compile-attempt03-source.json",
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_runtime::tests::local_and_tcp_runtime_share_live_authority_and_published_coverage",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "result": "PASS",
+  "wall_seconds": 0.1313127080211416,
+  "raw": "runtime-local-tcp-attempt01.log",
+  "invalidation": "New combined host runtime/local and authenticated TCP ownership, explicit snapshot construction and published coverage path."
+}

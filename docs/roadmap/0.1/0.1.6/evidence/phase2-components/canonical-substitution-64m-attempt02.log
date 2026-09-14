@@ -1,0 +1,8 @@
+
+running 1 test
+canonical substitution: captured=67108864B, live raw=1B, physical 68157440->4096B, cleanup steps=1039
+C2 after canonical substitution: SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 10, correspondence_fragments: 3, replacement_bytes: 1, reused_bytes: 67108863, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 1 }
+test host_canonicalize::tests::sixty_four_mib_capture_reclaims_to_one_later_write_block ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 154 filtered out; finished in 7.35s
+

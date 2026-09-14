@@ -1,0 +1,68 @@
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0282]: type annotations needed
+   --> crates/layerfs-workspace/src/snapshot_candidate.rs:478:82
+    |
+477 |                         .map(Ok)
+    |                              -- type must be known at this point
+478 |                         .unwrap_or_else(|| empty_directory(&mut objects).map_err(Into::into))?;
+    |                                                                                  ^^^^^^^^^^ cannot infer type of the type parameter `T` declared on the trait `Into`
+    |
+help: consider specifying the generic argument
+    |
+478 |                         .unwrap_or_else(|| empty_directory(&mut objects).map_err(Into::<T>::into))?;
+    |                                                                                      +++++
+
+error[E0283]: type annotations needed
+   --> crates/layerfs-workspace/src/snapshot_candidate.rs:478:82
+    |
+478 |                         .unwrap_or_else(|| empty_directory(&mut objects).map_err(Into::into))?;
+    |                                                                                  ^^^^^^^^^^ cannot infer type of the type parameter `T` declared on the trait `Into`
+    |
+    = note: multiple `impl`s satisfying `_: From<CoreError>` found in the following crates: `layerfs_layerstack_store`, `layerfs_materialization`, `layerfs_workspace_core`:
+            - impl From<CoreError> for layerfs_layerstack_store::StoreError;
+            - impl From<CoreError> for layerfs_materialization::MaterializationError;
+            - impl From<CoreError> for layerfs_workspace_core::Error;
+    = note: required for `CoreError` to implement `Into<_>`
+help: consider specifying the generic argument
+    |
+478 |                         .unwrap_or_else(|| empty_directory(&mut objects).map_err(Into::<T>::into))?;
+    |                                                                                      +++++
+
+error[E0283]: type annotations needed
+   --> crates/layerfs-workspace/src/snapshot_candidate.rs:478:82
+    |
+478 |                         .unwrap_or_else(|| empty_directory(&mut objects).map_err(Into::into))?;
+    |                                                                                  ^^^^^^^^^^  - type must be known at this point
+    |                                                                                  |
+    |                                                                                  cannot infer type of the type parameter `T` declared on the trait `Into`
+    |
+    = note: multiple `impl`s satisfying `layerfs_layerstack_store::StoreError: From<_>` found in the following crates: `core`, `layerfs_layerstack_store`:
+            - impl From<CoreError> for layerfs_layerstack_store::StoreError;
+            - impl From<rusqlite::error::Error> for layerfs_layerstack_store::StoreError;
+            - impl From<std::io::Error> for layerfs_layerstack_store::StoreError;
+            - impl<T> From<T> for T;
+help: consider specifying the generic argument
+    |
+478 |                         .unwrap_or_else(|| empty_directory(&mut objects).map_err(Into::<T>::into))?;
+    |                                                                                      +++++
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0282, E0283.
+For more information about an error, try `rustc --explain E0282`.
+warning: `layerfs-workspace` (lib test) generated 2 warnings
+error: could not compile `layerfs-workspace` (lib test) due to 3 previous errors; 2 warnings emitted

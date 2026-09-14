@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--workspace",
+    "--locked"
+  ],
+  "toolchain": "1.85.1",
+  "exit_code": 0,
+  "wall_seconds": 19.207533666980453,
+  "raw": "workspace-build.log",
+  "source": "source-before.json"
+}

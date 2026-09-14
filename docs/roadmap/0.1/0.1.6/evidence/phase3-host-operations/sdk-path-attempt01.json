@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-79f458ce1bbf884f",
+    "host_sdk::tests::invalid_sdk_path_is_rejected_before_control_or_target_pin",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "binary_sha256": "28cdea82e064e75635eceb4be3b0e89ee8fa9f8288c5167f3dabb788075811d9",
+  "source_seal": "docs/roadmap/0.1/0.1.6/evidence/phase3-host-operations/sdk-shutdown-compile-attempt01-source.json",
+  "source_seal_sha256": "1677a26973eacae1dce1ff2f34bc8b8a2b9ebb18447f9535b57aa6c032f3c08c",
+  "started_unix": 1789346353.6026082,
+  "elapsed_seconds": 2.277341842651367,
+  "returncode": 101,
+  "result": "FAIL",
+  "reason": "New exact input-contract reproducer against missing whole-path validator; expected failure.",
+  "validity": "current for stated source and unchanged dependencies",
+  "performance": "N/A component correctness; no benchmark or #122 scenario"
+}

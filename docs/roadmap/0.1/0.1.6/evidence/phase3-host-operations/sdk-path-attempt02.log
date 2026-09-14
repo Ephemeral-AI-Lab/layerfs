@@ -1,0 +1,6 @@
+
+running 1 test
+test host_sdk::tests::invalid_sdk_path_is_rejected_before_control_or_target_pin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 168 filtered out; finished in 0.02s
+

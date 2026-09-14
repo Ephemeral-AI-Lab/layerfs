@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
+mod candidate_capacity;
 mod capture;
 mod changes;
+mod commit_attempt;
 mod container;
 mod correspondence;
 mod daemon;
@@ -10,9 +12,12 @@ mod docker_engine;
 mod execution;
 pub(crate) use layerfs_workspace_core::file_edit;
 mod file_io;
+mod host_canonicalize;
 mod host_directories;
 mod host_operations;
 mod host_overlay;
+mod host_runtime;
+mod host_sdk;
 mod lifecycle;
 mod live_backing;
 

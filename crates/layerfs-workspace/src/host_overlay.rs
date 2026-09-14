@@ -584,10 +584,42 @@ impl HostOverlay {
         node: NodeId,
         edits: &[(u64, u64, crate::WorkspaceFileReplacement)],
     ) -> Result<()> {
-        if edits.is_empty() {
+        self.edit_many_snapshot(node, edits).map(drop)
+    }
+
+    pub(crate) fn edit_many_snapshot(
+        &self,
+        node: NodeId,
+        edits: &[(u64, u64, crate::WorkspaceFileReplacement)],
+    ) -> Result<Snapshot> {
+        self.edit_snapshot(node, || {
+            edits
+                .iter()
+                .map(|(start, delete, replacement)| (*start, *delete, replacement))
+        })
+    }
+
+    /// Borrow public SDK inputs directly; retries do not copy their payloads.
+    pub(crate) fn edit_file_snapshot(
+        &self,
+        node: NodeId,
+        edits: &[crate::WorkspaceFileRangeEdit],
+    ) -> Result<Snapshot> {
+        self.edit_snapshot(node, || {
+            edits
+                .iter()
+                .map(|edit| (edit.start, edit.delete_len, &edit.replacement))
+        })
+    }
+
+    fn edit_snapshot<'a, I>(&self, node: NodeId, edits: impl Fn() -> I) -> Result<Snapshot>
+    where
+        I: Iterator<Item = (u64, u64, &'a crate::WorkspaceFileReplacement)>,
+    {
+        if edits().next().is_none() {
             return Err(StoreError::InvalidInput("workspace edit batch"));
         }
-        for (_, _, replacement) in edits {
+        for (_, _, replacement) in edits() {
             if matches!(replacement, crate::WorkspaceFileReplacement::Inline(bytes) if bytes.len() > layerfs_workspace_core::file_edit::MAX_INLINE_PER_EDIT)
             {
                 return Err(StoreError::InvalidInput("workspace inline edit limit"));
@@ -596,7 +628,7 @@ impl HostOverlay {
         self.mutate(|m| {
             let _permit = self.budget.enter(Operation::Write, Charge::default())?;
             let (mut record, mut tree) = self.tree(&m.view(), node)?;
-            for (start, delete, replacement) in edits {
+            for (start, delete, replacement) in edits() {
                 let replacement = match replacement {
                     crate::WorkspaceFileReplacement::Inline(bytes) => self.bytes_tree(bytes)?,
                     crate::WorkspaceFileReplacement::Zero(0) => self.ranges.empty(),
@@ -604,10 +636,14 @@ impl HostOverlay {
                         .ranges
                         .append(&self.ranges.empty(), OwnedPiece::zero(*length)?)?,
                 };
-                tree = self.replace_tree(&tree, *start, *delete, &replacement)?;
+                tree = self.replace_tree(&tree, start, delete, &replacement)?;
             }
             record.attr.size = tree.len();
-            self.bump(m, record, tree.root())
+            self.bump(m, record, tree.root())?;
+            // Every accepted nonempty edit batch installs an inode revision,
+            // including an empty replacement. Its logical generation therefore
+            // matches this candidate; failed retries replace/drop this output.
+            Ok(m.view())
         })
     }
     pub(crate) fn truncate(&self, node: NodeId, size: u64) -> Result<()> {
@@ -806,6 +842,32 @@ impl HostOverlay {
                 self.touch_parent(m, new_parent)?;
             }
             Ok(())
+        })
+    }
+    /// Resolve and pin one SDK target in the same root installation. The SDK
+    /// coordinator validates the complete canonical path before entering here.
+    pub(crate) fn pin_path(&self, path: &str) -> Result<NodeId> {
+        self.mutate(|m| {
+            let mut node = ROOT;
+            for name in path
+                .as_bytes()
+                .split(|byte| *byte == b'/')
+                .filter(|name| !name.is_empty())
+            {
+                node = self
+                    .resolve_name(m, node, name)?
+                    .ok_or(StoreError::NotFound("workspace edit path"))?;
+            }
+            let (mut record, root) = self.record(&m.view(), node)?;
+            if record.attr.kind != Kind::File {
+                return Err(StoreError::InvalidInput("workspace edit file"));
+            }
+            record.pins = record
+                .pins
+                .checked_add(1)
+                .ok_or(StoreError::Integrity("node pin"))?;
+            m.cache_inode_record(record, root.as_ref())?;
+            Ok(node)
         })
     }
     pub(crate) fn pin(&self, node: NodeId, truncate: bool) -> Result<()> {
@@ -1093,10 +1155,15 @@ impl HostOverlay {
     /// One bounded assist; callers schedule further work without interpreting
     /// a Commit as a live-operation pause or draining the graph at acquisition.
     pub(crate) fn maintain(&self) -> Result<bool> {
+        if self.overlay.directory_cleanup_pending()? {
+            self.mutate(|m| m.cleanup_deleted_directory())?;
+        }
         self.index.reclaim(16)?;
         self.payload.reclaim_step()?;
         let index = self.index.stats()?;
-        Ok(index.reclamation_pending || self.payload.stats()?.cleanup_pending)
+        Ok(self.overlay.directory_cleanup_pending()?
+            || index.reclamation_pending
+            || self.payload.stats()?.cleanup_pending)
     }
 }
 
@@ -1187,6 +1254,117 @@ pub(crate) mod tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.directory).unwrap();
         }
+    }
+
+    #[test]
+    fn sdk_candidate_snapshot_has_installed_generation_and_survives_later_write() {
+        let fixture = Fixture::new(|_| {}, ResourcePolicy::default());
+        let host = &fixture.host;
+        let node = host.create_file(ROOT, b"candidate", 0o600).unwrap().node;
+        host.write(node, 0, b"old").unwrap();
+        let installed = host
+            .edit_many_snapshot(node, &[(0, 3, Replacement::Inline(b"SDK".to_vec()))])
+            .unwrap();
+        assert_eq!(
+            installed.root.sequence,
+            host.overlay.acquire().unwrap().sequence
+        );
+        assert_eq!(
+            installed.root.installation_sequence,
+            host.overlay.acquire().unwrap().installation_sequence
+        );
+        host.write(node, 0, b"new").unwrap();
+        let mut bytes = [0; 3];
+        host.read_snapshot(&installed, node, 0, &mut bytes).unwrap();
+        assert_eq!(&bytes, b"SDK");
+        let empty_replacement = host
+            .edit_many_snapshot(node, &[(0, 0, Replacement::Inline(Vec::new()))])
+            .unwrap();
+        assert_eq!(
+            empty_replacement.root.sequence,
+            host.overlay.acquire().unwrap().sequence
+        );
+        assert!(host.edit_many_snapshot(node, &[]).is_err());
+    }
+
+    #[test]
+    fn authenticated_client_and_sdk_share_one_host_root_and_owned_snapshots() {
+        use crate::host_operations::HostOperations;
+        use layerfs_fuse::host_client::HostClient;
+        use layerfs_fuse::live_runtime::LiveRuntime;
+        use layerfs_fuse::live_transport::BackingServer;
+        use layerfs_fuse::{FilesystemPort, KernelEntry, PortError};
+
+        let fixture = Fixture::new(
+            |source| {
+                fs::write(source.join("canonical"), b"base").unwrap();
+                fs::hard_link(source.join("canonical"), source.join("alias")).unwrap();
+            },
+            ResourcePolicy::default(),
+        );
+        let host = &fixture.host;
+        let operations = Arc::new(HostOperations::new(host.clone()));
+        let dispatch = operations.clone();
+        let server = BackingServer::start(move |request| dispatch.request(request)).unwrap();
+        let runtime = LiveRuntime::shared().unwrap();
+        let client = runtime
+            .block_on(HostClient::connect(
+                format!("127.0.0.1:{}", server.port()),
+                server.capability(),
+                [41; 16],
+                runtime.scheduler(),
+            ))
+            .unwrap();
+        let file = client.lookup(ROOT, b"canonical").unwrap();
+        assert_eq!(client.read(file.node, 0, 4).unwrap(), b"base");
+        let before = host.snapshot().unwrap();
+        assert_eq!(client.write(file.node, 0, b"host").unwrap(), 4);
+        assert_eq!(client.lookup(ROOT, b"alias").unwrap().node, file.node);
+        assert_eq!(fixture.bytes(file.node), b"host");
+        host.edit_many(file.node, &[(1, 2, Replacement::Inline(b"SDK".to_vec()))])
+            .unwrap();
+        assert_eq!(client.read(file.node, 0, 8).unwrap(), b"hSDKt");
+        let mut captured = [0; 4];
+        host.read_snapshot(&before, file.node, 0, &mut captured)
+            .unwrap();
+        assert_eq!(&captured, b"base");
+        client.fsync(Some(file.node)).unwrap();
+
+        let opened = client.create_file_open(ROOT, b"opened", 0o600).unwrap();
+        client.write(opened.node, 0, b"orphan").unwrap();
+        client.unlink(ROOT, b"opened", false).unwrap();
+        assert_eq!(client.read(opened.node, 0, 6).unwrap(), b"orphan");
+        client.unpin(opened.node, true).unwrap();
+        assert_eq!(client.attr(opened.node), Err(PortError::NotFound));
+
+        runtime.block_on(async {
+            let (attr, references) = client
+                .kernel_entry_async(ROOT, b"canonical", KernelEntry::Lookup)
+                .await
+                .unwrap();
+            assert_eq!(attr.node, file.node);
+            references.submitted();
+            let (page, mut references) = client.kernel_directory_page_async(ROOT, 0).await.unwrap();
+            assert_eq!(&page[0].2, b".");
+            assert_eq!(&page[1].2, b"..");
+            assert_eq!(page.iter().filter(|(cookie, _, _)| *cookie > 2).count(), 2);
+            references.release_unemitted(1).unwrap();
+            references.submitted();
+            client.detach().await.unwrap();
+        });
+        assert!(host
+            .mutate(|m| m.kernel_reference_page())
+            .unwrap()
+            .is_empty());
+        assert!(server.healthy());
+        drop(client);
+        drop(server);
+        drop(operations);
+        assert_eq!(fixture.bytes(file.node), b"hSDKt");
+        host.read_snapshot(&before, file.node, 0, &mut captured)
+            .unwrap();
+        assert_eq!(&captured, b"base");
+        println!("authenticated TCP HostClient/HostOperations PASS: sharedSDK/FUSEoperationauthority,snapshots,canonicalalias,open-unlinked,actualfsync,numericcookies,partialkernelreplyanddetach");
     }
 
     #[test]

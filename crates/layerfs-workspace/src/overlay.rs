@@ -2,6 +2,9 @@
 //!
 //! These roots describe host-installed state; kernel mapping visibility is a
 //! separate obligation of the FUSE adapter, not a property of an Arc clone.
+#[path = "overlay_cleanup.rs"]
+mod cleanup;
+
 use crate::overlay_index::{Index, Limits, Root};
 use layerfs_content::tree::inode::InodeId;
 use layerfs_content::{CanonicalName, ObjectId};
@@ -524,6 +527,7 @@ impl Mutation<'_> {
         self.candidate.index = self.index.remove(&self.candidate.index, &key)?;
         if record.attr.kind == Kind::Directory {
             self.remove_cookie_directory(inode)?;
+            self.enqueue_deleted_directory(inode)?;
         }
         self.changed(&key)?;
         self.candidate.live_inline_bytes = retained_inline;

@@ -16,6 +16,11 @@ type ControlSlot = (Arc<Mutex<Option<TcpStream>>>, Arc<tokio::sync::Notify>);
 
 pub type BackingHandler = dyn Fn(&[u8]) -> PortResult<Vec<u8>> + Send + Sync;
 
+enum LocalOwner {
+    Legacy(crate::live_owner::LiveOwner),
+    Host(crate::host_client::HostClient),
+}
+
 fn carries_append(bytes: &[u8]) -> bool {
     bytes.first() == Some(&crate::live_wire::APPEND)
         || (bytes.first() == Some(&crate::live_wire::BATCH)
@@ -29,9 +34,10 @@ fn carries_append(bytes: &[u8]) -> bool {
 pub struct BackingServer {
     port: u16,
     capability: [u8; 32],
+    host_session: Option<[u8; 16]>,
     stop: watch::Sender<bool>,
     listener: Option<tokio::task::JoinHandle<()>>,
-    local: Option<crate::live_owner::LiveOwner>,
+    local: Option<LocalOwner>,
     failed: Arc<AtomicBool>,
     control: Arc<Mutex<Option<TcpStream>>>,
     connected: Arc<tokio::sync::Notify>,
@@ -92,6 +98,7 @@ impl BackingServer {
         Ok(Self {
             port,
             capability,
+            host_session: None,
             stop,
             listener: Some(task),
             local: None,
@@ -104,10 +111,27 @@ impl BackingServer {
         })
     }
     pub fn local(owner: crate::live_owner::LiveOwner) -> Self {
+        Self::with_local(LocalOwner::Legacy(owner))
+    }
+    pub fn start_host(
+        session: [u8; 16],
+        handler: impl Fn(&[u8]) -> PortResult<Vec<u8>> + Send + Sync + 'static,
+    ) -> io::Result<Self> {
+        let mut server = Self::start(handler)?;
+        server.host_session = Some(session);
+        Ok(server)
+    }
+    pub fn local_host(owner: crate::host_client::HostClient, session: [u8; 16]) -> Self {
+        let mut server = Self::with_local(LocalOwner::Host(owner));
+        server.host_session = Some(session);
+        server
+    }
+    fn with_local(owner: LocalOwner) -> Self {
         let (stop, _) = watch::channel(false);
         Self {
             port: 0,
             capability: [0; 32],
+            host_session: None,
             stop,
             listener: None,
             local: Some(owner),
@@ -120,7 +144,16 @@ impl BackingServer {
         }
     }
     pub fn local_owner(&self) -> Option<crate::live_owner::LiveOwner> {
-        self.local.clone()
+        match &self.local {
+            Some(LocalOwner::Legacy(owner)) => Some(owner.clone()),
+            _ => None,
+        }
+    }
+    pub fn host_owner(&self) -> Option<crate::host_client::HostClient> {
+        match &self.local {
+            Some(LocalOwner::Host(owner)) => Some(owner.clone()),
+            _ => None,
+        }
     }
 
     pub fn port(&self) -> u16 {
@@ -128,6 +161,9 @@ impl BackingServer {
     }
     pub fn capability(&self) -> [u8; 32] {
         self.capability
+    }
+    pub fn host_session(&self) -> Option<[u8; 16]> {
+        self.host_session
     }
     pub fn healthy(&self) -> bool {
         !self.failed.load(Ordering::Acquire)
@@ -172,7 +208,14 @@ impl BackingServer {
                         let _held = slot.lock().await;
                         let mut response = Vec::new();
                         for bytes in frames {
-                            response = owner.local_control(bytes.as_ref()).await?;
+                            response = match owner {
+                                LocalOwner::Legacy(owner) => {
+                                    owner.local_control(bytes.as_ref()).await?
+                                }
+                                LocalOwner::Host(owner) => {
+                                    owner.local_control(bytes.as_ref()).await?
+                                }
+                            };
                         }
                         return Ok(response);
                     }

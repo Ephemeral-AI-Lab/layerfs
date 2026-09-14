@@ -1,0 +1,89 @@
+{
+  "recorded_utc": "2026-09-13T22:35:14.793436+00:00",
+  "scope": "bounded host-overlay deleted-parent directory mask reclamation; root cookieguard regression receipt also retained",
+  "status": "component PASS; public integration/V1 and final correctness/benchmark campaign remain open",
+  "source_seal": "deleted-directory-attempt02-source.json",
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+  "binary_sha256": "6007082d4f1be482dd9db4140e95f081eafc7379c42829c6d7b3e25ffa818d82",
+  "source": {
+    "crates/layerfs-workspace/src/overlay_cleanup.rs": {
+      "sha256": "082d3712d7eb8128a585cdb9f9229205dd2f34c15e4a257d3ea86632d87060ff",
+      "git_blob": "580e9f41685a9914d83e6ede32322371933c372a"
+    },
+    "crates/layerfs-workspace/src/overlay.rs": {
+      "sha256": "9f60f1c601ac1066e7bdcd65bc1d70564b1762e59c4279d6ed13f8a75fdbedaa",
+      "git_blob": "991b6676211747f1c0af38a490f6543c83346f22"
+    },
+    "crates/layerfs-workspace/src/host_overlay.rs": {
+      "sha256": "76330edc7efc5e45f0563580c52b2a47a27add324d0962d39b1bd1cbd7fd5db7",
+      "git_blob": "191c7d3a6c9df6c292e8a7562c9650a6fccb6583"
+    }
+  },
+  "changes": [
+    "Final Directory inode retirement atomically enqueues one disk-indexed domain11 parent ID. No prefix scan occurs inside rmdir or root installation.",
+    "Maintenance selects one queued parent and proves inode absent in its leased source root. Identities are never reused. Only unreachable negative binding rows and their exact latest dual change indexes are removed.",
+    "At most128 total index-row removals per step, including change indexes and final queue removal;129 still-dirty masks take4 steps, first step42 masks/126 rows.",
+    "Queue allocation and cleanup use existing COW Index quota, prepare admission, lease/installation and failure semantics. An error preserves the live root, retained snapshots and retry queue.",
+    "Logical sequence remains unchanged. Surviving-parent namespace deletion, moved/live inode effects, and masks under live canonical directories remain intact."
+  ],
+  "attempts": [
+    {
+      "identity": "64 distinct deleted child masks after covered bookkeeping; retained snapshot payload",
+      "result": "FAIL",
+      "source": "deleted-directory-attempt01-source.json",
+      "raw": "deleted-directory-attempt01.log",
+      "reason": "existing maintenance returned drained while64 unreachable masks remained",
+      "validity": "retained original failure; resolved by bounded queue cleanup"
+    },
+    {
+      "identities": [
+        "64-child failed reproducer",
+        "129-mask strict step bound with live canonical-mask protection"
+      ],
+      "result": "PASS2",
+      "source": "deleted-directory-attempt02-source.json",
+      "raw": "deleted-directory-attempt02.log",
+      "validity": "current cleanup source"
+    },
+    {
+      "identity": "host namespace rename/snapshots/open-unlinked",
+      "result": "PASS1",
+      "raw": "deleted-directory-namespace-attempt01.log",
+      "receipt": "deleted-directory-namespace-attempt01.json",
+      "validity": "old pass invalidated specifically by Directory remove_inode_record enqueue and Host maintain hook; targeted rerun passed"
+    },
+    {
+      "identity": "numeric cold-directory cookie/unknown offset",
+      "result": "PASS1",
+      "raw": "directory-cookie-unknown-attempt01.log",
+      "receipt": "directory-cookie-unknown-attempt01.json",
+      "validity": "root-owned guard changed directory_cookies; exact existing test plus unknown-offset assertion passed; no prior failure run fabricated"
+    }
+  ],
+  "reused_passes": [
+    "Index retained-root/page ownership and injected failure proofs remain compatible: no Index production function changed.",
+    "Existing payload ownership, charge/class and explicit fsync proofs remain compatible: no Payload production function changed.",
+    "Exact captured C1/C2 file-change test without directory deletion remains compatible; candidate agent separately reruns the directly affected new-inode/C3 directory deletion test.",
+    "Replay identity and covered-change behavior outside absent-parent cleanup unchanged; no blanket suite rerun."
+  ],
+  "environment": "native macOS arm64, Rust1.96.0, no benchmark/workload #122 executed",
+  "pending_integration": [],
+  "integration_followups": [
+    {
+      "identity": "authenticated TCP HostClient and SDK shared host authority",
+      "result": "PASS1",
+      "receipt": "../phase3-host-operations/host-authenticated-tcp-attempt01.json",
+      "raw": "../phase3-host-operations/host-authenticated-tcp-attempt01.log",
+      "source": "same6007082d compiled binary"
+    },
+    {
+      "identity": "candidate new inode/C1-C2 then C3 deletion",
+      "result": "PASS1",
+      "receipt": "../phase4-candidate/candidate-deletion-attempt05.json",
+      "raw": "../phase4-candidate/candidate-deletion-attempt05.log",
+      "source": "same6007082d compiled binary",
+      "validity": "directly affected final-directory removal integration now verified; earlier old-binary attempt04 preserved but invalid for cleanup fix"
+    }
+  ],
+  "followup_recorded_utc": "2026-09-13T22:37:22.922018+00:00"
+}

@@ -1,0 +1,15 @@
+
+running 6 tests
+test objects::scratch::tests::exact_growth_shared_fd_named_reopen_and_external_owner_are_charged ... charged_named_peak ScratchUsage { reserved_bytes: 8192, reserved_files: 0, peak_reserved_bytes: 8192, peak_reserved_files: 1, observed_allocated_bytes: 8192, peak_observed_allocated_bytes: 8192, write_calls: 2, written_bytes: 5001 }
+ok
+test objects::scratch::tests::partial_write_and_uncertain_truncate_keep_prospective_charge_until_verified ... charged_failure_peak ScratchUsage { reserved_bytes: 4096, reserved_files: 1, peak_reserved_bytes: 12288, peak_reserved_files: 1, observed_allocated_bytes: 4096, peak_observed_allocated_bytes: 8192, write_calls: 2, written_bytes: 8192 }
+ok
+test objects::scratch::tests::private_off_journal_sqlite_keeps_owned_unlinked_file_through_paging ... ignored, native macOS SQLite rejects unlinked vnode with IOERR_VNODE; retained mechanism probe
+test objects::scratch::tests::replaced_private_name_is_preserved_and_cleanup_keeps_charge_until_owner_restored ... ok
+test objects::scratch::tests::scoped_object_spill_seen_and_order_use_actual_owned_scratch ... scoped_canonical_scratch ScratchUsage { reserved_bytes: 24576, reserved_files: 6, peak_reserved_bytes: 1097728, peak_reserved_files: 6, observed_allocated_bytes: 24576, peak_observed_allocated_bytes: 24576, write_calls: 2, written_bytes: 730 }
+ok
+test objects::scratch::tests::sqlite_growth_is_admitted_before_bounded_rows_and_observed_after_commit ... charged_sqlite_peak ScratchUsage { reserved_bytes: 16384, reserved_files: 1, peak_reserved_bytes: 34095104, peak_reserved_files: 1, observed_allocated_bytes: 16384, peak_observed_allocated_bytes: 16384, write_calls: 0, written_bytes: 0 }
+ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 155 filtered out; finished in 0.01s
+

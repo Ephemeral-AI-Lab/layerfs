@@ -29,7 +29,6 @@ fn version_requested() -> bool {
 #[cfg(all(target_os = "linux", feature = "proxy"))]
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
-    use std::sync::Arc;
 
     let mut arguments = std::env::args_os().skip(1);
     let endpoint = arguments.next().ok_or("missing endpoint")?;
@@ -41,24 +40,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .to_owned();
     let capability = capability(&capability_text)?;
     let mountpoint = std::path::PathBuf::from(arguments.next().ok_or("missing mountpoint")?);
+    let host_session = arguments
+        .next()
+        .map(|text| identity::<16>(text.to_str().ok_or("session text")?))
+        .transpose()?;
     if arguments.next().is_some() {
         return Err("unexpected argument".into());
     }
     let endpoint = endpoint.to_str().ok_or("endpoint text")?;
-    let runtime = layerfs_fuse::live_runtime::LiveRuntime::shared()?;
-    let client = Arc::new(
-        runtime
-            .block_on(layerfs_fuse::live_owner::LiveOwner::connect(
-                endpoint.to_owned(),
-                capability,
-                runtime.scheduler(),
-            ))
-            .map_err(|error| std::io::Error::other(format!("live owner: {error:?}")))?,
-    );
-    let control = client.serve_control(endpoint.to_owned(), capability)?;
-    let mut mount = layerfs_fuse::mount_host(client.clone(), &mountpoint, 0, 0)?;
-    client.set_notifier(mount.notifier()?)?;
-    client.set_kernel_root(std::fs::File::open(&mountpoint)?)?;
+    let (client, control, mut mount) =
+        layerfs_fuse::mount_remote(endpoint.to_owned(), capability, host_session, &mountpoint)?;
     println!("READY");
     let mountpoint_text = mountpoint.to_string_lossy();
     let mountinfo_text = std::fs::read_to_string("/proc/self/mountinfo")?;
@@ -136,10 +127,15 @@ fn process_start() -> std::io::Result<String> {
 
 #[cfg(all(target_os = "linux", feature = "proxy"))]
 fn capability(value: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
-    if value.len() != 64 {
-        return Err("capability length".into());
+    identity(value)
+}
+
+#[cfg(all(target_os = "linux", feature = "proxy"))]
+fn identity<const N: usize>(value: &str) -> Result<[u8; N], Box<dyn std::error::Error>> {
+    if value.len() != 2 * N {
+        return Err("identity length".into());
     }
-    let mut output = [0; 32];
+    let mut output = [0; N];
     for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
         output[index] = (hex(pair[0])? << 4) | hex(pair[1])?;
     }

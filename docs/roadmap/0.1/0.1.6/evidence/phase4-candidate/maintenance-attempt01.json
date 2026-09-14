@@ -1,0 +1,16 @@
+{
+  "result": "2PASS/1FAIL",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "commit_attempt::maintenance::tests",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "source": "capacity-compile-attempt03-source.json",
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "raw": "maintenance-attempt01.log",
+  "reason": "first3 tests of optional maintenance: boundedwork/currentsequence, actualC2contextCAS+laterwrite, active/retainedskip+foreignHost rejection",
+  "priorpasses": "existing completed coordinator/canonicalization checks not rerun bythiscommand",
+  "failure": "test incorrectly expected a pre-stage construction error to retain an attempt; coordinator correctly clears it",
+  "overlap": "Started before root ordering update; may overlap v1 agent isolated correctness fixtures. No benchmark campaign or performance measurement was running; fixtures/processes independent."
+}

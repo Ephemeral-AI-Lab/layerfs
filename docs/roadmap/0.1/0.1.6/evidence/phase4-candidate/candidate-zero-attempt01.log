@@ -1,0 +1,7 @@
+
+running 1 test
+test changes::snapshot_candidate::tests::zero_gap_deletion_reuses_large_zero_span_and_insertion_reads_only_new_byte ... explicit_zero C1 SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 6, correspondence_fragments: 3, replacement_bytes: 16777218, reused_bytes: 0, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 16777218 }; C2 deletion SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 7, correspondence_fragments: 1, replacement_bytes: 0, reused_bytes: 16777217, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 0 }; C3 insertion SnapshotCandidateDiagnostics { changed_keys: 1, changed_inodes: 1, binding_deltas: 0, file_tasks: 1, correspondence_visits: 6, correspondence_fragments: 3, replacement_bytes: 1, reused_bytes: 16777217, full_comparisons: 0, full_builds: 0, cdc_bytes_scanned: 1 }; zero_bytes=16777216
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 146 filtered out; finished in 0.89s
+

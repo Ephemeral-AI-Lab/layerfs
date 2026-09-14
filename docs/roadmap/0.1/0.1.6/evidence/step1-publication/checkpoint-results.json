@@ -1,0 +1,38 @@
+{
+  "scope": "Owner-requested three-fix checkpoint, not full Snapshot-Isolated Workspace or benchmark completion",
+  "source": "source-before.json",
+  "source_matches_delivered_working_files": true,
+  "checks": {
+    "cargo_build_workspace_rust185": "PASS",
+    "native_gate": {
+      "status": "FAIL_TIMING",
+      "planned_selections": 637,
+      "reported_passes": 611,
+      "reported_ignored": 26,
+      "binaries": 37,
+      "batches": 79,
+      "warm_seconds": 171,
+      "budget_seconds": 150,
+      "raw": "native-gate.log"
+    },
+    "strict_clippy": "FAIL; strict-clippy.log",
+    "format": "PASS cargo fmt --all -- --check",
+    "diff_whitespace": "PASS git diff --check",
+    "runner_tests": "PASS7; runner-tests.log",
+    "mounted_integration": "PASS; ../phase3-host-operations/mounted-host-attempt02.json",
+    "actual_spill_fixture": "PASS; ../phase4-candidate/capacity-owner-attempt02.json",
+    "corrected_maintenance": "PASS; ../phase4-candidate/maintenance-attempt02.json"
+  },
+  "review": {
+    "status": "No new scoped blocker",
+    "reviewer": "independent publication_receipts agent",
+    "scope": "shutdown descriptor/local SHUTDOWN, explicit after_detach, SDK path validator, retained-stage maintenance oracle",
+    "full_feature_approval": false
+  },
+  "publication_policy": {
+    "branch_protection": "GitHub returned404 Branch not protected",
+    "applicable_branch_rules": [],
+    "required_review_or_status_check_bypass": false
+  },
+  "remaining": "CI timing/lints, V1 and complete default-path integration/capacity/full non122 benchmark campaign remain OPEN"
+}

@@ -1,0 +1,6 @@
+
+running 1 test
+test candidate_capacity::tests::actual_private_output_and_admission_keep_resource_owner_until_both_drop ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 168 filtered out; finished in 0.13s
+

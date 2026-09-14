@@ -1,0 +1,7 @@
+
+running 1 test
+Host runtime local/TCP PASS: exact owned input, concurrent acknowledged writes, C1/C2 Store reopen, monotonic generation vs published coverage, detach ownership; kernel acquisition remains outside this component check
+test host_runtime::tests::local_and_tcp_runtime_share_live_authority_and_published_coverage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.09s
+

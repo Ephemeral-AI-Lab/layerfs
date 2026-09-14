@@ -20,6 +20,12 @@ mod write_metrics;
 pub use adapter::LayerFs;
 #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
 pub use host_mount::{mount_host, HostMount};
+#[cfg(all(
+    feature = "live",
+    target_os = "linux",
+    any(feature = "host", feature = "proxy")
+))]
+pub use host_mount::{mount_remote, MountedOwner};
 pub use port::{
     Attr, CallbackGuard, FilesystemPort, KernelOperation, Kind, NodeId, PortError, PortResult,
     SharedPort, ROOT,
@@ -44,6 +50,9 @@ pub mod live_wire;
 
 #[cfg(feature = "live")]
 pub mod host_wire;
+
+#[cfg(feature = "live")]
+pub mod host_client;
 
 #[cfg(feature = "live")]
 pub mod live_transport;

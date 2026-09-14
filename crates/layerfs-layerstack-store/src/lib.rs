@@ -16,6 +16,10 @@ mod workspace;
 
 pub use error::{Result, StoreError};
 pub use ids::{BranchId, CommitId, LayerId, LayerStackId};
+#[cfg(unix)]
+pub use objects::scratch::{
+    Allocation as ScratchAllocation, ScratchBudget, ScratchFile, ScratchLimits, ScratchUsage,
+};
 pub use objects::{
     apply_changes, apply_reconcile_choices, empty_root, reconcile_candidate,
     reconcile_candidate_with, BuildCounters, BuiltRoot, CandidateReconciliation, CanonicalObject,

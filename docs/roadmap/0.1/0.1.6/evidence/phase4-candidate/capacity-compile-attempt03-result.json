@@ -1,0 +1,25 @@
+{
+  "returncode": 0,
+  "source_changes": [],
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-layerstack-store",
+    "--lib",
+    "--no-run"
+  ],
+  "raw": "capacity-compile-attempt03.log",
+  "binaries": [
+    {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_layerstack_store-1df70e3f7470c3b7",
+      "sha256": "89b16632c6734f15792b8e9050077e353111dc7efea485362366fb0773910dfc"
+    },
+    {
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+      "sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7"
+    }
+  ]
+}

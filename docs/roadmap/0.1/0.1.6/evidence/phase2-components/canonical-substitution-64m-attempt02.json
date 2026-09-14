@@ -1,0 +1,13 @@
+{
+  "result": "PASS1",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_canonicalize::tests::sixty_four_mib_capture_reclaims_to_one_later_write_block",
+    "--exact",
+    "--nocapture"
+  ],
+  "source": "canonical-substitution-cap-attempt02-source.json",
+  "binary_sha256": "8ec696135f683251ab4e04d2dc1ca6be05270ef6bf9bc13fa37124755fd216d0",
+  "raw": "canonical-substitution-64m-attempt02.log",
+  "invalidation": "prior pass invalidated: shared canonicalization eligibility/currentcursor changed; affected64MiB+actualC2 remains required"
+}

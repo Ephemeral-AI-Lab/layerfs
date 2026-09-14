@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "+1.96.0",
+    "clippy",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--locked",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 101,
+  "wall_seconds": 4.8472228340106085,
+  "raw": "strict-clippy.log",
+  "source": "source-before.json"
+}

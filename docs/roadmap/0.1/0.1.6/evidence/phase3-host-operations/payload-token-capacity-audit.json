@@ -1,0 +1,41 @@
+{
+  "recorded_utc": "2026-09-14T00:44:36.002067+00:00",
+  "result": "READ_ONLY_AUDIT; reproducer NOT_RUN; fix NOT_IMPLEMENTED",
+  "head": "f35e0039ba8f11fb97feb608b2bc179fc0e9bc04",
+  "issue": "payload-token-capacity-issue123.json",
+  "sources": {
+    "crates/layerfs-workspace-core/src/limits.rs": {
+      "sha256": "604661247b88ac821329243505814083946672a61ab4e91aeab37efeb79aa69d",
+      "git_blob": "35ffd85f865757b068f734532f887c78cb777a70"
+    },
+    "crates/layerfs-workspace/src/overlay_budget.rs": {
+      "sha256": "24ff979ebcdf639eac4fccfefa91eee2237782326c23c8fc878c43b0e19db1c3",
+      "git_blob": "ea4cb03c506db2f4fa0a3a3f1b143917eb54d792"
+    },
+    "crates/layerfs-workspace/src/overlay_payload.rs": {
+      "sha256": "bd8b2cf3e350d2ae1f0bc56a679971b18bd804b04e221ce2367dafc52030aae1",
+      "git_blob": "ec3d64744a236834891bbb0846ba56a8fe8922da"
+    },
+    "crates/layerfs-workspace/src/overlay_ranges.rs": {
+      "sha256": "386873a0a109e20396e228113393283ac10fb663a13e1e6eaeb4c7b2fa85e76a",
+      "git_blob": "bb9743226e21a175b0282d199dd045f031104ead"
+    },
+    "crates/layerfs-workspace/src/host_overlay.rs": {
+      "sha256": "4d906dd073fd7dc72ce8815ebd831b8a5f69d2cd393b7d0c60b7de8625630642",
+      "git_blob": "0ef1f839904f2f759253e18af82195b50dc0376a"
+    },
+    "crates/layerfs-workspace/tests/issue116_capacity.rs": {
+      "sha256": "4cce696de1584cf8059db1cfb38bc2beb28cba8f5f3f780b4c46e79dc6cd8d4e",
+      "git_blob": "bb8dfe307d3330b7a2f50d2492ca5849c8bfe0b5"
+    },
+    "docs/roadmap/0.1/0.1.6/overlay-snapshot-rule.md": {
+      "sha256": "03d93fc5929ba2b6e99c013e4898a454ddf908c81089c41bb87f9d24d54f543e",
+      "git_blob": "20901bff42bfe14ca195f970b22b8b13db88aa42"
+    },
+    "docs/roadmap/0.1/0.1.6/overlay-snapshot-implementation-plan.md": {
+      "sha256": "03464386667128e070d47fc65ecfbf72c1306a0df9b1fdc1875813857c6cd865",
+      "git_blob": "6375b79058bace9d199e6e649f3ee1269b715922"
+    }
+  },
+  "execution": "No benchmark, issue122 scenario, million-file fixture, 8193-file reproducer or payload test executed for this audit. No Payload source edit."
+}

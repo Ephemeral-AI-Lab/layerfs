@@ -153,12 +153,15 @@ impl Filesystem for LayerFs {
                 }
             };
 
-            let result = this.node(ino).and_then(|node| {
+            let result = async {
+                let node = this.node(ino)?;
                 this.port
-                    .attr(node)
+                    .attr_async(node)
+                    .await
                     .map_err(errno)
                     .and_then(|attr| this.attr(attr))
-            });
+            }
+            .await;
             match result {
                 Ok(attr) => reply.attr(&TTL, &attr),
                 Err(error) => reply.error(error),
@@ -244,7 +247,7 @@ impl Filesystem for LayerFs {
                             .await
                             .map_err(errno)?;
                     }
-                    this.attr(this.port.attr(node).map_err(errno)?)
+                    this.attr(this.port.attr_async(node).await.map_err(errno)?)
                 }
             }
             .await;
@@ -284,9 +287,11 @@ impl Filesystem for LayerFs {
                 }
             };
 
-            match this
-                .node(ino)
-                .and_then(|node| this.port.readlink(node).map_err(errno))
+            match async {
+                let node = this.node(ino)?;
+                this.port.readlink_async(node).await.map_err(errno)
+            }
+            .await
             {
                 Ok(target) => reply.data(&target),
                 Err(error) => reply.error(error),
@@ -935,11 +940,14 @@ impl Filesystem for LayerFs {
                 }
             };
 
-            let result = this
-                .handles
-                .remove(handle.0)
-                .ok_or(fuser::Errno::EBADF)
-                .and_then(|handle| this.port.unpin(handle.node, handle.writable).map_err(errno));
+            let result = async {
+                let handle = this.handles.remove(handle.0).ok_or(fuser::Errno::EBADF)?;
+                this.port
+                    .unpin_async(handle.node, handle.writable)
+                    .await
+                    .map_err(errno)
+            }
+            .await;
             empty_reply(result, reply);
         });
     }
@@ -1020,13 +1028,16 @@ impl Filesystem for LayerFs {
                 }
             };
 
-            match this.node(ino).and_then(|node| {
-                if this.port.attr(node).map_err(errno)?.kind != Kind::Directory {
+            match async {
+                let node = this.node(ino)?;
+                if this.port.attr_async(node).await.map_err(errno)?.kind != Kind::Directory {
                     return Err(fuser::Errno::ENOTDIR);
                 }
-                this.port.pin_directory(node).map_err(errno)?;
+                this.port.pin_directory_async(node).await.map_err(errno)?;
                 Ok(this.handles.insert(node, false))
-            }) {
+            }
+            .await
+            {
                 Ok(handle) => reply.opened(FileHandle(handle), FopenFlags::empty()),
                 Err(error) => reply.error(error),
             }
@@ -1234,7 +1245,7 @@ impl Filesystem for LayerFs {
             };
 
             match this.handles.remove(handle.0) {
-                Some(handle) => match this.port.unpin_directory(handle.node) {
+                Some(handle) => match this.port.unpin_directory_async(handle.node).await {
                     Ok(()) => reply.ok(),
                     Err(error) => reply.error(errno(error)),
                 },
@@ -1345,9 +1356,11 @@ impl Filesystem for LayerFs {
                 }
             };
 
-            match this
-                .node(ino)
-                .and_then(|node| this.port.attr(node).map_err(errno))
+            match async {
+                let node = this.node(ino)?;
+                this.port.attr_async(node).await.map_err(errno)
+            }
+            .await
             {
                 Ok(_) => reply.ok(),
                 Err(error) => reply.error(error),

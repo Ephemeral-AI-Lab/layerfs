@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "candidate_capacity::tests::actual_private_output_and_admission_keep_resource_owner_until_both_drop",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "returncode": 101,
+  "elapsed_seconds": 0.11817598342895508,
+  "expected_active_test_count": 1,
+  "binary_sha256": "0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7",
+  "compiled_source": "capacity-compile-attempt03-source.json",
+  "raw": "capacity-owner-attempt01.log",
+  "validity": "current for exact sealed compiled inputs"
+}

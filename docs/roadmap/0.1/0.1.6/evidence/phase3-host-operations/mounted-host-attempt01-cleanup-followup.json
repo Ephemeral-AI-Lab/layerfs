@@ -1,0 +1,13 @@
+{
+  "command": [
+    "docker",
+    "inspect",
+    "ec2aba626f1b49495fda187aff948ccf9ed7897fc40180dd44d57061a4a914a9"
+  ],
+  "returncode": 1,
+  "stdout": "[]\n",
+  "stderr": "error: no such object: ec2aba626f1b49495fda187aff948ccf9ed7897fc40180dd44d57061a4a914a9\n",
+  "verified_absent": true,
+  "original_receipt_retained": true,
+  "runner_error": "Original verification looked for capitalized No such object; Docker emitted lowercase no such object. This follow-up confirms owner container removal, not successful product unmount. Product result remains FAIL with EBUSY."
+}

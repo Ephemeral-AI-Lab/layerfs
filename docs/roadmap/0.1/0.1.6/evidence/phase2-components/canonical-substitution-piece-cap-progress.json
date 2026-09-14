@@ -1,0 +1,16 @@
+{
+  "recorded_utc": "2026-09-13T23:12:15.579437+00:00",
+  "status": "PASS6; scopedfix complete",
+  "identity": "host_canonicalize::tests::piece_cap_defers_partial_c1_backing_until_complete_c2_is_available",
+  "premise": [
+    "Ranges::append_from preserves origin and extends length only when Payload append accepts never-rewound source frontier; sameSource check and join_tokens preserve ownership.",
+    "Description indexes disjoint origin coordinates; published C1 only covers old extent, so appended coordinates are Replacement.",
+    "When C2 captures the current full piece, its published Description covers that wholepiece; physical replacement needs no extra boundary.",
+    "Contract-resolution section2.10 requires unsafe-to-install raw ranges to remain explicitly charged, not pretend reclaimed."
+  ],
+  "pending_compile_receipt": "../phase3-host-operations/lease-ci-attempt01-result.json",
+  "pending_compile_reason": "unrelated root typedfixture used PayloadLimits::default which is not implemented; no piece-cap test executed",
+  "next": "root integrates/publishes testedsource; no further local builds",
+  "evidence": "canonical-substitution-piece-cap-manifest.json",
+  "prior_compile_block_resolved": "shared lease-ci-attempt02 compiled; exactpiececapFAIL retained then resolved"
+}

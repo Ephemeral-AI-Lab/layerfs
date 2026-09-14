@@ -362,3 +362,38 @@ break, not as qualification of the new behavior.
 - environment: GitHub Actions runner and toolchain recorded in raw log.
 - result: all native selections passed; enclosing CI step FAIL at125s under its original120s ceiling. Raw: `evidence/ci/run-34789404326-failed.log`. Preserve FAIL; do not relabel as a historical PASS.
 - validity: current evidence of that historical attempt. Owner subsequently authorized150s for CI; `tools/test-fast.sh` and current development guidance updated accordingly. No benchmark/correctness contract changed; no timing optimization or repeated full suite requested by this change. Shell syntax checked with `bash -n tools/test-fast.sh`.
+
+### L20 — explicit host mount transport integration
+
+- identity: Linux FUSE helper and daemon mount startup with host-owned authority selected before connection; strict daemon Mount codec.
+- source: exact per-file SHA256 manifest `evidence/phase3-host-operations/mount-authority-linux-attempt01-source.json`; before/after unchanged. Linux helperSHA `ed690820d4437aad700e4d7a2b1974206c2ccd69dc6e1c5deca7be6b77c23e2c`, daemonSHA `6fb684d896132ed841269496898b8bf79f6c5f085f4f4b0ee0312e1c10eb5614`.
+- environment: native macOS cross-build, existing cargo-zigbuild/Zig, aarch64-unknown-linux-musl debug. No container/workload/benchmark execution.
+- result: helper+daemon build PASS (27.23s command wall; not a performance claim), exact commands/log in `mount-authority-linux-attempt01-result.json` and `.log`. Native `protocol::tests::fragmented_and_coalesced_frames_and_exec_bounds` PASS1, old Mount byte encoding retained, affirmative host selection roundtrip and invalid/trailing flag rejection; `mount-authority-codec-attempt01-{source,result}.json`/`.log`, source unchanged.
+- validity: concrete mount entrypoints compile; codec test current. This does not establish mounted-kernel, complete public lifecycle or V1 acceptance. New ignored mounted host-owner component check is written and remains NOT_RUN until explicitly executed.
+
+### L21 — CI after owner150second update
+
+- identity/source: run34791110435 at `f35e0039ba8f11fb97feb608b2bc179fc0e9bc04`; native Rust1.85.1 suite using new150s ceiling.
+- result: native test-fast step SUCCESS per GitHub Actions job/step receipt; overall CI FAIL in strictClippy due unwired new component paths and remaining lint findings. Raw failed step: `evidence/ci/run-34791110435-failed.log`. The old125s/120s run remains FAIL separately atL19.
+- validity: historical source-specific CI result; ongoing integration remains the repair. No repeated full native suite for a timing optimization, no numerical benchmark contract change and no lint suppression.
+
+### L22 — integrated SDK readers, attempt retries and shared host runtime
+
+- source/environment: native macOS arm64 debug, exact `evidence/phase4-candidate/capacity-compile-attempt03-source.json`; no source drift, workspace binarySHA `0869ef5dcda8f36013d124129753dd125bd1d3a25101f13d51c9477cebcfb4a7`.
+- result: SDK host4 + exact installed-snapshot1 PASS (`phase3-host-operations/sdk-host-attempt01.json`, `sdk-installed-snapshot-attempt01.json`); direct owned-file reader2 PASS (`sdk-file-lease-attempt02.json`, `sdk-reader-reservation-attempt01.json`); coordinator held construction/C1/C2 + exact lost stage/Created/UpToDate retries + definite branch-conflict abandonment3 PASS (`phase4-candidate/coordinator-c1-c2-attempt02.json`, `coordinator-retry-attempt02.json`, `coordinator-conflict-attempt01.json`); local/TCP HostRuntime factory/coverage1 PASS (`runtime-local-tcp-attempt01.json`). Each JSON carries exact command/raw log.
+- invalidation: reader creation changed to pre-admission+activation, requiring the affected old reader check; canonical candidate now uses charged scratch/private admission ownership, requiring the affected C1/C2 and retry checks. New lifecycle/runtime checks had no predecessor pass. Unchanged unrelated suites were not rerun. These are component results, not publicV1 acceptance or benchmark measurements.
+
+### L23 — shared scratch and bounded maintenance integration
+
+- source: same exact attempt03 workspace binary; Store binarySHA `89b16632c6734f15792b8e9050077e353111dc7efea485362366fb0773910dfc`.
+- result: actual Store scratch/SQLite/data/order tests5 PASS in `phase4-candidate/scratch-integrated-attempt01.json`. Existing unlinked-SQLite probe remains ignored after its original recorded FAIL; it is not counted as a pass. New capacity-owner fixture FAIL (`capacity-owner-attempt01.json`): repetitive2MiB data deduplicated below the actual spill threshold, so its required spill assertion did not trigger. Correct that unpassed fixture to deterministic varied bytes; preserve the assertion and failed attempt.
+- maintenance:2 PASS and1 test-oracle FAIL in new maintenance evidence. Idle pre-stage construction error correctly clears its attempt; test incorrectly expected retention. Repair only the failing test using the existing real retained-stage fault; retain bounded-node/key and C2/CAS passes. Those isolated correctness processes may have overlapped SDK tests; no benchmark measurement occurred.
+- remaining:96MiB per-construction reserve is explicitly provisional and admits at most one default builder under shared128MiB; trace/reduce actual scoped working-set bounds and check independent builders. Account ordinary host SnapshotReader cache. Default8192 persisted payload token limit needs separate capacity investigation; none of these is a capacity PASS claim.
+
+### L24 — first actual mounted host-owner check, cleanup failure retained
+
+- identity: `host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input`, explicitly ignored in resource-free native runs and manually executed under existing measurement lock.
+- source: native0869ef5d from L22; Linux helpered690820 from L20; immutableimage `sha256:b9d3d2c3090596364d2d70ee304a5b7316b8dc51b9d672b8a0b3857e1de940f3`, kernel6.12.76-linuxkit, Python3.11.2. macOS owns Store/SDK/host runtime/spool; Docker owns only helper/FUSE/workload. Actual2CPU/2GiB/no-swap/256PID/nonprivileged/no-host-bind checks passed.
+- result: overall FAIL in `phase3-host-operations/mounted-host-attempt01.json`/`.log`. All prior assertions passed: SDK byte visible through retained mapping and descriptor, unrelated dirty mmap byte retained, inode/hardlink/rename/open-unlinked lifetime, owned C1 excluding later ordinary write and C2 including it. Normal `projection.end()` then failed with EBUSY because HostClient retained its preopened mount-root descriptor. Preserve `mounted-host-attempt01-fuse.stderr` and fallback logs; do not count this row as a passing mounted check.
+- cleanup: owner removed the test container. Original runner mistakenly matched capitalized error text; append-only `mounted-host-attempt01-cleanup-followup.json` verifies actual absence with Docker's lowercase message. This correction does not turn failed product unmount into success. Raw fixture Store remains in its original temporary directory.
+- next: release root descriptor before unmount, add explicit local SHUTDOWN parity and focused ownership check, rebuild only affected helper/native code, rerun the failed mounted case. Generic Commit dirty-mmap acquisition remains unproven; this concrete test uses an explicitly supplied owned input and is not a Phase6/final benchmark result.

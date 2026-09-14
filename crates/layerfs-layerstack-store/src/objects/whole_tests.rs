@@ -12,7 +12,7 @@ impl Store {
         std::fs::remove_file(&path).unwrap();
         Self {
             db: StoreDb::create(&path).unwrap(),
-            _path: TempPath(path),
+            _path: TempPath::new(path),
         }
     }
     fn put(&self, canonical: &[u8], record: Vec<u8>) -> ObjectId {

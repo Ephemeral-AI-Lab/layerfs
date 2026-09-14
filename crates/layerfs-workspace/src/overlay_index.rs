@@ -327,8 +327,11 @@ impl Index {
     pub(crate) fn empty_root(&self) -> io::Result<Root> {
         self.ticket()
     }
+    pub(crate) fn owns(&self, root: &Root) -> bool {
+        Arc::ptr_eq(&self.0, &root.0.owner)
+    }
     fn check(&self, root: &Root, key: &[u8]) -> io::Result<()> {
-        if !Arc::ptr_eq(&self.0, &root.0.owner) {
+        if !self.owns(root) {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 "foreign overlay index root",

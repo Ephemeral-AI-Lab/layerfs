@@ -1,0 +1,12 @@
+Linux 5f13a3a8cf9b 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+Copyright (C) 2022 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+4af3be9e2c6631ffff2f0401058a0bb9c88aedb263517f16fd7ea43883783e2b  /tmp/sdk-invalidation-probe
+SDK_NO_STORE: inval=0 syncfs=0 mapped_sdk=83 mapped_other=117 backing_sdk=83 backing_other=117 laundering_writes=1
+SDK_LAUNDER_FAILURE: inval=0 inval_errno=0 syncfs=-1 syncfs_errno=5 rejected_writes=1 mapped_sdk=84 backing_sdk=84
+SDK_RETRY: mapped_sdk=84 mapped_other=122 backing_sdk=84 backing_other=122
+probe: server read returned -1 errno=19 (No such device)
+SDK invalidation/protected-writeback hypotheses PASS; Commit V1 remains OPEN

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-79f458ce1bbf884f",
+    "candidate_capacity::tests::actual_private_output_and_admission_keep_resource_owner_until_both_drop",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "returncode": 0,
+  "elapsed_seconds": 0.13532805442810059,
+  "binary_sha256": "28cdea82e064e75635eceb4be3b0e89ee8fa9f8288c5167f3dabb788075811d9",
+  "compiled_source": "../phase3-host-operations/sdk-shutdown-compile-attempt01-source.json",
+  "raw": "capacity-owner-attempt02.log",
+  "invalidation": "prior check failed because uniform2MiB input deduplicates under spill threshold; only fixture changed to fixed xorshift7 varied2MiB, product unchanged",
+  "expected_active_test_count": 1
+}

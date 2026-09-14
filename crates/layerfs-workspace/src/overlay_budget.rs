@@ -253,6 +253,22 @@ pub(crate) struct Permit {
     _live: LiveReservation,
     _transfer: LiveReservation,
 }
+/// Canonical construction has its own bounded domain, outside the live-overlay
+/// per-Workspace envelope, while consuming the same aggregate host admission.
+/// Keep this owner until private output and admission buffers are both gone.
+pub(crate) struct ConstructionReservation {
+    host: Arc<HostAdmission>,
+    charge: Usage,
+    _live: LiveReservation,
+}
+impl Drop for ConstructionReservation {
+    fn drop(&mut self) {
+        let mut used = self.host.used.lock().unwrap();
+        used.memory_bytes -= self.charge.memory_bytes;
+        used.reserved_disk_bytes -= self.charge.reserved_disk_bytes;
+        used.reserved_files -= self.charge.reserved_files;
+    }
+}
 impl Budget {
     fn reserve(policy: ResourcePolicy, host: Arc<HostAdmission>) -> io::Result<Arc<Self>> {
         let components = components(policy)?;
@@ -297,6 +313,29 @@ impl Budget {
             payload,
             index,
             ranges,
+        })
+    }
+    pub(crate) fn reserve_construction(
+        &self,
+        memory_bytes: u64,
+        disk_bytes: u64,
+        files: usize,
+    ) -> io::Result<ConstructionReservation> {
+        let live = self.host.scheduler.reserve_live(as_usize(memory_bytes)?)?;
+        let charge = Usage {
+            memory_bytes,
+            reserved_disk_bytes: disk_bytes,
+            reserved_files: files,
+            workspaces: 0,
+        };
+        let mut used = self.host.used.lock().unwrap();
+        let next = used.plus(memory_bytes, disk_bytes, files, 0)?;
+        self.host.check(next)?;
+        *used = next;
+        Ok(ConstructionReservation {
+            host: self.host.clone(),
+            charge,
+            _live: live,
         })
     }
     pub(crate) fn policy(&self) -> ResourcePolicy {

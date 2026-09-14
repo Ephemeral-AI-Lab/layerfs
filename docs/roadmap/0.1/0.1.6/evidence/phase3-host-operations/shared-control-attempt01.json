@@ -1,0 +1,41 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-fuse",
+    "--features",
+    "live",
+    "--lib",
+    "live_owner::immutable_acquisition_tests::shared_control_handler_preserves_authentication_roles_and_shutdown_ack",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-fuse/src/host_client.rs": "1a47b95ac8022d7b709f233b9f69da87a8c10229595f693e530244306a4de6e8",
+    "crates/layerfs-fuse/src/adapter.rs": "3fb629ab75595a854dbe673bf4a6a4099aadec9c0b7de3409bf0ae727bb98f03",
+    "crates/layerfs-fuse/src/live_transport.rs": "71af989561fb6956f2746cce48da634a2723ec40e2c2f11e078191f8dd9db677",
+    "crates/layerfs-fuse/src/filesystem.rs": "204be4d1943d88f21f47d59943626bf1537b1a0b33a41bddf881f2e8d93ed3bf",
+    "crates/layerfs-fuse/src/host_mount.rs": "2d31f56e4f7e02dc2836e26032a65bd5f7239eff4f8d5940c284de233961f0a6",
+    "crates/layerfs-fuse/src/protocol.rs": "f50037523cf1cfa98973708e2da6cbe1f8c3ec7af9f274d57aed00750c78fdae",
+    "crates/layerfs-fuse/src/live_wire.rs": "4341b6876bf1c9f6c2394f25a53e9803227088dd4ece67681e1dc0c0599d42bc",
+    "crates/layerfs-fuse/src/lib.rs": "9d536bfaa8934e3db59d3ee77d747036e6fb50d592853078eda25e253430ffc1",
+    "crates/layerfs-fuse/src/proxy_client.rs": "1972992801bd1dfd0e7a8d6eea6b3a0d3d722a8da43fcdf8383d698da636efbc",
+    "crates/layerfs-fuse/src/live_runtime.rs": "a10be42f6e3c3b77708ce161df97fe97d788e97acf238ebfec694ebff2e33b60",
+    "crates/layerfs-fuse/src/inode_table.rs": "89d89e713d8d8c493fc7c484254c7f1c5d48741211f2ba0b743c596654f9f0c4",
+    "crates/layerfs-fuse/src/port.rs": "fbe9f01291224709f326cb1b3ab6917d5e2c5ed10d35c511c0d0132799550ad5",
+    "crates/layerfs-fuse/src/handles.rs": "167d37726c818ee625387e61ce4aa7f206c7454d112644a1765f08dc58d77d5f",
+    "crates/layerfs-fuse/src/write_metrics.rs": "e9041098432e7f9698270e3e73e22a6133401eabcd9bb86e86f8ff562cce4424",
+    "crates/layerfs-fuse/src/host_coherence.rs": "b31693bc34cda2c1a5b3d77e447909b915861eac4f227dad24bab46852427943",
+    "crates/layerfs-fuse/src/live_owner.rs": "8222ad0e501a2c38c9841a2096b828b6b8d43dc926766e7249e241ca9bbbbc82",
+    "crates/layerfs-fuse/src/immutable_read_cache.rs": "877ff9fad4c6c8b65a1922dfae33c10a1d747253bfc9407edd3ce7a5c62eaf24",
+    "crates/layerfs-fuse/src/proxy_host.rs": "f256c4e1115864b523c233f6a8335f62b4ded5e1d74f5a23ccea5c318c131175",
+    "crates/layerfs-fuse/src/host_wire.rs": "c2d36fdea9fa2329eff78fc6e4729abe44350e87caa33bfa1746d0b3f4a4520a"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789342833.5208519,
+  "reason": "New lifecyclegate and sharedauthenticatedcontrol checks; existingcancel/detach test invalidated byadded explicitSDK/lifecycledrain. Knownrequestacknowledgmenttestunaffected andretained.",
+  "returncode": 0
+}

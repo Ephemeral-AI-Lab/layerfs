@@ -1,0 +1,70 @@
+{
+  "identity": "host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input",
+  "source": "../step1-publication/source-before.json",
+  "linux_source": "../step1-publication/source-before.json",
+  "binaries": {
+    "target/debug/deps/layerfs_workspace-6b336fb7a81e951e": "1f84e1f00c529a5796029a5fdfe644ac0faca06c4534353e84843f0993994325",
+    "target/aarch64-unknown-linux-musl/debug/layerfs-fuse": "29f56dcd24aad94149510d8f0474a2d9895b96ea7904465404aa39172a33e513"
+  },
+  "image": "sha256:b9d3d2c3090596364d2d70ee304a5b7316b8dc51b9d672b8a0b3857e1de940f3",
+  "status": "PASS",
+  "performance": "N/A correctness component, no benchmark case",
+  "scope": "macOS Store/HostOverlay/SDK/coordinator/spool; Linux actual FUSE/helper/workload; explicit owned input supplied to construction, V1 acquisition remains OPEN",
+  "container_command": [
+    "docker",
+    "run",
+    "--detach",
+    "--rm",
+    "--name",
+    "layerfs-v124-539423fe91fb",
+    "--device",
+    "/dev/fuse",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--security-opt",
+    "apparmor=unconfined",
+    "--cpus",
+    "2",
+    "--memory",
+    "2g",
+    "--memory-swap",
+    "2g",
+    "--pids-limit",
+    "256",
+    "--entrypoint",
+    "/bin/sleep",
+    "sha256:b9d3d2c3090596364d2d70ee304a5b7316b8dc51b9d672b8a0b3857e1de940f3",
+    "3600"
+  ],
+  "container_id": "bb44f4980b0211e041bf292b6a931d647bacfa62fa8734a0d85320e413c95014",
+  "kernel": "6.12.76-linuxkit",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/debug/deps/layerfs_workspace-6b336fb7a81e951e",
+    "host_runtime::tests::mounted_host_owner_preserves_sdk_mapping_handles_and_owned_commit_input",
+    "--exact",
+    "--ignored",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "command_wall_seconds": 0.9958242090069689,
+  "state_before_owner_container_cleanup": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 523,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-09-14T00:59:16.524355045Z",
+    "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "container_cleanup": {
+    "exit_code": 0,
+    "stdout": "bb44f4980b0211e041bf292b6a931d647bacfa62fa8734a0d85320e413c95014\n",
+    "stderr": "",
+    "verified_absent": true
+  },
+  "artifacts_unchanged": true
+}

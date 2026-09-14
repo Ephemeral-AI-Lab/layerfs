@@ -1,0 +1,12 @@
+{
+  "result": "PASS1",
+  "command": [
+    "target/debug/deps/layerfs_workspace-7a70d4db173d6a6f",
+    "host_canonicalize::tests::canonical_inline_substitution_releases_only_current_equivalent_inline_charge",
+    "--exact",
+    "--nocapture"
+  ],
+  "source": "canonical-substitution-attempt01-source.json",
+  "binary_sha256": "8e975629bb1e46065b59cb489446ec03e09ecf0fd80b501e1425374725bbbe23",
+  "raw": "canonical-substitution-inline-attempt01.log"
+}
