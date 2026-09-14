@@ -204,10 +204,135 @@ host-before-ack, no-freeze) | verdict (adopt / adapt / reject).
 
 ## 5. Ranked draft optimization directions (D3)
 
-PENDING — ranked after the commit/end attribution closes. The receipt
-evidence so far points at route-level transport costs (exec 11.4 s backing
-wait) dominating over #130 storage mechanisms (P130.2's −18 %/−23 % page
-reductions are ~1–2 % of this workflow).
+Ranked by measured share × expected effect ÷ risk. All preserve CAS/CDC/
+FULL-DELTA/pack/compression (untouched), C1/C2 locality, O(1) snapshot
+acquisition, exact stage/retry and Created/UpToDate receipts, the no-freeze
+Commit rule, and host-before-acknowledgment ownership. Memory bounds are
+Workspace-scoped and charged to the existing `ResourcePolicy`/admission
+budgets — never per-file unbounded state. Measured shares are from the
+instrumented single sample (§1, diagnostic); Phase 2 re-verifies per change.
+
+### R1 — Cut round trips per file on the mounted path (exec; → #124)
+
+Measured basis: 4,521 host-authority dispatches for 500 files (~9/file, D1
+receipt), each a serialized TCP exchange; the workload is serial so every
+dispatch is on the critical path.
+
+- **R1a. Drop redundant attribute fetches on OPEN.** The daemon's
+  `prepare_kernel_open`/`validate_kernel_open` each issue `Op::Attr` — ~2
+  extra round trips per file (measured: `attr` dispatches 1,482 ≈ 3/file vs
+  ~1/file that the kernel needs). The CREATE/LOOKUP reply already carries the
+  attr. Complexity O(1)/op; no new state.
+- **R1b. Combined `SetAttr` wire op (mode+mtime in one request).** The
+  benchmark's normalization issues `chmod` + `utimensat` per file (measured:
+  chmod 510 + mtime 510). One op halves these and the path-resolution
+  LOOKUPs that ride with them. One mutation = one replay slot (same
+  acknowledgment semantics as today's Chmod/Mtime).
+- **R1c. Answer FUSE FLUSH locally.** Every WRITE is host-owned before its
+  acknowledgment (the decided V2 contract), so FLUSH has no unacked data to
+  push and no deferred error to report; measured flush callbacks: 500.
+  `Op::Fsync` remains the explicit durability path. This *relies on* the
+  host-before-ack contract rather than weakening it.
+- **R1d. Kernel dentry/attr caching.** 1,065 LOOKUP dispatches (~2.1/file)
+  vs v0.1.5's 521 — both routes use a 1 s entry/attr TTL, so the difference
+  is in the mount/reply configuration; fix the leak before adding caches.
+  Requires correct invalidation through the existing coherence machinery.
+
+Expected: ~9 → ~4 dispatches/file; with per-dispatch cost unchanged,
+exec ≈ 7.9 s → ≈ 4 s. Risk: low (R1a/c are pure client-side waste removal);
+R1b is a wire-protocol addition (versioned, first-party); R1d needs an
+invalidation-correctness check. Cost: small, reviewable PRs.
+
+### R2 — Cheaper host dispatch (exec; → #124 + #130 P130.4)
+
+Measured basis: `host_dispatch_ns` 7.35 s / 4,538 calls ≈ 1.62 ms per
+dispatch in the retained M2 sample — the host authority's own per-op work
+(metadata page copies; in-process reference 48.2 writes / 280 reads per
+tiny create).
+
+- **R2a. Bounded Workspace-scoped immutable metadata page cache** (explicitly
+  sanctioned by P130.4): cuts re-reads in the dispatch path; evictable pages,
+  disk ownership model unchanged; charged to the Workspace budget.
+- **R2b. Inline dispatch on the serve loop** when a physical permit is
+  immediately available (skip the `spawn_blocking` handoff per frame).
+- **R2c. Admission fast path** for the default charge (`budget.enter`).
+
+Expected: 1.62 → well under 1 ms per dispatch; combined with R1,
+exec ≈ 1.5–2.5 s. Complexity: O(1)/op with bounded memory; cache is
+O(budget) at Workspace scope. Risk: medium (cache coherence must respect
+the single-authority rule — cache entries are never authoritative, only
+installed immutable pages). Cost: medium.
+
+### R3 — Un-serialize the two maintenance drains (commit + end; → #130)
+
+Measured basis (new counters, this branch): commit `pre_capture_ns`
+4,072 ms (dominated by the pre-commit `maintain()` drain of reclamation
+queued during exec) and End `settle_ns` 4,104 ms over 512 steps (≈ 8.0 ms
+per correspondence-canonicalization step). Together ≈ 8.2 s of the 17.7 s
+workflow — the single largest block, and pure per-item serialization.
+
+- **R3a. Batch the drain step.** Each step does per-node overlay
+  `prepare`+`install` (index page writes per node). Preparing/installing one
+  root per K nodes (K=64) amortizes the page writes: 8.0 → ≈ 1 ms/item.
+  Work stays O(D); bounded batches keep admission exact.
+- **R3b. Parallelize independent drain items** across bounded workers
+  (Workspace-scoped, like the existing construction worker formula):
+  wall ≈ drain_time / workers.
+- **R3c. (Owner decision needed) overlap drains with foreground phases** on
+  background host threads. The plan's rule "moving cost out of End cannot
+  create an apparent improvement" governs reporting: overlapped work must
+  still be charged and its CPU reported. Flagged for owner/spec confirmation
+  before design.
+
+Expected: 8.2 s → ≈ 1–2 s combined (R3a+R3b alone). Risk: medium — batching
+and parallelism must preserve exact correspondence semantics (C1/C2), page
+ownership and rollback; the per-step algorithm is already independent per
+node, which the counters confirm (512 steps × 8 ms ≈ linear). Cost: medium.
+
+### R4 — Commit construction (→ #130)
+
+Measured basis: plan 477 ms + content 721 ms + namespace 78 ms + admission
+25 ms ≈ 1.3 s (capture is 125 ns — the O(1) contract holds); insertion is
+already one batched transaction (473 objects); no per-file store
+transactions exist.
+
+- **R4a. Bounded-worker content construction** (host route pins
+  `worker_limit=1` today): content 721 → ≈ 200 ms at 4 workers; sorted
+  construction and deterministic output preserved by the existing merge.
+- **R4b. Batch the per-file `view.before` lookups** (2 per file + directory
+  fallback): one sorted cursor pass over the previous canonical root turns
+  O(D·log N) into O(log N + D).
+
+Expected: 1.3 s → ≈ 0.5 s. Risk: low-medium (determinism and exact
+predecessor comparisons unchanged). Cost: small-medium.
+
+### R5 — Wire-level batching for multi-operation exchanges (→ #124)
+
+A host-wire `BATCH` op: N operations per frame, per-op results in one reply,
+per-op sequence numbers with exact acknowledged-prefix replay, admission by
+total frame bytes at the Workspace transfer budget, serial fallback on
+NoSpace (the existing `call_batch` pattern). **This does not cut the serial
+tiny-create critical path** (each syscall blocks on its own result) — it
+targets bulk cases (45k dispatches at tier-500), git-tool and future
+multi-worker cases, and compounds with R1/R2 for the tier-100 criterion.
+
+### R6 — End state-directory removal (→ #130, minor)
+
+`state_removal_ns` 431 ms: `remove_dir_all` of the per-Workspace state
+directory (arena/catalog/journal files from exec churn). After R3 shrinks
+per-item page churn, the file count drops; remaining cost is honest
+per-Workspace cleanup.
+
+### Combined expectation and the honest floor
+
+With R1–R4 (no overlap decisions): exec ≈ 2 s + commit ≈ 1 s + end ≈ 1 s
+≈ **4 s total (~4.4×)**. The v0.1.5 row (242.660 ms) is **not reachable** by
+these directions alone: a serial workload with host-before-acknowledgment
+ownership has a floor of ~3 round trips/file; at v0.1.5-class per-op cost
+(~0.1 ms) that is ≈ 0.3 ms/file ≈ 150 ms exec — parity would require
+Route-level per-op costs two orders below today's, i.e. the full R1+R2
+program *plus* further dispatch-path work. The staged target (§6) reflects
+this honestly.
 
 ## 6. Frozen numeric target (D4)
 
