@@ -297,6 +297,7 @@ impl LiveWorkspace {
             .checked_add(1)
             .ok_or(Error::Integrity("inode revision"))?;
         let (inline, allocation, spool) = self.write_resources(&prepared)?;
+        self.protect(prepared.node);
         let node = self
             .nodes
             .get_mut(&prepared.node)

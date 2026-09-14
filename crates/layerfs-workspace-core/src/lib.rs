@@ -3,6 +3,8 @@
 pub mod backing;
 mod checkpoint;
 pub mod file_edit;
+mod frozen;
+pub use frozen::FrozenFrontier;
 mod limits;
 pub mod namespace;
 pub use limits::ResourcePolicy;
@@ -435,6 +437,12 @@ pub struct LiveWorkspace {
     pub dirty: BTreeSet<NodeId>,
     pub mutation_generation: u64,
     pub mutation_paths: BTreeMap<String, u64>,
+    /// The active Commit's frozen frontier, if any (one per workspace).
+    pub(crate) frozen: Option<Box<FrozenFrontier>>,
+    /// The generation whose changes are published in the current base root.
+    /// Later generations are live changes; this stays monotonic, unlike the
+    /// legacy checkpoint reset to zero.
+    pub covered_generation: u64,
 }
 
 impl LiveWorkspace {
@@ -461,6 +469,8 @@ impl LiveWorkspace {
             dirty: BTreeSet::new(),
             mutation_generation: 0,
             mutation_paths: BTreeMap::new(),
+            frozen: None,
+            covered_generation: 0,
         }
     }
 
@@ -487,6 +497,7 @@ impl LiveWorkspace {
     }
 
     pub fn chmod(&mut self, node: NodeId, mode: u32) -> Result<()> {
+        self.protect(node);
         let generation = self.next_generation()?;
         let value = self.nodes.get_mut(&node).ok_or(Error::NotFound("node"))?;
         let revision = value
@@ -504,6 +515,7 @@ impl LiveWorkspace {
     }
 
     pub fn set_mtime(&mut self, node: NodeId, seconds: i64, nanos: u32) -> Result<()> {
+        self.protect(node);
         if nanos > 999_999_999 {
             return Err(Error::InvalidInput("mtime"));
         }

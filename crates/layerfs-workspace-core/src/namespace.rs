@@ -14,10 +14,10 @@ pub(crate) struct AcquiredNames {
 }
 
 pub struct ResolvedName {
-    parent: NodeId,
-    revision: u64,
-    name: CanonicalName,
-    existing: Option<NodeId>,
+    pub(crate) parent: NodeId,
+    pub(crate) revision: u64,
+    pub(crate) name: CanonicalName,
+    pub(crate) existing: Option<NodeId>,
 }
 
 #[cfg(test)]
@@ -205,11 +205,13 @@ impl LiveWorkspace {
 
     pub fn pin(&mut self, node: NodeId) -> Result<()> {
         self.check_pin(node)?;
+        self.protect(node);
         self.nodes.get_mut(&node).unwrap().pins += 1;
         Ok(())
     }
 
     pub fn pin_directory(&mut self, node: NodeId) -> Result<()> {
+        self.protect(node);
         let value = self.nodes.get_mut(&node).ok_or(Error::NotFound("node"))?;
         if !matches!(value.data, Data::Directory(_)) {
             return Err(Error::InvalidInput("directory"));
@@ -223,6 +225,7 @@ impl LiveWorkspace {
 
     /// Returns whether edited ranges were released and adapter retirement can run.
     pub fn unpin(&mut self, node: NodeId) -> Result<bool> {
+        self.protect(node);
         let value = self.nodes.get_mut(&node).ok_or(Error::NotFound("node"))?;
         value.pins = value
             .pins
@@ -232,6 +235,7 @@ impl LiveWorkspace {
     }
 
     pub fn reclaim(&mut self, node: NodeId) -> bool {
+        self.protect(node);
         if self.nodes.get(&node).is_some_and(|value| {
             value.paths.is_empty()
                 && value.pins == 0
@@ -273,6 +277,7 @@ impl LiveWorkspace {
     }
 
     pub fn directory_mut(&mut self, node: NodeId) -> Result<&mut DirectoryData> {
+        self.protect(node);
         let node_value = self.nodes.get_mut(&node).ok_or(Error::NotFound("node"))?;
         let Data::Directory(directory) = &mut node_value.data else {
             return Err(Error::InvalidInput("directory"));
@@ -532,6 +537,7 @@ impl LiveWorkspace {
         }
         .validate(kind)?;
         if let Some(id) = self.canonical_nodes.get(&inode).copied() {
+            self.protect(id);
             let live = self
                 .nodes
                 .get_mut(&id)
@@ -665,6 +671,7 @@ impl LiveWorkspace {
             .changes
             .insert(name.name.as_bytes().to_vec(), Some(node));
         self.dirty.insert(node);
+        self.protect(node);
         let value = self.nodes.get_mut(&node).unwrap();
         value.links = links;
         value.paths.insert(target);
@@ -698,6 +705,7 @@ impl LiveWorkspace {
         self.directory_mut(name.parent)?
             .changes
             .insert(name.name.as_bytes().to_vec(), None);
+        self.protect(node);
         let value = self.nodes.get_mut(&node).unwrap();
         value.links = value.links.saturating_sub(1);
         value.paths.remove(&path);
@@ -774,6 +782,7 @@ impl LiveWorkspace {
             .changes
             .insert(target_name, Some(node));
         // ponytail: update only materialized paths; add a path index if this scan is measured as material.
+        self.protect_frontier_paths();
         for value in self.nodes.values_mut() {
             value.paths = value
                 .paths

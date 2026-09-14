@@ -37,6 +37,14 @@ impl BackingRef {
     pub fn is_unique(&self) -> bool {
         Arc::strong_count(&self.0) == 1
     }
+
+    /// Adapter retirement accounting: how many owners currently retain this
+    /// segment (registry, live pieces, frozen frontiers, read plans). The
+    /// core never interprets the count; adapters use it to decide when a
+    /// failed reservation's segment is physically unreachable.
+    pub fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.0)
+    }
 }
 
 impl PartialEq for BackingRef {

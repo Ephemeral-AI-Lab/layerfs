@@ -40,6 +40,9 @@ pub mod live_runtime;
 mod immutable_read_cache;
 
 #[cfg(feature = "live")]
+pub mod local_spool;
+
+#[cfg(feature = "live")]
 pub mod live_wire;
 
 #[cfg(feature = "live")]
