@@ -227,12 +227,19 @@ impl Filesystem for LayerFs {
             }
             let result = async {
                 let node = this.node(ino)?;
+                // #144 R1a: each applied mutation reports the exact installed
+                // attr, so the kernel reply is built from the last mutation
+                // instead of a second `Op::Attr` round trip. A SETATTR that
+                // mutates nothing (mode/uid/gid/flags unchanged, no size or
+                // mtime) still reads the attr once.
+                let mut installed = None;
                 {
                     if let Some(size) = size {
-                        this.port.truncate_async(node, size).await.map_err(errno)?;
+                        installed =
+                            Some(this.port.truncate_async(node, size).await.map_err(errno)?);
                     }
                     if let Some(mode) = mode {
-                        this.port.chmod_async(node, mode).await.map_err(errno)?;
+                        installed = Some(this.port.chmod_async(node, mode).await.map_err(errno)?);
                     }
                     if let Some(value) = mtime {
                         let value = match value {
@@ -242,12 +249,18 @@ impl Filesystem for LayerFs {
                         let value = value
                             .duration_since(UNIX_EPOCH)
                             .map_err(|_| fuser::Errno::EINVAL)?;
-                        this.port
-                            .set_mtime_async(node, value.as_secs() as i64, value.subsec_nanos())
-                            .await
-                            .map_err(errno)?;
+                        installed = Some(
+                            this.port
+                                .set_mtime_async(node, value.as_secs() as i64, value.subsec_nanos())
+                                .await
+                                .map_err(errno)?,
+                        );
                     }
-                    this.attr(this.port.attr_async(node).await.map_err(errno)?)
+                    let attr = match installed {
+                        Some(attr) => attr,
+                        None => this.port.attr_async(node).await.map_err(errno)?,
+                    };
+                    this.attr(attr)
                 }
             }
             .await;

@@ -650,25 +650,34 @@ impl HostOverlay {
             Ok(m.view())
         })
     }
-    pub(crate) fn truncate(&self, node: NodeId, size: u64) -> Result<()> {
+    /// Metadata mutations return the exact installed `Attr` (#144 R1a): the
+    /// reply carries the state the host authority owns, so a caller never
+    /// re-reads the node to build a kernel reply. The value is copied from the
+    /// same record that is installed, never read back after the mutation lock
+    /// is released.
+    pub(crate) fn truncate(&self, node: NodeId, size: u64) -> Result<Attr> {
         self.mutate(|m| {
             let (mut record, tree) = self.tree(&m.view(), node)?;
             if size == tree.len() {
-                return Ok(());
+                return Ok(record.attr);
             }
             let next = self.ranges.truncate(&tree, size)?;
             record.attr.size = size;
-            self.bump(m, record, next.root())
+            let installed = record.attr;
+            self.bump(m, record, next.root())?;
+            Ok(installed)
         })
     }
-    pub(crate) fn chmod(&self, node: NodeId, mode: u32) -> Result<()> {
+    pub(crate) fn chmod(&self, node: NodeId, mode: u32) -> Result<Attr> {
         self.mutate(|m| {
             let (mut record, root) = self.record(&m.view(), node)?;
             record.attr.mode = mode & 0o1777;
-            self.bump(m, record, root.as_ref())
+            let installed = record.attr;
+            self.bump(m, record, root.as_ref())?;
+            Ok(installed)
         })
     }
-    pub(crate) fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> Result<()> {
+    pub(crate) fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> Result<Attr> {
         if nanos >= 1_000_000_000 {
             return Err(StoreError::InvalidInput("mtime"));
         }
@@ -676,7 +685,9 @@ impl HostOverlay {
             let (mut record, root) = self.record(&m.view(), node)?;
             record.attr.mtime_seconds = seconds;
             record.attr.mtime_nanoseconds = nanos;
-            self.bump(m, record, root.as_ref())
+            let installed = record.attr;
+            self.bump(m, record, root.as_ref())?;
+            Ok(installed)
         })
     }
 

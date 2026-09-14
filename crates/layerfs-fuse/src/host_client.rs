@@ -255,7 +255,10 @@ impl HostClient {
     fn validate_result(operation: Op<'_>, bytes: &[u8]) -> PortResult<Vec<NodeId>> {
         let mut nodes = Vec::new();
         match operation {
-            Op::Attr(_) => {
+            // The SETATTR-class replies carry the installed attr, but the
+            // kernel already owns this inode's lookup, so no reference is
+            // registered here (unlike Create/Lookup with `kernel: true`).
+            Op::Attr(_) | Op::Truncate { .. } | Op::Chmod { .. } | Op::Mtime { .. } => {
                 wire::attr_in(bytes).map_err(|_| PortError::Io)?;
             }
             Op::Lookup { kernel, .. }
@@ -994,22 +997,28 @@ impl FilesystemPort for HostClient {
         });
     }
     fn truncate(&self, node: NodeId, size: u64) -> PortResult<()> {
-        self.run(self.truncate_async(node, size))
+        self.run(self.truncate_async(node, size)).map(|_| ())
     }
-    fn truncate_async<'a>(&'a self, node: NodeId, size: u64) -> PortFuture<'a, ()> {
-        Box::pin(self.unit(Op::Truncate { node, size }))
+    fn truncate_async<'a>(&'a self, node: NodeId, size: u64) -> PortFuture<'a, Attr> {
+        Box::pin(self.attribute(Op::Truncate { node, size }))
     }
     fn chmod(&self, node: NodeId, mode: u32) -> PortResult<()> {
-        self.run(self.chmod_async(node, mode))
+        self.run(self.chmod_async(node, mode)).map(|_| ())
     }
-    fn chmod_async<'a>(&'a self, node: NodeId, mode: u32) -> PortFuture<'a, ()> {
-        Box::pin(self.unit(Op::Chmod { node, mode }))
+    fn chmod_async<'a>(&'a self, node: NodeId, mode: u32) -> PortFuture<'a, Attr> {
+        Box::pin(self.attribute(Op::Chmod { node, mode }))
     }
     fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> PortResult<()> {
         self.run(self.set_mtime_async(node, seconds, nanos))
+            .map(|_| ())
     }
-    fn set_mtime_async<'a>(&'a self, node: NodeId, seconds: i64, nanos: u32) -> PortFuture<'a, ()> {
-        Box::pin(self.unit(Op::Mtime {
+    fn set_mtime_async<'a>(
+        &'a self,
+        node: NodeId,
+        seconds: i64,
+        nanos: u32,
+    ) -> PortFuture<'a, Attr> {
+        Box::pin(self.attribute(Op::Mtime {
             node,
             seconds,
             nanos,
@@ -1037,6 +1046,7 @@ mod tests {
         refs: AtomicU64,
         lose_reply: AtomicBool,
         unknown: AtomicBool,
+        installed: Mutex<Option<Attr>>,
         started: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
         release: (Mutex<bool>, std::sync::Condvar),
     }
@@ -1070,7 +1080,36 @@ mod tests {
                 }
             }
             let result = match request.operation {
-                Op::Attr(node) => Ok(wire::attr_out(attr(node.0))),
+                Op::Attr(node) => Ok(wire::attr_out(
+                    self.installed.lock().unwrap().unwrap_or(attr(node.0)),
+                )),
+                // #144 R1a: SETATTR-class replies carry the installed attr.
+                Op::Chmod { node, mode } => {
+                    let mut installed = self.installed.lock().unwrap();
+                    let attr = installed.get_or_insert_with(|| attr(node.0));
+                    attr.mode = mode;
+                    self.applied.fetch_add(1, Ordering::AcqRel);
+                    Ok(wire::attr_out(*attr))
+                }
+                Op::Mtime {
+                    node,
+                    seconds,
+                    nanos,
+                } => {
+                    let mut installed = self.installed.lock().unwrap();
+                    let attr = installed.get_or_insert_with(|| attr(node.0));
+                    attr.mtime_seconds = seconds;
+                    attr.mtime_nanoseconds = nanos;
+                    self.applied.fetch_add(1, Ordering::AcqRel);
+                    Ok(wire::attr_out(*attr))
+                }
+                Op::Truncate { node, size } => {
+                    let mut installed = self.installed.lock().unwrap();
+                    let attr = installed.get_or_insert_with(|| attr(node.0));
+                    attr.size = size;
+                    self.applied.fetch_add(1, Ordering::AcqRel);
+                    Ok(wire::attr_out(*attr))
+                }
                 Op::Lookup { kernel, .. } => {
                     if kernel {
                         self.refs.fetch_add(1, Ordering::AcqRel);
@@ -1287,6 +1326,42 @@ mod tests {
             client.detach().await.unwrap();
             assert_eq!(backend.refs.load(Ordering::Acquire), 0);
             assert_eq!(client.0.cleanup_slots.available_permits(), CLEANUP_SLOTS);
+        });
+    }
+    /// #144 R1a: each SETATTR-class mutation is exactly one wire frame whose
+    /// reply carries the installed attr. The client must not issue a follow-up
+    /// `Op::Attr` to build the kernel reply.
+    #[test]
+    fn setattr_class_mutations_take_one_frame_and_reply_with_the_installed_attr() {
+        let backend = Arc::new(Backend::default());
+        let client = backend.client();
+        LiveRuntime::shared().unwrap().block_on(async {
+            let attr = client.chmod_async(NodeId(2), 0o640).await.unwrap();
+            assert_eq!((attr.node, attr.mode), (NodeId(2), 0o640));
+            let attr = client
+                .set_mtime_async(NodeId(2), 1_700_000_000, 7)
+                .await
+                .unwrap();
+            assert_eq!(
+                (attr.mtime_seconds, attr.mtime_nanoseconds),
+                (1_700_000_000, 7)
+            );
+            assert_eq!(
+                attr.mode, 0o640,
+                "the mutation reply carries the whole record"
+            );
+            let attr = client.truncate_async(NodeId(2), 9).await.unwrap();
+            assert_eq!((attr.size, attr.mode), (9, 0o640));
+            let observed = backend.observed.lock().unwrap().clone();
+            assert_eq!(
+                observed.len(),
+                3,
+                "one frame per mutation: the reply is the attr, not a re-fetch"
+            );
+            assert!(observed.iter().all(|frame| {
+                !matches!(wire::decode_request(frame).unwrap().operation, Op::Attr(_))
+            }));
+            assert_eq!(backend.applied.load(Ordering::Acquire), 3);
         });
     }
 }
