@@ -734,3 +734,22 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
   benchmarks" is judged against the wired route's own control (as screened here)
   or against the historical v0.1.5 legacy-route rows, since the route change
   itself accounts for the ≈80× gap.
+
+### L45 — owner narrows #130 optimization to `tiny-create-500-mixed-v4` with single-sample iteration
+
+- Owner direction: scope the handoff agent to `tiny-create-500-mixed-v4` only, on
+  the working belief that fixing it fixes the other tiny cases; **no multi-sample
+  runs for fast iteration**, because the current route's absolute time is already
+  large. Terminal evidence still follows the prospective n3 paired rule.
+- Recorded as a scoped handoff:
+  [issue130-tiny-create-500-optimization-handoff.md](issue130-tiny-create-500-optimization-handoff.md),
+  which fixes the measured starting point (candidate median 20,029.7 ms vs
+  same-route control 19,395.8 ms; phases exec 11,362.6 / commit 4,406.8 / end
+  4,249.2 ms; v0.1.5 242.660 ms), the one-sample iteration commands, the ordered
+  investigation targets (exec ≈23 ms/file first, then commit ≈8.8 ms/file, then
+  end ≈8.5 ms/file), the guardrails and the definition of done.
+- The "fixing create fixes the others" belief is carried as an explicit
+  hypothesis to test at the end (at minimum stat-500 and unlink-500, ideally the
+  bulk-500 cases); it is not asserted as established.
+- No product change, no new measurement, no acceptance claim; #130/#124/#125 stay
+  OPEN and the deferred 25k/million-file obligations are unchanged.
