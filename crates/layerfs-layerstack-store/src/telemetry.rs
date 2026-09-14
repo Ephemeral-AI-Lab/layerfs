@@ -1164,6 +1164,17 @@ mod tests {
                 namespace_dirty_nodes_visited: 15,
                 namespace_clean_nodes_visited: 16,
                 namespace_candidate_probe_nodes: 17,
+                construction_changed_keys: 0,
+                construction_changed_inodes: 0,
+                construction_binding_deltas: 0,
+                construction_file_tasks: 0,
+                construction_correspondence_visits: 0,
+                construction_correspondence_fragments: 0,
+                construction_replacement_bytes: 0,
+                construction_reused_bytes: 0,
+                construction_full_comparisons: 0,
+                construction_full_builds: 0,
+                construction_scratch_peak_reserved_bytes: 0,
             }
         );
     }
