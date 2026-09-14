@@ -82,6 +82,24 @@ mounts through `RemoteWorkspace`/`DockerProjection`); no case was run and no
 case/control receipt is claimed. 25k/two-second and million-file stay
 DEFERRED/OPEN. #130/#124/#125 remain OPEN; V1 remains open.
 
+**M2 first results (2026-09-14): screen passes, absolute slowness recorded.**
+The container route now runs the #130 implementation (M1, PRs #139/#140), and the
+paired screen was run on two tier-500 cases with a same-route control (main with
+the three #130 commits reverted, branch `codex/issue130-m2-control`). Candidate
+create-500 median 20,029.7 ms vs control 19,395.8 ms (+3.27 %, inside the 15 %
+band, 2/3 pairs slower): **no material regression, and no visible speedup**;
+unlink-500 −1.06 %. Against the historical v0.1.5 create-500 sum of 242.659707 ms
+the wired route is ≈80× slower; exec ≈11.4 s, commit ≈4.4 s and end ≈4.2 s
+dominate, so the remaining cost is route/lifecycle/commit overhead owned by #124,
+not P130.2's reclamation or Index work. `tiny-stat-500` is incomplete (one pair,
++8.64 %) and the two bulk-500 cases were not run; the same-route n3 pairs for
+create/unlink pass with no material regression. Raw receipts:
+`benchmark-results/issue130-m2/runs/` (git-ignored, retained); identities and
+phase tables in ledger L44. Next investigation: instrument a host-authority
+dispatch counter in the receipt, then attack the dominant exec/commit/end phases;
+owner decision needed on whether "close to the existing tiny-churn benchmarks"
+is judged against the same-route control or the historical legacy-route rows.
+
 Next #130 implementation task: the focused whole-arena reclamation counterexample
 and local-reclamation repair (P130.2), then bounded metadata preparation.
 P130.1 pins the five tier-500 comparator/cost instrumentation in parallel.
