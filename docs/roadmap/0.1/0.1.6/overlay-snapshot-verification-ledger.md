@@ -639,3 +639,80 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
   adopted and the original failure is retained.
 - Deferred: the 25k/two-second milestone and million-file qualification remain
   DEFERRED/OPEN; neither was registered, generated or run.
+
+### L44 — #130 paired screen on the wired container route: two cases complete, absolute slowness recorded
+
+- Identity: `tiny-create-500-mixed-v4` and `tiny-unlink-500-mixed-v4`, seed 1, `--setup clone`,
+  `perf-fast` collection mode, n3 pairs. Candidate = delivered main
+  `918ad73de00aa5eed97f4b69c66594c298d4a63e` (P130.2 + the #124 container
+  host-authority wiring); control = the same wired route with the three #130
+  commits reverted, branch `codex/issue130-m2-control` commit
+  `0b15e178375f8a80b59d4c659700a896db54c07a`. Sealed arms:
+  candidate binary `5dc3fd496a22270e6b2e78e328cf543117baca0299fa58ac1592bc744e18f018`,
+  compilation seal `48a2e563…`, product seal `8613248f…`, image
+  `layerfs-bench-infra:95aa0eada65960a8`; control binary
+  `2f2580321aa5cb9b97404b0cbdea37a8534067778a534b0a58266016493d0422`,
+  compilation seal `bc7c4dc0…`, product seal `883f36e1…`, image
+  `layerfs-bench-infra:9b0bdbcb2507eb12`. Army custody verified from the run
+  receipts (`source_arm`, `binary_sha256`, `LAYERFS_SOURCE_COMMIT`, image id).
+  Raw receipts: `benchmark-results/issue130-m2/runs/<arm>-c<n>/perf.jsonl`
+  (git-ignored, retained locally); arm binaries under
+  `benchmark-results/issue130-m2/arms/`.
+- Environment: macOS host store/coordinator + Linux container (2 CPU, 2 GiB, no
+  swap, 256 PID, `/dev/fuse`, SYS_ADMIN), container **daemon mount route**
+  (`attach` receipt: `mount_ready_ns≈7.2 ms`, `docker_calls: 0`), prepared
+  5,000-file/500-MiB (`create`) and 5,500-file/525-MB (`unlink`) backgrounds
+  reused (preparation 2.4 s).
+
+| pair | create-500 candidate / baseline | unlink-500 candidate / baseline |
+|---|---|---|
+| 1 | 21,119.5 / 20,595.5 ms | 9,323.4 / 8,730.9 ms |
+| 2 | 18,725.8 / 19,395.8 ms | 10,834.8 / 10,823.0 ms |
+| 3 | 20,029.7 / 19,017.9 ms | 8,853.3 / 9,423.6 ms |
+| median | 20,029.7 / 19,395.8 ms (+3.27%) | 9,323.4 / 9,423.6 ms (−1.06%) |
+| pairs slower | 2/3 | 2/3 |
+| threshold (`max(15 %, 3 ms)`) | 2,909.4 ms | 1,413.5 ms |
+| screen verdict | **PASS — no material regression** | **PASS — no material regression** |
+
+- Phase medians (candidate / baseline): create-500 begin 10.5/11.1 ms, exec
+  11,362.6/10,980.2 ms, commit 4,406.8/4,128.9 ms, visibility 0.074/0.067 ms,
+  end 4,249.2/3,983.9 ms; unlink-500 exec 5,614.7/5,919.3 ms, commit
+  2,517.1/2,071.1 ms, end 1,195.0/1,148.1 ms.
+- **Honest result: the screen passes, but no #130 speedup is visible.** Create
+  median is +3.27 % (inside the 15 % band, inside noise), unlink median −1.06 %;
+  phase medians differ only within run-to-run spread except the unlink commit
+  phase (candidate ≈ +21 %, all three candidate samples above all three control
+  samples — retained as a diagnostic, not a screen failure).
+- **Absolute slowness (the decisive finding).** 20.0 s (candidate median,
+  500 creates) against the historical v0.1.5 `tiny-create-500-mixed-v4` public
+  sum of 242.659707 ms recorded in the plan: ≈80× slower. The workflow is
+  dominated by exec (≈11.4 s, ≈23 ms/file), commit (≈4.4 s) and end (≈4.2 s);
+  visibility is microseconds. P130.2's measured metadata reductions (−18 % page
+  writes, −23 % page reads per create) are too small to move a 20 s workflow,
+  and the dominant costs sit in the route/lifecycle/commit path that #124 owns,
+  not in payload reclamation or Index preparation.
+- Delimited: `tiny-stat-500-mixed-v4` is **incomplete** (one usable pair:
+  candidate 3,160.4 ms / baseline 2,908.9 ms, +8.64 %; run stopped on the
+  owner's instruction) and is not a screen result. `tiny-bulk-create-500-mixed-v3`
+  and `tiny-bulk-delete-500-mixed-v3` were **not run**. The runner's
+  `historical_target=TARGET_MISS` on create-500 is the receipt's own
+  reporting-only 15 s historical scope, not a #130 acceptance gate; unlink-500
+  reported `historical_target=PASS`.
+- Dispatch evidence and its gap: the container route is the proven host-authority
+  route (`CONTAINER DAEMON HOST AUTHORITY PASS`), the attach receipt shows the
+  daemon mount path, and the two arms differ only by the #130 commits inside
+  `HostOverlay`'s modules. A **counter-level dispatch proof inside the run
+  receipt was not instrumented** (no per-run `HostOverlay` operation counter),
+  so the comparison is route-verified but not counter-verified.
+- State: no container, benchmark process or measurement lock left running;
+  `benchmark-results/issue130-m2/` retained (git-ignored); suite gates unchanged
+  (`tools/test-fast.sh` PASS before the runs; no product source changed by M2).
+- Recommended next investigation (handoff): (1) instrument the run receipt with
+  a host-authority dispatch counter and re-confirm custody; (2) attack the
+  dominant phases — per-operation exec path (FUSE/daemon round trips,
+  per-operation lifecycle/admission), commit construction (~8.8 ms/file) and end
+  (~8.5 ms/file) — before any further metadata/allocator micro-optimization;
+  (3) decide with the owner whether "close to the existing tiny-churn
+  benchmarks" is judged against the wired route's own control (as screened here)
+  or against the historical v0.1.5 legacy-route rows, since the route change
+  itself accounts for the ≈80× gap.
