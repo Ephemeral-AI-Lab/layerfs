@@ -25,6 +25,19 @@ contracts remain unchanged and no new performance gate is introduced.
 
 ## Scope and fixed decisions
 
+Owner scheduling/objective amendment, 2026-09-14: promote
+[#130](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130) into this migration
+before final capacity qualification and Phase 7. Its
+[implementation plan](overlay-minimal-overhead-implementation-plan.md) defines
+the current existing-tiny-churn comparison and rejects quadratic scaling.
+The owner now defers the 25k/two-second and million-file cases; do not register
+or run them for this evaluation. #130's former after-closure prerequisite is
+obsolete. Existing benchmark criteria and required #124 correctness/capacity
+remain intact; deferred capacity stays OPEN wherever terminal contracts require
+it. Progress dependency-ready work while V1 is investigated. The final campaign
+still needs its correct sealed candidate and applicable prerequisites; original
+phase-completion evidence is not satisfied by this smaller evaluation.
+
 Implement one current mutable Workspace overlay with host private backing, owned
 Commit snapshots, and independent Commit attempts. Snapshot input feeds the existing
 shared Init/Commit construction machinery, then canonical admission,
@@ -50,6 +63,7 @@ waived by this performance-policy decision.
 | Work | Owner | Completion meaning |
 | --- | --- | --- |
 | Product contracts, implementation, removal of old coupling, correctness and source handoff | Implementation issue | Correct behavior with V1-V4 addressed and affected integration checks; no claim of benchmark success before final campaign. |
+| Promoted overhead reduction in existing backing/Index/ranges/construction and tiny-churn comparison | #130 | Its own scoped implementation and affected evidence; production wiring/V1/non-Commit migration remain #124, final full matrix remains #125. Independent #130 components proceed while only their actual public-route dependencies are pending. |
 | Full non-#122 suite selection, execution, verification, raw data and human-readable report | Benchmark issue | All included required runs accounted for and honestly reported; benchmark execution/reporting is distinct from release qualification. |
 | Pending-metadata capacity and million-file correctness objective | #123, coordinated through implementation issue | Preserve required scale/ownership evidence; do not silently replace or close #123. |
 | #122's new/extended benchmark cases | #122 only, outside this plan | Do not run, prepare case-specific inputs for, or claim completion of those cases in this campaign. |

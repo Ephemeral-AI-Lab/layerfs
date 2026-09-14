@@ -3,11 +3,14 @@
 Status: source-backed proposal, 2026-09-14. Not an implementation, performance
 qualification, amendment of the frozen contracts, or completion of #124/#125.
 
-Scheduling: [deferred follow-up #130](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130).
-Implement only after the earlier seven steps, their required correctness/capacity
-and full non-#122 benchmark evidence, and verified completed closure of #124 and
-#125. This proposal is not an extra completion gate for that campaign and does
-not permit moving its mandatory fixes into this follow-up.
+Scheduling update: [#130](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130)
+is promoted into the active migration, before final capacity qualification and
+benchmarks. The current objective is close performance on the existing tiny-churn
+cases with no quadratic scaling. The 25k/two-second and million-file cases are
+deferred; they are not current registration or execution tasks. The [current implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
+supersedes this review's earlier order and selects the initial representation;
+the remaining analysis below is retained context, not a mandatory pager/feature
+bundle. #124/#125 retain all correctness, capacity and benchmark obligations.
 
 The owner requires a fresh Workspace to be affordable for each agent tool call.
 Reusing a mutable Workspace and resetting it is not a substitute for that
@@ -330,7 +333,7 @@ fragmentation, cache misses and RPC work remain real costs.
 ## Continued operation during and after Commit
 
 The live Workspace and a Commit attempt own separate views. These correctness
-requirements already belong to #124 and the earlier seven steps; the deferred
+requirements already belong to #124 and the earlier seven steps; the promoted
 #130 optimization must preserve them. This clarification neither postpones their
 verification nor claims they are proved merely by the proposed representation.
 

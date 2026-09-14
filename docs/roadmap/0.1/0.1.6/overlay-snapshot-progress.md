@@ -9,6 +9,57 @@ for that work; the append-only record of individual checks is
 
 ## Current position
 
+**Latest owner direction: #130 is promoted before final capacity qualification
+and benchmarks.** Read the
+[current implementation plan](overlay-minimal-overhead-implementation-plan.md)
+first. The latest objective is close performance on existing tiny-churn cases:
+quick iteration uses the five tier-500 create/stat/unlink/bulk-create/bulk-delete
+cases, then the full 20 when stable. Use existing applicable paired regression
+and stronger case criteria.
+The owner defers the 25k/two-second and million-file cases. Do not register/run
+them for this evaluation; required broader capacity obligations remain OPEN.
+No quadratic scaling is accepted. The old #130 after-closure prerequisite and
+the earlier two-second active target are superseded.
+
+Two subagents reviewed tiny-churn receipts and the actual write/storage path;
+the coordinator reviewed contracts. Current source has a whole-arena evacuation
+counterexample with quadratic cumulative work, per-file storage amplification
+and serialized host RPCs. Repair reclamation and redundant preparation first;
+select further existing-backend improvements from measured tiny-case costs.
+A full compact-storage bundle or new pager is not a prerequisite. #124/#125/#130 remain OPEN; V1, complete production Docker
+dispatch, capacity and final benchmark qualification are outstanding.
+
+Current review/publication branch: `codex/promote-workspace-overhead`, based on
+main `695c482e7aa8471710ad7e869334084de0bf2fa0`. The interrupted unverified changes
+in lifecycle.rs, projection.rs, reconcile.rs and registry.rs were preserved,
+including a binary patch backup before the branch switch. No product build,
+benchmark, probe, cleanup or new product test was run during this plan review.
+Trajectory evidence remains published on `codex/step6-capacity-trajectory`,
+not merged here; use its exact commits rather than relabeling it as main evidence.
+
+Next #130 implementation task: the focused whole-arena reclamation counterexample
+and local-reclamation repair (P130.2), then bounded metadata preparation.
+P130.1 pins the five tier-500 comparator/cost instrumentation in parallel.
+Production dispatch/wiring, V1 and the interrupted consumer patch remain #124;
+only authentic public timing depends on that route, not all #130 component work.
+No new fixture or scale campaign.
+Preserve the old 25k debug receipt unchanged. Check actual
+process/measurement-lock ownership before running. Final full #125 collection
+still waits for complete correctness and a sealed candidate, not issue closure.
+
+Earlier publication record (its two-second evaluation is now superseded): plan source `d36058a31f734ca12995c3b249c5ff80331b5a21`
+is pushed. The #130 title/body now use the promoted order and explicit objective.
+Comments were posted and read back exactly:
+[#130 promotion/review](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130#issuecomment-5659266555),
+[#124 migration handoff](https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5659266831),
+[#125 benchmark handoff](https://github.com/Ephemeral-AI-Lab/layerfs/issues/125#issuecomment-5659267085).
+All three issues remain OPEN. Document links/structure/whitespace passed checking;
+the interrupted product patch remains byte-identical (SHA-256
+`8a50da256a3292530fe91e60ae87b88eec1da5557e796daa635dcb21f40ca837`).
+This documentation update completes planning/review only, not any P130 package.
+
+### Historical stopping checkpoint
+
 **Owner-requested stopping checkpoint: all three integration fixes have verified passes.** Product/evidence commit `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a` and budget/handoff head `820ecab8079c7e0f09c29c6df1c983366e3dd77e` were merged through PR#126 to remote main at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`; fetch and ancestry checks succeeded. This run stops after the documentation-only publication record.
 
 Read [the successor handoff](overlay-snapshot-step1-handoff.md) first. It supersedes the older next-action entries retained below as history. Public default-path integration, V1, capacity qualification and the final benchmark campaign remain unfinished. Both issues stay OPEN.

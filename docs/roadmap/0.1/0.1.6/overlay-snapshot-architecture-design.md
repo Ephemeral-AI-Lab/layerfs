@@ -19,6 +19,17 @@ zero-range locality, retention, and performance requirements. This architecture
 document retains the original alternatives and source analysis; neither document
 claims full-surface readiness or measured benchmark performance.
 
+Owner review update, 2026-09-14: the
+[promoted #130 implementation plan](overlay-minimal-overhead-implementation-plan.md)
+prioritizes local reclamation instead of whole-arena sweeps and bounded Index
+preparation. Select further density/range/payload changes from measured costs;
+no new RAM-first pager is required. The current objective is close performance
+on the existing 20 tiny-churn cases. The 25k/two-second and million-file cases
+are deferred. Quadratic growth is rejected, including cumulative maintenance
+and diagnostic work. This update
+supersedes the old after-closure scheduling and unconstrained design alternatives,
+while preserving all snapshot/ownership/publication contracts.
+
 ## 1. Architectural conclusion and unresolved gates
 
 Separate live filesystem operation from Commit construction/publication. Maintain
@@ -160,11 +171,11 @@ snapshot acquisition cannot observe mismatched roots. Internal ordering tokens a
 not Workspace checkpoints or retained action history. New logical inode identity
 must be stable before a later Commit makes that inode canonical.
 
-Copy-on-write pages are the leading design candidate, not a selected B-tree/DB
-format. Ordinary updates touch affected pages and replacement ranges. A page
-reachable by a snapshot cannot be overwritten; exclusively owned pages may be
-updated in place only with a proven ownership protocol. No whole-map copy on
-capture or the first subsequent write is allowed. Metadata eviction must preserve
+The subsequent specification selects immutable published copy-on-write pages,
+including pages owned only by the current root. Ordinary updates touch affected
+pages and replacement ranges; unowned prepared pages can be filled before
+publication. The earlier exclusive-page in-place alternative is not selected.
+No whole-map copy on capture or the first subsequent write is allowed. Metadata eviction must preserve
 stable references to disk or retained buffers without an unbounded RAM indirection map.
 
 Payload segments can accept non-overlapping appends while older ranges are read.
@@ -496,6 +507,15 @@ not live filesystem operations.
 | H | Supported buffered writes and writable mappings straddle acquisition; combine SDK edits with kernel-cached pages. | Exact documented snapshot visibility and continued operations. Failure is a G1 failure, not permission to flush/freeze globally or weaken the oracle. |
 
 ## 4. Complexity vocabulary and assumptions
+
+Owner acceptance rule: no quadratic scaling with namespace, changed-set size or
+operation history. Necessary complete scans/input/output processing may be linear;
+point operations should follow logarithmic index paths, and snapshot ownership
+registration must be constant-sized. Creating N files through O(log N) individual
+updates totals O(N log N), not O(log N) or O(N); disclose residual sorting/index
+factors and measure them. A bounded per-call maintenance budget does not excuse
+quadratic total relocation. The #130 review found exactly that risk in the current
+payload arena sweep and requires local free-space/tail-block reclamation instead.
 
 Complexity below is conditional analysis, not measured results. Symbols separate
 logical cardinality from resident structures and actual I/O. Byte-linear terms

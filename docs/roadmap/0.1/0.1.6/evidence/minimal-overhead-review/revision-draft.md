@@ -1,15 +1,20 @@
 # #130 revision draft: minimal Workspace overhead
 
-Status: proposed replacement for the main #130 design document following the
-[rules/minimality audit](rule-audit/README.md). Not yet applied to the published
-issue or existing proposal; not an implementation or benchmark result.
+Status: retained earlier minimality draft following the
+[rules/minimality audit](rule-audit/README.md). The
+[promoted implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
+now selects the implementation order, scaling requirements and existing-tiny-churn
+comparison. The 25k/two-second and million-file cases are deferred. This draft is
+not implementation or benchmark evidence; select each next change from actual
+costs instead of requiring this or the later compact-storage bundle in full.
 
 ## Scheduling and authority
 
-Implement only after the earlier seven steps, required correctness/capacity and
-full non-#122 benchmark evidence, and verified completed closure of #124/#125.
-This follow-up adds no prerequisite to that campaign and cannot absorb its
-mandatory unfinished fixes.
+The owner promoted #130 before final capacity qualification and benchmarks;
+closure of #124/#125 is no longer a prerequisite. Continue dependency-ready
+optimization alongside production integration, preserving all mandatory
+correctness and cleanup. Use the linked current plan rather than this historical
+draft's after-delivery assumptions below.
 
 The [overlay rules](../../overlay-snapshot-rule.md) and applicable
 [specification](../../overlay-snapshot-spec.md) remain authoritative. Preserve the
