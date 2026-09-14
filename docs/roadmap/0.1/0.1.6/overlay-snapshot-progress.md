@@ -9,15 +9,18 @@ for that work; the append-only record of individual checks is
 
 ## Current position
 
+**Owner-requested stopping checkpoint: all three integration fixes have verified passes.** Current source/evidence is committed in `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a`; next action for this run is publish the handoff and merge the checkpoint to remote main through PR#126, then verify remote ancestry and stop.
+
+Read [the successor handoff](overlay-snapshot-step1-handoff.md) first. It supersedes the older next-action entries retained below as history. Public default-path integration, V1, capacity qualification and the final benchmark campaign remain unfinished. Both issues stay OPEN.
+
 | Item | Value |
 | --- | --- |
-| Phase | 2 in progress; V1 acceptance remains OPEN and V2/V3/V4 remain implementation obligations |
-| Next concrete action | Finish shared canonical scratch accounting, compile new SDK pre-reserved-reader/coordinator conflict/runtime checks, integrate host SDK coherence owner and bounded maintenance, then actual mount/lifecycle consumers |
-| Phases 2–6 | Phase 2 disk roots/payload/ranges/owned reads have component evidence; host ordinary-operation, logical quota, kernel-reference and server/cookie cores have focused evidence; the FUSE client and Phase 4 candidate adapter are being integrated. No whole phase or public-path acceptance claimed |
-| Phase 7 | Not started. No benchmark case was executed for #124/#125 |
-| Active processes | No root Cargo process. publication_receipts edits Store scratch/spill and candidate capacity; v1_mechanism edits host SDK coordinator after Linux adapter refresh PASS; overlay_index edits bounded coordinator maintenance after lifecycle consumer audit. Root edits host runtime/local transport, pending reader/coordinator checks. No benchmark running |
-| Measurement lock | Not held |
-| Unresolved contract | V1: NOTIFY_RETRIEVE supplies dirty bytes but retains mutable pages, not a snapshot. See follow-up investigation; no relaxation approved |
+| Phase | Components of2–5 implemented/checked; no new whole-phase completion; V1 exit stillOPEN |
+| Bounded step1 | Mounted shutdown rerun PASS; actual-spill fixture PASS; maintenance oracle PASS |
+| Publication checks | Build/fmt/whitespace/runner checks PASS; native executed tests pass but171s misses150s gate; strictClippyFAIL |
+| Active resources | No test/build process or owned container; measurement lock released |
+| Phase7 | NOT_STARTED; no#122 registered scenario executed |
+| Successor next task | Existing8192 persisted-token admission defect: bounded8193-file reproduction, then ownership correction; no capacity stress was run in this stopped checkpoint |
 
 Scheduling correction (2026-09-14): the owner requested continued execution through
 terminal success. The predecessor's blanket wait before Phases 2–5 is superseded
