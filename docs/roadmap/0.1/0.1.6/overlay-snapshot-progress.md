@@ -100,6 +100,14 @@ dispatch counter in the receipt, then attack the dominant exec/commit/end phases
 owner decision needed on whether "close to the existing tiny-churn benchmarks"
 is judged against the same-route control or the historical legacy-route rows.
 
+**Successor execution vehicle (owner, 2026-09-14):** [#144](https://github.com/Ephemeral-AI-Lab/layerfs/issues/144)
+scopes the next agent to `tiny-create-500-mixed-v4` only, with single-sample iteration and
+two phases — Phase 1 root-cause investigation/experiments plus a report and draft
+optimization directions, Phase 2 implementation of the selected direction with the n3
+same-route paired screen as terminal evidence and a hypothesis check on the other tiny
+cases. Operational detail:
+[issue130-tiny-create-500-optimization-handoff.md](issue130-tiny-create-500-optimization-handoff.md).
+
 Next #130 implementation task: the focused whole-arena reclamation counterexample
 and local-reclamation repair (P130.2), then bounded metadata preparation.
 P130.1 pins the five tier-500 comparator/cost instrumentation in parallel.

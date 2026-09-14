@@ -741,6 +741,9 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
   the working belief that fixing it fixes the other tiny cases; **no multi-sample
   runs for fast iteration**, because the current route's absolute time is already
   large. Terminal evidence still follows the prospective n3 paired rule.
+- Execution vehicle created: [#144](https://github.com/Ephemeral-AI-Lab/layerfs/issues/144)
+  with two phases — Phase 1 investigation/experiments/report and draft directions, Phase 2
+  implementation of the selected optimization — linked from #130.
 - Recorded as a scoped handoff:
   [issue130-tiny-create-500-optimization-handoff.md](issue130-tiny-create-500-optimization-handoff.md),
   which fixes the measured starting point (candidate median 20,029.7 ms vs
