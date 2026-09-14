@@ -1,0 +1,36 @@
+Linux 05155676d1a4 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+baf482ee35d7d5c2c6b47b18230577be9ed0cb17473b1d1b46ddcf1ec5760cf9  /tmp/v1gen-followup
+probe: negotiated minor=31 flags=0x10021 writeback_cache=1
+T8 trial=0 park_ms=15 writer_rounds_during_plain_park=347192 rounds_per_us=23146.133 daemon_reads_during=0 daemon_writes_during=0
+T8 trial=1 park_ms=15 writer_rounds_during_plain_park=321112 rounds_per_us=21407.467 daemon_reads_during=0 daemon_writes_during=0
+T8 trial=2 park_ms=15 writer_rounds_during_plain_park=327561 rounds_per_us=21837.400 daemon_reads_during=0 daemon_writes_during=0
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=6489056 payload_max=6489056 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=4022
+T7 trial=0 fsync_rc=0 writer_round_park=6486957 hold=6489056 read=6490979 payload_max_minus_park=2099 payload_max_minus_hold=0 payload_max_minus_read=-1923
+T7 trial=0 page_values: 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056 6489056
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=6799113 payload_max=6799113 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=5058
+T7 trial=1 fsync_rc=0 writer_round_park=6797494 hold=6799113 read=6802552 payload_max_minus_park=1619 payload_max_minus_hold=0 payload_max_minus_read=-3439
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=7224674 payload_max=7224674 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=4723
+T7 trial=2 fsync_rc=0 writer_round_park=7223073 hold=7224674 read=7227796 payload_max_minus_park=1601 payload_max_minus_hold=0 payload_max_minus_read=-3122
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=7724604 payload_max=7724604 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=2978
+T7 trial=3 fsync_rc=0 writer_round_park=7722951 hold=7724604 read=7725929 payload_max_minus_park=1653 payload_max_minus_hold=0 payload_max_minus_read=-1325
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=8033243 payload_max=8033243 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=3783
+T7 trial=4 fsync_rc=0 writer_round_park=8030773 hold=8033243 read=8034556 payload_max_minus_park=2470 payload_max_minus_hold=0 payload_max_minus_read=-1313
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=8284529 payload_max=8284529 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=2825
+T7 trial=5 fsync_rc=0 writer_round_park=8283521 hold=8284529 read=8286346 payload_max_minus_park=1008 payload_max_minus_hold=0 payload_max_minus_read=-1817
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=8640108 payload_max=8640108 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=3891
+T7 trial=6 fsync_rc=0 writer_round_park=8638020 hold=8640108 read=8641911 payload_max_minus_park=2088 payload_max_minus_hold=0 payload_max_minus_read=-1803
+T7 daemon_writes=1 write_cache_flagged=1 distinct_pages=32/32 payload_min=8893633 payload_max=8893633 payload_spread_rounds=0 compared_pairs=496 violating_pairs=0 writer_rounds_during=4477
+T7 trial=7 fsync_rc=0 writer_round_park=8891891 hold=8893633 read=8896368 payload_max_minus_park=1742 payload_max_minus_hold=0 payload_max_minus_read=-2735
+T9 prefault_big pages=1024 writer_rounds=18446744073700696991 daemon_reads=1056 daemon_writes=9
+T9 trial=0 fsync_rc=0 daemon_write_requests=32 write_cache_flagged=32
+T9 daemon_writes=32 write_cache_flagged=32 distinct_pages=1024/1024 payload_min=42685 payload_max=42685 payload_spread_rounds=0 compared_pairs=523776 violating_pairs=0 writer_rounds_during=7
+T9 trial=0 sampled_pages p0=42685 p256=42685 p512=42685 p768=42685 p1023=42685 current_mapping_p0=42714
+T9 trial=1 fsync_rc=0 daemon_write_requests=32 write_cache_flagged=32
+T9 daemon_writes=32 write_cache_flagged=32 distinct_pages=1024/1024 payload_min=42716 payload_max=42716 payload_spread_rounds=0 compared_pairs=523776 violating_pairs=0 writer_rounds_during=9
+T9 trial=1 sampled_pages p0=42716 p256=42716 p512=42716 p768=42716 p1023=42716 current_mapping_p0=42742
+T9 trial=2 fsync_rc=0 daemon_write_requests=32 write_cache_flagged=32
+T9 daemon_writes=32 write_cache_flagged=32 distinct_pages=1024/1024 payload_min=42743 payload_max=42743 payload_spread_rounds=0 compared_pairs=523776 violating_pairs=0 writer_rounds_during=8
+T9 trial=2 sampled_pages p0=42743 p256=42743 p512=42743 p768=42743 p1023=42743 current_mapping_p0=42782
+probe: done. totals reads=1056 writes=105 write_cache=105
+EXIT=0
