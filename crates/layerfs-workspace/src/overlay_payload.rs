@@ -2245,6 +2245,60 @@ mod tests {
         Ok(())
     }
 
+    /// Runs the release/replace churn loop with completed maintenance between
+    /// deletions and returns `(freed, relocated, reclaimed, physical)` bytes.
+    fn churn_run(files: usize) -> io::Result<(u64, u64, u64, u64)> {
+        const SIZE: u64 = 8 * 1024;
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-payload-amortized-{}-{files}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory)?;
+        let payload = Payload::temporary(
+            &directory,
+            Limits {
+                physical_bytes: 16 * 1024 * 1024,
+                owners: files + 16,
+                readers: 4,
+                writes: 4,
+                index: IndexLimits {
+                    max_pages: 65_536,
+                    max_roots: 4096,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        let mut live = Vec::new();
+        for step in 0..files {
+            live.push(payload.write_from(&mut Repeated(step as u8), SIZE)?);
+        }
+        let mut freed = 0_u64;
+        for step in 0..files {
+            let retired = live.remove(0);
+            drop(retired);
+            freed += SIZE;
+            // Completed maintenance between deletions is the shape that made the
+            // former whole-arena evacuation quadratic.
+            while payload.reclaim_step()? {}
+            live.push(payload.write_from(&mut Repeated(step as u8), SIZE)?);
+        }
+        let after = payload.stats()?;
+        let result = (
+            freed,
+            after.relocated_bytes,
+            after.reclaimed_bytes,
+            after.physical_bytes,
+        );
+        assert_eq!(after.live_block_bytes, files as u64 * SIZE, "{after:?}");
+        assert_eq!(after.unclaimed_bytes, 0, "{after:?}");
+        drop(live);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.physical_bytes, 0);
+        drop(payload);
+        fs::remove_dir(&directory)?;
+        Ok(result)
+    }
+
     /// Focused counterexample and repair proof for release-triggered reclamation.
     ///
     /// The former mechanism set a sweep flag on every coverage release and
@@ -2256,60 +2310,42 @@ mod tests {
     /// relocation is charged to reclaimed bytes and stays linear in freed input.
     #[test]
     fn repeated_small_release_over_large_live_set_moves_only_justified_bytes() -> io::Result<()> {
-        const FILES: usize = 64;
-        const SIZE: u64 = 8 * 1024;
-        let directory =
-            std::env::temp_dir().join(format!("layerfs-payload-amortized-{}", std::process::id()));
-        fs::create_dir_all(&directory)?;
-        let payload = Payload::temporary(
-            &directory,
-            Limits {
-                physical_bytes: 16 * 1024 * 1024,
-                owners: FILES as usize + 16,
-                readers: 4,
-                writes: 4,
-                index: IndexLimits {
-                    max_pages: 65_536,
-                    max_roots: 4096,
-                    ..IndexLimits::default()
-                },
-            },
-        )?;
-        let mut live = Vec::new();
-        for step in 0..FILES {
-            live.push(payload.write_from(&mut Repeated(step as u8), SIZE)?);
-        }
-        let mut freed = 0_u64;
-        for step in 0..FILES {
-            let retired = live.remove(0);
-            drop(retired);
-            freed += SIZE;
-            // Completed maintenance between deletions, exactly the shape that
-            // made the former whole-arena evacuation quadratic.
-            while payload.reclaim_step()? {}
-            live.push(payload.write_from(&mut Repeated(step as u8), SIZE)?);
-        }
-        let after = payload.stats()?;
+        let (freed, relocated, reclaimed, physical) = churn_run(64)?;
         println!(
-            "payload amortized files={FILES} size={SIZE} freed={freed} relocated={} reused={} \
-             unclaimed={} physical={} reclaimed={}",
-            after.relocated_bytes,
-            after.reused_bytes,
-            after.unclaimed_bytes,
-            after.physical_bytes,
-            after.reclaimed_bytes
+            "payload amortized files=64 freed={freed} relocated={relocated} reused=0 \
+             physical={physical} reclaimed={reclaimed}"
         );
-        assert_eq!(after.live_block_bytes, FILES as u64 * SIZE, "{after:?}");
         assert!(
-            after.relocated_bytes <= freed,
-            "relocation must be charged to reclaimed bytes: {after:?}"
+            relocated <= freed,
+            "relocation must be charged to reclaimed bytes: relocated={relocated} freed={freed}"
         );
-        assert_eq!(after.unclaimed_bytes, 0, "{after:?}");
-        drop(live);
-        drain(&payload)?;
-        assert_eq!(payload.stats()?.physical_bytes, 0);
-        drop(payload);
-        fs::remove_dir(&directory)?;
+        Ok(())
+    }
+
+    /// Multi-size oracle for the same bound: relocation work must follow freed
+    /// bytes at every size instead of the square of the live set. This is an
+    /// ownership/byte oracle, not a timing gate.
+    #[test]
+    fn reclamation_work_follows_freed_bytes_across_sizes() -> io::Result<()> {
+        let mut previous = 0_u64;
+        for files in [16_usize, 32, 64] {
+            let (freed, relocated, reclaimed, physical) = churn_run(files)?;
+            println!(
+                "payload scaling files={files} live={} freed={freed} relocated={relocated} \
+                 reclaimed={reclaimed} physical={physical}",
+                files as u64 * 8 * 1024
+            );
+            assert!(
+                relocated <= freed,
+                "files={files} relocated={relocated} freed={freed}"
+            );
+            assert!(
+                relocated >= previous,
+                "relocation must grow with freed input: files={files} relocated={relocated} \
+                 previous={previous}"
+            );
+            previous = relocated;
+        }
         Ok(())
     }
 
