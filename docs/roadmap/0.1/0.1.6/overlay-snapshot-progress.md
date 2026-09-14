@@ -38,6 +38,17 @@ and repair from P130.2. Preserve the 25k debug receipt unchanged. Check actual
 process/measurement-lock ownership before running. Final full #125 collection
 still waits for complete correctness and a sealed candidate, not issue closure.
 
+Publication record: plan source `d36058a31f734ca12995c3b249c5ff80331b5a21`
+is pushed. The #130 title/body now use the promoted order and explicit objective.
+Comments were posted and read back exactly:
+[#130 promotion/review](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130#issuecomment-5659266555),
+[#124 migration handoff](https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5659266831),
+[#125 benchmark handoff](https://github.com/Ephemeral-AI-Lab/layerfs/issues/125#issuecomment-5659267085).
+All three issues remain OPEN. Document links/structure/whitespace passed checking;
+the interrupted product patch remains byte-identical (SHA-256
+`8a50da256a3292530fe91e60ae87b88eec1da5557e796daa635dcb21f40ca837`).
+This documentation update completes planning/review only, not any P130 package.
+
 ### Historical stopping checkpoint
 
 **Owner-requested stopping checkpoint: all three integration fixes have verified passes.** Product/evidence commit `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a` and budget/handoff head `820ecab8079c7e0f09c29c6df1c983366e3dd77e` were merged through PR#126 to remote main at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`; fetch and ancestry checks succeeded. This run stops after the documentation-only publication record.
