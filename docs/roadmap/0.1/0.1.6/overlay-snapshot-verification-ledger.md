@@ -879,3 +879,66 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
   dependency/manifest/lockfile change. No container, process or measurement lock
   left behind; the tier-100 criterion stays BLOCKED (untouched); #130/#124/#125/
   #144 stay OPEN.
+
+### L48 — #144 Phase 2 R3a: batched maintenance drain step (structural gate met; per-node work, not step overhead, is the residual)
+
+- Identity: Phase-2 change 2, branch `codex/issue144-phase2-r3a-batched-drain`
+  commit `a79c07640` (clean tree, `LAYERFS_SOURCE_DIRTY: false`), base = main
+  `40e3bfda5` (R1a merged). Source seal `1bca9ef24…`, compilation seal
+  `2f97ea933…`, product seal `f464ba298…`, host binary `976edbf9…`, image
+  `layerfs-bench-infra:1bca9ef24ba82ff0`. Run
+  `benchmark-results/issue144-phase2/runs/iter-r3a-1789409235` (git-ignored,
+  retained): `tiny-create-500-mixed-v4`, seed 1, `--setup clone`, collection
+  mode, one sample, `--source-arm candidate` — **diagnostic, not acceptance
+  evidence**.
+- What changed: one maintenance step now processes a bounded batch of
+  `NODES_PER_STEP = 64` pending nodes through a single `overlay.prepare` +
+  `install` pair (`canonicalize_batch`), completes the batch with one
+  `Index::remove_batch` (one storage lock, one reclamation duty), and clones and
+  installs the published context once per batch; `HostOverlay::maintain` retires
+  up to 8 payload release jobs per call instead of one. A stale root still
+  reports the whole install-pending batch as retry, so exact correspondence
+  installation is unchanged — only amortized. The drain stays O(D); batching
+  changes the per-node constant, not the bound.
+- Structural gate — **MET** (deterministic counters): End settle steps
+  **512 → 56** for the same 512 pending nodes (fixed-size per-step work is now a
+  bounded 64-node batch, and the step count is set by the two queues rather than
+  by the node count), while `host_authority_dispatches` stays 3,512
+  (= `live_backing_calls`, route proof intact) and `attr` 463 (R1a unchanged).
+  In-process bounded fixture (500 created+written files, 501 pending nodes):
+  drain **10,902 → 9,028 ms**, steps **1002 → 125**; one step installs 64 nodes
+  through ≤4 root preparations where the previous shape needed ≥64.
+- Timing (single sample, honest): settle_ns **4,021.2 → 3,778.1 ms (−243 ms,
+  −6.0 %)**; commit `maintain_ns` 3,404.2 → 3,505.3 ms; `content_ns` 581.2 →
+  572.8; whole workflow 17,976.3 ms in a sample whose per-call cost was again
+  inflated (host dispatch 6,531 ms over 3,512 calls = 1.86 ms/call vs 1.02
+  ms/call at the Phase-1 baseline; exec 9,335.1 ms). The single-sample timing is
+  noise-dominated and is **not** acceptance evidence.
+- Decisive counter finding (this is what the counters, not the timing, show):
+  the brief's staged gate for R3a (per-step cost 7.85 → ≤1.5 ms, settle
+  ≤900 ms) is **not reachable by batching**, because the drain is not
+  step-overhead-bound. Removing 456 of 512 steps saved only ~0.5 ms per removed
+  step. In-process component measurement of the batched drain (500 files, 501
+  nodes): canonical planning/installation 1,919 ms for 501 nodes (**3.83
+  ms/node**, of which the batched `prepare`/`install` is a small share — the
+  planning is per-node index work), payload release backlog 940 ms for 502 jobs
+  (**1.87 ms/job**, one job per write), and the index/payload reclamation duty
+  driven by `HostOverlay::maintain` (measured 42.7 ms per call while a backlog
+  exists, 45 µs when drained). Batching cannot remove per-node planning or
+  reclamation; it removes only per-step machinery.
+- Tests: `one_step_installs_a_bounded_batch_through_a_single_root_preparation`
+  (pending queue drops by the whole batch and preparations per step stay
+  bounded — the amortization is asserted, not asserted-by-timing),
+  `batch_removal_matches_sequential_removal_and_tolerates_missing_keys`, and
+  the stale-context/retry tests now exercise the batch conflict path. Gates:
+  `tools/test-fast.sh` PASS (159 s), `cargo fmt --all --check` clean, CI clippy
+  invocation (`--workspace --locked -- -D clippy::correctness
+  -D clippy::suspicious -D unused_must_use`) clean.
+- Validity: current for the structural counter claim and the component
+  measurements. The single-sample timing row is a diagnostic. Contracts:
+  ordinary Commit still has no pause/quiesce/drain/checkpoint-reset; C1/C2
+  locality, exact correspondence semantics, CAS/CDC/pack boundaries, O(1)
+  snapshot acquisition, exact stage/retry receipts and per-op acknowledgment
+  ordering are unchanged; the batch charges its retained state to the Workspace
+  budget. No container, process or measurement lock left behind; the tier-100
+  criterion stays BLOCKED (untouched); #130/#124/#125/#144 stay OPEN.
