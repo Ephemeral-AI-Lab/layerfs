@@ -25,6 +25,18 @@ contracts remain unchanged and no new performance gate is introduced.
 
 ## Scope and fixed decisions
 
+Owner scheduling/objective amendment, 2026-09-14: promote
+[#130](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130) into this migration
+before final capacity qualification and Phase 7. Its
+[implementation plan](overlay-minimal-overhead-implementation-plan.md) defines
+the explicit <=2-second full 25,000-file lifecycle objective and rejects
+quadratic scaling. This supersedes #130's former after-closure prerequisite and
+the earlier absence of a numerical objective only for that new #130 case.
+Existing benchmark criteria and required #124 correctness/capacity remain intact.
+Progress dependency-ready representation/ownership work while V1 is investigated;
+do not run the final campaign until the selected candidate is correct and sealed.
+The seven phases and their issue-completion evidence still apply.
+
 Implement one current mutable Workspace overlay with host private backing, owned
 Commit snapshots, and independent Commit attempts. Snapshot input feeds the existing
 shared Init/Commit construction machinery, then canonical admission,

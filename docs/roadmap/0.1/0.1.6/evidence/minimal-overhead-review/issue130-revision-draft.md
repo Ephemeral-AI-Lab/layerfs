@@ -1,10 +1,10 @@
-## Deferred until the earlier seven steps complete
+## Historical issue-body draft: superseded by promoted implementation plan
 
-Implement only after required correctness/capacity and full non-#122 benchmark
-evidence, publication, and verified completed closure of #124/#125. This issue
-does not add a gate to that campaign or absorb its mandatory unfinished work.
-It preserves the delivered public integration and supported-surface capture;
-it does not restart their implementation.
+The owner promoted #130 into the active migration, with a <=2-second objective
+for the complete fresh 25k-file lifecycle and no quadratic scaling. Use the
+[current implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
+and live issue body. The remaining draft is retained review history, including
+its old prerequisite assumptions; it is not current scheduling authority.
 
 ## Objective
 

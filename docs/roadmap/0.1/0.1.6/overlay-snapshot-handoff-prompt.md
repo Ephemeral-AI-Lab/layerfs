@@ -1,5 +1,14 @@
 # Snapshot-Isolated Workspace implementation and verification handoff
 
+Current owner amendment (2026-09-14): #130 is promoted before final capacity
+qualification and benchmarks. Read the
+[minimal-overhead implementation plan](overlay-minimal-overhead-implementation-plan.md)
+alongside this handoff: it sets the explicit <=2-second full 25,000-file lifecycle
+objective and rejects quadratic scaling. The after-closure #130 gate is obsolete.
+Its objective does not waive V1-V4, capacity, existing benchmark criteria or #122
+exclusions. Historical predecessor/source descriptions below are not a current
+checkout status; inspect the latest progress and delivered source before resuming.
+
 Implement and verify Snapshot-Isolated Workspace in
 `/Users/yifanxu/Ephemeral-AI-Lab/layerfs` until both of these issues have reached
 verified terminal success and are closed:

@@ -420,3 +420,30 @@ Identity: PR#133 (docs only, 31 files under `evidence/minimal-overhead-review/`)
 Result: published the review evidence #130 depends on but which had never been in the repository, captured at directory hash `71ae8487731459e0904e28109dd99f1782f7ea55f744103500d6804594fc13f1` after a 75-second quiescence check (another session was writing to that directory while this campaign was stopped). The audit's own verdict — "Do not approve this as a fully specified implementation yet" — is preserved unaltered; none of it is implementation or qualification evidence.
 **Incidental finding — a pre-existing flaky CI test:** the first CI attempt on this docs-only PR failed at `layerfs-fuse::host_client::tests::cancelled_entry_and_partial_page_keep_pre_admitted_cleanup` (`crates/layerfs-fuse/src/host_client.rs:1248`, a cleanup-slot permit assertion). The PR changes no source file (`git diff --name-only origin/main...HEAD` lists only `docs/`). The identical commit passed 6/6 locally and **passed on rerun of the same run id with no code change**, so the failure is a flake, not a regression.
 Validity: current, and recorded because it matters beyond this row: the file was last modified by the predecessor's `f8ed6bbbb`, not by this run, so the flake predates this work; a flaky gate can mask a real regression during the eventual #125 campaign and must not be mistaken for one, nor silently retried as if green. No fix has been attempted and no retry-until-green policy is adopted. Not a benchmark, gate or waiver claim.
+
+### L38 — #130 promotion, scaling review and two-second implementation plan
+
+- Identity: owner-requested architecture/feasibility review, with two bounded
+  subagent reviews of tiny churn and the current write/Index/payload/transport
+  path; coordination/contract review by the root agent.
+- Source: main `695c482e7aa8471710ad7e869334084de0bf2fa0`; plan on
+  `codex/promote-workspace-overhead`. Interrupted four-file Step 5 edits remain
+  unverified and excluded from this documentation publication. Historical 25k
+  source/log is `1ffd63688eaabca7b8a4b756a342cde4514011d2` on the trajectory branch.
+- Environment/result: read-only source/receipt analysis on macOS; **REVIEW ONLY**,
+  no new product PASS, benchmark run or measured speedup. Two-second feasibility
+  is not established. Found a source-level cumulative quadratic payload evacuation
+  counterexample, fixed per-file allocation amplification and serialized RPC cost.
+  The old diagnostic itself also performs cumulative quadratic censuses; retain
+  its timing as diagnostic wall, not production throughput or a million-file forecast.
+- Validity: scheduling and the explicit <=2-second #130 objective supersede the
+  prior after-closure prerequisite. All correctness/benchmark criteria and #122
+  exclusions remain. New plan selects bounded local reclamation, dense existing
+  Index, compact common ranges and packed arena allocation; it is not implementation.
+- Evidence correction: L37's same-source fail/pass establishes intermittent
+  behavior, but file blame alone does not establish the root cause or introduction
+  point. Preserve its original failure and passes; no blanket unrelated-flake waiver.
+  Likewise trajectory-branch L36's assertion that a suite failure is "void" due
+  to concurrent source edits is unsupported: a compiled test binary does not
+  normally read Rust source. Retain the failure and investigate source custody/
+  actual cause; do not count it as a pass or erase it.

@@ -9,6 +9,37 @@ for that work; the append-only record of individual checks is
 
 ## Current position
 
+**Latest owner direction: #130 is promoted before final capacity qualification
+and benchmarks.** Read the
+[current implementation plan](overlay-minimal-overhead-implementation-plan.md)
+first. Its final objective is <=2 seconds for fresh Begin -> create/write 25,000
+one-byte files -> Commit -> End, with no quadratic scaling. This supersedes the
+old #130 after-closure prerequisite; the stopped checkpoints below are history.
+
+Two subagents reviewed tiny-churn receipts and the actual write/storage path;
+the coordinator reviewed contracts. The two-second objective remains unproved.
+Current source has a whole-arena evacuation counterexample with quadratic
+cumulative work, per-file storage amplification, and serialized host RPCs.
+The selected plan fixes these in the existing ownership/backend, rather than
+mandating a new pager. #124/#125/#130 remain OPEN; V1, complete production Docker
+dispatch, capacity and final benchmark qualification are outstanding.
+
+Current review/publication branch: `codex/promote-workspace-overhead`, based on
+main `695c482e7aa8471710ad7e869334084de0bf2fa0`. The interrupted unverified changes
+in lifecycle.rs, projection.rs, reconcile.rs and registry.rs were preserved,
+including a binary patch backup before the branch switch. No product build,
+benchmark, probe, cleanup or new product test was run during this plan review.
+Trajectory evidence remains published on `codex/step6-capacity-trajectory`,
+not merged here; use its exact commits rather than relabeling it as main evidence.
+
+Next executable implementation task: P130.1's new public 25k fixture/route and
+release cost instrumentation, alongside the bounded reclamation counterexample
+and repair from P130.2. Preserve the 25k debug receipt unchanged. Check actual
+process/measurement-lock ownership before running. Final full #125 collection
+still waits for complete correctness and a sealed candidate, not issue closure.
+
+### Historical stopping checkpoint
+
 **Owner-requested stopping checkpoint: all three integration fixes have verified passes.** Product/evidence commit `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a` and budget/handoff head `820ecab8079c7e0f09c29c6df1c983366e3dd77e` were merged through PR#126 to remote main at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`; fetch and ancestry checks succeeded. This run stops after the documentation-only publication record.
 
 Read [the successor handoff](overlay-snapshot-step1-handoff.md) first. It supersedes the older next-action entries retained below as history. Public default-path integration, V1, capacity qualification and the final benchmark campaign remain unfinished. Both issues stay OPEN.
