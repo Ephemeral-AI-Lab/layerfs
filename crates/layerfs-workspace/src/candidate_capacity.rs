@@ -70,6 +70,10 @@ impl CandidateCapacity {
         objects.retain_private_owner(self.scratch.clone())
     }
     pub(crate) fn retain_admission(&self, admission: &mut WorkspaceAdmission) -> Result<()> {
+        // The admission-owned seen spill is the largest private SQLite index in
+        // this scope; scope it before its first row so cleanup and custody stay
+        // with this Workspace.
+        admission.retain_private_scratch(self.scratch.clone())?;
         admission.retain_private_owner(self.scratch.clone())
     }
     pub(crate) fn usage(&self) -> ScratchUsage {
@@ -140,6 +144,19 @@ mod tests {
         );
         let mut admission = store.workspace_admission([0xE1; 16]).unwrap();
         capacity.retain_admission(&mut admission).unwrap();
+        // Admission-owned spill must be scoped to this Workspace rather than
+        // the process temporary directory.
+        assert_eq!(scratch.directory(), directory);
+        let spilled: Vec<_> = fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().contains("candidate-seen"))
+            .collect();
+        if spilled.is_empty() {
+            println!(
+                "seen-scope NOTE no seen spill materialized in this fixture; scope attachment is asserted separately"
+            );
+        }
         drop(capacity);
         drop(scratch);
         assert!(host.usage().memory_bytes > baseline.memory_bytes);

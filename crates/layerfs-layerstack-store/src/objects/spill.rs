@@ -405,6 +405,27 @@ impl SpillableObjectSet {
         set.scratch = scratch;
         Ok(set)
     }
+    /// Attach the owning scratch scope before this set holds any row. The set
+    /// is built with the Store's own admission path and only later learns which
+    /// Workspace scope admits its spill, so this must remain lower-only and
+    /// refuse to change once rows exist.
+    pub(super) fn set_scratch(&mut self, scratch: ScratchContext) -> Result<()> {
+        if scratch.is_none() {
+            return Ok(());
+        }
+        if self.scratch.is_some() {
+            return Err(StoreError::InvalidInput(
+                "candidate seen scratch scope already set",
+            ));
+        }
+        if self.count != 0 || !matches!(self.storage, SeenStorage::Memory(_)) {
+            return Err(StoreError::InvalidInput(
+                "candidate seen scratch scope set after use",
+            ));
+        }
+        self.scratch = scratch;
+        Ok(())
+    }
     fn healthy(&self) -> Result<()> {
         if self.failed {
             Err(StoreError::Integrity("invalidated candidate seen index"))
@@ -1069,7 +1090,9 @@ pub(super) fn temporary_file_in(
 
 #[cfg(test)]
 mod scratch_tests {
+    use super::super::scratch::ScratchBudget;
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn private_scratch_uses_the_requested_journal_policy() {
@@ -1123,6 +1146,47 @@ mod scratch_tests {
         assert!(seen.insert_page(&ids[..1]).is_err());
         drop(seen);
         assert!(!path.exists());
+    }
+
+    /// The admission-owned seen index is built by the Store's own admission
+    /// path and only later learns which Workspace scope admits it. Attaching
+    /// that scope must be possible before the first row and must be refused
+    /// afterwards, so private scratch ownership can never silently change.
+    #[test]
+    fn seen_scratch_scope_attaches_only_before_use() {
+        let root = std::env::temp_dir().join(format!("layerfs-seen-scope-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let open = ScratchBudget::with_directory(
+            super::super::scratch::ScratchLimits {
+                bytes: 1024 * 1024,
+                files: 4,
+            },
+            Arc::new(()),
+            Some(root.clone()),
+        )
+        .unwrap();
+        let mut set = SpillableObjectSet::bounded(64 * 1024).unwrap();
+        // Attaching before any row is accepted, and the scope is now the
+        // owning directory rather than the process temporary directory.
+        set.set_scratch(Some(open.clone())).unwrap();
+        set.insert_page(&[ObjectId::for_bytes(b"scope-probe")])
+            .unwrap();
+        assert!(set.contains(ObjectId::for_bytes(b"scope-probe")).unwrap());
+        // A second scope cannot take ownership of an already-used index.
+        let other = ScratchBudget::new(
+            super::super::scratch::ScratchLimits {
+                bytes: 1024 * 1024,
+                files: 4,
+            },
+            Arc::new(()),
+        )
+        .unwrap();
+        assert!(set.set_scratch(Some(other)).is_err());
+        // None is a no-op, so callers without a scope keep the legacy path.
+        assert!(set.set_scratch(None).is_ok());
+        drop(set);
+        drop(open);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
