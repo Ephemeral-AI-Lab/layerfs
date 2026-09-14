@@ -2415,6 +2415,131 @@ mod tests {
         println!("MOUNTED HOST AUTHORITY PASS: production attach, held Commit, concurrent SDK splice with stable inode, C1 excludes the splice while C2 includes it, verified unmount");
     }
 
+    /// Real container-placement host authority on the benchmark's daemon mount
+    /// route (`LAYERFS_FUSE_TRANSPORT=daemon`): the in-container daemon mounts
+    /// through the one installed host authority instead of the legacy owner.
+    #[cfg(unix)]
+    #[test]
+    fn container_daemon_route_mounts_through_the_host_authority() {
+        let Ok(container) = std::env::var("LAYERFS_TEST_CONTAINER") else {
+            return;
+        };
+        let exec = |script: &str| -> String {
+            let output = std::process::Command::new("docker")
+                .args(["exec", &container, "/bin/sh", "-c", script])
+                .output()
+                .expect("docker exec");
+            assert!(
+                output.status.success(),
+                "docker exec failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+        };
+        let hex_capability = exec("od -An -tx1 -v /run/layerfs/capability | tr -d ' \\n'");
+        assert_eq!(
+            hex_capability.len(),
+            64,
+            "daemon capability: {hex_capability}"
+        );
+        let mut capability = [0_u8; 32];
+        for (index, byte) in capability.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&hex_capability[index * 2..index * 2 + 2], 16).unwrap();
+        }
+        let published = {
+            let output = std::process::Command::new("docker")
+                .args(["port", &container, "41273"])
+                .output()
+                .expect("docker port");
+            assert!(output.status.success(), "docker port failed");
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .next()
+                .expect("published daemon port")
+                .trim()
+                .to_owned()
+        };
+        let endpoint = published
+            .parse::<std::net::SocketAddr>()
+            .expect("published daemon endpoint");
+        let owner = layerfs_daemon::connect_tcp(endpoint, capability).expect("daemon owner");
+        let binding = crate::ContainerBinding {
+            id: crate::ContainerId(container.clone()),
+            owner,
+            fuse_host: "host.docker.internal".to_owned(),
+        };
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-lifecycle-container-daemon-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("file"), b"abcdef").unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let layer = store
+            .initialize_layerstack(
+                EntityName::new("project").unwrap(),
+                LayerStackInitialization::Directory(source),
+            )
+            .unwrap()
+            .genesis_layer_id;
+        let branch = store
+            .fork_branch(
+                EntityName::new("main").unwrap(),
+                LocalForkSource::Layer { layer_id: layer },
+            )
+            .unwrap();
+        let workspaces =
+            Workspaces::new_with_container(root.join("runtime"), store.clone(), binding).unwrap();
+        // The in-container daemon validates that a Workspace root lives under
+        // its own /workspace tree.
+        let mount = "/workspace/layerfs-container-daemon";
+        let session = workspaces
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Container {
+                    container_id: crate::ContainerId(container.clone()),
+                    root: std::path::PathBuf::from(mount),
+                },
+                projection: Some(WorkspaceProjection::Fuse),
+            })
+            .unwrap();
+        let worker = workspaces.worker(session.id).unwrap();
+        assert!(
+            worker.host_runtime().unwrap().is_some(),
+            "daemon mount route must own the installed host authority"
+        );
+        assert!(
+            worker.remote.lock().unwrap().is_none(),
+            "daemon mount route must not create the legacy remote owner"
+        );
+        // The in-container daemon mounted this path through the host authority.
+        assert_eq!(exec(&format!("cat {mount}/file")), "abcdef");
+        let inode_before = exec(&format!("stat -c %i {mount}/file"));
+        exec(&format!(
+            "printf Z | dd of={mount}/file bs=1 seek=0 conv=notrunc status=none"
+        ));
+        assert_eq!(exec(&format!("cat {mount}/file")), "Zbcdef");
+        let committed = workspaces.commit_workspace_session(session.id).unwrap();
+        assert!(matches!(committed, WorkspaceCommitResult::Created { .. }));
+        let published_root = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, published_root), b"Zbcdef");
+        assert_eq!(exec(&format!("stat -c %i {mount}/file")), inode_before);
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        assert_eq!(exec(&format!("findmnt -rn -M {mount} | wc -l")), "0");
+        std::fs::remove_dir_all(root).unwrap();
+        println!(
+            "CONTAINER DAEMON HOST AUTHORITY PASS: benchmark daemon mount route owns one host \
+             authority, in-container write captured as Created, inode stable, verified unmount"
+        );
+    }
+
     /// Real container-placement host authority: a host-side session whose
     /// Workspace root lives inside a Linux container must mount through the one
     /// installed host authority (no legacy remote owner), capture an ordinary
