@@ -29,6 +29,8 @@ pub(crate) mod payload_create_read { include!("../families/payload_create_read/m
 #[allow(dead_code)]
 pub(crate) mod tiny_file_churn { include!("../families/tiny_file_churn/mod.rs"); }
 #[allow(dead_code)]
+pub(crate) mod local_snapshot { include!("../families/local_snapshot/mod.rs"); }
+#[allow(dead_code)]
 pub(crate) mod directory_construction_traversal { include!("../families/directory_construction_traversal/mod.rs"); }
 #[allow(dead_code)]
 pub(crate) mod git_tool_workflow { include!("../families/git_tool_workflow/mod.rs"); }

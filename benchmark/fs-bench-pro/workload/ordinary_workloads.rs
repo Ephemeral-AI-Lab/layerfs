@@ -427,6 +427,9 @@ pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
     dir(&mut entries, ".");
     match case.kind {
         "payload-create" => (),
+        // The scoped 25k lifecycle starts from an empty namespace: only the
+        // normalized 0755 root (the shared fixture base).
+        "local-snapshot-create" => (),
         "payload-random-read" => file(
             &mut entries,
             "payload.bin".into(),
@@ -671,8 +674,12 @@ pub(crate) fn sdk_edits(case: &Case, seed: u8) -> Result<Vec<SdkEdit>> {
 }
 
 pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>> {
-    if step > 1 {
+    let local_snapshot = case.kind == "local-snapshot-create";
+    if step > 1 && !local_snapshot {
         return Err("ordinary expected step must be 0 (input) or 1 (final)".into());
+    }
+    if local_snapshot && step > 3 {
+        return Err("local-snapshot expected state is defined for steps 0..=3".into());
     }
     let mut entries: BTreeMap<_, _> = fixture(case, seed)?
         .into_iter()
@@ -701,6 +708,32 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
             }
         }
         "tiny-bulk-create" => merge(&mut entries, bulk_entries(case, seed)?),
+        "local-snapshot-create" => {
+            if step >= 1 {
+                let edited: std::collections::BTreeSet<usize> =
+                    super::local_snapshot::edited_ordinals().into_iter().collect();
+                for ordinal in 0..super::local_snapshot::FILE_COUNT {
+                    // Step 2 carries the 256 edited bytes; step 3 restores
+                    // the exact C1 bytes (C1/C3 payload equality).
+                    let byte = if step == 2 && edited.contains(&ordinal) {
+                        super::local_snapshot::edited_byte(ordinal)
+                    } else {
+                        super::local_snapshot::original_byte(ordinal)
+                    };
+                    let path = super::local_snapshot::ordinal_path(ordinal);
+                    entries.insert(
+                        path.clone(),
+                        Entry {
+                            path,
+                            kind: EntryKind::File(Content::Literal(vec![byte])),
+                            mode: 0o644,
+                            mtime_seconds: common::MTIME,
+                            mtime_nanoseconds: 0,
+                        },
+                    );
+                }
+            }
+        }
         "tiny-bulk-delete" => remove_tree(&mut entries, "bulk"),
         "directory-construct" => {
             for (k, i) in case_rank(case,seed, "directory-construction")?
@@ -1986,8 +2019,12 @@ pub(crate) fn verify_git(root: &Path, case: &Case, seed: u8, reference: &Path) -
 
 pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<Receipt> {
     seed_label(seed)?;
-    if step != 0 {
+    let multi_step = case.kind == "local-snapshot-create";
+    if step != 0 && !multi_step {
         return Err("ordinary workload has exactly one step, index zero".into());
+    }
+    if multi_step && step > 2 {
+        return Err("local-snapshot lifecycle has exactly three steps".into());
     }
     if matches!(
         case.kind,
@@ -2132,6 +2169,43 @@ pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<
                 }
             }
             "tiny-bulk-create" => create_entries(&mut ops, bulk, "bulk")?,
+            "local-snapshot-create" => {
+                let ordinals: Vec<usize> = if step == 0 {
+                    (0..super::local_snapshot::FILE_COUNT).collect()
+                } else {
+                    super::local_snapshot::edited_ordinals()
+                };
+                for ordinal in ordinals {
+                    let byte = if step == 1 {
+                        super::local_snapshot::edited_byte(ordinal)
+                    } else {
+                        super::local_snapshot::original_byte(ordinal)
+                    };
+                    let path = super::local_snapshot::ordinal_path(ordinal);
+                    let content = Content::Literal(vec![byte]);
+                    ops.write_content(&path, &content, step == 0, false)?;
+                    ops.changed.insert(
+                        path.clone(),
+                        Entry {
+                            path,
+                            kind: EntryKind::File(Content::Literal(vec![byte])),
+                            mode: 0o644,
+                            mtime_seconds: common::MTIME,
+                            mtime_nanoseconds: 0,
+                        },
+                    );
+                }
+                // Normalize the affected metadata and the 0755 root, then
+                // the final root fsync before this Commit.
+                ops.changed.insert(".".into(), Entry {
+                    path: ".".into(),
+                    kind: EntryKind::Directory,
+                    mode: 0o755,
+                    mtime_seconds: common::MTIME,
+                    mtime_nanoseconds: 0,
+                });
+                ops.finish()?;
+            }
             "tiny-bulk-delete" => ops.delete_tree("bulk")?,
             "directory-construct" => {
                 for (k, i) in order.iter().copied().take(case.tier).enumerate() {

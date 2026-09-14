@@ -2,11 +2,11 @@ use super::workspace_common::{Case, Entry, Receipt};
 use super::Result;
 use std::path::Path;
 
-pub(crate) const FAMILIES: [&str; 11] = [
+pub(crate) const FAMILIES: [&str; 12] = [
     "payload_create_read", "tiny_file_churn", "directory_construction_traversal",
     "git_tool_workflow", "namespace_mutation", "workspace_change_locality",
     "mixed_load_bearing", "dedup_cross_file", "dedup_cdc_locality",
-    "dedup_workspace_reuse", "dedup_branch_history",
+    "dedup_workspace_reuse", "dedup_branch_history", "local_snapshot",
 ];
 
 pub(crate) fn cases() -> Vec<Case> {
@@ -22,6 +22,7 @@ pub(crate) fn cases() -> Vec<Case> {
     rows.extend(super::dedup_cdc_locality::cases());
     rows.extend(super::dedup_workspace_reuse::cases());
     rows.extend(super::dedup_branch_history::cases());
+    rows.extend(super::local_snapshot::cases());
     rows
 }
 
@@ -51,6 +52,7 @@ macro_rules! dispatch_family {
             "dedup_cdc_locality" => super::dedup_cdc_locality::$function($case $(, $arg)*),
             "dedup_workspace_reuse" => super::dedup_workspace_reuse::$function($case $(, $arg)*),
             "dedup_branch_history" => super::dedup_branch_history::$function($case $(, $arg)*),
+            "local_snapshot" => super::local_snapshot::$function($case $(, $arg)*),
             other => Err(format!("unknown Workspace family: {other}").into()),
         }
     };
@@ -86,20 +88,23 @@ pub(crate) fn is_import(case: &Case) -> bool {
 }
 
 pub(crate) fn steps(case: &Case) -> usize {
-    if case.family == "dedup_branch_history" { case.tier } else { 1 }
+    if case.family == "dedup_branch_history" { case.tier }
+    else if case.family == "local_snapshot" { 3 }
+    else { 1 }
 }
 
 pub(crate) fn self_check() -> Result<()> {
     let rows = cases();
-    if rows.len() != 132 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 132 {
-        return Err("Workspace registry must have 132 unique timed IDs".into());
+    if rows.len() != 133 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 133 {
+        return Err("Workspace registry must have 133 unique timed IDs".into());
     }
-    for (family, expected) in FAMILIES.iter().zip([8,20,12,4,4,16,4,10,20,14,20]) {
+    for (family, expected) in FAMILIES.iter().zip([8,20,12,4,4,16,4,10,20,14,20,1]) {
         if rows.iter().filter(|r| r.family == *family).count() != expected {
             return Err(format!("wrong membership for {family}").into());
         }
     }
-    if rows.iter().any(|r| ![1,10,100,500].contains(&r.tier)) { return Err("invalid tier".into()); }
+    if rows.iter().any(|r| ![1,10,100,500].contains(&r.tier) && r.family != "local_snapshot") { return Err("invalid tier".into()); }
+    super::local_snapshot::self_check()?;
     super::workspace_common::self_check()?;
     super::dedup_workloads::self_check()?;
     super::payload_create_read::self_check()?;
@@ -169,7 +174,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
         }
         [command] if command == "workspace-self-check" => {
             self_check()?;
-            println!("registry_status=pass\ntimed_case_count=132\nsample_slot_count=396");
+            println!("registry_status=pass\ntimed_case_count=133\nsample_slot_count=399");
         }
         [command, id, seed, step, mode] if command == "workspace-apply" => {
             if !matches!(mode.as_str(), "performance" | "verify") { return Err("invalid workload mode".into()); }

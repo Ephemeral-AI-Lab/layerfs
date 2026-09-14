@@ -33,7 +33,7 @@ HOST_FAMILIES = ("payload_create_read", "dedup_workspace_reuse", "dedup_cross_fi
                  "init_namespace", "store_footprint", "tiny_file_churn",
                  "namespace_mutation", "directory_construction_traversal",
                  "workspace_change_locality", "dedup_branch_history", "git_tool_workflow",
-                 "mixed_load_bearing", "workspace_reliability")
+                 "mixed_load_bearing", "workspace_reliability", "local_snapshot")
 PRODUCT_TARGET_NS = 15_000_000_000
 HISTORICAL_PRODUCT_TARGET_SCOPE = (
     "reporting-only historical 15-second family target; not a collection acceptance gate"

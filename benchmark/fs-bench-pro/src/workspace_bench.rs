@@ -1761,6 +1761,21 @@ fn run_case(
                         ],
                     );
                 }
+                if verification && case.family == "local_snapshot" {
+                    // Each Commit's published content is verified while it is
+                    // the branch head: C1, C2 and C3 states all carry exact
+                    // bytes, namespace and metadata through the Store.
+                    let expected = registry::expected(case, seed, step + 1)?;
+                    let receipt =
+                        super::workspace_verify::verify(&store, branch, &expected, root)?;
+                    emit(
+                        "step-canonical-verification",
+                        &[
+                            ("step", step.to_string()),
+                            ("receipt", quote(&format!("{:?}", receipt.receipt))),
+                        ],
+                    );
+                }
                 store_metrics(&store, "after-commit", step + 1)?;
                 spool_observation("after-commit")?;
                 physical_spool_state(&client, session.id, "after-commit")?;
