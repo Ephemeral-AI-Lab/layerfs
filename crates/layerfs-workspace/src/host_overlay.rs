@@ -1267,6 +1267,61 @@ pub(crate) mod tests {
         }
     }
 
+    /// Diagnostic (not a gate): measured metadata and payload-catalog page
+    /// writes for the ordinary tiny-file create and first-write path, split by
+    /// phase so the next storage change is selected from counters rather than
+    /// arithmetic. It asserts only that the workload's bytes are readable.
+    #[test]
+    fn tiny_create_metadata_page_cost_is_measured() {
+        const FILES: usize = 100;
+        let fixture = Fixture::new(|_| {}, ResourcePolicy::default());
+        let host = &fixture.host;
+        let payload_start = host.payload.stats().unwrap();
+        let mut nodes = Vec::with_capacity(FILES);
+        let before = host.index.stats().unwrap();
+        for index in 0..FILES {
+            let name = format!("tiny-{index:03}");
+            nodes.push(
+                host.create_file(ROOT, name.as_bytes(), 0o600)
+                    .unwrap_or_else(|error| panic!("create {index} failed: {error:?}"))
+                    .node,
+            );
+        }
+        let created = host.index.stats().unwrap();
+        for (index, node) in nodes.iter().enumerate() {
+            assert_eq!(
+                host.write(*node, 0, b"x").unwrap(),
+                1,
+                "first write {index} must store one byte"
+            );
+        }
+        let written = host.index.stats().unwrap();
+        let payload_end = host.payload.stats().unwrap();
+        let mut byte = [0_u8; 1];
+        let node = host.lookup(ROOT, b"tiny-099").unwrap().node;
+        assert_eq!(host.read_into(node, 0, &mut byte).unwrap(), 1);
+        assert_eq!(byte, [b'x']);
+        println!(
+            "tinycreate files={FILES} create_writes={} create_reads={} write_writes={} \
+             write_reads={} total_writes={} total_reads={} metadata_live={} metadata_allocated={} \
+             metadata_physical={} payload_catalog_allocated={} payload_live_pages={} \
+             payload_physical={} payload_catalog_physical={}",
+            created.page_writes - before.page_writes,
+            created.page_reads - before.page_reads,
+            written.page_writes - created.page_writes,
+            written.page_reads - created.page_reads,
+            written.page_writes - before.page_writes,
+            written.page_reads - before.page_reads,
+            written.live_pages,
+            written.allocated_pages,
+            written.physical_bytes,
+            payload_end.index_allocated_pages - payload_start.index_allocated_pages,
+            payload_end.index_live_pages,
+            payload_end.physical_bytes,
+            payload_end.index_physical_bytes
+        );
+    }
+
     #[test]
     fn sdk_candidate_snapshot_has_installed_generation_and_survives_later_write() {
         let fixture = Fixture::new(|_| {}, ResourcePolicy::default());
