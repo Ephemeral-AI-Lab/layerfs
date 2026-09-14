@@ -59,7 +59,38 @@ Cases, in order, one sample per arm each: `tiny-create-500-mixed-v4` (B1) →
   hosting/sampling exception patch to `benchmark/AGENTS.md` and
   `docs/general/benchmark_rules.md` (verified it applies cleanly on v0.1.5).
 - Added this worktree's 0.1.6 README and the evidence ledger.
-- Commit: (recorded after commit) — docs only; no product/benchmark code changes;
+- Commit: `25002b8e5` — docs only; no product/benchmark code changes;
   dependency tree untouched.
-- Next: source reading phase (v0.1.5 live owner, workspace core, workspace
-  lifecycle, store), then I1 implementation.
+
+### L2 — 2026-09-15: source-reading phase complete; design frozen (I0 exit)
+
+- Four parallel read-only source maps completed over the v0.1.5 worktree:
+  host backing/wire/transport/registry; Commit lifecycle +
+  capture/reconcile/worker/checkpoint; SDK/daemon protocol + FUSE dispatch;
+  canonical builder + Store publication contract. Full reports retained in
+  session blobs; key structures verified by direct reading of
+  `live_owner.rs`, `file_edit.rs`, `lib.rs` (workspace-core), `live_wire.rs`,
+  `changes.rs` (prepare_page/produce_file/FrozenFile) by the implementing
+  agent.
+- Implementation design recorded in
+  [issue151-implementation-design.md](issue151-implementation-design.md):
+  local packed payload segments under `/snapshots/<id>/`; frozen-frontier
+  capture with protect-on-mutation COW (moved dirty set + retained-node
+  copies, fixed-size capture); new snapshot service lane for records/payload
+  pull; host materialized frozen input into the unchanged single-worker
+  builder; generation-guarded completion records replacing checkpoint
+  install; volatile fsync; shared `LAYERFS_CONSTRUCTION_WORKERS=1` knob and
+  B3 harness adapter applied identically to both arms.
+- Safety finding verified in source: `FrozenFile::build`/
+  `mutate_existing_file` guard piece-base vs before-root mismatches
+  (fallback to `build_complete_with_predecessor`), so completion that leaves
+  re-mutated nodes on their pre-capture piece base is safe (correct, with
+  CDC-level predecessor locality).
+- Commit: design doc committed with I1 start (see L3).
+- Next: I1 implementation (local payload ownership + mount layout).
+
+### L3 — 2026-09-15: I1 implementation started
+
+- Local payload backing (`crates/layerfs-fuse/src/local_spool.rs`), backing
+  dir plumbing, volatile fsync, host BackingOwner payload/facts removal,
+  mount layout `/workspaces` + `/snapshots/<id>/`.
