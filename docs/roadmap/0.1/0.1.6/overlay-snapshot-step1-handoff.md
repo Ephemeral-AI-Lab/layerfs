@@ -35,6 +35,8 @@ The mounted case proves SDK visibility through a retained mapping/descriptor, pr
 
 ## Publication checks and CI debt
 
+**Subsequent owner-approved CI policy:** the blanket `-D warnings` gate has been replaced with fatal `clippy::correctness`, `clippy::suspicious` and `unused_must_use`. Other warnings remain visible and advisory. The balanced workspace Clippy command and focused existing shutdown/default-state test pass locally; [follow-up evidence](evidence/ci/balanced-clippy/source.json). The strict-policy failures below remain historical evidence, not the current gate. Snapshot integration/acceptance and benchmark obligations are unchanged.
+
 [Raw logs and receipts](evidence/step1-publication/) retain these actual results:
 
 | Check | Result |

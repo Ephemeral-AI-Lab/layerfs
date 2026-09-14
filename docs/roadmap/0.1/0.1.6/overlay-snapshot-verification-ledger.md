@@ -409,3 +409,7 @@ break, not as qualification of the new behavior.
 ### L26 — owner180second CI budget
 
 Owner directly accepted171s and requested180s before checkpoint publication. Updated the actual test-fast ceiling and current development guidance; `bash -n tools/test-fast.sh` PASS. L25's historical171s/150s gateFAIL remains unchanged, as doesL19's125s/120s failure. No passing suite rerun, benchmark gate change or lint suppression. CurrentCIbudget180s; strictClippy stillOPEN.
+
+### L27 — owner-approved balanced Clippy policy
+
+Owner approved advisory style/complexity/unused-code warnings; CI still denies clippy::correctness, clippy::suspicious and unused_must_use. Initial balanced command FAILed on a stale doc comment documenting the wrong benchmark helper. Comment-only removal repaired it; balanced workspace Clippy PASS. Equivalent State Default derivation passes the existing shutdown descriptor/local-control check (1exacttest); fmt/whitespace PASS. Commands, raw failure/pass logs and source hashes: evidence/ci/balanced-clippy/. No full native rerun locally for these equivalent/comment-only changes; publication's Linux CI will exercise its existing complete gate. Current180s budget, V1/product acceptance and36 #122 exclusions unchanged.

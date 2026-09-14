@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-fuse",
+    "--lib",
+    "host_client::coherence::tests::shutdown_releases_mount_descriptor_before_unmount_and_closes_local_control",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 7.761605584004428,
+  "raw": "/tmp/layerfs-balanced-clippy/state-default-regression.log"
+}

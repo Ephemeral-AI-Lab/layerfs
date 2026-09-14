@@ -15,9 +15,16 @@ From the repository root:
 cargo build --workspace
 tools/test-fast.sh
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo +1.96.0 clippy --workspace --locked -- -D clippy::correctness -D clippy::suspicious -D unused_must_use
 git diff --check
 ```
+
+Clippy blocks compilation errors, correctness and suspicious-code findings,
+and ignored values marked `must_use`. Other warnings remain visible and
+advisory, including style, complexity and unused-code findings. Do not add
+`-D warnings` or make the step `continue-on-error`: the selected fatal checks
+must still fail CI. Broader local lint coverage can add `--all-targets
+--all-features` before `--` using the same lint levels.
 
 `tools/test-fast.sh` is the complete native gate and fails if the warm suite
 exceeds 180 seconds. It still runs every test and benchmark exactly once in

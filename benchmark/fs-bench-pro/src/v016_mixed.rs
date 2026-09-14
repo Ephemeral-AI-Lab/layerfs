@@ -974,8 +974,6 @@ fn start_children(
     Ok(workers)
 }
 
-/// Run the two forked children concurrently over the shared schedule.
-
 fn close_sessions(runtime: &Runtime, sessions: &[Worker]) -> AnyResult<()> {
     for worker in sessions {
         let Some(session) = worker.session else {

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.96.0",
+    "clippy",
+    "--workspace",
+    "--locked",
+    "--",
+    "-D",
+    "clippy::correctness",
+    "-D",
+    "clippy::suspicious",
+    "-D",
+    "unused_must_use"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 4.683944332995452,
+  "raw": "/tmp/layerfs-balanced-clippy/clippy-fixed.log"
+}
