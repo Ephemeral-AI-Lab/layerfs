@@ -9,6 +9,9 @@ pub(crate) struct WorkspaceWorker {
     pub(crate) workspace: Arc<Mutex<Workspace>>,
     pub(crate) lifecycle: Mutex<()>,
     pub(crate) remote: Mutex<Option<crate::live_backing::RemoteWorkspace>>,
+    // The one installed host authority, shared by the mounted client, SDK ranges,
+    // status and lifecycle. Container placement keeps its `remote` owner instead.
+    host: Mutex<Option<Arc<crate::host_runtime::HostRuntime>>>,
     pub(crate) projection_handle: Mutex<Option<crate::projection::ProjectionHandle>>,
     admission: Mutex<Admission>,
     drained: Condvar,
@@ -47,12 +50,55 @@ impl WorkspaceWorker {
             lifecycle: Mutex::new(()),
             projection_handle: Mutex::new(None),
             remote: Mutex::new(None),
+            host: Mutex::new(None),
             admission: Mutex::new(Admission {
                 accepting: true,
                 ..Admission::default()
             }),
             drained: Condvar::new(),
         }
+    }
+
+    /// The installed host authority, when this session owns one. Reading the
+    /// slot is a short lock; callers never hold it across an operation.
+    pub(crate) fn host_runtime(
+        &self,
+    ) -> Result<Option<Arc<crate::host_runtime::HostRuntime>>, WorkspaceError> {
+        Ok(self
+            .host
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .clone())
+    }
+
+    /// Install the authority constructed before projection attachment. The
+    /// mounted client, SDK, status and lifecycle all reach this one owner.
+    #[cfg(any(test, all(target_os = "linux", feature = "host-fuse")))]
+    pub(crate) fn install_host_runtime(
+        &self,
+        runtime: Arc<crate::host_runtime::HostRuntime>,
+    ) -> Result<(), WorkspaceError> {
+        let mut slot = self
+            .host
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        if slot.is_some() {
+            return Err(WorkspaceError::InvalidExecution);
+        }
+        *slot = Some(runtime);
+        Ok(())
+    }
+
+    /// Remove the authority once End/Discard has settled it. Callers hold the
+    /// returned owner until its shutdown is acknowledged.
+    pub(crate) fn take_host_runtime(
+        &self,
+    ) -> Result<Option<Arc<crate::host_runtime::HostRuntime>>, WorkspaceError> {
+        Ok(self
+            .host
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .take())
     }
 
     #[cfg(test)]

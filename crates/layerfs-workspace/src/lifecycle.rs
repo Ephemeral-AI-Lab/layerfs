@@ -501,6 +501,9 @@ impl Workspaces {
         id: WorkspaceId,
     ) -> WorkspaceResult<WorkspaceCommitStatus> {
         let worker = self.worker(id)?;
+        if let Some(host) = worker.host_runtime()? {
+            return self.commit_host_session(&worker, &host);
+        }
         let _operation = worker
             .lifecycle
             .lock()
@@ -704,6 +707,105 @@ impl Workspaces {
         }
     }
 
+    /// Ordinary Commit against the installed host authority.
+    ///
+    /// The attempt coordinator owns one unresolved attempt and captures its own
+    /// snapshot, so no projection freeze, writer wait, quiesce, kernel cache
+    /// flush, legacy capture or checkpoint installation is involved, and no
+    /// whole-duration lifecycle lock is held: ordinary commands, FUSE callbacks
+    /// and SDK ranges continue against the same live authority while this
+    /// construction runs.
+    fn commit_host_session(
+        &self,
+        worker: &Arc<WorkspaceWorker>,
+        host: &Arc<crate::host_runtime::HostRuntime>,
+    ) -> WorkspaceResult<WorkspaceCommitStatus> {
+        let _timing = layerfs_layerstack_store::begin_workspace_commit(
+            layerfs_layerstack_store::CaptureMode::Live,
+        )?;
+        if worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .presentation_failed
+        {
+            return Err(WorkspaceError::InvalidExecution);
+        }
+        let commit_read_before = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .reader
+            .read_metrics_snapshot()?;
+        // Bounded maintenance of the previously published context before this
+        // attempt starts. A retained attempt reports remaining work and is left
+        // to its own authoritative resolver below.
+        host.maintain()?;
+        crate::projection::record_write_metrics(worker)?;
+        let previous_head = host.published_head()?;
+        let completion = match host.commit(|| {
+            let started = Instant::now();
+            let snapshot = host.operations.host.snapshot()?;
+            layerfs_layerstack_store::note_workspace_commit_phase(
+                layerfs_layerstack_store::WorkspaceCommitPhase::Capture,
+                elapsed_ns(started),
+            );
+            Ok(snapshot)
+        }) {
+            Ok(completion) => completion,
+            Err(error) => {
+                return Ok(WorkspaceCommitStatus {
+                    result: match error {
+                        layerfs_layerstack_store::StoreError::StoreBusy => {
+                            WorkspaceCommitResult::Busy
+                        }
+                        layerfs_layerstack_store::StoreError::CommitHeadMoved {
+                            expected,
+                            actual,
+                        } => WorkspaceCommitResult::HeadMoved { expected, actual },
+                        error => return Err(error.into()),
+                    },
+                    presentation_failed: false,
+                })
+            }
+        };
+        let result = if completion.receipt.up_to_date {
+            WorkspaceCommitResult::UpToDate {
+                head: previous_head,
+            }
+        } else {
+            WorkspaceCommitResult::Created {
+                previous_head,
+                commit_id: completion.receipt.head_after.ok_or(
+                    layerfs_layerstack_store::StoreError::Integrity("publication head"),
+                )?,
+            }
+        };
+        if let Some(error) = &completion.cleanup_error {
+            // The publication is known and is reported as such; the retained
+            // receipt stays charged and is acknowledged by the next Commit or by
+            // the authoritative End/Discard resolution.
+            eprintln!("layerfs-workspace: retained publication receipt cleanup: {error}");
+        }
+        let observations = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .reader
+            .read_metrics_snapshot()
+            .and_then(|after| {
+                layerfs_layerstack_store::note_workspace_commit_reads(commit_read_before, after)
+            });
+        if let Err(error) = observations {
+            // The publication is complete and must not be re-reported as failed.
+            eprintln!("layerfs-workspace: host Commit read observation: {error}");
+        }
+        Ok(WorkspaceCommitStatus {
+            result,
+            presentation_failed: false,
+        })
+    }
+
     pub fn recover_workspace_presentation(
         &self,
         id: WorkspaceId,
@@ -808,6 +910,13 @@ impl Workspaces {
         let workspace_id = first.workspace_id;
         let path = first.path.clone();
         let worker = self.worker(workspace_id)?;
+        if let Some(host) = worker.host_runtime()? {
+            // The installed authority already owns live bytes: one atomic SDK
+            // scope, no freeze/capture/refresh, and no whole-duration lifecycle
+            // lock, so an ordinary range edit completes while a Commit is in
+            // flight. Same-workspace/same-path validation is above.
+            return host.edit(&path, &edits).map_err(WorkspaceError::from);
+        }
         let _operation = worker
             .lifecycle
             .lock()
@@ -919,13 +1028,31 @@ impl Workspaces {
         // Discard must remain usable after a backing write failure. FREEZE
         // flushes pending bytes and rejects a failed owner; shutdown below
         // closes admission and releases those bytes without publishing them.
-        if mode == EndWorkspaceMode::Clean {
-            crate::projection::pause(&worker)?;
+        let host = worker.host_runtime()?;
+        if let Some(host) = &host {
+            // The host authority is settled before the mounted consumer is asked
+            // to stop, and its attempt/raw owners are resolved below, after the
+            // verified unmount. A Discard that still cannot resolve its exact
+            // publication stays observable and retryable instead of erasing it.
+            if let Err(error) = host.recover_sdk() {
+                if mode == EndWorkspaceMode::Clean {
+                    return Err(error.into());
+                }
+                // Discard retires the exact pending owner in `after_detach`,
+                // which needs no control call, so a failed recovery is not fatal.
+            }
+        }
+        if host.is_none() {
+            if mode == EndWorkspaceMode::Clean {
+                crate::projection::pause(&worker)?;
+            }
         }
         let _quiesced = match worker.quiesce() {
             Ok(quiesced) => quiesced,
             Err(error) => {
-                crate::projection::resume(&worker)?;
+                if host.is_none() {
+                    crate::projection::resume(&worker)?;
+                }
                 return Err(error);
             }
         };
@@ -963,10 +1090,17 @@ impl Workspaces {
         let (state, discarded) = match validated {
             Ok(validated) => validated,
             Err(error) => {
-                crate::projection::resume(&worker)?;
+                if host.is_none() {
+                    crate::projection::resume(&worker)?;
+                }
                 return Err(error);
             }
         };
+        if let Some(host) = &host {
+            if mode == EndWorkspaceMode::Clean {
+                host.maintain()?;
+            }
+        }
         crate::projection::record_read_metrics(&worker)?;
         if let Err(error) = crate::projection::end(&worker) {
             if let Ok(mut workspace) = worker.workspace.lock() {
@@ -987,6 +1121,12 @@ impl Workspaces {
                 .remote
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)? = None;
+            if let Some(host) = &host {
+                // Verified unmount is complete. This is the one authoritative
+                // resolution point for the Commit attempt and SDK scope.
+                host.after_detach()?;
+                drop(worker.take_host_runtime()?);
+            }
             match mode {
                 EndWorkspaceMode::Discard => {
                     workspace.discard()?;
@@ -1065,6 +1205,13 @@ impl Workspaces {
                         executions,
                     });
                 }
+                if let Some(host) = worker.host_runtime()? {
+                    return Ok(WorkspaceDetail {
+                        session: host_session(&worker, &host)?,
+                        mutation_generation: host.generation()?,
+                        executions,
+                    });
+                }
                 let generation = crate::live_backing::generation(&worker)?;
                 let workspace = worker
                     .workspace
@@ -1095,6 +1242,13 @@ impl Workspaces {
             .ok_or(WorkspaceError::NotFound)?;
         match record {
             crate::registry::SessionRecord::Active(worker) => {
+                if let Some(host) = worker.host_runtime()? {
+                    return Ok(WorkspaceDiff {
+                        session_id: id,
+                        dirty: host.is_dirty()?,
+                        mutation_generation: host.generation()?,
+                    });
+                }
                 let generation = crate::live_backing::generation(&worker)?;
                 let dirty = if worker.projection == WorkspaceProjection::Fuse {
                     generation != 0
@@ -1136,11 +1290,39 @@ pub(crate) fn session(worker: &WorkspaceWorker) -> WorkspaceResult<WorkspaceSess
     if let Some((session, _)) = remote_session(worker)? {
         return Ok(session);
     }
+    if let Some(host) = worker.host_runtime()? {
+        return host_session(worker, &host);
+    }
     let workspace = worker
         .workspace
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?;
     Ok(session_locked(worker, &workspace))
+}
+
+/// Session identity and pinned head for a host-authority Workspace. The pinned
+/// head is the published context, never the legacy `Workspace.expected_head`.
+fn host_session(
+    worker: &WorkspaceWorker,
+    host: &crate::host_runtime::HostRuntime,
+) -> WorkspaceResult<WorkspaceSession> {
+    let pinned_head = host.published_head()?;
+    let state = worker
+        .workspace
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?
+        .state;
+    Ok(WorkspaceSession {
+        id: worker.id,
+        branch_id: worker.request.branch_id,
+        layer_stack_id: worker.identity.layer_stack_id,
+        layer_stack_name: worker.identity.layer_stack_name.clone(),
+        branch_name: worker.identity.branch_name.clone(),
+        pinned_head,
+        placement: worker.request.placement.clone(),
+        projection: worker.projection,
+        state,
+    })
 }
 
 fn remote_session(worker: &WorkspaceWorker) -> WorkspaceResult<Option<(WorkspaceSession, u64)>> {
@@ -1194,6 +1376,24 @@ pub(crate) fn summary(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<Workspac
             pinned_head: session.pinned_head,
             state: session.state,
             dirty: generation != 0,
+        });
+    }
+    if let Some(host) = worker.host_runtime()? {
+        let session = host_session(worker, &host)?;
+        let state = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .state;
+        return Ok(WorkspaceSummary {
+            id: session.id,
+            branch_id: session.branch_id,
+            layer_stack_id: session.layer_stack_id,
+            layer_stack_name: session.layer_stack_name,
+            branch_name: session.branch_name,
+            pinned_head: session.pinned_head,
+            state,
+            dirty: host.is_dirty()? || state == WorkspaceState::BrokenCleanup,
         });
     }
     let dirty = crate::projection::is_dirty(worker)?;
@@ -1786,6 +1986,455 @@ mod tests {
             .end_workspace_session(session.id, EndWorkspaceMode::Clean)
             .unwrap();
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    // ---- Host authority routes -------------------------------------------------
+
+    /// A Host-placement session carrying the same authority production mounts
+    /// on Linux. `mount_host` and the client kernel-coherence path are
+    /// Linux-only, so the authority is installed directly here; every route
+    /// below is the unmodified production route for that authority.
+    fn host_authority_session(
+        root: &std::path::Path,
+        workspaces: &Workspaces,
+        branch: layerfs_layerstack_store::BranchId,
+    ) -> (
+        WorkspaceSession,
+        Arc<crate::host_runtime::HostRuntime>,
+        layerfs_fuse::host_client::HostClient,
+    ) {
+        let session = workspaces
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Host {
+                    root: root.join("mount"),
+                },
+                projection: Some(WorkspaceProjection::Materialize),
+            })
+            .unwrap();
+        let worker = workspaces.worker(session.id).unwrap();
+        let runtime = crate::projection::start_host_authority(&worker).unwrap();
+        worker.install_host_runtime(runtime.clone()).unwrap();
+        let client = runtime.server.host_owner().unwrap();
+        (session, runtime, client)
+    }
+
+    /// Read one published root's exact bytes through a fresh reader.
+    fn committed_file(store: &LayerStackStore, root: layerfs_content::ObjectId) -> Vec<u8> {
+        use layerfs_content::{filesystem, CanonicalPath};
+        use layerfs_layerstack_store::CoreReader;
+        let reader = store.snapshot_reader(root);
+        let resolved = filesystem::resolve(
+            &CoreReader(&reader),
+            root,
+            &CanonicalPath::new("file").unwrap(),
+            &mut filesystem::LogicalCounters::default(),
+        )
+        .unwrap();
+        let content = layerfs_content::file::content::FileContentRoot(resolved.record.content_root);
+        let length = layerfs_content::file::content::length(&CoreReader(&reader), content).unwrap();
+        let mut bytes = Vec::new();
+        layerfs_content::file::content::read_range(
+            &CoreReader(&reader),
+            content,
+            0..length,
+            &mut bytes,
+        )
+        .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn host_authority_commit_in_flight_keeps_live_operations_and_owned_cut() {
+        use layerfs_fuse::FilesystemPort;
+        let (root, workspaces, branch, store) = fixture("host-commit-in-flight");
+        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
+        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
+        assert_eq!(client.read(node, 0, 16).unwrap(), b"abcdef");
+        client.write(node, 0, b"A").unwrap();
+        assert_eq!(client.read(node, 0, 16).unwrap(), b"Abcdef");
+        assert!(workspaces.diff(session.id).unwrap().dirty);
+        let cut = runtime.generation().unwrap();
+        let (at_build, resume) = crate::host_runtime::arm_build_latch();
+        let committed = std::thread::scope(|scope| {
+            let building =
+                scope.spawn(|| workspaces.commit_workspace_session_with_status(session.id));
+            // The attempt owns its captured snapshot and is mid-construction
+            // while these ordinary operations run against the same authority.
+            at_build
+                .recv_timeout(std::time::Duration::from_secs(60))
+                .unwrap();
+            // Unresolved attempt state is visible as pending lifecycle work.
+            assert!(workspaces.diff(session.id).unwrap().dirty);
+            assert!(workspaces.sessions().unwrap()[0].dirty);
+            // A live write and read through the mounted port complete while the
+            // Commit is in flight and see the new bytes immediately.
+            assert_eq!(client.write(node, 1, b"Z").unwrap(), 1);
+            assert_eq!(client.read(node, 0, 16).unwrap(), b"AZcdef");
+            resume.send(()).unwrap();
+            building.join().unwrap().unwrap()
+        });
+        assert!(matches!(
+            committed.result,
+            WorkspaceCommitResult::Created { .. }
+        ));
+        assert!(!committed.presentation_failed);
+        // C1 is the owned cut: it holds the capture boundary, not the later write.
+        assert_eq!(runtime.covered_sequence().unwrap(), cut);
+        let c1 = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, c1), b"Abcdef");
+        assert_eq!(client.read(node, 0, 16).unwrap(), b"AZcdef");
+        // The later write is still live and is included by the next Commit; the
+        // non-resetting host sequence is what makes this session dirty.
+        let later = runtime.generation().unwrap();
+        assert!(later > cut);
+        assert!(workspaces.diff(session.id).unwrap().dirty);
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let c2 = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, c2), b"AZcdef");
+        assert_eq!(runtime.covered_sequence().unwrap(), later);
+        assert!(!workspaces.diff(session.id).unwrap().dirty);
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+        println!("HOST IN-FLIGHT PASS: owned C1 cut excludes a write that completed during construction, C2 includes it, live port read/write never blocked, published coverage == live sequence");
+    }
+
+    #[test]
+    fn host_authority_dirty_tracks_covered_sequence_not_nonzero_generation() {
+        use layerfs_fuse::FilesystemPort;
+        let (root, workspaces, branch, _store) = fixture("host-dirty-coverage");
+        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
+        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
+        let pinned = session.pinned_head;
+        assert!(!workspaces.diff(session.id).unwrap().dirty);
+        client.write(node, 0, b"X").unwrap();
+        assert!(workspaces.diff(session.id).unwrap().dirty);
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let generation = runtime.generation().unwrap();
+        assert!(generation > 0, "the host sequence never resets");
+        assert_eq!(runtime.covered_sequence().unwrap(), generation);
+        let detail = workspaces.session(session.id).unwrap();
+        assert_eq!(detail.mutation_generation, generation);
+        assert!(
+            detail.session.pinned_head.is_some() && detail.session.pinned_head != pinned,
+            "the pinned head follows the published context"
+        );
+        // A committed session with a nonzero sequence is clean.
+        assert!(!workspaces.diff(session.id).unwrap().dirty);
+        assert!(!workspaces.sessions().unwrap()[0].dirty);
+        // A no-op Commit advances coverage instead of leaving a dirty session.
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::UpToDate { .. }
+        ));
+        assert!(!workspaces.diff(session.id).unwrap().dirty);
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        // A later write is the only thing that makes Clean End refuse.
+        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
+        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
+        client.write(node, 0, b"Y").unwrap();
+        assert!(matches!(
+            workspaces.end_workspace_session(session.id, EndWorkspaceMode::Clean),
+            Err(WorkspaceError::WorkspaceDirty)
+        ));
+        // The refused End allocated nothing: the session still commits and ends.
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        assert!(!runtime.is_dirty().unwrap());
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+        println!("HOST DIRTY PASS: coverage-relative dirtiness, monotonic sequence, published pinned head, no-op Commit stays clean, Clean End refuses only outstanding work");
+    }
+
+    #[test]
+    fn host_authority_discard_resolves_publication_instead_of_erasing_it() {
+        use layerfs_fuse::FilesystemPort;
+        use layerfs_layerstack_store::WorkspacePublicationAttempt;
+        let (root, workspaces, branch, store) = fixture("host-discard-resolution");
+        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
+        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
+        let branch_before = store.branch(branch).unwrap().unwrap();
+        let root_before = store.pin_branch(branch).unwrap().root;
+        client.write(node, 0, b"X").unwrap();
+        let covered = runtime.generation().unwrap();
+        let commits_before = store.store_counts().unwrap().commits;
+        // The publication transaction commits and then its reply is lost, so the
+        // caller cannot know whether this exact attempt published.
+        layerfs_layerstack_store::set_transaction_failure_at(Some(u64::MAX - 3));
+        let lost = workspaces.commit_workspace_session(session.id);
+        layerfs_layerstack_store::set_transaction_failure_at(None);
+        assert!(lost.is_err());
+        let published_root = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, published_root), b"Xbcdef");
+        assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
+        assert!(runtime.is_dirty().unwrap());
+        let attempt = WorkspacePublicationAttempt::new(
+            session.id.bytes(),
+            &branch_before,
+            root_before,
+            published_root,
+            store.branch(branch).unwrap().unwrap().base_layer_id,
+            covered,
+        );
+        assert!(matches!(
+            store.resolve_workspace_publication(&attempt).unwrap(),
+            layerfs_layerstack_store::WorkspacePublicationResolution::Published(_)
+        ));
+        // Discard must resolve that exact receipt: the published Commit stays on
+        // the branch and the receipt is acknowledged, never erased as unknown.
+        let ended = workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Discard)
+            .unwrap();
+        assert!(ended.discarded);
+        assert_eq!(store.pin_branch(branch).unwrap().root, published_root);
+        assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
+        assert_eq!(committed_file(&store, published_root), b"Xbcdef");
+        // Acknowledged by the Discard resolution: nothing is left to delete.
+        assert!(!store.acknowledge_workspace_publication(&attempt).unwrap());
+        assert!(!root.join("mount").exists());
+
+        // An outcome that authoritative state cannot resolve is retained instead
+        // of being discarded: a sibling Workspace moves the branch after this
+        // attempt's publication transaction rolled back.
+        let (session, _runtime, client) = host_authority_session(&root, &workspaces, branch);
+        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
+        client.write(node, 0, b"L").unwrap();
+        layerfs_layerstack_store::set_transaction_failure_at(Some(u64::MAX - 1));
+        let rolled_back = workspaces.commit_workspace_session(session.id);
+        layerfs_layerstack_store::set_transaction_failure_at(None);
+        assert!(rolled_back.is_err());
+        let stage = store.workspace_stage(session.id.bytes()).unwrap();
+        assert!(stage.is_some(), "the exact stage is retained for retry");
+        let second = Workspaces::new(root.join("second-runtime"), store.clone()).unwrap();
+        let sibling = second
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Host {
+                    root: root.join("sibling-mount"),
+                },
+                projection: Some(WorkspaceProjection::Materialize),
+            })
+            .unwrap();
+        prepend(&second, sibling.id).unwrap();
+        assert!(matches!(
+            second.commit_workspace_session(sibling.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let sibling_root = store.pin_branch(branch).unwrap().root;
+        assert_ne!(sibling_root, published_root);
+        assert!(matches!(
+            workspaces.end_workspace_session(session.id, EndWorkspaceMode::Discard),
+            Err(WorkspaceError::Storage(_))
+        ));
+        assert_eq!(
+            store
+                .workspace_stage(session.id.bytes())
+                .unwrap()
+                .map(|s| s.root_id),
+            stage.map(|s| s.root_id),
+            "an unresolvable publication keeps its exact retained stage"
+        );
+        assert_eq!(store.pin_branch(branch).unwrap().root, sibling_root);
+        assert_eq!(
+            workspaces
+                .worker(session.id)
+                .unwrap()
+                .workspace
+                .lock()
+                .unwrap()
+                .state,
+            WorkspaceState::BrokenCleanup
+        );
+        drop((second, client, sibling));
+        drop(workspaces);
+        std::fs::remove_dir_all(root).unwrap();
+        println!("HOST DISCARD PASS: lost reply resolved from the retained receipt with published history preserved; unresolvable attempt retained with its stage and branch rather than erased");
+    }
+
+    /// The audit's superseded expectation: a retained stage after a moved branch
+    /// keeps CAS and exact explicit-discard resolution, but it no longer freezes
+    /// ordinary mutation. The legacy `Workspace::commit` test above still covers
+    /// the retained local Materialize route, whose own live mirror is separate.
+    #[test]
+    fn host_authority_head_movement_retains_stage_without_freezing_mutation() {
+        use layerfs_fuse::FilesystemPort;
+        let (root, workspaces, branch, store) = fixture("host-head-moved");
+        let (session, runtime, client) = host_authority_session(&root, &workspaces, branch);
+        let node = client.lookup(crate::ROOT, b"file").unwrap().node;
+        client.write(node, 0, b"A").unwrap();
+        // A sibling Workspace on the same branch publishes first: no
+        // lifetime-exclusive branch lease, and this attempt's CAS now conflicts.
+        let second = Workspaces::new(root.join("second-runtime"), store.clone()).unwrap();
+        let sibling = second
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Host {
+                    root: root.join("sibling-mount"),
+                },
+                projection: Some(WorkspaceProjection::Materialize),
+            })
+            .unwrap();
+        prepend(&second, sibling.id).unwrap();
+        assert!(matches!(
+            second.commit_workspace_session(sibling.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let sibling_root = store.pin_branch(branch).unwrap().root;
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::HeadMoved { .. }
+        ));
+        let stage = store
+            .workspace_stage(session.id.bytes())
+            .unwrap()
+            .expect("the conflicting candidate stage is retained for explicit retry");
+        assert_eq!(store.pin_branch(branch).unwrap().root, sibling_root);
+        // The retained stage no longer freezes ordinary mutation or status.
+        assert_eq!(client.write(node, 1, b"Y").unwrap(), 1);
+        assert_eq!(client.read(node, 0, 16).unwrap(), b"AYcdef");
+        assert!(workspaces.diff(session.id).unwrap().dirty);
+        assert!(runtime.generation().unwrap() > 0);
+        assert!(matches!(
+            workspaces.end_workspace_session(session.id, EndWorkspaceMode::Clean),
+            Err(WorkspaceError::WorkspaceDirty)
+        ));
+        // Explicit Discard resolves the known-not-published attempt: the exact
+        // stage disappears, the winning branch is untouched, and the live bytes
+        // that arrived while the stage was retained are never published.
+        assert!(
+            workspaces
+                .end_workspace_session(session.id, EndWorkspaceMode::Discard)
+                .unwrap()
+                .discarded
+        );
+        assert!(store.workspace_stage(session.id.bytes()).unwrap().is_none());
+        assert_eq!(store.pin_branch(branch).unwrap().root, sibling_root);
+        assert_eq!(committed_file(&store, sibling_root), b"Pabcdef");
+        drop((second, client, sibling));
+        drop(workspaces);
+        std::fs::remove_dir_all(root).unwrap();
+        println!("HOST HEAD-MOVED PASS: retained stage {stage:?}, CAS and explicit discard preserved, ordinary mutation/status continued while it was retained");
+    }
+
+    /// Real mounted Linux host authority: the production `attach` path plus a
+    /// held Commit, an ordinary SDK splice and live kernel reads on one inode.
+    #[test]
+    #[cfg(all(target_os = "linux", feature = "host-fuse"))]
+    fn mounted_host_authority_holds_commit_while_sdk_edit_and_live_read_proceed() {
+        use std::os::unix::fs::{FileExt, MetadataExt};
+        if std::env::var_os("LAYERFS_HOST_AUTHORITY_MOUNT").is_none() {
+            return;
+        }
+        let (root, workspaces, branch, store) = fixture("host-mounted");
+        std::fs::create_dir_all(root.join("mount")).unwrap();
+        let session = workspaces
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Host {
+                    root: root.join("mount"),
+                },
+                projection: Some(WorkspaceProjection::Fuse),
+            })
+            .unwrap();
+        let file = root.join("mount/file");
+        let inode = std::fs::metadata(&file).unwrap().ino();
+        assert_eq!(std::fs::read(&file).unwrap(), b"abcdef");
+        // An ordinary kernel write through the mount precedes the Commit, so the
+        // owned capture is a real change and not a no-op publication.
+        let handle = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&file)
+            .unwrap();
+        handle.write_at(b"A", 0).unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"Abcdef");
+        let worker = workspaces.worker(session.id).unwrap();
+        let runtime = worker.host_runtime().unwrap().unwrap();
+        let cut = runtime.generation().unwrap();
+        let (at_build, resume) = crate::host_runtime::arm_build_latch();
+        let committed = std::thread::scope(|scope| {
+            let building =
+                scope.spawn(|| workspaces.commit_workspace_session_with_status(session.id));
+            at_build
+                .recv_timeout(std::time::Duration::from_secs(60))
+                .unwrap();
+            assert!(workspaces.diff(session.id).unwrap().dirty);
+            // Ordinary SDK splice against the same inode while Commit constructs.
+            workspaces
+                .edit_workspace_file_range(WorkspaceFileRangeEdit {
+                    workspace_id: session.id,
+                    path: "file".into(),
+                    start: 0,
+                    delete_len: 0,
+                    replacement: crate::WorkspaceFileReplacement::Inline(b"P".to_vec()),
+                })
+                .unwrap();
+            assert_eq!(std::fs::read(&file).unwrap(), b"PAbcdef");
+            handle.write_at(b"Z", 1).unwrap();
+            assert_eq!(std::fs::read(&file).unwrap(), b"PZbcdef");
+            assert_eq!(std::fs::metadata(&file).unwrap().ino(), inode);
+            resume.send(()).unwrap();
+            building.join().unwrap().unwrap()
+        });
+        assert!(matches!(
+            committed.result,
+            WorkspaceCommitResult::Created { .. }
+        ));
+        assert_eq!(runtime.covered_sequence().unwrap(), cut);
+        let c1 = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, c1), b"Abcdef");
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let c2 = store.pin_branch(branch).unwrap().root;
+        assert_eq!(committed_file(&store, c2), b"PZbcdef");
+        assert_eq!(std::fs::metadata(&file).unwrap().ino(), inode);
+        assert!(!workspaces.diff(session.id).unwrap().dirty);
+        // The mounted consumer must own no descriptor on this mount to unmount.
+        drop(handle);
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        assert!(!is_mounted_mountpoint(&root.join("mount")));
+        std::fs::remove_dir_all(root).unwrap();
+        println!("MOUNTED HOST AUTHORITY PASS: production attach, held Commit, concurrent SDK splice with stable inode, C1 excludes the splice while C2 includes it, verified unmount");
+    }
+
+    #[cfg(all(target_os = "linux", feature = "host-fuse"))]
+    fn is_mounted_mountpoint(mountpoint: &std::path::Path) -> bool {
+        use std::os::unix::ffi::OsStrExt;
+        let mut encoded = Vec::new();
+        for byte in mountpoint.as_os_str().as_bytes() {
+            match byte {
+                b' ' => encoded.extend_from_slice(br"\040"),
+                b'\t' => encoded.extend_from_slice(br"\011"),
+                b'\n' => encoded.extend_from_slice(br"\012"),
+                b'\\' => encoded.extend_from_slice(br"\134"),
+                byte => encoded.push(*byte),
+            }
+        }
+        std::fs::read("/proc/self/mountinfo")
+            .map(|mountinfo| {
+                mountinfo
+                    .split(|byte| *byte == b'\n')
+                    .any(|line| line.split(|byte| *byte == b' ').nth(4) == Some(encoded.as_slice()))
+            })
+            .unwrap_or(false)
     }
 }
 
