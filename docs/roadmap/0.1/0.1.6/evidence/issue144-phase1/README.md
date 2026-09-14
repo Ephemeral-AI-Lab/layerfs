@@ -175,6 +175,43 @@ comparison at the next commit instead.
 workflow**), both ~7.9–8.0 ms per item, both bounded loops with identical
 step shape.
 
+### 3.4 Storage efficiency (the #130 storage expectation, raised by the owner 2026-09-15)
+
+**Durable canonical store — the expectation is met, and provably unchanged
+vs v0.1.5** (same fixture, receipts compared):
+
+| store observation | v0.1.5 | wired route (c2) |
+|---|---|---|
+| live page bytes before → after commit | 530,321,408 → 531,230,720 | 530,321,408 → 531,226,624 |
+| live growth for 824,450 B of new content | **+909,312 B (1.10×)** | **+905,216 B (1.10×)** |
+| pages added | 222 | 221 |
+| allocated high-water | 547,098,624 | 547,098,624 (identical) |
+
+Non-content durable overhead ≈ 80 KB for 500 files (~161 B/file), one batched
+admission transaction (473 objects / 899,678 B — the same CandidateStats as
+v0.1.5, since the canonical construction pipeline is shared). The
+allocated−live gap of ~15.1 MiB is transaction working slack, identical in
+both routes (bounded and reused; noted for the "physical slack bounded and
+charged" rule — not a regression).
+
+**Workspace overlay (transient state) — the "very little metadata" expectation
+is NOT met there; that is the deliberately deferred P130.3 work, not a
+regression.** Recorded state: 48.2 metadata page writes + 280 page reads per
+tiny create (after P130.2's −18 %/−23 % reductions); payload physical is one
+4-KiB unit per tiny file (a one-byte source still occupies 4 KiB); payload
+catalog allocation 802 pages per 100 files (unchanged by P130.2). P130.3's
+compact-storage bundle (denser Index, compact Empty/Single/Indexed ranges,
+packed tiny arena allocation, singleton correspondence) is **not implemented**
+— #130's execution summary records exactly that, and the L45 owner narrowing
+re-aimed remaining work at the dominant route costs first. This state is
+Workspace-transient (deleted at End; named spool files measured at 1 file /
+4 KiB in the c2 receipt), so it never bloats the durable store — but its I/O
+churn is a material part of the measured slowness: the per-create page work
+sits inside the 1.02 ms/call host dispatch, and the per-node overlay
+`prepare`+`install` is the 8 ms/item drain cost. Storage efficiency and speed
+converge on the same machinery: R2a (bounded page cache) and R3a (batched
+prepare/install) reduce both.
+
 ## 4. Why v0.1.5 was fast — technique-by-technique (brief §5)
 
 Reconstructed from source at `1ff1f2ddd` and receipts (Tao, this Phase; full
