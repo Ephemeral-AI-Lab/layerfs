@@ -94,3 +94,43 @@ Cases, in order, one sample per arm each: `tiny-create-500-mixed-v4` (B1) →
 - Local payload backing (`crates/layerfs-fuse/src/local_spool.rs`), backing
   dir plumbing, volatile fsync, host BackingOwner payload/facts removal,
   mount layout `/workspaces` + `/snapshots/<id>/`.
+
+### L4 — 2026-09-15: I1–I3 daemon route complete (commit `ab2a6f9cb`)
+
+- Sandbox-owned mutable state: LiveOwner writes payloads into `LocalSpool`
+  under `/snapshots/<id>/` (write-before-apply, positioned writes, no
+  durability flush); reads serve local segments; volatile fsync contract
+  (validate + known errors, zero wire traffic).
+- Stable owned snapshots: protect-on-mutation COW frozen frontier
+  (`capture` fixes a generation; live writes continue; retained-node copies
+  keep the snapshot readable while the live tree mutates).
+- Bounded frozen transfer: new snapshot service lane — `SNAP_RECORDS` pages
+  node records with bounded frames; `SNAP_READ` serves payload ranges with a
+  bounded host-side window; commands/control/base reads keep progressing
+  during transfer (no lifecycle lock, no queue monopolization).
+- Host payload/facts wire opcodes and the checkpoint
+  install/freeze/resume machinery removed from the route.
+
+### L5 — 2026-09-15: I3–I5 host route complete (commit `55b531bc5`)
+
+- `pull_frozen_input` materializes the frozen generation on the host;
+  sandbox piece backings fetch through the bounded remote window
+  (`read_backing_exact` dispatch — host segment direct read, remote bounded
+  fetch), so the host payload spool is never used for remote payloads.
+- `build_remote_candidate` feeds the unchanged single-worker canonical
+  builder (CAS/dedup/CDC/FULL-DELTA selection, compression, packing,
+  dependency checks) and publishes through the existing
+  `commit_workspace_candidate` transaction.
+- `complete_generation` applies completion records with revision guards;
+  repeated Commits and Workspace isolation verified; End clean-validation
+  observes sandbox dirty state through the daemon.
+- Physical spool observations restored into commit diagnostics; remote
+  verification state reports the materialized host spool only.
+- Full workspace native suite green via the canonical runner:
+  `RUSTUP_TOOLCHAIN=1.85.1 tools/test-fast.sh` →
+  `PASS full workspace native tests in 111s with 4 bounded jobs`
+  (raw log: `/tmp/v016_testfast2.log`; includes the rewritten
+  LiveOwner full-route integration tests, the k100 point-lookup case, and
+  the immutable-base opcode-rejection proof).
+- Next: I6 focused checks (fastcdc/extent/small-chain suite subset), then
+  B1 → B2 → B3 gates with freshly collected v0.1.5 controls.
