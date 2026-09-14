@@ -1,0 +1,14 @@
+{
+  "source_sha256": {
+    ".github/workflows/ci.yml": "9b9a3e28ab0163c9c17b1181322bb0406aad2d3ec2881c9ddd1bdb5f2a983ed9",
+    "crates/layerfs-fuse/src/host_coherence.rs": "3199caf174ab820bedeedbdd106f7f50f4fe44c44bc31a226007b291a83efd8d",
+    "benchmark/fs-bench-pro/src/v016_mixed.rs": "1fbabb5282edbd402c14633b49392e379fabd8c365fd2a223005324447e9ab9d",
+    "docs/roadmap/0.1/development.md": "a8d965eb6c6be19e9aa75ed955b1dd2118e0950028470b20e2b7a9ee43ae64ff"
+  },
+  "parent_commit": "8b6012a7bb309e45dea5d92f32daa53cb3324992",
+  "policy": "correctness, suspicious and unused_must_use fatal; other default warnings advisory",
+  "original_failure": "stale doc comment attached to close_sessions; removed comment only, no benchmark behavior changed",
+  "verification": "balanced workspace Clippy PASS, focused existing State/shutdown test PASS1, fmt and whitespace PASS",
+  "full_native_reuse": "Native suite not repeated locally for equivalent Default initialization and a lint-only workflow change. Linux PR CI remains mandatory for this publication.",
+  "benchmark_execution": false
+}

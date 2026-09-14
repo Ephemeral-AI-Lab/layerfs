@@ -12,6 +12,7 @@ pub(super) struct Lease {
     pub id: u64,
     pub size: u64,
 }
+#[derive(Default)]
 pub(super) struct State {
     book: AsyncMutex<Book>,
     pub(super) protection: Mutex<Option<Arc<KernelEdit<Lease>>>>,
@@ -22,21 +23,6 @@ pub(super) struct State {
     root: Mutex<Option<Arc<std::fs::File>>>,
     #[cfg(test)]
     kernel: Mutex<Option<Arc<dyn Fn(NodeId) -> PortFuture<'static, ()> + Send + Sync>>>,
-}
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            book: Default::default(),
-            protection: Default::default(),
-            writeback_order: Default::default(),
-            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
-            notifier: Default::default(),
-            #[cfg(any(target_os = "linux", test))]
-            root: Default::default(),
-            #[cfg(test)]
-            kernel: Default::default(),
-        }
-    }
 }
 #[derive(Default)]
 struct Book {

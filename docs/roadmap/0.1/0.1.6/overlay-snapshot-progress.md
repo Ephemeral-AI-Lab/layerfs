@@ -17,7 +17,7 @@ Read [the successor handoff](overlay-snapshot-step1-handoff.md) first. It supers
 | --- | --- |
 | Phase | Components of2–5 implemented/checked; no new whole-phase completion; V1 exit stillOPEN |
 | Bounded step1 | Mounted shutdown rerun PASS; actual-spill fixture PASS; maintenance oracle PASS |
-| Publication checks | Build/fmt/whitespace/runner PASS; native executed tests pass in171s, historical150s gateFAIL retained; owner accepted171s and currentCIbudget is180s; strictClippyFAIL |
+| Publication checks | Build/fmt/whitespace/runner PASS; native executed tests pass in171s, historical150s gateFAIL retained; owner accepted171s and currentCIbudget is180s; old strictClippyFAIL retained, owner-approved balancedClippy passes locally |
 | Active resources | No test/build process or owned container; measurement lock released |
 | Phase7 | NOT_STARTED; no#122 registered scenario executed |
 | Successor next task | Existing8192 persisted-token admission defect: bounded8193-file reproduction, then ownership correction; no capacity stress was run in this stopped checkpoint |
@@ -144,3 +144,7 @@ Finalsource has been formatted and diff-whitespace checked. Source frozen while 
 ## Verified publication and stopped state
 
 PR#126 MERGED at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`. Remote main contains product `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a` and latest owner180s budget/handoff `820ecab8079c7e0f09c29c6df1c983366e3dd77e`. Evidence comments read back: https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5657648675 and https://github.com/Ephemeral-AI-Lab/layerfs/issues/125#issuecomment-5657648911. Both issues remainOPEN. No owned build/test/container/measurement lock remains. Local branch remains `codex/snapshot-isolated-workspace`, fast-forwarded to the main merge before this documentation-only publication record; no source reset or unrelated change was discarded. Repository CI may run automatically on publication; strictClippy and all other successor obligations are explicit in the handoff.
+
+## Authorized balanced Clippy follow-up
+
+Owner approved making style/complexity/unused-code warnings advisory while keeping compilation, correctness, suspicious-code and unused_must_use failures fatal. Workflow and development guidance now agree. Replaced equivalent manual State::default with derive; removed one stale documentation comment caught by suspicious lint. Balanced workspace Clippy PASS, focused existing shutdown/initialization test PASS1, fmt/whitespace PASS. Raw initial failure and targeted passes are retained in evidence/ci/balanced-clippy/. The180s test gate and all product/benchmark correctness obligations are unchanged. No broader Snapshot work or benchmark case was executed.

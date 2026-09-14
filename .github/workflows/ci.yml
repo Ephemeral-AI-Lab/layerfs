@@ -21,4 +21,9 @@ jobs:
       - run: cargo +1.96.0 fmt --all --check
       - run: python3 -m unittest discover -s tools -p test_test_fast.py
       - run: RUSTUP_TOOLCHAIN=1.85.1 tools/test-fast.sh
-      - run: cargo +1.96.0 clippy --workspace --locked -- -D warnings
+      - name: Clippy
+        run: >
+          cargo +1.96.0 clippy --workspace --locked --
+          -D clippy::correctness
+          -D clippy::suspicious
+          -D unused_must_use
