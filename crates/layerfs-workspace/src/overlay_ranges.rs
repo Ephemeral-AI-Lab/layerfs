@@ -1,7 +1,7 @@
 //! Implicit-offset host range treap using the existing PieceTree split/merge
 //! shape. Index leaves retain child graphs and payload tokens on disk.
 use crate::correspondence::{Descriptor, Kind, OriginId, OriginSequence};
-use crate::overlay_index::{Index, Record, Root};
+use crate::overlay_index::{Index, Root};
 use crate::overlay_payload::{OwnedRange, Payload};
 use layerfs_content::ObjectId;
 use std::io::{self, ErrorKind, Read};
@@ -585,58 +585,30 @@ impl Ranges {
     // pack nodes together if measured metadata pressure requires that change.
     fn node(&self, piece: Piece, priority: u64, left: &Tree, right: &Tree) -> io::Result<Tree> {
         let summary = self.summary(piece, priority, left, right)?;
-        // A node's records share one leaf, so they are prepared together and
-        // applied with a single path copy. The former per-field sequence
-        // published and retired an intermediate root for every record.
-        let encoded = summary.encode();
-        let provenance = piece.metadata();
-        let backing = piece.backing();
-        let left_summary = left.root().map(|_| left.summary.encode());
-        let right_summary = right.root().map(|_| right.summary.encode());
-        let mut records = Vec::with_capacity(5);
-        records.push(Record {
-            key: META,
-            value: &encoded,
-            external: None,
-            linked: None,
-        });
+        let mut root = self.0.index.empty_root()?;
+        root = self.0.index.set(&root, META, &summary.encode())?;
+        root = self.0.index.set(&root, PROVENANCE, &piece.metadata())?;
         if let Some(child) = left.root() {
-            records.push(Record {
-                key: LEFT,
-                value: left_summary
-                    .as_ref()
-                    .ok_or_else(|| corrupt("range node child summary"))?,
-                external: None,
-                linked: Some(child),
-            });
+            root = self
+                .0
+                .index
+                .set_linked(&root, LEFT, &left.summary.encode(), Some(child))?;
         }
         if let Some(child) = right.root() {
-            records.push(Record {
-                key: RIGHT,
-                value: right_summary
-                    .as_ref()
-                    .ok_or_else(|| corrupt("range node child summary"))?,
-                external: None,
-                linked: Some(child),
-            });
+            root = self
+                .0
+                .index
+                .set_linked(&root, RIGHT, &right.summary.encode(), Some(child))?;
         }
-        records.push(Record {
-            key: PROVENANCE,
-            value: &provenance,
-            external: None,
-            linked: None,
-        });
-        records.push(Record {
-            key: BACKING,
-            value: &backing,
-            external: match piece.source {
+        root = self.0.index.set_owned(
+            &root,
+            BACKING,
+            &piece.backing(),
+            match piece.source {
                 Source::Payload { token } => Some(token),
                 _ => None,
             },
-            linked: None,
-        });
-        let empty = self.0.index.empty_root()?;
-        let root = self.0.index.set_batch(&empty, &records)?;
+        )?;
         self.0.writes.fetch_add(1, Ordering::Relaxed);
         Ok(Tree {
             root: Some(root),
