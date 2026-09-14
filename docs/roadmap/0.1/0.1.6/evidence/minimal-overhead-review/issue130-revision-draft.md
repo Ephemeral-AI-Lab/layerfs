@@ -1,7 +1,8 @@
 ## Historical issue-body draft: superseded by promoted implementation plan
 
-The owner promoted #130 into the active migration, with a <=2-second objective
-for the complete fresh 25k-file lifecycle and no quadratic scaling. Use the
+The owner promoted #130 into the active migration. The current objective is
+close performance on existing tiny-churn cases, with no quadratic scaling;
+25k/two-second and million-file cases are deferred. Use the
 [current implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
 and live issue body. The remaining draft is retained review history, including
 its old prerequisite assumptions; it is not current scheduling authority.

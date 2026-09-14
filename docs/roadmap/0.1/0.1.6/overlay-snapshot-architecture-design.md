@@ -21,11 +21,12 @@ claims full-surface readiness or measured benchmark performance.
 
 Owner review update, 2026-09-14: the
 [promoted #130 implementation plan](overlay-minimal-overhead-implementation-plan.md)
-selects denser existing Index pages, compact common ranges and packed ordinary
-arena allocation, with local reclamation instead of whole-arena sweeps. It does
-not require a new RAM-first pager. The explicit objective is a complete fresh
-25,000-file lifecycle in <=2 seconds; feasibility is unproved. Quadratic growth
-is rejected, including cumulative maintenance and diagnostic work. This update
+prioritizes local reclamation instead of whole-arena sweeps and bounded Index
+preparation. Select further density/range/payload changes from measured costs;
+no new RAM-first pager is required. The current objective is close performance
+on the existing 20 tiny-churn cases. The 25k/two-second and million-file cases
+are deferred. Quadratic growth is rejected, including cumulative maintenance
+and diagnostic work. This update
 supersedes the old after-closure scheduling and unconstrained design alternatives,
 while preserving all snapshot/ownership/publication contracts.
 

@@ -3,9 +3,10 @@
 Status: retained earlier minimality draft following the
 [rules/minimality audit](rule-audit/README.md). The
 [promoted implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
-now selects the implementation order, scaling requirements and two-second
-objective. This draft is not implementation or benchmark evidence; its narrow
-four-change first cut alone does not resolve the 25k dirty-file costs.
+now selects the implementation order, scaling requirements and existing-tiny-churn
+comparison. The 25k/two-second and million-file cases are deferred. This draft is
+not implementation or benchmark evidence; select each next change from actual
+costs instead of requiring this or the later compact-storage bundle in full.
 
 ## Scheduling and authority
 

@@ -3,10 +3,12 @@
 Current owner amendment (2026-09-14): #130 is promoted before final capacity
 qualification and benchmarks. Read the
 [minimal-overhead implementation plan](overlay-minimal-overhead-implementation-plan.md)
-alongside this handoff: it sets the explicit <=2-second full 25,000-file lifecycle
-objective and rejects quadratic scaling. The after-closure #130 gate is obsolete.
-Its objective does not waive V1-V4, capacity, existing benchmark criteria or #122
-exclusions. Historical predecessor/source descriptions below are not a current
+alongside this handoff: the current evaluation seeks close performance on the
+existing tiny-churn cases and rejects quadratic scaling. The owner defers the
+25k/two-second and million-file cases; do not run them as current prerequisites.
+The after-closure #130 gate is obsolete. V1-V4, existing benchmark criteria and
+#122 exclusions remain; deferred capacity obligations stay OPEN wherever required
+for terminal closure. Historical predecessor/source descriptions below are not a current
 checkout status; inspect the latest progress and delivered source before resuming.
 
 Implement and verify Snapshot-Isolated Workspace in

@@ -447,3 +447,28 @@ Validity: current, and recorded because it matters beyond this row: the file was
   to concurrent source edits is unsupported: a compiled test binary does not
   normally read Rust source. Retain the failure and investigate source custody/
   actual cause; do not count it as a pass or erase it.
+
+### L39 — owner switches #130 evaluation to existing tiny-churn cases
+
+- Identity/source: owner update after L38: evaluate close performance to existing
+  tiny-* benchmarks and defer 25,000-file and million-file cases. The two existing
+  subagents rechecked active registry/criteria and minimal implementation order.
+- Result: **REVIEW ONLY**; no benchmark/build/test/probe. Exactly 20 active tiny-*
+  identities are in `tiny_file_churn`, none intersect the 36 #122 exclusions.
+  Keep their current fixtures/modes/seeds, original public-call timer and existing
+  stronger criteria. The plan prospectively adopts the existing #118 ordinary
+  paired regression screen for comparable per-case results; no invented universal
+  two-second threshold or per-file dilution of a whole-workflow delta.
+- Validity: L38's promotion and no-quadratic requirement remain; its active
+  25k/two-second objective and new-case registration task are superseded/deferred.
+  Million-file qualification is deferred, not passed or waived; any broader
+  terminal requirement for it remains OPEN. Preserve all old evidence unchanged.
+- Next: current-route tiny-case diagnostics and focused quadratic-reclamation
+  repair, then the smallest measured improvement. The full compact-storage bundle
+  is no longer required before this evaluation; no new scale matrix is introduced.
+- Subsequent owner refinement: quick iteration targets exactly
+  `tiny-create-500-mixed-v4`, `tiny-stat-500-mixed-v4`,
+  `tiny-unlink-500-mixed-v4`, `tiny-bulk-create-500-mixed-v3`, and
+  `tiny-bulk-delete-500-mixed-v3`. Bulk tier500 means 5,000 files/500 MiB.
+  Retain valid passes and rerun only affected checks; full 20-case qualification
+  follows when stable, not after every fix. This is scheduling, not a test result.

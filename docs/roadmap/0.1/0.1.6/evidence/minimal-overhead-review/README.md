@@ -5,8 +5,9 @@ qualification, amendment of the frozen contracts, or completion of #124/#125.
 
 Scheduling update: [#130](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130)
 is promoted into the active migration, before final capacity qualification and
-benchmarks. The owner's full 25,000-file lifecycle objective is <=2 seconds, with
-no quadratic scaling. The [current implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
+benchmarks. The current objective is close performance on the existing tiny-churn
+cases with no quadratic scaling. The 25k/two-second and million-file cases are
+deferred; they are not current registration or execution tasks. The [current implementation plan](../../overlay-minimal-overhead-implementation-plan.md)
 supersedes this review's earlier order and selects the initial representation;
 the remaining analysis below is retained context, not a mandatory pager/feature
 bundle. #124/#125 retain all correctness, capacity and benchmark obligations.

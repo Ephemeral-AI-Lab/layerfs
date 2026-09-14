@@ -12,16 +12,21 @@ for that work; the append-only record of individual checks is
 **Latest owner direction: #130 is promoted before final capacity qualification
 and benchmarks.** Read the
 [current implementation plan](overlay-minimal-overhead-implementation-plan.md)
-first. Its final objective is <=2 seconds for fresh Begin -> create/write 25,000
-one-byte files -> Commit -> End, with no quadratic scaling. This supersedes the
-old #130 after-closure prerequisite; the stopped checkpoints below are history.
+first. The latest objective is close performance on existing tiny-churn cases:
+quick iteration uses the five tier-500 create/stat/unlink/bulk-create/bulk-delete
+cases, then the full 20 when stable. Use existing applicable paired regression
+and stronger case criteria.
+The owner defers the 25k/two-second and million-file cases. Do not register/run
+them for this evaluation; required broader capacity obligations remain OPEN.
+No quadratic scaling is accepted. The old #130 after-closure prerequisite and
+the earlier two-second active target are superseded.
 
 Two subagents reviewed tiny-churn receipts and the actual write/storage path;
-the coordinator reviewed contracts. The two-second objective remains unproved.
-Current source has a whole-arena evacuation counterexample with quadratic
-cumulative work, per-file storage amplification, and serialized host RPCs.
-The selected plan fixes these in the existing ownership/backend, rather than
-mandating a new pager. #124/#125/#130 remain OPEN; V1, complete production Docker
+the coordinator reviewed contracts. Current source has a whole-arena evacuation
+counterexample with quadratic cumulative work, per-file storage amplification
+and serialized host RPCs. Repair reclamation and redundant preparation first;
+select further existing-backend improvements from measured tiny-case costs.
+A full compact-storage bundle or new pager is not a prerequisite. #124/#125/#130 remain OPEN; V1, complete production Docker
 dispatch, capacity and final benchmark qualification are outstanding.
 
 Current review/publication branch: `codex/promote-workspace-overhead`, based on
@@ -32,13 +37,15 @@ benchmark, probe, cleanup or new product test was run during this plan review.
 Trajectory evidence remains published on `codex/step6-capacity-trajectory`,
 not merged here; use its exact commits rather than relabeling it as main evidence.
 
-Next executable implementation task: P130.1's new public 25k fixture/route and
-release cost instrumentation, alongside the bounded reclamation counterexample
-and repair from P130.2. Preserve the 25k debug receipt unchanged. Check actual
+Next executable implementation task: P130.1's existing tiny-case comparator,
+production dispatch and release cost instrumentation for those five tier-500
+cases, alongside the bounded
+reclamation counterexample/repair from P130.2. No new fixture or scale campaign.
+Preserve the old 25k debug receipt unchanged. Check actual
 process/measurement-lock ownership before running. Final full #125 collection
 still waits for complete correctness and a sealed candidate, not issue closure.
 
-Publication record: plan source `d36058a31f734ca12995c3b249c5ff80331b5a21`
+Earlier publication record (its two-second evaluation is now superseded): plan source `d36058a31f734ca12995c3b249c5ff80331b5a21`
 is pushed. The #130 title/body now use the promoted order and explicit objective.
 Comments were posted and read back exactly:
 [#130 promotion/review](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130#issuecomment-5659266555),

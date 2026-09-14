@@ -1,20 +1,26 @@
-# #130: compact Workspace implementation plan and two-second objective
+# #130: compact Workspace implementation plan and tiny-churn evaluation
 
 Status: promoted implementation plan, 2026-09-14. Architecture/feasibility review,
 not implemented or performance-qualified. No new benchmark was run for this plan.
 
-Owner updates supersede the former after-closure scheduling of
-[#130](https://github.com/Ephemeral-AI-Lab/layerfs/issues/130): promote this work
-now; pursue **a complete warm, fresh 25,000-file Workspace workflow in at most
-2,000,000,000 ns**; reject quadratic scaling, accept necessary linear work, and
-prefer logarithmic point operations and constant-sized lifecycle bookkeeping.
+Latest owner direction supersedes both the former after-closure scheduling and
+subsequent two-second milestone: **promote #130 now and evaluate closeness to the
+existing tiny-* benchmarks. Defer the 25,000-file and million-file cases.**
+The quick iteration set is the five **tier-500** create/stat/unlink/bulk-create/
+bulk-delete cases; the full 20-case family is the later stable qualification.
+Reject quadratic scaling, accept necessary linear work, and prefer logarithmic
+point operations and constant-sized lifecycle bookkeeping.
 
-The target belongs to #130. Existing #124 correctness/capacity and #125 benchmark
-contracts, including stronger applicable tiny-churn criteria, remain unchanged.
+Use the existing benchmark workloads, timing definitions and applicable criteria.
+The 25k/two-second proposal is retained as deferred history, not a current exit
+criterion or registration task. Million-file qualification is deferred and still
+open wherever a broader migration contract requires it; small-case success does
+not satisfy or waive it. Do not launch either deferred case now.
+
 The [overlay rules](overlay-snapshot-rule.md) and
-[specification](overlay-snapshot-spec.md) still govern semantics. This plan
-supersedes the earlier #130 implementation order and makes the remaining larger
-representation proposals conditional; historical analysis and failures remain.
+[specification](overlay-snapshot-spec.md) still govern semantics. #124 correctness
+and #125 final benchmark obligations remain. This plan selects the next measured
+improvement instead of requiring every previously proposed storage mechanism.
 
 ## 1. Feasibility review and decision
 
@@ -25,11 +31,12 @@ snapshot and complexity requirements. Source checkpoint: main
 unverified interrupted Step 5 changes in lifecycle/projection/reconcile/registry.
 Those local changes are not delivered or passing product evidence.
 
-**Verdict: promotion is justified; two-second feasibility is not yet proved.**
-The current representation has demonstrable amplification. The earlier narrow
-clean/lazy/correspondence/range-leaf proposal is insufficient for this dirty-file
-objective. The architecture must address foreground index work, common-file
-storage and transport; faster inner Commit alone cannot satisfy it.
+**Verdict: promotion is justified; comparable tiny-churn performance still needs
+measurement.** The current representation has demonstrable amplification.
+Repair the quadratic reclamation mechanism and remove repeated preparation first;
+then select the next measured cost. Foreground write/index/transport, complete
+Commit and cleanup must all be visible. Clean-Commit improvements alone do not
+establish performance for dirty tiny-file cases.
 
 | Retained evidence | What it establishes | What it does not establish |
 |---|---|---|
@@ -46,14 +53,13 @@ receipt is `benchmark-results/host-store/issue120/performance/tiny_file_churn/`
 The producing binary is `c55daf13e372331a5ab6dbd465ece351a55923831c45864325ac46b1508fa295`
 on source `1ff1f2ddd`. Historical statuses and original source identities stand.
 
-Two seconds permits only 80 microseconds per created file before fixed costs.
-Current `HostClient::call_owned` serializes a complete request/reply; the current
-host path needs at least 50,000 create/write exchanges, before other operations.
-That leaves less than 40 microseconds per exchange before Begin/Commit/End.
-This is a necessary-condition calculation, not a measured RTT or impossibility
-proof. TCP_NODELAY already exists. A sequential write cannot be pipelined before
-its dependent create returns; the existing legacy batch transport is not a
-ready-made host-wire Create/Write batching mechanism.
+Current `HostClient::call_owned` serializes a complete request/reply. Measure
+queue/transport/host execution on the existing cases; do not assume page packing
+alone restores their latency. TCP_NODELAY already exists. A sequential write
+cannot be pipelined before its dependent create returns, and legacy batch
+transport is not a ready-made host-wire Create/Write batching mechanism. The
+older two-second/50,000-exchange arithmetic is historical context for a deferred
+case, not a current feasibility gate.
 
 The review also found a **production quadratic counterexample**, separate from
 the diagnostic censuses. In `overlay_payload.rs`, releasing coverage sets
@@ -138,29 +144,27 @@ The steps below are #130 work packages, not a renumbering of #124's seven phases
 Continue dependency-ready work across packages; a review/revision is not an
 implementation completion or a reason to stop an authorized execution loop.
 
-### P130.1 — Freeze the public workload and diagnose the actual bottleneck
+### P130.1 — Pin existing tiny-churn comparisons and the production route
 
 - Preserve the interrupted patch and all existing results before choosing source.
   Correct its post-publication metrics error propagation and unbounded
   reconciliation scans before accepting those respective changes under #124.
 - Wire/verify macOS host authority to Docker daemon/FUSE with SDK parity. Receipts
   must identify new dispatch; never measure legacy Docker dispatch as the new path.
-- Register the opt-in milestone in the existing family/workload/runner/oracle,
-  with the exact contract in section 4. The existing create schedule has only
-  500 ranked entries: use an explicit `0..25_000` schedule and exact completion
-  assertions instead of merely changing its tier.
+- Select the five tier-500 tiny-create/stat/unlink/bulk-create/bulk-delete cases using
+  section 4. Preserve their fixtures, seeds, worker counts, normalization, sync,
+  timing and independent proof. Do not register the deferred 25k case or expand
+  the 500-entry schedule for it.
 - Obtain compatible release baseline/current diagnostics under the measurement
   lock. Count transport requests/queue time, host execution, Index edits/path
   copies/catalog I/O, range/payload allocations and complete lifecycle phases.
   Expensive tracing is a diagnostic, outside accepted timing distributions.
-- Test the serial transport budget early. If it exceeds the available time,
-  investigate an actual compliant reduction; do not optimize only disk layout,
-  silently change worker count, defer host acknowledgment ownership, or claim
-  that independent-request multiplexing removes a sequential dependency.
+- Start with the slow/affected existing case and its smallest correctness check.
+  If network waiting dominates, investigate its actual dependency; do not change
+  worker count or defer host acknowledgment ownership to make the case faster.
 
 Exit: exact fixtures/timers/custody and route evidence; a source-backed cost
-breakdown and selected next change. Unknown RTT and the two-second miss remain
-visible. A missing V1 mechanism does not block independent ordinary-input cost
+breakdown and selected next change. Unmeasured performance remains unqualified. A missing V1 mechanism does not block independent ordinary-input cost
 diagnostics, but those do not qualify the complete snapshot surface.
 
 ### P130.2 — Remove quadratic reclamation and repeated Index construction
@@ -196,9 +200,20 @@ per deletion; smaller edit/path-copy/write counts, with stale-source installatio
 disjoint writes, retained snapshots, quota/partial-I/O and rollback checks passing.
 No published-page in-place mutation is introduced.
 
-### P130.3 — Remove common-file storage floors
+### P130.3 — Select the next measured storage cost
 
-Select and version one coordinated private encoding before implementation:
+The complete compact-storage bundle is not mandatory for the first useful
+result. Select the smallest change justified by current tiny-churn phase/I/O/
+allocation evidence; version its coordinated private encoding before coding:
+
+| Candidate | Selection evidence |
+|---|---|
+| Denser existing Index | Page slack, path depth or COW/catalog I/O remains material |
+| Compact common ranges | Dedicated range pages and their lookup/reference work remain material |
+| Packed tiny arena allocation | Rounding, payload writes or reclamation remains material |
+| Singleton correspondence | Commit builds/retains disproportionate per-file description trees |
+
+The concrete design directions, when selected, are:
 
 1. **Dense pages in the existing Index.** Split/merge by encoded bytes and bounded
    decoded size; keep maximum-name/value and overflow validation. Raising the
@@ -269,94 +284,144 @@ Exit: the previously failing cost/latency check and the genuinely affected
 regressions pass. Retain failed attempts and record why any previous pass became
 invalid. Do not repeat unchanged runs to select a favorable number.
 
-### P130.5 — Meet milestone one, then complete migration qualification
+### P130.5 — Qualify the existing tiny-churn evaluation and hand off
 
-Run the full section-4 workflow from the selected release source. Require the
-two-second result, exact reopened contents/metadata/count, correct publication,
-resource/custody and cleanup. Report foreground latency during natural Commit
-construction separately from held-builder correctness tests. Passing this one-byte
-case establishes its own scope; it does not establish mmap or realistic-payload
-performance.
+First complete the five tier-500 quick-iteration cases, retaining their valid
+passes across unrelated fixes. Once the implementation is stable, complete all
+20 unchanged tiny-churn cases under section 4's prospective
+comparison rule and each existing stronger criterion. Require independent exact
+verification, source/custody/resource and cleanup success. Publish actual case
+numbers, phase differences and physical storage; no family average may hide an
+individual mandatory failure. Retain every failed attempt and valid reused pass.
 
-Complete the affected inherited tiny-churn family and the relevant small-C2,
-large-file CDC/extent, hardlink/rename/open-unlinked, replay/publication and fsync
-checks. Finish V1-V4 and the actual production/non-Commit migration under #124.
-Complete the required million-changed-file proof with one final Commit and fresh
-reopen on the selected representation; carry valid prior evidence only when its
-relevant dependencies/custody permit. The 25k milestone is not a substitute.
+Complete the genuinely affected small-C2, large-file CDC/extent,
+hardlink/rename/open-unlinked, replay/publication and fsync checks. Report
+foreground latency during natural Commit construction separately from held-builder
+correctness. Continue V1-V4 and actual production/non-Commit migration under #124;
+small-case performance cannot claim complete supported-surface correctness.
 
-Seal the candidate only after required correctness/capacity is complete. #125
-then runs the complete existing included suite, including required extended cases,
-with the 36 #122 exclusions reconciled against the registry. Neither prior #124
-closure nor a separate second full benchmark campaign is required to begin that
-handoff. Required failures must be fixed; the new target does not replace existing
-criteria. Close issues only after their respective terminal evidence is valid.
+The 25k/two-second milestone and million-changed-file qualification are deferred,
+not required to complete this current tiny-churn evaluation. Do not run them as
+an implicit prerequisite. Where #124/#125 terminal contracts still require the
+million-file proof, retain that obligation as DEFERRED/OPEN; do not close those
+issues on small-case evidence or silently change their closure criteria.
 
-## 4. Milestone one: exact public workload and acceptance
+The later #125 full included campaign still needs a correct sealed candidate
+and its applicable capacity prerequisites. Retain its complete scope and 36 #122
+exclusions. Existing development tiny-case results are not automatically final
+campaign evidence; reuse them only where exact source/custody rules permit.
 
-Proposed new opt-in case identity: `tiny-create-25000-onebyte-lifecycle-v1`, in
-`tiny_file_churn`. It is a separate #130 extension, not a new default family tier,
-a renamed #122 case or a replacement for the 20 inherited cases. Registration,
-actual operation counts, fixture, oracle and selection self-checks must agree.
+## 4. Current evaluation: existing tiny-* cases and closeness
 
-| Field | Frozen requirement |
+The active source registry defines exactly **20 tiny-* cases**, all in one
+family, `tiny_file_churn`: five operations at four tiers. Keep every identity,
+fixture and default membership unchanged. None is in the 36 #122 exclusions.
+
+**Quick iteration selects exactly these five existing cases:**
+
+| Case | Affected files / payload |
 |---|---|
-| Initial state | Empty target namespace in an independently owned sample Store; setup/Init outside the lifecycle timer and separately reported |
-| Services / Workspace | Warm already-bound services; one fresh Workspace per sample; no mutable Workspace reset/reuse |
-| Files | Exactly 25,000 regular files `file-00000` through `file-24999` in the root |
-| Bytes | Exactly `b"x"` written once per file: 25,000 supplied bytes; intentionally dedup-friendly, not a general throughput profile |
-| Workload | One managed process, sequential ordinary open/create-exclusive, one-byte write, close; no SDK bulk-create substitution or 25,000 Docker execs |
-| Metadata / sync | Reuse declared tiny-churn normalization: mode 0640 files, 0750 directories, mtime 1700000000000000000 ns; include normalization and the existing single root-directory fsync in Exec; no per-file fsync |
-| Primary time | Contiguous monotonic elapsed time immediately before public Begin through completed End, including managed Exec, Commit and any intervening public visibility operation |
-| Objective | Primary elapsed time <= 2,000,000,000 ns under the frozen applicable sampling rule; a miss remains TARGET_MISS, not PASS from inner Commit time |
-| Other times | Begin, Exec/create-write/finalization, Commit including acquisition/build/stage/publish, visibility, End, existing pure-call sum, full runner/setup/proof/cleanup wall |
-| Placement | macOS Store/SDK/coordinator/construction/spool; Linux Docker daemon/FUSE/workload under existing 2-CPU/2-GiB/no-swap/256-PID profile |
-| Qualification | Exact public dispatch, release binaries/image/fixture/harness identities, complete expected operation counts, independent reopen verification, ownership/resource and cleanup success |
+| `tiny-create-500-mixed-v4` | 500 created tiny files; registered mixed background |
+| `tiny-stat-500-mixed-v4` | 500 stat targets; registered mixed background |
+| `tiny-unlink-500-mixed-v4` | 500 removed tiny files; registered mixed background |
+| `tiny-bulk-create-500-mixed-v3` | 5,000 created files / 500 MiB plus registered witness |
+| `tiny-bulk-delete-500-mixed-v3` | 5,000 removed files / 500 MiB plus registered witness |
 
-The mode above differs from the internal diagnostic's 0600 creation mode; this
-is an explicitly new public fixture, not a byte-for-byte identity claim for the
-old test. Metadata normalization is real work. Existing wrapped syscall counts
-omit its chmod/utimensat calls, so report normalization and actual transport
-counts separately rather than claiming that counter counts every filesystem call.
+The `500` tier does not mean 500 files in bulk cases. Do not substitute smaller
+tiers or one-byte fixtures. Establish source-bound results for this set, then
+rerun only a failing case and genuinely affected regressions after each fix.
+A changed shared Index/ownership path can invalidate several passes; an unrelated
+change does not. Do not rerun all five or all 20 routinely after every edit.
+The five-case screen is not full-family or final #125 campaign completion.
 
-Successful source-level counts, absent retries: 25,000 file opens, 25,000 one-byte
-writes, 25,001 closes including the root descriptor, one root open, one root
-fsyncdir, zero per-file fsync, and 25,001 metadata normalizations. The existing
-wrapper therefore counts 75,003 calls; normalization adds 50,002 chmod/utimensat
-calls. Freeze and assert these alongside exact file/byte counts; report attempted
-and retried calls separately. Observe actual FUSE/host RPC counts rather than
-equating them to POSIX counts.
+The later stable full-family membership remains:
 
-Reuse existing complete-sample/seed/repetition and applicable paired-comparison
-rules. Freeze exact applicability in the new case before collection; do not pick
-statistics, repetitions or a tolerance after seeing results. Keep the inherited
-`pure_call_sum_ns` definition unchanged. Benchmark-only expensive census/formatting
-belongs outside the new contiguous timer; required engine work stays inside.
-Moving required cleanup out of End is not an optimization. If existing semantics
-permit deferred physical reclamation, report its bounded bytes and time through
-settlement separately, and require successful cleanup before accepting evidence.
+| Operation | Tiers / affected files | Registered suffix |
+|---|---|---|
+| tiny-create, tiny-stat, tiny-unlink | tiers 1/10/100/500 affect 1/10/100/500 files | tiers 1/10: compact-v2; tiers 100/500: mixed-v4 |
+| tiny-bulk-create, tiny-bulk-delete | tiers 1/10 affect 50/500 files; tiers 100/500 affect 1,000/5,000 files | tiers 1/10: compact-v2; tiers 100/500: mixed-v3 |
 
-Independent verification enumerates all 25,000 paths from reopened committed
-state, checks every byte/length/type/mode/mtime and exact count, root-directory
-mode/mtime, branch outcome, and final cleanup. No full verification inside performance timing. Workload,
-proof and cleanup retain separate deadlines and their existing failure rules.
+Case IDs are `<operation>-<tier>-<suffix>`. Bulk tiers supply 1/10/100/500 MiB
+respectively, with the existing witness profiles. Mixed tiers include varied and
+large files, and individual-operation tiers have their registered untouched
+background. Do not flatten those fixtures or use file counts as interchangeable
+workload identities. Keep normalized metadata and the registered root sync in
+managed Exec; no added per-file fsync or removal of existing synchronization.
 
-First obtain a matched v0.1.5 result with the same workload, public operation,
-oracle, topology, cache and enclosing timer. If compatible execution cannot be
-established, label that comparison unavailable; retain old tiny-churn rows only
-as historical context. A v0.1.5 miss does not waive #130's two-second objective.
+### Prospective comparison rule
+
+Compare each case against a compatible v0.1.5 control using the existing
+[#118 regression screen](../../../general/benchmark_rules.md), also documented
+in the benchmark QUICKSTART. Adopt it prospectively for #130 before collecting
+new comparisons; do not invent a uniform two-second or per-file gate:
+
+- Existing n3 fresh alternating pairs, with the existing arm/seed/custody rules.
+- A material wall regression requires median paired slowdown greater than
+  `max(15% of control median, 3 ms)` **and** at least two of three pairs slower.
+- The analogous CPU rule uses `max(15% of control median, 1 ms)`.
+- Preserve each stronger applicable unwaived criterion, including the existing
+  strict <1-second tier-100 bulk create/delete target. A paired screen does not
+  replace the recorded tiny-create-100 <1-second criterion where applicable, nor
+  override a correctness, resource, cleanup, deadline or stronger timing failure.
+
+For this evaluation, “close” means no material regression under that existing
+screen, all applicable mandatory criteria satisfied, and resource/storage costs
+reported without hidden deferred work. Preserve permitted minor differences and
+reporting-only statuses under their original contracts; do not silently convert
+reporting-only targets into hard gates. Faster results remain welcome, but no
+blanket speedup ratio is promised.
+
+Apply the comparison to the registered metric of the **whole selected workflow**.
+The inherited receipt's `operations=1` is not 500 or 5,000 independent workflows;
+never divide a slowdown by its file count to evade the millisecond floor.
+Report file/byte-normalized mechanism counters separately for diagnosis.
+
+### Public route, timer and evidence
+
+- Use exact existing family/workload/oracle and seeds. Baseline and candidate
+  have matched fixture, cache, topology, operations and timer, with only the
+  declared product change differing. A legacy-route candidate run cannot qualify
+  the new host-authority path. If the historical product cannot run compatibly,
+  report comparison BLOCKED/unavailable and preserve its published rows as
+  historical context; do not substitute a slower control silently.
+- macOS owns Store/SDK/coordinator/construction/spool; Linux Docker owns real
+  daemon/FUSE/workload under the existing 2-CPU/2-GiB/no-swap/256-PID profile.
+  Reuse warm services, matching builds and pristine prepared inputs; each sample
+  has a fresh Workspace. No mutable-Workspace reset/reuse.
+- Preserve `pure_call_sum_ns` and the case's existing boundaries. Report Begin,
+  managed Exec, Commit, visibility, End and full orchestration wall separately.
+  A public-call sum is not contiguous wall or inner Commit time. If an enclosing
+  interval is added for attribution, name it separately and do not replace the
+  historical comparison metric.
+- Keep normalization and sync in their existing timed scope. Wrapped syscall
+  counters omit chmod/utimensat normalization; report those separately and observe
+  actual FUSE/host requests. Do not equate POSIX and transport counts.
+- Keep setup, verification and cleanup domains separate, while including each
+  required product action in its real boundary. Report any legitimately deferred
+  physical reclamation through settlement; moving cost out of End cannot create
+  an apparent improvement. Independent proof checks the registered full expected
+  state, including unchanged witnesses, metadata, branch results and cleanup.
+- Retain exact source/binary/image/harness/fixture identities, paired raw results,
+  sample counts, all failures and applicable statuses. Once a pass remains valid,
+  reuse it; rerun only after concrete dependency/fixture/environment/custody
+  invalidation. Never retry unchanged cases to improve a median.
+
+### Deferred work
+
+The [earlier 25k/two-second proposal](https://github.com/Ephemeral-AI-Lab/layerfs/blob/d36058a31f734ca12995c3b249c5ff80331b5a21/docs/roadmap/0.1/0.1.6/overlay-minimal-overhead-implementation-plan.md)
+is retained history. Do not add its case registration, baseline run, counter
+prefixes or two-second acceptance to the current task. The million-changed-file
+capacity proof is also deferred; its original one-Workspace/final-Commit/reopen
+contract remains open wherever required. Neither deferral is a PASS or waiver.
 
 ## 5. Scaling and full-suite evidence
 
-Reuse inherited tiny-create 100/500 and bulk-create 1,000/5,000 cases for affected
-regression coverage; their payload/background differences make them unsuitable
-as a single scaling curve. When diagnosis requires scaling evidence, use a
-separately identified diagnostic mode of the new one-byte recipe, with cheap
-cumulative counters at fixed prefixes such as 5k/10k/20k/25k and unchanged
-directory/content/concurrency settings. Do not add a new matrix or repetition
-schedule, run a full census at those points, or mix diagnostic timings into the
-performance distribution. Keep only 25,000 as the new timed objective; smaller
-prefixes do not replace final qualification.
+Use the existing tiers for realistic workload/regression comparisons, but their
+background and payload distributions differ, so they are not a one-variable
+scaling curve. Inspect algorithmic loops and cheap operation/relocation counters
+on the affected existing case; a small focused ownership/reclamation test can
+exercise the quadratic counterexample without a new scale campaign. Do not add
+25k prefix diagnostics or million-file work while those cases are deferred.
 
 Report totals and per-file/record values for metadata/payload/index bytes, page
 occupancy, Index edits, copied/visited pages, ownership/reclaim work, content tasks,
@@ -374,7 +439,7 @@ All 20 inherited tiny-churn cases are outside the recorded 36 exclusions. At
 review time `cases.json` SHA-256 was
 `6a89e9ac1c5df25eb0a4a495cf013d0eb8ab66f55b10281de1f5d72b0a0fcdc8`, matching
 the exclusion manifest. Recheck before execution. Tier-100 bulk create/delete's
-applicable strict <1-second criterion is not replaced by this two-second target.
+applicable strict <1-second criterion remains unchanged.
 Keep all original WARN/FAIL/waiver/reuse labels and applicable existing deadlines.
 
 Use [benchmark rules](../../../general/benchmark_rules.md), `benchmark/AGENTS.md`
@@ -403,4 +468,4 @@ action in the existing progress note. An external block must name the failed
 action, evidence and intervention needed, and only blocks actual dependants.
 V1 remains open until a generic supported mechanism is proved; no host-only cut,
 implicit user fsync, removed mmap, third-party patch or freeze/drain is authorized.
-Do not manufacture a two-second PASS or relax an oracle to end the loop.
+Do not manufacture a comparison PASS or relax an oracle to end the loop.
