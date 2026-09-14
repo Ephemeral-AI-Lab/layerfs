@@ -86,7 +86,8 @@ pub(super) fn temporary_output_file(
             let id = SERIAL
                 .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
                 .map_err(|_| StoreError::Integrity("private scratch serial exhausted"))?;
-            let path = std::env::temp_dir()
+            let path = scratch
+                .directory()
                 .join(format!("layerfs-owned-{label}-{}-{id}", std::process::id()));
             match super::scratch::ScratchFile::create(&path, Some(scratch)) {
                 Ok((file, allocation)) => {

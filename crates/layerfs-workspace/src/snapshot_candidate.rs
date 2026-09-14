@@ -379,7 +379,9 @@ impl SnapshotCandidateInputs<'_> {
         }
         let started = Instant::now();
         let changes = CapturedChanges::capture(self)?;
-        let capacity = CandidateCapacity::acquire(self.budget, self.policy)?;
+        // Private canonical scratch belongs to this Workspace's spool directory,
+        // not to the process temporary directory.
+        let capacity = CandidateCapacity::acquire_in(self.budget, self.policy, self.spool)?;
         if changes.count != 0 {
             self.prepare_serials()?;
         }
