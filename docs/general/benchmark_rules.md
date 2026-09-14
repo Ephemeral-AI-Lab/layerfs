@@ -2,6 +2,15 @@
 
 > **Status:** Current general guide.
 
+> **Scoped owner-directed exception, 2026-09-15:**
+> [`v016-local-snapshot-experiment-v1`](../roadmap/0.1/0.1.6/sandbox-local-snapshot-spec-and-plan.md)
+> permits sandbox-owned mutable metadata and temporary snapshot/payload backing,
+> while keeping the Store, coordinator and canonical construction/publication on
+> the host. It requires one Commit compute worker and one performance sample per
+> case/arm, with direct v0.1.5 comparison gates instead of n3/median rules.
+> The declared topology change is the experimental treatment. Its single-run
+> results remain release-admission-ineligible; other profiles are unchanged.
+
 **Permanent hosting rule:** benchmark SDK/coordinator, Workspace processing,
 spool, and SQLite MUST run on the macOS host. Docker is only for Linux
 daemon/FUSE/workloads. Docker-owned SQLite, prepared Store images, and
