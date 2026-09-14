@@ -20,6 +20,9 @@ const MAX_CHILDREN: usize = 8;
 const MIN_CHILDREN: usize = 4;
 const MAX_KEY_BYTES: usize = 384;
 const INLINE_BYTES: usize = 128;
+/// Records one prepared [`Index::set_batch`] call may carry: bounded to one
+/// leaf's worth of keys so a single batch step stays bounded.
+pub(crate) const BATCH_RECORDS: usize = MAX_KEYS;
 const MAX_SCAN_BYTES: usize = 4 * 1024 * 1024;
 const MAX_HEIGHT: usize = 64;
 const NONE: u64 = u64::MAX;
@@ -30,6 +33,14 @@ const RETIRING: u64 = 3;
 const REVERSE: u64 = 4;
 const MAGIC: u64 = 0x3158495357464c;
 
+/// One prepared record of a bounded [`Index::set_batch`]. `linked` and
+/// `external` carry exactly the ownership transfer of `set_linked`/`set_owned`.
+pub(crate) struct Record<'a> {
+    pub key: &'a [u8],
+    pub value: &'a [u8],
+    pub external: Option<u64>,
+    pub linked: Option<&'a Root>,
+}
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Limits {
     pub max_pages: u64,
@@ -478,27 +489,7 @@ impl Index {
                 "overlay payload owner missing",
             ));
         }
-        let mut overflow = None;
-        let value = if value.len() <= INLINE_BYTES {
-            Value::Inline(value.to_vec())
-        } else {
-            for chunk in value.rchunks(BODY_BYTES - 13) {
-                let next = overflow.as_ref().and_then(|r: &Root| r.0.page);
-                overflow = Some(self.write(
-                    &mut storage,
-                    Node::Overflow {
-                        next,
-                        bytes: chunk.to_vec(),
-                    },
-                )?);
-                // Only the newest chain root needs a foreground owner.
-                self.release_retired(&mut storage, 2)?;
-            }
-            Value::Overflow {
-                page: overflow.as_ref().unwrap().0.page.unwrap(),
-                len: value.len(),
-            }
-        };
+        let value = self.encode_value(&mut storage, value)?;
         let entry = Entry {
             key: key.to_vec(),
             value,
@@ -518,6 +509,167 @@ impl Index {
             .map(|r| storage.child(r))
             .collect::<io::Result<Vec<_>>>()?;
         self.write(&mut storage, Node::Branch(children))
+    }
+    /// Inline or overflow-page encoding shared by single and batched records.
+    fn encode_value(&self, storage: &mut Storage, value: &[u8]) -> io::Result<Value> {
+        if value.len() <= INLINE_BYTES {
+            return Ok(Value::Inline(value.to_vec()));
+        }
+        let mut overflow = None;
+        for chunk in value.rchunks(BODY_BYTES - 13) {
+            let next = overflow.as_ref().and_then(|r: &Root| r.0.page);
+            overflow = Some(self.write(
+                storage,
+                Node::Overflow {
+                    next,
+                    bytes: chunk.to_vec(),
+                },
+            )?);
+            // Only the newest chain root needs a foreground owner.
+            self.release_retired(storage, 2)?;
+        }
+        Ok(Value::Overflow {
+            page: overflow.as_ref().unwrap().0.page.unwrap(),
+            len: value.len(),
+        })
+    }
+    /// Apply a bounded batch of records with one tree descent per shared path.
+    ///
+    /// Records are prepared together and the only root the caller can observe is
+    /// the returned one: no intermediate root is constructed and retired per
+    /// record. Entries must be sorted by key and unique; the batch is bounded to
+    /// one leaf's worth of keys so a single step stays bounded.
+    pub(crate) fn set_batch(&self, root: &Root, records: &[Record<'_>]) -> io::Result<Root> {
+        self.check(root, &[])?;
+        if records.is_empty() {
+            return Ok(root.clone());
+        }
+        if records.len() > MAX_KEYS {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "overlay batch too large",
+            ));
+        }
+        for record in records {
+            self.check(root, record.key)?;
+            if record.external == Some(NONE) {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "reserved overlay payload token",
+                ));
+            }
+            if record.value.len() > self.0.limits.max_value_bytes {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "overlay index value too large",
+                ));
+            }
+            if let Some(linked) = record.linked {
+                self.check(linked, &[])?;
+            }
+        }
+        if records.windows(2).any(|pair| pair[0].key >= pair[1].key) {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "overlay batch keys unordered",
+            ));
+        }
+        self.reclaim(16)?;
+        let mut storage = self.0.storage.lock().unwrap();
+        if records.iter().any(|record| record.external.is_some()) && storage.external.is_none() {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "overlay payload owner missing",
+            ));
+        }
+        let mut entries = Vec::with_capacity(records.len());
+        for record in records {
+            entries.push(Entry {
+                key: record.key.to_vec(),
+                value: self.encode_value(&mut storage, record.value)?,
+                external: record.external,
+                linked: record.linked.and_then(|root| root.0.page),
+            });
+        }
+        let mut pages = if let Some(page) = root.0.page {
+            self.insert_many(&mut storage, page, entries, 0)?
+        } else {
+            vec![self.write(&mut storage, Node::Leaf(entries))?]
+        };
+        if pages.len() == 1 {
+            return Ok(pages.pop().unwrap());
+        }
+        let children = pages
+            .iter()
+            .map(|root| storage.child(root))
+            .collect::<io::Result<Vec<_>>>()?;
+        self.write(&mut storage, Node::Branch(children))
+    }
+    /// Batched counterpart of `insert`: the batch shares one descent as long as
+    /// its records target the same path, and only the resulting pages are
+    /// written. Reference release and rollback use the same transactions.
+    fn insert_many(
+        &self,
+        storage: &mut Storage,
+        page: u64,
+        entries: Vec<Entry>,
+        height: usize,
+    ) -> io::Result<Vec<Root>> {
+        if height >= MAX_HEIGHT {
+            return Err(corrupt("overlay index height exceeded"));
+        }
+        let mut holds = Vec::new();
+        let mut node = storage.node(page)?;
+        match &mut node {
+            Node::Leaf(existing) => {
+                for entry in entries {
+                    match existing.binary_search_by(|item| item.key.cmp(&entry.key)) {
+                        Ok(index) => existing[index] = entry,
+                        Err(index) => existing.insert(index, entry),
+                    }
+                }
+            }
+            Node::Branch(children) => {
+                // Records arrive sorted, so equal destinations are adjacent and
+                // can be patched with one recursive descent each. Patch from the
+                // highest child index down so earlier positions stay valid.
+                let mut groups: Vec<(usize, Vec<Entry>)> = Vec::new();
+                for entry in entries {
+                    let index = child_position(children, &entry.key)?;
+                    match groups.last_mut() {
+                        Some((last, group)) if *last == index => group.push(entry),
+                        _ => groups.push((index, vec![entry])),
+                    }
+                }
+                for (index, group) in groups.into_iter().rev() {
+                    let replacements =
+                        self.insert_many(storage, children[index].page, group, height + 1)?;
+                    let mapped = replacements
+                        .iter()
+                        .map(|root| storage.child(root))
+                        .collect::<io::Result<Vec<_>>>()?;
+                    children.splice(index..=index, mapped);
+                    holds.extend(replacements);
+                }
+                self.release_retired(storage, 4)?;
+            }
+            _ => return Err(corrupt("overflow in index path")),
+        }
+        let right = match &mut node {
+            Node::Leaf(entries) => {
+                (entries.len() > MAX_KEYS).then(|| Node::Leaf(entries.split_off(entries.len() / 2)))
+            }
+            Node::Branch(children) => (children.len() > MAX_CHILDREN)
+                .then(|| Node::Branch(children.split_off(children.len() / 2))),
+            _ => None,
+        };
+        let mut result = vec![self.write(storage, node)?];
+        if let Some(right) = right {
+            result.push(self.write(storage, right)?);
+        }
+        drop(holds);
+        self.release_retired(storage, 4)?;
+        Ok(result)
     }
     fn insert(
         &self,
@@ -1714,6 +1866,118 @@ mod tests {
         assert_eq!(stats.physical_bytes, 0);
         assert_eq!(stats.root_leases, 0);
     }
+    /// Prepared batch: the same records produce the same visible tree with one
+    /// path copy instead of one published/retired root per record. Counted in
+    /// actual page writes and allocated pages, not inferred from arithmetic.
+    #[test]
+    fn prepared_batch_writes_the_same_tree_with_fewer_pages() -> io::Result<()> {
+        let sequential = index(4096);
+        let batched = index(4096);
+        let keys: [&[u8]; 5] = [b"a-meta", b"b-left", b"c-right", b"d-prov", b"e-back"];
+        let before = sequential.stats()?;
+        let mut root = sequential.empty_root()?;
+        for key in keys {
+            root = sequential.set(&root, key, b"payload value")?;
+        }
+        let after = sequential.stats()?;
+        let sequential_writes = after.page_writes - before.page_writes;
+        let sequential_pages = after.allocated_pages;
+        let before = batched.stats()?;
+        let empty = batched.empty_root()?;
+        let records = keys
+            .iter()
+            .map(|key| Record {
+                key,
+                value: b"payload value",
+                external: None,
+                linked: None,
+            })
+            .collect::<Vec<_>>();
+        let batched_root = batched.set_batch(&empty, &records)?;
+        let after = batched.stats()?;
+        let batched_writes = after.page_writes - before.page_writes;
+        let batched_pages = after.allocated_pages;
+        println!(
+            "batch sequential_writes={sequential_writes} batch_writes={batched_writes} \
+             sequential_pages={sequential_pages} batch_pages={batched_pages}"
+        );
+        assert!(
+            batched_writes < sequential_writes,
+            "{batched_writes} !< {sequential_writes}"
+        );
+        assert!(
+            batched_pages < sequential_pages,
+            "{batched_pages} !< {sequential_pages}"
+        );
+        for key in keys {
+            assert_eq!(
+                sequential.get(&root, key)?,
+                batched.get(&batched_root, key)?,
+                "{key:?}"
+            );
+            assert_eq!(
+                batched.get(&batched_root, key)?,
+                Some(b"payload value".to_vec())
+            );
+        }
+        // An update batch replaces the records in place: the immutable source
+        // root keeps its bytes, and dropping it returns the displaced page.
+        let live_before = batched.stats()?.live_pages;
+        let updates = keys
+            .iter()
+            .map(|key| Record {
+                key,
+                value: b"replacement",
+                external: None,
+                linked: None,
+            })
+            .collect::<Vec<_>>();
+        let updated = batched.set_batch(&batched_root, &updates)?;
+        for key in keys {
+            assert_eq!(batched.get(&updated, key)?, Some(b"replacement".to_vec()));
+            assert_eq!(
+                batched.get(&batched_root, key)?,
+                Some(b"payload value".to_vec())
+            );
+        }
+        drop(batched_root);
+        drain(&batched);
+        assert_eq!(batched.stats()?.live_pages, live_before);
+        // Malformed batches are rejected before any page is written.
+        let writes = batched.stats()?.page_writes;
+        let unordered = vec![
+            Record {
+                key: b"z",
+                value: b"value",
+                external: None,
+                linked: None,
+            },
+            Record {
+                key: b"a",
+                value: b"value",
+                external: None,
+                linked: None,
+            },
+        ];
+        assert!(batched.set_batch(&updated, &unordered).is_err());
+        let oversized = (0..=MAX_KEYS)
+            .map(|step| Record {
+                key: if step == 0 { b"k0".as_slice() } else { b"k1" },
+                value: b"value",
+                external: None,
+                linked: None,
+            })
+            .collect::<Vec<_>>();
+        assert!(batched.set_batch(&updated, &oversized).is_err());
+        assert_eq!(batched.stats()?.page_writes, writes);
+        drop(updated);
+        drop(root);
+        drop(empty);
+        drop(batched);
+        drop(sequential);
+        Ok(())
+    }
+
     #[test]
     fn quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages() {
         let index = index(3);

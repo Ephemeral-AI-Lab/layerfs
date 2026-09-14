@@ -8,7 +8,7 @@ use std::ops::Bound;
 use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 
 const BLOCK: u64 = 4096;
 const MOVE: u64 = 64 * 1024;
@@ -19,6 +19,15 @@ const LOCATION: u8 = 4;
 const PHYSICAL: u8 = 5;
 const RELEASE: u8 = 6;
 const SOURCE: u8 = 7;
+/// Unclaimed physical interval of an arena, keyed `(FREE, arena, offset)` in
+/// ascending offset order and valued `[len]`. Adjacent rows are always
+/// coalesced and a row never overlaps a LOCATION row, so the family is exactly
+/// the complement of the live physical extents below the arena length.
+const FREE: u8 = 8;
+/// Bounded number of candidate records inspected by one allocation/relocation
+/// decision. Each lookup is logarithmic in the catalog; this caps the fan-out so
+/// a single step stays bounded with a large unclaimed or live set.
+const CANDIDATES: usize = 64;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Limits {
@@ -63,6 +72,12 @@ pub(crate) struct Stats {
     pub interval_visits: u64,
     pub relocated_bytes: u64,
     pub reclaimed_bytes: u64,
+    /// Bytes currently unclaimed inside the arena: freed, not yet returned to
+    /// the file system and available for reuse.
+    pub unclaimed_bytes: u64,
+    /// Cumulative bytes served by reusing an unclaimed interval instead of
+    /// extending the arena.
+    pub reused_bytes: u64,
     pub cleanup_pending: bool,
     pub recovery_index_pages: u64,
 }
@@ -74,7 +89,6 @@ struct Inner {
     files: [File; 2],
     limits: Limits,
     state: Mutex<State>,
-    available: Condvar,
     released: Mutex<VecDeque<u64>>,
     maintenance: Mutex<()>,
     neighbor_visits: AtomicU64,
@@ -91,23 +105,25 @@ struct State {
     root: Root,
     next: u64,
     tails: [u64; 2],
+    /// The single arena that holds payload. Reclamation is local: an unclaimed
+    /// interval is reused in place instead of evacuating a whole arena, so the
+    /// second backing file stays empty and is only admitted by the aggregate
+    /// physical quota.
     active: usize,
-    evacuating: Option<usize>,
-    moving: bool,
-    truncate: Option<(usize, u64)>,
-    sweep: bool,
     /// Resident owners: live handles plus queued release tickets/jobs.
     owners: usize,
     /// Live persisted TOKEN rows, charged by the index/arena disk quotas.
     tokens: usize,
     release_jobs: usize,
     writes: Vec<Reservation>,
-    readers: Vec<Option<(usize, u64)>>,
+    readers: Vec<Option<Reader>>,
     live_bytes: u64,
     chargeable_bytes: u64,
     visits: u64,
     relocated: u64,
     reclaimed: u64,
+    unclaimed: u64,
+    reused: u64,
     #[cfg(test)]
     fail_after: Option<u64>,
 }
@@ -117,7 +133,37 @@ struct Reservation {
     arena: usize,
     start: u64,
     len: u64,
-    failed: bool,
+}
+/// One bounded physical read lease. Its range is protected twice: no allocation
+/// may reuse any part of it, and the arena length may not be reduced below its
+/// end while the lease lives.
+#[derive(Clone, Copy)]
+struct Reader {
+    arena: usize,
+    start: u64,
+    end: u64,
+}
+/// Bounded local reclamation decision for one maintenance step. Every variant
+/// is derived from indexed records only, never from a whole-arena walk.
+enum Local {
+    /// No unclaimed interval is registered.
+    None,
+    /// The highest unclaimed interval reaches the arena length.
+    Truncate { len: u64 },
+    /// One bounded live interval can move into a strictly lower unclaimed
+    /// interval, shortening the arena by at least the moved byte count.
+    Relocate {
+        physical: u64,
+        source: u64,
+        logical: u64,
+        len: u64,
+        destination: u64,
+    },
+    /// Unclaimed space exists but a live physical reader still pins it.
+    Deferred,
+    /// Unclaimed space is retained, charged slack: no bounded step can shrink
+    /// the arena and the space is only reusable by a later fitting allocation.
+    Retained,
 }
 #[derive(Clone, Copy)]
 struct Token {
@@ -290,10 +336,6 @@ impl Payload {
                 next: 1,
                 tails: [0, 0],
                 active: 0,
-                evacuating: None,
-                moving: false,
-                truncate: None,
-                sweep: false,
                 owners: 0,
                 tokens: 0,
                 release_jobs: 0,
@@ -304,10 +346,11 @@ impl Payload {
                 visits: 0,
                 relocated: 0,
                 reclaimed: 0,
+                unclaimed: 0,
+                reused: 0,
                 #[cfg(test)]
                 fail_after: None,
             }),
-            available: Condvar::new(),
             released: Mutex::new(released),
             maintenance: Mutex::new(()),
             neighbor_visits: AtomicU64::new(0),
@@ -384,35 +427,25 @@ impl Payload {
         let allocated = aligned(len)?;
         let reservation = {
             let mut state = self.0.state.lock().unwrap();
-            while state.moving {
-                state = self.0.available.wait(state).unwrap();
-            }
-            if state
-                .truncate
-                .is_some_and(|(arena, _)| arena == state.active)
-            {
-                return Err(quota("payload cleanup pending"));
-            }
             if state.owners + state.writes.len() >= self.0.limits.owners
                 || state.writes.len() >= self.0.limits.writes
             {
                 return Err(quota("payload owner/write admission"));
             }
             self.reserve(&state, allocated, false)?;
-            self.reserve_catalog(&state, 6, false)?;
+            self.reserve_catalog(&state, 8, false)?;
             let id = state.next;
             state.next = id
                 .checked_add(1)
                 .ok_or_else(|| quota("payload identities"))?;
             let arena = state.active;
+            let start = self.allocate(&mut state, allocated)?;
             let reservation = Reservation {
                 id,
                 arena,
-                start: state.tails[arena],
+                start,
                 len: allocated,
-                failed: false,
             };
-            state.tails[arena] += allocated;
             state.writes.push(reservation);
             reservation
         };
@@ -511,22 +544,22 @@ impl Payload {
         reservation: Reservation,
         published: &io::Result<T>,
     ) -> io::Result<()> {
-        if published.is_ok() {
-            state.writes.retain(|item| item.id != reservation.id);
-        } else {
-            state
-                .writes
-                .iter_mut()
-                .find(|item| item.id == reservation.id)
-                .unwrap()
-                .failed = true;
-            // A failed non-tail reservation stays charged and admitted until a
-            // bounded evacuation reaches it; it cannot grow an unbounded list.
-            state.sweep = true;
-            if reservation.len == 0 {
-                state.writes.retain(|item| item.id != reservation.id);
-            }
-            self.trim_failed(state)?;
+        state.writes.retain(|item| item.id != reservation.id);
+        if published.is_err() {
+            // Never-published bytes are referenced by no location record.
+            // Return them to the unclaimed set in place and give back the top of
+            // the arena immediately: a failed write must not leave charged slack
+            // and must not grow an unbounded retention list.
+            self.reserve_catalog(state, 12, true)?;
+            let (root, added) = self.free_interval(
+                &state.root,
+                reservation.arena,
+                reservation.start,
+                reservation.len,
+            )?;
+            state.root = root;
+            state.unclaimed += added;
+            self.truncate_top(state)?;
         }
         Ok(())
     }
@@ -557,9 +590,6 @@ impl Payload {
         self.assist()?;
         let (reservation, location, high, end) = {
             let mut state = self.0.state.lock().unwrap();
-            while state.moving {
-                state = self.0.available.wait(state).unwrap();
-            }
             let owner = self.token(&state.root, owner)?;
             let (high, _, spool_charge) = self.source(&state.root, owner.source)?;
             if !spool_charge || owner.start.checked_add(owner.len) != Some(high) {
@@ -575,13 +605,13 @@ impl Payload {
                 return Ok(None);
             };
             let location = decode_location(owner.source, !word(&key[1..], 1)?, &bytes)?;
+            // Only an occurrence whose location still ends exactly at the
+            // active arena tail can extend contiguously. A location reused from
+            // an unclaimed interval in the middle of the arena reports None and
+            // the caller starts a fresh lineage instead.
             if location.start + location.len != aligned(high)?
                 || location.arena != state.active
                 || location.offset + location.len != state.tails[location.arena]
-                || state
-                    .truncate
-                    .is_some_and(|(arena, _)| arena == state.active)
-                || state.writes.iter().any(|r| !r.failed)
             {
                 return Ok(None);
             }
@@ -602,7 +632,6 @@ impl Payload {
                 arena: location.arena,
                 start: state.tails[location.arena],
                 len: delta,
-                failed: false,
             };
             state.tails[location.arena] += delta;
             state.writes.push(reservation);
@@ -873,7 +902,11 @@ impl Payload {
             .iter()
             .position(Option::is_none)
             .ok_or_else(|| quota("payload read leases"))?;
-        state.readers[slot] = Some((location.arena, physical + len as u64));
+        state.readers[slot] = Some(Reader {
+            arena: location.arena,
+            start: physical,
+            end: physical + len as u64,
+        });
         Ok(PhysicalLease {
             payload: self.clone(),
             slot,
@@ -883,11 +916,391 @@ impl Payload {
         })
     }
 
-    /// One bounded ownership/physical maintenance step. Large source release
-    /// advances by interval; evacuation moves at most 64 KiB and then truncates.
-    /// Retired payload-index versions are reclaimed here as well: the arena's
-    /// index is otherwise never recycled, which would exhaust its catalog quota
-    /// long before any ownership or disk bound is reached.
+    /// One bounded local reclamation decision for `arena` (always the active
+    /// arena). Every variant is derived from indexed records: the highest
+    /// unclaimed interval, the highest live interval, and at most one bounded
+    /// candidate probe. No step walks the arena, so a small deletion can never
+    /// recopy unrelated live payload.
+    fn plan_local(&self, state: &State, arena: usize) -> io::Result<Local> {
+        let Some((start, len)) = self.free_top(&state.root, arena)? else {
+            return Ok(Local::None);
+        };
+        if !state.writes.is_empty() {
+            // An admitted reservation may still extend the arena length and its
+            // bytes are neither live nor unclaimed yet. No bounded step can
+            // reduce the arena safely until that write publishes or fails.
+            return Ok(Local::Deferred);
+        }
+        let ceiling = reader_ceiling(state, arena);
+        if start + len == state.tails[arena] {
+            return Ok(if ceiling <= start {
+                Local::Truncate { len: start }
+            } else {
+                Local::Deferred
+            });
+        }
+        let Some((physical, source, logical, len)) = self.physical_top(&state.root, arena)? else {
+            return Err(corrupt("payload unclaimed interval above live top"));
+        };
+        if len == 0 || len > MOVE {
+            // Whole-arena repacking is deliberately not performed. A live
+            // interval larger than one bounded move is retained and charged.
+            return Ok(Local::Retained);
+        }
+        let Some(destination) = self.free_below(state, arena, physical, len)? else {
+            return Ok(Local::Retained);
+        };
+        let target = self
+            .live_end_below(&state.root, arena, physical)?
+            .unwrap_or(0)
+            .max(destination + len);
+        if target >= physical + len {
+            return Ok(Local::Retained);
+        }
+        if ceiling > target {
+            return Ok(Local::Deferred);
+        }
+        Ok(Local::Relocate {
+            physical,
+            source,
+            logical,
+            len,
+            destination,
+        })
+    }
+    /// Apply at most one bounded local reclamation step. Returns whether it made
+    /// progress. Relocation moves at most `MOVE` bytes and permanently removes
+    /// at least the moved byte count from the arena length, so cumulative
+    /// relocation work is charged to reclaimed bytes: repeated small deletions
+    /// or replacements cannot recopy an unrelated live set.
+    fn reclaim_local(&self, state: &mut State) -> io::Result<bool> {
+        let arena = state.active;
+        match self.plan_local(state, arena)? {
+            Local::Truncate { len } => {
+                self.truncate_to(state, len)?;
+                Ok(true)
+            }
+            Local::Relocate {
+                physical,
+                source,
+                logical,
+                len,
+                destination,
+            } => {
+                self.relocate(state, physical, source, logical, len, destination)?;
+                Ok(true)
+            }
+            Local::None | Local::Deferred | Local::Retained => Ok(false),
+        }
+    }
+    /// Return the top of the arena to the file system when the highest
+    /// unclaimed interval reaches it. Bounded and reader-safe.
+    fn truncate_top(&self, state: &mut State) -> io::Result<bool> {
+        let arena = state.active;
+        let Some((start, len)) = self.free_top(&state.root, arena)? else {
+            return Ok(false);
+        };
+        if start + len != state.tails[arena]
+            || !state.writes.is_empty()
+            || reader_ceiling(state, arena) > start
+        {
+            return Ok(false);
+        }
+        self.truncate_to(state, start)?;
+        Ok(true)
+    }
+    /// Reduce the arena length to `len` (the start of the highest unclaimed
+    /// interval). The caller established that no live reader covers the removed
+    /// bytes and that no reservation is in flight.
+    fn truncate_to(&self, state: &mut State, len: u64) -> io::Result<()> {
+        let arena = state.active;
+        if len >= state.tails[arena] {
+            return Err(corrupt("payload truncation growth"));
+        }
+        self.0.files[arena].set_len(len)?;
+        let removed = state.tails[arena] - len;
+        state.reclaimed += removed;
+        state.unclaimed = state
+            .unclaimed
+            .checked_sub(removed)
+            .ok_or_else(|| corrupt("payload unclaimed underflow"))?;
+        state.tails[arena] = len;
+        // The record that described the returned space is no longer inside the
+        // arena; `remove` is a no-op when the interval was already consumed.
+        state.root = self
+            .0
+            .index
+            .remove(&state.root, &key(FREE, arena as u64, len))?;
+        Ok(())
+    }
+    /// Move one bounded live interval into a strictly lower unclaimed interval
+    /// and return the vacated top of the arena to the file system. Only the
+    /// moved interval's own location record is rewritten through stable
+    /// locations; no other live payload is touched.
+    fn relocate(
+        &self,
+        state: &mut State,
+        physical: u64,
+        source: u64,
+        logical: u64,
+        len: u64,
+        destination: u64,
+    ) -> io::Result<()> {
+        let arena = state.active;
+        self.reserve_catalog(state, 24, true)?;
+        let mut bytes = vec![0_u8; len as usize];
+        self.0.files[arena].read_exact_at(&mut bytes, physical)?;
+        self.0.files[arena].write_all_at(&bytes, destination)?;
+        let available = self
+            .0
+            .index
+            .get(&state.root, &key(FREE, arena as u64, destination))?
+            .ok_or_else(|| corrupt("payload relocation destination absent"))?;
+        let available = word(&available, 0)?;
+        if available < len {
+            return Err(corrupt("payload relocation destination too small"));
+        }
+        let mut root = self
+            .0
+            .index
+            .remove(&state.root, &key(FREE, arena as u64, destination))?;
+        if available > len {
+            root = self.0.index.set(
+                &root,
+                &key(FREE, arena as u64, destination + len),
+                &words(&[available - len]),
+            )?;
+        }
+        let location = Location {
+            source,
+            start: logical,
+            len,
+            arena,
+            offset: physical,
+        };
+        root = self.remove_location(&root, location)?;
+        root = self.put_location(
+            &root,
+            Location {
+                offset: destination,
+                ..location
+            },
+        )?;
+        let (root, added) = self.free_interval(&root, arena, physical, len)?;
+        state.root = root;
+        state.unclaimed = state
+            .unclaimed
+            .checked_sub(len)
+            .ok_or_else(|| corrupt("payload unclaimed underflow"))?
+            .checked_add(added)
+            .ok_or_else(|| corrupt("payload unclaimed overflow"))?;
+        state.relocated += len;
+        let _ = self.truncate_top(state)?;
+        Ok(())
+    }
+    /// Highest unclaimed interval in `arena`. The unclaimed family is stored in
+    /// ascending offset order, so its greatest key is that interval.
+    fn free_top(&self, root: &Root, arena: usize) -> io::Result<Option<(u64, u64)>> {
+        let Some((row, value)) = self.0.index.floor(root, &key(FREE, u64::MAX, u64::MAX))? else {
+            return Ok(None);
+        };
+        if row[0] != FREE || word(&row[1..], 0)? != arena as u64 {
+            return Ok(None);
+        }
+        Ok(Some((word(&row[1..], 1)?, word(&value, 0)?)))
+    }
+    /// Highest live physical interval of `arena`: `(offset, source, logical
+    /// start, length)`. Physical keys are stored in reverse offset order.
+    fn physical_top(&self, root: &Root, arena: usize) -> io::Result<Option<(u64, u64, u64, u64)>> {
+        // Physical keys are stored in reverse offset order, so the first record
+        // of the family is the highest live interval.
+        let first = key(PHYSICAL, arena as u64, 0);
+        let last = key(PHYSICAL, arena as u64 + 1, 0);
+        let rows = self
+            .0
+            .index
+            .scan(root, Bound::Included(&first), Bound::Excluded(&last), 1)?;
+        let Some((row, value)) = rows.first() else {
+            return Ok(None);
+        };
+        Ok(Some((
+            !word(&row[1..], 1)?,
+            word(value, 0)?,
+            word(value, 1)?,
+            word(value, 2)?,
+        )))
+    }
+    /// End offset of the greatest live interval strictly below `physical`.
+    fn live_end_below(&self, root: &Root, arena: usize, physical: u64) -> io::Result<Option<u64>> {
+        let first = key(PHYSICAL, arena as u64, !physical);
+        let last = key(PHYSICAL, arena as u64 + 1, 0);
+        let rows = self
+            .0
+            .index
+            .scan(root, Bound::Excluded(&first), Bound::Excluded(&last), 1)?;
+        rows.first()
+            .map(|(row, value)| {
+                let offset = !word(&row[1..], 1)?;
+                Ok(offset + word(value, 2)?)
+            })
+            .transpose()
+    }
+    /// Lowest unclaimed interval below `physical` that fits `len` and is not
+    /// pinned by a live reader. Bounded to `CANDIDATES` record probes.
+    fn free_below(
+        &self,
+        state: &State,
+        arena: usize,
+        physical: u64,
+        len: u64,
+    ) -> io::Result<Option<u64>> {
+        if physical == 0 {
+            return Ok(None);
+        }
+        let first = key(FREE, arena as u64, 0);
+        let last = key(FREE, arena as u64, physical);
+        let rows = self.0.index.scan(
+            &state.root,
+            Bound::Included(&first),
+            Bound::Excluded(&last),
+            CANDIDATES,
+        )?;
+        for (row, value) in rows {
+            let offset = word(&row[1..], 1)?;
+            if word(&value, 0)? >= len && !reader_pins(state, arena, offset, len) {
+                return Ok(Some(offset));
+            }
+        }
+        Ok(None)
+    }
+    /// Register `[start, start + len)` as unclaimed, coalescing both neighbours.
+    /// Bounded: one exact lookup, one neighbour seek and one update. Returns the
+    /// root and the number of newly unclaimed bytes.
+    fn free_interval(
+        &self,
+        root: &Root,
+        arena: usize,
+        start: u64,
+        len: u64,
+    ) -> io::Result<(Root, u64)> {
+        if len == 0 {
+            return Ok((root.clone(), 0));
+        }
+        let added = len;
+        let mut root = root.clone();
+        let mut start = start;
+        let mut len = len;
+        if let Some(bytes) = self
+            .0
+            .index
+            .get(&root, &key(FREE, arena as u64, start + len))?
+        {
+            let following = word(&bytes, 0)?;
+            if following == 0 {
+                return Err(corrupt("payload unclaimed record"));
+            }
+            root = self
+                .0
+                .index
+                .remove(&root, &key(FREE, arena as u64, start + len))?;
+            len = len
+                .checked_add(following)
+                .ok_or_else(|| corrupt("payload unclaimed overflow"))?;
+        }
+        if start > 0 {
+            if let Some((row, value)) = self
+                .0
+                .index
+                .floor(&root, &key(FREE, arena as u64, start - 1))?
+            {
+                let at = word(&row[1..], 1)?;
+                let size = word(&value, 0)?;
+                if row[0] == FREE
+                    && word(&row[1..], 0)? == arena as u64
+                    && size != 0
+                    && at + size == start
+                {
+                    root = self.0.index.remove(&root, &key(FREE, arena as u64, at))?;
+                    start = at;
+                    len = len
+                        .checked_add(size)
+                        .ok_or_else(|| corrupt("payload unclaimed overflow"))?;
+                }
+            }
+        }
+        let root = self
+            .0
+            .index
+            .set(&root, &key(FREE, arena as u64, start), &words(&[len]))?;
+        Ok((root, added))
+    }
+    /// Lowest unclaimed interval that fits `len`, is not pinned by a live reader
+    /// and does not overlap an in-flight reservation. Bounded to `CANDIDATES`.
+    fn take_free(&self, state: &mut State, arena: usize, len: u64) -> io::Result<Option<u64>> {
+        let first = key(FREE, arena as u64, 0);
+        let last = key(FREE, arena as u64 + 1, 0);
+        let rows = self.0.index.scan(
+            &state.root,
+            Bound::Included(&first),
+            Bound::Excluded(&last),
+            CANDIDATES,
+        )?;
+        for (row, value) in rows {
+            let offset = word(&row[1..], 1)?;
+            let available = word(&value, 0)?;
+            if available < len
+                || state
+                    .writes
+                    .iter()
+                    .any(|item| item.arena == arena && overlaps(item.start, item.len, offset, len))
+                || reader_pins(state, arena, offset, len)
+            {
+                continue;
+            }
+            let mut root = self
+                .0
+                .index
+                .remove(&state.root, &key(FREE, arena as u64, offset))?;
+            if available > len {
+                root = self.0.index.set(
+                    &root,
+                    &key(FREE, arena as u64, offset + len),
+                    &words(&[available - len]),
+                )?;
+            }
+            state.root = root;
+            state.unclaimed = state
+                .unclaimed
+                .checked_sub(len)
+                .ok_or_else(|| corrupt("payload unclaimed underflow"))?;
+            state.reused += len;
+            return Ok(Some(offset));
+        }
+        Ok(None)
+    }
+    /// Reserve `len` bytes of the active arena: reuse the lowest fitting
+    /// unclaimed interval first, otherwise extend the append tail. Tail-first
+    /// contiguity is preserved for the append path because a fresh write of at
+    /// least `MOVE` bytes is the common sequential-stream shape, while tiny
+    /// payloads reuse unclaimed space and keep the arena length down.
+    fn allocate(&self, state: &mut State, len: u64) -> io::Result<u64> {
+        let arena = state.active;
+        if len < MOVE {
+            if let Some(offset) = self.take_free(state, arena, len)? {
+                return Ok(offset);
+            }
+        }
+        let offset = state.tails[arena];
+        state.tails[arena] = offset
+            .checked_add(len)
+            .ok_or_else(|| quota("payload arena length"))?;
+        Ok(offset)
+    }
+    /// One bounded ownership/physical maintenance step. Reclamation is local:
+    /// at most one truncation or one bounded relocation per call, never a whole
+    /// arena evacuate. Retired payload-index versions are reclaimed here as
+    /// well: the arena's index is otherwise never recycled, which would exhaust
+    /// its catalog quota long before any ownership or disk bound is reached.
     pub(crate) fn reclaim_step(&self) -> io::Result<bool> {
         let Ok(_maintenance) = self.0.maintenance.try_lock() else {
             return Ok(false);
@@ -907,170 +1320,8 @@ impl Payload {
             return Ok(true);
         }
         let mut state = self.0.state.lock().unwrap();
-        if state.moving {
-            return Ok(false);
-        }
-        if self.finish_truncate(&mut state)? {
-            return Ok(true);
-        }
-        if state.truncate.is_some() {
-            return Ok(false);
-        }
-        if self.trim_failed(&mut state)? {
-            return Ok(true);
-        }
-        if self.release_interval(&mut state)? {
-            return Ok(true);
-        }
-        if state.evacuating.is_none() {
-            if !state.sweep {
-                return Ok(false);
-            }
-            let source = state.active;
-            if state.tails[1 - source] != 0 {
-                return Err(corrupt("payload evacuation destination not empty"));
-            }
-            state.evacuating = Some(source);
-            state.active = 1 - source;
-            state.sweep = false;
-        }
-        let source_arena = state.evacuating.unwrap();
-        if state.tails[source_arena] == 0 {
-            state.evacuating = None;
-            return Ok(true);
-        }
-        // Pending writers own their reservations independently. Foreground
-        // writes proceed in the other arena while this source waits for them.
-        if state
-            .writes
-            .iter()
-            .any(|r| r.arena == source_arena && !r.failed)
-        {
-            return Ok(false);
-        }
-        let first = key(PHYSICAL, source_arena as u64, 0);
-        let last = key(PHYSICAL, source_arena as u64 + 1, 0);
-        let rows = self.0.index.scan(
-            &state.root,
-            Bound::Included(&first),
-            Bound::Excluded(&last),
-            1,
-        )?;
-        let Some((physical_key, value)) = rows.first() else {
-            return Err(corrupt("payload tail location absent"));
-        };
-        let physical = !word(&physical_key[1..], 1)?;
-        let location = Location {
-            source: word(value, 0)?,
-            start: word(value, 1)?,
-            len: word(value, 2)?,
-            arena: source_arena,
-            offset: physical,
-        };
-        if physical + location.len != state.tails[source_arena] {
-            return Err(corrupt("payload noncontiguous tail"));
-        }
-        let len = location.len.min(MOVE);
-        let start = location.start + location.len - len;
-        let physical_start = physical + location.len - len;
-        let mut live = Vec::with_capacity((MOVE / BLOCK) as usize);
-        let mut cursor = start;
-        while cursor < start + len {
-            state.visits += 1;
-            let found = self.cover_at(&state.root, location.source, cursor, &mut 0)?;
-            if let Some((_, end, _)) = found {
-                let stop = end.min(start + len);
-                live.push((cursor, stop - cursor));
-                cursor = stop;
-            } else {
-                let first = key(COVER, location.source, cursor);
-                let last = key(COVER, location.source + 1, 0);
-                let next = self.0.index.scan(
-                    &state.root,
-                    Bound::Included(&first),
-                    Bound::Excluded(&last),
-                    1,
-                )?;
-                cursor = next
-                    .first()
-                    .map(|(key, _)| word(&key[1..], 1))
-                    .transpose()?
-                    .unwrap_or(start + len)
-                    .min(start + len);
-            }
-        }
-        let move_bytes: u64 = live.iter().map(|(_, len)| *len).sum();
-        self.reserve(&state, move_bytes, true)?;
-        self.reserve_catalog(&state, 36, true)?;
-        // Keep destination rollback a tail operation. Existing reservations
-        // finish first, and later writers wait only for this bounded move.
-        if state.writes.iter().any(|reservation| !reservation.failed) {
-            return Ok(false);
-        }
-        let destination = state.active;
-        let destination_start = state.tails[destination];
-        state.tails[destination] += move_bytes;
-        state.moving = true;
-        drop(state);
-
-        let copied = (|| {
-            let mut bytes = [0_u8; MOVE as usize];
-            let mut verify = [0_u8; MOVE as usize];
-            let mut dest = destination_start;
-            for (offset, count) in &live {
-                let count = *count as usize;
-                self.0.files[source_arena]
-                    .read_exact_at(&mut bytes[..count], physical + offset - location.start)?;
-                self.0.files[destination].write_all_at(&bytes[..count], dest)?;
-                self.0.files[destination].read_exact_at(&mut verify[..count], dest)?;
-                if bytes[..count] != verify[..count] {
-                    return Err(corrupt("payload relocation verification"));
-                }
-                dest += count as u64;
-            }
-            Ok(())
-        })();
-        let mut state = self.0.state.lock().unwrap();
-        let installed = copied.and_then(|()| {
-            self.reserve(&state, 0, true)?;
-            let mut root = self.remove_location(&state.root, location)?;
-            if location.len > len {
-                root = self.put_location(
-                    &root,
-                    Location {
-                        len: location.len - len,
-                        ..location
-                    },
-                )?;
-            }
-            let mut dest = destination_start;
-            for (offset, count) in &live {
-                root = self.put_location(
-                    &root,
-                    Location {
-                        source: location.source,
-                        start: *offset,
-                        len: *count,
-                        arena: destination,
-                        offset: dest,
-                    },
-                )?;
-                dest += count;
-            }
-            state.root = root;
-            state.relocated += move_bytes;
-            state.truncate = Some((source_arena, physical_start));
-            Ok(())
-        });
-        if installed.is_err() {
-            state.truncate = Some((destination, destination_start));
-        }
-        state.moving = false;
-        self.0.available.notify_all();
-        self.finish_truncate(&mut state)?;
-        installed.map(|()| true)
+        self.reclaim_local(&mut state)
     }
-
     fn release_interval(&self, state: &mut State) -> io::Result<bool> {
         let rows = self.0.index.scan(
             &state.root,
@@ -1109,6 +1360,18 @@ impl Payload {
         if stop_here < stop {
             root = self.put_cover(&root, token.source, stop_here, stop, refs)?;
         }
+        let mut unclaimed = 0;
+        if refs == 1 {
+            // The last reference over `[released_start, stop_here)` is gone, so
+            // exactly that physical span becomes unclaimed. The location record
+            // is split at the same boundaries, which keeps live extents exact: a
+            // file-only reader retains its own bounded allocation unit and never
+            // the unrelated payload that shared the arena.
+            let (split, added) =
+                self.release_physical(&root, token.source, released_start, stop_here)?;
+            root = split;
+            unclaimed = added;
+        }
         token.cursor = stop_here;
         if stop_here == end {
             root = self.0.index.remove(&root, job)?;
@@ -1142,9 +1405,9 @@ impl Payload {
             .ok_or_else(|| corrupt("payload charge underflow"))?;
         state.root = root;
         state.chargeable_bytes = chargeable;
+        state.unclaimed += unclaimed;
         if refs == 1 {
             state.live_bytes -= stop_here - released_start;
-            state.sweep = true;
         }
         if stop_here == end {
             state.owners -= 1;
@@ -1153,6 +1416,59 @@ impl Payload {
         }
         self.note_resident(state);
         Ok(true)
+    }
+    /// Split the location record covering `[released_start, stop_here)` and
+    /// register the released physical span as unclaimed. `stop_here` is a
+    /// coverage boundary, so both remaining parts stay exactly covered and a
+    /// later append can still extend the surviving tail occurrence.
+    fn release_physical(
+        &self,
+        root: &Root,
+        source: u64,
+        released_start: u64,
+        stop_here: u64,
+    ) -> io::Result<(Root, u64)> {
+        let Some((row, value)) = self.floor(root, LOCATION, source, released_start)? else {
+            return Err(corrupt("payload location absent"));
+        };
+        let location = decode_location(source, !word(&row[1..], 1)?, &value)?;
+        let location_end = location
+            .start
+            .checked_add(location.len)
+            .ok_or_else(|| corrupt("payload location overflow"))?;
+        if stop_here <= released_start
+            || released_start < location.start
+            || stop_here > location_end
+        {
+            return Err(corrupt("payload release outside location"));
+        }
+        let mut root = self.remove_location(root, location)?;
+        if location.start < released_start {
+            root = self.put_location(
+                &root,
+                Location {
+                    len: released_start - location.start,
+                    ..location
+                },
+            )?;
+        }
+        if stop_here < location_end {
+            root = self.put_location(
+                &root,
+                Location {
+                    start: stop_here,
+                    len: location_end - stop_here,
+                    offset: location.offset + (stop_here - location.start),
+                    ..location
+                },
+            )?;
+        }
+        self.free_interval(
+            &root,
+            location.arena,
+            location.offset + (released_start - location.start),
+            stop_here - released_start,
+        )
     }
     /// Bounded catalog assistance used by admission: one short burst, sized so
     /// an owner-producing call stays within a predictable work bound even when
@@ -1180,39 +1496,6 @@ impl Payload {
         let pending_interval = self.release_interval(&mut state)?;
         drop(state);
         Ok(pending_interval)
-    }
-    fn finish_truncate(&self, state: &mut State) -> io::Result<bool> {
-        let Some((arena, len)) = state.truncate else {
-            return Ok(false);
-        };
-        if state
-            .readers
-            .iter()
-            .flatten()
-            .any(|(at, end)| *at == arena && *end > len)
-        {
-            return Ok(false);
-        }
-        self.0.files[arena].set_len(len)?;
-        state.reclaimed += state.tails[arena] - len;
-        state.tails[arena] = len;
-        state.truncate = None;
-        Ok(true)
-    }
-    fn trim_failed(&self, state: &mut State) -> io::Result<bool> {
-        let found = state
-            .writes
-            .iter()
-            .find(|r| r.failed && r.start + r.len == state.tails[r.arena])
-            .copied();
-        let Some(reservation) = found else {
-            return Ok(false);
-        };
-        self.0.files[reservation.arena].set_len(reservation.start)?;
-        state.tails[reservation.arena] = reservation.start;
-        state.writes.retain(|r| r.id != reservation.id);
-        state.reclaimed += reservation.len;
-        Ok(true)
     }
     fn reserve(&self, state: &State, bytes: u64, recovery: bool) -> io::Result<()> {
         let physical = physical(&self.0.files)?;
@@ -1319,7 +1602,7 @@ impl Payload {
             |pressure| Some(pressure.saturating_add(operations)),
         );
         let limits = self.0.limits.index;
-        let pending = state.writes.iter().filter(|r| !r.failed).count() as u64 * 32;
+        let pending = state.writes.len() as u64 * 32;
         let needed = catalog_pages(
             limits.max_pages,
             operations + pending + if recovery { 0 } else { 40 },
@@ -1486,12 +1769,14 @@ impl Payload {
             interval_visits: state.visits + self.0.neighbor_visits.load(Ordering::Relaxed),
             relocated_bytes: state.relocated,
             reclaimed_bytes: state.reclaimed,
+            unclaimed_bytes: state.unclaimed,
+            reused_bytes: state.reused,
             cleanup_pending: pending_releases != 0
-                || state.writes.iter().any(|reservation| reservation.failed)
-                || state.sweep
-                || state.evacuating.is_some()
-                || state.truncate.is_some()
-                || index.reclamation_pending,
+                || index.reclamation_pending
+                || matches!(
+                    self.plan_local(&state, state.active)?,
+                    Local::Truncate { .. } | Local::Relocate { .. } | Local::Deferred
+                ),
             recovery_index_pages: catalog_pages(self.0.limits.index.max_pages, 40),
         })
     }
@@ -1559,6 +1844,29 @@ fn decode_location(source: u64, start: u64, bytes: &[u8]) -> io::Result<Location
         arena: arena as usize,
         offset: word(bytes, 2)?,
     })
+}
+/// Whether a live physical reader still covers part of `[start, start + len)`.
+fn reader_pins(state: &State, arena: usize, start: u64, len: u64) -> bool {
+    state.readers.iter().flatten().any(|reader| {
+        reader.arena == arena && overlaps(reader.start, reader.end - reader.start, start, len)
+    })
+}
+/// Highest end offset covered by a live reader of `arena` (0 when none). The
+/// arena length may never be reduced below this bound.
+fn reader_ceiling(state: &State, arena: usize) -> u64 {
+    state
+        .readers
+        .iter()
+        .flatten()
+        .filter(|reader| reader.arena == arena)
+        .map(|reader| reader.end)
+        .max()
+        .unwrap_or(0)
+}
+fn overlaps(first: u64, first_len: u64, second: u64, second_len: u64) -> bool {
+    let first_end = first.saturating_add(first_len);
+    let second_end = second.saturating_add(second_len);
+    first < second_end && second < first_end
 }
 fn physical(files: &[File; 2]) -> io::Result<u64> {
     files.iter().try_fold(0_u64, |sum, file| {
@@ -1706,10 +2014,11 @@ mod tests {
         payload.read_exact_at(token, &mut byte, 0)?;
         assert_eq!(byte, [0x5a]);
 
-        // A physical I/O lease survives catalog relocation; truncation is
-        // deferred and charged until that bounded reader finishes.
-        let physical = payload.physical_lease(token, 0, 1)?;
+        // A live physical lease pins its own bytes and the arena length: local
+        // reclamation may not reuse or truncate the range it still reads, and it
+        // is charged as deferred work until that bounded reader finishes.
         let discard = payload.write_from(&mut Repeated(0x41), MOVE)?;
+        let physical = payload.physical_lease(discard.token(), 0, 1)?;
         drop(discard);
         for _ in 0..64 {
             if !payload.reclaim_step()? {
@@ -1717,7 +2026,7 @@ mod tests {
             }
         }
         self_read(&physical, &mut byte)?;
-        assert_eq!(byte, [0x5a]);
+        assert_eq!(byte, [0x41]);
         assert!(payload.stats()?.cleanup_pending);
         drop(physical);
         drain(&payload)?;
@@ -1872,7 +2181,7 @@ mod tests {
     }
 
     #[test]
-    fn writes_continue_while_old_source_reader_defers_truncation() -> io::Result<()> {
+    fn live_physical_reader_defers_arena_truncation_without_blocking_writes() -> io::Result<()> {
         let directory = std::env::temp_dir().join(format!(
             "layerfs-payload-reader-write-{}",
             std::process::id()
@@ -1893,37 +2202,211 @@ mod tests {
             },
         )?;
         let kept = payload.write_from(&mut Repeated(0x41), BLOCK)?;
-        let physical = payload.physical_lease(kept.token(), 0, 1)?;
-        let discard = payload.write_from(&mut Repeated(0), MOVE)?;
-        drop(discard);
+        let released = payload.write_from(&mut Repeated(0x5a), MOVE)?;
+        // The lease covers bytes of an occurrence that is then released: its
+        // range must stay readable, must not be reused, and must be charged as
+        // deferred reclamation until the bounded reader retires.
+        let physical = payload.physical_lease(released.token(), 0, 1)?;
+        drop(released);
         for _ in 0..32 {
             if !payload.reclaim_step()? {
                 break;
             }
         }
-        {
-            let state = payload.0.state.lock().unwrap();
-            let (retired, _) = state
-                .truncate
-                .expect("old physical reader defers source truncation");
-            assert_ne!(retired, state.active);
-            assert!(
-                state.tails.iter().sum::<u64>() + MOVE + BLOCK < payload.0.limits.physical_bytes
-            );
-        }
-        // The reader holds only retired source storage. It must not reject an
-        // admitted foreground write into the independent active arena.
+        let deferred = payload.stats()?;
+        assert!(deferred.cleanup_pending, "{deferred:?}");
+        assert!(deferred.unclaimed_bytes >= MOVE, "{deferred:?}");
+        assert_eq!(deferred.relocated_bytes, 0, "{deferred:?}");
+        // A foreground write is admitted while the reader pins that range: it
+        // must neither be rejected nor overwrite the leased bytes.
         let written = payload.write_from(&mut &b"B"[..], 1)?;
         let mut byte = [0];
         written.read_exact_at(&mut byte, 0)?;
         assert_eq!(byte, [b'B']);
         self_read(&physical, &mut byte)?;
-        assert_eq!(byte, [b'A']);
+        assert_eq!(byte, [0x5a]);
+        kept.read_exact_at(&mut byte, 0)?;
+        assert_eq!(byte, [0x41]);
         println!("payload deferred_source_reader foreground_write=PASS old_reader=PASS");
         drop(physical);
+        drain(&payload)?;
+        kept.read_exact_at(&mut byte, 0)?;
+        assert_eq!(byte, [0x41]);
+        written.read_exact_at(&mut byte, 0)?;
+        assert_eq!(byte, [b'B']);
+        let settled = payload.stats()?;
+        assert_eq!(settled.live_block_bytes, 2 * BLOCK, "{settled:?}");
+        assert!(settled.physical_bytes <= 2 * BLOCK, "{settled:?}");
         drop(written);
         drop(kept);
         drain(&payload)?;
+        drop(payload);
+        fs::remove_dir(&directory)?;
+        Ok(())
+    }
+
+    /// Runs the release/replace churn loop with completed maintenance between
+    /// deletions and returns `(freed, relocated, reclaimed, physical)` bytes.
+    fn churn_run(files: usize) -> io::Result<(u64, u64, u64, u64)> {
+        const SIZE: u64 = 8 * 1024;
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-payload-amortized-{}-{files}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory)?;
+        let payload = Payload::temporary(
+            &directory,
+            Limits {
+                physical_bytes: 16 * 1024 * 1024,
+                owners: files + 16,
+                readers: 4,
+                writes: 4,
+                index: IndexLimits {
+                    max_pages: 65_536,
+                    max_roots: 4096,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        let mut live = Vec::new();
+        for step in 0..files {
+            live.push(payload.write_from(&mut Repeated(step as u8), SIZE)?);
+        }
+        let mut freed = 0_u64;
+        for step in 0..files {
+            let retired = live.remove(0);
+            drop(retired);
+            freed += SIZE;
+            // Completed maintenance between deletions is the shape that made the
+            // former whole-arena evacuation quadratic.
+            while payload.reclaim_step()? {}
+            live.push(payload.write_from(&mut Repeated(step as u8), SIZE)?);
+        }
+        let after = payload.stats()?;
+        let result = (
+            freed,
+            after.relocated_bytes,
+            after.reclaimed_bytes,
+            after.physical_bytes,
+        );
+        assert_eq!(after.live_block_bytes, files as u64 * SIZE, "{after:?}");
+        assert_eq!(after.unclaimed_bytes, 0, "{after:?}");
+        drop(live);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.physical_bytes, 0);
+        drop(payload);
+        fs::remove_dir(&directory)?;
+        Ok(result)
+    }
+
+    /// Focused counterexample and repair proof for release-triggered reclamation.
+    ///
+    /// The former mechanism set a sweep flag on every coverage release and
+    /// evacuated the whole arena one bounded step at a time, so `D` small
+    /// deletions among `N` live blocks moved `N + (N-1) + ...` live bytes with
+    /// completed maintenance between them: quadratic cumulative work. Local
+    /// reclamation may only move an interval whose relocation permanently
+    /// removes at least the moved byte count from the arena length, so total
+    /// relocation is charged to reclaimed bytes and stays linear in freed input.
+    #[test]
+    fn repeated_small_release_over_large_live_set_moves_only_justified_bytes() -> io::Result<()> {
+        let (freed, relocated, reclaimed, physical) = churn_run(64)?;
+        println!(
+            "payload amortized files=64 freed={freed} relocated={relocated} reused=0 \
+             physical={physical} reclaimed={reclaimed}"
+        );
+        assert!(
+            relocated <= freed,
+            "relocation must be charged to reclaimed bytes: relocated={relocated} freed={freed}"
+        );
+        Ok(())
+    }
+
+    /// Multi-size oracle for the same bound: relocation work must follow freed
+    /// bytes at every size instead of the square of the live set. This is an
+    /// ownership/byte oracle, not a timing gate.
+    #[test]
+    fn reclamation_work_follows_freed_bytes_across_sizes() -> io::Result<()> {
+        let mut previous = 0_u64;
+        for files in [16_usize, 32, 64] {
+            let (freed, relocated, reclaimed, physical) = churn_run(files)?;
+            println!(
+                "payload scaling files={files} live={} freed={freed} relocated={relocated} \
+                 reclaimed={reclaimed} physical={physical}",
+                files as u64 * 8 * 1024
+            );
+            assert!(
+                relocated <= freed,
+                "files={files} relocated={relocated} freed={freed}"
+            );
+            assert!(
+                relocated >= previous,
+                "relocation must grow with freed input: files={files} relocated={relocated} \
+                 previous={previous}"
+            );
+            previous = relocated;
+        }
+        Ok(())
+    }
+
+    /// A bounded top-of-arena live interval makes relocation impossible, so a
+    /// small unrelated release must copy nothing at all and the next fitting
+    /// write must reuse the unclaimed interval in place instead of growing the
+    /// arena.
+    #[test]
+    fn middle_release_reuses_unclaimed_interval_without_relocating_live_payload() -> io::Result<()>
+    {
+        const SMALL: u64 = 4 * 1024;
+        const LARGE: u64 = 4 * MOVE;
+        let directory =
+            std::env::temp_dir().join(format!("layerfs-payload-reuse-{}", std::process::id()));
+        fs::create_dir_all(&directory)?;
+        let payload = Payload::temporary(
+            &directory,
+            Limits {
+                physical_bytes: 16 * 1024 * 1024,
+                owners: 64,
+                readers: 4,
+                writes: 4,
+                index: IndexLimits {
+                    max_pages: 65_536,
+                    max_roots: 4096,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        let middle = payload.write_from(&mut Repeated(0x44), SMALL)?;
+        let top = payload.write_from(&mut Repeated(0x33), LARGE)?;
+        let before = payload.stats()?;
+        let physical_before = before.physical_bytes;
+        drop(middle);
+        while payload.reclaim_step()? {}
+        let settled = payload.stats()?;
+        assert_eq!(
+            settled.relocated_bytes, before.relocated_bytes,
+            "a release under a large live interval must not move unrelated payload"
+        );
+        assert!(settled.unclaimed_bytes >= SMALL, "{settled:?}");
+        let reuse = payload.write_from(&mut Repeated(0x55), SMALL)?;
+        let after = payload.stats()?;
+        assert!(
+            after.reused_bytes >= SMALL,
+            "the next fitting write must reuse the unclaimed interval: {after:?}"
+        );
+        assert_eq!(
+            after.physical_bytes, physical_before,
+            "reuse must not extend the arena: {after:?}"
+        );
+        let mut bytes = vec![0_u8; LARGE as usize];
+        top.read_exact_at(&mut bytes, 0)?;
+        assert!(bytes.iter().all(|byte| *byte == 0x33));
+        let mut byte = [0_u8; SMALL as usize];
+        reuse.read_exact_at(&mut byte, 0)?;
+        assert!(byte.iter().all(|value| *value == 0x55));
+        drop(reuse);
+        drop(top);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.physical_bytes, 0);
         drop(payload);
         fs::remove_dir(&directory)?;
         Ok(())
@@ -2116,14 +2599,17 @@ mod tests {
             let owner = payload.write_from(&mut &b"x"[..], 1)?;
             let stats = payload.0.index.stats()?;
             if index < 5 || index % 25 == 24 {
+                // Deltas are signed: bounded catalog assistance may recycle more
+                // retired pages than this write allocates, so a run of writes is
+                // not a monotone live-page count.
                 println!(
                     "pagecost index={index} live={} allocated={} page_writes={} delta_live={} \
                      delta_writes={}",
                     stats.live_pages,
                     stats.allocated_pages,
                     stats.page_writes,
-                    stats.live_pages - previous.live_pages,
-                    stats.page_writes - previous.page_writes
+                    stats.live_pages as i64 - previous.live_pages as i64,
+                    stats.page_writes as i64 - previous.page_writes as i64
                 );
             }
             previous = stats;

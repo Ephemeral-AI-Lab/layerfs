@@ -5,7 +5,7 @@
 #[path = "overlay_cleanup.rs"]
 mod cleanup;
 
-use crate::overlay_index::{Index, Limits, Root};
+use crate::overlay_index::{Index, Limits, Record, Root, BATCH_RECORDS};
 use layerfs_content::tree::inode::InodeId;
 use layerfs_content::{CanonicalName, ObjectId};
 use layerfs_layerstack_store::{Result, StoreError};
@@ -199,7 +199,16 @@ pub(crate) struct Mutation<'a> {
     pub(super) index: &'a Index,
     pub(super) candidate: OverlayRoot,
     logical_change: bool,
+    /// Change-log keys queued by an opted-in operation. They are applied
+    /// together at the end of the mutation so the shared tree path is copied
+    /// once instead of once per changed field.
+    pending_changes: Vec<Vec<u8>>,
+    batching_changes: bool,
 }
+
+/// Bounded queue of deferred change-log keys. Reaching the bound flushes early;
+/// the queue can never grow with the operation's record count.
+const MAX_PENDING_CHANGES: usize = 64;
 
 impl Overlay {
     pub(crate) fn temporary(directory: &Path, base_root: ObjectId, limits: Limits) -> Result<Self> {
@@ -243,6 +252,8 @@ impl Overlay {
         let mut mutation = Mutation {
             index: &self.index,
             logical_change: false,
+            pending_changes: Vec::new(),
+            batching_changes: false,
             candidate: OverlayRoot {
                 installation_sequence: source
                     .installation_sequence
@@ -259,6 +270,7 @@ impl Overlay {
             },
         };
         apply(&mut mutation)?;
+        mutation.flush_change_batch()?;
         if !mutation.logical_change {
             // Cache, handle ownership, equivalent backing substitution and
             // covered-entry retirement change root identity, not user generation.
@@ -589,8 +601,66 @@ impl Mutation<'_> {
         Ok(())
     }
 
+    /// Defer this mutation's change-log records so they can be prepared and
+    /// applied together. Record writes themselves are unaffected.
+    pub(crate) fn begin_change_batch(&mut self) {
+        self.batching_changes = true;
+    }
+
+    /// Apply the deferred change-log records with one bounded batch per
+    /// `BATCH_RECORDS`, removing superseded sequence keys first. Idempotent and
+    /// cheap when nothing is queued; a mutation that never opted in keeps the
+    /// original per-key behaviour.
+    pub(crate) fn flush_change_batch(&mut self) -> Result<()> {
+        if self.pending_changes.is_empty() {
+            return Ok(());
+        }
+        let sequence = self.candidate.sequence;
+        let keys = std::mem::take(&mut self.pending_changes);
+        let mut removals = Vec::new();
+        let mut records: Vec<(Vec<u8>, Vec<u8>)> = Vec::with_capacity(keys.len() * 2);
+        for key in keys {
+            let by_key = [vec![CHANGE_KEY], key.clone()].concat();
+            if let Some(old) = self.index.get(&self.candidate.index, &by_key)? {
+                let old_sequence = decode_sequence(&old)?;
+                removals.push(sequence_key(old_sequence, &key));
+            }
+            records.push((by_key, sequence.to_be_bytes().to_vec()));
+            records.push((sequence_key(sequence, &key), Vec::new()));
+        }
+        for key in removals {
+            self.candidate.index = self.index.remove(&self.candidate.index, &key)?;
+        }
+        records.sort_by(|left, right| left.0.cmp(&right.0));
+        for chunk in records.chunks(BATCH_RECORDS) {
+            let batch = chunk
+                .iter()
+                .map(|(key, value)| Record {
+                    key,
+                    value,
+                    external: None,
+                    linked: None,
+                })
+                .collect::<Vec<_>>();
+            self.candidate.index = self.index.set_batch(&self.candidate.index, &batch)?;
+        }
+        Ok(())
+    }
+
     fn changed(&mut self, key: &[u8]) -> Result<()> {
         self.logical_change = true;
+        if self.batching_changes {
+            // Repeating a key inside one mutation is idempotent: the candidate
+            // sequence is fixed, so one record per key is exactly equivalent.
+            if self.pending_changes.iter().any(|queued| queued == key) {
+                return Ok(());
+            }
+            if self.pending_changes.len() >= MAX_PENDING_CHANGES {
+                self.flush_change_batch()?;
+            }
+            self.pending_changes.push(key.to_vec());
+            return Ok(());
+        }
         let by_key = [vec![CHANGE_KEY], key.to_vec()].concat();
         if let Some(old) = self.index.get(&self.candidate.index, &by_key)? {
             let old_sequence = decode_sequence(&old)?;
@@ -613,6 +683,9 @@ impl Mutation<'_> {
     /// Drop only exactly covered bookkeeping; binding masks and newer changes
     /// survive. The caller supplies one bounded batch from a captured root.
     pub(crate) fn forget_covered(&mut self, key: &ChangeKey, sequence: u64) -> Result<()> {
+        // Guard against reading the change family while this mutation still owns
+        // deferred records for it.
+        self.flush_change_batch()?;
         let key = key.encode()?;
         let by_key = [vec![CHANGE_KEY], key.clone()].concat();
         if self.index.get(&self.candidate.index, &by_key)?.as_deref()
@@ -821,6 +894,95 @@ mod tests {
             overlay.changes(&current, captured.sequence, None).unwrap()[0].2,
             ChangeKey::Inode(NodeId(3))
         );
+    }
+
+    /// Prepared change-log batches must be exactly equivalent to immediate
+    /// tracking and must copy the shared tree path fewer times. Counted in
+    /// actual page writes, not inferred from arithmetic.
+    #[test]
+    fn batched_change_records_match_immediate_tracking_with_fewer_page_writes() -> Result<()> {
+        let immediate = overlay();
+        let batched = overlay();
+        let apply = |overlay: &Overlay, batch: bool| -> Result<(usize, Vec<(u64, ChangeKey)>)> {
+            let before = overlay.index.stats()?.page_writes;
+            let prepared = overlay.prepare(overlay.acquire()?, |m| {
+                if batch {
+                    m.begin_change_batch();
+                }
+                m.put_inode(NodeId(2), b"first")?;
+                m.put_binding(NodeId(1), b"name", Some(NodeId(2)))?;
+                m.put_inode(NodeId(2), b"second")?;
+                m.set_kernel_references(NodeId(2), 3)?;
+                Ok(())
+            })?;
+            assert!(overlay.install(prepared)?);
+            let writes = (overlay.index.stats()?.page_writes - before) as usize;
+            let current = overlay.acquire()?;
+            let changes = overlay
+                .changes(&current, 0, None)?
+                .into_iter()
+                .map(|(_, sequence, key)| (sequence, key))
+                .collect::<Vec<_>>();
+            Ok((writes, changes))
+        };
+        let (immediate_writes, immediate_changes) = apply(&immediate, false)?;
+        let (batched_writes, batched_changes) = apply(&batched, true)?;
+        println!(
+            "changebatch immediate_writes={immediate_writes} batched_writes={batched_writes} \
+             changes={}",
+            batched_changes.len()
+        );
+        assert_eq!(immediate_changes, batched_changes);
+        // The repeated inode write is one change key; the binding is the second.
+        // Kernel-reference bookkeeping is not a tracked change.
+        assert_eq!(batched_changes.len(), 2);
+        assert!(
+            batched_writes < immediate_writes,
+            "{batched_writes} !< {immediate_writes}"
+        );
+        // The newest version of a repeated key wins in both paths, and the
+        // deferred batch still replaces the superseded sequence key when the
+        // same key changes again in a later mutation.
+        for overlay in [&immediate, &batched] {
+            let prepared = overlay.prepare(overlay.acquire()?, |m| {
+                if std::ptr::eq(overlay, &batched) {
+                    m.begin_change_batch();
+                }
+                m.put_inode(NodeId(2), b"third")
+            })?;
+            assert!(overlay.install(prepared)?);
+        }
+        let immediate_current = immediate.acquire()?;
+        let batched_current = batched.acquire()?;
+        assert_eq!(
+            immediate.inode(&immediate_current, NodeId(2))?,
+            batched.inode(&batched_current, NodeId(2))?
+        );
+        assert_eq!(
+            immediate.inode(&immediate_current, NodeId(2))?.as_deref(),
+            Some(&b"third"[..])
+        );
+        let immediate_changes = immediate
+            .changes(&immediate_current, 0, None)?
+            .into_iter()
+            .map(|(_, sequence, key)| (sequence, key))
+            .collect::<Vec<_>>();
+        let batched_changes = batched
+            .changes(&batched_current, 0, None)?
+            .into_iter()
+            .map(|(_, sequence, key)| (sequence, key))
+            .collect::<Vec<_>>();
+        assert_eq!(immediate_changes, batched_changes);
+        assert_eq!(
+            batched.binding(&batched_current, NodeId(1), b"name")?,
+            Some(Some(NodeId(2)))
+        );
+        let references = batched.prepare(batched_current.clone(), |m| {
+            assert_eq!(m.kernel_reference_page()?, vec![(NodeId(2), 3)]);
+            Ok(())
+        });
+        assert!(references.is_ok());
+        Ok(())
     }
 
     #[test]
