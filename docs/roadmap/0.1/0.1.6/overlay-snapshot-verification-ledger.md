@@ -817,3 +817,65 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
   build attempt aborted (`source changed during qualified image build`) after a
   docs edit landed during the image build — no receipt produced, retained as an
   operational note.
+
+### L47 — #144 Phase 2 R1a: SETATTR-class replies carry the installed attr (counter gate met; single-sample timing noise-dominated)
+
+- Identity: Phase-2 change 1, branch `codex/issue144-phase2-r1a-setattr-attr-reply`
+  commit `2ed8b65fc` (clean tree, `LAYERFS_SOURCE_DIRTY: false`), base = Phase-2
+  merge-base main `6c30b0c17`. Source seal `1d4edae8…`, compilation seal
+  `d3d62b32…`, product seal `2174794b…`, host binary `bcc3b1a9…`, image
+  `layerfs-bench-infra:1d4edae8743e8966` (image source identity `1d4edae8…`).
+  Run `benchmark-results/issue144-phase2/runs/iter-r1a-1789407959` (git-ignored,
+  retained): `tiny-create-500-mixed-v4`, seed 1, `--setup clone`, collection
+  mode, one sample, `--source-arm candidate` — **diagnostic, never acceptance
+  evidence**.
+- What changed: the `Truncate`/`Chmod`/`Mtime` host dispatch arms reply with the
+  exact installed `Attr` (`HostOverlay::{truncate,chmod,set_mtime}` return the
+  attr copied under the same mutation lock, never a read-back after the lock is
+  released), the client parses that reply without registering a kernel
+  reference, and the FUSE setattr handler builds the kernel reply from the last
+  applied mutation (re-reading only when the request mutates nothing). Wire
+  opcodes, replay slots, `needs_replay` classes and the 64-byte response bound
+  are unchanged; the attr reply is 37 bytes.
+- Counter gate — **MET** (deterministic; this is the accept criterion for the
+  change): `host_authority_attr` 1,482 → **464** (gate ≈460, −68.7 %);
+  `host_authority_dispatches` 4,518 → **3,510** (gate ≈3,500, −22.3 %) and still
+  `== live_backing_calls` (3,510), so the counter-level route proof holds.
+  Dispatch mix: lookup 1,072 · attr 464 · create 500 · write 450 · chmod 510 ·
+  mtime 510 · fsync 1 · pin 2 · unpin 1. (LOOKUP moved 1,062 → 1,072, +0.9 % of
+  dispatches — the R1d leak, untouched by this change; noted, not explained.)
+- Timing (single sample, reported honestly): total **17,402.6 ms** against the
+  frozen Phase-1 baseline 16,519.4 ms — exec 8,748.5 / commit 4,526.6 /
+  visibility 0.07 / end 4,127.5 ms. The sample is **slower** than the baseline
+  while doing strictly less work, and the reason is visible in the receipt: the
+  whole sample ran in a more expensive cost regime — host dispatch
+  **1.024 → 1.768 ms/call**, client backing wait **1.592 → 2.374 ms/call**
+  (host-process CPU 13.69 → 14.98 s; host RSS, disk write and dispatch mix
+  otherwise unchanged). Within that sample's *own* per-call cost the unchanged
+  4,518-dispatch counterfactual costs 7,990 ms of host dispatch against the
+  measured 6,207 ms: **≈1.78 s of host dispatch (≈2.39 s of client wait)
+  removed**, consistent with the Phase-1 prediction of −1.3 to −1.8 s. Timing
+  verdict: unresolvable in one sample at this variance (the two Phase-1 samples
+  differ by 1.2 s on an identical binary); the paired screen resolves it.
+- Other phases from the same receipt: commit `maintain_ns` 3,449.1 ms
+  (pre-capture 3,449.9), candidate plan 420.4, content 590.7, namespace 42.6,
+  object admission 20.2, construction tail 2.2, stage 0.1, acknowledge 0.04,
+  publication 0.3, unattributed 0.15; capture 0 ms (O(1) acquisition contract
+  holds). End `settle_ns` 3,803.6 ms over 512 steps (7.43 ms/step), unmount
+  ≈350 ms, `after_detach` 0.02 ms, state removal 0.30 ms.
+- Tests: `host_operations::tests::setattr_class_replies_carry_the_exact_installed_attr_in_one_dispatch`
+  (the reply equals a same-node `Attr` dispatch; one dispatch per mutation
+  including the no-op truncate path) and
+  `host_client::tests::setattr_class_mutations_take_one_frame_and_reply_with_the_installed_attr`
+  (one frame per mutation, no follow-up `Op::Attr`). Gates: `tools/test-fast.sh`
+  PASS (164 s), `cargo fmt --all --check` clean, CI clippy invocation
+  (correctness/suspicious/unused_must_use, `--locked`) clean.
+- Validity: current for the counter claim. The timing row is a single-sample
+  diagnostic and is **not** acceptance evidence. Contracts: the
+  host-before-acknowledgment ownership rule is what makes the reply exact (the
+  reply is the host's installed record, never a client cache); single authority,
+  CAS/CDC/pack boundaries, C1/C2, O(1) capture, exact stage/retry receipts and
+  the ordinary-Commit no-pause rule are unchanged; first-party only, no
+  dependency/manifest/lockfile change. No container, process or measurement lock
+  left behind; the tier-100 criterion stays BLOCKED (untouched); #130/#124/#125/
+  #144 stay OPEN.
