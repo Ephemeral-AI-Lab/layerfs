@@ -486,13 +486,16 @@ impl HostOperations {
             } => Ok((host.write(node, offset, bytes)? as u64)
                 .to_be_bytes()
                 .to_vec()),
-            Operation::Truncate { node, size } => unit(host.truncate(node, size)),
-            Operation::Chmod { node, mode } => unit(host.chmod(node, mode)),
+            // #144 R1a: SETATTR-class mutations reply with the exact installed
+            // attr, mirroring `Op::Create`, so the kernel reply needs no
+            // separate `Op::Attr` round trip. One mutation, one replay slot.
+            Operation::Truncate { node, size } => host.truncate(node, size).map(wire::attr_out),
+            Operation::Chmod { node, mode } => host.chmod(node, mode).map(wire::attr_out),
             Operation::Mtime {
                 node,
                 seconds,
                 nanos,
-            } => unit(host.set_mtime(node, seconds, nanos)),
+            } => host.set_mtime(node, seconds, nanos).map(wire::attr_out),
             Operation::Fsync(node) => {
                 if let Some(node) = node {
                     host.attr(node)?;
@@ -685,6 +688,102 @@ mod tests {
             Reply::Unknown
         ));
         println!("host transport exact replay, known failure, stale/unknown session, kernel orphan+retained snapshot: PASS");
+    }
+
+    /// #144 R1a: a SETATTR-class mutation replies with the exact attr the
+    /// host authority installed, so the kernel reply needs no separate
+    /// `Op::Attr` round trip. The reply therefore *is* the authority's record:
+    /// a same-node `Attr` dispatch returns the same value.
+    #[test]
+    fn setattr_class_replies_carry_the_exact_installed_attr_in_one_dispatch() {
+        let fixture = Fixture::new(|_| {}, ResourcePolicy::default());
+        let server = HostOperations::new(fixture.host.clone());
+        let create = frame(
+            1,
+            0,
+            Operation::Create {
+                parent: ROOT,
+                name: b"file",
+                mode: 0o600,
+                open: false,
+                kernel: true,
+            },
+        );
+        let node = wire::attr_in(success(&server.request(&create).unwrap(), 1))
+            .unwrap()
+            .node;
+        let write = frame(
+            2,
+            1,
+            Operation::Write {
+                node,
+                offset: 0,
+                bytes: b"abcd",
+            },
+        );
+        assert_eq!(
+            u64::from_be_bytes(
+                success(&server.request(&write).unwrap(), 2)
+                    .try_into()
+                    .unwrap()
+            ),
+            4
+        );
+
+        // Each mutation's own reply carries the post-mutation attr.
+        let mtime = frame(
+            3,
+            2,
+            Operation::Mtime {
+                node,
+                seconds: 1_700_000_000,
+                nanos: 7,
+            },
+        );
+        let attr = wire::attr_in(success(&server.request(&mtime).unwrap(), 3)).unwrap();
+        assert_eq!(
+            (attr.mtime_seconds, attr.mtime_nanoseconds),
+            (1_700_000_000, 7)
+        );
+        assert_eq!(attr.size, 4, "mtime keeps the installed size");
+
+        let chmod = frame(4, 3, Operation::Chmod { node, mode: 0o640 });
+        let attr = wire::attr_in(success(&server.request(&chmod).unwrap(), 4)).unwrap();
+        assert_eq!(attr.mode, 0o640);
+        assert_eq!(
+            (attr.mtime_seconds, attr.mtime_nanoseconds),
+            (1_700_000_000, 7),
+            "chmod keeps the installed mtime"
+        );
+
+        let truncate = frame(5, 4, Operation::Truncate { node, size: 2 });
+        let attr = wire::attr_in(success(&server.request(&truncate).unwrap(), 5)).unwrap();
+        assert_eq!((attr.size, attr.mode), (2, 0o640));
+
+        // A no-op truncate still reports the installed record (the same-size
+        // path installs nothing, so it must not answer with a stale copy).
+        let unchanged = frame(6, 5, Operation::Truncate { node, size: 2 });
+        let attr = wire::attr_in(success(&server.request(&unchanged).unwrap(), 6)).unwrap();
+        assert_eq!((attr.size, attr.mode), (2, 0o640));
+
+        // Exactness: the reply equals what a dedicated attr dispatch returns.
+        let read_back = frame(0, 6, Operation::Attr(node));
+        let expected = wire::attr_in(success(&server.request(&read_back).unwrap(), 0)).unwrap();
+        assert_eq!(expected, attr);
+
+        // One mutation, one dispatch: the reply shape adds no operation.
+        let counts = server.take_dispatch_counts();
+        assert_eq!(
+            (
+                counts.create,
+                counts.write,
+                counts.mtime,
+                counts.chmod,
+                counts.truncate,
+                counts.attr
+            ),
+            (1, 1, 1, 1, 2, 1)
+        );
     }
 
     #[test]

@@ -309,16 +309,33 @@ pub trait FilesystemPort: Send + Sync {
         Box::pin(async move { self.pin(node, truncate, writable) })
     }
     #[cfg(feature = "live")]
-    fn truncate_async<'a>(&'a self, node: NodeId, size: u64) -> PortFuture<'a, ()> {
-        Box::pin(async move { self.truncate(node, size) })
+    /// SETATTR-class mutations report the exact post-mutation attr (#144 R1a).
+    /// A port whose mutation reply already carries it overrides this method;
+    /// the default re-reads the same authority it just mutated.
+    fn truncate_async<'a>(&'a self, node: NodeId, size: u64) -> PortFuture<'a, Attr> {
+        Box::pin(async move {
+            self.truncate(node, size)?;
+            self.attr(node)
+        })
     }
     #[cfg(feature = "live")]
-    fn chmod_async<'a>(&'a self, node: NodeId, mode: u32) -> PortFuture<'a, ()> {
-        Box::pin(async move { self.chmod(node, mode) })
+    fn chmod_async<'a>(&'a self, node: NodeId, mode: u32) -> PortFuture<'a, Attr> {
+        Box::pin(async move {
+            self.chmod(node, mode)?;
+            self.attr(node)
+        })
     }
     #[cfg(feature = "live")]
-    fn set_mtime_async<'a>(&'a self, node: NodeId, seconds: i64, nanos: u32) -> PortFuture<'a, ()> {
-        Box::pin(async move { self.set_mtime(node, seconds, nanos) })
+    fn set_mtime_async<'a>(
+        &'a self,
+        node: NodeId,
+        seconds: i64,
+        nanos: u32,
+    ) -> PortFuture<'a, Attr> {
+        Box::pin(async move {
+            self.set_mtime(node, seconds, nanos)?;
+            self.attr(node)
+        })
     }
     #[cfg(feature = "live")]
     fn fsync_async<'a>(&'a self, node: Option<NodeId>) -> PortFuture<'a, ()> {

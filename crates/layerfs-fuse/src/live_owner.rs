@@ -2286,9 +2286,12 @@ impl FilesystemPort for LiveOwner {
         Ok(())
     }
     fn truncate(&self, node: NodeId, size: u64) -> PortResult<()> {
-        self.run(self.truncate_async(node, size))
+        self.run(self.truncate_async(node, size)).map(|_| ())
     }
-    fn truncate_async<'a>(&'a self, node: NodeId, size: u64) -> crate::PortFuture<'a, ()> {
+    /// #144 R1a: report the post-mutation attr so a SETATTR reply needs no
+    /// second read. The in-process authority has no wire hop to save here; the
+    /// contract (exact installed metadata) is what changes.
+    fn truncate_async<'a>(&'a self, node: NodeId, size: u64) -> crate::PortFuture<'a, Attr> {
         Box::pin(async move {
             let _order = self.ordered(node).await?;
             self.exclude_prefill(node).await?;
@@ -2301,13 +2304,13 @@ impl FilesystemPort for LiveOwner {
                 self.0.backing.call(&check).await?;
                 self.state()?.apply_edit(prepared).map_err(core)?;
             }
-            Ok(())
+            self.state()?.attr(node).map_err(core)
         })
     }
     fn chmod(&self, node: NodeId, mode: u32) -> PortResult<()> {
-        self.run(self.chmod_async(node, mode))
+        self.run(self.chmod_async(node, mode)).map(|_| ())
     }
-    fn chmod_async<'a>(&'a self, node: NodeId, mode: u32) -> crate::PortFuture<'a, ()> {
+    fn chmod_async<'a>(&'a self, node: NodeId, mode: u32) -> crate::PortFuture<'a, Attr> {
         Box::pin(async move {
             let directory = self.state()?.attr(node).map_err(core)?.kind == Kind::Directory;
             let _namespace = if directory {
@@ -2316,18 +2319,20 @@ impl FilesystemPort for LiveOwner {
                 None
             };
             let _order = self.ordered(node).await?;
-            self.state()?.chmod(node, mode).map_err(core)
+            self.state()?.chmod(node, mode).map_err(core)?;
+            self.state()?.attr(node).map_err(core)
         })
     }
     fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> PortResult<()> {
         self.run(self.set_mtime_async(node, seconds, nanos))
+            .map(|_| ())
     }
     fn set_mtime_async<'a>(
         &'a self,
         node: NodeId,
         seconds: i64,
         nanos: u32,
-    ) -> crate::PortFuture<'a, ()> {
+    ) -> crate::PortFuture<'a, Attr> {
         Box::pin(async move {
             let directory = self.state()?.attr(node).map_err(core)?.kind == Kind::Directory;
             let _namespace = if directory {
@@ -2336,7 +2341,10 @@ impl FilesystemPort for LiveOwner {
                 None
             };
             let _order = self.ordered(node).await?;
-            self.state()?.set_mtime(node, seconds, nanos).map_err(core)
+            self.state()?
+                .set_mtime(node, seconds, nanos)
+                .map_err(core)?;
+            self.state()?.attr(node).map_err(core)
         })
     }
     fn fsync(&self, node: Option<NodeId>) -> PortResult<()> {
@@ -4788,7 +4796,7 @@ mod immutable_acquisition_tests {
             let task = runtime.scheduler().handle.spawn(async move {
                 match operation {
                     0 => waiting.prepare_kernel_open(file, true).await,
-                    1 => waiting.truncate_async(file, 3).await,
+                    1 => waiting.truncate_async(file, 3).await.map(|_| ()),
                     _ => waiting.write_owned(file, 0, b"x").await.map(|_| ()),
                 }
             });
