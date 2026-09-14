@@ -1,0 +1,118 @@
+Kernel-source citations for this probe. All line numbers are from the pinned
+trees below (downloaded with curl, not modified).
+
+  A. gregkh/linux tag v6.12.76 commit 39b686f8d57d7506af7789e915fe7fd103b0fe57
+     fs/fuse/dev.c, fs/fuse/file.c, fs/fuse/inode.c, fs/fuse/fuse_i.h,
+     include/uapi/linux/fuse.h
+  B. torvalds/linux master (read 2026-09-14)
+     fs/fuse/notify.c, include/uapi/linux/fuse.h
+
+URLs:
+  https://raw.githubusercontent.com/gregkh/linux/39b686f8d57d7506af7789e915fe7fd103b0fe57/fs/fuse/dev.c
+  https://raw.githubusercontent.com/gregkh/linux/39b686f8d57d7506af7789e915fe7fd103b0fe57/fs/fuse/file.c
+  https://raw.githubusercontent.com/torvalds/linux/master/fs/fuse/notify.c
+
+--------------------------------------------------------------------------
+(1) FUSE_NOTIFY_RETRIEVE returns page REFERENCES, released only when the
+    request ends; contents are copied to the daemon at read(2) time.
+
+A fs/fuse/dev.c:1700-1708  fuse_retrieve_end():
+        release_pages(ra->ap.pages, ra->ap.num_pages);
+
+A fs/fuse/dev.c:1710-1786  fuse_retrieve():
+        args->opcode = FUSE_NOTIFY_REPLY;
+        args->end = fuse_retrieve_end;
+        ...
+        while (num && ap->num_pages < num_pages) {
+                struct page *page;
+                page = find_get_page(mapping, index);   /* line 1762: reference */
+                if (!page)
+                        break;
+                this_num = min_t(unsigned, num, PAGE_SIZE - offset);
+                ap->pages[ap->num_pages] = page;        /* not cloned, not
+                                                           write-protected */
+                ...
+        }
+        err = fuse_simple_notify_reply(fm, args, outarg->notify_unique); /* 1784 */
+
+A fs/fuse/dev.c:638-656  fuse_simple_notify_reply(): fuse_send_one() queues the
+    request and returns - it does not wait for the daemon to read it.
+
+A fs/fuse/dev.c:1024-1039 fuse_copy_pages(): copies ap->pages into the daemon's
+    userspace read buffer, i.e. the copy happens at delivery time.
+
+A include/uapi/linux/fuse.h:1087-1094 struct fuse_notify_retrieve_in
+A include/uapi/linux/fuse.h:1078-1084 struct fuse_notify_retrieve_out
+A include/uapi/linux/fuse.h:658 enum fuse_notify_code { ... FUSE_NOTIFY_RETRIEVE = 5
+                                                        ... FUSE_NOTIFY_RESEND = 7 };
+
+  Consequence, confirmed by T1/T2/T3: retrieval gives the daemon a private copy
+  of whatever the pages hold when the daemon reads the reply, and the pages stay
+  mutable until the request ends. There is no ownership, no version and no
+  boundary report.
+
+(2) Writeback hands the daemon OWNED copies (folio_copy into a private tmp
+    folio) under the page lock.
+
+A fs/fuse/file.c:2102-2116 fuse_writepage_args_page_fill():
+        folio_copy(tmp_folio, folio);                   /* line 2108 */
+        ap->pages[page_index] = &tmp_folio->page;       /* owned copy */
+        ...
+
+A fs/fuse/file.c:2330-2405 fuse_writepages_fill() (comment at 2359-2368):
+        "The page must not be redirtied until the writeout is completed
+         (i.e. userspace has sent a reply to the write request). Otherwise
+         there could be more than one temporary page instance for each real
+         page. This is ensured by holding the page lock in page_mkwrite() ..."
+        => the per-page copy is taken under the page lock at fill time.
+
+A fs/fuse/file.c:2408-2440 fuse_writepages() -> write_cache_pages() ->
+        fuse_writepages_fill() -> fuse_writepages_send(); the WRITE request
+        carries FUSE_WRITE_CACHE (fs/fuse/file.c:2132).
+
+A fs/fuse/file.c:2143-2186 fuse_writepage_locked(): single-page variant, same
+        folio_copy path (fuse_writepage_args_page_fill).
+
+A include/uapi/linux/fuse.h:505 FUSE_WRITE_CACHE (1 << 0) - "delayed write from
+        page cache, file handle is guessed".
+
+  Consequence, confirmed by T6/T7/T9: the payload of a writeback WRITE is an
+  owned copy, stable once received, delivered as FUSE_WRITE_WRITE_CACHE.
+
+(3) A mapped writer is stalled while its pages are under writeback.
+
+A fs/fuse/file.c:2570-2586 fuse_page_mkwrite():
+        lock_page(page);
+        ...
+        fuse_wait_on_page_writeback(inode, page->index);   /* line 2582 */
+        return VM_FAULT_LOCKED;
+
+A fs/fuse/file.c:2593-2640 fuse_file_mmap(): installs
+        filemap_fault / fuse_page_mkwrite; sends no request to the daemon
+        (so the daemon cannot learn that a writable mapping exists).
+
+  Consequence, confirmed by T8 vs T7/T9: parking the daemon alone does not slow
+  the mapped writer (T8: ~21-36 rounds/us, 0 daemon requests), while a
+  daemon-initiated fsync drain throttles it ~100x (T7: 1.4-5.5k rounds per
+  15 ms) and the 4 MiB drain advances it only 3-9 rounds (T9).
+
+(4) No FUSE request/notification returns an owned copy at a chosen instant.
+
+A include/uapi/linux/fuse.h:258 FUSE_KERNEL_MINOR_VERSION 41; notify codes end
+        at FUSE_NOTIFY_RESEND = 7 (line 657) in v6.12.76.
+B include/uapi/linux/fuse.h (master): FUSE_KERNEL_MINOR_VERSION 46;
+        FUSE_NOTIFY_INC_EPOCH = 8 (7.44), FUSE_NOTIFY_PRUNE = 9 (7.45).
+B fs/fuse/notify.c:367-373 fuse_notify_inc_epoch(): atomic_inc(&fc->epoch) +
+        dentry/readdir cache invalidation only.
+B fs/fuse/notify.c:376-410 fuse_notify_prune(): per-nodeid cache pruning only.
+  Neither returns payload copies or a snapshot handle.
+
+A include/uapi/linux/fuse.h:1019-1023 struct fuse_out_header (unique==0 marks an
+        unsolicited notification) - the only daemon->kernel vector besides
+        replies; it carries codes, not data ownership.
+
+A fs/fuse/fuse_i.h:36 FUSE_DEFAULT_MAX_PAGES_PER_REQ 32;
+A fs/fuse/fuse_i.h:39 FUSE_MAX_MAX_PAGES 256;
+A fs/fuse/inode.c:1298-1301 max_pages negotiated from FUSE_MAX_PAGES.
+  (Relevant to T9: 4 MiB / (32 * 4096) = 32 writeback WRITE requests, as
+  measured.)

@@ -1,0 +1,66 @@
+Linux df66962dc1b8 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+a0aee75e6eab324120a18685b0613af0726dd57fc9d138f7b768014a8be6ac9a  /tmp/v1gen-probe-bin
+probe: argv1=(none) (writeback_mode=0)
+probe: page_size=4096 file_size=131072 pages=32 MAP_SHARED|PROT_WRITE=accepted
+probe: negotiated minor=31 flags=0x21 max_write=1048576 writeback_cache=0
+probe: prefault done rounds=3621945 daemon_reads=33 daemon_writes=1
+probe: writer_rate=2015035 rounds/100ms (49 ns/round, 1 round = 32 barriers)
+T1 retrieve size=4096 reply_word=0x4141414141414141 mapped_store_word=0x4141414141414141 daemon_writes_delta=0
+T1 after_later_mapped_store reply_word=0x4141414141414141 reply_word_unchanged=1 daemon_writes_delta_now=0
+RESULT T1 delivered_is_copy_of_current_bytes=1 daemon_copy_stable_after_mapped_store=1 write_callbacks_for_mapped_stores=0
+T2 notify_time_word=0x4343434343434343 post_notify_return_store_word=0x4444444444444444 reply_word=0x4444444444444444 daemon_writes_delta=0
+RESULT T2 reply_bound_to_notification_instant=0 reply_reflects_store_after_return=1
+T3 trial=0 pages_returned=32 bytes=131072 writer_rounds_during_reply=20007 compared_pairs=496 violating_pairs=496 max_delta_rounds=402
+T3 trial=1 pages_returned=32 bytes=131072 writer_rounds_during_reply=28770 compared_pairs=496 violating_pairs=496 max_delta_rounds=300
+T3 trial=2 pages_returned=32 bytes=131072 writer_rounds_during_reply=50639 compared_pairs=496 violating_pairs=496 max_delta_rounds=253
+T3 trial=3 pages_returned=32 bytes=131072 writer_rounds_during_reply=39091 compared_pairs=496 violating_pairs=496 max_delta_rounds=372
+T3 trial=4 pages_returned=32 bytes=131072 writer_rounds_during_reply=40083 compared_pairs=496 violating_pairs=496 max_delta_rounds=427
+T3 trial=5 pages_returned=32 bytes=131072 writer_rounds_during_reply=31651 compared_pairs=496 violating_pairs=496 max_delta_rounds=298
+T3 trial=6 pages_returned=32 bytes=131072 writer_rounds_during_reply=38890 compared_pairs=496 violating_pairs=496 max_delta_rounds=184
+T3 trial=7 pages_returned=32 bytes=131072 writer_rounds_during_reply=35758 compared_pairs=496 violating_pairs=495 max_delta_rounds=252
+T3 trial=8 pages_returned=32 bytes=131072 writer_rounds_during_reply=41019 compared_pairs=496 violating_pairs=496 max_delta_rounds=297
+T3 trial=9 pages_returned=32 bytes=131072 writer_rounds_during_reply=55534 compared_pairs=496 violating_pairs=496 max_delta_rounds=349
+T3 trial=10 pages_returned=32 bytes=131072 writer_rounds_during_reply=33444 compared_pairs=496 violating_pairs=496 max_delta_rounds=248
+T3 trial=11 pages_returned=32 bytes=131072 writer_rounds_during_reply=55203 compared_pairs=496 violating_pairs=496 max_delta_rounds=764
+T3 trial=12 pages_returned=32 bytes=131072 writer_rounds_during_reply=30215 compared_pairs=496 violating_pairs=496 max_delta_rounds=456
+T3 trial=13 pages_returned=32 bytes=131072 writer_rounds_during_reply=41602 compared_pairs=496 violating_pairs=496 max_delta_rounds=466
+T3 trial=14 pages_returned=32 bytes=131072 writer_rounds_during_reply=42903 compared_pairs=496 violating_pairs=496 max_delta_rounds=267
+T3 trial=15 pages_returned=32 bytes=131072 writer_rounds_during_reply=37253 compared_pairs=496 violating_pairs=496 max_delta_rounds=295
+T3 trial=16 pages_returned=32 bytes=131072 writer_rounds_during_reply=38076 compared_pairs=496 violating_pairs=496 max_delta_rounds=418
+T3 trial=17 pages_returned=32 bytes=131072 writer_rounds_during_reply=38624 compared_pairs=496 violating_pairs=496 max_delta_rounds=378
+T3 trial=18 pages_returned=32 bytes=131072 writer_rounds_during_reply=51634 compared_pairs=496 violating_pairs=496 max_delta_rounds=491
+T3 trial=19 pages_returned=32 bytes=131072 writer_rounds_during_reply=35806 compared_pairs=496 violating_pairs=496 max_delta_rounds=384
+RESULT T3 trials=20 replies_violating_single_instant=20 max_delta_rounds=764
+T3C quiesced pages_returned=32 compared_pairs=496 violating_pairs=0 max_delta=0
+RESULT T3C quiesced_violations=0 (control: oracle is satisfiable)
+T4 trial=0 fileA_page0_round=28750114 fileB_page0_round=30170527 collected_delta_rounds=1420413 ordering_violation=1
+T4 trial=1 fileA_page0_round=31155228 fileB_page0_round=32219947 collected_delta_rounds=1064719 ordering_violation=1
+T4 trial=2 fileA_page0_round=33510380 fileB_page0_round=34515855 collected_delta_rounds=1005475 ordering_violation=1
+T4 trial=3 fileA_page0_round=35755206 fileB_page0_round=36779324 collected_delta_rounds=1024118 ordering_violation=1
+T4 trial=4 fileA_page0_round=37961811 fileB_page0_round=39050255 collected_delta_rounds=1088444 ordering_violation=1
+T4 trial=5 fileA_page0_round=40288921 fileB_page0_round=41117544 collected_delta_rounds=828623 ordering_violation=1
+T4 trial=6 fileA_page0_round=42271506 fileB_page0_round=42896211 collected_delta_rounds=624705 ordering_violation=1
+T4 trial=7 fileA_page0_round=44237040 fileB_page0_round=45256214 collected_delta_rounds=1019174 ordering_violation=1
+T4 trial=8 fileA_page0_round=46261972 fileB_page0_round=47479317 collected_delta_rounds=1217345 ordering_violation=1
+T4 trial=9 fileA_page0_round=48548536 fileB_page0_round=49161949 collected_delta_rounds=613413 ordering_violation=1
+T4 trial=10 fileA_page0_round=50526603 fileB_page0_round=51486544 collected_delta_rounds=959941 ordering_violation=1
+T4 trial=11 fileA_page0_round=52559939 fileB_page0_round=53655902 collected_delta_rounds=1095963 ordering_violation=1
+T4 trial=12 fileA_page0_round=54983451 fileB_page0_round=55944626 collected_delta_rounds=961175 ordering_violation=1
+T4 trial=13 fileA_page0_round=57206861 fileB_page0_round=58206675 collected_delta_rounds=999814 ordering_violation=1
+T4 trial=14 fileA_page0_round=59325627 fileB_page0_round=60332208 collected_delta_rounds=1006581 ordering_violation=1
+T4 trial=15 fileA_page0_round=61708513 fileB_page0_round=62675253 collected_delta_rounds=966740 ordering_violation=1
+T4 trial=16 fileA_page0_round=63911899 fileB_page0_round=64944173 collected_delta_rounds=1032274 ordering_violation=1
+T4 trial=17 fileA_page0_round=66201792 fileB_page0_round=67217475 collected_delta_rounds=1015683 ordering_violation=1
+T4 trial=18 fileA_page0_round=68334828 fileB_page0_round=69459417 collected_delta_rounds=1124589 ordering_violation=1
+T4 trial=19 fileA_page0_round=70580138 fileB_page0_round=71737826 collected_delta_rounds=1157688 ordering_violation=1
+RESULT T4 trials=20 collected_pairs_violating_single_instant=20 max_delta_rounds=1420413
+T5 self_pread_bytes=131072 daemon_read_requests=0 daemon_write_requests=0 daemon_fsync_requests=0 compared_pairs=496 violating_pairs=496 max_delta=708
+T5 sample_oldest=934533 sample_newest=935241 writer_max_after_read=935281 sample_lags_current_mapping_max=40
+RESULT T5 bytes_visible_without_write_or_fsync_callbacks=1 collected_is_single_instant=0 write_callbacks=0
+T6 fsync_rc=0 writer_rounds_during_fsync=406 daemon_write_requests=1 write_cache_flagged=1 pages_delivered=32 compared_pairs=496 violating_pairs=0 max_delta_rounds=0
+T6 drained_page0=935233 drained_pageNminus1=935233 current_mapping_max=935436 oldest_drained_page0_vs_current=-203
+RESULT T6 fsync_delivered_bytes_to_daemon=1 drained_copy_is_single_instant=1 fsync_request_before_or_after=0/1
+probe: done. daemon_totals reads=97 writes=36 write_cache=36 fsync=1 other=3
+probe: writeback_cache_flag=0
+EXIT=0

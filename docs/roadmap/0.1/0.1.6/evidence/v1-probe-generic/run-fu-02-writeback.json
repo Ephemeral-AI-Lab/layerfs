@@ -1,0 +1,20 @@
+{
+  "label": "fu-02",
+  "program": "followup.c (T8 park control, T7 held writeback payload, T9 4 MiB whole-range drain)",
+  "mode": "writeback",
+  "argv1": "writeback",
+  "negotiated_flags": "0x10021 (FUSE_ASYNC_READ|FUSE_BIG_WRITES|FUSE_WRITEBACK_CACHE)",
+  "image": "rust:1.85.1-bookworm",
+  "image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "kernel": "6.12.76-linuxkit",
+  "device": "/dev/fuse",
+  "cap_add": ["SYS_ADMIN"],
+  "runtime_limits": {"cpus": 2, "memory": "1g", "pids": 256},
+  "binary_sha256": "baf482ee35d7d5c2c6b47b18230577be9ed0cb17473b1d1b46ddcf1ec5760cf9",
+  "binary_path_in_container": "/tmp/v1gen-followup",
+  "exit_status": 0,
+  "container_removed": true,
+  "recovery_needed": false,
+  "command": "docker run --rm --name v1gen-probe-fu-02 --device /dev/fuse --cap-add SYS_ADMIN --cpus 2 --memory 1g --pids-limit 256 -v /tmp/v1-generic-probe:/probe -w /probe rust:1.85.1-bookworm sh -c 'ulimit -c 0; gcc -std=c11 -O2 -pthread -Wall -Wextra -o /tmp/v1gen-followup followup.c; /tmp/v1gen-followup writeback'",
+  "driver_script": "run_followup.sh (same command; wrapper is what was actually run)"
+}
