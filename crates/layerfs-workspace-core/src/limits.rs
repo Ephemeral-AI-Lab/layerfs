@@ -55,6 +55,11 @@ impl Default for OverlayPolicy {
             max_replay_bytes: 256 * 1024,
             // Root owners cover cursors/prepared paths; page bodies stay on disk.
             max_roots: 16_384,
+            // Maximum *resident* payload owners (live handles plus queued
+            // release tickets), not a ceiling on persisted tokens. A Workspace
+            // may retain far more changed files than this; their payload
+            // records and bytes are charged to the index and arena disk
+            // quotas instead.
             max_payload_owners: 8192,
             max_readers: 32,
             max_writers: 4,

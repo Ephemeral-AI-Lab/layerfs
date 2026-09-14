@@ -52,6 +52,7 @@ pub use telemetry::{
 };
 pub use workspace::{
     CommitOutcome, PinnedSnapshot, PreparedReconciliation, SnapshotReader, WorkspaceLease,
+    SNAPSHOT_READER_CACHE_BYTES,
 };
 
 pub use layerfs_content::filesystem::{

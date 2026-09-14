@@ -1,0 +1,5 @@
+3f04d4146ebe508a240076e4540de5123b9142d1
+ M crates/layerfs-workspace/src/host_overlay.rs
+ M crates/layerfs-workspace/src/overlay_payload.rs
+?? .tmp-issue-comments/
+?? docs/roadmap/0.1/0.1.6/evidence/step1-capacity/
