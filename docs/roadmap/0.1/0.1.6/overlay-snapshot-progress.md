@@ -9,7 +9,7 @@ for that work; the append-only record of individual checks is
 
 ## Current position
 
-**Owner-requested stopping checkpoint: all three integration fixes have verified passes.** Current source/evidence is committed in `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a`; next action for this run is publish the handoff and merge the checkpoint to remote main through PR#126, then verify remote ancestry and stop.
+**Owner-requested stopping checkpoint: all three integration fixes have verified passes.** Product/evidence commit `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a` and budget/handoff head `820ecab8079c7e0f09c29c6df1c983366e3dd77e` were merged through PR#126 to remote main at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`; fetch and ancestry checks succeeded. This run stops after the documentation-only publication record.
 
 Read [the successor handoff](overlay-snapshot-step1-handoff.md) first. It supersedes the older next-action entries retained below as history. Public default-path integration, V1, capacity qualification and the final benchmark campaign remain unfinished. Both issues stay OPEN.
 
@@ -140,3 +140,7 @@ Finalsource has been formatted and diff-whitespace checked. Source frozen while 
 ## Latest direct owner CI update
 
 “171 is acceptable, give it180s budget.” Applied to `tools/test-fast.sh` and current development guidance before main publication. Historical171s/150s gateFAIL and125s/120s gateFAIL remain unchanged. No suite rerun for a new timing; no benchmark/correctness/lint requirement changed. CurrentCIbudget180s supersedes the earlier150s instruction.
+
+## Verified publication and stopped state
+
+PR#126 MERGED at `74b2bdb93ee804ad8ef23877296eec1ab53976a8`. Remote main contains product `f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a` and latest owner180s budget/handoff `820ecab8079c7e0f09c29c6df1c983366e3dd77e`. Evidence comments read back: https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5657648675 and https://github.com/Ephemeral-AI-Lab/layerfs/issues/125#issuecomment-5657648911. Both issues remainOPEN. No owned build/test/container/measurement lock remains. Local branch remains `codex/snapshot-isolated-workspace`, fast-forwarded to the main merge before this documentation-only publication record; no source reset or unrelated change was discarded. Repository CI may run automatically on publication; strictClippy and all other successor obligations are explicit in the handoff.

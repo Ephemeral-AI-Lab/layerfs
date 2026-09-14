@@ -1,0 +1,24 @@
+{
+  "pull_request": 126,
+  "pr_state": "MERGED",
+  "code_merge_commit": "74b2bdb93ee804ad8ef23877296eec1ab53976a8",
+  "product_evidence_commit": "f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a",
+  "budget_handoff_commit": "820ecab8079c7e0f09c29c6df1c983366e3dd77e",
+  "remote_main_fetched": true,
+  "product_and_handoff_ancestry_verified": true,
+  "ci_budget_seconds": 180,
+  "issue124": {
+    "state": "OPEN",
+    "comment": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5657648675"
+  },
+  "issue125": {
+    "state": "OPEN",
+    "comment": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/125#issuecomment-5657648911"
+  },
+  "local_source_state": "clean before documentation-only publication record",
+  "owned_processes": [],
+  "owned_containers": [],
+  "measurement_lock_held": false,
+  "scope": "Owner-requested bounded checkpoint, full feature and benchmarks unfinished",
+  "release_or_tag": false
+}

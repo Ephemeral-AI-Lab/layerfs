@@ -7,7 +7,8 @@ The owner changed this run's stopping point to: finish the three current integra
 ## Delivered source and evidence
 
 - Product/evidence commit: [`f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a`](https://github.com/Ephemeral-AI-Lab/layerfs/commit/f8ed6bbbb3cc86eea23b82d3efa96c70b0519d2a).
-- Review/publication PR: [#126](https://github.com/Ephemeral-AI-Lab/layerfs/pull/126), base `main`. The merge result and remote-main ancestry verification are published in the final issue checkpoint comments. Read back the PR and remote ref; do not assume a feature-branch push is main publication.
+- Publication verified: [PR#126](https://github.com/Ephemeral-AI-Lab/layerfs/pull/126) is MERGED at [`74b2bdb93ee804ad8ef23877296eec1ab53976a8`](https://github.com/Ephemeral-AI-Lab/layerfs/commit/74b2bdb93ee804ad8ef23877296eec1ab53976a8). Remote main was fetched and both the product commit and budget/handoff head were verified as ancestors. This publication-record follow-up changes documentation only.
+- Read-back checkpoint comments: [#124 evidence](https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5657648675) and [#125 benchmark status](https://github.com/Ephemeral-AI-Lab/layerfs/issues/125#issuecomment-5657648911); both issues were verified OPEN.
 - Exact formatted source hashes: [publication source seal](evidence/step1-publication/source-before.json). Source did not change during publication verification. This handoff and final progress/ledger edits are documentation only.
 - [Checkpoint result matrix](evidence/step1-publication/checkpoint-results.json), [append-only verification ledger](overlay-snapshot-verification-ledger.md), [current progress/history](overlay-snapshot-progress.md).
 
