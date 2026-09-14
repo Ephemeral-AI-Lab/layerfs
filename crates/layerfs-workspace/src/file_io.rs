@@ -186,6 +186,31 @@ pub(crate) fn spool_segment(backing: &BackingRef) -> Result<&SpoolSegment> {
         .ok_or(StoreError::Integrity("host spool backing"))
 }
 
+/// Read an exact range from a piece backing: host-owned segments read the
+/// open descriptor directly; sandbox-owned segments (frozen remote input)
+/// fetch through the bounded remote window. The reply length is checked by
+/// the transport, so a short remote read surfaces as an integrity error.
+pub(crate) fn read_backing_exact(
+    segment: &BackingRef,
+    output: &mut [u8],
+    offset: u64,
+) -> Result<()> {
+    if let Some(host) = segment.resource::<SpoolSegment>() {
+        return read_exact_at(&host.file, output, offset);
+    }
+    if let Some(remote) = segment.resource::<crate::snapshot_input::RemoteSegment>() {
+        let bytes = remote
+            .read(offset, output.len() as u64)
+            .map_err(|_| StoreError::Integrity("remote segment read"))?;
+        if bytes.len() != output.len() {
+            return Err(StoreError::Integrity("remote segment read"));
+        }
+        output.copy_from_slice(&bytes);
+        return Ok(());
+    }
+    Err(StoreError::Integrity("host spool backing"))
+}
+
 pub(crate) struct EditCheckpoint {
     node: NodeId,
     value: crate::cow_tree::Node,
@@ -239,11 +264,7 @@ impl ReadPlan {
                         } => {
                             let start = output.len();
                             output.resize(start + as_usize(len)?, 0);
-                            read_exact_at(
-                                &spool_segment(&segment)?.file,
-                                &mut output[start..],
-                                offset,
-                            )?;
+                            read_backing_exact(&segment, &mut output[start..], offset)?;
                         }
                     }
                 }
@@ -261,42 +282,37 @@ impl ReadPlan {
 
 impl Workspace {
     pub(crate) fn note_commit_edit_state(&self) -> Result<()> {
+        Self::note_edit_state_over(
+            &self.live.nodes,
+            &self.live.dirty,
+            self.live.spool_bytes,
+            self.live.spool_bytes_peak,
+        )?;
+        let (current, peak, errors, observations) = self.physical_spool_snapshot();
+        layerfs_layerstack_store::note_workspace_physical_spool(
+            current,
+            peak,
+            errors,
+            observations,
+        );
+        Ok(())
+    }
+
+    /// Edit-state telemetry over one node table. Remote workspaces call this
+    /// with their materialized frozen input; the sandbox owns the live state.
+    pub(crate) fn note_edit_state_over(
+        nodes: &std::collections::HashMap<NodeId, Node>,
+        dirty: &std::collections::BTreeSet<NodeId>,
+        spool_bytes: u64,
+        spool_peak: u64,
+    ) -> Result<()> {
         let mut edits = 0_u64;
         let mut pieces = 0_u64;
         let mut height = 0_u64;
         let mut charge = 0_u64;
         let mut spool_live = 0_u64;
         let mut metric_nodes_scanned = 0_u64;
-        let remote = self
-            .remote
-            .as_ref()
-            .map(|remote| {
-                remote
-                    .backing
-                    .lock()
-                    .map_err(|_| StoreError::Integrity("live backing lock"))
-            })
-            .transpose()?;
-        let (nodes, dirty, spool_bytes, spool_peak) = if let Some(backing) = &remote {
-            let bytes = backing
-                .facts
-                .values()
-                .filter_map(|node| match &node.data {
-                    Data::File(FileData::Edited {
-                        spool_high_water, ..
-                    }) => Some(*spool_high_water),
-                    _ => None,
-                })
-                .sum();
-            (&backing.facts, &backing.dirty, bytes, bytes)
-        } else {
-            (
-                &self.live.nodes,
-                &self.live.dirty,
-                self.live.spool_bytes,
-                self.live.spool_bytes_peak,
-            )
-        };
+        let (nodes, dirty, spool_bytes, spool_peak) = (nodes, dirty, spool_bytes, spool_peak);
         for node in dirty.iter().filter_map(|node| nodes.get(node)) {
             metric_nodes_scanned = metric_nodes_scanned.saturating_add(1);
             if let Data::File(FileData::Edited {
@@ -325,14 +341,6 @@ impl Workspace {
             spool_live,
             spool_bytes.saturating_sub(spool_live),
             metric_nodes_scanned,
-        );
-        drop(remote);
-        let (current, peak, errors, observations) = self.physical_spool_snapshot();
-        layerfs_layerstack_store::note_workspace_physical_spool(
-            current,
-            peak,
-            errors,
-            observations,
         );
         Ok(())
     }
@@ -611,14 +619,10 @@ impl Workspace {
         Ok(())
     }
     pub(crate) fn physical_spool_snapshot(&self) -> (Option<u64>, Option<u64>, u64, u64) {
-        if let Some(remote) = &self.remote {
-            return remote.backing.lock().map_or((None, None, 1, 0), |backing| {
-                backing
-                    .spool
-                    .physical
-                    .lock()
-                    .map_or((None, None, 1, 0), |metrics| metrics.snapshot())
-            });
+        // The remote workspace's physical spool lives in the sandbox; its
+        // bytes are observed through the daemon (OBSERVE) rather than here.
+        if self.remote.is_some() {
+            return (None, None, 0, 0);
         }
         self.backing
             .physical

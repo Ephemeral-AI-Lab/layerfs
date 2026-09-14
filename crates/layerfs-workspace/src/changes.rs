@@ -342,10 +342,7 @@ impl Workspace {
     // edges directly preserves untouched subtrees, including a renamed directory,
     // without building either complete namespace manifest.
     fn build_frontier_candidate(&mut self, purpose: CandidatePurpose) -> Result<PreparedCommit> {
-        let workers = std::thread::available_parallelism()
-            .map(std::num::NonZeroUsize::get)
-            .unwrap_or(1)
-            .min(8);
+        let workers = construction_worker_limit();
         // CandidateInputs further caps workers by eligible tasks and partitions
         // the existing aggregate journal, candidate and spill allowances.
         self.build_frontier_candidate_with_workers(purpose, workers)
@@ -356,39 +353,49 @@ impl Workspace {
         purpose: CandidatePurpose,
         worker_limit: usize,
     ) -> Result<PreparedCommit> {
-        if let Some(remote) = &self.remote {
-            let backing = remote
-                .backing
-                .lock()
-                .map_err(|_| StorageError::Integrity("live backing lock"))?;
-            backing.frozen_generation()?;
-            let canonical_nodes = backing
-                .facts
-                .iter()
-                .filter_map(|(id, node)| node.canonical.map(|inode| (inode, *id)))
-                .collect();
-            return CandidateInputs {
-                scope: self.inode_scope,
-                serials: self.inode_serials.clone(),
-                live: layerfs_workspace_core::FrozenWorkspaceChanges {
-                    nodes: &backing.facts,
-                    dirty: &backing.dirty,
-                    canonical_nodes: &canonical_nodes,
-                    base_root: self.base_root,
-                    mutation_generation: backing.generation,
-                    policy: self.live.policy,
-                },
-                store: &self.store,
-                workspace_id: self.workspace_id,
-                reader: self.reader.clone(),
-                base_inodes: self.base_inodes,
-                spool: &self.spool,
-            }
-            .build(purpose, worker_limit, None);
-        }
+        // The remote (sandbox-owned) route builds from its materialized
+        // frozen input through build_remote_candidate; this workspace's live
+        // map is only authoritative for materialized workspaces.
         let captured = self.take_capture();
         self.candidate_inputs()
             .build(purpose, worker_limit, captured)
+    }
+
+    /// Build a commit candidate from a remote workspace's materialized
+    /// frozen input. The input is an owned stable copy, so construction
+    /// holds no lock the live workspace needs. Payload bytes stream from
+    /// the sandbox backing through the input's remote segment resources.
+    pub(crate) fn build_remote_candidate(
+        &self,
+        input: &crate::snapshot_input::FrozenRemoteInput,
+        worker_limit: usize,
+    ) -> Result<PreparedCommit> {
+        let canonical_nodes: std::collections::HashMap<
+            layerfs_content::tree::inode::InodeId,
+            layerfs_workspace_core::NodeId,
+        > = input
+            .nodes
+            .iter()
+            .filter_map(|(id, node)| node.canonical.map(|inode| (inode, *id)))
+            .collect();
+        CandidateInputs {
+            scope: self.inode_scope,
+            serials: self.inode_serials.clone(),
+            live: layerfs_workspace_core::FrozenWorkspaceChanges {
+                nodes: &input.nodes,
+                dirty: &input.dirty,
+                canonical_nodes: &canonical_nodes,
+                base_root: self.base_root,
+                mutation_generation: input.mutation_generation,
+                policy: self.live.policy,
+            },
+            store: &self.store,
+            workspace_id: self.workspace_id,
+            reader: self.reader.clone(),
+            base_inodes: self.base_inodes,
+            spool: &self.spool,
+        }
+        .build(CandidatePurpose::Commit, worker_limit, None)
     }
 
     fn candidate_inputs(&self) -> CandidateInputs<'_> {
@@ -548,6 +555,24 @@ impl Workspace {
 }
 
 // Host construction needs immutable inputs and backing, never a live Workspace.
+/// Construction worker budget. `LAYERFS_CONSTRUCTION_WORKERS` caps the
+/// canonical builder's producer threads; the frozen default preserves the
+/// released behavior (available parallelism, at most eight). The
+/// sandbox-local experiment sets 1 in both arms: exactly one construction
+/// worker in control and candidate.
+pub(crate) fn construction_worker_limit() -> usize {
+    std::env::var("LAYERFS_CONSTRUCTION_WORKERS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|limit| (1..=8).contains(limit))
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(std::num::NonZeroUsize::get)
+                .unwrap_or(1)
+                .min(8)
+        })
+}
+
 struct CandidateInputs<'a> {
     scope: Option<ObjectId>,
     serials: std::sync::Arc<std::sync::Mutex<Option<std::ops::Range<u64>>>>,
@@ -1745,9 +1770,20 @@ impl FrozenFile {
 
     fn reader(&self) -> WorkspaceFileReader {
         let source = match &self.data {
+            // The direct fast path is valid only for host-owned spool
+            // segments; sandbox-owned backings route through the read plan's
+            // bounded fetch.
             FileData::Edited {
                 base: None, pieces, ..
-            } if pieces.compact_spool().is_some() => {
+            } if pieces
+                .compact_spool()
+                .is_some_and(|slice| {
+                    slice
+                        .segment
+                        .resource::<crate::file_io::SpoolSegment>()
+                        .is_some()
+                }) =>
+            {
                 let slice = pieces.compact_spool().unwrap();
                 WorkspaceFileSource::Direct(slice.segment.clone(), slice.offset)
             }

@@ -205,23 +205,15 @@ pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<
     let Some(transport) = transport else {
         return Ok(());
     };
+    // The sandbox owns payload spool metrics on the remote route; the host
+    // records only transport metrics. Materialized workspaces keep their
+    // in-process spool receipts.
     let spool = {
         let mut workspace = worker
             .workspace
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        if let Some(remote) = &workspace.remote {
-            std::mem::take(
-                &mut remote
-                    .backing
-                    .lock()
-                    .map_err(|_| WorkspaceError::WorkspaceBusy)?
-                    .spool
-                    .metrics,
-            )
-        } else {
-            workspace.take_spool_write_metrics()
-        }
+        workspace.take_spool_write_metrics()
     };
     layerfs_layerstack_store::record_fuse_write(layerfs_layerstack_store::FuseWriteReceipt {
         max_write_bytes: transport.max_write_bytes,

@@ -104,15 +104,7 @@ impl Workspace {
         // candidate is returned to the Store publication entrypoint.
         #[cfg(feature = "test-instrumentation")]
         layerfs_layerstack_store::verification_candidate(self.branch_id, 0);
-        let generation = if let Some(remote) = &self.remote {
-            remote
-                .backing
-                .lock()
-                .map_err(|_| StorageError::Integrity("live backing lock"))?
-                .frozen_generation()?
-        } else {
-            self.live.mutation_generation
-        };
+        let generation = self.live.mutation_generation;
         let (candidate, admission) = if generation == 0 {
             (
                 ObjectBuffer::new(&self.reader)?.finish(self.base_root, 0)?,
@@ -147,7 +139,7 @@ impl Workspace {
         Ok((outcome, transition))
     }
 
-    fn note_retained_stage(&mut self, candidate_root: layerfs_content::ObjectId) {
+    pub(crate) fn note_retained_stage(&mut self, candidate_root: layerfs_content::ObjectId) {
         self.pending_stage = match self.store.workspace_stage(self.workspace_id) {
             Ok(Some(stage)) => Some(stage.root_id),
             Ok(None) => None,
@@ -377,12 +369,10 @@ impl Workspaces {
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
         let (physical_current, physical_peak, physical_errors, physical_observations) =
             workspace.physical_spool_snapshot();
-        let (open_spool_files, spool_segment_bytes) = if let Some(remote) = &workspace.remote {
-            let backing = remote
-                .backing
-                .lock()
-                .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-            (backing.spool.segments.len(), backing.spool.bytes)
+        // Remote workspaces own their spool in the sandbox; the verification
+        // state reports the host-owned (materialized) spool only.
+        let (open_spool_files, spool_segment_bytes) = if workspace.remote.is_some() {
+            (0, 0)
         } else {
             (workspace.backing.segments.len(), workspace.backing.bytes)
         };
@@ -638,19 +628,10 @@ impl Workspaces {
                 transition,
             )) => match transition {
                 CommitTransition::Checkpointed => {
-                    let started = Instant::now();
-                    let installed = crate::live_backing::install_checkpoint(&worker.workspace);
-                    layerfs_layerstack_store::note_workspace_commit_phase(
-                        WorkspaceCommitPhase::Checkpoint,
-                        elapsed_ns(started),
-                    );
-                    let started = Instant::now();
-                    let resumed = installed.and_then(|()| crate::projection::resume(&worker));
-                    layerfs_layerstack_store::note_workspace_commit_phase(
-                        WorkspaceCommitPhase::Resume,
-                        elapsed_ns(started),
-                    );
-                    resumed
+                    // Materialized workspaces installed their checkpoint
+                    // inside the commit; the sandbox route completes its
+                    // generation inside remote_commit. Nothing remains here.
+                    Ok(())
                 }
                 CommitTransition::InstallationFailed => Err(WorkspaceError::InvalidExecution),
                 CommitTransition::Refreshed => {
@@ -808,10 +789,8 @@ impl Workspaces {
         let workspace_id = first.workspace_id;
         let path = first.path.clone();
         let worker = self.worker(workspace_id)?;
-        let _operation = worker
-            .lifecycle
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        // Remote edits enter the sandbox owner's local ordering directly: no
+        // whole-Commit lifecycle lock is held across an edit or a Commit.
         let remote = worker
             .workspace
             .lock()
@@ -821,6 +800,10 @@ impl Workspaces {
         if let Some(remote) = remote {
             return remote.edit(&path, edits);
         }
+        let _operation = worker
+            .lifecycle
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
         if worker.has_executions()? {
             return Err(WorkspaceError::WorkspaceBusy);
         }

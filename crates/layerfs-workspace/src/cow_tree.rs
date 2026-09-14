@@ -57,6 +57,10 @@ pub struct Workspace {
     pub(crate) pending_stage: Option<layerfs_content::ObjectId>,
     pub(crate) pending_publication:
         Option<(layerfs_layerstack_store::CommitOutcome, LayerId, bool)>,
+    /// A published generation whose completion records have not been
+    /// acknowledged by the sandbox. Retained and re-delivered exactly; a
+    /// retry never recaptures newer state as the old attempt.
+    pub(crate) pending_completion: Option<crate::remote_commit::PendingCompletion>,
 }
 
 impl Workspace {
@@ -173,6 +177,7 @@ impl Workspace {
             pending_checkpoint: None,
             pending_stage: None,
             pending_publication: None,
+            pending_completion: None,
             remote: None,
         })
     }

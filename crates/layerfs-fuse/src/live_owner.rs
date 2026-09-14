@@ -3364,8 +3364,6 @@ mod immutable_acquisition_tests {
     }
 
     #[test]
-
-    #[test]
     fn delayed_lookup_cannot_install_after_root_or_parent_revision_changes() {
         let runtime = LiveRuntime::new().unwrap();
         for change_root in [true, false] {

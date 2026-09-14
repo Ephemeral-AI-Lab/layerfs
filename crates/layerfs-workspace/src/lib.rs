@@ -17,7 +17,9 @@ mod output;
 mod projection;
 mod reconcile;
 mod registry;
+mod remote_commit;
 mod session;
+mod snapshot_input;
 mod worker;
 
 pub use container::{
