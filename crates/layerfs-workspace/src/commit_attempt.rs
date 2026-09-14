@@ -275,10 +275,16 @@ impl CommitCoordinator {
             attempt.snapshot = None;
         }
         let diagnostics = attempt.diagnostics;
+        // #144 D2: publication acknowledgment previously landed in unattributed.
+        let acknowledge_started = std::time::Instant::now();
         let cleanup_error = self
             .store
             .acknowledge_workspace_publication(&receipt.attempt)
             .err();
+        layerfs_layerstack_store::note_workspace_commit_phase(
+            layerfs_layerstack_store::WorkspaceCommitPhase::Acknowledge,
+            acknowledge_started.elapsed().as_nanos() as u64,
+        );
         if cleanup_error.is_none() {
             *slot = None;
         }

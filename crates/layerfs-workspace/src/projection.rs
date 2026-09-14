@@ -220,7 +220,8 @@ pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
         .clone();
-    let transport = match (remote, worker.host_runtime()?) {
+    let host = worker.host_runtime()?;
+    let transport = match (remote, host.clone()) {
         (Some(remote), _) => Some(
             remote
                 .server
@@ -234,6 +235,12 @@ pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<
         ),
         (None, None) => None,
     };
+    // Host-authority dispatch proof (#144 D1): the host runtime counts every
+    // decoded wire operation; absent runtimes report zero dispatches.
+    let dispatch = host
+        .as_ref()
+        .map(|host| host.operations.take_dispatch_counts())
+        .unwrap_or_default();
     let Some(transport) = transport else {
         return Ok(());
     };
@@ -280,6 +287,31 @@ pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<
         live_backing_queue_ns: transport.live_backing_queue_ns,
         live_write_dispatch_ns: transport.live_write_dispatch_ns,
         live_edit_ns: transport.live_edit_ns,
+
+        host_authority_dispatches: dispatch.total,
+        host_authority_lookup: dispatch.lookup,
+        host_authority_attr: dispatch.attr,
+        host_authority_readlink: dispatch.readlink,
+        host_authority_directory: dispatch.directory,
+        host_authority_create: dispatch.create,
+        host_authority_mkdir: dispatch.mkdir,
+        host_authority_symlink: dispatch.symlink,
+        host_authority_link: dispatch.link,
+        host_authority_unlink: dispatch.unlink,
+        host_authority_rename: dispatch.rename,
+        host_authority_pin: dispatch.pin,
+        host_authority_unpin: dispatch.unpin,
+        host_authority_forget: dispatch.forget,
+        host_authority_forget_batch: dispatch.forget_batch,
+        host_authority_read: dispatch.read,
+        host_authority_read_lease: dispatch.read_lease,
+        host_authority_release_lease: dispatch.release_lease,
+        host_authority_write: dispatch.write,
+        host_authority_truncate: dispatch.truncate,
+        host_authority_chmod: dispatch.chmod,
+        host_authority_mtime: dispatch.mtime,
+        host_authority_fsync: dispatch.fsync,
+        host_authority_detach: dispatch.detach,
 
         spool_write_bytes: spool.write_bytes,
         spool_write_open_count: spool.write_open_count,

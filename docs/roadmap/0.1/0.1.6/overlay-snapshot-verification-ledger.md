@@ -756,3 +756,64 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
   bulk-500 cases); it is not asserted as established.
 - No product change, no new measurement, no acceptance claim; #130/#124/#125 stay
   OPEN and the deferred 25k/million-file obligations are unchanged.
+
+### L46 — #144 Phase 1: counter-level dispatch proof, full phase attribution, v0.1.5 technique table, tier-100 probe FAILED on admission
+
+- Identity: instrumentation commits on branch `codex/issue144-phase1-dispatch-proof`
+  (`9989e36f4` counters + `5951ab172` report; source clean at `5951ab172`,
+  binary `186713ac…`, image `layerfs-bench-infra:2dfb9b2e54f2ff2a`); runs
+  `create500-instrumented-c1` (dirty-tree seal, PASS 17,722.1 ms) and
+  `create500-instrumented-c2` (clean, PASS 16,519.4 ms; phases create 10.5 /
+  exec 7,694.2 / commit 4,474.5 / visibility 0.1 / end 4,340.1 ms), plus
+  `bulkcreate100-probe-c1` (INCOMPLETE, FAIL). All seed 1, `--setup clone`,
+  collection mode, one sample each — **diagnostics, never acceptance evidence**.
+  Raw receipts: `benchmark-results/issue144-phase1/runs/` (git-ignored, retained).
+- Dispatch proof (exit criterion 1): the run receipt now counts host-authority
+  wire dispatches by operation class (`host_authority_*` in `FuseWriteReceipt`);
+  c2 records 4,518 dispatches = 4,518 `live_backing_calls` (lookup 1,062, attr
+  1,482, create 500, write 450, chmod 510, mtime 510) — counter-verified that the
+  host authority executed every mounted exchange, closing the L44
+  route-verified-but-not-counter-verified gap.
+- Attribution (exit criterion 2, single-sample counters): exec 7.69 s = 4,518
+  serialized round trips × 1.02 ms host dispatch + ~0.6 ms transport each;
+  commit 4.47 s = **pre-capture `maintain()` drain 3,404 ms** + construction
+  1,067 ms (capture 0 ms — the O(1) acquisition contract holds on the benchmark
+  path) + publication/stage/acknowledge ≈ 0, unattributed ≈ 0 (the M2 76.5%
+  unattributed bucket is solved); end 4.34 s = **settle drain 4,021 ms over 512
+  steps × 7.85 ms** (C1/C2 correspondence deferred installation) + unmount ≈350 ms.
+  The two per-item maintenance drains total 7.43 s = 45% of the workflow. The
+  all-zero M2 `WorkspaceCommitDiagnostics` is explained: the host route's
+  construction diagnostics were computed and dropped; this phase bridges them.
+- v0.1.5 comparison (exit criterion 3): reconstructed from source `1ff1f2ddd`
+  and receipts — 7 wire calls total (SEED, 3 prefetched LOOKUPs, RESERVE, one
+  BATCH appending 824 KB + 510 facts at the workload's own fsyncdir, CANCEL).
+  Techniques T1/T2 (container-authoritative mirror, acked container-memory
+  writes), T5 (commit-time dirty-prefix export) and T8 (pause-fence) are
+  **rejected as named-contract violations**; T3/T4/T6-construction/T7/T9 survive
+  and are already in main; the admission/thread constants are identical between
+  v0.1.5 and main — the regression is the route's per-op synchronous host
+  installation, not configuration. Full table: `evidence/issue144-phase1/README.md` §4.
+- Tier-100 probe (exit criterion 5): `tiny-bulk-create-100-mixed-v3` **FAIL/
+  INCOMPLETE** — exec 28,803.9 ms (≈28.8 ms/file) then
+  `Workspace(Storage(Io("scratch allocation exceeds admitted growth")))`. The
+  registered strict <1 s criterion is unmeasured as timing but decisively out of
+  reach at the current per-file cost; the admission failure blocks completion
+  and is routed to #124/#130 (open unknown, not a policy change made here).
+- Directions (exit criterion 4): ranked R1–R6 in the report — round-trip
+  reduction (SETATTR-reply-carries-attr removes ~1,020 dispatches; combined
+  SetAttr; the 2.1/file lookup leak), host dispatch cost (Workspace-bounded
+  immutable page cache, inline dispatch), drain batching/parallelism (the 45%
+  block), construction parallelism/batched lookups, wire BATCH for multi-op
+  cases, and the bulk admission blocker. Target proposal (§6) staged A/B/C
+  (exec ≥65%/file, commit+end ≥70%/file, whole-workflow ≤5.0 s milestone) —
+  **recorded as awaiting owner confirmation**, per the owner's 2026-09-15
+  decision; primary gate and every registered criterion unchanged.
+- Validity: current for these diagnostics. Delimited: single samples labeled
+  diagnostic; the two Phase-1 samples (17.7/16.5 s) sit below the M2 n3
+  single-sample spread on an idle machine — noted, not explained; M2 medians
+  remain the baseline. No product behavior change (counters only); no #122 case;
+  no release/tag; #130/#124/#125/#144 stay OPEN; 25k and million-file
+  obligations unchanged. No container/process/lock left behind; one earlier
+  build attempt aborted (`source changed during qualified image build`) after a
+  docs edit landed during the image build — no receipt produced, retained as an
+  operational note.

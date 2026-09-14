@@ -595,8 +595,20 @@ impl LayerStackStore {
             receipt.validate()?;
         }
 
-        let stage =
-            session.resolve(self.stage_workspace_root(workspace_id, expected.id, built.root_id))?;
+        let stage = {
+            // #144 D2: exact staging previously landed in unattributed.
+            let started = std::time::Instant::now();
+            let stage = session.resolve(self.stage_workspace_root(
+                workspace_id,
+                expected.id,
+                built.root_id,
+            ))?;
+            crate::telemetry::note_workspace_commit_phase(
+                crate::telemetry::WorkspaceCommitPhase::Stage,
+                started.elapsed().as_nanos() as u64,
+            );
+            stage
+        };
         session.retain();
         self.publish_workspace_stage_inner(
             expected,

@@ -740,9 +740,23 @@ impl Workspaces {
         // Bounded maintenance of the previously published context before this
         // attempt starts. A retained attempt reports remaining work and is left
         // to its own authoritative resolver below.
-        host.maintain()?;
+        // #144 D2: this pre-capture region (maintenance, transport metrics
+        // collection, published-head read) previously landed in unattributed.
+        let pre_capture = Instant::now();
+        let maintain_started = Instant::now();
+        let maintain_steps = host.maintain()?;
+        let maintain_ns = elapsed_ns(maintain_started);
+        layerfs_layerstack_store::note_workspace_commit_phase(
+            layerfs_layerstack_store::WorkspaceCommitPhase::Maintain,
+            maintain_ns,
+        );
+        let _ = maintain_steps;
         crate::projection::record_write_metrics(worker)?;
         let previous_head = host.published_head()?;
+        layerfs_layerstack_store::note_workspace_commit_phase(
+            layerfs_layerstack_store::WorkspaceCommitPhase::PreCapture,
+            elapsed_ns(pre_capture),
+        );
         let completion = match host.commit(|| {
             let started = Instant::now();
             let snapshot = host.operations.host.snapshot()?;
@@ -781,6 +795,23 @@ impl Workspaces {
                 )?,
             }
         };
+        // #144 D2 bridge: the host route computes construction diagnostics
+        // (SnapshotCandidateDiagnostics) that previously never reached the
+        // thread-local WorkspaceCommitDiagnostics the run receipt reads.
+        let construction = completion.diagnostics.unwrap_or_default();
+        layerfs_layerstack_store::note_workspace_commit_construction(
+            construction.changed_keys,
+            construction.changed_inodes,
+            construction.binding_deltas,
+            construction.file_tasks,
+            construction.correspondence_visits,
+            construction.correspondence_fragments,
+            construction.replacement_bytes,
+            construction.reused_bytes,
+            construction.full_comparisons,
+            construction.full_builds,
+            construction.scratch_peak_reserved_bytes,
+        );
         if let Some(error) = &completion.cleanup_error {
             // The publication is known and is reported as such; the retained
             // receipt stays charged and is acknowledged by the next Commit or by
@@ -1096,9 +1127,16 @@ impl Workspaces {
                 return Err(error);
             }
         };
+        // #144 D2: host-side End phase split — settle, after_detach and
+        // per-Workspace state removal previously had no receipt at all.
+        let mut settle_ns: u64 = 0;
+        let mut settle_steps: u64 = 0;
         if let Some(host) = &host {
             if mode == EndWorkspaceMode::Clean {
-                host.maintain()?;
+                let started = Instant::now();
+                let steps = host.maintain()?;
+                settle_steps = steps as u64;
+                settle_ns = elapsed_ns(started);
             }
         }
         crate::projection::record_read_metrics(&worker)?;
@@ -1111,6 +1149,8 @@ impl Workspaces {
             }
             return Err(error);
         }
+        let mut after_detach_ns: u64 = 0;
+        let mut state_removal_ns: u64 = 0;
         let finalized = (|| {
             let mut workspace = worker
                 .workspace
@@ -1124,7 +1164,9 @@ impl Workspaces {
             if let Some(host) = &host {
                 // Verified unmount is complete. This is the one authoritative
                 // resolution point for the Commit attempt and SDK scope.
+                let started = Instant::now();
                 host.after_detach()?;
+                after_detach_ns = after_detach_ns.saturating_add(elapsed_ns(started));
                 drop(worker.take_host_runtime()?);
             }
             match mode {
@@ -1136,7 +1178,9 @@ impl Workspaces {
             }
             drop(workspace);
             if state.exists() {
+                let started = Instant::now();
                 std::fs::remove_dir_all(state)?;
+                state_removal_ns = state_removal_ns.saturating_add(elapsed_ns(started));
             }
             Ok(())
         })();
@@ -1149,6 +1193,13 @@ impl Workspaces {
             }
             return Err(error);
         }
+        let _ =
+            layerfs_layerstack_store::record_host_end(layerfs_layerstack_store::HostEndReceipt {
+                settle_ns,
+                settle_steps,
+                after_detach_ns,
+                state_removal_ns,
+            });
         let retained = {
             let workspace = worker
                 .workspace

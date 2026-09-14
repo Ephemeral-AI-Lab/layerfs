@@ -40,15 +40,16 @@ pub use staging::{
 pub use store::LayerStackStore;
 pub use telemetry::{
     begin_workspace_commit, capture_workspace_commit_diagnostics, note_workspace_capture,
-    note_workspace_commit_edit_state, note_workspace_commit_phase, note_workspace_commit_reads,
-    note_workspace_commit_tree_visits, note_workspace_create_snapshot,
-    note_workspace_namespace_visits, note_workspace_physical_spool,
-    note_workspace_spool_retirement, record_fuse_write, record_workspace_lifecycle,
-    record_workspace_read, take_storage_receipts, take_workspace_commit_diagnostics,
-    CandidateReceipt, CaptureMode, FuseWriteReceipt, LayerStackInitializationReceipt,
-    PhysicalStorageReceipt, StorageReceipt, WorkspaceCommitDiagnostics,
-    WorkspaceCommitDiagnosticsGuard, WorkspaceCommitPhase, WorkspaceCommitReceipt,
-    WorkspaceCommitTimer, WorkspaceLifecycleKind, WorkspaceLifecycleReceipt,
+    note_workspace_commit_construction, note_workspace_commit_edit_state,
+    note_workspace_commit_phase, note_workspace_commit_reads, note_workspace_commit_tree_visits,
+    note_workspace_create_snapshot, note_workspace_namespace_visits, note_workspace_physical_spool,
+    note_workspace_spool_retirement, record_fuse_write, record_host_end,
+    record_workspace_lifecycle, record_workspace_read, take_storage_receipts,
+    take_workspace_commit_diagnostics, CandidateReceipt, CaptureMode, FuseWriteReceipt,
+    HostEndReceipt, LayerStackInitializationReceipt, PhysicalStorageReceipt, StorageReceipt,
+    WorkspaceCommitDiagnostics, WorkspaceCommitDiagnosticsGuard, WorkspaceCommitPhase,
+    WorkspaceCommitReceipt, WorkspaceCommitTimer, WorkspaceLifecycleKind,
+    WorkspaceLifecycleReceipt,
 };
 pub use workspace::{
     CommitOutcome, PinnedSnapshot, PreparedReconciliation, SnapshotReader, WorkspaceLease,
