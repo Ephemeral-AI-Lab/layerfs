@@ -1,5 +1,11 @@
 # Handoff: optimize `tiny-create-500-mixed-v4` on the wired route (#130)
 
+Execution vehicle: [#144](https://github.com/Ephemeral-AI-Lab/layerfs/issues/144)
+("Optimize tiny-create-500-mixed-v4 on the wired host-authority route"), which carries
+the two phases: **Phase 1** root-cause investigation, experiments, report and draft
+directions; **Phase 2** implementation of the selected optimization. This document is
+the operational detail behind that issue; the issue is authoritative for scope and exit.
+
 Scope decision (owner, 2026-09-14): **work on `tiny-create-500-mixed-v4` only.**
 The working belief is that fixing this case fixes the other tiny cases; that
 belief is a **hypothesis to test at the end**, not an assumption to build on.
