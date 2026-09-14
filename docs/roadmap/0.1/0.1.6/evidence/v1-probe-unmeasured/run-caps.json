@@ -1,0 +1,17 @@
+{
+  "label": "caps",
+  "source": "caps.c",
+  "argv": "",
+  "image": "rust:1.85.1-bookworm",
+  "image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "device": "/dev/fuse",
+  "cap_add": ["SYS_ADMIN"],
+  "runtime_limits": {"cpus": 2, "memory": "1g", "pids": 256},
+  "wall_seconds": 2,
+  "probe_timeout_seconds": 60,
+  "probe_timed_out": "no",
+  "exit_code": "0",
+  "container_had_to_be_recovered_by_shim_kill": "no",
+  "containers_named_v1un-caps_remaining": 0,
+  "command": "docker run --rm --name v1un-caps --device /dev/fuse --cap-add SYS_ADMIN --cpus 2 --memory 1g --pids-limit 256 -v /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured:/probe -w /probe rust:1.85.1-bookworm sh -c 'gcc -std=c11 -O2 -pthread -o /tmp/v1un-bin caps.c && /tmp/v1un-bin '"
+}

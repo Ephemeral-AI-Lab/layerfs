@@ -487,3 +487,74 @@ Validity: current, and recorded because it matters beyond this row: the file was
 - Result: documentation/ownership correction only. No product change, benchmark,
   test PASS or issue/phase completion. Five tier-500 quick cases, later 20-case
   qualification, no quadratic scaling and deferred 25k/million cases are unchanged.
+
+
+## Preserved historical L28–L36 from the retired trajectory branch
+
+Imported verbatim from `13954e82793865b5a97ee175e6509978806c92f3` for branch cleanup.
+These rows keep their original source/attempt scope; “current” inside them is
+historical, not final-candidate validity. L38 corrects L36's unsupported “void”
+failure classification and its timing extrapolation. No old result becomes a
+new pass, and no deferred scale test or V1 probe is executed by this import.
+
+### L28 — persisted-token admission defect: reproduction, diagnosis, repair
+
+Identity: `host_overlay::tests::many_ordinary_files_do_not_exhaust_payload_owner_admission`, 8,193 distinct regular files, one deterministic one-byte ordinary write per file, one bounded `HostOverlay::maintain()` per write, `ResourcePolicy::default()`, no Commit and no per-file snapshot.
+Source: pre-fix `3f04d4146` + the uncommitted reproducer; repair `ca46e2793` on PR#128.
+Environment: native macOS, Rust 1.85.1, all features.
+Result: **pre-fix FAIL at file 6,841** — `StorageFull: "payload catalog recovery reserve"`, `owners=6841 persisted_tokens=6841 pending_releases=0 physical=28020736 payload_index_physical=1082957824`; the rejected file stayed empty and all 6,840 earlier acknowledged bytes were readable. **Post-fix PASS** — `files=8193 verified_bytes=8193 peak_resident_owners=0 peak_pending_releases=0 persisted_tokens=8193 owners=0 pending_releases=0`, payload index physical 71,593,984 B (≈1.97 pages/file, was ≈16.2), arena 33,611,776 B.
+Sibling checks: `tiny_owner_cap_bounds_resident_handles_not_persisted_tokens` PASS (cap 4; 5th handle rejected; 64 retained tokens at `peak_resident=3`; converges to zero tokens/owners/pages); `repeated_prefix_insertions_release_every_retired_page` PASS; `one_byte_write_index_page_cost` PASS (non-gating diagnostic: 1,966 live pages for 200 writes, 399 with bounded recycle).
+Validity: current. The original failure is preserved unmodified in `evidence/step1-capacity/attempt01-before-fix.log` and is not relabeled.
+
+### L29 — snapshot-reader cache charged to the fixed resident base
+
+Identity: `overlay_budget::tests::fixed_resident_base_charges_the_snapshot_reader_cache`.
+Source: `ff7098929` on PR#128.
+Result: PASS — fixed base 14,234,624 B for the 8 MiB `SNAPSHOT_READER_CACHE_BYTES` under the 128 MiB aggregate, and the aggregate still admits several Workspaces. Full `layerfs-workspace` + `layerfs-layerstack-store` suites: 163 + 161 + 12 + 2 + 8 + 1 + 1 passed, **0 failed**, 13 + 6 + 8 ignored.
+Validity: current.
+
+### L30 — Workspace-owned scratch placement and admission-owned seen-spill scope
+
+Identity: `named_scope_scratch_is_placed_in_the_owning_directory`, `explicit_scratch_placement_rejects_a_missing_directory`, `seen_scratch_scope_attaches_only_before_use`, candidate scope placement assertion.
+Source: `737592356`, `72e1d07f6` on PR#129 (merged `ea34ba98a`).
+Result: PASS — created path's parent is the owning directory with mode 0600 and `nlink == 1`; a configured but absent directory is rejected rather than redirected; a second scratch scope cannot take ownership of an already-used seen index and `None` remains the legacy no-op. Full Store+Workspace suites 0 failed.
+Validity: current.
+
+### L31 — full-attempt scratch peaks recorded separately
+
+Identity: `commit_attempt::tests::held_construction_keeps_live_operations_and_c1_c2_predecessor_independent`.
+Source: `b5fe8de91` on PR#129.
+Result: PASS — `scratch_peak_reserved_bytes=1081344` (construction) and `attempt_peak_reserved_bytes=1081344` with `attempt_peak_sampled=true`, within the admitted 100,663,296 B construction reservation. Construction-only fields keep their original meaning and are asserted not to exceed the admitted reservation.
+Validity: current. The 96 MiB construction figure remains an analysis draft, not a verified minimum envelope.
+
+### L32 — host authority becomes the ordinary public route (Steps 2-3)
+
+Identity: `lifecycle::tests::host_authority_{commit_in_flight_keeps_live_operations_and_owned_cut,dirty_tracks_covered_sequence_not_nonzero_generation,discard_resolves_publication_instead_of_erasing_it,head_movement_retains_stage_without_freezing_mutation}`; `lifecycle::tests::mounted_host_authority_holds_commit_while_sdk_edit_and_live_read_proceed`.
+Source: `594831baa` on PR#131 (merged `87f01ec30`).
+Environment: native macOS Rust 1.85.1 all features; the mounted case additionally in a privileged `rust:1.85.1-bookworm` container.
+Result: PASS — native **167 lib + 12 + 2, 0 failed** (163 lib at baseline; 4 new); Linux **169 lib + 12 + 2, 0 failed**, mounted case printed `MOUNTED HOST AUTHORITY PASS` (production attach, held Commit, concurrent SDK splice with stable inode, C1 excludes the splice, C2 includes it, verified unmount).
+Validity: current. Delimited: ordinary Commit no longer freezes/quiesces/waits for writers/installs a checkpoint/holds `worker.lifecycle`; dirty is covered-sequence based. NOT proven: V1 writable-mapping visibility (still open), container placement end to end, host-session physical-spool diagnostics (deliberately unset, not zeroed).
+
+### L33 — generic-FUSE mmap visibility investigation (V1, bounded, negative)
+
+Identity: four mechanisms probed (`FUSE_NOTIFY_RETRIEVE` stability, writeback/`FUSE_WRITEBACK_CACHE`, copy-plus-instant ABI surface, writeback-boundary reporting) plus sub-page gap noted, kernel `6.12.76-linuxkit` (environment identity only), image `rust:1.85.1-bookworm`.
+Source: `b5a679d10` on PR#132 (merged `8d6352128`), docs only.
+Result: **negative**; recorded per-mechanism DOES-NOT-SATISFY. New measured facts: the retrieved buffer is a copy, not an alias, and stays stable after later mapped stores with 0 WRITE callbacks (so the predecessor counterexample is a timing result); the copy instant is not the notification return (a store completing after the return appeared in the reply); one reply is not a point-in-time image (20/20 mode `0x21` and 19/20 mode `0x10021` replies violate the single-instant invariant over 32 pages, versus 0/496 quiesced control); a daemon-initiated writeback drain gives owned coherent per-file copies (1024/1024 pages, 0/523,776 ordering violations) but at a kernel-chosen undisclosed instant with the mapped writer stalled ~100x.
+Validity: current. NOT a universal-impossibility claim: sub-page tearing untested, drain boundary instant and stall magnitude unexplained, a two-file drain variant failed its sampling and is excluded, and passthrough/DAX/userfaultfd were unmeasured. **V1 remains OPEN pending the owner-ordered investigation of those unmeasured mechanisms.**
+
+### L34 — owner decision on the V1 approach
+
+Owner, on being asked which acquisition property (exact visibility / mmap support / non-freezing / bounded acquisition) to relax given no checked mechanism satisfies all four: **"Investigate unmeasured mechanisms first."** No semantic change is authorized yet; no constraint was relaxed. The separable second half of V1 (host ownership of acknowledged bytes at acknowledgement time, resolution §1) is explicitly not blocked by this decision.
+Validity: current; the governing next action for V1.
+
+### L35 — unmeasured FUSE mechanisms probed (PASSTHROUGH, DAX, userfaultfd, sub-page tearing)
+
+Identity: standalone C probes; kernel `6.12.76-linuxkit` (environment identity only), image `rust:1.85.1-bookworm` `sha256:e51d0265…`, 2 cpus/1 GiB/256 pids, one stack depth.
+Source: raw logs only; **the probing agent was cancelled mid-flight under the owner stop order**, so `README.md` was written from the recorded logs and product source was never touched.
+Result: capability survey — `FUSE_PASSTHROUGH` advertised **yes** and `BACKING_OPEN` succeeds only after negotiation (`verdict=PASSTHROUGH_AVAILABLE_AND_NEGOTIABLE`); `FUSE_HAS_INODE_DAX` **NO** (DAX unavailable here); `userfaultfd` blocked, `errno_name=EPERM`. PASSTHROUGH reads mapped dirty bytes with `without_client_cooperation=1 without_fsync=1 fuse_requests_for_that_read=0` and `stall_ratio_pct=67`, but is **not a single instant** (`reads_that_are_NOT_a_single_instant=19/50`; after fsync `still_not_single_instant=11/20`), costs one descriptor per inode, and is **mutually exclusive with cached handles** (`errno=5 EIO` both directions). Sub-page tearing, previously untested, is **51% (write-through) / 46% (writeback)** of single-page replies, breaking *within* pages (`breaks_at_page_end=0`). The prior premise that the daemon never learns a mapping exists is **refuted** for locally observable processes (`mapping_existence_learnable=1`), with an unexplained soft-dirty discrepancy left open.
+Validity: current as raw evidence. **Does not change the V1 verdict** and authorizes no semantic change: no mechanism satisfies all four properties, DAX and userfaultfd remain unmeasured beyond availability, passthrough coherence is unresolved, and no two-file variant was run. V1 stays OPEN. No product source changed and no repository test ran for this directory; nothing here is a benchmark, performance gate or speedup claim.
+
+### L36 — owner stop order; campaign halted at the owner's judgement
+
+Owner: "just stop here the evidence is good enough. it shows correctness but it is actually quite slow." Both running agents were cancelled (Step 5 non-Commit migration; the unmeasured-mechanism probe), their in-flight work preserved rather than lost. The 25k-file trajectory, its superlinear per-file rate (24→44 ms/file) and the ~12 h million-file extrapolation are recorded in `evidence/step1-capacity/capacity-trajectory.md`, with no performance gate asserted. The Step 5 diff is preserved as `evidence/step5-non-commit-consumers/UNVERIFIED-cancelled-work.patch` and is explicitly **not** product evidence: it was never built or tested, and the one suite failure observed during the window is **void** because it read files being edited concurrently. Nothing was published as verified without having been verified.
+Validity: current. #124/#125 remain OPEN; no phase claimed complete; no release, tag, #123 closure or #122 scenario.

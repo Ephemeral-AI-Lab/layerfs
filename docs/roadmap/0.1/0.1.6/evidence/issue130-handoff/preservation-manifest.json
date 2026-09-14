@@ -1,0 +1,189 @@
+{
+  "kind": "preservation-not-qualification",
+  "archive_directory": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-handoff-archive-20260914T053631Z",
+  "archive_bundle": {
+    "bytes": 377374188,
+    "sha256": "aa8fc68c8a7c7d17094302d4893596c65db30d9eb164fb06c7c606f8aace4b0e"
+  },
+  "source_checkpoint": "037f3356c4fe87e6119417c2cbdad6072f120aba",
+  "trajectory_source": "13954e82793865b5a97ee175e6509978806c92f3",
+  "preserved_evidence": [
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/step1-capacity/capacity-trajectory.md",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "22fd00fd29da18fee3d9d6398a9ed8ba8e2aa88b884386b0bdeecd085e85c172",
+      "bytes": 5512
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/step1-capacity/run-25000.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "b91cdd050547d3f012cf803a8438badf28d0666359c7cd7d0085be0ab809b886",
+      "bytes": 2142
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/step5-non-commit-consumers/README.md",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "d853b5dc05b36c2223a2061f9cd032a9a8d0161decf74b43e65a9ee4da18a480",
+      "bytes": 2536
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/step5-non-commit-consumers/UNVERIFIED-cancelled-work.patch",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "8a50da256a3292530fe91e60ae87b88eec1da5557e796daa635dcb21f40ca837",
+      "bytes": 51354
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/README.md",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "f00a81460f69cba5c6d418a9cdbc1c8979dc526a6fe7e06d7536a405bae0a625",
+      "bytes": 8157
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/caps.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "8df409466b5522ae19cba754b6b78035d1eb540c461ca418bb00b7dc626fe259",
+      "bytes": 12433
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/enumdirty-v1.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "0067b709c55b7c91a7acde76f13ed0dc2235bfc01f29b5e621b0e3a505db0f20",
+      "bytes": 8932
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/enumdirty.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "f8f15189f51ac21d5657857ec7e144464ef565c898e0d278785049314cdd5f69",
+      "bytes": 8433
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/passthrough-v1.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "fd1fca9eea24bbc50b1d01be43028d17046b925dd5bd606436f0ba40a2e6b0ec",
+      "bytes": 30924
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/passthrough.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "8c0a979d0e57bb3deda0f1434d6a644d8d023d92ad311e6a843a60795f1f3058",
+      "bytes": 30542
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-caps.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "d4e80bf660b8e37a1065b21d87ca3c6d656565c1819b98bb22c23efc58684b81",
+      "bytes": 830
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-caps.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "35d80a21eb1a1586ec17bc2407ad9005758ca598dfef90f0a5ad5f1d38f74922",
+      "bytes": 1933
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-enumdirty.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "28f0ec517ac607a81204948b32178baffac5f5c0f9fa73e9131e9ec4e0489ae2",
+      "bytes": 855
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-enumdirty.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "5f6687f66df8d5b7e013ffec060d6572cd96574820a9d617feb8c984104219e3",
+      "bytes": 1241
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-passthrough.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "008a8cc7804716eebf41fb44f32e146a3d642bc327f5ae8138a6f19c624222ff",
+      "bytes": 866
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-passthrough.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "831795ead764b582c2fcac6a32fe1c4b08650c635685dd335c77e313ef3363bd",
+      "bytes": 4377
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-passthrough2.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "dc03eb9b234dc4c4b6540e5eb4e0852eeb91560db79992da82209a5d2e35b803",
+      "bytes": 869
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-passthrough2.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "df1ad5d43f6f8b7d855d7662985027774956e1c0b1183299488b6736a4d3f6d3",
+      "bytes": 4511
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "e1289b2df3fdf80046b9a8cf48b0fc7d459e53a3f475f45e6d5c0fea24ba2f76",
+      "bytes": 847
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "0b7906d8334b275f37452e89be31cb3eea95a2cbb3c6f2b817ae197c8132edfb",
+      "bytes": 7246
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage2-writeback.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "a38d2b283622909811e45ac67b43c51a4532aab156345f621d68f1c44cb8f90c",
+      "bytes": 897
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage2-writeback.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "1215eb4b7ecf8316eeb96bdca0ea4a334d7692412149598f00b5064fb9f1aa0a",
+      "bytes": 9748
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage2-writethrough.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "8b352df3bce285d31687ee46907eee9293b57f9a2ea0314a355782db8d9d4f4a",
+      "bytes": 849
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage2-writethrough.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "4ab8831a9656ec5021f6d25e76e8aed100f7854b888d8e7d8bc530c05f7a78b3",
+      "bytes": 10262
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage2.json",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "8b352df3bce285d31687ee46907eee9293b57f9a2ea0314a355782db8d9d4f4a",
+      "bytes": 849
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run-subpage2.log",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "4ab8831a9656ec5021f6d25e76e8aed100f7854b888d8e7d8bc530c05f7a78b3",
+      "bytes": 10262
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/run_probe.sh",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "3b87d15f58235f586b3594ae433ab0d6eb93871ee7fecb90e5c0d742b194fe0c",
+      "bytes": 3659
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/subpage-v1-wholesweep.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "a57598e91ab3feee29a4d78d32aaa2db9c2a17a07ce3a33201baa2221afadf87",
+      "bytes": 27733
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.6/evidence/v1-probe-unmeasured/subpage.c",
+      "source_commit": "13954e82793865b5a97ee175e6509978806c92f3",
+      "sha256": "e14979dd3274a45fea715a1a2b0e3df5220e9edf13255e5b883b64e970841438",
+      "bytes": 30605
+    }
+  ],
+  "unfinished_patch_sha256": "8a50da256a3292530fe91e60ae87b88eec1da5557e796daa635dcb21f40ca837",
+  "deferred_harness_patch_sha256": "c9a0e5d5cbb88091b4e48a0fcd43e90562982ab97c4defaf75ecd3507bebdbdb",
+  "scope": "No product code enabled; no tests, benchmarks or probes run; no raw evidence removed."
+}

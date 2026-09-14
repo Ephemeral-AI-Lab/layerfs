@@ -1,0 +1,65 @@
+Linux 6d1559e872ef 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
+gcc (Debian 12.2.0-14) 12.2.0
+2f1c503755caaed773e93bc6638d3452b026c21337ac11fe8b92624d395bded8  /tmp/v1un-bin
+probe: argv1=(none) writeback_mode=0
+probe: page_size=4096 file_size=131072 pages=32 words=16384 mmap_shared_write=ok
+probe: negotiated minor=31 flags=0x21 max_write=1048576 writeback_cache=0
+probe: prefault done rounds=14588 daemon_reads=32 daemon_writes=1
+probe: writer_mode=page0 round_words=512 rounds_per_100ms=235994 ns_per_round=423 ns_per_word=0
+probe: writer_mode=file round_words=16384 rounds_per_100ms=7788 ns_per_round=12840 ns_per_word=0
+T-SP-A trial=1 writer_rounds_during_reply=5437 breaks=1 in_page=1 first_break_word=344 delta=1 violating_pairs=57792 distinct_rounds=2 sample_range=131204..131205
+T-SP-A trial=2 writer_rounds_during_reply=4161 breaks=2 in_page=2 first_break_word=365 delta=1 violating_pairs=48967 distinct_rounds=2 sample_range=136707..136708
+T-SP-A trial=3 writer_rounds_during_reply=4857 breaks=1 in_page=1 first_break_word=24 delta=1 violating_pairs=11712 distinct_rounds=2 sample_range=141015..141016
+T-SP-A trial=6 writer_rounds_during_reply=4289 breaks=1 in_page=1 first_break_word=4 delta=1 violating_pairs=2032 distinct_rounds=2 sample_range=156416..156417
+T-SP-A trial=10 writer_rounds_during_reply=4995 breaks=1 in_page=1 first_break_word=18 delta=1 violating_pairs=8892 distinct_rounds=2 sample_range=175245..175246
+T-SP-A trial=11 writer_rounds_during_reply=4058 breaks=1 in_page=1 first_break_word=410 delta=1 violating_pairs=41820 distinct_rounds=2 sample_range=180329..180330
+T-SP-A trial=13 writer_rounds_during_reply=5615 breaks=1 in_page=1 first_break_word=337 delta=1 violating_pairs=58975 distinct_rounds=2 sample_range=189437..189438
+T-SP-A trial=14 writer_rounds_during_reply=4384 breaks=1 in_page=1 first_break_word=351 delta=1 violating_pairs=56511 distinct_rounds=2 sample_range=195127..195128
+T-SP-A trial=15 writer_rounds_during_reply=4373 breaks=1 in_page=1 first_break_word=232 delta=1 violating_pairs=64960 distinct_rounds=2 sample_range=199639..199640
+T-SP-A trial=17 writer_rounds_during_reply=5603 breaks=1 in_page=1 first_break_word=156 delta=1 violating_pairs=55536 distinct_rounds=2 sample_range=209097..209098
+T-SP-A trial=18 writer_rounds_during_reply=4375 breaks=1 in_page=1 first_break_word=151 delta=1 violating_pairs=54511 distinct_rounds=2 sample_range=214753..214754
+T-SP-A trial=19 writer_rounds_during_reply=4496 breaks=1 in_page=1 first_break_word=31 delta=1 violating_pairs=14911 distinct_rounds=2 sample_range=219166..219167
+RESULT T-SP-A mode=page0 retrieve=4096B trials=200 single_page_replies_torn=103 tear_rate_pct=51 max_delta_rounds=1 max_violating_pairs=65535 breaks_in_page=114 breaks_at_page_end=0 max_writer_rounds_during_reply=6092
+T-SP-B trial=0 reply_bytes=131072 writer_rounds_during_reply=3021 breaks=1 in_page=1 first_break_word=416 delta=1 violating_pairs=3328 distinct_rounds=2 sample_range=125648..125649
+T-SP-B trial=1 reply_bytes=131072 writer_rounds_during_reply=4810 breaks=1 in_page=1 first_break_word=155 delta=1 violating_pairs=55335 distinct_rounds=2 sample_range=128584..128585
+T-SP-B trial=2 reply_bytes=131072 writer_rounds_during_reply=5014 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=133490..133490
+T-SP-B trial=3 reply_bytes=131072 writer_rounds_during_reply=4735 breaks=1 in_page=1 first_break_word=62 delta=1 violating_pairs=27900 distinct_rounds=2 sample_range=138600..138601
+T-SP-B trial=4 reply_bytes=131072 writer_rounds_during_reply=4927 breaks=1 in_page=1 first_break_word=183 delta=1 violating_pairs=60207 distinct_rounds=2 sample_range=143368..143369
+T-SP-B trial=5 reply_bytes=131072 writer_rounds_during_reply=4909 breaks=1 in_page=1 first_break_word=496 delta=1 violating_pairs=7936 distinct_rounds=2 sample_range=148356..148357
+T-SP-B trial=6 reply_bytes=131072 writer_rounds_during_reply=4824 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=153319..153319
+T-SP-B trial=7 reply_bytes=131072 writer_rounds_during_reply=4824 breaks=2 in_page=2 first_break_word=161 delta=1 violating_pairs=57911 distinct_rounds=2 sample_range=158245..158246
+T-SP-B trial=8 reply_bytes=131072 writer_rounds_during_reply=4943 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=163205..163205
+T-SP-B trial=9 reply_bytes=131072 writer_rounds_during_reply=4955 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=168267..168267
+T-SP-B trial=10 reply_bytes=131072 writer_rounds_during_reply=4871 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=173233..173233
+T-SP-B trial=11 reply_bytes=131072 writer_rounds_during_reply=4718 breaks=1 in_page=1 first_break_word=5 delta=1 violating_pairs=2535 distinct_rounds=2 sample_range=178148..178149
+T-SP-B trial=12 reply_bytes=131072 writer_rounds_during_reply=4928 breaks=1 in_page=1 first_break_word=39 delta=1 violating_pairs=18447 distinct_rounds=2 sample_range=182986..182987
+T-SP-B trial=13 reply_bytes=131072 writer_rounds_during_reply=4876 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=188082..188082
+T-SP-B trial=14 reply_bytes=131072 writer_rounds_during_reply=4923 breaks=1 in_page=1 first_break_word=6 delta=1 violating_pairs=3036 distinct_rounds=2 sample_range=192990..192991
+T-SP-B trial=15 reply_bytes=131072 writer_rounds_during_reply=4929 breaks=1 in_page=1 first_break_word=154 delta=1 violating_pairs=55132 distinct_rounds=2 sample_range=198035..198036
+T-SP-B trial=16 reply_bytes=131072 writer_rounds_during_reply=5013 breaks=1 in_page=1 first_break_word=135 delta=1 violating_pairs=50895 distinct_rounds=2 sample_range=203042..203043
+T-SP-B trial=17 reply_bytes=131072 writer_rounds_during_reply=4490 breaks=2 in_page=2 first_break_word=384 delta=1 violating_pairs=22656 distinct_rounds=2 sample_range=208084..208085
+T-SP-B trial=18 reply_bytes=131072 writer_rounds_during_reply=2832 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=212654..212654
+T-SP-B trial=19 reply_bytes=131072 writer_rounds_during_reply=4831 breaks=0 in_page=0 first_break_word=18446744073709551615 delta=0 violating_pairs=0 distinct_rounds=1 sample_range=215548..215548
+RESULT T-SP-B mode=page0 retrieve=131072B trials=20 replies_with_a_sub-page_tear=12 max_delta_rounds=1 max_violating_pairs=60207 breaks_in_page=14 breaks_at_page_end=0 (page0 analysed: 512 words)
+RESULT T-SP-C quiesced_page_breaks=0 quiesced_page_violations=0 quiesced_page_distinct_rounds=1 quiesced_full_page0_breaks=0 quiesced_full_page0_violations=0 quiesced_full_page0_range=220350..220350
+RESULT T-SP-D slow_writer_control trials=100 torn=0 (200us between words: a 4-KiB page copy cannot straddle a store)
+T-SP-E single_page trial=12 breaks=1 first_break_word=309 delta=1 violating_pairs=62727 distinct_rounds=2 range=5770..5771
+T-SP-E single_page trial=126 breaks=1 first_break_word=280 delta=1 violating_pairs=64960 distinct_rounds=2 range=23369..23370
+T-SP-E single_page trial=140 breaks=1 first_break_word=46 delta=1 violating_pairs=21436 distinct_rounds=2 range=25525..25526
+T-SP-E single_page trial=150 breaks=1 first_break_word=362 delta=1 violating_pairs=22444 distinct_rounds=2 range=27071..27072
+T-SP-E single_page trial=193 breaks=1 first_break_word=16 delta=1 violating_pairs=7936 distinct_rounds=2 range=33636..33637
+RESULT T-SP-E mode=file single_page_trials=200 single_page_torn=5 single_page_max_delta=1 full_reply_trials=20 full_reply_torn=8 full_reply_max_delta=1 (version-1 geometry: writer and copier run at the same words/ns, so the full reply stays in phase)
+T-SP-F trial=0 fsync_rc=0 writer_rounds_during_fsync=135 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=65280 distinct_rounds=2 range=130395..130396
+T-SP-F trial=1 fsync_rc=0 writer_rounds_during_fsync=137 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=34911 distinct_rounds=2 range=130588..130589
+T-SP-F trial=2 fsync_rc=0 writer_rounds_during_fsync=111 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=47311 distinct_rounds=2 range=130795..130796
+T-SP-F trial=3 fsync_rc=0 writer_rounds_during_fsync=131 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=57967 distinct_rounds=2 range=130964..130965
+T-SP-F trial=4 fsync_rc=0 writer_rounds_during_fsync=115 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=38311 distinct_rounds=2 range=131158..131159
+T-SP-F trial=5 fsync_rc=0 writer_rounds_during_fsync=152 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=3036 distinct_rounds=2 range=131328..131329
+T-SP-F trial=6 fsync_rc=0 writer_rounds_during_fsync=103 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=65367 distinct_rounds=2 range=131546..131547
+T-SP-F trial=7 fsync_rc=0 writer_rounds_during_fsync=106 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=52540 distinct_rounds=2 range=131719..131720
+T-SP-F trial=8 fsync_rc=0 writer_rounds_during_fsync=115 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=57255 distinct_rounds=2 range=131881..131882
+T-SP-F trial=9 fsync_rc=0 writer_rounds_during_fsync=82 daemon_writes=1 cache_writes=1 page0_words_delivered=512 breaks=1 in_page=1 delta=1 violating_pairs=31311 distinct_rounds=2 range=132057..132058
+RESULT T-SP-F drain_trials=10 drain_page0_replies_torn=10 drain_max_delta_rounds=1 (page 0 word-granular analysis of the FUSE_WRITE payload)
+probe: retrieve_reply_read_duration_ns count=542 max=49875 mean=5298
+probe: done. daemon_totals reads=33 writes=44 write_cache=44 fsync=10
+EXIT=0

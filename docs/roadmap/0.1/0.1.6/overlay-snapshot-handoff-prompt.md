@@ -1,5 +1,12 @@
 # Snapshot-Isolated Workspace implementation and verification handoff
 
+For the currently promoted #130 execution, start with
+[the current execution handoff](overlay-minimal-overhead-execution-handoff.md).
+It narrows the active rollout to the agreed tiny-churn evaluation, keeps scale
+cases deferred, defines issue ownership and forbids third-party library/import
+patches. This older broad migration prompt remains historical context and must
+not override the current owner's scope or restart deferred campaigns.
+
 Current owner amendment (2026-09-14): #130 is promoted before final capacity
 qualification and benchmarks. Read the
 [minimal-overhead implementation plan](overlay-minimal-overhead-implementation-plan.md)

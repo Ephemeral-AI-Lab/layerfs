@@ -1,0 +1,12 @@
+REPRODUCER headers file=23999 HeaderCensus { high_water: 47526, live_pages: 47484, live_unreferenced: 0, live_single_ref: 47450, live_multi_ref: 34, live_refs: 47518, free_pages: 42, reclaim_queue_pages: 0, retiring_pages: 0, root_leases: 2 }
+REPRODUCER progress file=23999 payload_index_live=47484 payload_index_allocated=47526 payload_index_reclaimed=1437409 payload_index_roots=1 payload_index_pending=true payload_index_physical=223653888 metadata_live=101297 owners=0 persisted=24000 pending=0 physical=100712448
+REPRODUCER census file=24999 keys=[(1, 25000, 1000000), (2, 25000, 400000), (3, 25000, 400000), (4, 25000, 600000), (5, 25000, 600000), (7, 25000, 600000)]
+REPRODUCER tree file=24999 Census { pages: 49451, leaves: 37498, branches: 11953, overflows: 0, leaf_entries: 150000, branch_children: 49450, overflow_bytes: 0, min_leaf_entries: Some(4), max_leaf_entries: 7, height: 8 }
+REPRODUCER headers file=24999 HeaderCensus { high_water: 49504, live_pages: 49459, live_unreferenced: 0, live_single_ref: 49421, live_multi_ref: 38, live_refs: 49497, free_pages: 45, reclaim_queue_pages: 0, retiring_pages: 0, root_leases: 2 }
+REPRODUCER progress file=24999 payload_index_live=49459 payload_index_allocated=49504 payload_index_reclaimed=1501409 payload_index_roots=1 payload_index_pending=true payload_index_physical=233033728 metadata_live=105515 owners=0 persisted=25000 pending=0 physical=117489664
+REPRODUCER files=25000 peak_resident_owners=0 peak_pending_releases=0 peak_persisted_tokens=25000 owners=0 persisted_tokens=25000 pending_releases=0 chargeable=25000 physical=117489664 index_physical=233033728
+REPRODUCER PASS files=25000 verified_bytes=25000 peak_resident_owners=0 peak_pending_releases=0 resident_owners=0 persisted_tokens=25000
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 179 filtered out; finished in 1099.52s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s

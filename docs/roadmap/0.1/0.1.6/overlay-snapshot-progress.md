@@ -9,6 +9,28 @@ for that work; the append-only record of individual checks is
 
 ## Current position
 
+**Successor entry point:**
+[the #130 execution handoff](overlay-minimal-overhead-execution-handoff.md).
+The owner requested a clean checkout with only local `main`, cleanup of completed
+migration branches, and preservation of unrelated open-PR branches. PR #135 was
+merged at `037f3356c4fe87e6119417c2cbdad6072f120aba` before this handoff publication.
+Final branch/checkout verification is recorded in the external archive's
+`final-cleanup-receipt.json`; inspect actual git state on resume.
+
+The unfinished four-file Step 5 patch is archived, not applied to product source.
+Its exact historical copy and the trajectory/probe evidence are now preserved at
+their existing paths; L28–L36 are imported with historical validity labels. The
+scale-harness patch remains deferred. See
+[preservation inventory](evidence/issue130-handoff/README.md) and its manifest for
+the verified Git bundle, stashes, branch heads and source hashes. Do not interpret
+the clean checkout as completion of that interrupted implementation.
+
+The execution handoff prohibits third-party library/dependency/import patches,
+forks, substitutes and copied reimplementations. It requires implementation and
+verification through every current P130 package, actual phase comments, five
+tier-500 cases then all 20 when stable, and valid terminal #130 evidence before
+closure. Scope and genuine external-block handling remain explicit.
+
 **Latest owner direction: #130 is promoted before final capacity qualification
 and benchmarks.** Read the
 [current implementation plan](overlay-minimal-overhead-implementation-plan.md)
@@ -29,13 +51,14 @@ select further existing-backend improvements from measured tiny-case costs.
 A full compact-storage bundle or new pager is not a prerequisite. #124/#125/#130 remain OPEN; V1, complete production Docker
 dispatch, capacity and final benchmark qualification are outstanding.
 
-Current review/publication branch: `codex/promote-workspace-overhead`, based on
+Historical review/publication branch: `codex/promote-workspace-overhead`, based on
 main `695c482e7aa8471710ad7e869334084de0bf2fa0`. The interrupted unverified changes
 in lifecycle.rs, projection.rs, reconcile.rs and registry.rs were preserved,
 including a binary patch backup before the branch switch. No product build,
 benchmark, probe, cleanup or new product test was run during this plan review.
-Trajectory evidence remains published on `codex/step6-capacity-trajectory`,
-not merged here; use its exact commits rather than relabeling it as main evidence.
+Trajectory evidence originally lived on `codex/step6-capacity-trajectory`; this
+handoff preserves it on main as historical artifacts, with its original source
+identities. It is not reclassified as new candidate evidence.
 
 Next #130 implementation task: the focused whole-arena reclamation counterexample
 and local-reclamation repair (P130.2), then bounded metadata preparation.
