@@ -20,6 +20,9 @@ const MAX_CHILDREN: usize = 8;
 const MIN_CHILDREN: usize = 4;
 const MAX_KEY_BYTES: usize = 384;
 const INLINE_BYTES: usize = 128;
+/// Records one prepared [`Index::set_batch`] call may carry: bounded to one
+/// leaf's worth of keys so a single batch step stays bounded.
+pub(crate) const BATCH_RECORDS: usize = MAX_KEYS;
 const MAX_SCAN_BYTES: usize = 4 * 1024 * 1024;
 const MAX_HEIGHT: usize = 64;
 const NONE: u64 = u64::MAX;

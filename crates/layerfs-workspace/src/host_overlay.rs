@@ -115,6 +115,10 @@ impl HostOverlay {
         let mut output = None;
         self.overlay.mutate(|m| {
             let _permit = self.budget.enter(Operation::Prepare, Charge::default())?;
+            // Ordinary operations prepare their change-log records together;
+            // the deferred batch is flushed by `Overlay::prepare` before the
+            // candidate can be installed.
+            m.begin_change_batch();
             output = Some(apply(m)?);
             Ok(())
         })?;
