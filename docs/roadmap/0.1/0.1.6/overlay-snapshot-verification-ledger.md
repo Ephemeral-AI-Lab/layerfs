@@ -558,3 +558,84 @@ Validity: current as raw evidence. **Does not change the V1 verdict** and author
 
 Owner: "just stop here the evidence is good enough. it shows correctness but it is actually quite slow." Both running agents were cancelled (Step 5 non-Commit migration; the unmeasured-mechanism probe), their in-flight work preserved rather than lost. The 25k-file trajectory, its superlinear per-file rate (24→44 ms/file) and the ~12 h million-file extrapolation are recorded in `evidence/step1-capacity/capacity-trajectory.md`, with no performance gate asserted. The Step 5 diff is preserved as `evidence/step5-non-commit-consumers/UNVERIFIED-cancelled-work.patch` and is explicitly **not** product evidence: it was never built or tested, and the one suite failure observed during the window is **void** because it read files being edited concurrently. Nothing was published as verified without having been verified.
 Validity: current. #124/#125 remain OPEN; no phase claimed complete; no release, tag, #123 closure or #122 scenario.
+
+## #130 P130.2 execution evidence (2026-09-14)
+
+Source of record: delivered main `2786b9c81da131ddd78fea9dd2de309d745082fc`
+(merge of PR [#137](https://github.com/Ephemeral-AI-Lab/layerfs/pull/137) over
+`74a62398485ce2cb6a452f7adf8f96dfb64e989b`), product commits `9bfcbc768`,
+`0a4e55540`, `12745110a`. First-party crates only: no dependency, manifest,
+lockfile, `[patch]`/`[replace]`, vendor or third-party edit. No benchmark case,
+sealed benchmark binary/image, release or tag is claimed by these rows.
+
+### L41 — release-triggered whole-arena evacuation reproduced and repaired
+
+- Identity: `overlay_payload::tests::{repeated_small_release_over_large_live_set_moves_only_justified_bytes,reclamation_work_follows_freed_bytes_across_sizes,middle_release_reuses_unclaimed_interval_without_relocating_live_payload,live_physical_reader_defers_arena_truncation_without_blocking_writers}`.
+- Source: `9bfcbc768` (+ multi-size oracle `0a4e55540`), merged `2786b9c81`.
+- Counterexample, **identical workload and oracle on the pre-repair source**
+  (`74a623984`; the focused test was applied to a stashed tree, run, then
+  removed): 64 deletions/replacements of 8-KiB files among 64 live files with
+  completed maintenance between them, 524,288 B freed → **relocated
+  33,030,144 B** and the amortized assertion failed.
+- After the repair: same workload relocates **524,288 B = exactly the freed
+  bytes**, 0 unclaimed bytes left. Multi-size oracle (16/32/64 live 8-KiB
+  files): freed 131,072 / 262,144 / 524,288 vs relocated 131,072 / 262,144 /
+  524,288; reclaimed identically; arena 524,288 + 57,344 retained slack at 64.
+  The pre-repair source has no unclaimed-interval family at all.
+- Mechanism: a `FREE` record family in the same published root, location
+  splitting at fully released coverage boundaries, lowest-fit reuse for bounded
+  payloads, tail truncation, and at most one bounded (<= 64 KiB) relocation per
+  maintenance step whose arena-length reduction is at least the moved byte
+  count. Reader leases pin their range against reuse and truncation.
+- Valid: current for these counters and checks. Delimited: byte/ownership
+  oracles only; no timing gate and no public case result is claimed.
+
+### L42 — prepared Index records: range leaf and ordinary change log
+
+- Identity: `overlay_index::tests::prepared_batch_writes_the_same_tree_with_fewer_pages`, `overlay::tests::batched_change_records_match_immediate_tracking_with_fewer_page_writes`, `host_overlay::tests::tiny_create_metadata_page_cost_is_measured`.
+- Source: `9bfcbc768` (range leaf) and `12745110a` (change log), merged `2786b9c81`.
+- Measured, 100 tiny creates with a one-byte first write through the ordinary
+  host-authority path, baseline `74a623984` → delivered head: create 6,290 →
+  4,821 page writes (-23.4%) and 37,813 → 28,023 reads (-25.9%); first write
+  2,165 → 2,068 writes (-4.5%) and 12,642 → 11,037 reads (-12.7%); total 8,455
+  → 6,889 writes (-18.5%) and 50,455 → 39,060 reads (-22.6%). Range-leaf
+  preparation alone: 5 leaf page writes → 1 and 2 allocated pages → 1.
+  Change-log batching alone: 24 → 11 page writes for the same four edits.
+- Payload catalog allocation is unchanged at 802 pages per 100 files and
+  payload physical stays one 4-KiB unit per tiny file; the remaining dominant
+  cost is metadata path copies (48.2 writes / 280 reads per create).
+- Valid: current. Delimited: component counters, not public case timing, and no
+  claim that page-count reductions alone bound wall clock.
+
+### L43 — public five/20-case comparison blocked on the container host-authority route
+
+- Identity: benchmark topology (macOS host store/coordinator/spool + Linux
+  Docker workload) case screen for `tiny-create-500-mixed-v4`,
+  `tiny-stat-500-mixed-v4`, `tiny-unlink-500-mixed-v4`,
+  `tiny-bulk-create-500-mixed-v3`, `tiny-bulk-delete-500-mixed-v3`.
+- Result: **BLOCKED / NOT RUN**, reported as blocked rather than substituted.
+  `crates/layerfs-workspace/src/projection.rs::attach` routes
+  `WorkspacePlacement::Container` (+ `Projection::Fuse`) to
+  `live_backing::RemoteWorkspace::start` + `docker::DockerProjection::attach`
+  (legacy remote protocol, optionally the daemon owner), while the host
+  authority is installed only on the `Host` + `Projection::Fuse` path
+  (`install_host_runtime` has exactly two call sites: `projection.rs:84` and the
+  `lifecycle.rs` test fixture). `live_backing::generation` therefore resolves to
+  the legacy live mirror for container placement. `Payload`/`Ranges`/`Index` are
+  constructed only in `overlay_budget::Resources::open` for `HostOverlay`.
+  A legacy-route case run cannot qualify #130's implementation, so no case was
+  run and no paired screen, control identity or case receipt is claimed.
+- Dependency: #124 owns constructing the host authority for container placement
+  (comment https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5659930981).
+  #130's own implementation work does not wait on it; only the public
+  comparison does.
+- CI note: the first CI run of `12745110a` failed on
+  `layerfs-fuse::host_client::tests::cancelled_entry_and_partial_page_keep_pre_admitted_cleanup`
+  (`crates/layerfs-fuse/src/host_client.rs:1248`, cleanup-slot permit assertion)
+  — the already-recorded L37 flake, in a crate this change does not modify. The
+  failed job was re-run on the same source with no code change and passed
+  (run 34814040788). Locally `tools/test-fast.sh` passed twice with this change
+  (157 s and 149 s, 4 bounded jobs, Rust 1.85.1). No retry-until-green policy is
+  adopted and the original failure is retained.
+- Deferred: the 25k/two-second milestone and million-file qualification remain
+  DEFERRED/OPEN; neither was registered, generated or run.
