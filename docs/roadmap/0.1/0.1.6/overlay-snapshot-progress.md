@@ -17,7 +17,7 @@ Read [the successor handoff](overlay-snapshot-step1-handoff.md) first. It supers
 | --- | --- |
 | Phase | Components of2–5 implemented/checked; no new whole-phase completion; V1 exit stillOPEN |
 | Bounded step1 | Mounted shutdown rerun PASS; actual-spill fixture PASS; maintenance oracle PASS |
-| Publication checks | Build/fmt/whitespace/runner checks PASS; native executed tests pass but171s misses150s gate; strictClippyFAIL |
+| Publication checks | Build/fmt/whitespace/runner PASS; native executed tests pass in171s, historical150s gateFAIL retained; owner accepted171s and currentCIbudget is180s; strictClippyFAIL |
 | Active resources | No test/build process or owned container; measurement lock released |
 | Phase7 | NOT_STARTED; no#122 registered scenario executed |
 | Successor next task | Existing8192 persisted-token admission defect: bounded8193-file reproduction, then ownership correction; no capacity stress was run in this stopped checkpoint |
@@ -136,3 +136,7 @@ Owner instruction relayed from side task `01a09c84-f7a3-7852-b8b2-be8e917ab316`:
 Step1 is specifically: (a) retained mount-root descriptor shutdown fix plus passing mounted rerun, (b) real-spill fixture correction plus focusedPASS, and(c) maintenance test/oracle correction plus focusedPASS. (b)/(c) are complete with failure retention. Finish(a), required publication checks/review, publish through normal workflow to remote main and verify its ancestry, publish successor handoff, then stop thisrun. Do not start default-path migration, furtherV1 investigation, million-file qualification or benchmarks. Keep#124/#125OPEN and#122excluded; no release/tag. Remaining knownCI/integration/capacity obligations must be explicit inhandoff.
 
 Finalsource has been formatted and diff-whitespace checked. Source frozen while root runs native Rust1.85.1 publication build/gate under existing measurement lock, session55320. Next step after checks: rebuild only finalformatted Linuxhelper ifneeded, rerun failed mountedcheck, writehandoff andpublishall scoped source/evidence. Requiredreview ofthreefixes found no newscopedblocker; genericV1/productionmigration/resourcegaps remainopen.
+
+## Latest direct owner CI update
+
+“171 is acceptable, give it180s budget.” Applied to `tools/test-fast.sh` and current development guidance before main publication. Historical171s/150s gateFAIL and125s/120s gateFAIL remain unchanged. No suite rerun for a new timing; no benchmark/correctness/lint requirement changed. CurrentCIbudget180s supersedes the earlier150s instruction.

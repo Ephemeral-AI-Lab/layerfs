@@ -405,3 +405,7 @@ break, not as qualification of the new behavior.
 - otherboundedfixes: actualvariedspillfixturePASS (`capacity-owner-attempt02.json`); exactretained-stagemaintenancetestPASS (`maintenance-attempt02.json`) with2unaffectedpassesretained. Independentreviewfoundnonewscopedblocker.
 - finalpublicationverification: buildPASS; format/whitespacePASS; runner7PASS; native637selections/37binaries/79batches reports611passes26ignored andnoexecutedtestfailure, butgateFAIL171s>150s. StrictClippyFAIL; preserveexactlogs. Named1.96toolchainLinuxstdmissingFAIL repairedbyexistingconfiguredstabletoolchain, finalhelperPASS. No CI timeoptimization/waiver/lintsuppression.
 - ownerstoppinginstruction: stopafterthreefixes, remote-mainpublication anddurablehandoff. No furtherproductmigration/V1/capacity/benchmarkexecutionauthorizedinthisrun. [Successor handoff](overlay-snapshot-step1-handoff.md) recordsremainingworkandcustody. Issues124/125stayOPEN; no#122scenario/release/tag.
+
+### L26 — owner180second CI budget
+
+Owner directly accepted171s and requested180s before checkpoint publication. Updated the actual test-fast ceiling and current development guidance; `bash -n tools/test-fast.sh` PASS. L25's historical171s/150s gateFAIL remains unchanged, as doesL19's125s/120s failure. No passing suite rerun, benchmark gate change or lint suppression. CurrentCIbudget180s; strictClippy stillOPEN.
