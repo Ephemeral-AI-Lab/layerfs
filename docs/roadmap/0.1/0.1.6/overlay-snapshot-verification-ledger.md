@@ -707,6 +707,24 @@ sealed benchmark binary/image, release or tag is claimed by these rows.
 - State: no container, benchmark process or measurement lock left running;
   `benchmark-results/issue130-m2/` retained (git-ignored); suite gates unchanged
   (`tools/test-fast.sh` PASS before the runs; no product source changed by M2).
+- **v0.1.5 comparison (historical context, cross-route — never a paired claim).**
+  v0.1.5 rows from `release-notes/0.1.5/benchmark-performance.csv` (binary
+  `c55daf13…` @ `1ff1f2ddd`, single fresh samples, themselves WARN against their
+  own v0.1.3 reference) versus the M2 candidate medians on the wired route:
+  `tiny-create-500-mixed-v4` 242.659707 ms → **20,029.7 ms (≈82.5×)**;
+  `tiny-stat-500-mixed-v4` 69.836625 ms → **3,160.4 ms (≈45.3×, single sample)**;
+  `tiny-unlink-500-mixed-v4` 119.579792 ms → **9,323.4 ms (≈78.0×)**;
+  `tiny-bulk-create-500-mixed-v3` 5.732993668 s and
+  `tiny-bulk-delete-500-mixed-v3` 1.185336667 s are **not measured** on the new
+  route. Per affected file: create 0.485 → 40.1 ms, unlink 0.239 → 18.6 ms,
+  stat 0.140 → 6.3 ms. Phase decomposition for create-500 (v0.1.5 → candidate
+  median): begin 10.733 → 10.5 ms (≈1.0×), **exec 166.715 → 11,362.6 ms (≈68×)**,
+  **commit 59.709 → 4,406.8 ms (≈74×)**, visibility 0.107 → 0.074 ms (≈0.7×),
+  **end 5.395 → 4,249.2 ms (≈788×)**. Begin and visibility are unchanged; the
+  gap is per-operation exec, Commit construction and End/teardown. Consequence:
+  the registered stronger criterion (strict <1 s tier-100 bulk create/delete;
+  v0.1.5 `tiny-bulk-create-100-mixed-v3` 983.33 ms) is at high risk on the
+  wired route and **was not measured** — measure tier-100 early.
 - Recommended next investigation (handoff): (1) instrument the run receipt with
   a host-authority dispatch counter and re-confirm custody; (2) attack the
   dominant phases — per-operation exec path (FUSE/daemon round trips,
