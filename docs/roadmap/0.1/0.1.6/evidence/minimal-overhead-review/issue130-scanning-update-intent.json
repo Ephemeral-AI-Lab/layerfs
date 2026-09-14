@@ -1,0 +1,15 @@
+{
+  "issue": 130,
+  "expected_previous_updated_at": "2026-09-14T03:05:19Z",
+  "previous_body_sha256": "1fbb4308234f0ec1e3b8b30420ee3c02f9560d5446d96184e811cbabe54d45cd",
+  "new_body_sha256": "fe2660d9b2f7be3436c9ec3b337338d2629770f7f5692e7723910a20891f330a",
+  "changes": [
+    "ASCII sparse-upper architecture and root sharing",
+    "ordered lower/upper directory merge",
+    "bounded packed-page/attribute traversal and live cookie ownership",
+    "latest-change Commit seek and immutable snapshot scan",
+    "content-scan lower bound and direct range streaming",
+    "scan checks/counters and acceptance checklist"
+  ],
+  "deferral_preserved": true
+}

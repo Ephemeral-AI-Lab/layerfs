@@ -1,0 +1,26 @@
+{
+  "kind": "analysis read identities; not an atomic candidate seal",
+  "head": "ca46e2793f1a8c41260e97f3b04d10edaf2612fc",
+  "working_tree_status": [
+    " M crates/layerfs-layerstack-store/src/lib.rs",
+    " M crates/layerfs-layerstack-store/src/workspace.rs",
+    " M crates/layerfs-workspace/src/overlay_budget.rs",
+    "?? docs/roadmap/0.1/0.1.6/evidence/minimal-overhead-review/"
+  ],
+  "sha256": {
+    "crates/layerfs-workspace/src/overlay_budget.rs": "7cee989550a603fdf33bd94712314b074b0ffc9626c35ae02d42f9f0d1256ef9",
+    "crates/layerfs-workspace/src/candidate_capacity.rs": "20a823e404cd9be4a5c0752f91a081a90e9df33ec4022f2e927a58712a71dd6d",
+    "crates/layerfs-workspace/src/overlay_index.rs": "eaf9a14a67bb189a3b293e2336f6637c4a4d7717def2dd7d1a05de472bbe1a79",
+    "crates/layerfs-workspace/src/overlay_ranges.rs": "386873a0a109e20396e228113393283ac10fb663a13e1e6eaeb4c7b2fa85e76a",
+    "crates/layerfs-workspace/src/overlay_payload.rs": "ac2bac76cc486e99be6d87a072288e5e89bb50f9c6435ad05a05682e9df2d5f5",
+    "crates/layerfs-workspace/src/host_runtime.rs": "fa573c4b82ffb6913a270d3fdc9caaf5e385a15cba0d1352b00daa199e22e7c3",
+    "crates/layerfs-workspace/src/snapshot_candidate.rs": "861d30c4277befd57378e03baf8438b34299c6cf513350acc65403414a267d97",
+    "crates/layerfs-workspace/src/correspondence.rs": "15e1d267950819bc5742e2520b5f604697339e72eae04f3d378ddb2936e8fe95",
+    "crates/layerfs-workspace/src/commit_attempt.rs": "bf5dbd7046b35484300c10367d2b22f4e84493d584c8bdada740667b27076143",
+    "docs/roadmap/0.1/0.1.6/overlay-snapshot-rule.md": "03d93fc5929ba2b6e99c013e4898a454ddf908c81089c41bb87f9d24d54f543e",
+    "docs/roadmap/0.1/0.1.6/overlay-snapshot-spec.md": "1e5913da8454cf0aae597f0d5cf6908ab8ebe8e86e212f966e424df799b356da"
+  },
+  "product_benchmark_executed": false,
+  "product_test_executed": false,
+  "product_source_modified_by_review": false
+}

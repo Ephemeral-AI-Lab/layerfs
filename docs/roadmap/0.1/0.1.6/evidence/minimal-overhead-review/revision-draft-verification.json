@@ -1,0 +1,17 @@
+{
+  "kind": "revision draft consistency check; no issue update or product verification",
+  "drafts": {
+    "revision-draft.md": "1e5e6dfce31f4062c33a0b12db2419c9419943b2b42e62f191cc261a588a3579",
+    "issue130-revision-draft.md": "fe62e49e9580e05b4ed68e6bd545b3745c333cf4047cdc47cbd5ec2abaaa19f8"
+  },
+  "checks": [
+    "Markdown fences balanced",
+    "local references resolve",
+    "initial implementation separated from conditional mechanisms",
+    "deferral and existing correctness authority retained"
+  ],
+  "published_issue_modified": false,
+  "governing_rules_modified": false,
+  "existing_proposal_modified": false,
+  "product_tests_run": 0
+}

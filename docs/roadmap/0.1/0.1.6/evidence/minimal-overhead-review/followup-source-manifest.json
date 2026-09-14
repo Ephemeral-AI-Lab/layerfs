@@ -1,0 +1,21 @@
+{
+  "kind": "subsequent read during concurrent implementation; not atomic candidate seal",
+  "head": "ff7098929eda07d91fbfc2d1072b286231203325",
+  "sha256": {
+    "crates/layerfs-workspace/src/overlay_budget.rs": "7cee989550a603fdf33bd94712314b074b0ffc9626c35ae02d42f9f0d1256ef9",
+    "crates/layerfs-workspace/src/overlay_payload.rs": "ac2bac76cc486e99be6d87a072288e5e89bb50f9c6435ad05a05682e9df2d5f5",
+    "crates/layerfs-workspace/src/overlay_index.rs": "eaf9a14a67bb189a3b293e2336f6637c4a4d7717def2dd7d1a05de472bbe1a79",
+    "crates/layerfs-workspace/src/candidate_capacity.rs": "e5d47df6a351531ad129a805639c8ae25826fea5ab0e0ab1e9e64c5c3a7421f3",
+    "crates/layerfs-workspace/src/snapshot_candidate.rs": "837173451ebcc2fe1498c134e32d533df8837549c7d72fca7f58cc66b5a8a34e",
+    "docs/roadmap/0.1/0.1.6/evidence/step1-capacity/README.md": "0b037aefc9071a5e38947ab043968e71c7a5f82f40a2d3ce239bb3242d6d2707"
+  },
+  "fixed_reserved_memory_after_ff7098929": 14234624,
+  "fixed_memory_allowances_fit_in_128MiB": 9,
+  "reported_reproducer_after_ca46e2793": {
+    "files": 8193,
+    "status": "PASS as recorded by separate implementation task",
+    "payload_index_physical_bytes": 71593984,
+    "payload_arena_physical_bytes": 33611776
+  },
+  "benchmark_executed_by_review": false
+}

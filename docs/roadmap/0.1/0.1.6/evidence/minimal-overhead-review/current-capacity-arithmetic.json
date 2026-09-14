@@ -1,0 +1,14 @@
+{
+  "kind": "source-derived arithmetic, not RSS or physical-allocation measurements",
+  "workspace_fixed_reserved_memory_bytes": 5846016,
+  "workspace_reserved_disk_bytes": 7784693760,
+  "workspace_reserved_fd_slots": 8,
+  "eager_index_and_payload_backing_fds": 6,
+  "host_reserved_disk_bytes": 137438953472,
+  "maximum_default_workspace_disk_reservations": 17,
+  "builder_reserved_memory_bytes": 100663296,
+  "builder_reserved_fd_slots": 128,
+  "singleton_range_page_and_catalog_bytes_per_file": 4352,
+  "singleton_correspondence_pages_and_catalog_bytes_per_file": 13056,
+  "scope": "Current default component paths; not evidence of default public dispatch."
+}
