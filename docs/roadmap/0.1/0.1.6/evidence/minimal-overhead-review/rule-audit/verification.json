@@ -1,0 +1,43 @@
+{
+  "kind": "documentation audit verification; not product evidence",
+  "reports": {
+    "README.md": "b580a68382d323d586eb938a21aa5d83325f82ba0af59a3e8eeda240ab42ce73",
+    "foundations-review.md": "aa6cb03e151b02227667c9fbe9459d85f9250b10e71228ae9f8ab15bc9b23226",
+    "commit-scan-review.md": "d4c2ba118c6420ed68a2e4199e94856fe4a51cd64df5ce37a286c0fae2be7f3e",
+    "minimality-review.md": "c98bdcf40a0eadc7f6ab80a4cf9e891edb955375e643f0d6a3a62b351c004a43"
+  },
+  "governing_sections_mapped": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "finding_ids": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+  ],
+  "checks": [
+    "all independent reports present",
+    "Markdown fences balanced",
+    "local report links resolve",
+    "governing/proposal/issue inputs checked unchanged during review"
+  ],
+  "product_tests_run": 0,
+  "benchmarks_run": 0,
+  "issue_edits": 0,
+  "product_source_edits": 0,
+  "verdict": "requirements broadly preserved in intent; mechanisms need correction/selection; full architecture not established minimal"
+}

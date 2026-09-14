@@ -1,0 +1,18 @@
+{
+  "number": 130,
+  "title": "Follow-up: minimize fresh Workspace-per-tool-call overhead after Snapshot-Isolated Workspace completion",
+  "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/130",
+  "state": "OPEN",
+  "createdAt": "2026-09-14T03:05:19Z",
+  "labels": [
+    "enhancement",
+    "deferred"
+  ],
+  "body_sha256": "1fbb4308234f0ec1e3b8b30420ee3c02f9560d5446d96184e811cbabe54d45cd",
+  "body_verified": true,
+  "implementation_prerequisites": [
+    124,
+    125
+  ],
+  "scheduling": "after all existing seven steps and verified completed closure of both prerequisites"
+}

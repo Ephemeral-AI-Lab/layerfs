@@ -1,0 +1,16 @@
+{
+  "kind": "analysis-only verification",
+  "checks": [
+    "all four review documents exist and local Markdown links resolve",
+    "all JSON artifacts parse",
+    "selected historical case identities are unique",
+    "exact clean and read-only timer components sum to the published receipt totals",
+    "post-reader-cache default reservation arithmetic yields nine base allowances under 128 MiB"
+  ],
+  "result": "consistent",
+  "product_tests_run": 0,
+  "product_benchmarks_run": 0,
+  "issue122_cases_run": 0,
+  "new_performance_claim": false,
+  "product_files_modified_by_review": false
+}

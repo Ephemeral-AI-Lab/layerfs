@@ -1,0 +1,12 @@
+{
+  "kind": "read-only proposal audit; not implementation qualification",
+  "captured_at_utc": "2026-09-14T03:41:35.535991+00:00",
+  "head": "8d6352128248d2598af20641127371f983d66a4e",
+  "issue_updated_at": "2026-09-14T03:34:29Z",
+  "sha256": {
+    "docs/roadmap/0.1/0.1.6/overlay-snapshot-rule.md": "03d93fc5929ba2b6e99c013e4898a454ddf908c81089c41bb87f9d24d54f543e",
+    "docs/roadmap/0.1/0.1.6/overlay-snapshot-spec.md": "1e5913da8454cf0aae597f0d5cf6908ab8ebe8e86e212f966e424df799b356da",
+    "docs/roadmap/0.1/0.1.6/evidence/minimal-overhead-review/README.md": "8d0a4dbddbac6ef3eea09f4eb94fbe804e9eb7fc43680790c1c424c82ef1618c"
+  },
+  "issue_body_sha256": "671d306711a8f05faf4e9e6b939477cd1ab69e5b2766418c1f2a26600dc3f889"
+}

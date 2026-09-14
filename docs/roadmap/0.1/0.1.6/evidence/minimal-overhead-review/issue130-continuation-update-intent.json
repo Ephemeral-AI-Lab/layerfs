@@ -1,0 +1,8 @@
+{
+  "issue": 130,
+  "previous_updated_at": "2026-09-14T03:23:42Z",
+  "previous_body_sha256": "fe2660d9b2f7be3436c9ec3b337338d2629770f7f5692e7723910a20891f330a",
+  "new_body_sha256": "671d306711a8f05faf4e9e6b939477cd1ab69e5b2766418c1f2a26600dc3f889",
+  "new_section": "## Continued operation during and after Commit",
+  "deferral_and_existing_content_preserved": true
+}
