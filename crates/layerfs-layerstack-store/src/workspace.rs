@@ -33,6 +33,12 @@ const SNAPSHOT_CACHE_BYTES: usize = 8 * 1024 * 1024;
 const SNAPSHOT_CACHE_PAYLOAD_BYTES: usize = 1024;
 const SNAPSHOT_CACHE_ENTRY_BYTES: usize = 96;
 
+/// Resident bound of one `SnapshotReader` demand cache. Every reader owns its
+/// own cache (ordinary readers, host overlay readers and reconciliation
+/// readers), so a host aggregate that admits Workspaces must charge this
+/// allowance per admitted reader rather than assume it is free.
+pub const SNAPSHOT_READER_CACHE_BYTES: u64 = SNAPSHOT_CACHE_BYTES as u64;
+
 #[derive(Default)]
 struct SnapshotCache {
     rows: HashMap<ObjectId, Vec<u8>>,

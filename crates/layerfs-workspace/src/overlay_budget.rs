@@ -184,12 +184,18 @@ fn components(policy: ResourcePolicy) -> io::Result<Components> {
         mul(operation_slots, 128)?,
         mul(p.max_replay_entries as u64, 96)?,
     )?;
+    // One Workspace owns exactly one ordinary SnapshotReader, whose demand
+    // cache is independently bounded by the Store. It was previously admitted
+    // for free: the aggregate 128MiB host allowance covered every other
+    // resident domain but not this one, so a Workspace's real resident
+    // footprint exceeded its reservation by up to this allowance.
+    let reader_cache = layerfs_layerstack_store::SNAPSHOT_READER_CACHE_BYTES;
     let fixed = add(
         add(
             add(mul(index_memory, 2)?, owner_memory)?,
             add(slot_memory, p.max_replay_bytes)?,
         )?,
-        2 * MOVE,
+        add(2 * MOVE, reader_cache)?,
     )?;
     p.check_memory(fixed)
         .map_err(|_| invalid("overlay fixed resident capacity exceeds policy"))?;
@@ -456,7 +462,9 @@ mod tests {
         p.overlay.max_payload_index_bytes = 8 * MIB;
         p.overlay.max_retained_payload_bytes = 64 * 1024;
         p.overlay.max_scratch_bytes = 64 * 1024;
-        p.overlay.max_memory_bytes = 8 * MIB;
+        // Must cover the fixed resident base, which now includes the ordinary
+        // SnapshotReader demand-cache allowance this fixture admits.
+        p.overlay.max_memory_bytes = 16 * MIB;
         p.overlay.max_transport_bytes = 64 * 1024;
         p.overlay.max_replay_bytes = 256;
         p.overlay.max_roots = 32;
@@ -598,6 +606,33 @@ mod tests {
         drop(payload);
         assert_eq!(host.usage(), Usage::default());
     }
+    /// The ordinary SnapshotReader cache is a real resident domain: it must be
+    /// part of the fixed host reservation rather than admitted for free.
+    #[test]
+    fn fixed_resident_base_charges_the_snapshot_reader_cache() {
+        let components = components(ResourcePolicy::default()).unwrap();
+        let reader_cache = layerfs_layerstack_store::SNAPSHOT_READER_CACHE_BYTES;
+        assert_eq!(reader_cache, 8 * MIB);
+        let without_reader = components.fixed_memory_bytes - reader_cache;
+        // The reservation must exceed every other resident domain, so the
+        // charge is observable rather than absorbed by unrelated slack.
+        assert!(without_reader > 0);
+        assert_eq!(without_reader + reader_cache, components.fixed_memory_bytes);
+        let host = HostLimits::default();
+        assert!(
+            components.fixed_memory_bytes <= host.memory_bytes,
+            "one Workspace reservation must fit the aggregate host allowance"
+        );
+        assert!(
+            host.memory_bytes / components.fixed_memory_bytes >= 4,
+            "aggregate allowance must not be silently consumed by one Workspace"
+        );
+        println!(
+            "reader-cache charge PASS fixed={} reader_cache={} aggregate={}",
+            components.fixed_memory_bytes, reader_cache, host.memory_bytes
+        );
+    }
+
     #[test]
     fn aggregate_counter_and_policy_overflow_are_rejected_without_wraparound() {
         let full = Usage {
