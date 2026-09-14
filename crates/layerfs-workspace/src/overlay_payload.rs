@@ -23,6 +23,9 @@ const SOURCE: u8 = 7;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Limits {
     pub physical_bytes: u64,
+    /// Resident owner cap: live `OwnedRange` handles plus their queued release
+    /// tickets. It is deliberately **not** a ceiling on persisted payload
+    /// tokens, whose disk cost is charged through `index` and `physical_bytes`.
     pub owners: usize,
     pub readers: usize,
     pub writes: usize,
@@ -38,7 +41,22 @@ pub(crate) struct Stats {
     /// Legacy ordinary-spool charge: live coverage clipped to source highwater.
     /// SDK-inline sources use the same physical backing but are excluded here.
     pub chargeable_bytes: u64,
+    /// Resident ownership charge: live `OwnedRange` handles plus their queued
+    /// release tickets. Bounded by `Limits::owners`.
     pub owners: usize,
+    /// Persisted payload TOKEN rows. Their disk cost is charged through the
+    /// independent index/arena quotas, not the resident owner cap.
+    pub persisted_tokens: usize,
+    /// Payload-index pages still live (records plus unreclaimed old versions).
+    pub index_live_pages: u64,
+    /// Highest payload-index page slot ever allocated in this arena.
+    pub index_allocated_pages: u64,
+    /// Payload-index pages actually returned to the free list.
+    pub index_reclaimed_pages: u64,
+    /// Retired payload-index roots awaiting reference release.
+    pub index_pending_roots: usize,
+    /// Payload-index reclamation backlog flag.
+    pub index_reclamation_pending: bool,
     pub readers: usize,
     pub pending_releases: usize,
     pub pending_writes: usize,
@@ -60,6 +78,11 @@ struct Inner {
     released: Mutex<VecDeque<u64>>,
     maintenance: Mutex<()>,
     neighbor_visits: AtomicU64,
+    /// Catalog operations performed since the last bounded recycle. Advisory
+    /// only: it decides *when* assistance runs, never admission itself.
+    catalog_pressure: AtomicU64,
+    /// Advisory mirror of `State::owners` for lock-free assistance decisions.
+    resident_hint: AtomicU64,
     // Drop after files/state so aggregate backing admission cannot be released
     // while an independent OwnedRange or physical reader still owns this arena.
     _lifetime: Option<Arc<dyn std::any::Any + Send + Sync>>,
@@ -73,7 +96,10 @@ struct State {
     moving: bool,
     truncate: Option<(usize, u64)>,
     sweep: bool,
+    /// Resident owners: live handles plus queued release tickets/jobs.
     owners: usize,
+    /// Live persisted TOKEN rows, charged by the index/arena disk quotas.
+    tokens: usize,
     release_jobs: usize,
     writes: Vec<Reservation>,
     readers: Vec<Option<(usize, u64)>>,
@@ -269,6 +295,7 @@ impl Payload {
                 truncate: None,
                 sweep: false,
                 owners: 0,
+                tokens: 0,
                 release_jobs: 0,
                 writes,
                 readers,
@@ -284,11 +311,55 @@ impl Payload {
             released: Mutex::new(released),
             maintenance: Mutex::new(()),
             neighbor_visits: AtomicU64::new(0),
+            catalog_pressure: AtomicU64::new(0),
+            resident_hint: AtomicU64::new(0),
             _lifetime: lifetime,
         })))
     }
 
+    /// Mirror the resident charge for lock-free assistance decisions. Advisory
+    /// only; `State::owners` remains the admission authority.
+    fn note_resident(&self, state: &State) {
+        self.0
+            .resident_hint
+            .store(state.owners as u64, Ordering::Relaxed);
+    }
+    /// Bounded admission assistance for retired transient handles and for
+    /// recycled catalog versions. Called before an owner-producing path takes
+    /// the state lock, so it never runs under it and never drains without a
+    /// bound. Ordinary callers do not need a separate maintenance loop for
+    /// either the release queue or the index backlog to keep up.
+    fn assist(&self) -> io::Result<()> {
+        // Recycle at most one assistance budget of obsolete catalog versions.
+        const CATALOG_ASSIST_PAGES: u64 = 1024;
+        if self
+            .0
+            .catalog_pressure
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |pressure| {
+                (pressure >= CATALOG_ASSIST_PAGES).then_some(0)
+            })
+            .is_ok()
+        {
+            self.assist_catalog()?;
+        }
+        // Release retired handles while the resident charge is above half of
+        // its cap. The queue pop path re-acquires the state lock per item, so
+        // no lock is held across this loop.
+        const RELEASE_ASSIST: usize = 64;
+        if self.0.resident_hint.load(Ordering::Relaxed) * 2 >= self.0.limits.owners as u64 {
+            for _ in 0..RELEASE_ASSIST {
+                if self.0.resident_hint.load(Ordering::Relaxed) * 4 < self.0.limits.owners as u64 {
+                    break;
+                }
+                if !self.release_step()? {
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn write_from(&self, reader: &mut impl Read, len: u64) -> io::Result<OwnedRange> {
+        self.assist()?;
         self.write_classified(reader, len, true)
     }
     /// Preserve SDK-inline input classification without retaining its payload
@@ -298,6 +369,7 @@ impl Payload {
         reader: &mut impl Read,
         len: u64,
     ) -> io::Result<OwnedRange> {
+        self.assist()?;
         self.write_classified(reader, len, false)
     }
     fn write_classified(
@@ -388,6 +460,7 @@ impl Payload {
             state.chargeable_bytes = chargeable;
             state.live_bytes += allocated;
             state.owners += 1;
+            state.tokens += 1;
             Ok(OwnedRange {
                 payload: self.clone(),
                 token: reservation.id,
@@ -481,6 +554,7 @@ impl Payload {
         if len == 0 {
             return Err(invalid("empty payload append"));
         }
+        self.assist()?;
         let (reservation, location, high, end) = {
             let mut state = self.0.state.lock().unwrap();
             while state.moving {
@@ -620,6 +694,7 @@ impl Payload {
                 .ok_or_else(|| quota("payload charge overflow"))?;
             state.root = root;
             state.owners += 1;
+            state.tokens += 1;
             state.live_bytes += added_live;
             state.chargeable_bytes = chargeable;
             Ok(OwnedRange {
@@ -633,6 +708,7 @@ impl Payload {
     }
 
     pub(crate) fn subrange(&self, owner: u64, offset: u64, len: u64) -> io::Result<OwnedRange> {
+        self.assist()?;
         let mut state = self.0.state.lock().unwrap();
         let original = self.token(&state.root, owner)?;
         check_range(original, offset, len)?;
@@ -658,6 +734,7 @@ impl Payload {
     }
     /// Both tokens must be retained by the caller's acquired metadata root.
     pub(crate) fn join_tokens(&self, left: u64, right: u64) -> io::Result<OwnedRange> {
+        self.assist()?;
         let mut state = self.0.state.lock().unwrap();
         let left = self.token(&state.root, left)?;
         let right = self.token(&state.root, right)?;
@@ -754,6 +831,7 @@ impl Payload {
         state.root = root;
         state.next = next;
         state.owners += 1;
+        state.tokens += 1;
         Ok(OwnedRange {
             payload: self.clone(),
             token: id,
@@ -807,14 +885,25 @@ impl Payload {
 
     /// One bounded ownership/physical maintenance step. Large source release
     /// advances by interval; evacuation moves at most 64 KiB and then truncates.
+    /// Retired payload-index versions are reclaimed here as well: the arena's
+    /// index is otherwise never recycled, which would exhaust its catalog quota
+    /// long before any ownership or disk bound is reached.
     pub(crate) fn reclaim_step(&self) -> io::Result<bool> {
         let Ok(_maintenance) = self.0.maintenance.try_lock() else {
             return Ok(false);
         };
-        let released = self.0.released.lock().unwrap().front().copied();
-        if let Some(id) = released {
-            self.release(id)?;
-            self.0.released.lock().unwrap().pop_front();
+        // Bounded catalog recycle first and unconditionally: it never touches
+        // payload state, and it must not be starved by a busy handle-release
+        // queue. Every copied page path retires a whole cascade of now
+        // unreferenced pages, and releasing one child reference frees no page
+        // at all, so progress is judged by the pending backlog rather than by
+        // pages freed. Without this the catalog quota is exhausted long before
+        // any ownership or disk bound is reached.
+        let recycled = recycle_catalog(&self.0.index)?;
+        if self.release_step()? {
+            return Ok(true);
+        }
+        if recycled {
             return Ok(true);
         }
         let mut state = self.0.state.lock().unwrap();
@@ -1059,9 +1148,38 @@ impl Payload {
         }
         if stop_here == end {
             state.owners -= 1;
+            state.tokens -= 1;
             state.release_jobs -= 1;
         }
+        self.note_resident(state);
         Ok(true)
+    }
+    /// Bounded catalog assistance used by admission: one short burst, sized so
+    /// an owner-producing call stays within a predictable work bound even when
+    /// a large backlog exists.
+    fn assist_catalog(&self) -> io::Result<bool> {
+        let Ok(_maintenance) = self.0.maintenance.try_lock() else {
+            return Ok(false);
+        };
+        recycle_catalog(&self.0.index)
+    }
+    /// Consume one queued retired handle. The caller must not hold the state
+    /// lock: this re-acquires it, so a bounded assistance loop stays deadlock
+    /// free and its per-item cost is bounded by one catalog update.
+    fn release_step(&self) -> io::Result<bool> {
+        let queued = self.0.released.lock().unwrap().front().copied();
+        if let Some(id) = queued {
+            self.release_charged(id, true)?;
+            self.0.released.lock().unwrap().pop_front();
+            return Ok(true);
+        }
+        // Metadata leaves acquire tokens without a resident handle; their
+        // release jobs are queued work too and are counted against the same
+        // resident admission until they complete.
+        let mut state = self.0.state.lock().unwrap();
+        let pending_interval = self.release_interval(&mut state)?;
+        drop(state);
+        Ok(pending_interval)
     }
     fn finish_truncate(&self, state: &mut State) -> io::Result<bool> {
         let Some((arena, len)) = state.truncate else {
@@ -1107,7 +1225,99 @@ impl Payload {
         }
         Ok(())
     }
+    /// Deep drain of the payload catalog reclamation for diagnosis: repeats the
+    /// bounded step until it stops making progress.
+    #[cfg(test)]
+    pub(crate) fn deep_reclaim(&self) -> io::Result<usize> {
+        let mut total = 0;
+        for _ in 0..1_000_000 {
+            let freed = self.0.index.reclaim(1024)?;
+            if freed == 0 {
+                break;
+            }
+            total += freed;
+        }
+        Ok(total)
+    }
+    /// Diagnostic header census of the payload catalog arena.
+    #[cfg(test)]
+    pub(crate) fn catalog_header_census(&self) -> io::Result<crate::overlay_index::HeaderCensus> {
+        self.0.index.header_census()
+    }
+    /// Diagnostic census of the payload catalog tree structure.
+    #[cfg(test)]
+    pub(crate) fn catalog_tree_census(&self) -> io::Result<crate::overlay_index::Census> {
+        let state = self.0.state.lock().unwrap();
+        self.0.index.census(&state.root)
+    }
+    /// Diagnostic census of the payload catalog: live records by key prefix.
+    /// Test-only measurement helper; it never gates product behavior.
+    #[cfg(test)]
+    pub(crate) fn catalog_census(&self) -> io::Result<Vec<(u8, usize, u64)>> {
+        use std::collections::BTreeMap;
+        let state = self.0.state.lock().unwrap();
+        let mut tally: BTreeMap<u8, (usize, u64)> = BTreeMap::new();
+        let mut start: Option<Vec<u8>> = None;
+        loop {
+            let lower = start
+                .as_deref()
+                .map(Bound::Excluded)
+                .unwrap_or(Bound::Unbounded);
+            let rows = self
+                .0
+                .index
+                .scan(&state.root, lower, Bound::Unbounded, 1024)?;
+            let Some((last, _)) = rows.last() else {
+                break;
+            };
+            for (key, value) in &rows {
+                let entry = tally.entry(key[0]).or_insert((0, 0));
+                entry.0 += 1;
+                entry.1 += value.len() as u64;
+            }
+            start = Some(last.clone());
+        }
+        Ok(tally.into_iter().map(|(k, (n, b))| (k, n, b)).collect())
+    }
+    /// Release one reference to `id`. `charged` states whether the caller's
+    /// resident slot already covers this work (a retired handle ticket) or the
+    /// charge must be created for queued metadata-leaf release work.
+    fn release_charged(&self, id: u64, charged: bool) -> io::Result<()> {
+        let mut state = self.0.state.lock().unwrap();
+        let mut token = self.token(&state.root, id)?;
+        self.reserve_catalog(&state, 2, true)?;
+        token.refs -= 1;
+        token.cursor = token.start / BLOCK * BLOCK;
+        let mut root = self
+            .0
+            .index
+            .set(&state.root, &key(TOKEN, id, 0), &token.encode())?;
+        if token.refs == 0 {
+            root = self.0.index.set(&root, &key(RELEASE, id, 0), &[])?;
+            // A queued release job replaces the retired handle's charge; a
+            // metadata-started job adds its own until it completes.
+            state.release_jobs += 1;
+            if !charged {
+                state.owners += 1;
+            }
+        } else if charged {
+            // An independent metadata leaf still owns the token. The retired
+            // handle's resident slot is free again; the token itself remains
+            // charged to the catalog/arena disk quotas.
+            state.owners -= 1;
+        }
+        state.root = root;
+        self.note_resident(&state);
+        Ok(())
+    }
     fn reserve_catalog(&self, state: &State, operations: u64, recovery: bool) -> io::Result<()> {
+        // Advisory pressure for bounded inline assistance. Saturating: the
+        // assist resets it, and an overflow only delays the next early assist.
+        let _ = self.0.catalog_pressure.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |pressure| Some(pressure.saturating_add(operations)),
+        );
         let limits = self.0.limits.index;
         let pending = state.writes.iter().filter(|r| !r.failed).count() as u64 * 32;
         let needed = catalog_pages(
@@ -1256,13 +1466,20 @@ impl Payload {
     pub(crate) fn stats(&self) -> io::Result<Stats> {
         let state = self.0.state.lock().unwrap();
         let pending_releases = state.release_jobs + self.0.released.lock().unwrap().len();
+        let index = self.0.index.stats()?;
         Ok(Stats {
             physical_bytes: physical(&self.0.files)?,
             reserved_bytes: state.tails.iter().sum(),
-            index_physical_bytes: self.0.index.stats()?.physical_bytes,
+            index_physical_bytes: index.physical_bytes,
             live_block_bytes: state.live_bytes,
             chargeable_bytes: state.chargeable_bytes,
             owners: state.owners,
+            persisted_tokens: state.tokens,
+            index_live_pages: index.live_pages,
+            index_allocated_pages: index.allocated_pages,
+            index_reclaimed_pages: index.reclaimed_pages,
+            index_pending_roots: index.pending_roots,
+            index_reclamation_pending: index.reclamation_pending,
             readers: state.readers.iter().flatten().count(),
             pending_releases,
             pending_writes: state.writes.len(),
@@ -1273,7 +1490,8 @@ impl Payload {
                 || state.writes.iter().any(|reservation| reservation.failed)
                 || state.sweep
                 || state.evacuating.is_some()
-                || state.truncate.is_some(),
+                || state.truncate.is_some()
+                || index.reclamation_pending,
             recovery_index_pages: catalog_pages(self.0.limits.index.max_pages, 40),
         })
     }
@@ -1296,24 +1514,25 @@ impl ExternalOwner for Payload {
         Ok(())
     }
     fn release(&self, id: u64) -> io::Result<()> {
-        let mut state = self.0.state.lock().unwrap();
-        let mut token = self.token(&state.root, id)?;
-        self.reserve_catalog(&state, 2, true)?;
-        token.refs -= 1;
-        token.cursor = token.start / BLOCK * BLOCK;
-        let mut root = self
-            .0
-            .index
-            .set(&state.root, &key(TOKEN, id, 0), &token.encode())?;
-        if token.refs == 0 {
-            root = self.0.index.set(&root, &key(RELEASE, id, 0), &[])?;
-        }
-        state.root = root;
-        if token.refs == 0 {
-            state.release_jobs += 1;
-        }
-        Ok(())
+        // Invoked by a metadata leaf retiring its own reference: this is new
+        // queued release work without a resident handle.
+        self.release_charged(id, false)
     }
+}
+/// Bounded catalog recycle. Pages are reclaimed in batches; the loop stops as
+/// soon as the index reports no further backlog, so a caught-up index costs one
+/// cheap probe per call.
+fn recycle_catalog(index: &Index) -> io::Result<bool> {
+    const CATALOG_STEPS: usize = 8;
+    const CATALOG_BATCH: usize = 256;
+    let mut recycled = false;
+    for _ in 0..CATALOG_STEPS {
+        if !index.reclaim_pending() {
+            break;
+        }
+        recycled |= index.reclaim(CATALOG_BATCH)? > 0;
+    }
+    Ok(recycled)
 }
 fn catalog_pages(max_pages: u64, operations: u64) -> u64 {
     // Minimum internal fanout is four. Include two boundary levels, split
@@ -1748,6 +1967,192 @@ mod tests {
             );
         }
     }
+    /// Tiny admission-cap oracle. The resident owner cap must bound genuinely
+    /// simultaneous handles, and it must **not** become a ceiling on the number
+    /// of persisted payload tokens a Workspace retains: those are charged to the
+    /// independent catalog/arena disk quotas. Reclamation must also keep the
+    /// payload index's live page count proportional to the tokens it holds.
+    #[test]
+    fn tiny_owner_cap_bounds_resident_handles_not_persisted_tokens() -> io::Result<()> {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-payload-tiny-owner-cap-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory)?;
+        let payload = Payload::temporary(
+            &directory,
+            Limits {
+                physical_bytes: 16 * 1024 * 1024,
+                owners: 4,
+                readers: 4,
+                writes: 2,
+                index: IndexLimits {
+                    max_pages: 8192,
+                    max_roots: 64,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        // Simultaneous handles are still bounded by the configured cap, and a
+        // rejected one leaves the admitted owners usable.
+        let held: Vec<OwnedRange> = (0..4)
+            .map(|_| payload.write_from(&mut &b"a"[..], 1).unwrap())
+            .collect();
+        assert_eq!(payload.stats()?.owners, 4);
+        assert_eq!(
+            payload.write_from(&mut &b"b"[..], 1).err().unwrap().kind(),
+            ErrorKind::StorageFull
+        );
+        let mut byte = [0];
+        held[3].read_exact_at(&mut byte, 0)?;
+        assert_eq!(byte, [b'a']);
+        drop(held);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.owners, 0);
+
+        // Persisted tokens outlive their transient handles through an
+        // independent metadata root. With a four-slot resident cap and no
+        // external maintenance loop, sixty-four retained tokens must be
+        // admitted: the bounded admission assistance retires each handle.
+        let metadata = Index::temporary_with_owner(
+            &directory,
+            IndexLimits {
+                max_pages: 8192,
+                max_roots: 64,
+                ..IndexLimits::default()
+            },
+            Arc::new(payload.clone()),
+        )?;
+        let mut root = metadata.empty_root()?;
+        let mut tokens = Vec::new();
+        let mut peak_resident = 0;
+        for index in 0..64u64 {
+            let owner = payload.write_from(&mut &[index as u8][..], 1)?;
+            let token = owner.token();
+            root = metadata.set_owned(
+                &root,
+                &index.to_be_bytes(),
+                b"one retained byte",
+                Some(token),
+            )?;
+            drop(owner);
+            peak_resident = peak_resident.max(payload.stats()?.owners);
+            assert!(
+                payload.stats()?.owners <= 4,
+                "resident charge escaped the configured cap: {:?}",
+                payload.stats()?
+            );
+            tokens.push((token, index as u8));
+        }
+        // Bounded assistance retires the dropped handles, so the settled state
+        // holds every token with no resident owner and a catalog proportional
+        // to those tokens rather than to the write history.
+        drain(&payload)?;
+        let stats = payload.stats()?;
+        assert_eq!(
+            stats.persisted_tokens, 64,
+            "every retained file keeps exactly one persisted token"
+        );
+        assert_eq!(stats.owners, 0, "{stats:?}");
+        assert_eq!(stats.readers, 0, "{stats:?}");
+        assert!(
+            stats.index_live_pages <= 4 * 64 + 64,
+            "payload catalog pages must stay proportional to live tokens: {stats:?}"
+        );
+        for (token, expected) in &tokens {
+            payload.read_exact_at(*token, &mut byte, 0)?;
+            assert_eq!(byte, [*expected]);
+        }
+        println!(
+            "tiny-owner-cap PASS tokens={} peak_resident={peak_resident} live_pages={} allocated_pages={} pending_releases={}",
+            stats.persisted_tokens,
+            stats.index_live_pages,
+            stats.index_allocated_pages,
+            stats.pending_releases
+        );
+
+        // Dropping the retaining metadata root converges: tokens and catalog
+        // pages both retire with it.
+        drop(root);
+        for _ in 0..1024 {
+            metadata.reclaim(64)?;
+        }
+        drain(&payload)?;
+        let settled = payload.stats()?;
+        assert_eq!(settled.persisted_tokens, 0, "{settled:?}");
+        assert_eq!(settled.owners, 0, "{settled:?}");
+        assert_eq!(settled.index_live_pages, 0, "{settled:?}");
+        assert!(!settled.cleanup_pending, "{settled:?}");
+        drop(metadata);
+        drop(payload);
+        fs::remove_dir(&directory)?;
+        Ok(())
+    }
+
+    /// Diagnostic (not a gate): page cost of one isolated one-byte write and of
+    /// a run of them, so the per-file metadata footprint is measured rather
+    /// than inferred from arithmetic.
+    #[test]
+    fn one_byte_write_index_page_cost() -> io::Result<()> {
+        let directory =
+            std::env::temp_dir().join(format!("layerfs-payload-pagecost-{}", std::process::id()));
+        fs::create_dir_all(&directory)?;
+        let payload = Payload::temporary(
+            &directory,
+            Limits {
+                physical_bytes: 64 * 1024 * 1024,
+                owners: 65_536,
+                readers: 4,
+                writes: 4,
+                index: IndexLimits {
+                    max_pages: 262_144,
+                    max_roots: 16_384,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        let mut previous = payload.0.index.stats()?;
+        for index in 0..200 {
+            let owner = payload.write_from(&mut &b"x"[..], 1)?;
+            let stats = payload.0.index.stats()?;
+            if index < 5 || index % 25 == 24 {
+                println!(
+                    "pagecost index={index} live={} allocated={} page_writes={} delta_live={} \
+                     delta_writes={}",
+                    stats.live_pages,
+                    stats.allocated_pages,
+                    stats.page_writes,
+                    stats.live_pages - previous.live_pages,
+                    stats.page_writes - previous.page_writes
+                );
+            }
+            previous = stats;
+            drop(owner);
+            payload.0.index.reclaim(64)?;
+            let after = payload.0.index.stats()?;
+            if index < 5 || index % 25 == 24 {
+                println!(
+                    "pagecost-after index={index} live={} allocated={} reclaimed={} pending={}",
+                    after.live_pages,
+                    after.allocated_pages,
+                    after.reclaimed_pages,
+                    after.reclamation_pending
+                );
+            }
+        }
+        let settled = payload.0.index.stats()?;
+        println!(
+            "pagecost files=200 live={} allocated={} page_writes={} physical={}",
+            settled.live_pages,
+            settled.allocated_pages,
+            settled.page_writes,
+            settled.physical_bytes
+        );
+        drop(payload);
+        fs::remove_dir(&directory)?;
+        Ok(())
+    }
+
     #[test]
     fn chargeable_spool_counts_clipped_shared_coverage_and_excludes_sdk_inline() -> io::Result<()> {
         let payload = Payload::temporary(

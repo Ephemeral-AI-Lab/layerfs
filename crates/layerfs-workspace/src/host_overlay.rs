@@ -1154,11 +1154,22 @@ impl HostOverlay {
 
     /// One bounded assist; callers schedule further work without interpreting
     /// a Commit as a live-operation pause or draining the graph at acquisition.
+    /// The metadata index is recycled proportionally to what ordinary
+    /// operations retired: a fixed handful of pages per step would otherwise
+    /// let obsolete page versions outrun reclamation and exhaust the catalog
+    /// quota long before any inode, owner or disk bound is reached.
     pub(crate) fn maintain(&self) -> Result<bool> {
         if self.overlay.directory_cleanup_pending()? {
             self.mutate(|m| m.cleanup_deleted_directory())?;
         }
-        self.index.reclaim(16)?;
+        const RECLAIM_STEPS: usize = 16;
+        const RECLAIM_BATCH: usize = 256;
+        for _ in 0..RECLAIM_STEPS {
+            if !self.index.reclaim_pending() {
+                break;
+            }
+            self.index.reclaim(RECLAIM_BATCH)?;
+        }
         self.payload.reclaim_step()?;
         let index = self.index.stats()?;
         Ok(self.overlay.directory_cleanup_pending()?
@@ -1726,6 +1737,140 @@ pub(crate) mod tests {
         worker.join().unwrap();
         assert!(observations > 0);
         println!("host namespace/open-unlinked identity PASS; concurrent rename snapshot observations={observations}");
+    }
+
+    /// Focused ownership-accounting reproduction, explicitly selected by name.
+    /// This is **not** the #123 million-changed-file qualification: it uses
+    /// 8,193 distinct regular files, one small ordinary write per file, one
+    /// bounded existing maintenance step per completed write, no Commit and no
+    /// retained snapshot. Ignored in the default suite because of its scale.
+    #[test]
+    #[ignore = "scale reproduction; select explicitly: cargo test -p layerfs-workspace many_ordinary_files"]
+    fn many_ordinary_files_do_not_exhaust_payload_owner_admission() {
+        const FILES: usize = 8193;
+        let fixture = Fixture::new(|_| {}, ResourcePolicy::default());
+        let host = &fixture.host;
+        let mut peak_owners: usize = 0;
+        let mut peak_pending: usize = 0;
+        let mut peak_persisted: usize = 0;
+        let mut failure: Option<(usize, String)> = None;
+        for index in 0..FILES {
+            let name = format!("file-{index:05}");
+            let node = host
+                .create_file(ROOT, name.as_bytes(), 0o600)
+                .unwrap_or_else(|error| panic!("ordinary create {index} failed: {error:?}"))
+                .node;
+            match host.write(node, 0, b"x") {
+                Ok(written) => assert_eq!(written, 1),
+                Err(error) => {
+                    let stats = host.payload.stats().unwrap();
+                    println!(
+                        "REPRODUCER first failure index={index} error={error:?} owners={} \
+                         persisted_tokens={} pending_releases={} physical={} index_physical={} \
+                         chargeable={}",
+                        stats.owners,
+                        stats.persisted_tokens,
+                        stats.pending_releases,
+                        stats.physical_bytes,
+                        stats.index_physical_bytes,
+                        stats.chargeable_bytes
+                    );
+                    failure = Some((index, format!("{error:?}")));
+                    break;
+                }
+            }
+            host.maintain().unwrap();
+            let stats = host.payload.stats().unwrap();
+            peak_owners = peak_owners.max(stats.owners);
+            peak_pending = peak_pending.max(stats.pending_releases);
+            peak_persisted = peak_persisted.max(stats.persisted_tokens);
+            if index % 1000 == 999 || index == FILES - 1 {
+                println!(
+                    "REPRODUCER census file={index} keys={:?}",
+                    host.payload.catalog_census().unwrap()
+                );
+                println!(
+                    "REPRODUCER tree file={index} {:?}",
+                    host.payload.catalog_tree_census().unwrap()
+                );
+                println!(
+                    "REPRODUCER headers file={index} {:?}",
+                    host.payload.catalog_header_census().unwrap()
+                );
+                let metadata = host.index.stats().unwrap();
+                println!(
+                    "REPRODUCER progress file={index} payload_index_live={} \
+                     payload_index_allocated={} payload_index_reclaimed={} \
+                     payload_index_roots={} payload_index_pending={} payload_index_physical={} \
+                     metadata_live={} owners={} persisted={} pending={} physical={}",
+                    stats.index_live_pages,
+                    stats.index_allocated_pages,
+                    stats.index_reclaimed_pages,
+                    stats.index_pending_roots,
+                    stats.index_reclamation_pending,
+                    stats.index_physical_bytes,
+                    metadata.live_pages,
+                    stats.owners,
+                    stats.persisted_tokens,
+                    stats.pending_releases,
+                    stats.physical_bytes
+                );
+            }
+        }
+        let stats = host.payload.stats().unwrap();
+        println!(
+            "REPRODUCER files={FILES} peak_resident_owners={peak_owners} \
+             peak_pending_releases={peak_pending} peak_persisted_tokens={peak_persisted} \
+             owners={} persisted_tokens={} pending_releases={} chargeable={} physical={} \
+             index_physical={}",
+            stats.owners,
+            stats.persisted_tokens,
+            stats.pending_releases,
+            stats.chargeable_bytes,
+            stats.physical_bytes,
+            stats.index_physical_bytes
+        );
+        // Whichever file the failure landed on stays empty, and every earlier
+        // acknowledged byte is still readable: a rejected admission may not
+        // corrupt retained ownership.
+        let acknowledged = failure.as_ref().map_or(FILES, |(index, _)| *index);
+        for index in 0..acknowledged {
+            let attr = host
+                .lookup(ROOT, format!("file-{index:05}").as_bytes())
+                .unwrap();
+            let mut byte = [0];
+            assert_eq!(
+                host.read_into(attr.node, 0, &mut byte).unwrap(),
+                1,
+                "prior acknowledged byte lost at {index}"
+            );
+            assert_eq!(byte, [b'x'], "prior acknowledged byte changed at {index}");
+        }
+        if let Some((index, error)) = failure {
+            let attr = host
+                .lookup(ROOT, format!("file-{index:05}").as_bytes())
+                .unwrap();
+            assert_eq!(attr.size, 0, "rejected ordinary write was not atomic");
+            panic!(
+                "ordinary write {index}/{FILES} rejected: {error}; earlier acknowledged bytes and \
+                 the rejected file's emptiness verified"
+            );
+        }
+        let settled = host.payload.stats().unwrap();
+        assert_eq!(
+            settled.persisted_tokens, FILES,
+            "every live file retains exactly one persisted payload token"
+        );
+        assert!(
+            peak_owners <= ResourcePolicy::default().overlay.max_payload_owners,
+            "resident owners exceeded the configured cap: {peak_owners}"
+        );
+        println!(
+            "REPRODUCER PASS files={FILES} verified_bytes={acknowledged} \
+             peak_resident_owners={peak_owners} peak_pending_releases={peak_pending} \
+             resident_owners={} persisted_tokens={}",
+            settled.owners, settled.persisted_tokens
+        );
     }
 
     #[test]

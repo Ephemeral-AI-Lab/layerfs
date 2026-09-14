@@ -48,6 +48,32 @@ impl Default for Limits {
     }
 }
 #[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct HeaderCensus {
+    pub high_water: u64,
+    pub live_pages: u64,
+    pub live_unreferenced: u64,
+    pub live_single_ref: u64,
+    pub live_multi_ref: u64,
+    pub live_refs: u64,
+    pub free_pages: u64,
+    pub reclaim_queue_pages: u64,
+    pub retiring_pages: u64,
+    pub root_leases: usize,
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Census {
+    pub pages: u64,
+    pub leaves: u64,
+    pub branches: u64,
+    pub overflows: u64,
+    pub leaf_entries: u64,
+    pub branch_children: u64,
+    pub overflow_bytes: u64,
+    pub min_leaf_entries: Option<u64>,
+    pub max_leaf_entries: u64,
+    pub height: u64,
+}
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Stats {
     pub allocated_pages: u64,
     pub live_pages: u64,
@@ -655,7 +681,9 @@ impl Index {
         }
         Ok(output)
     }
-    fn release_retired(&self, storage: &mut Storage, limit: usize) -> io::Result<()> {
+    /// Process up to `limit` retired roots, returning how many were consumed.
+    fn release_retired(&self, storage: &mut Storage, limit: usize) -> io::Result<usize> {
+        let mut processed = 0;
         for _ in 0..limit {
             let Some(page) = self.0.retired.lock().unwrap().pop_front() else {
                 break;
@@ -667,20 +695,29 @@ impl Index {
                 }
             }
             self.0.roots.fetch_sub(1, Ordering::AcqRel);
+            processed += 1;
         }
-        Ok(())
+        Ok(processed)
     }
     /// Each step frees at most one page and visits only that page's bounded links.
     /// Failed cleanup leaves its cursor and charges intact for the next call.
     pub(crate) fn reclaim(&self, max_pages: usize) -> io::Result<usize> {
         let mut storage = self.0.storage.lock().unwrap();
         storage.retry_rollback()?;
-        self.release_retired(&mut storage, max_pages)?;
+        // Retired roots and the zero-reference chain share one bound, but the
+        // chain must always advance: a long retired queue would otherwise
+        // consume the whole budget on every call and the chain's pages would
+        // stay charged forever even though nothing references them.
+        let budget = max_pages.max(1);
+        let released = self.release_retired(&mut storage, budget)?;
         let mut reclaimed = 0;
-        for _ in 0..max_pages {
+        for _ in 0..budget.saturating_sub(released) {
             if storage.reclaim == NONE {
                 break;
             }
+            reclaimed += usize::from(storage.reclaim_one()?);
+        }
+        if released == budget && storage.reclaim != NONE {
             reclaimed += usize::from(storage.reclaim_one()?);
         }
         storage.finish_pending_header()?;
@@ -711,6 +748,109 @@ impl Index {
             file.sync_data()?;
         }
         Ok(())
+    }
+    /// Test-only header census over every allocated page slot: how many pages
+    /// are live/free/queued and how many live pages still hold references.
+    /// Explains whether catalog growth is a queued-reclaim backlog or pinned
+    /// pages, with measured values rather than arithmetic estimates.
+    #[cfg(test)]
+    pub(crate) fn header_census(&self) -> io::Result<HeaderCensus> {
+        let mut storage = self.0.storage.lock().unwrap();
+        let high_water = storage.high_water;
+        let mut census = HeaderCensus {
+            high_water,
+            ..HeaderCensus::default()
+        };
+        for page in 0..high_water {
+            let header = storage.header(page)?.ok_or_else(|| {
+                io::Error::new(ErrorKind::InvalidData, "missing overlay page header")
+            })?;
+            match header.state {
+                FREE => census.free_pages += 1,
+                RECLAIM => census.reclaim_queue_pages += 1,
+                RETIRING => census.retiring_pages += 1,
+                _ => {
+                    census.live_pages += 1;
+                    if header.refs == 0 {
+                        census.live_unreferenced += 1;
+                    } else if header.refs == 1 {
+                        census.live_single_ref += 1;
+                    } else {
+                        census.live_multi_ref += 1;
+                    }
+                    census.live_refs += header.refs;
+                }
+            }
+        }
+        census.root_leases = self.0.roots.load(Ordering::Acquire);
+        Ok(census)
+    }
+    /// Test-only structural census: node kinds, occupancy and height of the
+    /// tree reachable from `root`. Used to explain catalog page growth with
+    /// measured values instead of arithmetic estimates.
+    #[cfg(test)]
+    pub(crate) fn census(&self, root: &Root) -> io::Result<Census> {
+        let mut storage = self.0.storage.lock().unwrap();
+        let mut census = Census::default();
+        let Some(page) = root.0.page else {
+            return Ok(census);
+        };
+        self.census_page(&mut storage, page, 1, &mut census)?;
+        Ok(census)
+    }
+    #[cfg(test)]
+    fn census_page(
+        &self,
+        storage: &mut Storage,
+        page: u64,
+        depth: usize,
+        census: &mut Census,
+    ) -> io::Result<()> {
+        census.height = census.height.max(depth as u64);
+        census.pages += 1;
+        match storage.node(page)? {
+            Node::Leaf(entries) => {
+                census.leaves += 1;
+                census.leaf_entries += entries.len() as u64;
+                census.min_leaf_entries = Some(
+                    census
+                        .min_leaf_entries
+                        .map_or(entries.len() as u64, |m| m.min(entries.len() as u64)),
+                );
+                census.max_leaf_entries = census.max_leaf_entries.max(entries.len() as u64);
+            }
+            Node::Branch(children) => {
+                census.branches += 1;
+                census.branch_children += children.len() as u64;
+                let pages: Vec<u64> = children.iter().map(|child| child.page).collect();
+                for child in pages {
+                    self.census_page(storage, child, depth + 1, census)?;
+                }
+            }
+            Node::Overflow { next, bytes } => {
+                census.overflows += 1;
+                census.overflow_bytes += bytes.len() as u64;
+                match next {
+                    Some(next) => self.census_page(storage, next, depth + 1, census)?,
+                    None => {}
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Cheap reclamation backlog probe: flags and queue lengths only, without
+    /// the metadata syscalls `stats()` performs. Bounded drive loops use this
+    /// instead of polling full statistics on every step.
+    pub(crate) fn reclaim_pending(&self) -> bool {
+        if !self.0.retired.lock().unwrap().is_empty() {
+            return true;
+        }
+        let storage = self.0.storage.lock().unwrap();
+        storage.reclaim != NONE
+            || storage.abandoned.is_some()
+            || !storage.rollback.is_empty()
+            || storage.pending_header.is_some()
+            || storage.pending_truncate.is_some()
     }
     pub(crate) fn stats(&self) -> io::Result<Stats> {
         let storage = self.0.storage.lock().unwrap();
@@ -1875,6 +2015,61 @@ mod tests {
         drain(&index);
         assert_eq!(index.stats().unwrap().live_pages, 0);
     }
+    fn key_for(kind: u8, first: u64, second: u64) -> Vec<u8> {
+        [
+            vec![kind],
+            first.to_be_bytes().to_vec(),
+            second.to_be_bytes().to_vec(),
+        ]
+        .concat()
+    }
+    /// Focused reproduction of the observed catalog growth: inserting records
+    /// under several key prefixes with monotonically increasing first words --
+    /// the payload arena's per-file record pattern -- must not leave pages
+    /// pinned after every root is dropped and reclamation is drained.
+    #[test]
+    fn repeated_prefix_insertions_release_every_retired_page() {
+        let index = index(262_144);
+        let mut root = index.empty_root().unwrap();
+        let mut samples = Vec::new();
+        for file in 1..=64u64 {
+            for kind in [1u8, 2, 3, 4, 5, 7] {
+                root = index
+                    .set(&root, &key_for(kind, file, 0), &[0u8; 24])
+                    .unwrap();
+            }
+            drain(&index);
+            if file % 16 == 0 {
+                samples.push((file, index.stats().unwrap(), index.header_census().unwrap()));
+            }
+        }
+        let peak = index.stats().unwrap();
+        println!(
+            "index-growth files=64 live={} allocated={} reclaimed={} roots={}",
+            peak.live_pages, peak.allocated_pages, peak.reclaimed_pages, peak.root_leases
+        );
+        let census = index.header_census().unwrap();
+        let tree = index.census(&root).unwrap();
+        println!("index-growth headers {census:?}");
+        println!("index-growth tree {tree:?}");
+        for (file, stats, headers) in &samples {
+            println!(
+                "index-growth sample file={file} live={} reclaim_queue={} single_ref={}                  multi_ref={} free={}",
+                stats.live_pages,
+                headers.reclaim_queue_pages,
+                headers.live_single_ref,
+                headers.live_multi_ref,
+                headers.free_pages
+            );
+        }
+        // The tree reachable from the live root holds every record; anything
+        // beyond it is unreachable garbage that reclamation must have released.
+        assert_eq!(
+            census.live_pages, tree.pages,
+            "unreachable pages stayed live: {census:?} vs {tree:?}"
+        );
+    }
+
     #[test]
     fn physical_pages_relocate_and_reclaim_under_a_retained_snapshot() {
         let index = index(256);

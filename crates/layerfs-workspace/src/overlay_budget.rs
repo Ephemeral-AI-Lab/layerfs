@@ -172,6 +172,9 @@ fn components(policy: ResourcePolicy) -> io::Result<Components> {
         mul(p.max_roots as u64, 80)?,
         add(64 * 16 * 1024, RECORD_BYTES as u64)?,
     )?;
+    // Resident ownership charge only: live payload handles plus their queued
+    // release tickets. Persisted payload tokens are bounded by the payload
+    // index and arena disk quotas, never by this resident allowance.
     let owner_memory = mul(p.max_payload_owners as u64, 80)?;
     let operation_slots = add(
         add(p.max_readers as u64, p.max_writers as u64)?,
