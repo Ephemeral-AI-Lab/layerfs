@@ -595,6 +595,9 @@ impl SnapshotCandidateInputs<'_> {
             CheckpointJournal::validate_record(objects, &metadata, record, content, value.attr)
         })?;
         note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+        // #144 D2: this tail (result finish, correspondence bookkeeping and
+        // the admission session) previously landed in unattributed.
+        let started = Instant::now();
         let mut built = objects.finish(inodes.root, 0)?;
         add_build_counters(&mut built.counters, file_counters);
         let mut correspondence = view
@@ -616,6 +619,7 @@ impl SnapshotCandidateInputs<'_> {
         drop(view.reader);
         let mut admission = self.store.workspace_admission(self.workspace_id)?;
         capacity.retain_admission(&mut admission)?;
+        note_commit_phase(WorkspaceCommitPhase::ConstructionTail, started);
         // Full-attempt peaks: the admission above performs its synchronous
         // staging here, so its private scratch is now included. The capacity
         // scope is still alive (retained by the admission), so this sample

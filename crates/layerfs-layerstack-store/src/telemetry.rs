@@ -355,6 +355,35 @@ pub struct FuseWriteReceipt {
     pub live_write_dispatch_ns: u64,
     pub live_edit_ns: u64,
 
+    /// Host-authority dispatch proof (#144 D1): per-wire-class counts of the
+    /// host-authority operations this Workspace dispatched. Zero on routes
+    /// without a host authority. Take semantics: counts dispatches since the
+    /// previous receipt.
+    pub host_authority_dispatches: u64,
+    pub host_authority_lookup: u64,
+    pub host_authority_attr: u64,
+    pub host_authority_readlink: u64,
+    pub host_authority_directory: u64,
+    pub host_authority_create: u64,
+    pub host_authority_mkdir: u64,
+    pub host_authority_symlink: u64,
+    pub host_authority_link: u64,
+    pub host_authority_unlink: u64,
+    pub host_authority_rename: u64,
+    pub host_authority_pin: u64,
+    pub host_authority_unpin: u64,
+    pub host_authority_forget: u64,
+    pub host_authority_forget_batch: u64,
+    pub host_authority_read: u64,
+    pub host_authority_read_lease: u64,
+    pub host_authority_release_lease: u64,
+    pub host_authority_write: u64,
+    pub host_authority_truncate: u64,
+    pub host_authority_chmod: u64,
+    pub host_authority_mtime: u64,
+    pub host_authority_fsync: u64,
+    pub host_authority_detach: u64,
+
     pub spool_write_bytes: u64,
     pub spool_write_open_count: u64,
     pub spool_write_ns: u64,
@@ -411,6 +440,16 @@ pub struct WorkspaceCommitReceipt {
     pub publication_insert_ns: u64,
     pub publication_metadata_ns: u64,
     pub publication_commit_ns: u64,
+    /// #144 D2: host-route regions previously inside unattributed_ns —
+    /// pre-capture maintenance/metrics collection, the construction tail after
+    /// the namespace phase, exact staging, and publication acknowledgment.
+    /// `maintain_ns` is nested inside `pre_capture_ns` (excluded from the
+    /// attributed summation, like the other nested sub-phase fields).
+    pub pre_capture_ns: u64,
+    pub maintain_ns: u64,
+    pub construction_tail_ns: u64,
+    pub stage_ns: u64,
+    pub acknowledge_ns: u64,
     /// Includes spool_retirement_ns; retirement is a nested subphase.
     pub checkpoint_ns: u64,
     pub spool_retirement_ns: u64,
@@ -450,6 +489,20 @@ pub struct WorkspaceCommitDiagnostics {
     pub namespace_dirty_nodes_visited: u64,
     pub namespace_clean_nodes_visited: u64,
     pub namespace_candidate_probe_nodes: u64,
+    /// #144 D2 bridge: host-route construction diagnostics from
+    /// SnapshotCandidateDiagnostics, dropped before reaching this record
+    /// before this note existed. Populated only on the host-authority route.
+    pub construction_changed_keys: u64,
+    pub construction_changed_inodes: u64,
+    pub construction_binding_deltas: u64,
+    pub construction_file_tasks: u64,
+    pub construction_correspondence_visits: u64,
+    pub construction_correspondence_fragments: u64,
+    pub construction_replacement_bytes: u64,
+    pub construction_reused_bytes: u64,
+    pub construction_full_comparisons: u64,
+    pub construction_full_builds: u64,
+    pub construction_scratch_peak_reserved_bytes: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -466,6 +519,10 @@ impl WorkspaceCommitReceipt {
             self.local_admission_ns,
             self.object_admission_ns,
             self.publication_ns,
+            self.pre_capture_ns,
+            self.construction_tail_ns,
+            self.stage_ns,
+            self.acknowledge_ns,
             self.checkpoint_ns,
             self.resume_ns,
         ]
@@ -489,6 +546,11 @@ pub enum WorkspaceCommitPhase {
     LocalAdmission,
     ObjectAdmission,
     Publication,
+    PreCapture,
+    Maintain,
+    ConstructionTail,
+    Stage,
+    Acknowledge,
     Checkpoint,
     SpoolRetirement,
     Resume,
@@ -499,6 +561,26 @@ pub enum WorkspaceLifecycleKind {
     #[default]
     Attach,
     End,
+}
+
+/// #144 D2: host-side End phase split for the host-authority route. The
+/// daemon-side teardown keeps its own `WorkspaceLifecycleReceipt`; this
+/// record covers the regions of `end_workspace_session` that had no receipt:
+/// correspondence settle (bounded maintenance drain), `after_detach`, and
+/// per-Workspace state-directory removal.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct HostEndReceipt {
+    pub settle_ns: u64,
+    pub settle_steps: u64,
+    pub after_detach_ns: u64,
+    pub state_removal_ns: u64,
+}
+
+pub fn record_host_end(receipt: HostEndReceipt) -> Result<()> {
+    RECEIPTS.with(|receipts| {
+        receipts.borrow_mut().push(StorageReceipt::HostEnd(receipt));
+    });
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -556,6 +638,7 @@ pub enum StorageReceipt {
     FuseWrite(FuseWriteReceipt),
     WorkspaceRead(WorkspaceReadReceipt),
     PhysicalStorage(PhysicalStorageReceipt),
+    HostEnd(HostEndReceipt),
 }
 
 thread_local! {
@@ -654,6 +737,39 @@ pub fn note_workspace_commit_edit_state(
     });
 }
 
+/// #144 D2 bridge: surface the host-route construction diagnostics that
+/// previously never reached this thread-local record. Values overwrite; the
+/// host route builds one candidate per attempt.
+pub fn note_workspace_commit_construction(
+    changed_keys: u64,
+    changed_inodes: u64,
+    binding_deltas: u64,
+    file_tasks: u64,
+    correspondence_visits: u64,
+    correspondence_fragments: u64,
+    replacement_bytes: u64,
+    reused_bytes: u64,
+    full_comparisons: u64,
+    full_builds: u64,
+    scratch_peak_reserved_bytes: u64,
+) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.construction_changed_keys = changed_keys;
+            diagnostic.construction_changed_inodes = changed_inodes;
+            diagnostic.construction_binding_deltas = binding_deltas;
+            diagnostic.construction_file_tasks = file_tasks;
+            diagnostic.construction_correspondence_visits = correspondence_visits;
+            diagnostic.construction_correspondence_fragments = correspondence_fragments;
+            diagnostic.construction_replacement_bytes = replacement_bytes;
+            diagnostic.construction_reused_bytes = reused_bytes;
+            diagnostic.construction_full_comparisons = full_comparisons;
+            diagnostic.construction_full_builds = full_builds;
+            diagnostic.construction_scratch_peak_reserved_bytes = scratch_peak_reserved_bytes;
+        }
+    });
+}
+
 /// Adds passive allocation observations without changing legacy receipt fields.
 pub fn note_workspace_physical_spool(
     current: Option<u64>,
@@ -727,6 +843,11 @@ pub fn note_workspace_commit_phase(phase: WorkspaceCommitPhase, elapsed_ns: u64)
             WorkspaceCommitPhase::LocalAdmission => &mut receipt.local_admission_ns,
             WorkspaceCommitPhase::ObjectAdmission => &mut receipt.object_admission_ns,
             WorkspaceCommitPhase::Publication => &mut receipt.publication_ns,
+            WorkspaceCommitPhase::PreCapture => &mut receipt.pre_capture_ns,
+            WorkspaceCommitPhase::Maintain => &mut receipt.maintain_ns,
+            WorkspaceCommitPhase::ConstructionTail => &mut receipt.construction_tail_ns,
+            WorkspaceCommitPhase::Stage => &mut receipt.stage_ns,
+            WorkspaceCommitPhase::Acknowledge => &mut receipt.acknowledge_ns,
             WorkspaceCommitPhase::Checkpoint => &mut receipt.checkpoint_ns,
             WorkspaceCommitPhase::SpoolRetirement => &mut receipt.spool_retirement_ns,
             WorkspaceCommitPhase::Resume => &mut receipt.resume_ns,

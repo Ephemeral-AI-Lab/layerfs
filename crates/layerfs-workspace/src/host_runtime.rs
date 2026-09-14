@@ -152,18 +152,21 @@ impl HostRuntime {
 
     /// Bounded explicit maintenance drain. A retained attempt or an active
     /// Commit makes every step report remaining work, so that condition stops
-    /// the drain and the next lifecycle call continues it.
-    pub(crate) fn maintain(&self) -> Result<()> {
+    /// the drain and the next lifecycle call continues it. Returns the number
+    /// of completed steps for the End/Commit phase receipts (#144 D2).
+    pub(crate) fn maintain(&self) -> Result<usize> {
         const MAX_STEPS: usize = 4096;
         if self.commits.has_pending()? {
-            return Ok(());
+            return Ok(0);
         }
+        let mut steps = 0_usize;
         for _ in 0..MAX_STEPS {
             if !self.maintenance_step()? {
                 break;
             }
+            steps += 1;
         }
-        Ok(())
+        Ok(steps)
     }
 
     pub(crate) fn recover_sdk(&self) -> Result<crate::host_sdk::Recovery> {
@@ -341,6 +344,13 @@ mod tests {
             );
             assert!(runtime.is_dirty().unwrap());
             assert_eq!(client.read(node, 0, 7).unwrap(), b"ABitial");
+            // #144 D1: the host authority counted the dispatched wire
+            // operations for both the in-process and the TCP-backed mount.
+            let dispatches = runtime.operations.take_dispatch_counts();
+            assert!(dispatches.lookup >= 1);
+            assert!(dispatches.write >= 2);
+            assert!(dispatches.read >= 1);
+            assert!(dispatches.total >= dispatches.lookup + dispatches.write + dispatches.read);
             let first_root = first.receipt.attempt.candidate_root;
             let read = |store: &LayerStackStore, root: ObjectId| {
                 let reader = store.snapshot_reader(root);

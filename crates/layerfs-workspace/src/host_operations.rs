@@ -37,8 +37,138 @@ pub(crate) struct ReadLeaseReservation {
     slot: ReadLeaseSlot,
 }
 
+/// Host-authority dispatch counters surfaced in the run receipt (#144 Phase 1
+/// deliverable D1). Counted at wire decode: every decoded request increments
+/// exactly one class, independent of admission, replay or execution outcome.
+/// Atomic increments only; the dispatch path allocates nothing.
+#[derive(Default)]
+pub(crate) struct HostDispatchMetrics {
+    pub(crate) total: AtomicU64,
+    pub(crate) lookup: AtomicU64,
+    pub(crate) attr: AtomicU64,
+    pub(crate) readlink: AtomicU64,
+    pub(crate) directory: AtomicU64,
+    pub(crate) create: AtomicU64,
+    pub(crate) mkdir: AtomicU64,
+    pub(crate) symlink: AtomicU64,
+    pub(crate) link: AtomicU64,
+    pub(crate) unlink: AtomicU64,
+    pub(crate) rename: AtomicU64,
+    pub(crate) pin: AtomicU64,
+    pub(crate) unpin: AtomicU64,
+    pub(crate) forget: AtomicU64,
+    pub(crate) forget_batch: AtomicU64,
+    pub(crate) read: AtomicU64,
+    pub(crate) read_lease: AtomicU64,
+    pub(crate) release_lease: AtomicU64,
+    pub(crate) write: AtomicU64,
+    pub(crate) truncate: AtomicU64,
+    pub(crate) chmod: AtomicU64,
+    pub(crate) mtime: AtomicU64,
+    pub(crate) fsync: AtomicU64,
+    pub(crate) detach: AtomicU64,
+}
+
+/// Snapshot of [`HostDispatchMetrics`] for the run receipt.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct HostDispatchCounts {
+    pub(crate) total: u64,
+    pub(crate) lookup: u64,
+    pub(crate) attr: u64,
+    pub(crate) readlink: u64,
+    pub(crate) directory: u64,
+    pub(crate) create: u64,
+    pub(crate) mkdir: u64,
+    pub(crate) symlink: u64,
+    pub(crate) link: u64,
+    pub(crate) unlink: u64,
+    pub(crate) rename: u64,
+    pub(crate) pin: u64,
+    pub(crate) unpin: u64,
+    pub(crate) forget: u64,
+    pub(crate) forget_batch: u64,
+    pub(crate) read: u64,
+    pub(crate) read_lease: u64,
+    pub(crate) release_lease: u64,
+    pub(crate) write: u64,
+    pub(crate) truncate: u64,
+    pub(crate) chmod: u64,
+    pub(crate) mtime: u64,
+    pub(crate) fsync: u64,
+    pub(crate) detach: u64,
+}
+
+impl HostDispatchMetrics {
+    pub(crate) fn count(&self, operation: &Operation<'_>) {
+        let class = match operation {
+            Operation::Lookup { .. } => &self.lookup,
+            Operation::Attr(_) => &self.attr,
+            Operation::Readlink(_) => &self.readlink,
+            Operation::Directory { .. } => &self.directory,
+            Operation::Create { .. } => &self.create,
+            Operation::Mkdir { .. } => &self.mkdir,
+            Operation::Symlink { .. } => &self.symlink,
+            Operation::Link { .. } => &self.link,
+            Operation::Unlink { .. } => &self.unlink,
+            Operation::Rename { .. } => &self.rename,
+            Operation::Pin { .. } => &self.pin,
+            Operation::Unpin { .. } => &self.unpin,
+            Operation::Forget { .. } => &self.forget,
+            Operation::ForgetBatch { .. } => &self.forget_batch,
+            Operation::Read { .. } => &self.read,
+            Operation::ReadLease { .. } => &self.read_lease,
+            Operation::ReleaseLease { .. } => &self.release_lease,
+            Operation::Write { .. } => &self.write,
+            Operation::Truncate { .. } => &self.truncate,
+            Operation::Chmod { .. } => &self.chmod,
+            Operation::Mtime { .. } => &self.mtime,
+            Operation::Fsync(_) => &self.fsync,
+            Operation::Detach => &self.detach,
+        };
+        class.fetch_add(1, Ordering::Relaxed);
+        self.total.fetch_add(1, Ordering::Relaxed);
+    }
+    /// Read and reset, matching the transport metrics take semantics.
+    pub(crate) fn take(&self) -> HostDispatchCounts {
+        macro_rules! take {
+            ($($field:ident),+ $(,)?) => {
+                HostDispatchCounts {
+                    $( $field: self.$field.swap(0, Ordering::Relaxed) ),+
+                }
+            };
+        }
+        take!(
+            total,
+            lookup,
+            attr,
+            readlink,
+            directory,
+            create,
+            mkdir,
+            symlink,
+            link,
+            unlink,
+            rename,
+            pin,
+            unpin,
+            forget,
+            forget_batch,
+            read,
+            read_lease,
+            release_lease,
+            write,
+            truncate,
+            chmod,
+            mtime,
+            fsync,
+            detach,
+        )
+    }
+}
+
 pub(crate) struct HostOperations {
     pub(crate) host: Arc<HostOverlay>,
+    dispatch: HostDispatchMetrics,
     replay: Mutex<Option<([u8; 16], ReplayWindow)>>,
     leases: Mutex<BTreeMap<u64, Arc<LeasedFile>>>,
     next_lease: AtomicU64,
@@ -48,11 +178,19 @@ impl HostOperations {
     pub(crate) fn new(host: Arc<HostOverlay>) -> Self {
         Self {
             host,
+            dispatch: HostDispatchMetrics::default(),
             replay: Mutex::new(None),
             leases: Mutex::new(BTreeMap::new()),
             next_lease: AtomicU64::new(1),
             lease_count: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    /// Host-authority dispatch counters for the run receipt (D1). Take
+    /// semantics: reading resets, so each receipt reports the dispatches since
+    /// the previous take.
+    pub(crate) fn take_dispatch_counts(&self) -> HostDispatchCounts {
+        self.dispatch.take()
     }
 
     /// Reserve the response reader before installing an SDK mutation. Failed
@@ -164,6 +302,7 @@ impl HostOperations {
     }
     pub(crate) fn request(&self, bytes: &[u8]) -> PortResult<Vec<u8>> {
         let request = wire::decode_request(bytes).map_err(|_| PortError::Invalid)?;
+        self.dispatch.count(&request.operation);
         // BackingServer already owns/admitted the borrowed frame and response
         // transfer. This permit bounds per-Workspace outstanding requests.
         let _request = self
