@@ -27,33 +27,35 @@ pub(crate) fn attach(
         if worker.projection != crate::WorkspaceProjection::Fuse {
             return Err(WorkspaceError::InvalidPlacement);
         }
-        let (remote, runtime) = {
-            let mut workspace = worker
+        // A container placement mounts through the same single host authority as
+        // a host placement: the authority is constructed before attachment and
+        // serves the in-container helper over its own endpoint, so the legacy
+        // remote owner is never created. There is no legacy fallback: a failed
+        // construction fails the attach.
+        let runtime_root = {
+            let workspace = worker
                 .workspace
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-            let runtime = workspace
+            workspace
                 .spool
                 .parent()
                 .ok_or(WorkspaceError::InvalidPlacement)?
-                .to_owned();
-            let remote = crate::live_backing::RemoteWorkspace::start(&workspace)?;
-            workspace.remote = Some(remote.clone());
-            *worker
-                .remote
-                .lock()
-                .map_err(|_| WorkspaceError::WorkspaceBusy)? = Some(remote.clone());
-            (remote, runtime)
+                .to_owned()
         };
-        return crate::docker::DockerProjection::attach(
+        let runtime = start_host_authority(worker, false)?;
+        let projection = crate::docker::DockerProjection::attach(
             worker.id,
             container_id.clone(),
             root.clone(),
-            remote.server,
-            &runtime,
+            runtime.server.clone(),
+            &runtime_root,
             daemon,
-        )
-        .map(|projection| ProjectionHandle::Docker(Box::new(projection)));
+        )?;
+        // The helper is already attached to this authority, so installing it can
+        // no longer fail a live consumer into an ownerless session.
+        worker.install_host_runtime(runtime)?;
+        return Ok(ProjectionHandle::Docker(Box::new(projection)));
     }
     let WorkspacePlacement::Host { root } = &worker.request.placement else {
         unreachable!()
@@ -71,7 +73,7 @@ pub(crate) fn attach(
                 // One host authority is constructed before attachment and then
                 // mounted through. There is no legacy owner and no fallback: a
                 // failed construction fails the attach.
-                let runtime = start_host_authority(worker)?;
+                let runtime = start_host_authority(worker, true)?;
                 let owner = Arc::new(
                     runtime
                         .server
@@ -94,9 +96,12 @@ pub(crate) fn attach(
 /// installed base root, under the session's own runtime directory. The mounted
 /// client, SDK ranges, status and lifecycle share this single owner; it never
 /// reads the legacy `Workspace.live` mirror.
-#[cfg(any(test, all(target_os = "linux", feature = "host-fuse")))]
+/// `local` selects an in-process authority (`Host` placement) or a real network
+/// endpoint (`Container` placement, whose helper runs in another process and
+/// reaches the host through the container gateway).
 pub(crate) fn start_host_authority(
     worker: &Arc<WorkspaceWorker>,
+    local: bool,
 ) -> WorkspaceResult<Arc<crate::host_runtime::HostRuntime>> {
     let workspace = worker
         .workspace
@@ -114,7 +119,7 @@ pub(crate) fn start_host_authority(
         },
         &workspace.spool,
         workspace.live.policy,
-        true,
+        local,
     )?;
     Ok(Arc::new(runtime))
 }

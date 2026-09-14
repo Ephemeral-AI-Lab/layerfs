@@ -72,8 +72,10 @@ impl WorkspaceWorker {
     }
 
     /// Install the authority constructed before projection attachment. The
-    /// mounted client, SDK, status and lifecycle all reach this one owner.
-    #[cfg(any(test, all(target_os = "linux", feature = "host-fuse")))]
+    /// mounted client, SDK, status and lifecycle all reach this one owner. It is
+    /// available wherever an attachment can own one: the Linux host-FUSE mount
+    /// and the container placement whose helper mounts through the same
+    /// authority.
     pub(crate) fn install_host_runtime(
         &self,
         runtime: Arc<crate::host_runtime::HostRuntime>,
