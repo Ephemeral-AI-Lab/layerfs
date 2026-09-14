@@ -156,6 +156,10 @@ pub(crate) struct SnapshotCandidateDiagnostics {
     pub full_comparisons: u64,
     pub full_builds: u64,
     pub cdc_bytes_scanned: u64,
+    /// Canonical construction workers this attempt actually ran (#144 R4a):
+    /// the caller's cap after the plan-size, journal-budget and
+    /// predecessor-plan clamps. One means serial construction.
+    pub workers: u64,
     /// Construction-only peaks: sampled when canonical construction finished
     /// and before Store admission ran. They do not describe the whole attempt.
     pub scratch_peak_reserved_bytes: u64,
@@ -622,6 +626,7 @@ impl SnapshotCandidateInputs<'_> {
             .into_inner()
             .map_err(|_| StorageError::Integrity("snapshot candidate diagnostics"))?;
         diagnostics.cdc_bytes_scanned = built.counters.cdc_bytes_scanned;
+        diagnostics.workers = workers as u64;
         let usage = capacity.usage();
         diagnostics.scratch_peak_reserved_bytes = usage.peak_reserved_bytes;
         diagnostics.scratch_peak_allocated_bytes = usage.peak_observed_allocated_bytes;
@@ -1557,6 +1562,52 @@ pub(crate) mod tests {
             if !self.keep_directory {
                 fs::remove_dir_all(&self.directory).unwrap();
             }
+        }
+    }
+
+    /// #144 R4a: a predecessor-free multi-file plan actually constructs with
+    /// the caller's bounded worker cap instead of one worker, and the ordered
+    /// merge still yields the exact same bytes.
+    #[test]
+    fn construction_uses_the_bounded_worker_cap_and_keeps_exact_output() {
+        let mut fixture = Fixture::new(0);
+        let files = 96_u64;
+        for index in 0..files {
+            let name = format!("worker-{index:03}");
+            let node = fixture
+                .host
+                .create_file(ROOT, name.as_bytes(), 0o600)
+                .unwrap()
+                .node;
+            fixture
+                .host
+                .write(node, 0, format!("body-{index:03}").as_bytes())
+                .unwrap();
+        }
+        let captured = fixture.host.snapshot().unwrap();
+        let serial = {
+            let prepared = fixture.inputs(&captured).build(1).unwrap();
+            assert_eq!(prepared.diagnostics.workers, 1, "one worker is one worker");
+            (
+                prepared.diagnostics.file_tasks,
+                prepared.diagnostics.changed_keys,
+                prepared.diagnostics.full_builds,
+                prepared.built.root_id,
+            )
+        };
+        for cap in [2_usize, 4, 8] {
+            let prepared = fixture.inputs(&captured).build(cap).unwrap();
+            assert_eq!(prepared.diagnostics.file_tasks, serial.0);
+            assert_eq!(prepared.diagnostics.changed_keys, serial.1);
+            assert_eq!(prepared.diagnostics.full_builds, serial.2);
+            assert_eq!(
+                prepared.built.root_id, serial.3,
+                "worker count must not change the constructed root"
+            );
+            assert!(
+                prepared.diagnostics.workers > 1,
+                "a predecessor-free plan of {files} files must construct with more than one worker at cap {cap}"
+            );
         }
     }
 

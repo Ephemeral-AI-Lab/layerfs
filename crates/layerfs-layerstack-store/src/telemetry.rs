@@ -502,6 +502,8 @@ pub struct WorkspaceCommitDiagnostics {
     pub construction_reused_bytes: u64,
     pub construction_full_comparisons: u64,
     pub construction_full_builds: u64,
+    /// #144 R4a: canonical construction workers actually used (1 = serial).
+    pub construction_workers: u64,
     pub construction_scratch_peak_reserved_bytes: u64,
 }
 
@@ -766,6 +768,15 @@ pub fn note_workspace_commit_construction(
             diagnostic.construction_full_comparisons = full_comparisons;
             diagnostic.construction_full_builds = full_builds;
             diagnostic.construction_scratch_peak_reserved_bytes = scratch_peak_reserved_bytes;
+        }
+    });
+}
+
+/// #144 R4a: canonical construction worker count for the attempt that ran.
+pub fn note_workspace_commit_construction_workers(workers: u64) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.construction_workers = workers;
         }
     });
 }
@@ -1115,6 +1126,21 @@ fn elapsed_ns(started: Instant) -> u64 {
 mod tests {
     use super::*;
 
+    /// #144 R4a: the construction worker count reaches the receipt diagnostics.
+    #[test]
+    fn construction_worker_count_is_reported_separately() {
+        let _guard = capture_workspace_commit_diagnostics().unwrap();
+        {
+            let _timer = begin_workspace_commit(CaptureMode::Materialized).unwrap();
+            note_workspace_commit_construction_workers(6);
+        }
+        let diagnostics = take_workspace_commit_diagnostics();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("one diagnostic")
+        };
+        assert_eq!(diagnostic.construction_workers, 6);
+    }
+
     #[test]
     fn edit_diagnostics_are_separate_from_the_legacy_commit_receipt() {
         take_storage_receipts();
@@ -1145,6 +1171,7 @@ mod tests {
             *diagnostic,
             WorkspaceCommitDiagnostics {
                 cdc_bytes_scanned: 12,
+                construction_workers: 0,
                 edit_count: 2,
                 edit_piece_count: 3,
                 edit_piece_height: 4,

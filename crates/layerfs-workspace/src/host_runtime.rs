@@ -15,6 +15,15 @@ use layerfs_workspace_core::ResourcePolicy;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// Caller cap for bounded candidate-construction workers (#144 R4a). The host
+/// route pinned one worker, so every Commit constructed its changed files
+/// serially (measured content phase 581 ms for 500 tiny files). `build_inner`
+/// still clamps this cap by the plan size, the policy-derived journal budget
+/// and the predecessor-plan rule, and the existing ordered merge keeps
+/// construction deterministic, so this raises the ceiling rather than
+/// overriding a bound.
+const CONSTRUCTION_WORKERS: usize = 8;
+
 pub(crate) struct HostRuntime {
     pub(crate) operations: Arc<HostOperations>,
     pub(crate) commits: CommitCoordinator,
@@ -225,7 +234,7 @@ impl HostRuntime {
             policy: host.policy,
             spool: &self.spool,
         }
-        .build(1)
+        .build(CONSTRUCTION_WORKERS)
     }
 
     #[cfg(test)]

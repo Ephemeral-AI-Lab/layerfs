@@ -812,6 +812,7 @@ impl Workspaces {
             construction.full_builds,
             construction.scratch_peak_reserved_bytes,
         );
+        layerfs_layerstack_store::note_workspace_commit_construction_workers(construction.workers);
         if let Some(error) = &completion.cleanup_error {
             // The publication is known and is reported as such; the retained
             // receipt stays charged and is acknowledged by the next Commit or by
