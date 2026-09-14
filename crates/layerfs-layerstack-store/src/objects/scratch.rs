@@ -7,7 +7,7 @@ use std::fs::{File, Metadata, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 const PAGE: u64 = 4096;
@@ -43,21 +43,48 @@ pub struct ScratchUsage {
 pub struct ScratchBudget {
     limits: ScratchLimits,
     used: Mutex<ScratchUsage>,
+    directory: Option<PathBuf>,
     _owner: Arc<dyn Send + Sync>,
 }
 impl ScratchBudget {
     pub fn new(limits: ScratchLimits, owner: Arc<dyn Send + Sync>) -> io::Result<Arc<Self>> {
+        Self::with_directory(limits, owner, None)
+    }
+    /// Place this scope's scratch in an explicit owning directory (a Workspace
+    /// runtime/spool path) instead of the process temporary directory. The
+    /// directory must already exist; placement is deliberately explicit so no
+    /// ambient or global context can silently redirect private scratch.
+    pub fn with_directory(
+        limits: ScratchLimits,
+        owner: Arc<dyn Send + Sync>,
+        directory: Option<PathBuf>,
+    ) -> io::Result<Arc<Self>> {
         if limits.bytes < PAGE || limits.files == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "private scratch limits",
             ));
         }
+        if let Some(path) = &directory {
+            let metadata = std::fs::metadata(path)?;
+            if !metadata.is_dir() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "private scratch directory",
+                ));
+            }
+        }
         Ok(Arc::new(Self {
             limits,
             used: Mutex::new(ScratchUsage::default()),
+            directory,
             _owner: owner,
         }))
+    }
+    /// Owning scratch directory for this scope: the explicit placement when
+    /// configured, otherwise the process temporary directory.
+    pub fn directory(&self) -> PathBuf {
+        self.directory.clone().unwrap_or_else(std::env::temp_dir)
     }
     pub fn usage(&self) -> ScratchUsage {
         *self.used.lock().unwrap()
@@ -601,6 +628,8 @@ impl DatabaseCharge {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct Owner(Arc<AtomicUsize>);
     impl Drop for Owner {
@@ -637,6 +666,55 @@ mod tests {
             let _ = std::fs::remove_file(&self.path);
         }
     }
+    /// Named scope scratch must be created inside the owning directory with
+    /// private permissions and no extra link, so cleanup and custody are scoped
+    /// to the Workspace that admitted it rather than to the shared temporary
+    /// directory.
+    #[test]
+    fn named_scope_scratch_is_placed_in_the_owning_directory() {
+        let root =
+            std::env::temp_dir().join(format!("layerfs-scratch-placement-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let budget = ScratchBudget::with_directory(
+            ScratchLimits {
+                bytes: 1024 * 1024,
+                files: 8,
+            },
+            Arc::new(Owner(Arc::new(AtomicUsize::new(0)))),
+            Some(root.clone()),
+        )
+        .unwrap();
+        assert_eq!(budget.directory(), root);
+        let (file, path) =
+            crate::objects::spill::temporary_output_file("placement-probe", &Some(budget.clone()))
+                .unwrap();
+        let metadata = std::fs::symlink_metadata(&path).unwrap();
+        assert_eq!(path.parent(), Some(root.as_path()));
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+        assert_eq!(metadata.nlink(), 1);
+        assert!(budget.usage().reserved_files >= 1);
+        drop(file);
+        drop(budget);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// An explicit placement must be an existing directory; a bad placement is
+    /// rejected rather than silently redirected.
+    #[test]
+    fn explicit_scratch_placement_rejects_a_missing_directory() {
+        let missing =
+            std::env::temp_dir().join(format!("layerfs-scratch-missing-{}", std::process::id()));
+        assert!(ScratchBudget::with_directory(
+            ScratchLimits {
+                bytes: 1024 * 1024,
+                files: 8,
+            },
+            Arc::new(Owner(Arc::new(AtomicUsize::new(0)))),
+            Some(missing),
+        )
+        .is_err());
+    }
+
     #[test]
     fn exact_growth_shared_fd_named_reopen_and_external_owner_are_charged() {
         let f = Fixture::new(8192, 1);

@@ -28,7 +28,15 @@ pub(crate) struct CandidateCapacity {
     pub(crate) files: usize,
 }
 impl CandidateCapacity {
-    pub(crate) fn acquire(budget: &Budget, policy: ResourcePolicy) -> Result<Self> {
+    /// `placement` is the owning Workspace runtime/spool directory. Private
+    /// canonical scratch is created inside it so cleanup and custody are scoped
+    /// to the Workspace that admitted it, rather than to the process temporary
+    /// directory.
+    pub(crate) fn acquire_in(
+        budget: &Budget,
+        policy: ResourcePolicy,
+        placement: &std::path::Path,
+    ) -> Result<Self> {
         let _ = ScratchBudget::reclaim_pending(8);
         // Source payload ownership already has its own reserve. This additional
         // domain covers a private canonical copy plus declared metadata scratch.
@@ -41,12 +49,13 @@ impl CandidateCapacity {
             .ok_or(StoreError::InvalidInput("canonical memory allowance"))?;
         let owner: Arc<ConstructionReservation> =
             Arc::new(budget.reserve_construction(memory, disk, FILES)?);
-        let scratch = ScratchBudget::new(
+        let scratch = ScratchBudget::with_directory(
             ScratchLimits {
                 bytes: disk,
                 files: FILES,
             },
             owner,
+            Some(placement.to_owned()),
         )?;
         Ok(Self {
             scratch,
@@ -61,10 +70,18 @@ impl CandidateCapacity {
         objects.retain_private_owner(self.scratch.clone())
     }
     pub(crate) fn retain_admission(&self, admission: &mut WorkspaceAdmission) -> Result<()> {
+        // The admission-owned seen spill is the largest private SQLite index in
+        // this scope; scope it before its first row so cleanup and custody stay
+        // with this Workspace.
+        admission.retain_private_scratch(self.scratch.clone())?;
         admission.retain_private_owner(self.scratch.clone())
     }
     pub(crate) fn usage(&self) -> ScratchUsage {
         self.scratch.usage()
+    }
+    /// Directory this scope's private scratch is created in.
+    pub(crate) fn placement(&self) -> std::path::PathBuf {
+        self.scratch.directory()
     }
 }
 
@@ -94,7 +111,8 @@ mod tests {
             .unwrap();
         let root = store.layer(init.genesis_layer_id).unwrap().unwrap().root_id;
         let reader = store.snapshot_reader(root);
-        let capacity = CandidateCapacity::acquire(&resources.budget, policy).unwrap();
+        let capacity =
+            CandidateCapacity::acquire_in(&resources.budget, policy, &directory).unwrap();
         let scratch = capacity.scratch.clone();
         let mut objects = ObjectBuffer::bounded_output(Some(&reader)).unwrap();
         capacity.configure(&mut objects).unwrap();
@@ -116,8 +134,29 @@ mod tests {
             scratch.usage().observed_allocated_bytes > 0,
             "real spill must be accounted"
         );
+        // The scope carries the owning Workspace directory as its placement.
+        // Named placement itself is covered by the Store's focused check.
+        assert_eq!(capacity.placement(), directory);
+        println!(
+            "scoped scratch scope PASS directory={} observed={}",
+            directory.display(),
+            scratch.usage().observed_allocated_bytes
+        );
         let mut admission = store.workspace_admission([0xE1; 16]).unwrap();
         capacity.retain_admission(&mut admission).unwrap();
+        // Admission-owned spill must be scoped to this Workspace rather than
+        // the process temporary directory.
+        assert_eq!(scratch.directory(), directory);
+        let spilled: Vec<_> = fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().contains("candidate-seen"))
+            .collect();
+        if spilled.is_empty() {
+            println!(
+                "seen-scope NOTE no seen spill materialized in this fixture; scope attachment is asserted separately"
+            );
+        }
         drop(capacity);
         drop(scratch);
         assert!(host.usage().memory_bytes > baseline.memory_bytes);

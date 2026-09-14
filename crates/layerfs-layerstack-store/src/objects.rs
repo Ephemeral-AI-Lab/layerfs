@@ -4051,6 +4051,16 @@ impl CheckedOutputAdmission {
         self.session.clone()
     }
 
+    /// Attach the owning Workspace scratch scope to this admission's spillable
+    /// seen index. Valid only before the index holds any row, so the scope
+    /// cannot silently change ownership of already-written private scratch.
+    pub(crate) fn set_scratch_scope(
+        &mut self,
+        scratch: std::sync::Arc<crate::objects::scratch::ScratchBudget>,
+    ) -> Result<()> {
+        self.seen.set_scratch(Some(scratch))
+    }
+
     pub(crate) fn resolve<T>(&self, result: Result<T>) -> Result<T> {
         self.session.resolve(result)
     }
@@ -4621,6 +4631,16 @@ impl WorkspaceAdmission {
         }
         self.private_owner = Some(owner);
         Ok(())
+    }
+
+    /// Retain the owning Workspace scratch scope for admission-owned spill.
+    /// This is what makes the seen index's SQLite spill a scoped private
+    /// allocation instead of an unscoped temporary file.
+    pub fn retain_private_scratch(
+        &mut self,
+        scratch: std::sync::Arc<crate::objects::scratch::ScratchBudget>,
+    ) -> Result<()> {
+        self.admission.set_scratch_scope(scratch)
     }
 
     pub(crate) fn admit_remaining(
