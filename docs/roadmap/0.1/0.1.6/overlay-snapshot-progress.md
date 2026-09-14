@@ -37,10 +37,12 @@ benchmark, probe, cleanup or new product test was run during this plan review.
 Trajectory evidence remains published on `codex/step6-capacity-trajectory`,
 not merged here; use its exact commits rather than relabeling it as main evidence.
 
-Next executable implementation task: P130.1's existing tiny-case comparator,
-production dispatch and release cost instrumentation for those five tier-500
-cases, alongside the bounded
-reclamation counterexample/repair from P130.2. No new fixture or scale campaign.
+Next #130 implementation task: the focused whole-arena reclamation counterexample
+and local-reclamation repair (P130.2), then bounded metadata preparation.
+P130.1 pins the five tier-500 comparator/cost instrumentation in parallel.
+Production dispatch/wiring, V1 and the interrupted consumer patch remain #124;
+only authentic public timing depends on that route, not all #130 component work.
+No new fixture or scale campaign.
 Preserve the old 25k debug receipt unchanged. Check actual
 process/measurement-lock ownership before running. Final full #125 collection
 still waits for complete correctness and a sealed candidate, not issue closure.

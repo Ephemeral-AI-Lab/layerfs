@@ -63,6 +63,7 @@ waived by this performance-policy decision.
 | Work | Owner | Completion meaning |
 | --- | --- | --- |
 | Product contracts, implementation, removal of old coupling, correctness and source handoff | Implementation issue | Correct behavior with V1-V4 addressed and affected integration checks; no claim of benchmark success before final campaign. |
+| Promoted overhead reduction in existing backing/Index/ranges/construction and tiny-churn comparison | #130 | Its own scoped implementation and affected evidence; production wiring/V1/non-Commit migration remain #124, final full matrix remains #125. Independent #130 components proceed while only their actual public-route dependencies are pending. |
 | Full non-#122 suite selection, execution, verification, raw data and human-readable report | Benchmark issue | All included required runs accounted for and honestly reported; benchmark execution/reporting is distinct from release qualification. |
 | Pending-metadata capacity and million-file correctness objective | #123, coordinated through implementation issue | Preserve required scale/ownership evidence; do not silently replace or close #123. |
 | #122's new/extended benchmark cases | #122 only, outside this plan | Do not run, prepare case-specific inputs for, or claim completion of those cases in this campaign. |

@@ -472,3 +472,18 @@ Validity: current, and recorded because it matters beyond this row: the file was
   `tiny-bulk-delete-500-mixed-v3`. Bulk tier500 means 5,000 files/500 MiB.
   Retain valid passes and rerun only affected checks; full 20-case qualification
   follows when stable, not after every fix. This is scheduling, not a test result.
+
+### L40 — correct #130/#124/#125 implementation ownership
+
+- Owner feedback: the implementation explanation looked like unfinished #124
+  migration rather than #130. Corrected the plan's ownership table and P130.1:
+  #130 owns local reclamation, redundant Index work and measured storage/
+  construction/transport overhead changes; #124 owns production wiring, V1 and
+  remaining Commit/consumer migration; #125 owns the full final benchmark matrix.
+- First #130 code slice: focused reclamation counterexample and local repair,
+  followed by bounded metadata preparation. Comparator/instrumentation work runs
+  alongside it. Only public measurements depend on the verified #124 route;
+  independent #130 component work is not held behind complete #124 integration.
+- Result: documentation/ownership correction only. No product change, benchmark,
+  test PASS or issue/phase completion. Five tier-500 quick cases, later 20-case
+  qualification, no quadratic scaling and deferred 25k/million cases are unchanged.

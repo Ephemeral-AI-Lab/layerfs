@@ -140,17 +140,50 @@ retain the old diagnostic, but exclude those censuses from performance sampling.
 
 ## 3. Implementation sequence and exit evidence
 
-The steps below are #130 work packages, not a renumbering of #124's seven phases.
+### Issue ownership: #130 implements overhead reduction
+
+| Issue | Implementation/evidence responsibility |
+|---|---|
+| **#130** | Reclamation and metadata-update cost; measured compact storage, construction, lifecycle and transport improvements; their affected correctness checks and five/20-case tiny-churn comparisons |
+| **#124** | Finish production host/Docker FUSE and SDK wiring, supported snapshot capture/V1, Commit integration, non-Commit consumers and obsolete-coupling removal; owns complete migration correctness |
+| **#125** | Later complete existing benchmark campaign excluding #122, final matrix/custody/report and its own terminal requirements |
+
+Promoting #130 means implementing its overhead changes **now alongside #124**.
+It does not rename unfinished #124 integration as #130 work or require finishing
+all of #124 before the first optimization. A verified new production route is a
+dependency for authentic public measurements; independently testable allocator,
+Index, range and correspondence work can start against owned inputs immediately.
+Full supported-surface correctness and later issue closure keep their own gates.
+
+These are the concrete #130 code deliverables and their bounded checks:
+
+| #130 change | Primary source | Focused verification |
+|---|---|---|
+| Replace whole-arena sweep with local reclamation | `overlay_payload.rs` | Repeated small deletion/replacement moves only justified blocks; retained-reader/partial-I/O/quota/cleanup checks; no quadratic cumulative relocation |
+| Prepare final metadata/range records without redundant intermediate roots | `overlay_index.rs`, `overlay_ranges.rs`, `overlay.rs` | Fewer page/catalog writes; stale-source/disjoint-write/retained-snapshot/rollback checks |
+| Reduce measured metadata and common-range allocation | Same Index/range modules, when selected | Byte-aware bounds; Empty/Single/Indexed transitions; maximum names/values; exact independent token/base ownership |
+| Reduce measured tiny-payload rounding | `overlay_payload.rs`, when selected | Packed arena allocation; append/subrange/relocation/neighbor retention and exact physical charging |
+| Reduce measured Commit correspondence/setup cost | `correspondence.rs`, `snapshot_candidate.rs`, `host_runtime.rs`, when selected | Same canonical output, equal-byte/new-Origin UpToDate and localized C2, receipts and retained cleanup |
+| Reduce measured request/cache overhead | Existing host client/operations/transport paths, when selected | Same ordering/replay/acknowledgment/ownership with lower observed wait/I/O cost |
+
+The first implementation slice is the #130 reclamation counterexample and repair,
+with metadata preparation next. P130.1's comparator/instrumentation work supports
+those changes; it is not a replacement for implementing them. #124's unfinished
+four-file patch is separately owned and must not be bundled into an overhead PR.
+
+The packages below are not a renumbering of #124's seven phases.
 Continue dependency-ready work across packages; a review/revision is not an
 implementation completion or a reason to stop an authorized execution loop.
 
-### P130.1 — Pin existing tiny-churn comparisons and the production route
+### P130.1 — Pin #130 comparisons and cost instrumentation
 
-- Preserve the interrupted patch and all existing results before choosing source.
-  Correct its post-publication metrics error propagation and unbounded
-  reconciliation scans before accepting those respective changes under #124.
-- Wire/verify macOS host authority to Docker daemon/FUSE with SDK parity. Receipts
-  must identify new dispatch; never measure legacy Docker dispatch as the new path.
+- Preserve the interrupted #124 patch and all existing results before choosing
+  source. Its publication-error/reconciliation repairs and production wiring
+  remain #124 tasks; do not make them the first #130 implementation package.
+- Consume #124's verified macOS-host/Docker route for public measurements.
+  Receipts must identify new dispatch. If that integration is unavailable, mark
+  only dependent public measurements blocked and continue #130 component work;
+  never substitute legacy dispatch or hold all overhead work behind the route.
 - Select the five tier-500 tiny-create/stat/unlink/bulk-create/bulk-delete cases using
   section 4. Preserve their fixtures, seeds, worker counts, normalization, sync,
   timing and independent proof. Do not register the deferred 25k case or expand
@@ -254,9 +287,11 @@ metadata leaves can increase external-token retain/release callbacks per COW
 page: batch correct ownership work and measure it. Byte savings alone do not
 prove a faster write path.
 
-Exit: encoded byte/record inventory and actual physical measurements reject the
-former dedicated-range-plus-rounded-payload floor. Report parent/index/catalog,
-retained versions, scratch and slack too; no guessed MiB allowance is acceptance.
+Exit: encoded byte/record inventory and physical measurements demonstrate the
+selected change's improvement, with its ownership/failure checks passing. Quantify
+any remaining dedicated-range or rounded-payload floor without claiming an
+unselected change was implemented. Report parent/index/catalog, retained versions,
+scratch and slack too; no guessed MiB allowance is acceptance.
 
 ### P130.4 — Remove the remaining measured latency
 
@@ -299,6 +334,11 @@ hardlink/rename/open-unlinked, replay/publication and fsync checks. Report
 foreground latency during natural Commit construction separately from held-builder
 correctness. Continue V1-V4 and actual production/non-Commit migration under #124;
 small-case performance cannot claim complete supported-surface correctness.
+
+This package verifies #130's delivered changes and regressions. Completing #124's
+remaining V1/integration/consumer implementation or executing #125's full matrix
+is not relabeled as #130 implementation. Keep cross-issue dependencies explicit
+and link their evidence when a public acceptance claim needs it.
 
 The 25k/two-second milestone and million-changed-file qualification are deferred,
 not required to complete this current tiny-churn evaluation. Do not run them as
