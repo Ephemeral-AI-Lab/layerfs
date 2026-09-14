@@ -1,29 +1,27 @@
-//! Execution-side live state. Physical storage and canonical construction stay on the host.
+//! Execution-side live state. The mutable namespace, file pieces and
+//! replacement payload bytes are owned here, in the sandbox: payload lives in
+//! packed local segments (no durability flush; the workspace is disposable).
+//! Canonical construction and the Store stay on the host; Commit captures a
+//! frozen generation locally and the host pulls its records and bytes over
+//! the snapshot lane.
 use crate::live_runtime::{LiveRuntime, OperationGate, Scheduler};
+use crate::local_spool::LocalSpool;
 use crate::live_transport::BackingConnection;
 use crate::live_wire::EditMetric;
 use crate::live_wire::{self as wire, Input};
 use crate::port::{DirectoryPage, KernelEntry, KernelReferences};
 use crate::{Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, ROOT};
-use layerfs_workspace_core::backing::{BackingId, BackingRef};
+use layerfs_workspace_core::backing::BackingId;
 use layerfs_workspace_core::file_edit::{Piece, SpoolSlice};
 use layerfs_workspace_core::namespace::{AcquiredInode, NameLookup, ResolvedName};
 use layerfs_workspace_core::{Data, LiveWorkspace, ReadPlan, ReadSource, ResourcePolicy};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[derive(Clone)]
 pub struct LiveOwner(Arc<Owner>);
-
-pub struct LocalFacts {
-    pub root: layerfs_content::ObjectId,
-    pub generation: u64,
-    pub nodes: HashMap<NodeId, layerfs_workspace_core::Node>,
-    pub dirty: std::collections::BTreeSet<NodeId>,
-    pub charge: crate::live_runtime::LiveReservation,
-}
 
 struct Owner {
     scheduler: Scheduler,
@@ -32,19 +30,23 @@ struct Owner {
     kernel_refs: Mutex<KernelRefState>,
     active_prefill: Mutex<Option<(NodeId, Arc<PrefillCompletionState>)>>,
     head: Mutex<Option<[u8; 33]>>,
+    /// Immutable-base service (SEED/LOOKUP/DIRECTORY_PAGE/READ_BASE) on the
+    /// host; ordinary mutations never wait on it.
     backing: BackingConnection,
-    local_facts: Option<Arc<dyn Fn(LocalFacts) -> PortResult<()> + Send + Sync>>,
-    // Only physical append allocation is ordered across files. No state lock
-    // is retained while a physical reservation or append waits.
-    append: tokio::sync::Mutex<Option<AppendWindow>>,
+    /// Sandbox-owned payload backing; no durability flush is ever issued.
+    spool: Arc<LocalSpool>,
+    /// Mount incarnation: late or misaddressed snapshot tokens can never act
+    /// on a successor owner reusing the same endpoint.
+    incarnation: u64,
+    attempt: AtomicU64,
+    /// The one active Commit's captured generation (one per workspace).
+    snapshot: Mutex<Option<SnapshotSlot>>,
     failed: AtomicBool,
     closing: AtomicBool,
     cached: Mutex<std::collections::BTreeSet<NodeId>>,
-    facts_sync: tokio::sync::Mutex<Option<(layerfs_content::ObjectId, u64)>>,
     ordering: Mutex<HashMap<NodeId, Arc<tokio::sync::Mutex<()>>>>,
     namespace: tokio::sync::Mutex<()>,
     directories: Mutex<HashMap<NodeId, DirectoryCookies>>,
-    ranges: Mutex<HashMap<BackingId, BackingRef>>,
     edit: Mutex<Option<PendingSplices>>,
     kernel_edit: Mutex<Option<Arc<KernelEdit>>>,
     gate: OperationGate,
@@ -55,7 +57,28 @@ struct Owner {
     #[cfg(target_os = "linux")]
     kernel_root: Mutex<Option<Arc<std::fs::File>>>,
     cut: Mutex<Option<crate::live_runtime::OperationCut>>,
-    install: Mutex<Option<PendingCheckpoint>>,
+}
+
+/// The active capture: identity for every frozen-input frame and completion.
+#[derive(Clone, Copy)]
+struct SnapshotToken {
+    incarnation: u64,
+    attempt: u64,
+    generation: u64,
+}
+
+struct SnapshotSlot {
+    token: SnapshotToken,
+    complete: Option<PendingComplete>,
+}
+
+/// One publication's completion records, applied under the slot's token.
+struct PendingComplete {
+    root: layerfs_content::ObjectId,
+    head: Option<[u8; 33]>,
+    received: u64,
+    applied: u64,
+    skipped: u64,
 }
 
 impl Drop for Owner {
@@ -63,323 +86,6 @@ impl Drop for Owner {
         self.scheduler
             .immutable_reads()
             .remove_scope(self.read_scope);
-    }
-}
-
-// This is live-operation metadata scratch, never a payload spool or canonical
-// Store. Files are immediately unlinked and owned by this frozen install only.
-// The host remains the owner of durable Checkpoint/SQLite/content storage.
-const CHECKPOINT_RECORD_BYTES: usize = 104;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CheckpointRecord {
-    node: NodeId,
-    inode: layerfs_content::tree::inode::InodeId,
-    content: layerfs_content::ObjectId,
-    attr: Attr,
-}
-
-impl CheckpointRecord {
-    // Same fixed metadata representation as the host's private CheckpointJournal.
-    fn encode(self) -> [u8; CHECKPOINT_RECORD_BYTES] {
-        let mut bytes = [0; CHECKPOINT_RECORD_BYTES];
-        bytes[..8].copy_from_slice(&self.node.0.to_le_bytes());
-        bytes[8..40].copy_from_slice(self.inode.as_bytes());
-        bytes[40..72].copy_from_slice(self.content.as_bytes());
-        bytes[72..80].copy_from_slice(&self.attr.size.to_le_bytes());
-        bytes[80..84].copy_from_slice(&self.attr.mode.to_le_bytes());
-        bytes[84..88].copy_from_slice(&self.attr.links.to_le_bytes());
-        bytes[88..96].copy_from_slice(&self.attr.mtime_seconds.to_le_bytes());
-        bytes[96..100].copy_from_slice(&self.attr.mtime_nanoseconds.to_le_bytes());
-        bytes[100] = match self.attr.kind {
-            Kind::File => 1,
-            Kind::Directory => 2,
-            Kind::Symlink => 3,
-        };
-        bytes
-    }
-
-    fn decode(bytes: &[u8; CHECKPOINT_RECORD_BYTES]) -> PortResult<Self> {
-        let node = NodeId(u64::from_le_bytes(bytes[..8].try_into().unwrap()));
-        if node.0 == 0 || bytes[101..] != [0; 3] {
-            return Err(PortError::Invalid);
-        }
-        Ok(Self {
-            node,
-            inode: layerfs_content::tree::inode::InodeId(bytes[8..40].try_into().unwrap()),
-            content: layerfs_content::ObjectId::from_bytes(&bytes[40..72])
-                .map_err(|_| PortError::Invalid)?,
-            attr: Attr {
-                node,
-                size: u64::from_le_bytes(bytes[72..80].try_into().unwrap()),
-                mode: u32::from_le_bytes(bytes[80..84].try_into().unwrap()),
-                links: u32::from_le_bytes(bytes[84..88].try_into().unwrap()),
-                mtime_seconds: i64::from_le_bytes(bytes[88..96].try_into().unwrap()),
-                mtime_nanoseconds: u32::from_le_bytes(bytes[96..100].try_into().unwrap()),
-                kind: match bytes[100] {
-                    1 => Kind::File,
-                    2 => Kind::Directory,
-                    3 => Kind::Symlink,
-                    _ => return Err(PortError::Invalid),
-                },
-            },
-        })
-    }
-}
-
-fn checkpoint_scratch() -> PortResult<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| PortError::Io)?
-        .as_nanos();
-    for _ in 0..16 {
-        let path = std::env::temp_dir().join(format!(
-            "layerfs-install-{}-{epoch}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        match std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-        {
-            Ok(file) => {
-                std::fs::remove_file(path).map_err(io)?;
-                return Ok(file);
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(io(error)),
-        }
-    }
-    Err(PortError::Io)
-}
-
-struct CheckpointJournal {
-    writer: std::io::BufWriter<std::fs::File>,
-    nodes: std::fs::File,
-    slots: u64,
-    hash: std::collections::hash_map::RandomState,
-    count: u64,
-    node_limit: u64,
-    last_inode: Option<layerfs_content::tree::inode::InodeId>,
-    closed: bool,
-}
-
-impl CheckpointJournal {
-    fn new(node_limit: usize, io_bytes: usize) -> PortResult<Self> {
-        let node_limit = u64::try_from(node_limit).map_err(|_| PortError::NoSpace)?;
-        let slots = node_limit
-            .max(1)
-            .checked_mul(2)
-            .and_then(u64::checked_next_power_of_two)
-            .ok_or(PortError::NoSpace)?;
-        // At most 104N record bytes + 32N sparse uniqueness bytes for admitted
-        // live nodes. This is a job-derived scratch quota, not a node-count cliff.
-        node_limit
-            .checked_mul(CHECKPOINT_RECORD_BYTES as u64)
-            .ok_or(PortError::NoSpace)?;
-        let index_bytes = slots.checked_mul(8).ok_or(PortError::NoSpace)?;
-        let nodes = checkpoint_scratch()?;
-        nodes.set_len(index_bytes).map_err(io)?;
-        Ok(Self {
-            writer: std::io::BufWriter::with_capacity(io_bytes, checkpoint_scratch()?),
-            nodes,
-            slots,
-            hash: Default::default(),
-            count: 0,
-            node_limit,
-            last_inode: None,
-            closed: false,
-        })
-    }
-
-    fn push(&mut self, record: CheckpointRecord) -> PortResult<()> {
-        use std::hash::BuildHasher;
-        use std::io::Write;
-        use std::os::unix::fs::FileExt;
-        if self.closed
-            || record.node.0 == 0
-            || record.attr.node != record.node
-            || self.last_inode.is_some_and(|last| last >= record.inode)
-        {
-            return Err(PortError::Invalid);
-        }
-        if self.count >= self.node_limit {
-            return Err(PortError::NoSpace);
-        }
-        // FrontierInodes::finish emits the host checkpoint in strict inode order.
-        // Check NodeId uniqueness separately without a second in-memory map.
-        let first = self.hash.hash_one(record.node) & (self.slots - 1);
-        for probe in 0..self.slots {
-            let offset = ((first + probe) & (self.slots - 1)) * 8;
-            let mut bytes = [0; 8];
-            self.nodes.read_exact_at(&mut bytes, offset).map_err(io)?;
-            let old = u64::from_le_bytes(bytes);
-            if old == record.node.0 {
-                return Err(PortError::Invalid);
-            }
-            if old == 0 {
-                self.nodes
-                    .write_all_at(&record.node.0.to_le_bytes(), offset)
-                    .map_err(io)?;
-                self.writer.write_all(&record.encode()).map_err(io)?;
-                self.count += 1;
-                self.last_inode = Some(record.inode);
-                return Ok(());
-            }
-        }
-        Err(PortError::NoSpace)
-    }
-
-    fn close(&mut self) -> PortResult<()> {
-        use std::io::Write;
-        self.closed = true;
-        self.writer.flush().map_err(io)?;
-        if self.writer.get_ref().metadata().map_err(io)?.len()
-            != self.count * CHECKPOINT_RECORD_BYTES as u64
-        {
-            return Err(PortError::Invalid);
-        }
-        Ok(())
-    }
-
-    fn matches(&self, cursor: u64, record: CheckpointRecord) -> PortResult<()> {
-        use std::os::unix::fs::FileExt;
-        if !self.closed || cursor >= self.count {
-            return Err(PortError::Invalid);
-        }
-        let mut bytes = [0; CHECKPOINT_RECORD_BYTES];
-        self.writer
-            .get_ref()
-            .read_exact_at(&mut bytes, cursor * CHECKPOINT_RECORD_BYTES as u64)
-            .map_err(io)?;
-        if bytes != record.encode() {
-            return Err(PortError::Invalid);
-        }
-        Ok(())
-    }
-
-    fn visit(&self, mut visitor: impl FnMut(CheckpointRecord) -> PortResult<()>) -> PortResult<()> {
-        use std::io::{Read, Seek, SeekFrom};
-        if !self.closed
-            || self.writer.get_ref().metadata().map_err(io)?.len()
-                != self.count * CHECKPOINT_RECORD_BYTES as u64
-        {
-            return Err(PortError::Invalid);
-        }
-        let mut reader =
-            std::io::BufReader::with_capacity(self.writer.capacity(), self.writer.get_ref());
-        reader.seek(SeekFrom::Start(0)).map_err(io)?;
-        for _ in 0..self.count {
-            let mut bytes = [0; CHECKPOINT_RECORD_BYTES];
-            reader.read_exact(&mut bytes).map_err(io)?;
-            visitor(CheckpointRecord::decode(&bytes)?)?;
-        }
-        Ok(())
-    }
-}
-
-struct PendingCheckpoint {
-    root: layerfs_content::ObjectId,
-    generation: u64,
-    journal: CheckpointJournal,
-    replay: Option<u64>,
-    applying: bool,
-    installed: bool,
-    head: Option<[u8; 33]>,
-    _charge: crate::live_runtime::LiveReservation,
-}
-
-impl PendingCheckpoint {
-    fn new(
-        root: layerfs_content::ObjectId,
-        generation: u64,
-        state: &LiveWorkspace,
-        scheduler: &Scheduler,
-    ) -> PortResult<Self> {
-        let io_bytes = (state
-            .policy
-            .max_final_delta_memory_bytes
-            .saturating_sub(1024)
-            / 64)
-            .clamp(256, 64 * 1024) as usize;
-        let memory = 2 * io_bytes + std::mem::size_of::<Self>() + CHECKPOINT_RECORD_BYTES;
-        state
-            .policy
-            .check_final_delta(memory as u64)
-            .map_err(core)?;
-        let charge = scheduler.reserve_live(memory).map_err(io)?;
-        Ok(Self {
-            root,
-            generation,
-            journal: CheckpointJournal::new(state.nodes.len(), io_bytes)?,
-            replay: None,
-            applying: false,
-            installed: false,
-            head: None,
-            _charge: charge,
-        })
-    }
-
-    fn push(&mut self, record: CheckpointRecord) -> PortResult<()> {
-        if let Some(cursor) = self.replay.as_mut() {
-            self.journal.matches(*cursor, record)?;
-            *cursor += 1;
-            Ok(())
-        } else if self.applying {
-            Err(PortError::Invalid)
-        } else {
-            self.journal.push(record)
-        }
-    }
-
-    fn finish(
-        &mut self,
-        state: &mut LiveWorkspace,
-        root: layerfs_content::ObjectId,
-        count: u64,
-        head: Option<[u8; 33]>,
-        #[cfg(test)] before_install: impl Fn(u64) -> PortResult<()>,
-    ) -> PortResult<()> {
-        if self.root != root
-            || self.journal.count != count
-            || self.replay.is_some_and(|cursor| cursor != count)
-            || (self.applying && self.head != head)
-            || (!self.installed && state.mutation_generation != self.generation)
-            || (self.installed && (state.base_root != root || state.mutation_generation != 0))
-        {
-            return Err(PortError::Invalid);
-        }
-        if self.installed {
-            return Ok(());
-        }
-        self.journal.close()?;
-        self.journal.visit(|record| {
-            state
-                .validate_checkpoint_record(record.node, record.inode, record.attr)
-                .map_err(core)
-        })?;
-        self.applying = true;
-        self.head = head;
-        #[cfg(test)]
-        let mut index = 0;
-        self.journal.visit(|record| {
-            #[cfg(test)]
-            {
-                before_install(index)?;
-                index += 1;
-            }
-            state
-                .install_checkpoint_record(record.node, record.inode, record.content, record.attr)
-                .map_err(core)
-        })?;
-        state.finish_checkpoint(root).map_err(core)?;
-        self.installed = true;
-        Ok(())
     }
 }
 
@@ -437,63 +143,6 @@ struct DirectoryCookies {
     ordered: std::collections::BTreeMap<u64, (NodeId, Vec<u8>)>,
 }
 
-struct AppendWindow {
-    backing: BackingRef,
-    start: u64,
-    reserved: u64,
-    filled: u64,
-}
-struct BufferedFrame {
-    bytes: Vec<u8>,
-    start: u64,
-    _charge: crate::live_runtime::LiveReservation,
-}
-enum PendingBytes {
-    Filling(BufferedFrame),
-    Sending(Arc<BufferedFrame>),
-    Backed,
-}
-struct PendingBacking(Mutex<PendingBytes>);
-
-struct FailOnCancel<'a> {
-    failed: &'a AtomicBool,
-    armed: bool,
-}
-impl Drop for FailOnCancel<'_> {
-    fn drop(&mut self) {
-        if self.armed {
-            self.failed.store(true, Ordering::Release);
-        }
-    }
-}
-
-struct AppendFlush {
-    window: AppendWindow,
-    frame: Option<Arc<BufferedFrame>>,
-    cancel: Option<Vec<u8>>,
-}
-impl AppendFlush {
-    fn frames(&self) -> impl Iterator<Item = &[u8]> {
-        [
-            self.frame
-                .as_ref()
-                .filter(|_| self.window.filled != 0)
-                .map(|frame| frame.bytes.as_slice()),
-            self.cancel.as_deref(),
-        ]
-        .into_iter()
-        .flatten()
-    }
-}
-
-struct PreparedFacts {
-    root: layerfs_content::ObjectId,
-    generation: u64,
-    count: usize,
-    frames: Vec<Vec<u8>>,
-    _charge: crate::live_runtime::LiveReservation,
-}
-
 fn core(error: layerfs_workspace_core::Error) -> PortError {
     use layerfs_workspace_core::Error;
     if std::env::var_os("LAYERFS_EDIT_FAILURE_DIAGNOSTIC").is_some() {
@@ -515,6 +164,51 @@ fn core(error: layerfs_workspace_core::Error) -> PortError {
 }
 fn io(_: std::io::Error) -> PortError {
     PortError::Io
+}
+
+/// Whether a records page exhausted the frontier: the page ended at `last`
+/// without hitting a page boundary earlier than the frontier end. The host
+/// stops pulling when `done` is set or the page returns zero records after a
+/// non-zero cursor.
+fn state_frontier_exhausted(frontier_len: u64, after: NodeId, count: u64, last: NodeId) -> bool {
+    count == 0 && after.0 != 0 || count != 0 && (count < wire::FACT_PAGE_NODES as u64)
+}
+
+/// Decode one completion record's attribute header. Mirrors `Attr` exactly:
+/// size, mode, links, mtime and kind; the node id rides the record itself.
+fn decode_complete_attr(input: &mut Input<'_>, node: NodeId) -> PortResult<Attr> {
+    let size = input.u64().map_err(io)?;
+    let mode = input.u32().map_err(io)?;
+    let links = input.u32().map_err(io)?;
+    let mtime_seconds = input.u64().map_err(io)? as i64;
+    let mtime_nanoseconds = input.u32().map_err(io)?;
+    let kind = match input.byte().map_err(io)? {
+        1 => Kind::File,
+        2 => Kind::Directory,
+        3 => Kind::Symlink,
+        _ => return Err(PortError::Invalid),
+    };
+    Ok(Attr {
+        node,
+        size,
+        kind,
+        mode,
+        links,
+        // mtime_seconds travels as u64; restore the signed value.
+        mtime_seconds: mtime_seconds as i64,
+        mtime_nanoseconds,
+    })
+}
+
+/// A fresh mount identity per LiveOwner: snapshot and completion tokens carry
+/// it so a late frame can never act on a successor owner.
+fn next_incarnation() -> u64 {
+    use std::sync::atomic::AtomicU64 as Counter;
+    static NEXT: Counter = Counter::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |value| value.as_nanos() as u64);
+    nanos ^ (NEXT.fetch_add(1, Ordering::Relaxed) as u64).rotate_left(32) ^ (std::process::id() as u64) << 32
 }
 
 // BTreeMap releases allocation on FORGET; HashMap spare capacity would outlive
@@ -880,22 +574,23 @@ impl LiveOwner {
         endpoint: String,
         capability: [u8; 32],
         scheduler: Scheduler,
+        backing_dir: std::path::PathBuf,
     ) -> PortResult<Self> {
         let backing = BackingConnection::connect(endpoint, capability, &scheduler)
             .await
             .map_err(io)?;
-        Self::from_backing(backing, scheduler, None).await
+        Self::from_backing(backing, scheduler, backing_dir).await
     }
 
     pub async fn local(
         handler: Arc<crate::live_transport::BackingHandler>,
-        facts: Arc<dyn Fn(LocalFacts) -> PortResult<()> + Send + Sync>,
         scheduler: Scheduler,
+        backing_dir: std::path::PathBuf,
     ) -> PortResult<Self> {
         Self::from_backing(
             BackingConnection::local(handler, scheduler.clone()),
             scheduler,
-            Some(facts),
+            backing_dir,
         )
         .await
     }
@@ -903,7 +598,7 @@ impl LiveOwner {
     async fn from_backing(
         backing: BackingConnection,
         scheduler: Scheduler,
-        local_facts: Option<Arc<dyn Fn(LocalFacts) -> PortResult<()> + Send + Sync>>,
+        backing_dir: std::path::PathBuf,
     ) -> PortResult<Self> {
         let seed = backing.call(&[wire::SEED]).await?;
         let mut input = Input(&seed);
@@ -917,6 +612,7 @@ impl LiveOwner {
         if id != ROOT {
             return Err(PortError::Io);
         }
+        let spool = Arc::new(LocalSpool::new(backing_dir)?);
         Ok(Self(Arc::new(Owner {
             read_scope: scheduler.immutable_reads().new_scope(),
             scheduler,
@@ -931,22 +627,29 @@ impl LiveOwner {
             active_prefill: Default::default(),
             head: Mutex::new(head),
             backing,
-            local_facts,
-            append: Default::default(),
+            spool,
+            incarnation: next_incarnation(),
+            attempt: AtomicU64::new(0),
+            snapshot: Default::default(),
             failed: AtomicBool::new(false),
             closing: AtomicBool::new(false),
             cached: Default::default(),
-            facts_sync: Default::default(),
             ordering: Default::default(),
             namespace: Default::default(),
             directories: Default::default(),
-            ranges: Default::default(),
             edit: Default::default(),
             kernel_edit: Default::default(),
             gate: Default::default(),
             cut: Default::default(),
-            install: Default::default(),
         })))
+    }
+
+    pub fn spool(&self) -> Arc<LocalSpool> {
+        self.0.spool.clone()
+    }
+
+    pub fn incarnation(&self) -> u64 {
+        self.0.incarnation
     }
 
     fn state(&self) -> PortResult<std::sync::MutexGuard<'_, LiveWorkspace>> {
@@ -1277,171 +980,59 @@ impl LiveOwner {
         if bytes.is_empty() {
             return Ok(acknowledged);
         }
-        let mut window = self.0.append.lock().await;
-        if window
-            .as_ref()
-            .is_some_and(|window| window.reserved - window.filled < bytes.len() as u64)
-        {
-            self.flush_append(&mut window).await?;
-        }
-        if window.is_none() {
-            let mut wanted = {
-                let state = self.state()?;
-                (1024 * 1024)
-                    .min(
-                        state
-                            .policy
-                            .max_spool_bytes
-                            .saturating_sub(state.spool_bytes),
-                    )
-                    .max(bytes.len() as u64)
-            };
-            // Own pending capacity before requesting physical space or copying payload.
-            let charge = self
-                .0
-                .scheduler
-                .reserve_transfer(wanted as usize + 21)
-                .map_err(|_| PortError::NoSpace)?;
-            let mut reserve = vec![wire::RESERVE];
-            wire::u64_out(&mut reserve, wanted);
-            let response = match self.0.backing.call(&reserve).await {
-                Err(PortError::NoSpace) if wanted > bytes.len() as u64 => {
-                    wanted = bytes.len() as u64;
-                    reserve.truncate(1);
-                    wire::u64_out(&mut reserve, wanted);
-                    self.0.backing.call(&reserve).await?
-                }
-                result => result?,
-            };
-            let mut input = Input(&response);
-            let id = BackingId(input.u64().map_err(io)?);
-            let start = input.u64().map_err(io)?;
-            let capacity = input.u64().map_err(io)?;
-            input.done().map_err(io)?;
-            if start.checked_add(wanted).is_none_or(|end| end > capacity) {
-                return Err(PortError::Io);
-            }
-            let backing = self
-                .0
-                .ranges
-                .lock()
-                .map_err(|_| PortError::Io)?
-                .entry(id)
-                .or_insert_with(|| {
-                    BackingRef::new(id, PendingBacking(Mutex::new(PendingBytes::Backed)))
-                })
-                .clone();
-            let mut frame = Vec::with_capacity(wanted as usize + 21);
-            frame.push(wire::APPEND);
-            wire::u64_out(&mut frame, id.0);
-            wire::u64_out(&mut frame, start);
-            frame.extend_from_slice(&0u32.to_be_bytes());
-            *backing
-                .resource::<PendingBacking>()
-                .ok_or(PortError::Io)?
-                .0
-                .lock()
-                .map_err(|_| PortError::Io)? = PendingBytes::Filling(BufferedFrame {
-                bytes: frame,
-                start,
-                _charge: charge,
-            });
-            *window = Some(AppendWindow {
-                backing,
-                start,
-                reserved: wanted,
-                filled: 0,
-            });
-        }
-        let window = window.as_mut().ok_or(PortError::Io)?;
+        // Sandbox-owned payload: reserve local segment space, prepare the
+        // piece referencing it, then install the bytes before applying. The
+        // piece only becomes visible after its bytes are physically readable
+        // in owned workspace state.
+        let (segment, start) = self.0.spool.reserve(bytes.len() as u64)?;
         let preparing = Instant::now();
-        let prepared = self
-            .state()?
-            .prepare_write(
+        let prepared = {
+            let result = self.state()?.prepare_write(
                 node,
                 offset,
                 bytes.len(),
                 Some(SpoolSlice {
-                    segment: window.backing.clone(),
-                    offset: window.start + window.filled,
+                    segment: segment.clone(),
+                    offset: start,
                     len: bytes.len() as u64,
                 }),
-            )
-            .map_err(core);
+            );
+            match result {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    // The failed reservation's segment is dropped when nothing
+                    // else retains it; the core charged nothing.
+                    let spool = self.0.spool.clone();
+                    let abandoned = segment.clone();
+                    let _ = self
+                        .0
+                        .scheduler
+                        .physical(move || {
+                            spool.abandon(abandoned).map_err(|_| wire::invalid())
+                        })
+                        .await;
+                    return Err(core(error));
+                }
+            }
+        };
         self.0
             .writes
             .live_edit_ns
             .fetch_add(ns(preparing), Ordering::Relaxed);
-        let prepared = match prepared {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                if window.filled == 0 {
-                    *window
-                        .backing
-                        .resource::<PendingBacking>()
-                        .ok_or(PortError::Io)?
-                        .0
-                        .lock()
-                        .map_err(|_| PortError::Io)? = PendingBytes::Backed;
-                }
-                return Err(error);
-            }
-        };
-        {
-            let mut pending = window
-                .backing
-                .resource::<PendingBacking>()
-                .ok_or(PortError::Io)?
-                .0
-                .lock()
-                .map_err(|_| PortError::Io)?;
-            if matches!(*pending, PendingBytes::Backed) {
-                // An idle reservation retains no payload buffer or transfer
-                // permit. Allocate its bounded remaining tail only on a write.
-                let size = window.reserved as usize + 21;
-                let mut frame = Vec::new();
-                let mut charge = self
-                    .0
-                    .scheduler
-                    .reserve_transfer(size)
-                    .map_err(|_| PortError::NoSpace)?;
-                frame
-                    .try_reserve_exact(size)
-                    .map_err(|_| PortError::NoSpace)?;
-                if frame.capacity() > size {
-                    charge.merge(
-                        self.0
-                            .scheduler
-                            .reserve_transfer(frame.capacity() - size)
-                            .map_err(|_| PortError::NoSpace)?,
-                    );
-                }
-                frame.push(wire::APPEND);
-                wire::u64_out(&mut frame, window.backing.id().0);
-                wire::u64_out(&mut frame, window.start);
-                frame.extend_from_slice(&0u32.to_be_bytes());
-                *pending = PendingBytes::Filling(BufferedFrame {
-                    bytes: frame,
-                    start: window.start,
-                    _charge: charge,
-                });
-            }
-        }
         let encoding = Instant::now();
         {
-            let mut pending = window
-                .backing
-                .resource::<PendingBacking>()
-                .ok_or(PortError::Io)?
-                .0
-                .lock()
-                .map_err(|_| PortError::Io)?;
-            let PendingBytes::Filling(frame) = &mut *pending else {
-                return Err(PortError::Io);
-            };
-            frame.bytes.extend_from_slice(bytes);
+            let spool = self.0.spool.clone();
+            let payload_segment = segment.clone();
+            let payload = bytes.to_vec();
+            self.0
+                .scheduler
+                .physical(move || {
+                    spool.write(&payload_segment, start, &payload)
+                        .map_err(|_| wire::invalid())
+                })
+                .await
+                .map_err(io)?;
         }
-        window.filled += bytes.len() as u64;
         self.0
             .writes
             .note_client_frame(0, bytes.len() as u64, ns(encoding), 0);
@@ -1452,125 +1043,6 @@ impl LiveOwner {
             .live_edit_ns
             .fetch_add(ns(applying), Ordering::Relaxed);
         result.map(|_| acknowledged)
-    }
-
-    fn prepare_append(
-        &self,
-        window: &mut Option<AppendWindow>,
-        cancel_tail: bool,
-    ) -> PortResult<Option<AppendFlush>> {
-        if self.0.failed.load(Ordering::Acquire) {
-            return Err(PortError::Io);
-        }
-        if !cancel_tail && window.as_ref().is_some_and(|window| window.filled == 0) {
-            return Ok(None);
-        }
-        let Some(window) = window.take() else {
-            return Ok(None);
-        };
-        let resource = window
-            .backing
-            .resource::<PendingBacking>()
-            .ok_or(PortError::Io)?;
-        let frame = {
-            let mut pending = resource.0.lock().map_err(|_| PortError::Io)?;
-            match std::mem::replace(&mut *pending, PendingBytes::Backed) {
-                PendingBytes::Filling(mut frame) => {
-                    frame.bytes[17..21].copy_from_slice(&(window.filled as u32).to_be_bytes());
-                    let frame = Arc::new(frame);
-                    *pending = PendingBytes::Sending(frame.clone());
-                    Some(frame)
-                }
-                PendingBytes::Backed if window.filled == 0 => None,
-                other => {
-                    *pending = other;
-                    return Err(PortError::Io);
-                }
-            }
-        };
-        let cancel = (cancel_tail && window.filled < window.reserved).then(|| {
-            let mut cancel = vec![wire::CANCEL_RESERVATION];
-            wire::u64_out(&mut cancel, window.backing.id().0);
-            wire::u64_out(&mut cancel, window.start + window.filled);
-            cancel
-        });
-        Ok(Some(AppendFlush {
-            window,
-            frame,
-            cancel,
-        }))
-    }
-
-    fn finish_append(
-        &self,
-        flush: AppendFlush,
-        window: &mut Option<AppendWindow>,
-        progress: &crate::live_transport::BatchProgress,
-    ) -> PortResult<()> {
-        let append_count = usize::from(flush.window.filled != 0);
-        if progress.completed >= append_count {
-            *flush
-                .window
-                .backing
-                .resource::<PendingBacking>()
-                .ok_or(PortError::Io)?
-                .0
-                .lock()
-                .map_err(|_| PortError::Io)? = PendingBytes::Backed;
-        }
-        if progress.uncertain || progress.completed < flush.frames().count() {
-            // Preserve acknowledged local bytes and their charge after ambiguous
-            // backing failure. Never replay the append or discard its prefix.
-            self.0.failed.store(true, Ordering::Release);
-        }
-        if !progress.uncertain
-            && progress.completed >= append_count
-            && flush.cancel.is_none()
-            && flush.window.filled < flush.window.reserved
-        {
-            *window = Some(AppendWindow {
-                start: flush.window.start + flush.window.filled,
-                reserved: flush.window.reserved - flush.window.filled,
-                filled: 0,
-                backing: flush.window.backing,
-            });
-        }
-        Ok(())
-    }
-
-    async fn flush_append(&self, window: &mut Option<AppendWindow>) -> PortResult<()> {
-        let Some(flush) = self.prepare_append(window, true)? else {
-            return Ok(());
-        };
-        let frames = flush.frames().collect::<Vec<_>>();
-        let mut cancellation = FailOnCancel {
-            failed: &self.0.failed,
-            armed: true,
-        };
-        let progress = self.0.backing.call_batch(&frames, &self.0.scheduler).await;
-        drop(frames);
-        self.finish_append(flush, window, &progress)?;
-        cancellation.armed = false;
-        progress.result()
-    }
-
-    async fn retire_idle_append(&self, window: &mut Option<AppendWindow>) -> PortResult<()> {
-        let idle_unused = if let Some(window) = window.as_ref().filter(|window| window.filled == 0)
-        {
-            let mut ranges = self.0.ranges.lock().map_err(|_| PortError::Io)?;
-            // Exclude the registry's own reference while checking the idle
-            // lease. Restore it before any fallible physical/network work.
-            drop(ranges.remove(&window.backing.id()));
-            let unused = window.backing.is_unique();
-            ranges.insert(window.backing.id(), window.backing.clone());
-            unused
-        } else {
-            false
-        };
-        if idle_unused {
-            self.flush_append(window).await?;
-        }
-        Ok(())
     }
 
     pub async fn read_owned(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Vec<u8>> {
@@ -1636,51 +1108,24 @@ impl LiveOwner {
                     offset,
                     len,
                 } => {
-                    let local = {
-                        let pending = segment
-                            .resource::<PendingBacking>()
-                            .ok_or(PortError::Io)?
-                            .0
-                            .lock()
-                            .map_err(|_| PortError::Io)?;
-                        let frame = match &*pending {
-                            PendingBytes::Filling(frame) => Some(frame),
-                            PendingBytes::Sending(frame) => Some(frame.as_ref()),
-                            PendingBytes::Backed => None,
-                        };
-                        frame
-                            .filter(|frame| offset + len > frame.start)
-                            .map(|frame| {
-                                let prefix = frame.start.saturating_sub(offset).min(len);
-                                let start = 21 + (offset + prefix - frame.start) as usize;
-                                let end = start + (len - prefix) as usize;
-                                frame
-                                    .bytes
-                                    .get(start..end)
-                                    .map(|bytes| (prefix, bytes.to_vec()))
-                                    .ok_or(PortError::Io)
-                            })
-                            .transpose()?
-                    };
-                    if let Some((prefix, local)) = local {
-                        if prefix != 0 {
-                            let mut request = vec![wire::READ_BACKING];
-                            wire::u64_out(&mut request, segment.id().0);
-                            wire::u64_out(&mut request, offset);
-                            request.extend_from_slice(&(prefix as u32).to_be_bytes());
-                            let prefix_bytes = self.0.backing.call(&request).await?;
-                            if prefix_bytes.len() as u64 != prefix {
-                                return Err(PortError::Io);
-                            }
-                            out.extend(prefix_bytes);
-                        }
-                        out.extend(local);
+                    // Sandbox-owned bytes: read the local segment through the
+                    // bounded physical worker. Every applied piece range was
+                    // written before its piece became visible.
+                    if len == 0 {
                         continue;
                     }
-                    request = vec![wire::READ_BACKING];
-                    wire::u64_out(&mut request, segment.id().0);
-                    wire::u64_out(&mut request, offset);
-                    length = len;
+                    let spool = self.0.spool.clone();
+                    let reader = segment.clone();
+                    let bytes = self
+                        .0
+                        .scheduler
+                        .physical(move || {
+                            spool.read(&reader, offset, len).map_err(|_| wire::invalid())
+                        })
+                        .await
+                        .map_err(io)?;
+                    out.extend(bytes);
+                    continue;
                 }
             }
             if length == 0 {
@@ -2343,52 +1788,32 @@ impl FilesystemPort for LiveOwner {
     }
     fn fsync_async<'a>(&'a self, _node: Option<NodeId>) -> crate::PortFuture<'a, ()> {
         Box::pin(async move {
-            let mut window = self.0.append.lock().await;
-            let mut cancellation = FailOnCancel {
-                failed: &self.0.failed,
-                armed: true,
-            };
-            let result = async {
-                let mut check = vec![wire::CHECK, 1];
-                for id in self.0.ranges.lock().map_err(|_| PortError::Io)?.keys() {
-                    wire::u64_out(&mut check, id.0);
-                }
-                if self.0.local_facts.is_some() {
-                    self.flush_append(&mut window).await?;
-                    self.0.backing.call(&check).await?;
-                    self.publish_facts(None).await?;
-                } else {
-                    let mut acknowledged = self.0.facts_sync.lock().await;
-                    let facts = self.prepare_remote_facts(&acknowledged)?;
-                    let flush = self.prepare_append(&mut window, false)?;
-                    let mut frames = flush
-                        .as_ref()
-                        .into_iter()
-                        .flat_map(AppendFlush::frames)
-                        .collect::<Vec<_>>();
-                    frames.push(check.as_slice());
-                    if let Some(facts) = &facts {
-                        frames.extend(facts.frames.iter().map(Vec::as_slice));
-                    }
-                    let progress = self.0.backing.call_batch(&frames, &self.0.scheduler).await;
-                    drop(frames);
-                    if let Some(flush) = flush {
-                        self.finish_append(flush, &mut window, &progress)?;
-                    }
-                    if progress.uncertain {
-                        self.0.failed.store(true, Ordering::Release);
-                    }
-                    progress.result()?;
-                    if let Some(facts) = facts {
-                        *acknowledged = Some((facts.root, facts.generation));
-                    }
-                }
-                self.retire_idle_append(&mut window).await?;
-                self.retire_ranges().await
+            // Volatile sync contract: the workspace backing is disposable and
+            // never receives a durability flush. Every acknowledged write is
+            // already installed in owned, readable workspace state (bytes are
+            // written before their piece is applied), so this validates state
+            // and surfaces known write/allocation errors, then retires idle
+            // allocations. It never exports facts, canonicalizes content or
+            // waits for a host acknowledgment.
+            if self.0.failed.load(Ordering::Acquire) {
+                return Err(PortError::Io);
             }
-            .await;
-            cancellation.armed = false;
-            result
+            let known_errors = {
+                let state = self.state()?;
+                state.policy.check(state.spool_bytes).is_ok()
+            };
+            if !known_errors {
+                // Surface the recorded allocation overrun; the failing write
+                // already reported its own error synchronously.
+                return Err(PortError::NoSpace);
+            }
+            let spool = self.0.spool.clone();
+            self.0
+                .scheduler
+                .physical(move || spool.retire_idle().map_err(|_| wire::invalid()))
+                .await
+                .map_err(io)?;
+            Ok(())
         })
     }
     fn readdir(&self, node: NodeId) -> PortResult<Vec<(NodeId, Kind, Vec<u8>)>> {
@@ -2567,7 +1992,7 @@ impl LiveOwner {
         self.0.closing.store(true, Ordering::Release);
         self.0.cut.lock().map_err(|_| wire::invalid())?.take();
         self.0.edit.lock().map_err(|_| wire::invalid())?.take();
-        self.0.install.lock().map_err(|_| wire::invalid())?.take();
+        self.0.snapshot.lock().map_err(|_| wire::invalid())?.take();
         #[cfg(target_os = "linux")]
         self.0
             .kernel_root
@@ -2647,225 +2072,37 @@ impl LiveOwner {
         }
     }
 
-    pub async fn freeze(&self) -> PortResult<()> {
-        self.freeze_diagnostic(true, &mut None).await
-    }
-
-    async fn freeze_diagnostic(
+    /// Take an operation cut for an SDK edit transaction: exclude ordinary
+    /// and writeback callbacks while queued kernel folios are reconciled.
+    /// Commit capture never calls this; snapshots are stable by frontier
+    /// ownership, not by pausing the workspace.
+    async fn take_edit_cut(
         &self,
-        publish: bool,
         diagnostic: &mut Option<EditDiagnostic>,
-    ) -> PortResult<()> {
+    ) -> PortResult<crate::live_runtime::OperationCut> {
         if self.0.failed.load(Ordering::Acquire) {
             return Err(PortError::Io);
         }
-        if self.0.cut.lock().map_err(|_| PortError::Io)?.is_none() {
-            let started = diagnostic.as_ref().map(|_| Instant::now());
-            let flush = self.0.gate.cache_flush().await;
-            note_edit(diagnostic, EditMetric::Gate, started);
-            let started = diagnostic.as_ref().map(|_| Instant::now());
-            self.flush_kernel_cache(diagnostic.as_mut()).await?;
-            note_edit(diagnostic, EditMetric::Kernel, started);
-            let started = diagnostic.as_ref().map(|_| Instant::now());
-            let cut = flush.finish().await;
-            *self.0.cut.lock().map_err(|_| PortError::Io)? = Some(cut);
-            note_edit(diagnostic, EditMetric::Gate, started);
+        if self.0.cut.lock().map_err(|_| PortError::Io)?.is_some() {
+            return Err(PortError::Busy);
         }
         let started = diagnostic.as_ref().map(|_| Instant::now());
-        self.flush_append(&mut *self.0.append.lock().await).await?;
-        note_edit(diagnostic, EditMetric::Append, started);
-        if publish {
-            let started = diagnostic.as_ref().map(|_| Instant::now());
-            self.publish_facts(diagnostic.as_mut()).await?;
-            note_edit(diagnostic, EditMetric::Facts, started);
-        }
+        let flush = self.0.gate.cache_flush().await;
+        note_edit(diagnostic, EditMetric::Gate, started);
         let started = diagnostic.as_ref().map(|_| Instant::now());
-        self.retire_ranges().await?;
-        note_edit(diagnostic, EditMetric::Retire, started);
-        Ok(())
-    }
-
-    async fn publish_facts(&self, mut diagnostic: Option<&mut EditDiagnostic>) -> PortResult<()> {
-        let mut acknowledged = self.0.facts_sync.lock().await;
-        if let Some(sink) = &self.0.local_facts {
-            let facts = {
-                let state = self.state()?;
-                if *acknowledged == Some((state.base_root, state.mutation_generation)) {
-                    return Ok(());
-                }
-                let mut ids = state.dirty.clone();
-                for id in &state.dirty {
-                    if let Some(layerfs_workspace_core::Node {
-                        data: Data::Directory(directory),
-                        ..
-                    }) = state.nodes.get(id)
-                    {
-                        ids.extend(directory.changes.values().flatten());
-                    }
-                }
-                let mut charge = 0usize;
-                for id in &ids {
-                    let node = state.nodes.get(id).ok_or(PortError::Io)?;
-                    let inline = match &node.data {
-                        Data::File(layerfs_workspace_core::FileData::Edited { pieces, .. }) => {
-                            pieces.inline_len() as usize
-                        }
-                        _ => 0,
-                    };
-                    charge = charge
-                        .checked_add(
-                            wire::node_encoded_bound(node)
-                                .map_err(io)?
-                                .saturating_sub(inline)
-                                .checked_mul(8)
-                                .and_then(|n| n.checked_add(1024))
-                                .ok_or(PortError::NoSpace)?,
-                        )
-                        .filter(|n| *n <= wire::MAX_FACT_MEMORY)
-                        .ok_or(PortError::NoSpace)?;
-                }
-                let charge = self
-                    .0
-                    .scheduler
-                    .reserve_live(charge)
-                    .map_err(|_| PortError::NoSpace)?;
-                LocalFacts {
-                    root: state.base_root,
-                    generation: state.mutation_generation,
-                    nodes: ids
-                        .into_iter()
-                        .map(|id| (id, state.nodes[&id].clone()))
-                        .collect(),
-                    dirty: state.dirty.clone(),
-                    charge,
-                }
-            };
-            let identity = (facts.root, facts.generation);
-            if let Some(diagnostic) = diagnostic.as_mut() {
-                diagnostic.values[EditMetric::FactNodes as usize] += facts.nodes.len() as u64;
-            }
-            let sink = sink.clone();
-            self.0
-                .scheduler
-                .physical(move || Ok(sink(facts)))
-                .await
-                .map_err(io)??;
-            *acknowledged = Some(identity);
-            return Ok(());
-        }
-        let Some(facts) = self.prepare_remote_facts(&acknowledged)? else {
-            return Ok(());
-        };
-        if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.values[EditMetric::FactNodes as usize] += facts.count as u64;
-            diagnostic.values[EditMetric::FactBytes as usize] += facts
-                .frames
-                .iter()
-                .map(|frame| frame.len() as u64 + 4)
-                .sum::<u64>();
-        }
-        for frame in &facts.frames {
-            self.0.backing.call(frame).await?;
-        }
-        *acknowledged = Some((facts.root, facts.generation));
-        Ok(())
-    }
-
-    fn prepare_remote_facts(
-        &self,
-        acknowledged: &Option<(layerfs_content::ObjectId, u64)>,
-    ) -> PortResult<Option<PreparedFacts>> {
-        let (root, generation, count, mut pages, charge) = {
-            let state = self.state()?;
-            if *acknowledged == Some((state.base_root, state.mutation_generation)) {
-                return Ok(None);
-            }
-            let mut ids = state.dirty.clone();
-            for id in &state.dirty {
-                if let Some(layerfs_workspace_core::Node {
-                    data: Data::Directory(directory),
-                    ..
-                }) = state.nodes.get(id)
-                {
-                    ids.extend(directory.changes.values().flatten());
-                }
-            }
-            let mut charge = 0usize;
-            for id in &ids {
-                let node = state.nodes.get(id).ok_or(PortError::Io)?;
-                charge = charge
-                    .checked_add(
-                        wire::node_encoded_bound(node)
-                            .map_err(io)?
-                            .checked_mul(8)
-                            .and_then(|n| n.checked_add(1024))
-                            .ok_or(PortError::NoSpace)?,
-                    )
-                    .filter(|n| *n <= wire::MAX_FACT_MEMORY)
-                    .ok_or(PortError::NoSpace)?;
-            }
-            let reservation = self
-                .0
-                .scheduler
-                .reserve_live(charge)
-                .map_err(|_| PortError::NoSpace)?;
-            // Capture one coherent changed-record generation. Encoding holds the
-            // short state lock, but no network/physical wait occurs under it.
-            let mut pages = Vec::new();
-            let mut page = vec![wire::FACTS_NODE];
-            let mut count = 0;
-            for id in &ids {
-                let node = state.nodes.get(id).ok_or(PortError::Io)?;
-                let dirty = u8::from(state.dirty.contains(id));
-                let encoded = wire::node_out(*id, node).map_err(io)?;
-                let mut record = vec![dirty];
-                wire::bytes_out(&mut record, &encoded).map_err(io)?;
-                if count != 0
-                    && (count == wire::FACT_PAGE_NODES
-                        || page.len() + record.len() > wire::FACT_PAGE_BYTES)
-                {
-                    pages.push(std::mem::replace(&mut page, vec![wire::FACTS_NODE]));
-                    count = 0;
-                }
-                if record.len() + 1 > wire::MAX_FRAME {
-                    let mut begin = vec![wire::FACTS_NODE_BEGIN, dirty];
-                    wire::u64_out(&mut begin, encoded.len() as u64);
-                    pages.push(begin);
-                    for chunk in encoded.chunks(wire::MAX_FRAME - 1) {
-                        let mut frame = vec![wire::FACTS_NODE_CHUNK];
-                        frame.extend_from_slice(chunk);
-                        pages.push(frame);
-                    }
-                    continue;
-                }
-                page.extend(record);
-                count += 1;
-            }
-            if count != 0 {
-                pages.push(page);
-            }
-            (
-                state.base_root,
-                state.mutation_generation,
-                ids.len(),
-                pages,
-                reservation,
-            )
-        };
-        let mut begin = vec![wire::FACTS_BEGIN];
-        wire::u64_out(&mut begin, generation);
-        pages.insert(0, begin);
-        let mut end = vec![wire::FACTS_END];
-        wire::u64_out(&mut end, generation);
-        wire::u64_out(&mut end, count as u64);
-        pages.push(end);
-        Ok(Some(PreparedFacts {
-            root,
-            generation,
-            count,
-            frames: pages,
-            _charge: charge,
-        }))
+        self.flush_kernel_cache(diagnostic.as_mut()).await?;
+        note_edit(diagnostic, EditMetric::Kernel, started);
+        let started = diagnostic.as_ref().map(|_| Instant::now());
+        let cut = flush.finish().await;
+        *self.0.cut.lock().map_err(|_| PortError::Io)? = Some(cut);
+        note_edit(diagnostic, EditMetric::Gate, started);
+        Ok(self
+            .0
+            .cut
+            .lock()
+            .map_err(|_| PortError::Io)?
+            .take()
+            .ok_or(PortError::Io)?)
     }
 
     pub async fn local_control(&self, bytes: &[u8]) -> PortResult<Vec<u8>> {
@@ -2952,16 +2189,9 @@ impl LiveOwner {
                     .scheduler
                     .reserve_live(9 * 1024 * 1024)
                     .map_err(|_| PortError::NoSpace)?;
-                // The edit reads live owner state. Only explicit FREEZE/fsync
-                // consumers need a host snapshot of the complete dirty prefix.
-                self.freeze_diagnostic(false, &mut diagnostic).await?;
-                let cut = self
-                    .0
-                    .cut
-                    .lock()
-                    .map_err(|_| PortError::Io)?
-                    .take()
-                    .ok_or(PortError::Io)?;
+                // The edit reconciles the kernel cache around its ranges; the
+                // cut is local and unrelated to Commit capture.
+                let cut = self.take_edit_cut(&mut diagnostic).await?;
                 let mut node = ROOT;
                 let started = diagnostic.as_ref().map(|_| Instant::now());
                 for name in path.split('/').filter(|name| !name.is_empty()) {
@@ -3191,136 +2421,200 @@ impl LiveOwner {
                 input.done().map_err(io)?;
                 self.invalidate(node)?;
             }
-            wire::FREEZE => {
+            wire::CAPTURE => {
                 input.done().map_err(io)?;
-                self.freeze().await?;
-            }
-            wire::RESUME => {
-                input.done().map_err(io)?;
-                let mut install = self.0.install.lock().map_err(|_| PortError::Io)?;
-                if install
-                    .as_ref()
-                    .is_some_and(|pending| pending.applying && !pending.installed)
+                if self.0.failed.load(Ordering::Acquire)
+                    || self.0.closing.load(Ordering::Acquire)
                 {
+                    return Err(PortError::Io);
+                }
+                let mut slot = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                if let Some(slot) = slot.as_ref() {
+                    // One active Commit: the retained attempt must be resolved
+                    // (completed or cancelled) before the next capture.
+                    if slot.complete.is_some() {
+                        return Err(PortError::Busy);
+                    }
                     return Err(PortError::Busy);
                 }
-                install.take();
-                self.0.cut.lock().map_err(|_| PortError::Io)?.take();
-            }
-            wire::OBSERVE => {
-                input.done().map_err(io)?;
-                let state = self.state()?;
-                wire::u64_out(&mut out, state.mutation_generation);
-                wire::u64_out(&mut out, state.dirty.len() as u64);
-                wire::u64_out(&mut out, state.spool_bytes);
+                let (generation, frontier_len, base_root) = {
+                    let mut state = self.state()?;
+                    state.capture_frontier().map_err(core)?;
+                    (
+                        state.mutation_generation,
+                        state.frontier_len() as u64,
+                        state.base_root,
+                    )
+                };
+                let attempt = self.0.attempt.fetch_add(1, Ordering::AcqRel) + 1;
+                *slot = Some(SnapshotSlot {
+                    token: SnapshotToken {
+                        incarnation: self.0.incarnation,
+                        attempt,
+                        generation,
+                    },
+                    complete: None,
+                });
+                drop(slot);
+                wire::u64_out(&mut out, self.0.incarnation);
+                wire::u64_out(&mut out, attempt);
+                wire::u64_out(&mut out, generation);
+                wire::u64_out(&mut out, frontier_len);
+                out.extend_from_slice(base_root.as_bytes());
                 let head = self.0.head.lock().map_err(|_| PortError::Io)?;
                 wire::bytes_out(&mut out, head.as_ref().map_or(&[][..], |bytes| &bytes[..]))
                     .map_err(io)?;
             }
-            wire::INSTALL_BEGIN => {
-                let root = input.object().map_err(io)?;
-                let generation = input.u64().map_err(io)?;
+            wire::SNAP_CANCEL => {
+                let incarnation = input.u64().map_err(io)?;
+                let attempt = input.u64().map_err(io)?;
                 input.done().map_err(io)?;
-                if self.0.cut.lock().map_err(|_| PortError::Io)?.is_none() {
-                    return Err(PortError::Invalid);
-                }
-                let mut install = self.0.install.lock().map_err(|_| PortError::Io)?;
-                let state = self.state()?;
-                if let Some(pending) = install.as_mut() {
-                    if pending.root != root || pending.generation != generation {
-                        return Err(PortError::Busy);
+                let mut slots = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                match slots.as_ref() {
+                    Some(slot)
+                        if slot.token.incarnation == incarnation
+                            && slot.token.attempt == attempt
+                            && slot.complete.is_none() =>
+                    {
+                        // Abandon the owned attempt before publication: the
+                        // frontier is released and nothing was published.
+                        slots.take();
+                        let mut state = self.state()?;
+                        state.release_frontier();
                     }
-                    if pending.applying {
-                        // Host retries BEGIN after failed/uncertain END. Preserve the
-                        // immutable journal and accept only its byte-exact replay.
-                        if (!pending.installed && state.mutation_generation != generation)
-                            || (pending.installed
-                                && (state.mutation_generation != 0 || state.base_root != root))
-                        {
-                            return Err(PortError::Invalid);
-                        }
-                        pending.replay = Some(0);
-                    } else {
-                        if state.mutation_generation != generation {
-                            return Err(PortError::Invalid);
-                        }
-                        // No record has changed yet: release old scratch and its
-                        // permit before reserving the replacement, even at capacity.
-                        install.take();
-                        *install = Some(PendingCheckpoint::new(
-                            root,
-                            generation,
-                            &state,
-                            &self.0.scheduler,
-                        )?);
-                    }
-                } else {
-                    if state.mutation_generation != generation {
-                        return Err(PortError::Invalid);
-                    }
-                    *install = Some(PendingCheckpoint::new(
-                        root,
-                        generation,
-                        &state,
-                        &self.0.scheduler,
-                    )?);
+                    _ => return Err(PortError::Invalid),
                 }
             }
-            wire::INSTALL_NODE => {
-                let mut count = 0;
-                while !input.0.is_empty() {
-                    if count == wire::FACT_PAGE_NODES {
-                        return Err(PortError::Invalid);
-                    }
-                    let content = input.object().map_err(io)?;
-                    let (id, node) =
-                        wire::node_in(input.bytes().map_err(io)?, |_, _, _| Err(wire::invalid()))
-                            .map_err(io)?;
-                    let inode = node.canonical.ok_or(PortError::Invalid)?;
-                    let attr = node.attr(id);
-                    self.state()?
-                        .validate_checkpoint_record(id, inode, attr)
-                        .map_err(core)?;
-                    let mut install = self.0.install.lock().map_err(|_| PortError::Io)?;
-                    install
-                        .as_mut()
-                        .ok_or(PortError::Invalid)?
-                        .push(CheckpointRecord {
-                            node: id,
-                            inode,
-                            content,
-                            attr,
-                        })?;
-                    count += 1;
-                }
-            }
-            wire::INSTALL_END => {
+            wire::COMPLETE_BEGIN => {
+                let incarnation = input.u64().map_err(io)?;
+                let attempt = input.u64().map_err(io)?;
                 let root = input.object().map_err(io)?;
-                let count = input.u64().map_err(io)?;
                 let head = input.head().map_err(io)?;
                 input.done().map_err(io)?;
-                let mut install = self.0.install.lock().map_err(|_| PortError::Io)?;
-                let pending = install.as_mut().ok_or(PortError::Invalid)?;
-                let mut state = self.state()?;
-                // Acquire the head lock before any record changes; publication of
-                // state/head then has no remaining fallible lock acquisition.
-                let mut installed_head = self.0.head.lock().map_err(|_| PortError::Io)?;
-                pending.finish(
-                    &mut state,
+                let mut slot = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                let slot = match slot.as_mut() {
+                    Some(slot)
+                        if slot.token.incarnation == incarnation
+                            && slot.token.attempt == attempt =>
+                    {
+                        slot
+                    }
+                    _ => return Err(PortError::Invalid),
+                };
+                // A retry after a failed END restarts the record stream.
+                slot.complete = Some(PendingComplete {
                     root,
-                    count,
                     head,
-                    #[cfg(test)]
-                    |_| Ok(()),
-                )?;
-                *installed_head = head;
-                // Retain the completed receipt until RESUME for a lost END reply.
+                    received: 0,
+                    applied: 0,
+                    skipped: 0,
+                });
             }
-
+            wire::COMPLETE_NODE => {
+                let incarnation = input.u64().map_err(io)?;
+                let attempt = input.u64().map_err(io)?;
+                let mut slot = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                let slot = match slot.as_mut() {
+                    Some(slot)
+                        if slot.token.incarnation == incarnation
+                            && slot.token.attempt == attempt
+                            && slot.complete.is_some() =>
+                    {
+                        slot
+                    }
+                    _ => return Err(PortError::Invalid),
+                };
+                let pending = slot.complete.as_mut().ok_or(PortError::Invalid)?;
+                let mut records = 0;
+                while !input.0.is_empty() {
+                    if records == wire::COMPLETE_PAGE_RECORDS {
+                        return Err(PortError::Invalid);
+                    }
+                    let node = NodeId(input.u64().map_err(io)?);
+                    let revision = input.u64().map_err(io)?;
+                    let inode =
+                        layerfs_content::tree::inode::InodeId::from_slice(
+                            input.raw(32).map_err(io)?,
+                        )
+                        .map_err(|_| PortError::Invalid)?;
+                    let content = input.object().map_err(io)?;
+                    let attr = decode_complete_attr(&mut input, node)?;
+                    let mut state = self.state()?;
+                    let applied = state
+                        .install_covered_record(node, revision, inode, content, attr)
+                        .map_err(core)?;
+                    pending.received += 1;
+                    if applied {
+                        pending.applied += 1;
+                    } else {
+                        pending.skipped += 1;
+                    }
+                    records += 1;
+                }
+            }
+            wire::COMPLETE_END => {
+                let incarnation = input.u64().map_err(io)?;
+                let attempt = input.u64().map_err(io)?;
+                let generation = input.u64().map_err(io)?;
+                let count = input.u64().map_err(io)?;
+                input.done().map_err(io)?;
+                let (applied, skipped) = {
+                    let mut slots = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                    let (root, head, received, applied, skipped) = match slots.as_mut() {
+                        Some(slot)
+                            if slot.token.incarnation == incarnation
+                                && slot.token.attempt == attempt
+                                && slot.token.generation == generation
+                                && slot.complete.is_some() =>
+                        {
+                            let pending = slot.complete.take().ok_or(PortError::Invalid)?;
+                            (
+                                pending.root,
+                                pending.head,
+                                pending.received,
+                                pending.applied,
+                                pending.skipped,
+                            )
+                        }
+                        _ => return Err(PortError::Invalid),
+                    };
+                    if received != count {
+                        // An incomplete record stream never finishes the
+                        // generation; the host retries the exact transaction.
+                        slots.take();
+                        let mut state = self.state()?;
+                        state.release_frontier();
+                        return Err(PortError::Invalid);
+                    }
+                    {
+                        let mut state = self.state()?;
+                        state.finish_covered_generation(root, generation);
+                    }
+                    *self.0.head.lock().map_err(|_| PortError::Io)? = head;
+                    slots.take();
+                    (applied, skipped)
+                };
+                wire::u64_out(&mut out, applied);
+                wire::u64_out(&mut out, skipped);
+                let spool = self.0.spool.clone();
+                self.0
+                    .scheduler
+                    .physical(move || spool.retire_idle().map_err(|_| wire::invalid()))
+                    .await
+                    .map_err(io)?;
+            }
+            wire::OBSERVE => {
+                input.done().map_err(io)?;
+                let state = self.state()?;
+                wire::u64_out(&mut out, state.covered_generation);
+                wire::u64_out(&mut out, state.dirty.len() as u64);
+                wire::u64_out(&mut out, state.spool_bytes);
+                wire::u64_out(&mut out, self.0.spool.physical_bytes());
+                let head = self.0.head.lock().map_err(|_| PortError::Io)?;
+                wire::bytes_out(&mut out, head.as_ref().map_or(&[][..], |bytes| &bytes[..]))
+                    .map_err(io)?;
+            }
             _ => return Err(PortError::Invalid),
-        }
-        if opcode == wire::INSTALL_END {
-            self.retire_ranges().await?;
         }
         if let Some(started) = diagnostic_started {
             if let Some(diagnostic) = completed_diagnostic.as_mut() {
@@ -3337,27 +2631,129 @@ impl LiveOwner {
         Ok(out)
     }
 
-    async fn retire_ranges(&self) -> PortResult<()> {
-        let ids: Vec<_> = self
-            .0
-            .ranges
-            .lock()
-            .map_err(|_| PortError::Io)?
-            .iter()
-            .filter_map(|(id, reference)| reference.is_unique().then_some(*id))
-            .collect();
-        for ids in ids.chunks(128) {
-            let mut release = vec![wire::RELEASE];
-            for id in ids {
-                wire::u64_out(&mut release, id.0);
-            }
-            self.0.backing.call(&release).await?;
-            let mut ranges = self.0.ranges.lock().map_err(|_| PortError::Io)?;
-            for id in ids {
-                ranges.remove(id);
+    /// Handle one host-initiated snapshot-lane frame. The lane is separate
+    /// from control so bulk frozen-input transfer can never starve SDK
+    /// edits, status or immutable-base reads.
+    pub(crate) async fn snapshot_request(&self, bytes: &[u8]) -> PortResult<Vec<u8>> {
+        let mut input = Input(bytes);
+        let opcode = input.byte().map_err(io)?;
+        let mut out = Vec::new();
+        let incarnation = input.u64().map_err(io)?;
+        let attempt = input.u64().map_err(io)?;
+        {
+            let slots = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+            match slots.as_ref() {
+                Some(slot)
+                    if slot.token.incarnation == incarnation
+                        && slot.token.attempt == attempt => {}
+                _ => return Err(PortError::Invalid),
             }
         }
-        Ok(())
+        match opcode {
+            wire::SNAP_RECORDS => {
+                let after = NodeId(input.u64().map_err(io)?);
+                input.done().map_err(io)?;
+                let mut page = Vec::with_capacity(wire::FACT_PAGE_BYTES);
+                let mut count = 0u64;
+                let generation;
+                let frontier_len;
+                {
+                    let state = self.state()?;
+                    generation = {
+                        let slots = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                        slots
+                            .as_ref()
+                            .map(|slot| slot.token.generation)
+                            .ok_or(PortError::Invalid)?
+                    };
+                    frontier_len = state.frontier_len() as u64;
+                    for id in state.frontier_ids() {
+                        if id <= after {
+                            continue;
+                        }
+                        let Some(node) = state.frozen_node(id) else {
+                            // A frontier id whose node vanished and was never
+                            // retained cannot happen: protect runs before
+                            // every removal.
+                            return Err(PortError::Io);
+                        };
+                        let encoded = wire::node_out(id, &node).map_err(io)?;
+                        if encoded.len() + 4 > wire::MAX_FRAME {
+                            // Bounded pages cannot carry an oversize node;
+                            // fail loudly instead of truncating input.
+                            return Err(PortError::NoSpace);
+                        }
+                        if count != 0
+                            && (page.len() + encoded.len() + 4 > wire::FACT_PAGE_BYTES
+                                || count == wire::FACT_PAGE_NODES as u64)
+                        {
+                            break;
+                        }
+                        wire::bytes_out(&mut page, &encoded).map_err(io)?;
+                        count += 1;
+                    }
+                }
+                // The generation in the token is the capture generation; a
+                // mismatch means the frontier was replaced under us.
+                let slots = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
+                match slots.as_ref() {
+                    Some(slot)
+                        if slot.token.incarnation == incarnation
+                            && slot.token.attempt == attempt => {}
+                    _ => return Err(PortError::Invalid),
+                }
+                let last = if count == 0 {
+                    after
+                } else {
+                    // Decode the last record's id from the page tail.
+                    let mut tail = Input(&page);
+                    let mut last = after;
+                    for _ in 0..count {
+                        let record = tail.bytes().map_err(io)?;
+                        let mut record_input = Input(record);
+                        last = NodeId(record_input.u64().map_err(io)?);
+                    }
+                    last
+                };
+                let done = u8::from(state_frontier_exhausted(frontier_len, after, count, last));
+                out.push(done);
+                wire::u64_out(&mut out, generation);
+                wire::u64_out(&mut out, count);
+                wire::u64_out(&mut out, last.0);
+                out.extend_from_slice(&page);
+            }
+            wire::SNAP_READ => {
+                let segment = BackingId(input.u64().map_err(io)?);
+                let offset = input.u64().map_err(io)?;
+                let len = input.u32().map_err(io)? as u64;
+                input.done().map_err(io)?;
+                if len > 1024 * 1024 {
+                    return Err(PortError::Invalid);
+                }
+                // Validate the segment exists and the range is within the
+                // reserved high-water before any physical read.
+                let high_water = self.0.spool.segment_len(segment)?;
+                if offset.checked_add(len).is_none_or(|end| end > high_water) {
+                    return Err(PortError::Invalid);
+                }
+                let reference = self.0.spool.segment_reference(segment)?;
+                let spool = self.0.spool.clone();
+                let bytes = self
+                    .0
+                    .scheduler
+                    .physical(move || {
+                        spool.read(&reference, offset, len).map_err(|_| wire::invalid())
+                    })
+                    .await
+                    .map_err(io)?;
+                if bytes.len() as u64 != len {
+                    return Err(PortError::Io);
+                }
+                out.extend_from_slice(&bytes);
+            }
+            _ => return Err(PortError::Invalid),
+        }
+        Ok(out)
     }
 
     pub fn serve_control(
@@ -3390,6 +2786,46 @@ impl LiveOwner {
                         .await
                         .map_err(|_| wire::invalid())?;
                     crate::live_transport::write_frame(&mut stream, Some(0), &result).await?;
+                }
+            });
+        let snapshot_owner = self.clone();
+        let snapshot: tokio::task::JoinHandle<std::io::Result<()>> =
+            self.0.scheduler.handle.spawn(async move {
+                use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+                let mut stream = tokio::net::TcpStream::connect(address).await?;
+                stream.set_nodelay(true)?;
+                stream.write_all(&capability).await?;
+                stream.write_u8(b's').await?;
+                if stream.read_u8().await? != 1 {
+                    return Err(wire::invalid());
+                }
+                loop {
+                    let len = stream.read_u32().await? as usize;
+                    if len == 0 || len > wire::MAX_FRAME {
+                        return Err(wire::invalid());
+                    }
+                    let _admitted = snapshot_owner
+                        .0
+                        .scheduler
+                        .admit_snapshot(len + wire::MAX_FRAME)
+                        .await?;
+                    let mut bytes = vec![0; len];
+                    stream.read_exact(&mut bytes).await?;
+                    let result = snapshot_owner.snapshot_request(&bytes).await;
+                    match result {
+                        Ok(bytes) => {
+                            crate::live_transport::write_frame(&mut stream, Some(0), &bytes)
+                                .await?;
+                        }
+                        Err(error) => {
+                            crate::live_transport::write_frame(
+                                &mut stream,
+                                Some(1),
+                                &[crate::protocol::error_code(error)],
+                            )
+                            .await?;
+                        }
+                    }
                 }
             });
         let (shutdown_send, shutdown) = std::sync::mpsc::sync_channel(1);
@@ -3479,6 +2915,7 @@ impl LiveOwner {
             finished: Some(finished),
             thread: Some(thread),
             observer: Some(observer),
+            snapshot: Some(snapshot),
         })
     }
 }
@@ -3491,6 +2928,7 @@ pub struct LiveControl {
     finished: Option<tokio::sync::oneshot::Sender<bool>>,
     thread: Option<tokio::task::JoinHandle<std::io::Result<()>>>,
     observer: Option<tokio::task::JoinHandle<std::io::Result<()>>>,
+    snapshot: Option<tokio::task::JoinHandle<std::io::Result<()>>>,
 }
 impl LiveControl {
     pub fn wait_for_shutdown(&self) -> std::io::Result<()> {
@@ -3609,23 +3047,12 @@ mod immutable_acquisition_tests {
 
     #[derive(Default)]
     struct BarrierBacking {
-        bytes: Vec<u8>,
+        base: Vec<u8>,
         seen: Vec<u8>,
-        batches: usize,
         fail: Option<u8>,
     }
     impl BarrierBacking {
         fn request(&mut self, bytes: &[u8]) -> PortResult<Vec<u8>> {
-            if bytes[0] == wire::BATCH {
-                let frames = wire::batch_frames(bytes).unwrap();
-                self.batches += 1;
-                for (completed, frame) in frames.iter().enumerate() {
-                    if let Err(error) = self.request(frame) {
-                        return Ok(wire::batch_reply(completed, Some(error)));
-                    }
-                }
-                return Ok(wire::batch_reply(frames.len(), None));
-            }
             let mut input = Input(bytes);
             let opcode = input.byte().unwrap();
             self.seen.push(opcode);
@@ -3636,213 +3063,16 @@ mod immutable_acquisition_tests {
             let mut out = Vec::new();
             match opcode {
                 wire::SEED => return Ok(seed()),
-                wire::RESERVE => {
-                    for value in [7, self.bytes.len() as u64, 4 * 1024 * 1024] {
-                        wire::u64_out(&mut out, value);
-                    }
-                }
-                wire::APPEND => {
-                    assert_eq!(input.u64().unwrap(), 7);
-                    assert_eq!(input.u64().unwrap(), self.bytes.len() as u64);
-                    self.bytes.extend_from_slice(input.bytes().unwrap());
-                }
-                wire::READ_BACKING => {
-                    assert_eq!(input.u64().unwrap(), 7);
+                wire::READ_BASE => {
+                    let root = input.object().unwrap();
+                    assert_eq!(root, identity(b"file root"));
                     let start = input.u64().unwrap() as usize;
                     let len = input.u32().unwrap() as usize;
-                    out.extend_from_slice(&self.bytes[start..start + len]);
+                    out.extend_from_slice(&self.base[start..start + len]);
                 }
-                wire::CHECK
-                | wire::CANCEL_RESERVATION
-                | wire::RELEASE
-                | wire::FACTS_BEGIN
-                | wire::FACTS_NODE
-                | wire::FACTS_END => (),
                 _ => panic!("unexpected backing opcode {opcode}"),
             }
             Ok(out)
-        }
-    }
-
-    fn barrier_owner(runtime: &LiveRuntime, backing: Arc<Mutex<BarrierBacking>>) -> LiveOwner {
-        let handler = Arc::new(move |bytes: &[u8]| backing.lock().unwrap().request(bytes));
-        let owner = runtime
-            .block_on(LiveOwner::from_backing(
-                BackingConnection::local(handler, runtime.scheduler()),
-                runtime.scheduler(),
-                None,
-            ))
-            .unwrap();
-        if let Data::Directory(directory) =
-            &mut owner.state().unwrap().nodes.get_mut(&ROOT).unwrap().data
-        {
-            directory.base = None;
-        }
-        owner
-    }
-
-    #[test]
-    fn backing_batch_fsync_reuses_tail_without_idle_buffer_and_full_cut_cancels() {
-        let runtime = LiveRuntime::new().unwrap();
-        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
-        let owner = barrier_owner(&runtime, backing.clone());
-        let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
-        owner.write(file, 0, b"abc").unwrap();
-        owner.fsync(Some(file)).unwrap();
-        assert_eq!(
-            backing.lock().unwrap().batches,
-            1,
-            "fsync must use one acknowledged exchange"
-        );
-        assert!(
-            runtime
-                .scheduler()
-                .reserve_transfer(32 * 1024 * 1024)
-                .is_ok(),
-            "idle tail retains no transfer capacity"
-        );
-        owner.write(file, 3, b"def").unwrap();
-        owner.fsync(Some(file)).unwrap();
-        assert_eq!(
-            runtime.block_on(owner.read_owned(file, 0, 6)).unwrap(),
-            b"abcdef"
-        );
-        assert_eq!(
-            backing
-                .lock()
-                .unwrap()
-                .seen
-                .iter()
-                .filter(|op| **op == wire::RESERVE)
-                .count(),
-            1
-        );
-        assert_eq!(
-            backing
-                .lock()
-                .unwrap()
-                .seen
-                .iter()
-                .filter(|op| **op == wire::CANCEL_RESERVATION)
-                .count(),
-            0
-        );
-        // Rejected writes cannot strand a newly allocated idle buffer.
-        assert!(owner.write(file, u64::MAX, b"bad").is_err());
-        owner.fsync(Some(file)).unwrap();
-        assert!(runtime
-            .scheduler()
-            .reserve_transfer(32 * 1024 * 1024)
-            .is_ok());
-        runtime.block_on(owner.freeze()).unwrap();
-        assert!(runtime.block_on(owner.0.append.lock()).is_none());
-        assert_eq!(
-            backing
-                .lock()
-                .unwrap()
-                .seen
-                .iter()
-                .filter(|op| **op == wire::CANCEL_RESERVATION)
-                .count(),
-            1
-        );
-        assert_eq!(backing.lock().unwrap().bytes, b"abcdef");
-    }
-
-    #[test]
-    fn backing_batch_known_append_prefix_is_not_replayed_after_check_failure() {
-        let runtime = LiveRuntime::new().unwrap();
-        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
-        let owner = barrier_owner(&runtime, backing.clone());
-        let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
-        owner.write(file, 0, b"acknowledged").unwrap();
-        backing.lock().unwrap().fail = Some(wire::CHECK);
-        assert_eq!(owner.fsync(Some(file)), Err(PortError::NoSpace));
-        assert!(!owner.0.failed.load(Ordering::Acquire));
-        owner.fsync(Some(file)).unwrap();
-        assert_eq!(
-            backing
-                .lock()
-                .unwrap()
-                .seen
-                .iter()
-                .filter(|op| **op == wire::APPEND)
-                .count(),
-            1
-        );
-        assert_eq!(
-            runtime.block_on(owner.read_owned(file, 0, 20)).unwrap(),
-            b"acknowledged"
-        );
-        // Known local pre-dispatch admission refusal remains retryable too.
-        let held = runtime
-            .scheduler()
-            .reserve_transfer(32 * 1024 * 1024)
-            .unwrap();
-        assert_eq!(owner.fsync(Some(file)), Err(PortError::NoSpace));
-        assert!(!owner.0.failed.load(Ordering::Acquire));
-        drop(held);
-        owner.fsync(Some(file)).unwrap();
-        assert_eq!(backing.lock().unwrap().bytes, b"acknowledged");
-    }
-
-    #[test]
-    fn backing_batch_cancelled_idle_fsync_cannot_refill_without_backing() {
-        for idle in [false, true] {
-            let runtime = LiveRuntime::new().unwrap();
-            let backing = Arc::new(Mutex::new(BarrierBacking::default()));
-            let block = Arc::new(AtomicBool::new(false));
-            let wait = block.clone();
-            let (entered, waiting) = std::sync::mpsc::channel();
-            let (release, released) = std::sync::mpsc::channel();
-            let released = Mutex::new(released);
-            let handler = Arc::new(move |bytes: &[u8]| {
-                let result = backing.lock().unwrap().request(bytes);
-                if wait.load(Ordering::Acquire) {
-                    entered.send(()).unwrap();
-                    released
-                        .lock()
-                        .unwrap()
-                        .recv_timeout(Duration::from_secs(5))
-                        .unwrap();
-                }
-                result
-            });
-            let owner = runtime
-                .block_on(LiveOwner::from_backing(
-                    BackingConnection::local(handler, runtime.scheduler()),
-                    runtime.scheduler(),
-                    None,
-                ))
-                .unwrap();
-            if let Data::Directory(directory) =
-                &mut owner.state().unwrap().nodes.get_mut(&ROOT).unwrap().data
-            {
-                directory.base = None;
-            }
-            let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
-            owner.write(file, 0, b"held").unwrap();
-            if idle {
-                owner.fsync(Some(file)).unwrap();
-            }
-            block.store(true, Ordering::Release);
-            let syncing = owner.clone();
-            let task = runtime
-                .scheduler()
-                .handle
-                .spawn(async move { syncing.fsync_async(Some(file)).await });
-            waiting.recv_timeout(Duration::from_secs(5)).unwrap();
-            task.abort();
-            assert!(runtime.block_on(task).unwrap_err().is_cancelled());
-            assert!(owner.0.failed.load(Ordering::Acquire));
-            assert_eq!(owner.write(file, 4, b"rejected"), Err(PortError::Io));
-            if !idle {
-                assert_eq!(
-                    runtime.block_on(owner.read_owned(file, 0, 4)).unwrap(),
-                    b"held"
-                );
-            }
-            release.send(()).unwrap();
         }
     }
 
@@ -3870,304 +3100,270 @@ mod immutable_acquisition_tests {
         out
     }
 
-    fn checkpoint_fixture(owner: &LiveOwner, count: usize) -> Vec<CheckpointRecord> {
-        let mut state = owner.state().unwrap();
-        let mut records = Vec::with_capacity(count);
-        for ordinal in 0..count {
-            let id = NodeId(ordinal as u64 + 2);
-            let mut file = node(
-                Data::File(FileData::Edited {
-                    base: None,
-                    spool_high_water: 0,
-                    pieces: layerfs_workspace_core::file_edit::PieceTree::empty(),
-                    edits: 0,
-                }),
-                false,
-            );
-            file.canonical = None;
-            file.paths.insert(format!("file-{ordinal}"));
-            let attr = file.attr(id);
-            state.nodes.insert(id, file);
-            state.edited_nodes.insert(id);
-            state.dirty.insert(id);
-            records.push(CheckpointRecord {
-                node: id,
-                inode: InodeId::allocate([79; 32], ordinal as u64),
-                content: identity(b"empty content"),
-                attr,
-            });
-        }
-        state.mutation_generation = 7;
-        records.sort_by_key(|record| record.inode);
-        records
+    fn backing_dir(label: &str) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        std::env::temp_dir().join(format!(
+            "layerfs-owner-test-{label}-{}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ))
     }
 
-    fn checkpoint_begin(root: ObjectId, generation: u64) -> Vec<u8> {
-        let mut bytes = vec![wire::INSTALL_BEGIN];
-        bytes.extend_from_slice(root.as_bytes());
-        wire::u64_out(&mut bytes, generation);
-        bytes
-    }
-
-    fn checkpoint_page(owner: &LiveOwner, records: &[CheckpointRecord]) -> Vec<u8> {
-        let state = owner.state().unwrap();
-        let mut bytes = vec![wire::INSTALL_NODE];
-        for record in records {
-            let mut node = state.nodes[&record.node].clone();
-            node.canonical = Some(record.inode);
-            node.data = Data::File(FileData::Base {
-                root: FileContentRoot(record.content),
-                len: record.attr.size,
-            });
-            bytes.extend_from_slice(record.content.as_bytes());
-            wire::bytes_out(&mut bytes, &wire::node_out(record.node, &node).unwrap()).unwrap();
-        }
-        bytes
-    }
-
-    fn checkpoint_end(root: ObjectId, count: usize, head: Option<[u8; 33]>) -> Vec<u8> {
-        let mut bytes = vec![wire::INSTALL_END];
-        bytes.extend_from_slice(root.as_bytes());
-        wire::u64_out(&mut bytes, count as u64);
-        wire::bytes_out(
-            &mut bytes,
-            head.as_ref().map_or(&[][..], |head| head.as_slice()),
-        )
-        .unwrap();
-        bytes
-    }
-
-    fn checkpoint_cut(runtime: &LiveRuntime, owner: &LiveOwner) {
-        let cut = runtime.block_on(async { owner.0.gate.cache_flush().await.finish().await });
-        *owner.0.cut.lock().unwrap() = Some(cut);
-    }
-
-    #[test]
-    fn checkpoint_install_streams_beyond_old_node_cap_and_replays_lost_end_reply() {
-        use std::os::unix::fs::MetadataExt;
-        let runtime = LiveRuntime::new().unwrap();
-        let owner = kernel_owner(&runtime);
-        let records = checkpoint_fixture(&owner, 16_700);
-        assert!(records.windows(2).any(|pair| pair[0].node > pair[1].node));
-        checkpoint_cut(&runtime, &owner);
-        let root = identity(b"checkpoint root");
-        let begin = checkpoint_begin(root, 7);
-        runtime.block_on(owner.local_control(&begin)).unwrap();
-        for page in records.chunks(wire::FACT_PAGE_NODES) {
-            runtime
-                .block_on(owner.local_control(&checkpoint_page(&owner, page)))
-                .unwrap();
-        }
-        {
-            let pending = owner.0.install.lock().unwrap();
-            let journal = &pending.as_ref().unwrap().journal;
-            assert_eq!(journal.count, 16_700);
-            assert!(journal.writer.capacity() <= 64 * 1024);
-            assert!(journal.nodes.metadata().unwrap().len() <= journal.node_limit * 32);
-            assert_eq!(journal.nodes.metadata().unwrap().nlink(), 0);
-            assert_eq!(journal.writer.get_ref().metadata().unwrap().nlink(), 0);
-            assert_eq!(
-                journal.writer.get_ref().metadata().unwrap().mode() & 0o777,
-                0o600
-            );
-        }
-        let head = Some([0x12; 33]);
-        let end = checkpoint_end(root, records.len(), head);
-        runtime.block_on(owner.local_control(&end)).unwrap();
-        assert_eq!(owner.state().unwrap().base_root, root);
-        assert_eq!(*owner.0.head.lock().unwrap(), head);
-        // The END reply may be lost after installation. Same BEGIN + exact replay
-        // succeeds without changing the installed view or admitting new records.
-        runtime.block_on(owner.local_control(&begin)).unwrap();
-        for page in records.chunks(wire::FACT_PAGE_NODES) {
-            runtime
-                .block_on(owner.local_control(&checkpoint_page(&owner, page)))
-                .unwrap();
-        }
-        assert_eq!(
-            runtime.block_on(owner.local_control(&checkpoint_end(root, records.len(), None))),
-            Err(PortError::Invalid)
-        );
-        runtime.block_on(owner.local_control(&end)).unwrap();
-        runtime
-            .block_on(owner.local_control(&[wire::RESUME]))
-            .unwrap();
-        assert!(owner.0.install.lock().unwrap().is_none());
-        assert!(owner.0.cut.lock().unwrap().is_none());
-    }
-
-    #[test]
-    fn checkpoint_journal_rejects_duplicate_ids_inodes_order_and_scratch_overflow() {
-        let runtime = LiveRuntime::new().unwrap();
-        let owner = kernel_owner(&runtime);
-        let records = checkpoint_fixture(&owner, 3);
-        let mut journal = CheckpointJournal::new(2, 256).unwrap();
-        journal.push(records[0]).unwrap();
-        let mut duplicate_node = records[1];
-        duplicate_node.node = records[0].node;
-        duplicate_node.attr.node = records[0].node;
-        assert_eq!(journal.push(duplicate_node), Err(PortError::Invalid));
-        let mut duplicate_inode = records[1];
-        duplicate_inode.inode = records[0].inode;
-        assert_eq!(journal.push(duplicate_inode), Err(PortError::Invalid));
-        journal.push(records[1]).unwrap();
-        assert_eq!(journal.push(records[2]), Err(PortError::NoSpace));
-        assert_eq!(journal.count, 2);
-        journal.close().unwrap();
-        let mut visited = Vec::new();
-        journal
-            .visit(|record| {
-                visited.push(record);
-                Ok(())
-            })
-            .unwrap();
-        assert_eq!(visited, records[..2]);
-        let mut journal = CheckpointJournal::new(2, 256).unwrap();
-        journal.push(records[1]).unwrap();
-        assert_eq!(journal.push(records[0]), Err(PortError::Invalid));
-    }
-
-    #[test]
-    fn checkpoint_full_validation_and_read_failure_leave_all_nodes_uninstalled() {
-        let runtime = LiveRuntime::new().unwrap();
-        let owner = kernel_owner(&runtime);
-        let records = checkpoint_fixture(&owner, 2);
-        let root = identity(b"validated root");
-        let mut pending =
-            PendingCheckpoint::new(root, 7, &owner.state().unwrap(), &runtime.scheduler()).unwrap();
-        for record in &records {
-            pending.push(*record).unwrap();
-        }
-        let mut state = owner.state().unwrap();
-        state.nodes.get_mut(&records[1].node).unwrap().mode ^= 1;
-        let before = state.nodes.clone();
-        assert!(pending
-            .finish(&mut state, root, 2, None, |_| panic!(
-                "validation must precede every install"
+    fn barrier_owner(runtime: &LiveRuntime, backing: Arc<Mutex<BarrierBacking>>) -> LiveOwner {
+        let handler = Arc::new(move |bytes: &[u8]| backing.lock().unwrap().request(bytes));
+        let owner = runtime
+            .block_on(LiveOwner::from_backing(
+                BackingConnection::local(handler, runtime.scheduler()),
+                runtime.scheduler(),
+                backing_dir("barrier"),
             ))
-            .is_err());
-        assert_eq!(state.nodes, before);
-        assert!(!pending.applying);
-        state.nodes.get_mut(&records[1].node).unwrap().mode ^= 1;
-        let before = state.nodes.clone();
-        // A short private-journal read is rejected before installing any prefix.
-        pending.journal.writer.get_ref().set_len(1).unwrap();
-        assert!(pending
-            .finish(&mut state, root, 2, None, |_| panic!(
-                "read failure must precede install"
-            ))
-            .is_err());
-        assert_eq!(state.nodes, before);
-        assert!(!pending.applying);
-    }
-
-    #[test]
-    fn checkpoint_partial_install_stays_frozen_until_exact_retry_finishes() {
-        let runtime = LiveRuntime::new().unwrap();
-        let owner = kernel_owner(&runtime);
-        let records = checkpoint_fixture(&owner, 2);
-        checkpoint_cut(&runtime, &owner);
-        let root = identity(b"retry root");
-        let begin = checkpoint_begin(root, 7);
-        runtime.block_on(owner.local_control(&begin)).unwrap();
-        runtime
-            .block_on(owner.local_control(&checkpoint_page(&owner, &records)))
             .unwrap();
-        let old_root = owner.state().unwrap().base_root;
+        if let Data::Directory(directory) =
+            &mut owner.state().unwrap().nodes.get_mut(&ROOT).unwrap().data
         {
-            let mut pending = owner.0.install.lock().unwrap();
-            assert_eq!(
-                pending.as_mut().unwrap().finish(
-                    &mut owner.state().unwrap(),
-                    root,
-                    2,
-                    None,
-                    |index| if index == 1 {
-                        Err(PortError::Io)
-                    } else {
-                        Ok(())
-                    }
-                ),
-                Err(PortError::Io)
-            );
+            directory.base = None;
         }
-        assert_eq!(owner.state().unwrap().base_root, old_root);
-        assert_eq!(
-            runtime.block_on(owner.local_control(&[wire::RESUME])),
-            Err(PortError::Busy)
-        );
-        runtime.block_on(owner.local_control(&begin)).unwrap();
-        let mut changed = records[0];
-        changed.content = identity(b"different retry content");
-        assert_eq!(
-            runtime.block_on(owner.local_control(&checkpoint_page(&owner, &[changed]))),
-            Err(PortError::Invalid)
-        );
-        runtime
-            .block_on(owner.local_control(&checkpoint_page(&owner, &records)))
-            .unwrap();
-        runtime
-            .block_on(owner.local_control(&checkpoint_end(root, 2, None)))
-            .unwrap();
-        assert_eq!(owner.state().unwrap().base_root, root);
-        runtime
-            .block_on(owner.local_control(&[wire::RESUME]))
-            .unwrap();
-        assert!(owner.0.install.lock().unwrap().is_none());
+        owner
     }
 
     #[test]
-    fn checkpoint_staging_retry_releases_old_scratch_and_checks_generation() {
+    fn local_writes_are_sandbox_owned_and_readable_without_backing_traffic() {
         let runtime = LiveRuntime::new().unwrap();
-        let owner = kernel_owner(&runtime);
-        let records = checkpoint_fixture(&owner, 2);
-        checkpoint_cut(&runtime, &owner);
-        let root = identity(b"staging root");
-        assert_eq!(
-            runtime.block_on(owner.local_control(&checkpoint_begin(root, 8))),
-            Err(PortError::Invalid)
-        );
-        let begin = checkpoint_begin(root, 7);
-        runtime.block_on(owner.local_control(&begin)).unwrap();
+        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
+        let owner = barrier_owner(&runtime, backing.clone());
+        let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
+        runtime.block_on(owner.write_owned(file, 0, b"abcdef")).unwrap();
         runtime
-            .block_on(owner.local_control(&checkpoint_page(&owner, &records[..1])))
+            .block_on(owner.write_owned(file, 6, b"ghijkl"))
             .unwrap();
-        // Fill remaining permits. Replacement must release, not double-reserve.
-        let mut held = Vec::new();
-        for amount in [1024 * 1024, 1024, 1] {
-            while let Ok(charge) = runtime.scheduler().reserve_live(amount) {
-                held.push(charge);
+        assert_eq!(
+            runtime.block_on(owner.read_owned(file, 0, 12)).unwrap(),
+            b"abcdefghijkl"
+        );
+        // No host payload traffic exists on this route: only SEED was seen.
+        assert_eq!(backing.lock().unwrap().seen, vec![wire::SEED]);
+        // Volatile fsync: no durability flush, no host acknowledgment, but
+        // errors surface and bytes remain readable.
+        owner.fsync(Some(file)).unwrap();
+        assert_eq!(
+            runtime.block_on(owner.read_owned(file, 3, 4)).unwrap(),
+            b"defg"
+        );
+        assert_eq!(
+            backing.lock().unwrap().seen,
+            vec![wire::SEED],
+            "fsync performs no wire traffic"
+        );
+        owner.spool().destroy().unwrap();
+    }
+
+    #[test]
+    fn failed_prepare_leaves_no_stranded_local_allocation() {
+        let runtime = LiveRuntime::new().unwrap();
+        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
+        let owner = barrier_owner(&runtime, backing.clone());
+        let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
+        runtime.block_on(owner.write_owned(file, 0, b"abc")).unwrap();
+        // A write beyond every bound fails without poisoning the owner or
+        // leaking a reservation.
+        assert!(runtime
+            .block_on(owner.write_owned(file, u64::MAX, b"bad"))
+            .is_err());
+        assert!(!owner.0.failed.load(Ordering::Acquire));
+        owner.fsync(Some(file)).unwrap();
+        assert_eq!(
+            runtime.block_on(owner.read_owned(file, 0, 3)).unwrap(),
+            b"abc"
+        );
+        runtime
+            .block_on(owner.write_owned(file, 3, b"def"))
+            .unwrap();
+        assert_eq!(
+            runtime.block_on(owner.read_owned(file, 0, 6)).unwrap(),
+            b"abcdef"
+        );
+        owner.spool().destroy().unwrap();
+    }
+
+    #[test]
+    fn capture_serves_stable_frozen_records_and_payload_while_live_writes_continue() {
+        let runtime = LiveRuntime::new().unwrap();
+        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
+        let owner = barrier_owner(&runtime, backing.clone());
+        let file = owner.create_file(ROOT, b"a", 0o644).unwrap().node;
+        runtime.block_on(owner.write_owned(file, 0, b"AAAA")).unwrap();
+
+        // CAPTURE.
+        let reply = runtime
+            .block_on(owner.local_control(&[wire::CAPTURE]))
+            .unwrap();
+        let mut input = Input(&reply);
+        let incarnation = input.u64().unwrap();
+        let attempt = input.u64().unwrap();
+        let generation = input.u64().unwrap();
+        let frontier_len = input.u64().unwrap();
+        assert!(frontier_len >= 2, "root + file");
+        let _base_root = input.object().unwrap();
+        let _head = input.head().unwrap();
+        assert_eq!(incarnation, owner.incarnation());
+
+        // Live successor writes continue without any pause.
+        runtime.block_on(owner.write_owned(file, 0, b"aaaa")).unwrap();
+
+        // Pull the frozen records: the file's captured inline/spool state must
+        // show the capture-time bytes, not the successor's.
+        let mut records = Vec::new();
+        let mut after = 0u64;
+        loop {
+            let mut request = vec![wire::SNAP_RECORDS];
+            wire::u64_out(&mut request, incarnation);
+            wire::u64_out(&mut request, attempt);
+            wire::u64_out(&mut request, after);
+            let page = runtime
+                .block_on(owner.snapshot_request(&request))
+                .unwrap();
+            let mut page_input = Input(&page);
+            let done = page_input.byte().unwrap();
+            let _page_generation = page_input.u64().unwrap();
+            let count = page_input.u64().unwrap();
+            after = page_input.u64().unwrap();
+            for _ in 0..count {
+                let record = page_input.bytes().unwrap().to_vec();
+                records.push(record);
+            }
+            if done == 1 || count == 0 {
+                break;
             }
         }
-        runtime.block_on(owner.local_control(&begin)).unwrap();
+        assert!(!records.is_empty());
+        // The live view moved on.
         assert_eq!(
-            owner
-                .0
-                .install
-                .lock()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .journal
-                .count,
-            0
+            runtime.block_on(owner.read_owned(file, 0, 4)).unwrap(),
+            b"aaaa"
         );
-        drop(held);
-        runtime
-            .block_on(owner.local_control(&checkpoint_page(&owner, &records)))
-            .unwrap();
-        owner.state().unwrap().mutation_generation = 8;
+
+        // COMPLETE with the captured revision: the re-mutated node keeps its
+        // live state (record skipped), and the generation still finishes.
+        let attr = {
+            let state = owner.state().unwrap();
+            state.nodes[&file].attr(file)
+        };
+        let mut begin = vec![wire::COMPLETE_BEGIN];
+        wire::u64_out(&mut begin, incarnation);
+        wire::u64_out(&mut begin, attempt);
+        begin.extend_from_slice(identity(b"published-root").as_bytes());
+        wire::bytes_out(&mut begin, &[]).unwrap();
+        runtime.block_on(owner.local_control(&begin)).unwrap();
+
+        let captured_revision = {
+            // The revision at capture is one less than the live revision
+            // after the post-capture write.
+            let state = owner.state().unwrap();
+            state.nodes[&file].revision - 1
+        };
+        let mut node_frame = vec![wire::COMPLETE_NODE];
+        wire::u64_out(&mut node_frame, incarnation);
+        wire::u64_out(&mut node_frame, attempt);
+        wire::u64_out(&mut node_frame, file.0);
+        wire::u64_out(&mut node_frame, captured_revision);
+        node_frame.extend_from_slice(&[8; 32]);
+        node_frame.extend_from_slice(identity(b"content").as_bytes());
+        wire::u64_out(&mut node_frame, attr.size);
+        node_frame.extend_from_slice(&attr.mode.to_be_bytes());
+        node_frame.extend_from_slice(&attr.links.to_be_bytes());
+        wire::u64_out(&mut node_frame, attr.mtime_seconds as u64);
+        node_frame.extend_from_slice(&attr.mtime_nanoseconds.to_be_bytes());
+        node_frame.push(1);
+        runtime.block_on(owner.local_control(&node_frame)).unwrap();
+
+        let mut end = vec![wire::COMPLETE_END];
+        wire::u64_out(&mut end, incarnation);
+        wire::u64_out(&mut end, attempt);
+        wire::u64_out(&mut end, generation);
+        wire::u64_out(&mut end, 1);
+        let summary = runtime.block_on(owner.local_control(&end)).unwrap();
+        let mut summary_input = Input(&summary);
+        assert_eq!(summary_input.u64().unwrap(), 0, "skipped: re-mutated");
+        assert_eq!(summary_input.u64().unwrap(), 1);
+
+        // The G+1 change survives completion as live dirty state.
+        assert!(owner.state().unwrap().dirty.contains(&file));
         assert_eq!(
-            runtime.block_on(owner.local_control(&checkpoint_end(root, 2, None))),
+            runtime.block_on(owner.read_owned(file, 0, 4)).unwrap(),
+            b"aaaa"
+        );
+        // A late duplicate completion cannot act: the slot is released.
+        let mut stale = vec![wire::COMPLETE_BEGIN];
+        wire::u64_out(&mut stale, incarnation);
+        wire::u64_out(&mut stale, attempt);
+        stale.extend_from_slice(identity(b"other").as_bytes());
+        wire::bytes_out(&mut stale, &[]).unwrap();
+        assert_eq!(
+            runtime.block_on(owner.local_control(&stale)),
             Err(PortError::Invalid)
         );
-        assert!(owner.state().unwrap().nodes[&records[0].node]
-            .canonical
-            .is_none());
-        runtime
-            .block_on(owner.local_control(&[wire::RESUME]))
-            .unwrap();
+        owner.spool().destroy().unwrap();
     }
+
+    #[test]
+    fn stale_snapshot_tokens_and_cancel_release_the_frontier() {
+        let runtime = LiveRuntime::new().unwrap();
+        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
+        let owner = barrier_owner(&runtime, backing.clone());
+        let file = owner.create_file(ROOT, b"a", 0o644).unwrap().node;
+        runtime.block_on(owner.write_owned(file, 0, b"AAAA")).unwrap();
+        let reply = runtime
+            .block_on(owner.local_control(&[wire::CAPTURE]))
+            .unwrap();
+        let mut input = Input(&reply);
+        let incarnation = input.u64().unwrap();
+        let attempt = input.u64().unwrap();
+        let _generation = input.u64().unwrap();
+        let _frontier_len = input.u64().unwrap();
+
+        // Wrong incarnation and wrong attempt are rejected on both lanes.
+        for (bad_incarnation, bad_attempt) in [(incarnation + 1, attempt), (incarnation, attempt + 1)]
+        {
+            let mut request = vec![wire::SNAP_RECORDS];
+            wire::u64_out(&mut request, bad_incarnation);
+            wire::u64_out(&mut request, bad_attempt);
+            wire::u64_out(&mut request, 0);
+            assert_eq!(
+                runtime.block_on(owner.snapshot_request(&request)),
+                Err(PortError::Invalid)
+            );
+            let mut cancel = vec![wire::SNAP_CANCEL];
+            wire::u64_out(&mut cancel, bad_incarnation);
+            wire::u64_out(&mut cancel, bad_attempt);
+            assert_eq!(
+                runtime.block_on(owner.local_control(&cancel)),
+                Err(PortError::Invalid)
+            );
+        }
+
+        // A second capture while the attempt is unresolved is Busy.
+        assert_eq!(
+            runtime.block_on(owner.local_control(&[wire::CAPTURE])),
+            Err(PortError::Busy)
+        );
+
+        // CANCEL releases the frontier and the next capture succeeds.
+        let mut cancel = vec![wire::SNAP_CANCEL];
+        wire::u64_out(&mut cancel, incarnation);
+        wire::u64_out(&mut cancel, attempt);
+        runtime.block_on(owner.local_control(&cancel)).unwrap();
+        assert!(!owner.state().unwrap().frontier_active());
+        runtime
+            .block_on(owner.local_control(&[wire::CAPTURE]))
+            .unwrap();
+        owner.spool().destroy().unwrap();
+    }
+
+    #[test]
 
     #[test]
     fn delayed_lookup_cannot_install_after_root_or_parent_revision_changes() {
@@ -4192,8 +3388,8 @@ mod immutable_acquisition_tests {
             let owner = runtime
                 .block_on(LiveOwner::local(
                     handler,
-                    Arc::new(|_| Ok(())),
                     runtime.scheduler(),
+                    backing_dir("lookup"),
                 ))
                 .unwrap();
             let acquiring = owner.clone();
@@ -4255,8 +3451,8 @@ mod immutable_acquisition_tests {
             let owner = runtime
                 .block_on(LiveOwner::local(
                     handler,
-                    Arc::new(|_| Ok(())),
                     runtime.scheduler(),
+                    backing_dir("lookup"),
                 ))
                 .unwrap();
             let before = owner.state().unwrap().nodes.clone();
@@ -4287,8 +3483,8 @@ mod immutable_acquisition_tests {
         let owner = runtime
             .block_on(LiveOwner::local(
                 handler,
-                Arc::new(|_| Ok(())),
                 runtime.scheduler(),
+                backing_dir("lookup"),
             ))
             .unwrap();
         if let Data::Directory(directory) =
@@ -4323,8 +3519,8 @@ mod immutable_acquisition_tests {
         let owner = runtime
             .block_on(LiveOwner::local(
                 handler,
-                Arc::new(|_| Ok(())),
                 runtime.scheduler(),
+                backing_dir("lookup"),
             ))
             .unwrap();
         runtime.block_on(async {
@@ -4385,15 +3581,22 @@ mod immutable_acquisition_tests {
             assert_eq!(values[EditMetric::FactNodes as usize], 0);
             assert_eq!(values[EditMetric::FactBytes as usize], 0);
             assert_eq!(owner.read_owned(node, 0, 10).await.unwrap(), b"abc");
-            assert!(owner.0.facts_sync.lock().await.is_none());
-            owner.local_control(&[wire::FREEZE]).await.unwrap();
-            let snapshot = *owner.0.facts_sync.lock().await;
-            let generation = {
-                let state = owner.state().unwrap();
-                (state.base_root, state.mutation_generation)
-            };
-            assert_eq!(snapshot, Some(generation));
-            owner.local_control(&[wire::RESUME]).await.unwrap();
+            // A capture retains the edited frontier without any pause; cancel
+            // releases it. This replaces the old FREEZE/RESUME facts export.
+            let capture = owner.local_control(&[wire::CAPTURE]).await.unwrap();
+            let mut input = Input(&capture);
+            let incarnation = input.u64().unwrap();
+            let attempt = input.u64().unwrap();
+            let generation = input.u64().unwrap();
+            let frontier_len = input.u64().unwrap();
+            assert!(frontier_len >= 2);
+            let state = owner.state().unwrap();
+            assert_eq!(generation, state.mutation_generation);
+            drop(state);
+            let mut cancel = vec![wire::SNAP_CANCEL];
+            wire::u64_out(&mut cancel, incarnation);
+            wire::u64_out(&mut cancel, attempt);
+            owner.local_control(&cancel).await.unwrap();
             owner.local_control(&begin(true)).await.unwrap();
             assert!(owner.local_control(&part(99, 1, b"bad")).await.is_err());
             assert!(owner.0.edit.lock().unwrap().is_none());
@@ -4410,10 +3613,18 @@ mod immutable_acquisition_tests {
                 .unwrap()
                 .is_empty());
             assert_eq!(owner.read_owned(node, 0, 10).await.unwrap(), b"xyz");
-            assert_eq!(*owner.0.facts_sync.lock().await, snapshot);
-            owner.local_control(&[wire::FREEZE]).await.unwrap();
-            assert_ne!(*owner.0.facts_sync.lock().await, snapshot);
-            owner.local_control(&[wire::RESUME]).await.unwrap();
+            // The second edit bumped the mutation generation; a fresh capture
+            // observes the newer state.
+            let capture = owner.local_control(&[wire::CAPTURE]).await.unwrap();
+            let mut input = Input(&capture);
+            let incarnation = input.u64().unwrap();
+            let attempt = input.u64().unwrap();
+            let newer = input.u64().unwrap();
+            assert!(newer > generation);
+            let mut cancel = vec![wire::SNAP_CANCEL];
+            wire::u64_out(&mut cancel, incarnation);
+            wire::u64_out(&mut cancel, attempt);
+            owner.local_control(&cancel).await.unwrap();
         });
     }
 
@@ -4434,8 +3645,8 @@ mod immutable_acquisition_tests {
         let owner = runtime
             .block_on(LiveOwner::local(
                 handler,
-                Arc::new(|_| Ok(())),
                 runtime.scheduler(),
+                backing_dir("lookup"),
             ))
             .unwrap();
         if let Data::Directory(directory) =
@@ -4609,8 +3820,8 @@ mod immutable_acquisition_tests {
         let owner = runtime
             .block_on(LiveOwner::local(
                 handler,
-                Arc::new(|_| Ok(())),
                 runtime.scheduler(),
+                backing_dir("lookup"),
             ))
             .unwrap();
         let (attr, refs) = runtime
@@ -4749,13 +3960,17 @@ mod immutable_acquisition_tests {
             assert!(!task.is_finished());
             drop(prefill);
             let result = runtime.block_on(task).unwrap();
-            if operation == 2 {
-                assert_eq!(result, Err(PortError::Io));
-            } else {
-                result.unwrap();
-            }
+            result.unwrap();
             assert!(owner.0.active_prefill.lock().unwrap().is_none());
             assert!(owner.begin_kernel_prefill(file).is_none());
+            if operation == 2 {
+                // The sandbox-local write completes after the prefill is
+                // released; its bytes are locally readable.
+                assert_eq!(
+                    runtime.block_on(owner.read_owned(file, 0, 4)).unwrap(),
+                    b"xld"
+                );
+            }
         }
     }
 

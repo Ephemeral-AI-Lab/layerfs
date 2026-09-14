@@ -11,6 +11,8 @@ pub type LiveReservation = OwnedSemaphorePermit;
 const REQUESTS: usize = 256;
 const TRANSFER_BYTES: usize = 32 * 1024 * 1024;
 const LIFECYCLE_BYTES: usize = 8 * 1024 * 1024;
+const SNAPSHOT_REQUESTS: usize = 4;
+const SNAPSHOT_BYTES: usize = 8 * 1024 * 1024;
 
 /// Process-owned runtime; destroy it only after mounts/services drain, outside
 /// their state locks. Mounted owners clone Scheduler, never the Runtime itself.
@@ -37,6 +39,8 @@ pub struct Scheduler {
     control_transfer: Arc<Semaphore>,
     lifecycle_requests: Arc<Semaphore>,
     lifecycle_transfer: Arc<Semaphore>,
+    snapshot_requests: Arc<Semaphore>,
+    snapshot_transfer: Arc<Semaphore>,
 }
 
 pub struct RequestAdmission {
@@ -97,6 +101,8 @@ impl LiveRuntime {
             control_transfer: Arc::new(Semaphore::new(4 * 1024 * 1024)),
             lifecycle_requests: Arc::new(Semaphore::new(2)),
             lifecycle_transfer: Arc::new(Semaphore::new(LIFECYCLE_BYTES)),
+            snapshot_requests: Arc::new(Semaphore::new(SNAPSHOT_REQUESTS)),
+            snapshot_transfer: Arc::new(Semaphore::new(SNAPSHOT_BYTES)),
         };
         Ok(Self { runtime, scheduler })
     }
@@ -172,6 +178,30 @@ impl Scheduler {
     /// Lifecycle frames must progress while filesystem callbacks are parked at a cut.
     pub async fn admit_lifecycle(&self, bytes: usize) -> io::Result<RequestAdmission> {
         self.admit_inner(bytes, true).await
+    }
+
+    /// Dedicated snapshot-lane admission: a stalled bulk transfer can neither
+    /// consume ordinary request capacity nor block control/lifecycle service.
+    pub async fn admit_snapshot(&self, bytes: usize) -> io::Result<RequestAdmission> {
+        if bytes > SNAPSHOT_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "snapshot transfer size",
+            ));
+        }
+        let slot = self
+            .snapshot_requests
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(io::Error::other)?;
+        let bytes = self
+            .snapshot_transfer
+            .clone()
+            .acquire_many_owned(bytes as u32)
+            .await
+            .map_err(io::Error::other)?;
+        Ok(RequestAdmission { slot, bytes })
     }
 
     async fn admit_inner(&self, bytes: usize, lifecycle: bool) -> io::Result<RequestAdmission> {

@@ -589,6 +589,23 @@ pub const EDIT_BEGIN: u8 = 42;
 pub const EDIT_PART: u8 = 43;
 pub const EDIT_END: u8 = 44;
 
+// v0.1.6 sandbox-local snapshot route. CAPTURE/COMPLETE_* carry the
+// generation-bound token (incarnation, attempt) on the control lane; the
+// frozen records and payload bytes are pulled over the dedicated snapshot
+// lane so bulk transfer never monopolizes control or immutable-base service.
+pub const CAPTURE: u8 = 45;
+pub const COMPLETE_BEGIN: u8 = 46;
+pub const COMPLETE_NODE: u8 = 47;
+pub const COMPLETE_END: u8 = 48;
+pub const SNAP_CANCEL: u8 = 49;
+pub const SNAP_RECORDS: u8 = 50;
+pub const SNAP_READ: u8 = 51;
+
+/// Snapshot completion record: the canonical re-base of one covered node,
+/// applied only while the live node still holds its captured revision.
+pub const COMPLETE_RECORD_BYTES: usize = 104;
+pub const COMPLETE_PAGE_RECORDS: usize = FACT_PAGE_NODES;
+
 // Optional diagnostics ride the existing edit transaction; ordinary payloads
 // are unchanged. Durations are nested unless the named phase says otherwise.
 pub const EDIT_DIAGNOSTIC_VERSION: u64 = 1;

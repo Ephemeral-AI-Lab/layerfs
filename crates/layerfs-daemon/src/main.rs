@@ -1381,16 +1381,31 @@ mod linux {
             shared: shared.clone(),
             id: request.workspace_id,
         };
+        // Private packed payload backing, keyed by WorkspaceId: created for
+        // this mount and removed when the workspace retires. A stale
+        // directory from a crashed prior mount is refused rather than reused
+        // (the workspace is disposable; its identity is not).
+        let mut backing_hex = String::with_capacity(32);
+        for byte in request.workspace_id {
+            backing_hex.push_str(&format!("{byte:02x}"));
+        }
+        let backing_dir = Path::new(protocol::SNAPSHOT_ROOT).join(&backing_hex);
         let mounted = (|| -> io::Result<_> {
             let endpoint = String::from_utf8(request.endpoint)
                 .map_err(|_| protocol::invalid("backing endpoint"))?;
             let runtime = layerfs_fuse::live_runtime::LiveRuntime::shared()?;
+            fs::create_dir_all(protocol::SNAPSHOT_ROOT)?;
+            if backing_dir.exists() {
+                return Err(protocol::invalid("daemon snapshot backing exists"));
+            }
+            fs::create_dir(&backing_dir)?;
             let owner = Arc::new(
                 runtime
                     .block_on(layerfs_fuse::live_owner::LiveOwner::connect(
                         endpoint.clone(),
                         request.capability,
                         runtime.scheduler(),
+                        backing_dir.clone(),
                     ))
                     .map_err(|error| io::Error::other(format!("live owner: {error:?}")))?,
             );
@@ -1407,6 +1422,7 @@ mod linux {
             Err(error) => {
                 eprintln!("layerfs-daemon: mount startup failed: {error}");
                 let _ = cleanup_mount(&root, created_root);
+                let _ = fs::remove_dir_all(&backing_dir);
                 send_error(&mut stream, RemoteError::InfrastructureLost);
                 return;
             }
@@ -1480,7 +1496,15 @@ mod linux {
         if lost {
             terminate_workspace_execs(&shared, request.workspace_id);
         }
-        let shutdown = owner.prepare_shutdown().and_then(|()| mount.unmount());
+        let shutdown = owner
+            .prepare_shutdown()
+            .and_then(|()| mount.unmount())
+            .and_then(|()| {
+                owner
+                    .spool()
+                    .destroy()
+                    .map_err(|error| io::Error::other(format!("snapshot backing: {error:?}")))
+            });
         let acknowledged = if requested {
             control.finish_shutdown(shutdown.is_ok())
         } else {

@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 /// One packed segment file. Shared by live pieces, the frozen frontier and
 /// snapshot readers through the `BackingRef` arc graph; the registry holds
 /// the only non-payload reference.
-pub(crate) struct LocalSegment {
+pub struct LocalSegment {
     file: File,
     path: PathBuf,
     /// Reserved high-water: every range below it is fully written.
@@ -33,17 +33,7 @@ pub(crate) struct LocalSegment {
     capacity: u64,
 }
 
-impl LocalSegment {
-    pub(crate) fn len(&self) -> u64 {
-        self.len.load(Ordering::Acquire)
-    }
-
-    pub(crate) fn capacity(&self) -> u64 {
-        self.capacity
-    }
-}
-
-pub(crate) struct LocalSpool {
+pub struct LocalSpool {
     directory: PathBuf,
     inner: Mutex<SpoolInner>,
     /// Monotonic physical allocation for observation and teardown.
@@ -69,7 +59,7 @@ fn io(_: std::io::Error) -> PortError {
 impl LocalSpool {
     /// The directory is created with private permissions; it is removed by
     /// `destroy` at workspace End/Discard.
-    pub(crate) fn new(directory: PathBuf) -> PortResult<Self> {
+    pub fn new(directory: PathBuf) -> PortResult<Self> {
         std::fs::create_dir_all(&directory).map_err(io)?;
         Ok(Self {
             directory,
@@ -83,19 +73,19 @@ impl LocalSpool {
         })
     }
 
-    pub(crate) fn directory(&self) -> &std::path::Path {
+    pub fn directory(&self) -> &std::path::Path {
         &self.directory
     }
 
-    pub(crate) fn physical_bytes(&self) -> u64 {
+    pub fn physical_bytes(&self) -> u64 {
         self.physical.load(Ordering::Acquire)
     }
 
-    pub(crate) fn physical_peak_bytes(&self) -> u64 {
+    pub fn physical_peak_bytes(&self) -> u64 {
         self.physical_peak.load(Ordering::Acquire)
     }
 
-    pub(crate) fn segment_count(&self) -> PortResult<usize> {
+    pub fn segment_count(&self) -> PortResult<usize> {
         Ok(self.inner.lock().map_err(|_| PortError::Io)?.segments.len())
     }
 
@@ -104,7 +94,7 @@ impl LocalSpool {
     /// The caller must write the bytes before applying the piece that
     /// references the range. Charging against the workspace spool policy
     /// happens in `LiveWorkspace::prepare_write` at apply validation.
-    pub(crate) fn reserve(&self, bytes: u64) -> PortResult<(BackingRef, u64)> {
+    pub fn reserve(&self, bytes: u64) -> PortResult<(BackingRef, u64)> {
         if bytes == 0 || bytes > SEGMENT_CAPACITY {
             return Err(PortError::Invalid);
         }
@@ -159,7 +149,7 @@ impl LocalSpool {
 
     /// Install bytes at a reserved range. Positioned write; no durability
     /// flush. Must complete before the referencing piece is applied.
-    pub(crate) fn write(
+    pub fn write(
         &self,
         segment: &BackingRef,
         start: u64,
@@ -182,7 +172,7 @@ impl LocalSpool {
     /// Read an owned range. Ranges referenced by pieces are always fully
     /// written (write-before-apply), so a miss below the high-water is an
     /// integrity error, not a wait.
-    pub(crate) fn read(
+    pub fn read(
         &self,
         segment: &BackingRef,
         offset: u64,
@@ -203,7 +193,18 @@ impl LocalSpool {
         Ok(out)
     }
 
-    pub(crate) fn segment_len(&self, id: BackingId) -> PortResult<u64> {
+    /// The registered reference for a segment id, for read-only serving of
+    /// frozen payload ranges.
+    pub fn segment_reference(&self, id: BackingId) -> PortResult<BackingRef> {
+        let inner = self.inner.lock().map_err(|_| PortError::Io)?;
+        inner
+            .segments
+            .get(&id)
+            .cloned()
+            .ok_or(PortError::NotFound)
+    }
+
+    pub fn segment_len(&self, id: BackingId) -> PortResult<u64> {
         let inner = self.inner.lock().map_err(|_| PortError::Io)?;
         let reference = inner.segments.get(&id).ok_or(PortError::NotFound)?;
         Ok(reference
@@ -215,7 +216,7 @@ impl LocalSpool {
 
     /// Retire segments whose only remaining reference is the registry's own:
     /// no live piece, frozen frontier or reader still needs their bytes.
-    pub(crate) fn retire_idle(&self) -> PortResult<()> {
+    pub fn retire_idle(&self) -> PortResult<()> {
         let mut inner = self.inner.lock().map_err(|_| PortError::Io)?;
         let idle: Vec<_> = inner
             .segments
@@ -243,7 +244,7 @@ impl LocalSpool {
     /// frontier or reader retains it (exactly the registry plus the passed
     /// reference remain); otherwise the dead range stays packed (bounded by
     /// segment capacity) until the segment retires.
-    pub(crate) fn abandon(&self, segment: BackingRef) -> PortResult<()> {
+    pub fn abandon(&self, segment: BackingRef) -> PortResult<()> {
         let mut inner = self.inner.lock().map_err(|_| PortError::Io)?;
         let removable = segment.strong_count() == 2
             && inner
@@ -268,7 +269,7 @@ impl LocalSpool {
     /// Remove the backing directory and all segment files. Called only at
     /// workspace End/Discard, after readers and the frozen frontier are
     /// released.
-    pub(crate) fn destroy(&self) -> PortResult<()> {
+    pub fn destroy(&self) -> PortResult<()> {
         let mut inner = self.inner.lock().map_err(|_| PortError::Io)?;
         inner.current = None;
         inner.segments.clear();
