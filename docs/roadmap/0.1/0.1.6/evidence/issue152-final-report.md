@@ -405,26 +405,34 @@ Container lifetime peaks are never quoted as phase peaks anywhere in this report
    candidate (5/5 and 4/4 failing probes, v0.1.5 passes 2/2), boundary isolated to
    exact byte level. This is the frozen spec's own declared open obligation;
    repairs are out of bounds for this campaign. No registered selection is affected.
-2. **Six `workspace_reliability` fault-injection proofs do not exercise the sandbox
-   route — five are instrumentation, one is a product defect.** See
-   [`issue152-reliability-fix-handoff.md`](../issue152-reliability-fix-handoff.md)
-   for the reproduction recipe, the per-case fix and the pitfalls.
-   `workspace-final-publication-failure-retry` is the exception: its fault *does*
-   fire and the Commit *does* surface the exact injected error, but the sandbox
-   route then refuses the retry (`remote_commit.rs:50-58`, `workspace stage
-   retained`) that the materialized route performs and the proof encodes — so
-   recovery from a failed final publication on this route is Discard-only. Their injections still target `Workspace::build_candidate`, the host
-   shell's append path and the host materialized projection. **The recovery evidence
-   they exist to produce is therefore missing for the sandbox route.** Follow-up:
-   re-point `VerificationFault::Candidate`/`VerificationStoreFault::*`, the short-write
-   and ENOSPC injections and the presentation-failure injection into
-   `build_remote_candidate`, the sandbox admission path, `LocalSpool` and the live
-   projection, and re-pin the retry semantics.
+2. **RESOLVED after this report — six `workspace_reliability` fault-injection
+   proofs at L28.** As recorded here they did not exercise the sandbox route:
+   five were instrumentation still pointing at the pre-v0.1.6 host-owned routes,
+   and `workspace-final-publication-failure-retry` was a real divergence — its
+   fault fired and the Commit surfaced the exact injected error, but the sandbox
+   route then refused the retry (`remote_commit.rs:50-58`, `workspace stage
+   retained`) that the materialized route performs and the proof encodes, so
+   recovery from a failed final publication on that route was Discard-only.
+   **Corrected by commit `ac729dfeb`** (ledger `L30`, report
+   [`issue152-reliability-fix-report.md`](issue152-reliability-fix-report.md)):
+   the sandbox route now retains a failed attempt and re-drives that exact frozen
+   generation on the supported Commit retry, the five injections were re-pointed
+   at the route that does the work (including a host-armed, container-consumed
+   one-shot append fault behind `layerfs-fuse/test-instrumentation` for the
+   ENOSPC and short-append cases), and **27/27 verification-supported
+   `workspace_reliability` proofs PASS** on the frozen candidate
+   (`8308cd8e…`, product `970964e9…`). The limitation above describes the L28
+   candidate only and is kept for the record.
 3. **File cache grows with the payload on the rewrite route** (~1.03×), with
    v0.1.5 parity; the bound would require the un-adopted §9.1 writable-open policy.
 4. **The host-side FUSE write-spool metric is dead on the sandbox route**
    (`spool_write_bytes` reads 0). It is no longer used as a gate here; re-wiring it
-   would need a new cross-boundary counter.
+   needs a new cross-boundary counter. `L30` observed the container-side
+   counterpart (`physical_spool_allocated_bytes` from the sandbox owner) and it
+   already shows one behavioural difference from v0.1.5: a failed append leaves
+   its reserved range packed in the current spool segment (4096 → 8192 B, versus
+   4096 → 4096 B on the control), bounded by segment capacity and retired with the
+   segment. Not repaired; named for a future decision.
 5. **`historical_access` could not be run**: the sealed v2 Store
    (`store_sha256 f323de0e…`) is absent — not in the prepared cache, not in the
    issue118 evidence (which used a different store), not in the control worktree,

@@ -1,6 +1,13 @@
 # Handoff — fix the six `workspace_reliability` proof failures left by #152
 
-Status: **open work item**, handed over from the #152 campaign
+Status: **complete** (commit `ac729dfeb`, ledger
+[`L30`](evidence/issue151-experiment-ledger.md)); all six proofs PASS and 27/27
+verification-supported `workspace_reliability` proofs PASS on the frozen
+candidate. Outcome report:
+[`issue152-reliability-fix-report.md`](evidence/issue152-reliability-fix-report.md).
+This document is the work specification as handed over, kept unchanged below.
+
+Handed over from the #152 campaign
 ([final report](evidence/issue152-final-report.md), group report
 [#152 comment 5677526128](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152#issuecomment-5677526128),
 corrected classification

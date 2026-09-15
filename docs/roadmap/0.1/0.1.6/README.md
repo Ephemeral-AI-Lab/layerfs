@@ -20,6 +20,7 @@ whose measurements motivated the replacement is preserved on
 | [Reviewed sandbox/host connection architecture](sandbox-host-connection-architecture.md) | [#150](https://github.com/Ephemeral-AI-Lab/layerfs/issues/150): explicit ASCII before/after diagrams, removal list, minimum remaining messages, service fairness and atomic publication boundaries |
 | [Connection review record](sandbox-host-connection-review.md) | Three independent subagent reviews, ranked findings, source evidence and dispositions; no implementation/performance claim |
 | [Experimental agent handoff prompt](experimental-agent-handoff-prompt.md) | The exact handoff instructions followed by the implementing agent |
+| [#152 reliability fix report](evidence/issue152-reliability-fix-report.md) | Outcome of the six `workspace_reliability` failures handed over by [#152](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152): per-case fix, identity chain, 27/27 proofs, non-passing lines |
 
 Execution evidence: [issue151 experiment ledger](evidence/issue151-experiment-ledger.md)
 (append-only). Research motivation:
@@ -89,14 +90,18 @@ host-load sensitive beyond the 15% allowance, dirty shared-mmap visibility stays
 unsolved, and the breadth families were not run. This is not a release decision:
 no merge, issue closure or tag follows from it.
 
-## Open follow-up from #152
+## #152 follow-up: closed
 
-The #152 campaign closed with every registered selection terminal; the one
-work item it hands over is the six `workspace_reliability` fault-injection
-proofs. Five are instrumentation that still targets the pre-v0.1.6 host-owned
-routes, and one — `workspace-final-publication-failure-retry` — is a real
-divergence: the sandbox route refuses the retry that the materialized route
-performs, so recovery from a failed final publication is Discard-only there.
-Reproduction recipe, per-case fix direction and the pitfalls (thread-local fault
-channels, and a fault that must now cross the host↔container process boundary)
-are in [`issue152-reliability-fix-handoff.md`](issue152-reliability-fix-handoff.md).
+The #152 campaign closed with every registered selection terminal and handed
+over one work item: the six `workspace_reliability` fault-injection proofs. It is
+**complete** (commit `ac729dfeb`, ledger
+[`L30`](evidence/issue151-experiment-ledger.md)): five were instrumentation still
+pointing at the pre-v0.1.6 host-owned routes, and
+`workspace-final-publication-failure-retry` was a real divergence — the sandbox
+route refused the retry the materialized route performs, so recovery from a
+failed final publication was Discard-only there. The sandbox route now re-drives
+a retained publication attempt, and **27/27 verification-supported
+`workspace_reliability` proofs PASS** on the frozen candidate. Report:
+[`issue152-reliability-fix-report.md`](evidence/issue152-reliability-fix-report.md);
+the original work specification stays in
+[`issue152-reliability-fix-handoff.md`](issue152-reliability-fix-handoff.md).

@@ -1565,3 +1565,167 @@ terminal tally, the complete `family → per-test` table (196 collected cells pl
 REUSED-FROM and non-collected terminal rows), the bug ledger, the architecture
 guardrails, the resource tables, the remaining limitations and the decisions.
 Group report: #152 comment 5677788950.
+
+### L30 — 2026-09-19: the six `workspace_reliability` failures fixed; 27/27 proofs PASS on the frozen candidate
+
+Work item handed over by L28 / the #152 final report (§7.2), specification
+`docs/roadmap/0.1/0.1.6/issue152-reliability-fix-handoff.md`. Product commit
+`ac729dfeb` — *fix(workspace): re-drive a failed sandbox publication; migrate the
+six reliability injections*. Report:
+`docs/roadmap/0.1/0.1.6/evidence/issue152-reliability-fix-report.md`.
+
+#### Identity
+
+| field | before (L28) | after (this entry) |
+|---|---|---|
+| source seal | `d1bbf882067d824b…` | `8308cd8e628a97cd8b7d17d184a8f69ff5f212d21b0646d84913a6df5d444e9a` |
+| product seal | `dc2b3a14f45a4eb7…` | `970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd` |
+| compilation seal | `2c4ec5eea9a731b9…` | `bff3ff080d64671f9bf9ef7e73450afd4dbaaecbce86c91a5c6ae285d5b63743` |
+| dependency seal | `9a13be19016e0991…` | `a1cf72ac4b77536d2d3b44c09872457a246673ca2eacf0997b11b293900709eb` |
+| harness identity | `daa74be0…` | `daa74be0…` (unchanged) |
+| workload source | `821b2404…` | `821b2404…` (unchanged) |
+| image | `layerfs-bench-infra:d1bbf882067d824b` | `layerfs-bench-infra:8308cd8e628a97cd` |
+| commit | `b9bca593c` | `ac729dfeb` (tree clean, `LAYERFS_SOURCE_DIRTY=false`) |
+
+The product seal moved because #6 is a behaviour fix and #1/#2/#5 add
+`test-instrumentation`-gated consume sites. Nothing in #1–#5 changes a released
+build's behaviour; #3/#4's channel is compiled out entirely unless
+`layerfs-fuse/test-instrumentation` is enabled, which only
+`Dockerfile.layerfs` (benchmark image) does.
+
+#### #6, the product defect
+
+`commit_remote` refused **any** Commit while `pending_stage.is_some()`
+(`InvalidInput("workspace stage retained")`), before the pending-completion
+re-delivery path, while the materialized route re-drives. Deleting the guard was
+not sufficient: the sandbox resolves one attempt at a time
+(`live_owner.rs` CAPTURE returns `Busy` while a slot is retained) and
+`LiveWorkspace::capture_frontier` *moves* the live dirty set into the attempt, so
+abandoning it and capturing again would publish an empty candidate — silently
+dropping the very data the retry is supposed to publish.
+
+Fix: `commit_remote` samples the retained attempt, retains the capture summary
+(`Workspace::pending_attempt`) before the first step that can fail, and a retry
+re-pulls and re-publishes **that exact frozen generation**. The "workspace stage
+retained" refusal now applies only when a stage exists with no attempt that can
+be re-driven (the Busy/HeadMoved path, unchanged). `settle_attempt` clears the
+attempt exactly when it is completed or cancelled; `Workspace::discard` and
+`end_clean` treat an unsettled attempt as unfinished publication state.
+
+Regression test `remote_commit::tests::failed_publication_is_re_driven_by_the_supported_commit_retry`
+drives a real local live owner and the real `VerificationStoreFault::FinalPublication`
+Store fault. Without the fix it fails with the recorded
+`Storage(InvalidInput("workspace stage retained"))`; with it the retry returns
+`Created` and the retained generation's bytes read back from the published root.
+
+#### #1/#2/#5, consume sites moved onto the route that does the work
+
+- `candidate-failure-retry`: the `VerificationFault::Candidate` consume plus
+  `inject_candidate_failure_once` and the Store admission-fault activation
+  (`verification_candidate`) now run before `build_remote_candidate`, mirroring
+  `lifecycle.rs:94-106`; `build_remote_candidate` honours the one-shot flag the
+  same way `build_candidate` does.
+- `admission-batch-failure-retry`: with the fault active before construction, the
+  construction-time cohort commit is counted, and the receipt shows the gate
+  holding exactly as designed: `committed_early_transactions: 1`, `hit_count: 1`.
+- `published-presentation-failure-smoke-v3`: the `PresentationResume` consume and
+  the recorded `workspace.presentation_failed` now exist on the sandbox route at
+  the transition where that route computes its own presentation state. A retained
+  completion is deliberately **not** recorded as a presentation failure: it is
+  re-delivered by the next Commit or End (unchanged design).
+
+Threading decision, recorded as the handoff asked: no channel was made
+process-global and no worker count changed. Each consume site was moved onto the
+thread that performs the work the fault targets, which is the same thread that
+arms it.
+
+#### #3/#4, the payload append is in the container
+
+Both fault channels are process-local and the append now happens in the sandbox
+owner (`LocalSpool`), so migrating the site could not work — and this is the one
+place where the fix is *not* benchmark-side: the arm has to cross a process
+boundary. New one-shot arm on the existing authenticated control lane
+(`wire::VERIFICATION_FAULT` / `VERIFICATION_FAULT_RECEIPT`, opcodes 52/53),
+consumed in `LiveOwner::write_owned`:
+
+- `NoSpace` lowers the workspace policy to the current charge for one append, so
+  the real `ResourcePolicy::check` rejection and its public `ENOSPC` are produced
+  by product code (the same injection shape the pre-v0.1.6 host shell used).
+- `ShortAppend` completes half the reserved range and fails the append with `EIO`
+  before any piece is applied.
+
+Both are one-shot and receipt-checked (`RemoteVerificationFaultReceipt { fault,
+hit_count: 1 }`), so the proofs keep their exactly-once evidence. The whole
+surface sits behind the new `layerfs-fuse/test-instrumentation` feature,
+propagated through `layerfs-workspace/test-instrumentation` and
+`layerfs-daemon/test-instrumentation`; `Dockerfile.layerfs` is the only build that
+enables it, so a released daemon carries neither the frames nor the injection
+points. Unit test
+`live_owner::verification_fault_tests::armed_append_fault_is_consumed_exactly_once_and_stays_on_the_receipt`
+pins the receipt semantics (a first attempt at this returned the receipt *after*
+consumption cleared the arm and was caught by the proof).
+
+#### Result: 27/27 verification-supported proofs PASS
+
+`benchmark/fs-bench-pro/verify-selected.py --family workspace_reliability
+--case <case> --seed 1 --setup clone --image layerfs-bench-infra:8308cd8e628a97cd
+--collection-mode --source 8308cd8e… --input <digest>` for every registered
+verification-supported case, one sample each, fresh append-only outputs under
+`benchmark-results/issue152/fix/<case>/`. **27 PASS, 27 cleanups PASS**, no
+unconsumed-fault record in any receipt, `reused_proof_identities` empty (nothing
+reused a prior receipt). Complete commands 1.69–6.02 s (6.02 s =
+`workspace-exec-500`), inside the 15 s rule and far inside the 59 s hard budget.
+
+The six repaired cases:
+
+| case | status | key evidence |
+|---|---|---|
+| `workspace-final-publication-failure-retry-compact-v2` | PASS | `Integrity("injected qualified Workspace transaction failure")` on the first Commit, `FinalPublication hit_count: 1`, retry publishes (`proof-outcome-before-cleanup: Ok(())`) |
+| `workspace-candidate-failure-retry-compact-v2` | PASS | `Integrity("injected Workspace candidate failure")`, `Candidate hit_count: 1`, retry publishes |
+| `workspace-admission-batch-failure-retry-compact-v2` | PASS | `Integrity(…)`, `LaterAdmissionBatch hit_count: 1, committed_early_transactions: 1`, retry publishes |
+| `workspace-published-presentation-failure-smoke-v3` | PASS | `Created` + `presentation_failed: true`, `PresentationResume hit_count: 1`, recover-start/recover-complete |
+| `workspace-deferred-nospace-compact-v2` | PASS | ENOSPC at the write boundary, `RemoteVerificationFaultReceipt { NoSpace, hit_count: 1 }` |
+| `workspace-short-spool-write-compact-v2` | PASS | EIO at the write boundary, `RemoteVerificationFaultReceipt { ShortAppend, hit_count: 1 }` |
+
+Control A/B is unchanged and still applies: all six **PASS** on the reconstructed
+v0.1.5 control (product `276c5970aabf`, source `40bb391e1efc`,
+`/Users/yifanxu/layerfs-v016-control/benchmark-results/issue152-control3/`), so
+none of them is a stale-in-both-arms test. `workspace-sustained-600s-compact-v2`
+remains **NOT_RUN_OPTIONAL** (`verification_supported: false`).
+
+#### Non-passing lines, stated as plainly as the passes
+
+1. **A failed append now leaves a dead range packed in the sandbox spool
+   segment.** Observed through the container-side counter (the host-side
+   counterpart is the dead metric in §7.4): `physical_spool_allocated_bytes`
+   4096 → 8192 after the injected failure in both #3 and #4, where the v0.1.5
+   control read 4096 → 4096 (its short-append run raised only the *peak* to
+   8192 and truncated back). The dead range is bounded by segment capacity
+   (1 MiB) and retired with the segment; not repaired here because reclaiming it
+   would change product spool policy, which this instrumentation work item does
+   not own. Named for a future decision.
+2. **The two proofs' `spool_segment_bytes` conjunct is vacuous on this route**
+   (`verification_workspace_state` reports 0 for every remote workspace), which
+   is the already-recorded dead host FUSE write-spool metric. The meaningful
+   assertions — exact errno at the public boundary, zero acknowledged bytes,
+   unchanged published snapshot, clean Discard — all hold.
+3. **`changes::tests::tiered_spill_partial_writes_and_final_merge_are_retryable_and_clean`
+   is a pre-existing parallel-run flake.** It counts process-wide file
+   descriptors, so any concurrent test that opens a file can fail it. Verified
+   on the pristine tree (`git stash` of this entire change set, same failure;
+   `--test-threads=1`: 73/73 pass). `tools/preflight.sh` passed on the final
+   tree; this is recorded because the flake can fail the suite at random.
+4. **Seals moved, so no earlier perf row is re-labelled.** The sandbox Commit
+   entry gains one uncontended workspace-lock acquisition and one retained
+   `Option<CaptureSummary>` store outside every measured phase's *work*; the
+   benchmark image's FUSE write path gains one relaxed atomic load per write
+   (compiled out in a release build). Both are sub-microsecond against Commit
+   totals of 10 ms–2 s. The handoff's impact set for #6 — the three
+   `*-failure-retry` proofs plus the rest of `workspace_reliability` — was
+   re-run in full; no perf row was re-collected, and no perf row's measured
+   semantics changed. Flagged rather than silently claimed as unaffected.
+
+Commands and receipts: `benchmark-results/issue152/fix/` (27 final receipts plus
+`provisional-329a33bc/`, `provisional-4f82c19a/`, `provisional-b4c4afee/` — the
+intermediate attempts, kept because receipts are append-only).
+Group report: [#152 comment 5683593603](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152#issuecomment-5683593603).
