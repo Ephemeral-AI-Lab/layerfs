@@ -252,3 +252,90 @@ classified a killed invocation with a stop wall under the ceiling as an
 "exception". A killed or failed invocation is a failure whatever its stop wall, so
 the rendered matrix now derives the verdict from status *and* wall
 (`TIMEOUT` → `FAIL`). No measured number changed.
+
+## L5 — F4 `branch_development` (4 of 6 registered; the two compact controls are missing)
+
+```bash
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f4-seed1 \
+  --family branch_development --prepare
+```
+
+| case | perf | perf wall | verdict | verify | verify wall | verdict | Created | workers |
+| --- | --- | ---: | --- | --- | ---: | --- | ---: | ---: |
+| `v016-branch-mixed-100mb-5000-k10-v1` | PASS | 3.38 s | PASS | PASS | 7.17 s | PASS | 30 | 3 |
+| `v016-branch-mixed-100mb-5000-k100-v1` | PASS | 7.06 s | PASS | TIMEOUT | 22.62 s | **FAIL** | 210 | 3 |
+| `v016-branch-mixed-500mb-30000-k10-v1` | PASS | 6.49 s | PASS | TIMEOUT | 22.98 s | **FAIL** | 30 | 3 |
+| `v016-branch-mixed-500mb-30000-k100-v1` | PASS | 17.52 s | **EXCEPTION (declared)** | TIMEOUT | 22.91 s | **FAIL** | 210 | 3 |
+
+* Trunk10 then children forked from trunk commit 5: `retained_roots` 31/211,
+  `longest_ancestry` 15/105, every Commit `Created`, three workers with observed
+  overlap.
+* `v016-branch-convergent-content-v1` and `v016-branch-fork-descendant-v1` are
+  **`NOT_READY`**: neither was ever implemented on the archived line, and the
+  compact-control registration, the compact schedule and its oracle do not exist
+  in this tree. `infra-list branch_development` reports four of the six declared
+  case IDs. This is the F4 blocker and it also gates two of F6's six consumers.
+* The three verification misses are the F2 escalation with better attribution
+  (see L3 addendum below).
+
+### L5 addendum — attribution of the verification misses (measured, not inferred)
+
+The killed receipts carry the product's own schedule timer, which separates the
+schedule replay from the verifier:
+
+| row | verify schedule timer (product) | verify invocation wall | tail = verifier + custody + cleanup |
+| --- | ---: | ---: | ---: |
+| mixed L500 K10 | 1.07 s | 22.91 s stopped | ≈ 21.8 s |
+| branch L100 K100 (210 Commits) | 8.74 s | 22.62 s stopped | ≈ 13.9 s |
+
+The schedule replay is not the problem: the mixed L500 K10 verify replays its
+schedule in 1.07 s and still cannot finish. The tail is the declared verification
+scope — complete namespace inventory, independently recomputed content roots for
+every sub-128 KiB regular file, declared large-file ranges, every retained commit
+identity and parent edge, plus custody. That cost is per path (≈0.5–0.7 ms/path
+measured across L100 ≈ 5 000 paths and L500 ≈ 30 000 paths), so a 30 000-path
+complete inventory alone needs ≈ 15–20 s. This is a measurement of the frozen
+verification scope, not of the product's Commit path.
+
+## L6 — F5 `dedup_branch_history` (4 of 6; the namespace-inode orchestrator is missing)
+
+```bash
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f5-seed1 \
+  --family dedup_branch_history \
+  --case v016-history-large-hotset-k10-v1 --case v016-history-large-hotset-k100-v1 \
+  --case v016-history-namespace-inode-k10-v1 --case v016-history-namespace-inode-k100-v1 \
+  --case v016-history-boundary-cycle-k10-v1 --case v016-history-boundary-cycle-k100-v1 --prepare
+```
+
+| case | perf | perf wall | verdict | verify | verify wall | verdict |
+| --- | --- | ---: | --- | --- | ---: | --- |
+| `v016-history-large-hotset-k10-v1` | PASS | 1.81 s | PASS | PASS | 3.73 s | PASS |
+| `v016-history-large-hotset-k100-v1` | PASS | 2.23 s | PASS | PASS | 3.62 s | PASS |
+| `v016-history-boundary-cycle-k10-v1` | PASS | 1.89 s | PASS | PASS | 3.77 s | PASS |
+| `v016-history-boundary-cycle-k100-v1` | PASS | 2.68 s | PASS | PASS | 3.81 s | PASS |
+| `v016-history-namespace-inode-k10-v1` | **FAIL** | 1.77 s | FAIL | **FAIL** | 1.69 s | FAIL |
+| `v016-history-namespace-inode-k100-v1` | **FAIL** | 1.67 s | FAIL | **FAIL** | 1.95 s | FAIL |
+
+The four measured rows are comfortable: the S fixture (16 files, 2 658 304 B) keeps
+both modes under 4 s, and the K10 prefix relationship holds.
+
+**Root cause of the two `namespace-inode` failures (harness, missing
+implementation, not a product defect):** the container workload prints
+`fs-benchmark-workload: unsupported dedup native workload` and exits 1, because
+`namespace-inode` is deliberately excluded from the SDK route
+(`dedup_workloads::is_sdk`) and the family's own `v016_edits` returns
+`"v0.1.6 namespace-inode compact schedule is not implemented yet: the five declared
+HN stages have no host orchestrator"`. The frozen HN schedule
+(`benchmark-families.md` §dedup_branch_history) needs five stages per cycle —
+unlink/recreate two tiny files, two single-file SDK 256 B overwrites, rename the
+populated `tiny` directory, alias + chmod + mtime, then a 4 KiB atomic save over
+the aliased destination with alias-inode observation and removal — with four POSIX
+helper executions and two SDK calls per cycle. Neither the orchestrator nor its
+per-state oracle exists in this tree. Retained as `FAIL` with the exact workload
+error; not re-labelled, not sampled again. This also gates two of F6's six
+consumers (`v016-access-inode-before/after-v1`).
+
+**Defects found and fixed in F4/F5: none** (the port behaved as documented; both
+misses are missing implementation and one measurement-scope finding).
