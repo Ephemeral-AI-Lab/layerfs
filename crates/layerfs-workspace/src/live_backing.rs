@@ -262,6 +262,28 @@ impl BackingOwner {
                     out.extend(self.acquired_out(acquired, &mut content_budget)?);
                 }
             }
+            wire::READ_BASE => {
+                // Canonical Store bytes for an immutable-base range. The
+                // sandbox owns replacement payload; every unchanged range is
+                // served here, exactly as the released route served it.
+                let root = FileContentRoot(input.object()?);
+                let offset = input.u64()?;
+                let len = input.u32()? as usize;
+                input.done()?;
+                if len > 1024 * 1024 {
+                    return Err(StoreError::InvalidInput("immutable read"));
+                }
+                let counters = read_range(
+                    &CoreReader(&self.snapshot.reader),
+                    root,
+                    offset
+                        ..offset
+                            .checked_add(len as u64)
+                            .ok_or(StoreError::InvalidInput("immutable range"))?,
+                    &mut out,
+                )?;
+                self.snapshot.reader.note_rope_read(counters)?;
+            }
             _ => return Err(StoreError::InvalidInput("backing request")),
         }
         Ok(out)
@@ -977,11 +999,24 @@ impl RemoteWorkspace {
         )));
         let handler = backing.clone();
         let handler: Arc<layerfs_fuse::live_transport::BackingHandler> = Arc::new(move |bytes| {
-            handler
+            let outcome = handler
                 .lock()
                 .map_err(|_| layerfs_fuse::PortError::Io)?
-                .request(bytes)
-                .map_err(crate::projection::storage_port_error)
+                .request(bytes);
+            if let Err(error) = &outcome {
+                // Attribution hook for immutable-base service failures: the
+                // exact store error that the wire can only report as a port
+                // error code.
+                if std::env::var_os("LAYERFS_BACKING_FAILURE_DIAGNOSTIC").is_some() {
+                    eprintln!(
+                        "{{\"kind\":\"backing-failure\",\"opcode\":{},\"request_bytes\":{},\"error\":{:?}}}",
+                        bytes.first().copied().unwrap_or(0),
+                        bytes.len(),
+                        format!("{error:?}")
+                    );
+                }
+            }
+            outcome.map_err(crate::projection::storage_port_error)
         });
         let server = if local {
             let runtime = layerfs_fuse::live_runtime::LiveRuntime::shared()?;
