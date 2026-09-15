@@ -77,6 +77,21 @@ impl Content {
     }
 
     pub(crate) fn validate(&self) -> Result<()> {
+        // `Content::slice` wraps one *shared* source (`Arc<Content>`), so the
+        // same subtree is reachable through many paths and a plain recursive
+        // walk re-validates it once per path: the v0.1.6 oracle replays a
+        // schedule that splices the same declared content every cycle, which
+        // made validation super-linear in the applied-edit count (#154). A node
+        // already proved valid in this walk cannot fail a second time, so each
+        // distinct node is visited once. Every check below is unchanged.
+        let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        self.validate_memo(&mut seen)
+    }
+
+    fn validate_memo(&self, seen: &mut std::collections::HashSet<usize>) -> Result<()> {
+        if !seen.insert(self as *const Content as usize) {
+            return Ok(());
+        }
         let len = match self {
             Self::Slice {
                 source,
@@ -89,7 +104,7 @@ impl Content {
                 len,
                 ..
             } => {
-                source.validate()?;
+                source.validate_memo(seen)?;
                 if matches!(source.as_ref(), Self::Digest { .. }) {
                     return Err("digest custody cannot be transformed into source bytes".into());
                 }
@@ -104,7 +119,7 @@ impl Content {
             Self::Concat(parts) => {
                 let mut sum = 0_u64;
                 for part in parts {
-                    part.validate()?;
+                    part.validate_memo(seen)?;
                     if matches!(part, Self::Digest { .. }) {
                         return Err(
                             "digest custody cannot be concatenated into source bytes".into()
