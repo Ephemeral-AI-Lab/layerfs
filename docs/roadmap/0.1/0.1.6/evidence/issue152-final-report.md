@@ -406,7 +406,14 @@ Container lifetime peaks are never quoted as phase peaks anywhere in this report
    exact byte level. This is the frozen spec's own declared open obligation;
    repairs are out of bounds for this campaign. No registered selection is affected.
 2. **Six `workspace_reliability` fault-injection proofs do not exercise the sandbox
-   route.** Their injections still target `Workspace::build_candidate`, the host
+   route — five are instrumentation, one is a product defect.** See
+   [`issue152-reliability-fix-handoff.md`](../issue152-reliability-fix-handoff.md)
+   for the reproduction recipe, the per-case fix and the pitfalls.
+   `workspace-final-publication-failure-retry` is the exception: its fault *does*
+   fire and the Commit *does* surface the exact injected error, but the sandbox
+   route then refuses the retry (`remote_commit.rs:50-58`, `workspace stage
+   retained`) that the materialized route performs and the proof encodes — so
+   recovery from a failed final publication on this route is Discard-only. Their injections still target `Workspace::build_candidate`, the host
    shell's append path and the host materialized projection. **The recovery evidence
    they exist to produce is therefore missing for the sandbox route.** Follow-up:
    re-point `VerificationFault::Candidate`/`VerificationStoreFault::*`, the short-write

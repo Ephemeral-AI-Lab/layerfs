@@ -88,3 +88,15 @@ not emitted by the frozen harness, the time comparison is cache-stance and
 host-load sensitive beyond the 15% allowance, dirty shared-mmap visibility stays
 unsolved, and the breadth families were not run. This is not a release decision:
 no merge, issue closure or tag follows from it.
+
+## Open follow-up from #152
+
+The #152 campaign closed with every registered selection terminal; the one
+work item it hands over is the six `workspace_reliability` fault-injection
+proofs. Five are instrumentation that still targets the pre-v0.1.6 host-owned
+routes, and one — `workspace-final-publication-failure-retry` — is a real
+divergence: the sandbox route refuses the retry that the materialized route
+performs, so recovery from a failed final publication is Discard-only there.
+Reproduction recipe, per-case fix direction and the pitfalls (thread-local fault
+channels, and a fault that must now cross the host↔container process boundary)
+are in [`issue152-reliability-fix-handoff.md`](issue152-reliability-fix-handoff.md).
