@@ -575,3 +575,44 @@ Same flags, extended allowances, seed 1, `--setup clone`, one worker per arm.
   measurement worktree is detached at the same commit; the sealed v0.1.5 control
   worktree is untouched at `6ee1ec94c`. The next measurement work starts from
   `main` with a rebuilt pair.
+
+### L17 — 2026-09-15: local worktrees and `layerfs*` directories reduced to one checkout
+
+- Owner directive: remove every `layerfs` worktree under
+  `/Users/yifanxu/Ephemeral-AI-Lab` and keep a single `layerfs*` directory.
+- Removed (≈13.6 GB): the two registered worktrees
+  `layerfs-v016` (candidate build tree + receipts, 7.8 GB) and
+  `layerfs-v016-control` (sealed v0.1.5 control build, 1.1 GB), both
+  deregistered with `git worktree remove --force` and `git worktree prune`;
+  plus the plain directories `layerfs-checkpoint` (3.5 GB),
+  `layerfs-fix-nested-init` (2.3 GB), `layerfs-init-experiment-20260907-221713`
+  (3.5 GB), `layerfs-workspace-admission` (3.5 GB),
+  `layerfs-issue68-corrected-baseline` (530 MB),
+  `layerfs-handoff-archive-20260914T053631Z` (361 MB),
+  `layerfs-deepseek-history` (206 MB),
+  `layerfs-main-uncommitted-20260915T0930Z` (240 KB) and the stale
+  `layerfs-cleanup-active.txt` marker (it pointed at a directory that no longer
+  exists).
+- Preserved before removal, inside the surviving checkout at
+  `benchmark-results/handoff-20260915/` (1.8 MB, git-ignored like all
+  `benchmark-results` content):
+  - `issue151-candidate/` — all 17 candidate receipt directories (B1/B2 samples,
+    the four smoke attempts and their verifications);
+  - `issue151-control/` — all 5 control receipt directories.
+  - `identities/` — the archived binary and image identity JSONs plus the host
+    binary sidecar for both arms.
+  - `control-harness.patch` — the exact 314-line harness patch the sealed
+    control worktree carried uncommitted, and its `git status` output.
+  - `removed-dirs/` — top-level manifests, SHA256SUMS and reports of the deleted
+    directories (80 KB).
+- Recoverability after this cleanup: the removed branches are tag-preserved
+  (`archive/main-branch-cleanup-20260915-1005/heads/*`, L16), including the
+  control-era harness patch source; `v0.1.5` remains tagged, so the control arm
+  can be recreated with the documented recipe (`git worktree add` at
+  `6ee1ec94`, apply the harness diff, rebuild host and image). Build outputs,
+  prepared fixtures and image layers are regenerable; the raw receipts are not,
+  which is why they were copied first.
+- Consequence for the remaining work: measurement can no longer resume from the
+  old trees. A fresh pair must be created from `main` (`ef1c2aa0a`) and from the
+  `v0.1.5` tag, built with the current harness (whose workload-source hash
+  changed with the L16 `writeln!` fix), before B3 or the breadth pass can run.
