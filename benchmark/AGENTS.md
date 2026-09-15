@@ -63,6 +63,21 @@ one arm only, or pooling cold and warm rows. Anything reused must be visible in
 the receipt (`build_mode`, `dependency_reuse`, `clone_method`,
 `reused_proof_identities`, `cache_contract`, `swap_current_bytes`-style domains).
 
+### Budgets
+
+- Prepared inputs are acquired **once per campaign and reused** with identity
+  checks: no per-selection fixture or image rebuild, no repeated setup before a
+  sample.
+- A performance selection's **complete command** (product timer + container
+  lifecycle + cleanup) is **≤ 15 s**, with a small, declared, owner-approved
+  exception list allowed up to **25 s** (the 500 MiB and 25k members are the usual
+  candidates).
+- Verification typically stays **under 15 s**, within a **60 s hard budget**.
+- A selection that cannot fit is either reused from a qualifying receipt with its
+  evidence cited, or escalated as an expensive-qualification exception for an owner
+  decision before it runs. Never move work outside the timer, enlarge a timeout, or
+  reduce the workload to fit.
+
 What the harness already enforces, and where an agent must not fight it:
 
 - `shared/cold.py` (`namespace-100000-cold-v2`,

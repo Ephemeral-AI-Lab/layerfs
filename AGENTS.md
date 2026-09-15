@@ -38,6 +38,10 @@ Forbidden, without exception:
   lifetime total unless it was verifiably reset after setup);
 - excusing file-size-proportional spool or cgroup page-cache growth because the
   process heap is bounded.
+- inflating a timeout, changing worker counts, or relaxing a cache/buffer policy
+  to turn a miss into a pass;
+- dropping a failing cell, or omitting a registered selection, from a report;
+- rewriting, re-labelling or promoting a historical receipt after the fact.
 
 Allowed, and expected: untimed, deterministic, recorded preconditioning;
 preparing pristine fixtures once outside the measured child; using the harness's
@@ -106,6 +110,15 @@ the report.
    successors) with exact numbers, limits, the arithmetic, the identities, the
    reproduction command, and every non-passing line. Report FAIL, INCOMPLETE and
    unrun work as plainly as PASS.
+7. **Fit the budgets.** Preparation is fast and reusable — prepared inputs are
+   acquired once and reused with identity checks, and repeated setup before a
+   sample is forbidden. A performance selection's **complete command** (product
+   timer + container lifecycle + cleanup) is **≤ 15 s**, with a small, declared,
+   owner-approved exception list allowed up to **25 s**. Verification is typically
+   **under 15 s** within a **60 s hard budget**. A selection that cannot fit is
+   reused from a qualifying receipt with its evidence cited, or escalated as an
+   expensive-qualification exception for an owner decision — never made to fit by
+   moving work outside the timer, enlarging a timeout, or shrinking the workload.
 
 ## 4. Code, build and docs
 
@@ -119,6 +132,11 @@ the report.
   be compared against a sealed arm.
 - No new dependencies when an existing crate already provides the capability;
   keep platform-specific code `cfg`-gated and behind a no-op fallback.
+- **Never patch, vendor, fork or locally modify a third-party crate or package.**
+  No `[patch]`/`[replace]` sections, no vendored copies, no edits in the Cargo
+  registry or under `~/.cargo`, no forked dependency substituted for a published
+  one. Builds stay `--locked`. If a dependency appears to need a change, stop and
+  report the blocker with evidence instead of satisfying it locally.
 - Never claim durability the contract does not provide: no `fsync`/`fdatasync`/
   `sync_data`/`sync_all` on Workspace backing, and memory hints are hints.
 - Documentation states measured facts, limits and open rulings; roadmap READMEs
