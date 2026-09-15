@@ -399,6 +399,8 @@ pub(crate) fn workspace_sample(case: &Case, seed: u8) -> Result<common::TreeSamp
         tiny_sample(case, seed)
     } else if super::dedup_workloads::history_unrelated_mixed_v2(case) {
         super::dedup_workloads::history_sample(case, seed)
+    } else if case.family == "local_snapshot" {
+        super::local_snapshot::sample(case, seed)
     } else {
         Err("no sampled proof recipe for case".into())
     }

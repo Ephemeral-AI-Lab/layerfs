@@ -622,7 +622,12 @@ fn qualify_fast_input(root: &Path, case: &Case, seed: u8, evidence: &Path) -> An
     snapshot
         .receipt
         .insert("fully_verified".into(), "false".into());
-    super::workspace_verify::persist_snapshot(&entries, &mut snapshot, evidence)?;
+    super::workspace_verify::persist_snapshot(
+        &entries,
+        &mut snapshot,
+        evidence,
+        "canonical-verification",
+    )?;
     resource_receipt("after-input-qualification", process_resource_snapshot()?);
     emit(
         "input-qualification-complete",
@@ -1302,6 +1307,7 @@ fn run_case(
     let sampled = verification
         && case.kind != "git-tool"
         && (case.family == "tiny_file_churn"
+            || case.family == "local_snapshot"
             || workload_source::ordinary_workloads::mixed_v4(case)
             || workload_source::dedup_workloads::history_unrelated_mixed_v2(case));
     if fast
@@ -1766,7 +1772,13 @@ fn run_case(
                     // the branch head: C1, C2 and C3 states all carry exact
                     // bytes, namespace and metadata through the Store.
                     let expected = registry::expected(case, seed, step + 1)?;
-                    let receipt = super::workspace_verify::verify(&store, branch, &expected, root)?;
+                    let receipt = super::workspace_verify::verify_step(
+                        &store,
+                        branch,
+                        &expected,
+                        root,
+                        step + 1,
+                    )?;
                     emit(
                         "step-canonical-verification",
                         &[
@@ -2246,6 +2258,7 @@ fn run_case(
                     &genesis_entries,
                     &mut genesis,
                     &root.join("history-0"),
+                    "canonical-verification",
                 )?;
                 emit(
                     "history-canonical",

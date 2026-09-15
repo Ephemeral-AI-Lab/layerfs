@@ -793,3 +793,190 @@ Both runs also produced smoke `smoke-candidate-6` (PASS) on the same identities.
   `benchmark-results/handoff-20260915/issue151-postfix/` (perf, verify and smoke
   receipts, the five post-fix B2 instrumentation runs, and the raw memory
   timelines), plus `candidate-host-binary.identity.json`.
+
+### L19 — 2026-09-16: gate B3 `local-snapshot-create-25000-onebyte-v1` — collected on a reconstructed control arm, and three harness defects repaired on the way
+
+Owner directive: proceed with B3 (`#151` checklist item: *one-sample 25k three-Commit
+control/candidate + separate verification*).
+
+#### Control arm reconstructed (its worktree had been removed in L17)
+
+- `git worktree add --detach /Users/yifanxu/layerfs-v016-control v0.1.5`
+  (`6ee1ec94`), then the benchmark tree mirrored from `main`. It lives **outside**
+  `Ephemeral-AI-Lab`, so the owner's "one `layerfs*` folder under the lab directory"
+  rule still holds. The control tree is by construction `SOURCE_DIRTY=true`, which is
+  what the recorded control receipts carry.
+- Evidence that this reproduces the original composition rather than inventing one:
+  the diff against `v0.1.5` is exactly the five files of `control-harness.patch`
+  (`benchmark/AGENTS.md`, `shared/runner.py`, `shared/test_layout.py`,
+  `shared/test_runner.py`, `src/workspace_bench.rs`), and `v0.1.5`'s own
+  `workload/main.rs` hashes `c6f1e4b1…` while both recorded arms hash `821b2404…`,
+  i.e. the sealed control already carried the current benchmark tree with `crates/`
+  still at v0.1.5.
+- Rebuild reproduced the recorded identities: source commit `6ee1ec94`,
+  source tree `739550b79159f4120cb60ddc8310b7cb7168c352`, **product seal
+  `276c5970aabf485594d90ae30920b3cdb310134a7572589c558063a9d52ce093`** (exact match),
+  workload source `821b2404…`; harness identity stayed
+  `daa74be0c3a0b40a824617a6403c70ce4e7be115e7c47f4f1faf26029c55b044`, which is why
+  the B1/B2 pairs recorded earlier remain valid. The source and compilation seals
+  are new values (`7bfd6855…`/`93f49a88…` at the control's first B3 build) because
+  the benchmark tree has since taken the `feec2defd` formatting commit and the B3
+  verification repairs below.
+
+#### Three harness defects made B3's verification impossible (none in the product)
+
+B3's *perf* runs passed from the first attempt, but its separate verification
+failed identically in **both** arms — the signature of a harness defect, not an arm
+defect. All three were on the verification path:
+
+1. **Root metadata expectation.** The comparison expects the fixture's root
+   (`0755`, mtime 1700000000), but `ordinary_workloads::fixture` builds `"."` through
+   the shared `dir()` helper, which uses `Entry::directory` and therefore `0750`.
+   With the error text extended to print both sides, the failure is unambiguous:
+   `expected mode [00,00,01,e8] mtime [00,00,00,00,65,53,f1,00,00,00,00,00];
+   observed mode [00,00,01,ed] mtime [00,00,00,00,65,53,f1,00,00,00,00,00]` — the
+   published root is the correct `0755` and the expectation was wrong. Repaired by
+   re-pinning the root entry in the `local_snapshot` expectation.
+2. **Evidence directory collision.** `persist_snapshot` refuses to create
+   `canonical-verification` twice, so a three-Commit lifecycle could never verify
+   ("canonical verifier evidence already exists" on C2). Repaired with
+   `verify_step`, which gives each cycle its own
+   `canonical-verification-step-{N}` directory instead of overwriting or colliding.
+3. **No bounded native recipe.** `workspace_sample` and the `sampled` allow-list in
+   `workspace_bench.rs` did not know `local_snapshot`, so verification fell through
+   to the *unbounded* native walk of the reopened mount. Over 25,001 entries that
+   walk died after 0.21 s in a fresh process with `fs-benchmark-workload: No space
+   left on device (os error 28)` — a failure the perf path never exercises (the
+   container overlay and `/dev/shm` both had 124 GB / 64 MB free, and no inotify or
+   shm is involved). Repaired by adding the bounded witness recipe (root plus seven
+   ordinals spanning first/middle/last and the C2-edited range) and adding
+   `local_snapshot` to the allow-list, so the case now gets the sampled native proof
+   the other families use.
+
+All three live behind verification-mode gates (`expected()` is only called under
+`if verification && case.family == "local_snapshot"`), so the perf samples below
+measure the same product behaviour as the earlier builds; the product seals were
+unchanged throughout (`31a42c95…` candidate, `276c5970…` control). The richer
+metadata-mismatch message was kept as a diagnostic improvement.
+
+#### B3 samples collected (ns; the case is one 25k lifecycle with three Commits)
+
+| sample | control workflow | control C1 exec | candidate workflow | candidate C1 exec |
+|---|---|---|---|---|
+| r1 (first cold run per arm) | 9,061,830,292 | 8,022,200,125 | 9,869,486,458 | 8,691,086,875 |
+| r2 (immediately after r1) | **1,912,412,501** | 897,722,917 | 9,663,445,501 | 8,617,677,250 |
+| r3 | 9,698,489,543 | 8,429,252,917 | 9,826,580,669 | 8,800,800,375 |
+| **r4 (final source, both arms)** | 8,913,636,875 | 7,842,096,125 | 10,570,971,626 | 9,420,617,625 |
+
+**Cache stance, stated because it decides this case.** The only cache-sensitive
+phase is C1's create/write: the control measured 8.02 s cold and 0.90 s when the
+run followed another run of the same case back-to-back (r2, a 4.7× artifact), while
+the candidate stayed at 8.6–9.4 s in every run because its sandbox is a fresh
+container each time. The r2 control row is therefore **not poolable** with any cold
+candidate row — it is exactly the "warm cache flatters a measured phase" pattern the
+owner forbade — and the one-sample rule also forbids back-to-back repeats as gate
+input. Gate samples are the first run of the case in each arm's current state,
+with the two arms separated by the intervening rebuild.
+
+#### B3 gate arithmetic (final source, r4 pair)
+
+`time_limit(T0) = T0 + max(0.15*T0, 3 ms)`, `cpu_limit(C0) = C0 + max(0.15*C0, 1 ms)`.
+
+| metric | control | candidate | limit | verdict |
+|---|---|---|---|---|
+| create | 8,175,208 | 10,483,333 | 11,175,208 | PASS |
+| C1 create/write exec | 7,842,096,125 | 9,420,617,625 | 9,018,410,543 | FAIL (+4.5% over limit, +20.1% vs control) |
+| C1 complete Commit | 394,334,750 | 540,147,709 | 453,484,962 | FAIL (+19.1%, +37.0%) |
+| C2 edit exec | 366,879,583 | 364,458,917 | 421,911,520 | PASS |
+| C2 complete Commit | 100,429,459 | 71,814,167 | 115,493,877 | PASS |
+| C3 edit exec | 82,294,875 | 81,366,250 | 94,639,106 | PASS |
+| C3 complete Commit | 82,243,167 | 64,039,542 | 94,579,642 | PASS |
+| visibility | 79,250 | 82,083 | 3,079,250 | PASS |
+| End/cleanup | 37,104,458 | 17,962,000 | 42,670,126 | PASS |
+| whole workflow (3 cycles) | 8,913,636,875 | 10,570,971,626 | 10,250,682,406 | FAIL (+3.1%, +18.6%) |
+| container CPU | 4,780,898,000 | 6,351,426,000 | 5,498,032,700 | FAIL (+15.5%, +32.9%) |
+| host-process CPU | 845,495,750 | 736,620,042 | 972,320,112 | PASS |
+| CPU sum (declared) | 5,626,393,750 | 7,088,046,042 | 6,470,352,812 | FAIL (+9.5%, +26.0%) |
+| peak-sum memory | 133,734,400 | 132,997,120 | 153,794,560 | **PASS** |
+| temporary backing | 28,672 | 25,000 | 1,077,248 | **PASS** |
+
+The two 25k-specific absolute gates hold: transient physical backing is **25,000 B**
+against the **32 MiB** ceiling, and the candidate's peak-sum memory is *below* the
+control's. The four non-passing lines are all inside the owner's one-worker
+tolerance (every delta ≤ 50%), and they are not stable: the r3 pair, collected
+minutes earlier on the same source and the same product seals, passes **every**
+line (workflow 9.827 s vs limit 11.153 s, C1 exec 8.801 s vs 9.694 s, C1 commit
+0.480 s vs 0.511 s, container CPU 5.783 s vs 6.000 s, CPU sum 6.448 s vs 7.172 s).
+The ~16% swing in the candidate/control ratio between r3 and r4 with no product
+change is the host-state spread L14 already documented (±15–30%), and it is wider
+than the 15% allowance this case is measured against.
+
+#### Separate verification — both arms PASS
+
+| verification | status | wall | source | input | image |
+|---|---|---|---|---|---|
+| `verify-CTRL-25k-r4` | **PASS** | 10.82 s | `7bfd6855…` | `e7004eff…` | `sha256:dcc26186…` |
+| `verify-CAND-25k-r4` | **PASS** | 11.89 s | `a3b8441b…` | `b8d655de…` | `sha256:a40d8c0e…` |
+
+Each receipt carries one sampled-canonical verification, the three per-Commit
+canonical verifications (C1/C2/C3 exact bytes, namespace and metadata through
+published content — 25,000 files, 25,001 inodes), one sampled native verification
+over a fresh FUSE reopen, cleanup PASS, and harness identity `daa74be0…`.
+
+#### Applicability after L19
+
+| result | revision | product seal | receipts | verdict |
+|---|---|---|---|---|
+| B1 create-500 | `c0ebedd2d` | `31a42c95…` | `perf-candidate5-…`, `verify-candidate5-…` | all gates PASS except the container-only CPU line (+4.9%); owner waived the commit-phase reading |
+| B2 bulk-create-500 | `c0ebedd2d` | `31a42c95…` | `perf-candidate3-…`, `verify-candidate3-…` | workflow/exec/End/backing PASS; Commit and CPU-sum FAIL against a cache-warm control's limit; sandbox memory bounded (≤2.6 MiB) with the metric ruling still open |
+| B3 25k three-Commit | `2e1cbb4b…` (harness repairs) | `31a42c95…` | `perf-CAND-25k-r4`, `verify-CAND-25k-r4` | **both 25k absolute gates PASS**, verification PASS, four time/CPU lines inside the owner's one-worker tolerance (r3 pair passes them strictly) |
+
+Next: the owner's remaining decisions (B2's sandbox memory metric; whether the
+control must be re-measured under an equal cold stance), then the optional breadth
+pass and the final adoption recommendation. The control worktree stays at
+`/Users/yifanxu/layerfs-v016-control` for paired runs and can be removed on request.
+
+#### L19 addendum — final source configuration (`9e3a4c91…` candidate / `40bb391e…` control)
+
+`cargo +1.96.0 fmt --all` reformatted the three repaired files (CI requires a clean
+`fmt --all --check`), which re-seals both arms, so the pair was re-collected on the
+final source rather than reported from the pre-format build. Samples `perf-CTRL-25k-r5`
+and `perf-CAND-25k-r5`; harness identity still `daa74be0…`, workload `821b2404…`,
+product seals unchanged (`31a42c95…` / `276c5970…`), images
+`sha256:10b6200e…` (candidate) and `sha256:3b8d8db2…` (control).
+
+| metric | control | candidate | limit | verdict |
+|---|---|---|---|---|
+| create | 8,350,708 | 9,192,792 | 11,350,708 | PASS |
+| C1 create/write exec | 7,819,424,208 | 9,204,423,625 | 8,992,337,839 | FAIL (+2.4%, +17.7%) |
+| C1 complete Commit | 383,394,375 | 521,839,917 | 440,903,531 | FAIL (+18.4%, +36.1%) |
+| C2 edit exec | 365,328,291 | 402,329,250 | 420,127,534 | PASS |
+| C2 complete Commit | 98,736,291 | 76,904,333 | 113,546,734 | PASS |
+| C3 edit exec | 86,469,333 | 82,235,208 | 99,439,732 | PASS |
+| C3 complete Commit | 78,614,500 | 67,380,500 | 90,406,675 | PASS |
+| visibility | 88,042 | 113,709 | 3,088,042 | PASS |
+| End/cleanup | 33,510,792 | 16,964,084 | 38,537,410 | PASS |
+| whole workflow (3 cycles) | 8,873,916,540 | 10,381,383,418 | 10,205,004,021 | FAIL (+1.7%, +17.0%) |
+| container CPU | 4,732,720,000 | 6,242,791,000 | 5,442,628,000 | FAIL (+14.7%, +31.9%) |
+| host-process CPU | 840,852,375 | 748,738,417 | 966,980,231 | PASS |
+| CPU sum (declared) | 5,573,572,375 | 6,991,529,417 | 6,409,608,231 | FAIL (+9.1%, +25.4%) |
+| peak-sum memory | 134,623,232 | 130,150,400 | 154,816,716 | **PASS** |
+| temporary backing | 28,672 | 25,000 | 1,077,248 | **PASS** (32 MiB absolute gate also PASS) |
+
+- **Separate verification on this source: both arms PASS** —
+  `verify-CTRL-25k-r5` (wall 11.15 s) and `verify-CAND-25k-r5` (wall 11.96 s), each
+  carrying one sampled-canonical verification, the three per-Commit canonical
+  verifications, one sampled native verification over a fresh FUSE reopen, and
+  cleanup PASS.
+- The five non-passing lines are the same five as the r4 pair and all sit inside the
+  owner's one-worker tolerance (every delta ≤ 50%). They are not stable across the
+  session: the r3 pair (same products, pre-sample-recipe harness) passed **all** of
+  them (workflow 9.827 s vs limit 11.153 s; C1 exec 8.801 s vs 9.694 s; C1 commit
+  0.480 s vs 0.511 s; container CPU 5.783 s vs 6.000 s; CPU sum 6.448 s vs 7.172 s).
+  Between r3 and r5 the candidate slowed ~6% and the control sped up ~8% with no
+  product change; the plausible cause is environmental and asymmetric: the
+  candidate's 25k create/write happens inside the Docker VM (whose disk gained ~10 GB
+  of images today) while the control's happens on the host SSD with its page cache
+  holding the fixture. The B3 time lines therefore carry a larger uncertainty than
+  the 15% allowance this case is measured against, and only the two absolute 25k
+  gates (backing, memory) plus the verification are decisive here.

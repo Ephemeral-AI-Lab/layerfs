@@ -1,4 +1,4 @@
-use super::workspace_common::{Case, Content, Entry, EntryKind, Receipt, MTIME};
+use super::workspace_common::{Case, Content, Entry, EntryKind, Receipt, TreeSample, MTIME};
 use super::{ordinary_workloads, Result};
 
 pub(crate) const FAMILY_ID: &str = "local_snapshot";
@@ -62,8 +62,39 @@ pub(crate) fn fixture(_case: &Case, _seed: u8) -> Result<Vec<Entry>> {
 /// State after `step` Commits: 0 = input, 1 = C1 (all original), 2 = C2
 /// (256 edited), 3 = C3 (restored; payload equality may reuse C1 objects).
 pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>> {
-    let entries = ordinary_workloads::expected(case, seed, step)?;
+    let mut entries = ordinary_workloads::expected(case, seed, step)?;
+    // The scoped case's fixture is the empty namespace carrying the normalized
+    // 0755 root, and the workload normalizes "." to 0755 before every Commit.
+    // The shared ordinary fixture helper defaults directories to 0750, so the
+    // root expectation is re-pinned here; without this the per-Commit metadata
+    // comparison rejects a correctly published 0755 root.
+    for entry in entries.iter_mut() {
+        if entry.path == "." {
+            *entry = root_entry();
+        }
+    }
     Ok(entries)
+}
+
+/// Bounded native witness set for the reopened published root: the 0755 root
+/// plus a deterministic span of ordinals covering the first, middle, last and
+/// C2-edited ranges that C3 restored. The unbounded native walk is not used at
+/// this tier, and the canonical (Store) verification still covers all 25,000
+/// entries.
+pub(crate) fn sample(case: &Case, _seed: u8) -> Result<TreeSample> {
+    if case.id != CASE_ID {
+        return Err("local snapshot sample case".into());
+    }
+    let last = FILE_COUNT - 1;
+    let mut entries = vec![root_entry()];
+    for ordinal in [0usize, 1, 97, 194, FILE_COUNT / 2, last - 1, last] {
+        entries.push(file_entry(ordinal, original_byte(ordinal)));
+    }
+    Ok(TreeSample {
+        entries,
+        absent: Vec::new(),
+        ranges: Default::default(),
+    })
 }
 
 pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<Receipt> {

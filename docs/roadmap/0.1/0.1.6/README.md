@@ -48,8 +48,18 @@ close #149/#150, cut a release tag, or claim the remaining gates:
   is now evidenced: six identical post-fix runs produced container *lifetime*
   peaks of 24.6-189.8 MB while the product's own residency stayed ~2 MB, so the
   frozen harness's only symmetric sandbox number cannot decide the gate.
-- **B3** (25,000 one-byte files) has not been run; the pipeline's strict order
-  still blocks it behind B2.
+- **B3** (`local-snapshot-create-25000-onebyte-v1`, one 25k lifecycle with three
+  Commits) is collected and verified on both arms. Both 25k absolute gates pass —
+  transient backing 25,000 B against the 32 MiB ceiling, and the candidate's
+  peak-sum memory *below* the control's (130.2 MB vs 134.6 MB) — and both separate
+  verifications PASS with per-Commit C1/C2/C3 canonical checks, a sampled native
+  reopen and cleanup. Five time/CPU lines miss the strict +15% allowance on the
+  final pair (+1.7% to +36% over control) while an earlier pair on the same
+  products passed all of them, so those lines sit inside the host-state spread
+  rather than inside a product regression; all are within the owner's one-worker
+  tolerance. Reaching B3 required three harness repairs (root-mode expectation,
+  per-Commit evidence collision, missing bounded native recipe), all on the
+  verification path and none in either product — ledger L19.
 
 See the ledger (L18 in particular) for exact identities, the memory timelines and
 per-phase arithmetic.

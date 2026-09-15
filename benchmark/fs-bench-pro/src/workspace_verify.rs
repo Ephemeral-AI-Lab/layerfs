@@ -212,9 +212,38 @@ pub(crate) fn verify(
     entries: &[Entry],
     evidence: &Path,
 ) -> AnyResult<SnapshotEvidence> {
+    verify_named(store, branch, entries, evidence, "canonical-verification")
+}
+
+/// Multi-Commit lifecycles verify every cycle from its own published head, so
+/// each cycle keeps its own evidence directory instead of colliding with the
+/// single-cycle path. `step` is the 1-based Commit ordinal.
+pub(crate) fn verify_step(
+    store: &LayerStackStore,
+    branch: BranchId,
+    entries: &[Entry],
+    evidence: &Path,
+    step: usize,
+) -> AnyResult<SnapshotEvidence> {
+    verify_named(
+        store,
+        branch,
+        entries,
+        evidence,
+        &format!("canonical-verification-step-{step}"),
+    )
+}
+
+fn verify_named(
+    store: &LayerStackStore,
+    branch: BranchId,
+    entries: &[Entry],
+    evidence: &Path,
+    name: &str,
+) -> AnyResult<SnapshotEvidence> {
     let pinned = store.pin_branch(branch)?;
     let mut result = verify_root(&pinned.reader, pinned.root, entries)?;
-    persist_snapshot(entries, &mut result, evidence)?;
+    persist_snapshot(entries, &mut result, evidence, name)?;
     Ok(result)
 }
 
@@ -222,8 +251,9 @@ pub(crate) fn persist_snapshot(
     entries: &[Entry],
     result: &mut SnapshotEvidence,
     evidence: &Path,
+    name: &str,
 ) -> AnyResult<()> {
-    let evidence = evidence.join("canonical-verification");
+    let evidence = evidence.join(name);
     if evidence.exists() {
         return Err("canonical verifier evidence already exists".into());
     }
@@ -664,7 +694,16 @@ fn verify_metadata(reader: &CoreReader<'_>, root: ObjectId, expected: &Entry) ->
             != Some(expected.mode.to_be_bytes().as_slice())
         || observed.get(b"mtime".as_slice()) != Some(&timestamp)
     {
-        return Err(format!("canonical metadata mismatch: {}", expected.path).into());
+        let absent: &[u8] = b"<absent>";
+        return Err(format!(
+            "canonical metadata mismatch: {} (expected mode {:02x?} mtime {:02x?}; observed mode {:02x?} mtime {:02x?})",
+            expected.path,
+            expected.mode.to_be_bytes(),
+            timestamp,
+            observed.get(b"mode".as_slice()).map(Vec::as_slice).unwrap_or(absent),
+            observed.get(b"mtime".as_slice()).map(Vec::as_slice).unwrap_or(absent),
+        )
+        .into());
     }
     Ok(())
 }
