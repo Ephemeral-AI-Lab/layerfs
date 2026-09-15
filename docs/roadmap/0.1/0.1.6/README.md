@@ -1,5 +1,20 @@
 # v0.1.6: fast mixed development under retained-history load
 
+> **Current replacement experiment, 2026-09-15:** the owner-directed
+> [sandbox-local snapshot specification and implementation plan](sandbox-local-snapshot-spec-and-plan.md)
+> starts from v0.1.5, with local mutable ownership, no pausing/quiescing,
+> one Commit worker, one sample per case/arm, and hard v0.1.5 comparison gates
+> for create-500, then bulk-create-500, then 25,000 files. It explicitly supersedes conflicting hosting,
+> worker and sampling choices for that experiment. The older roadmap below
+> remains historical/broader scope; no experiment or release is claimed complete.
+
+The combined implementation and benchmark sequence is tracked in
+[#151](https://github.com/Ephemeral-AI-Lab/layerfs/issues/151): follow the
+[experimental implementation pipeline](experimental-implementation-pipeline.md).
+#149 supplies requirements/gates; #150 supplies the reviewed connection design.
+Use the [experimental agent handoff prompt](experimental-agent-handoff-prompt.md)
+to assign the combined implementation and three benchmark gates.
+
 Status: implementation roadmap, 2026-09-13. Reviewed by three independent
 agents at the owner's request. No new benchmark is implemented, measured, or
 qualified by these documents. v0.1.5 release work is separate.
@@ -29,6 +44,10 @@ Use the [handoff prompt](handoff-prompt.md) to continue this work.
 
 | Document | Purpose |
 | --- | --- |
+| [Experimental implementation pipeline](experimental-implementation-pipeline.md) | [#151](https://github.com/Ephemeral-AI-Lab/layerfs/issues/151): one execution track from v0.1.5 through local ownership, snapshot/transport/publication proofs, create-500, bulk-create-500 and 25k gates |
+| [Sandbox-local snapshot spec and plan](sandbox-local-snapshot-spec-and-plan.md) | Current replacement experiment: architecture diagrams, owner rules, resource limits, one-sample performance gates, and staged rebuild from v0.1.5 |
+| [Reviewed sandbox/host connection architecture](sandbox-host-connection-architecture.md) | [#150](https://github.com/Ephemeral-AI-Lab/layerfs/issues/150): explicit ASCII before/after diagrams, removal list, minimum remaining messages, service fairness and atomic publication boundaries |
+| [Connection review record](sandbox-host-connection-review.md) | Three independent subagent reviews, ranked findings, source evidence and dispositions; no implementation/performance claim |
 | [Overlay and snapshot rules](overlay-snapshot-rule.md) | Product requirements for non-pausing Commit, shared backing, locality, and resource bounds; not a qualification result |
 | [Snapshot-Isolated Workspace architecture](overlay-snapshot-architecture-design.md) | Reviewed pre-specification diagrams, component boundaries, complexity analysis, gaps, and open decisions |
 | [Snapshot-Isolated Workspace specification](overlay-snapshot-spec.md) | Detailed resulting contracts, selected storage/correspondence mechanisms, interfaces, removal/addition inventory, and existing-benchmark evaluation; explicit correctness/design blockers |

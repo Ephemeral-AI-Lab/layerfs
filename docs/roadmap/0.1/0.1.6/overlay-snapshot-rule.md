@@ -1,5 +1,13 @@
 # Overlay and snapshot rules
 
+> **Scoped successor, 2026-09-15:** use the
+> [sandbox-local snapshot spec and plan](sandbox-local-snapshot-spec-and-plan.md)
+> for the new experiment from v0.1.5. Its explicit overrides permit sandbox-owned
+> temporary backing, compact resident metadata, one Commit compute worker and
+> one sample per case/arm. Non-pausing behavior, stable live identity, snapshot
+> correctness and canonical encoding remain required. The text below records
+> the earlier host-backed design and is retained for historical context.
+
 Status: owner-discussed requirements, 2026-09-14. Foundation for the next
 implementation specification; not an implemented architecture or a qualification
 claim. Related product work: [#123](https://github.com/Ephemeral-AI-Lab/layerfs/issues/123).
