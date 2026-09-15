@@ -109,10 +109,14 @@ the report.
 
 ## 4. Code, build and docs
 
-- CI-exact before pushing: `cargo +1.96.0 fmt --all --check` and
-  `cargo +1.96.0 clippy --workspace --locked -- -D warnings`; run the affected
-  tests. Keep the tree clean for sealed builds — a dirty source seal is recorded
-  and cannot be compared against a sealed arm.
+- **This repository runs no CI** (owner decision; GitHub Actions is disabled and
+  `.github/workflows/ci.yml` removed — see ledger L21). The former checks are now a
+  local pre-push gate: run **`tools/preflight.sh`** (rustfmt 1.96 `--all --check`,
+  tools unit tests, the workspace fast suite under 1.85.1, clippy
+  `--workspace --locked -- -D warnings`, plus the benchmark harness tests). CI being
+  off is not permission to skip them, and no push may claim "CI green".
+- Keep the tree clean for sealed builds — a dirty source seal is recorded and cannot
+  be compared against a sealed arm.
 - No new dependencies when an existing crate already provides the capability;
   keep platform-specific code `cfg`-gated and behind a no-op fallback.
 - Never claim durability the contract does not provide: no `fsync`/`fdatasync`/

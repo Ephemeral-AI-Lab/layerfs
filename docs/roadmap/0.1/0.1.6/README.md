@@ -64,6 +64,11 @@ close #149/#150, cut a release tag, or claim the remaining gates:
 See the ledger (L18–L20 in particular) for exact identities, the memory timelines
 and per-phase arithmetic.
 
+**Repository checks.** GitHub Actions is disabled for this repository by owner
+decision (ledger L21) and `.github/workflows/ci.yml` is removed. The former CI steps
+plus the benchmark harness tests now run from `tools/preflight.sh`, which is the
+pre-push gate; "CI green" claims in earlier ledger entries are historical.
+
 **Next campaign.** The full existing suite is tracked in
 [#152](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152): 8 family groups in the
 same phase order the v0.1.5 finalization campaign used, one sample per case per arm, a

@@ -1056,3 +1056,24 @@ this as a release decision: the remaining work is the optional breadth pass, a
 harness field for sandbox *process* memory if the B2 memory line is to be gated
 rather than reported, a declared repeat policy for the +15% lines, multi-Workspace
 isolation measurement, and the unresolved dirty-mmap visibility research.
+
+### L21 — 2026-09-17: owner directive — disable CI permanently; local preflight replaces it
+
+- Directive: disable CI, permanently.
+- Actions: the in-flight run for `7b9b9df5e` was cancelled, GitHub Actions was
+  disabled for the repository (`gh api -X PUT
+  repos/Ephemeral-AI-Lab/layerfs/actions/permissions -F enabled=false` →
+  `{"enabled":false}`), and `.github/workflows/ci.yml` was removed from the tree so
+  the repository no longer defines a workflow.
+- Consequence: nothing runs on push. The checks that workflow performed are preserved
+  as a local pre-push gate, `tools/preflight.sh` — rustfmt 1.96
+  `fmt --all --check`, the `tools` unit tests, the workspace fast suite under
+  `RUSTUP_TOOLCHAIN=1.85.1`, clippy `--workspace --locked -- -D warnings`, and (added
+  here, because #152 will keep repairing benchmark-harness code) the
+  `benchmark/fs-bench-pro/shared` tests. `AGENTS.md` §4 now states that the repository
+  runs no CI and that no push may claim "CI green".
+- Historical status: the "CI green" statements in L16, L18, L19 and L20 describe the
+  runs that existed when they were written; they are not claims about the repository's
+  current automation, which is now none.
+- Reversal, if ever wanted: re-enable Actions in repository settings and restore the
+  workflow from git history (`git show 7b9b9df5e:.github/workflows/ci.yml`).
