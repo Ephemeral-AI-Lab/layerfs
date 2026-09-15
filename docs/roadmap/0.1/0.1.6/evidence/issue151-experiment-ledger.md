@@ -1243,3 +1243,52 @@ dependency/kernel patches. No registered selection is on this path: the register
 families write through ordinary FUSE/SDK routes, which are in the frontier.
 
 Group report: #152 comment 5675466677.
+
+### L24 — 2026-09-18: #152 G3 workspace-locality/churn (34 PASS + 3 REUSED-FROM) and the rewrite-route file-cache bound
+
+Collection identity as L22/L23. `--seed 1 --setup clone --perf-fast
+--collection-mode`, 600/630/900 s, one sample per cell.
+
+34 fresh cells: **34/34 comparative PASS, 34/34 cleanup PASS, 34/34 proofs PASS.**
+Worst ratios `workspace-clean-commit-1-compact-v2` 1.66× (+6.98 ms) and
+`workspace-clean-commit-10-compact-v2` 1.62× (+7.32 ms), both accepted by the
+< 10 ms absolute test; everything else ≤ 1.22×, 27 of 34 faster than v0.1.5.
+Slowest complete command 12 s. Absolute gate `tiny-create-100-mixed-v4 < 1 s`
+measured **61.41 ms**. B1 `tiny-create-500-mixed-v4` 244.35 ms (1.01×), B2
+`tiny-bulk-create-500-mixed-v3` 4.755 s (0.83×), B3
+`local-snapshot-create-25000-onebyte-v1` 10.381 s vs control `perf-CTRL-25k-r5`
+8.874 s (1.17×) — all three **REUSED-FROM** their banked receipts, not re-run.
+
+#### Guardrail 4 failure on the rewrite route (diagnostic, not a gate sample)
+
+cgroup `memory.stat` sampled at ~50 ms during selected cells (L18 method):
+
+| cell | payload | file peak | anon peak | current peak |
+|---|--:|--:|--:|--:|
+| dense-rewrite-1-compact-v2 | 1 MiB | 8,192 | 0.66 MB | 5.15 MB |
+| dense-rewrite-10-compact-v2 | 10 MiB | 12,304,384 | 3.98 MB | 21.70 MB |
+| dense-rewrite-100-mixed-v4 | 100 MiB | 108,109,824 | 18.78 MB | 132.77 MB |
+| dense-rewrite-500-mixed-v4 | 500 MiB | **529,182,720** | 33.82 MB | 573.82 MB |
+| tiny-bulk-create-500-mixed-v3 | 500 MiB | 2,412,544 | 12.48 MB | 24.40 MB |
+| tiny-create-100-mixed-v4 | 100 MiB | 8,192 | 3.69 MB | 3.10 MB |
+| workspace-clean-commit-500-mixed-v4 | 500 MiB | 4,096 | 0.38 MB | 2.99 MB |
+
+`file` grows at ~1.03× the payload on the rewrite route; `shmem = 0`,
+`file_writeback = 0`, `file_dirty ≤ 1 MiB` throughout, and the charge collapses to
+4 KB at teardown, so the pages are the workspace's. Mechanism: create handles are
+returned with `FOPEN_DIRECT_IO` (`filesystem.rs:1430`) which is why every
+create-shaped cell is ≤ 8 KB, while a rewrite of a pre-existing file uses an
+ordinary writable open that does not bypass the page cache.
+
+**Control parity:** the reconstructed v0.1.5 control measured 525,750,272 B
+(501.4 MiB) on the identical cell — parity with the candidate's 504.7 MiB
+(+0.7 %). This is therefore **not** a v0.1.6 regression; L18's repair covers the
+transfer path (reproduced: 2.3 MiB vs the recorded ≤ 2.6 MiB) and never covered
+the rewrite route. Not repaired: the only bounding mechanism is the plan's
+§9.1 direct-I/O-for-writable-opens proposal, explicitly *"PROPOSED, not adopted"*,
+which removes supported writable shared mappings — a declared-architecture scope
+decision this campaign may not take. Reported, not excused (AGENTS.md §1).
+
+Diagnostics: `benchmark-results/issue152/g3-diag/` (7 candidate timelines +
+`-memdiag` receipts) and `/Users/yifanxu/layerfs-v016-control/benchmark-results/issue152-control/`.
+Group report: #152 comment 5675608355.
