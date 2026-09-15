@@ -49,6 +49,17 @@ Registered proof-only selections: `dedup-cdc-boundaries-proof` (PASS) and
 **Nothing was dropped, nothing was silently promoted, and no failing cell was
 omitted from a group report.**
 
+**Post-campaign update (2026-09-19).** The 6 `FAIL — diagnosed fault-injection
+proofs` are **repaired**: `workspace_reliability` is 27/27 PASS on source
+`8308cd8e…` / product `970964e9…` (commit `ac729dfeb`, ledger `L30`, report
+[`issue152-reliability-fix-report.md`](issue152-reliability-fix-report.md)). The 6
+`FAIL — diagnosed material regression` rows stay FAIL as recorded and are now
+**owner-accepted as recorded** (the G6 single-worker diagnosis; keyword
+`LAYERFS_CONSTRUCTION_WORKERS=1`), as is the earlier 2.7 s cold-Init waiver. The
+remaining rows and the limitations in §7 are unchanged, and #152 is closed as an
+owner act — this is still not a release claim, and #151 keeps the experiment's
+gates.
+
 ## 3. Family → per-test
 
 196 collected cells. `REUSED-FROM` rows (B1/B2/B3) and the non-collected

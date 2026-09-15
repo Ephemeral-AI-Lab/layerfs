@@ -1729,3 +1729,19 @@ Commands and receipts: `benchmark-results/issue152/fix/` (27 final receipts plus
 `provisional-329a33bc/`, `provisional-4f82c19a/`, `provisional-b4c4afee/` — the
 intermediate attempts, kept because receipts are append-only).
 Group report: [#152 comment 5683593603](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152#issuecomment-5683593603).
+
+#### Owner decision and issue closure
+
+#152 closed at the owner's direction on 2026-09-15
+([closing record, comment 5683799190](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152#issuecomment-5683799190)),
+as an owner act: the issue's own charter forbids closure *as a campaign
+consequence*. The decision recorded with it is **"the diagnosed slowness is
+acceptable"** — the six G6 dedup single-worker time regressions (1.50–1.65×, one
+cause: `LAYERFS_CONSTRUCTION_WORKERS=1`) and the earlier `namespace-100000` 2.7 s
+cold-Init waiver. Those rows stay **FAIL as recorded** with the decision attached;
+no row was re-labelled PASS, and the closure comment names the rows the decision
+does *not* cover (the ~1.03× rewrite-route file cache — a resource guardrail at
+v0.1.5 parity, not a timing miss — the kernel-dirty shared-mmap limitation, the
+dead host write-spool metric and §5.1's failed-append dead range above). No merge,
+tag or release follows; #151 keeps the experiment's create-500 / bulk-create-500 /
+25k gates.

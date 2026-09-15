@@ -207,9 +207,15 @@ LAYERFS_CONSTRUCTION_WORKERS=1 python3 benchmark/fs-bench-pro/verify-selected.py
 the intermediate attempts (including the two receipts that exposed the
 receipt-after-consumption bug), kept because receipts are append-only.
 
-## 7. Group report
+## 7. Group report and closure
 
 Posted on #152: [#152 comment 5683593603](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152#issuecomment-5683593603).
+#152 was then closed at the owner's direction
+([comment 5683799190](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152#issuecomment-5683799190)),
+which also records the owner's decision that the diagnosed slowness is acceptable:
+the six G6 dedup single-worker time regressions stay **FAIL as recorded** with that
+decision attached, and the rows the decision does not cover are named there
+explicitly. No merge, tag or release follows; #151 keeps the experiment's gates.
 
 ## 8. Still open (not this work item's scope)
 
