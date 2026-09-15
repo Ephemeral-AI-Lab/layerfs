@@ -1731,11 +1731,15 @@ impl FilesystemPort for LiveOwner {
             self.exclude_prefill(node).await?;
             let prepared = self.state()?.prepare_truncate(node, size).map_err(core)?;
             if let Some(prepared) = prepared {
-                let mut check = vec![wire::CHECK, 0];
-                for range in prepared.backing_ranges() {
-                    wire::u64_out(&mut check, range.segment.id().0);
-                }
-                self.0.backing.call(&check).await?;
+                // The payload backing is sandbox-owned, so a prepared edit is
+                // applied with no host payload traffic at all: the window of
+                // still-referenced segments is expressed by the local spool's
+                // `BackingRef` graph, not by a `CHECK` frame. The immutable-base
+                // service does not serve the removed payload opcodes
+                // (`layerfs-workspace/src/live_backing.rs`), so sending one here
+                // would fail every size-changing `truncate` with `EINVAL` and
+                // break `open(O_TRUNC)` — the write path applies edits the same
+                // way.
                 self.state()?.apply_edit(prepared).map_err(core)?;
             }
             Ok(())
@@ -3945,6 +3949,34 @@ mod immutable_acquisition_tests {
             .immutable_reads()
             .insert(owner.0.read_scope, root, 0, b"old".to_vec());
         (owner, file, root)
+    }
+
+    #[test]
+    fn truncate_applies_locally_without_a_removed_host_payload_check() {
+        let runtime = LiveRuntime::new().unwrap();
+        let backing = Arc::new(Mutex::new(BarrierBacking::default()));
+        let owner = barrier_owner(&runtime, backing.clone());
+        let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
+        runtime
+            .block_on(owner.write_owned(file, 0, b"abcdef"))
+            .unwrap();
+        // A size-changing `truncate` prepares a local edit. It must not reach the
+        // immutable-base service: that service removed the payload opcodes and
+        // rejects `CHECK`, so a host frame here turns `truncate` — and therefore
+        // `open(O_TRUNC)` — into `EINVAL`.
+        runtime
+            .block_on(owner.truncate_async(file, 3))
+            .expect("local truncate");
+        assert_eq!(
+            runtime.block_on(owner.read_owned(file, 0, 6)).unwrap(),
+            b"abc"
+        );
+        assert_eq!(
+            backing.lock().unwrap().seen,
+            vec![wire::SEED],
+            "truncate performs no host payload traffic"
+        );
+        owner.spool().destroy().unwrap();
     }
 
     #[test]
