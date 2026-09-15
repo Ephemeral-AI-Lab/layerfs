@@ -24,7 +24,7 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
 |---|---|
 | issue **#152** | scope, the 8 groups, budgets (15 s, exceptions 25 s), acceptance (<50 % or <10 ms), #122 exclusion, reporting protocol |
 | this prompt | the execution protocol below |
-| issue **#125** (closed, superseded) | the original objective and the #122 exclusion reference; the JSON draft it names is **not** in the tree — confirm the exclusion set with the owner instead of inventing one |
+| issue **#125** (closed, superseded) | the original objective and the #122 exclusion reference; the JSON draft it names is **not** in the tree — read #122's own scope, write down the exclusion set you are applying, and record that reading on #152 |
 | [`docs/roadmap/0.1/0.1.6/experimental-implementation-pipeline.md`](experimental-implementation-pipeline.md) | the I0–I6 + B1–B3 checklist and exit criteria this campaign closes |
 
 ### The architecture you are validating
@@ -74,12 +74,14 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
   and pool the warm row, never measure one arm warm and the other cold, never move work
   outside a timer, never inflate a timeout or change worker counts to pass.
 - **Budgets:** preparation is reused, not repeated; a performance selection's complete
-  command is **≤ 15 s** with a small declared owner-approved exception list up to
-  **25 s**; verification typically **< 15 s** inside a **60 s hard budget**.
-- **Acceptance (not an optimization campaign):** a comparative cell is accepted when it
-  is **< 50 % worse** than its v0.1.5 comparator **or** the absolute delta is **< 10 ms**.
-  Registered absolute targets stay pass/fail. Do not chase micro-optimizations and do
-  not "fix" an already-accepted cell.
+  command is **≤ 15 s**, and a small number of declared members may take up to **25 s** —
+  declare the exception in that group's report with the measured wall time instead of
+  waiting for sign-off; verification typically **< 15 s** inside a **60 s hard budget**.
+- **Acceptance — this is not an optimization campaign.** Its purpose is to have **all bugs
+  fixed and authentic results**. A comparative cell is accepted when it is **< 50 % worse**
+  than its v0.1.5 comparator **or** the absolute delta is **< 10 ms**; registered absolute
+  targets stay pass/fail. Do not chase micro-optimizations and do not "fix" an accepted
+  cell — spend the effort on defects, correctness and honest numbers instead.
 - **Never patch, vendor or locally modify a third-party crate/package**; builds stay
   `--locked` (AGENTS.md §4).
 - **No CI exists.** Run `tools/preflight.sh` before every push; a push may never claim
@@ -94,24 +96,25 @@ one continuous effort. There is no partial campaign, no "collected a few groups 
 paused", and no group left open for someone else.
 
 - **Drive every open item to a terminal disposition** and then keep going. Terminal means
-  PASS, WARN, FAIL (diagnosed, with a recorded escalation or owner waiver), REUSED-FROM or
-  NOT_RUN_OPTIONAL. "Not started", "in progress", "flaky" and "unexplained" are not
+  PASS, WARN, FAIL (diagnosed, with the root cause and your decision recorded), REUSED-FROM
+  or NOT_RUN_OPTIONAL. "Not started", "in progress", "flaky" and "unexplained" are not
   terminal.
 - **Prefer fixing over parking.** An S2 FAIL is a work item: reproduce it in the smallest
   case, find the root cause, fix it, run `tools/preflight.sh`, re-seal, re-run the affected
-  cases, and continue. A FAIL stays terminal only when its cause is understood and it has
-  been escalated to the owner (or waived).
-- **A blocker does not stop the campaign.** If a group is waiting on something only the
-  owner can supply (G8's sealed `historical_access` store, the `repository_history`
-  opt-in) or on an escalation decision (S0/S1), record the blocker precisely on #152,
-  continue with the remaining groups, and return to the blocked group when the input
-  arrives.
+  cases, and continue. A FAIL stays terminal only when its cause is understood, the fix is
+  either landed or demonstrably out of reach, and your reasoning is recorded on #152.
+- **A blocker does not stop the campaign, and you do not wait for anyone.** Look for what
+  you need first (the prepared-input cache, the #120 evidence, the archived tags, the
+  control worktree, the recorded comparator rows). If something is genuinely unavailable —
+  for example a sealed `historical_access` store you cannot find — record the case as
+  `NOT_RUN` with the exact reason, continue with the remaining groups, and revisit it if
+  the input turns up later.
 - **Do not stop early to report a favourable subset**, do not stop because the numbers
   look good, and do not stop to optimize: acceptance is already bounded (<50 % or <10 ms),
   so an accepted cell is done and the next group is the work.
 - The campaign ends only with the final report described in "Definition of done": all
   groups posted, every selection terminal, bug ledger, architecture-guardrail evidence,
-  resource tables, limitations and open owner decisions.
+  resource tables, the limitations that remain, and the decisions you made and why.
 
 ## Working protocol — group by group
 
@@ -142,7 +145,7 @@ Candidate: <source seal> @ <commit>; product <seal>; harness <id>; workload <has
 Absolute targets: <target → measured → PASS/FAIL>
 Architecture guardrails: <per-item result + numbers, see below>
 Bugs found & fixed: <commit — one-line RCA — impact set re-run>
-Gaps / omissions / escalations: <none, or exactly what and why>
+Gaps / omissions / decisions: <none, or exactly what you decided and why>
 ```
 
 ## Bug policy — expect bugs, fix them fast (requirements 2 and 3)
@@ -155,11 +158,15 @@ a verdict, and a passing gate is not proof that the mechanism behind it is sound
   tier), read the code path, fix the cause, add or extend a focused test, run
   `tools/preflight.sh`, commit, re-seal, and **re-run only the affected cases** (impact
   set by call path, not by family). Report the fix, its RCA, and the re-run.
-- Classification: **S0** correctness (stop collection, freeze the artifact, escalate
-  immediately, no waiver), **S1** resource/custody/lifecycle (stop that family, escalate),
-  **S2** gate miss (keep collecting, mark `FAIL — unrepaired` until fixed or waived),
-  **S3** permitted WARN, **H** harness/test defect (product fine → fix it in `benchmark/`,
+- Classification: **S0** correctness (stop that case immediately, freeze the artifact and
+  the reproducer, fix the defect before collecting anything else on that path — a
+  correctness bug is never waivable and never parkable), **S1** resource/custody/lifecycle
+  (stop that family, fix the leak/bound, re-run the affected cells), **S2** gate miss
+  (keep collecting the rest of the group, mark the cell `FAIL` until it is fixed), **S3**
+  permitted WARN, **H** harness/test defect (product fine → fix it in `benchmark/`,
   re-seal both arms, re-run only that case; never touch the product for an H).
+  Every class ends with a fix and a re-run of the impact set, or with a fully diagnosed
+  FAIL carrying its RCA on #152 — never with an open question left for someone else.
 - A fix that changes a case that already passed **invalidates that case** — re-run it and
   say so.
 - If a verification fails *identically in both arms* with a structural message, it is
@@ -215,19 +222,36 @@ result with evidence; a claim without evidence is not a result.
   historical receipt, never present a diagnostic row as a qualifying one.
 - The same facts go into the ledger, with identities and the exact reproduction command.
 
-## Escalate immediately (do not decide alone)
+## You own the outcome — decide and fix, do not hand anything back
 
-- Any **S0/S1** finding; any **absolute-target miss**; any selection that cannot fit the
-  25 s exception budget.
-- Owner-supplied inputs for **G8**: the sealed full157 Store for `historical_access`, and
-  explicit opt-in for the three `repository_history` profiles (`NOT_RUN_OPTIONAL`).
-- Anything that would require changing `crates/` in a way that invalidates the frozen
-  candidate beyond a local bug fix.
+There is no escalation path in this campaign. You are expected to use your best
+engineering judgement, decide, and land the fix yourself. The owner reads the group
+reports and can object afterwards; that is not a reason to pause.
+
+- **Decide with evidence.** For every defect: smallest reproducer, root cause in the code,
+  the fix, a focused test that would have caught it, `tools/preflight.sh`, commit, re-seal,
+  re-run the affected cells, and one paragraph on #152 saying what you found and why the
+  fix is the right one.
+- **Prefer the smallest correct fix** over a redesign. If the defect exposes a genuine
+  design problem (for example unbounded state, a lost update, non-atomic publication),
+  fix the design point rather than the symptom — but keep the frozen candidate's declared
+  architecture (sandbox-owned snapshot, host-owned canonical publication, one construction
+  worker) and do not widen scope beyond what the campaign needs.
+- **Ambiguity is yours to resolve.** If a rule seems to conflict (for example a budget
+  versus a qualifying row), pick the reading that keeps the evidence honest, state the
+  reading on #152, and continue. Prefer `NOT_RUN`/`WARN` with a clear reason over a
+  fabricated or optimistically labelled result.
+- **What you must never do without asking:** change the declared architecture, relax the
+  no-warm-cache rules, patch a third-party package, or claim a result you do not have.
+  Anything else in the way of fixing defects and finishing the campaign is your call.
+- **Optimization is explicitly not the goal.** Fix bugs, report authentic numbers, keep
+  storage and RAM bounded and safe; a cell that already meets the bounded acceptance
+  (<50 % or <10 ms) is finished.
 
 ## Definition of done
 
 All 8 groups posted on #152; every registered selection terminal; a final report with the
 `family → per-test` table, the bug ledger (commit, RCA, impact set re-run), the
 architecture-guardrail evidence above, resource tables (transient backing, canonical
-Store growth, memory domains), the limitations that remain, and any owner decision still
-open. Passing this campaign does not merge, close or release anything.
+Store growth, memory domains), the limitations that remain, and the decisions you made.
+Passing this campaign does not merge, close or release anything.

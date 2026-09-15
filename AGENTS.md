@@ -113,12 +113,13 @@ the report.
 7. **Fit the budgets.** Preparation is fast and reusable — prepared inputs are
    acquired once and reused with identity checks, and repeated setup before a
    sample is forbidden. A performance selection's **complete command** (product
-   timer + container lifecycle + cleanup) is **≤ 15 s**, with a small, declared,
-   owner-approved exception list allowed up to **25 s**. Verification is typically
+   timer + container lifecycle + cleanup) is **≤ 15 s**, with a small, declared
+   exception list allowed up to **25 s** (declare it in the group report with the
+   measured wall time; no sign-off blocks the run). Verification is typically
    **under 15 s** within a **60 s hard budget**. A selection that cannot fit is
-   reused from a qualifying receipt with its evidence cited, or escalated as an
-   expensive-qualification exception for an owner decision — never made to fit by
-   moving work outside the timer, enlarging a timeout, or shrinking the workload.
+   reused from a qualifying receipt with its evidence cited, or recorded as `NOT_RUN`
+   with the measured wall time and the reason — never made to fit by moving work
+   outside the timer, enlarging a timeout, or shrinking the workload.
 
 ## 4. Code, build and docs
 
