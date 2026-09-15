@@ -33,8 +33,9 @@ pub(crate) use layerfs_workspace_core::ResourcePolicy;
 pub use lifecycle::WorkspaceState;
 #[cfg(feature = "test-instrumentation")]
 pub use lifecycle::{
-    arm_verification_fault, take_verification_fault_receipt, VerificationFault,
-    VerificationFaultReceipt, VerificationWorkspaceState,
+    arm_verification_fault, take_verification_fault_receipt, RemoteVerificationFault,
+    RemoteVerificationFaultReceipt, VerificationFault, VerificationFaultReceipt,
+    VerificationWorkspaceState,
 };
 pub use output::{OutputPage, OutputReader};
 pub use reconcile::{

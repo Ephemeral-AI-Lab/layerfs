@@ -7,7 +7,8 @@ use layerfs_layerstack_store::{
 };
 use layerfs_sdk::{ExecutionId, SdkError, WorkspaceError};
 use layerfs_workspace::{
-    arm_verification_fault, take_verification_fault_receipt, VerificationFault,
+    arm_verification_fault, take_verification_fault_receipt, RemoteVerificationFault,
+    VerificationFault,
 };
 use std::time::Duration;
 
@@ -581,13 +582,16 @@ pub(crate) fn run(
             "short-spool-write" | "deferred-nospace" => {
                 workload(&client, session.id, &case, "prepare-failure", 0)?;
                 live(&client, session.id, &case, "done", 0)?;
+                // v0.1.6 moved the payload append into the sandbox, so these
+                // two faults are armed in the owner that performs the append.
+                // The host process cannot consume them any more.
                 let fault = if case.kind == "short-spool-write" {
-                    VerificationFault::ShortAppend
+                    RemoteVerificationFault::ShortAppend
                 } else {
-                    VerificationFault::NoSpace
+                    RemoteVerificationFault::NoSpace
                 };
                 let state_before = client.verification_workspace_state(session.id)?;
-                arm_verification_fault(branch, fault)?;
+                client.arm_remote_verification_fault(session.id, fault)?;
                 let out = client.exec_workspace_session(
                     session.id,
                     NonEmpty::new(argv(&case, "fail-write", 0))?,
@@ -613,7 +617,13 @@ pub(crate) fn run(
                         );
                     }
                 }
-                verify_fault(fault)?;
+                let receipt = client
+                    .take_remote_verification_fault_receipt(session.id)?
+                    .ok_or("missing sandbox append fault receipt")?;
+                record("remote-fault-reachability", receipt);
+                if receipt.fault != fault || receipt.hit_count != 1 {
+                    return Err("sandbox append fault never reached exactly once".into());
+                }
                 let state_after = client.verification_workspace_state(session.id)?;
                 record("write-rollback-accounting", (&state_before, &state_after));
                 if state_before.spool_segment_bytes != state_after.spool_segment_bytes

@@ -10,6 +10,10 @@ default = ["host"]
 host = ["dep:fuser", "live"]
 proxy = ["dep:fuser", "live"]
 live = ["dep:tokio"]
+# Verification-only surface. A released daemon is built without it, so it can
+# neither arm nor consume an injected append failure; the benchmark image
+# builds `layerfs-fuse` with this feature for the reliability proofs.
+test-instrumentation = []
 
 [dependencies]
 tokio = { version = "=1.48.0", default-features = false, features = ["rt-multi-thread", "sync", "net", "io-util", "time", "macros"], optional = true }

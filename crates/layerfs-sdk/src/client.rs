@@ -39,6 +39,29 @@ impl Client {
         Ok(self.0.workspaces.verification_workspace_state(id)?)
     }
 
+    /// Arm one one-shot append fault in the sandbox owner of a sandbox-owned
+    /// workspace (the payload append happens there, not in this process).
+    #[cfg(feature = "test-instrumentation")]
+    pub fn arm_remote_verification_fault(
+        &self,
+        id: WorkspaceId,
+        fault: layerfs_workspace::RemoteVerificationFault,
+    ) -> Result<()> {
+        Ok(self.0.workspaces.arm_remote_verification_fault(id, fault)?)
+    }
+
+    /// Take the sandbox owner's append-fault receipt.
+    #[cfg(feature = "test-instrumentation")]
+    pub fn take_remote_verification_fault_receipt(
+        &self,
+        id: WorkspaceId,
+    ) -> Result<Option<layerfs_workspace::RemoteVerificationFaultReceipt>> {
+        Ok(self
+            .0
+            .workspaces
+            .take_remote_verification_fault_receipt(id)?)
+    }
+
     #[cfg(feature = "test-instrumentation")]
     pub fn verification_disconnect_workspace_execution(
         &self,

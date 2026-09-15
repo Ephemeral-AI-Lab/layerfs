@@ -61,6 +61,11 @@ pub struct Workspace {
     /// acknowledged by the sandbox. Retained and re-delivered exactly; a
     /// retry never recaptures newer state as the old attempt.
     pub(crate) pending_completion: Option<crate::remote_commit::PendingCompletion>,
+    /// A captured sandbox generation whose attempt has not been completed or
+    /// cancelled. The sandbox resolves one attempt at a time, so a Commit that
+    /// fails after capture leaves this here for the supported retry to re-drive
+    /// instead of leaving the workspace unable to capture again.
+    pub(crate) pending_attempt: Option<crate::snapshot_input::CaptureSummary>,
 }
 
 impl Workspace {
@@ -178,6 +183,7 @@ impl Workspace {
             pending_stage: None,
             pending_publication: None,
             pending_completion: None,
+            pending_attempt: None,
             remote: None,
         })
     }

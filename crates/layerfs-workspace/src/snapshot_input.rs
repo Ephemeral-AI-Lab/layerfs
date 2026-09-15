@@ -26,6 +26,7 @@ pub(crate) struct SnapshotToken {
     pub generation: u64,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct CaptureSummary {
     pub token: SnapshotToken,
     pub frontier_len: u64,

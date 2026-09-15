@@ -37,9 +37,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
  && rustup target add "$target" \
  && find Cargo.toml Cargo.lock crates tools benchmark/fs-bench-pro -type f -exec touch {} + \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
-      -p layerfs-daemon \
+      -p layerfs-daemon --features test-instrumentation \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
-      -p layerfs-fuse --no-default-features --features proxy \
+      -p layerfs-fuse --no-default-features --features proxy,test-instrumentation \
  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon \
  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
 
@@ -66,11 +66,12 @@ FROM build AS runtime-check
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,id=layerfs-bench-rust-1.85.1-${TARGETARCH},target=/src/target,sharing=locked \
     find Cargo.toml Cargo.lock crates tools benchmark/fs-bench-pro -type f -exec touch {} + \
- && cargo test --locked --jobs 2 -p layerfs-daemon --bin layerfs-daemon \
+ && cargo test --locked --jobs 2 -p layerfs-daemon --features test-instrumentation \
+      --bin layerfs-daemon \
  && cargo check --locked --jobs 2 -p layerfs-workspace --features host-fuse \
- && cargo test --locked --jobs 2 -p layerfs-fuse --features proxy,live \
+ && cargo test --locked --jobs 2 -p layerfs-fuse --features proxy,live,test-instrumentation \
       --test proxy owned_write_reply_releases_receive_loop_and_completes_once \
- && cargo test --locked --jobs 2 -p layerfs-fuse --features proxy,live \
+ && cargo test --locked --jobs 2 -p layerfs-fuse --features proxy,live,test-instrumentation \
       --lib
 
 FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4

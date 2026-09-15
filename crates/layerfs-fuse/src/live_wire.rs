@@ -602,6 +602,23 @@ pub const SNAP_CANCEL: u8 = 49;
 pub const SNAP_RECORDS: u8 = 50;
 pub const SNAP_READ: u8 = 51;
 
+// Host-armed one-shot verification faults for the sandbox-owned payload path.
+// v0.1.6 moved the payload append into the sandbox, so the injection that
+// proves "a failed append acknowledges nothing and applies nothing" has to be
+// armed and consumed where the append now happens. Built only under
+// `test-instrumentation`, so a released daemon carries neither the frames nor
+// the injection points.
+#[cfg(feature = "test-instrumentation")]
+pub const VERIFICATION_FAULT_NONE: u64 = 0;
+#[cfg(feature = "test-instrumentation")]
+pub const VERIFICATION_FAULT_NO_SPACE: u64 = 1;
+#[cfg(feature = "test-instrumentation")]
+pub const VERIFICATION_FAULT_SHORT_APPEND: u64 = 2;
+#[cfg(feature = "test-instrumentation")]
+pub const VERIFICATION_FAULT: u8 = 52;
+#[cfg(feature = "test-instrumentation")]
+pub const VERIFICATION_FAULT_RECEIPT: u8 = 53;
+
 /// Snapshot completion record: the canonical re-base of one covered node,
 /// applied only while the live node still holds its captured revision.
 pub const COMPLETE_RECORD_BYTES: usize = 104;

@@ -370,6 +370,15 @@ impl Workspace {
         input: &crate::snapshot_input::FrozenRemoteInput,
         worker_limit: usize,
     ) -> Result<PreparedCommit> {
+        // The one-shot candidate-build failure is a property of "building this
+        // workspace's candidate", not of the materialized frontier builder:
+        // both routes honour the flag so their fault surface cannot drift.
+        #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+        if INJECT_CANDIDATE_FAILURE.with(|inject| inject.replace(false)) {
+            return Err(StorageError::Integrity(
+                "injected Workspace candidate failure",
+            ));
+        }
         let canonical_nodes: std::collections::HashMap<
             layerfs_content::tree::inode::InodeId,
             layerfs_workspace_core::NodeId,

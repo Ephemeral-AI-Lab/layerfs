@@ -331,12 +331,19 @@ impl Workspace {
         self.clear_spool()?;
         self.pending_publication = None;
         self.pending_checkpoint = None;
+        self.pending_attempt = None;
         self.state = WorkspaceState::Discarded;
         Ok(())
     }
 
     pub(crate) fn end_clean(&mut self) -> Result<()> {
-        if self.pending_stage.is_some() || self.pending_publication.is_some() {
+        if self.pending_stage.is_some()
+            || self.pending_publication.is_some()
+            || self.pending_attempt.is_some()
+        {
+            // An unsettled sandbox attempt (a captured generation this route
+            // can still re-drive) is unfinished publication state, not an
+            // empty workspace.
             return Err(StorageError::InvalidInput("workspace completion pending"));
         }
         self.clear_spool()?;
@@ -357,6 +364,44 @@ impl Workspace {
 }
 
 impl Workspaces {
+    /// Arm one one-shot append fault in the sandbox owner. The payload append
+    /// happens there for a sandbox-owned workspace, so the injection that
+    /// proves a failed append acknowledges nothing is consumed there.
+    #[cfg(feature = "test-instrumentation")]
+    pub fn arm_remote_verification_fault(
+        &self,
+        id: WorkspaceId,
+        fault: RemoteVerificationFault,
+    ) -> WorkspaceResult<()> {
+        let worker = self.worker(id)?;
+        let remote = worker
+            .remote
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .clone()
+            .ok_or(WorkspaceError::InvalidPlacement)?;
+        remote.arm_verification_fault(fault.wire_kind())
+    }
+
+    /// Take the sandbox owner's append-fault receipt: exactly-once evidence
+    /// for the injection armed above.
+    #[cfg(feature = "test-instrumentation")]
+    pub fn take_remote_verification_fault_receipt(
+        &self,
+        id: WorkspaceId,
+    ) -> WorkspaceResult<Option<RemoteVerificationFaultReceipt>> {
+        let worker = self.worker(id)?;
+        let remote = worker
+            .remote
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .clone()
+            .ok_or(WorkspaceError::InvalidPlacement)?;
+        let (armed, hit_count) = remote.take_verification_fault_receipt()?;
+        Ok(RemoteVerificationFault::from_wire(armed)
+            .map(|fault| RemoteVerificationFaultReceipt { fault, hit_count }))
+    }
+
     #[cfg(feature = "test-instrumentation")]
     pub fn verification_workspace_state(
         &self,
@@ -1789,6 +1834,38 @@ pub enum VerificationFault {
     PresentationResume,
     ShortAppend,
     NoSpace,
+}
+/// The same two append faults, armed in the sandbox owner that performs the
+/// payload append on a sandbox-owned workspace. The host process cannot
+/// consume them: since v0.1.6 the append does not happen there.
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RemoteVerificationFault {
+    ShortAppend,
+    NoSpace,
+}
+#[cfg(feature = "test-instrumentation")]
+impl RemoteVerificationFault {
+    fn wire_kind(self) -> u64 {
+        match self {
+            Self::ShortAppend => layerfs_fuse::live_wire::VERIFICATION_FAULT_SHORT_APPEND,
+            Self::NoSpace => layerfs_fuse::live_wire::VERIFICATION_FAULT_NO_SPACE,
+        }
+    }
+
+    fn from_wire(kind: u64) -> Option<Self> {
+        match kind {
+            layerfs_fuse::live_wire::VERIFICATION_FAULT_SHORT_APPEND => Some(Self::ShortAppend),
+            layerfs_fuse::live_wire::VERIFICATION_FAULT_NO_SPACE => Some(Self::NoSpace),
+            _ => None,
+        }
+    }
+}
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RemoteVerificationFaultReceipt {
+    pub fault: RemoteVerificationFault,
+    pub hit_count: u64,
 }
 #[cfg(feature = "test-instrumentation")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

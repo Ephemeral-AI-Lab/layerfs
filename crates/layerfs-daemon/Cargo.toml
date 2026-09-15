@@ -9,6 +9,12 @@ license.workspace = true
 blake3.workspace = true
 nix = { version = "=0.29.0", default-features = false, features = ["fs", "mount", "process", "resource", "signal", "socket", "user"] }
 
+[features]
+# Verification-only surface: the reliability proofs arm a one-shot payload
+# append fault in whichever process owns the live owner. A released daemon is
+# built without it, so it carries neither the frames nor the injection points.
+test-instrumentation = ["layerfs-fuse/test-instrumentation"]
+
 [lib]
 path = "src/lib.rs"
 
@@ -18,3 +24,4 @@ path = "src/main.rs"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 layerfs-fuse = { path = "../layerfs-fuse", default-features = false, features = ["host", "live"] }
+

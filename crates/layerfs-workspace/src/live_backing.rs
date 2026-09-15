@@ -1130,6 +1130,41 @@ impl RemoteWorkspace {
     /// Ask the sandbox for its exact view of the live Workspace. The sandbox
     /// owns the mutable state, so the host never mirrors it. The physical
     /// spool numbers are the sandbox's own maintained allocation counters.
+    /// Arm one-shot verification fault `kind` in the sandbox owner. The
+    /// payload append happens in the sandbox since v0.1.6, so the injection
+    /// that proves an append failure acknowledges nothing has to be armed
+    /// where that append runs. Verification-only surface.
+    #[cfg(feature = "test-instrumentation")]
+    pub(crate) fn arm_verification_fault(&self, kind: u64) -> crate::WorkspaceResult<()> {
+        let mut request = vec![wire::VERIFICATION_FAULT];
+        wire::u64_out(&mut request, kind);
+        self.server
+            .request(&request)
+            .map(drop)
+            .map_err(|_| crate::WorkspaceError::InvalidExecution)
+    }
+
+    /// Take the sandbox owner's fault receipt: the still-armed injection kind
+    /// (zero once consumed) and the number of times it was consumed.
+    #[cfg(feature = "test-instrumentation")]
+    pub(crate) fn take_verification_fault_receipt(&self) -> crate::WorkspaceResult<(u64, u64)> {
+        let reply = self
+            .server
+            .request(&[wire::VERIFICATION_FAULT_RECEIPT])
+            .map_err(|_| crate::WorkspaceError::InvalidExecution)?;
+        let mut input = Input(&reply);
+        let armed = input
+            .u64()
+            .map_err(|_| crate::WorkspaceError::InvalidExecution)?;
+        let hits = input
+            .u64()
+            .map_err(|_| crate::WorkspaceError::InvalidExecution)?;
+        input
+            .done()
+            .map_err(|_| crate::WorkspaceError::InvalidExecution)?;
+        Ok((armed, hits))
+    }
+
     pub(crate) fn observe(&self) -> crate::WorkspaceResult<RemoteObservation> {
         let response = self
             .server

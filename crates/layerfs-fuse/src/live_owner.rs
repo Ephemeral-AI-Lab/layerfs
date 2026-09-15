@@ -57,6 +57,77 @@ struct Owner {
     #[cfg(target_os = "linux")]
     kernel_root: Mutex<Option<Arc<std::fs::File>>>,
     cut: Mutex<Option<crate::live_runtime::OperationCut>>,
+    /// One-shot host-armed faults for the sandbox-owned payload append. Both
+    /// counters are zero unless a verification run armed one.
+    #[cfg(feature = "test-instrumentation")]
+    verification: VerificationFaults,
+}
+
+/// One-shot verification faults armed by the host and consumed by the append
+/// that now happens here. `armed` is zero when nothing is armed, so the common
+/// path is one relaxed load. Verification-only surface: a released daemon is
+/// built without the feature and never carries it.
+#[cfg(feature = "test-instrumentation")]
+#[derive(Default)]
+struct VerificationFaults {
+    /// Injection still awaiting consumption; zero when none is armed.
+    armed: AtomicU64,
+    /// Injection armed since the last receipt was taken; zero when no receipt
+    /// is pending. Consumption clears `armed`, never this.
+    last: AtomicU64,
+    hits: AtomicU64,
+}
+
+#[cfg(feature = "test-instrumentation")]
+impl VerificationFaults {
+    fn arm(&self, kind: u64) -> PortResult<()> {
+        if kind == wire::VERIFICATION_FAULT_NONE {
+            return Err(PortError::Invalid);
+        }
+        self.armed
+            .compare_exchange(
+                wire::VERIFICATION_FAULT_NONE,
+                kind,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .map(drop)
+            .map_err(|_| PortError::Busy)?;
+        self.last.store(kind, Ordering::Release);
+        Ok(())
+    }
+
+    /// Consume the armed fault when it names this injection point. Exactly one
+    /// caller can win, which is what makes the receipt a hit count of one.
+    fn consume(&self, kind: u64) -> bool {
+        if self.armed.load(Ordering::Acquire) != kind {
+            return false;
+        }
+        if self
+            .armed
+            .compare_exchange(
+                kind,
+                wire::VERIFICATION_FAULT_NONE,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_err()
+        {
+            return false;
+        }
+        self.hits.fetch_add(1, Ordering::AcqRel);
+        true
+    }
+
+    /// Take the receipt: the injection armed since the last take (zero when
+    /// none) and how often it was consumed.
+    fn take(&self) -> (u64, u64) {
+        (
+            self.last
+                .swap(wire::VERIFICATION_FAULT_NONE, Ordering::AcqRel),
+            self.hits.swap(0, Ordering::AcqRel),
+        )
+    }
 }
 
 /// The active capture: identity for every frozen-input frame and completion.
@@ -633,6 +704,8 @@ impl LiveOwner {
             kernel_edit: Default::default(),
             gate: Default::default(),
             cut: Default::default(),
+            #[cfg(feature = "test-instrumentation")]
+            verification: Default::default(),
         })))
     }
 
@@ -1005,24 +1078,73 @@ impl LiveOwner {
                 }
             }
         };
+        // Verification-only: this append cannot be charged. The payload append
+        // now happens here rather than in the host shell, so the injection that
+        // proves "a failed append acknowledges nothing" has to be consumed
+        // here. The rejection and its public errno are the workspace policy's
+        // own; only the budget is lowered to the current charge for this one
+        // append. Never compiled into a released daemon.
+        #[cfg(feature = "test-instrumentation")]
+        if self
+            .0
+            .verification
+            .consume(wire::VERIFICATION_FAULT_NO_SPACE)
+        {
+            let (mut policy, charged) = {
+                let state = self.state()?;
+                (state.policy, state.spool_bytes)
+            };
+            policy.max_spool_bytes = charged;
+            policy
+                .check(charged.saturating_add(bytes.len() as u64))
+                .map_err(core)?;
+        }
         self.0
             .writes
             .live_edit_ns
             .fetch_add(ns(preparing), Ordering::Relaxed);
         let encoding = Instant::now();
+        // Verification-only: the physical append completes fewer bytes than the
+        // reserved range the piece references.
+        #[cfg(feature = "test-instrumentation")]
+        let short = self
+            .0
+            .verification
+            .consume(wire::VERIFICATION_FAULT_SHORT_APPEND);
+        #[cfg(not(feature = "test-instrumentation"))]
+        let short = false;
         {
             let spool = self.0.spool.clone();
             let payload_segment = segment.clone();
             let payload = bytes.to_vec();
+            let written = if short {
+                payload.len() / 2
+            } else {
+                payload.len()
+            };
             self.0
                 .scheduler
                 .physical(move || {
                     spool
-                        .write(&payload_segment, start, &payload)
+                        .write(&payload_segment, start, &payload[..written])
                         .map_err(|_| wire::invalid())
                 })
                 .await
                 .map_err(io)?;
+        }
+        if short {
+            // The reserved range was not fully written, so the piece that
+            // would reference it is never applied: a short physical append is
+            // an ambiguous I/O failure, never an acknowledged short append.
+            let spool = self.0.spool.clone();
+            let abandoned = segment.clone();
+            drop(prepared);
+            let _ = self
+                .0
+                .scheduler
+                .physical(move || spool.abandon(abandoned).map_err(|_| wire::invalid()))
+                .await;
+            return Err(PortError::Io);
         }
         self.0
             .writes
@@ -2596,6 +2718,19 @@ impl LiveOwner {
                     .await
                     .map_err(io)?;
             }
+            #[cfg(feature = "test-instrumentation")]
+            wire::VERIFICATION_FAULT => {
+                let kind = input.u64().map_err(io)?;
+                input.done().map_err(io)?;
+                self.0.verification.arm(kind)?;
+            }
+            #[cfg(feature = "test-instrumentation")]
+            wire::VERIFICATION_FAULT_RECEIPT => {
+                input.done().map_err(io)?;
+                let (armed, hits) = self.0.verification.take();
+                wire::u64_out(&mut out, armed);
+                wire::u64_out(&mut out, hits);
+            }
             wire::OBSERVE => {
                 input.done().map_err(io)?;
                 let state = self.state()?;
@@ -4113,5 +4248,32 @@ mod immutable_acquisition_tests {
             Some(root)
         );
         assert!(owner.begin_kernel_prefill(file).is_none());
+    }
+}
+
+#[cfg(all(test, feature = "test-instrumentation"))]
+mod verification_fault_tests {
+    use super::*;
+
+    /// The receipt is the proof's exactly-once evidence, so the arm/consume/
+    /// take sequence is asserted directly: consumption must clear the arm but
+    /// keep the receipt readable, and a second consume must not count.
+    #[test]
+    fn armed_append_fault_is_consumed_exactly_once_and_stays_on_the_receipt() {
+        let faults = VerificationFaults::default();
+        assert_eq!(faults.take(), (wire::VERIFICATION_FAULT_NONE, 0));
+        assert!(!faults.consume(wire::VERIFICATION_FAULT_SHORT_APPEND));
+        faults.arm(wire::VERIFICATION_FAULT_SHORT_APPEND).unwrap();
+        assert!(faults.arm(wire::VERIFICATION_FAULT_NO_SPACE).is_err());
+        assert!(!faults.consume(wire::VERIFICATION_FAULT_NO_SPACE));
+        assert!(faults.consume(wire::VERIFICATION_FAULT_SHORT_APPEND));
+        assert!(!faults.consume(wire::VERIFICATION_FAULT_SHORT_APPEND));
+        assert_eq!(
+            faults.take(),
+            (wire::VERIFICATION_FAULT_SHORT_APPEND, 1),
+            "the receipt names the injection and its single hit"
+        );
+        assert_eq!(faults.take(), (wire::VERIFICATION_FAULT_NONE, 0));
+        faults.arm(wire::VERIFICATION_FAULT_NONE).unwrap_err();
     }
 }

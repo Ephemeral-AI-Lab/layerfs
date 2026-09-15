@@ -8,7 +8,7 @@ license.workspace = true
 [features]
 default = ["host-fuse"]
 host-fuse = ["layerfs-fuse/host"]
-test-instrumentation = ["layerfs-layerstack-store/test-instrumentation"]
+test-instrumentation = ["layerfs-layerstack-store/test-instrumentation", "layerfs-fuse/test-instrumentation"]
 
 [dependencies]
 layerfs-workspace-core = { path = "../layerfs-workspace-core" }
