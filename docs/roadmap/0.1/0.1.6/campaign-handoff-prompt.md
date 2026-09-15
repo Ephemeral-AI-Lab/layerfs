@@ -7,15 +7,64 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
 
 ## Read before you touch anything
 
-1. [`AGENTS.md`](../../../AGENTS.md) (repo rules) and [`benchmark/AGENTS.md`](../../../benchmark/AGENTS.md)
-   (benchmark mechanics, budgets, cache discipline).
-2. [`docs/general/benchmark_rules.md`](../../general/benchmark_rules.md) and
-   `benchmark/fs-bench-pro/QUICKSTART.md`.
-3. Issue **#152** (scope, groups, budgets, acceptance, exclusions) and ledger
-   **L18–L21** in `docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md`
-   (the three harness defects already fixed, the cache-stance lesson, the CI removal).
-4. `docs/roadmap/0.1/0.1.6/sandbox-local-snapshot-spec-and-plan.md` §6 (cases and
-   timing) and §7 (hard gates) — the architecture you are validating.
+### Normative rules — read fully, they bind this campaign
+
+| file | what you need from it |
+|---|---|
+| [`AGENTS.md`](../../../AGENTS.md) | repo-wide agent rules: no warm-cache credit, `--setup clone` reuse discipline, budgets, the third-party ban, no-CI/preflight |
+| [`benchmark/AGENTS.md`](../../../benchmark/AGENTS.md) | benchmark-tree mechanics: prepared inputs, `--reuse-pass`, clone semantics, budgets, the v0.1.6 hosting exception |
+| [`docs/general/benchmark_rules.md`](../../general/benchmark_rules.md) | the measurement contract: cache state, memory domains, reuse, reporting fields |
+| [`docs/general/release-policy.md`](../../general/release-policy.md), [`docs/general/documentation-policy.md`](../../general/documentation-policy.md) | what may be claimed, committed and released |
+| [`benchmark/fs-bench-pro/QUICKSTART.md`](../../../benchmark/fs-bench-pro/QUICKSTART.md) | build/reuse/run mechanics, `--setup fresh` vs `--setup clone`, family entrypoints |
+| [`tools/preflight.sh`](../../../tools/preflight.sh) | the local gate you run before **every** push — this repository has no CI |
+
+### This campaign's contract
+
+| file | what you need from it |
+|---|---|
+| issue **#152** | scope, the 8 groups, budgets (15 s, exceptions 25 s), acceptance (<50 % or <10 ms), #122 exclusion, reporting protocol |
+| this prompt | the execution protocol below |
+| issue **#125** (closed, superseded) | the original objective and the #122 exclusion reference; the JSON draft it names is **not** in the tree — confirm the exclusion set with the owner instead of inventing one |
+| [`docs/roadmap/0.1/0.1.6/experimental-implementation-pipeline.md`](experimental-implementation-pipeline.md) | the I0–I6 + B1–B3 checklist and exit criteria this campaign closes |
+
+### The architecture you are validating
+
+| file | what you need from it |
+|---|---|
+| [`sandbox-local-snapshot-spec-and-plan.md`](sandbox-local-snapshot-spec-and-plan.md) | the frozen spec and plan: §2 ownership boundary, §3.4 volatile contract, §5 resource gates (64 MiB accounted, 8 MiB staging, 32 MiB 25k backing), §6 cases/timing and §6.3 counters to collect, §7 hard gates, §9 focused proofs |
+| [`sandbox-host-connection-architecture.md`](sandbox-host-connection-architecture.md) | the simplified host↔docker connection: what crosses the boundary and the opcode surface |
+| [`sandbox-host-connection-review.md`](sandbox-host-connection-review.md) | review findings and dispositions — including what was deliberately left unsolved (dirty shared mmap) |
+| `crates/layerfs-fuse/src/local_spool.rs` | the sandbox spool and its bounded resident window (L18) |
+| `crates/layerfs-fuse/src/live_owner.rs` | the snapshot lane: `CAPTURE`, `SNAP_RECORDS`, `SNAP_READ`, `COMPLETE_*`, and the post-serve cache drop |
+| `crates/layerfs-fuse/src/live_backing.rs` | the host-side immutable-base service (`SEED`/`LOOKUP`/`LOOKUP_METADATA`/`DIRECTORY_PAGE`/`READ_BASE`) |
+| `crates/layerfs-daemon/src/protocol.rs` | opcode inventory and wire bounds |
+| `crates/layerfs-workspace/src/{lifecycle.rs,remote_commit.rs,changes.rs,snapshot_input.rs}` | Commit dispatch, the remote commit route, the single construction gate/worker limit, bounded transfer windows |
+
+### Evidence, history and the reporting shape
+
+| file / path | what you need from it |
+|---|---|
+| [`evidence/issue151-experiment-ledger.md`](evidence/issue151-experiment-ledger.md) | L12–L14 gate history and host-state spread; **L18** bounded-cache repair, cache-stance evidence, memory-metric finding; **L19** B3 and the three harness defects; **L20** accepted dispositions, limitations, adoption recommendation; **L21** CI removal |
+| [`evidence/issue151-implementation-design.md`](evidence/issue151-implementation-design.md), [`evidence/issue151-execution-continuation.md`](evidence/issue151-execution-continuation.md), [`issue151-handoff-agent-prompt.md`](issue151-handoff-agent-prompt.md) | how the implementation was built, what was already repaired, and how it was handed over |
+| `docs/roadmap/0.1/0.1.5/issue120/finalization-contract.md` | the disposition, severity and cache rules this campaign inherits (Tier 1/2/3, S0–S3, H) |
+| `docs/roadmap/0.1/0.1.5/issue120/final-report.md` and `family-*.md` | the `family → per-test` reporting shape to match, and the v0.1.5 context for old ratios |
+| `benchmark-results/host-store/issue120/{performance,verification,diagnostics}` | the recorded v0.1.5 comparator rows you cite instead of re-running |
+| [`README.md`](README.md) | the current recorded state: accepted B1/B2/B3 dispositions and the limitations list |
+| archived drafts | tag `archive/main-branch-cleanup-20260915-1005/heads/archive/main-uncommitted-20260915T0930Z` = `c5f85d546bd09b5384f5c5c1183123cc723e5798` holds the pre-promotion drafts (including `overlay-snapshot-*.md`). They describe the **discarded** host-overlay direction and an old exclusion draft — read for history only, never as contract |
+
+### Environment facts you can rely on
+
+- **Candidate**: `main` at `1558a121f` or later, product seal
+  `31a42c95197a21c5acd54cb12e7398bd8cb5308fab916e62b9439ca0a17bf01d`, image
+  `layerfs-bench-infra:9e3a4c91187729ec` (rebuild with `--build-host` / `--build-image`
+  after any `benchmark/` change).
+- **Control arm** (v0.1.5 comparators when a row is missing): `/Users/yifanxu/layerfs-v016-control`
+  — outside the lab directory, product seal `276c5970…`, `SOURCE_DIRTY=true` by
+  construction; verify the product seal reproduces before trusting a rebuild.
+- **Prepared inputs**: `benchmark-results/host-store/prepared` (242 entries, ~43 GB) —
+  reuse them; preparation runs automatically on a cache miss.
+- **Banked receipts** (cite, do not re-run): `benchmark-results/issue151/perf-candidate5-…`,
+  `perf-candidate3-…`, `perf-CAND-25k-r5` and their `verify-…` counterparts.
 
 ## Hard rules (from AGENTS.md and #152 — not negotiable)
 
@@ -37,6 +86,32 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
   "CI green".
 - Banked receipts — B1 `tiny-create-500-mixed-v4`, B2 `tiny-bulk-create-500-mixed-v3`,
   B3 `local-snapshot-create-25000-onebyte-v1` — are **cited, not re-collected**.
+
+## Do not stop until the campaign is finished
+
+The campaign runs to completion — all 8 groups, every registered selection terminal — as
+one continuous effort. There is no partial campaign, no "collected a few groups and
+paused", and no group left open for someone else.
+
+- **Drive every open item to a terminal disposition** and then keep going. Terminal means
+  PASS, WARN, FAIL (diagnosed, with a recorded escalation or owner waiver), REUSED-FROM or
+  NOT_RUN_OPTIONAL. "Not started", "in progress", "flaky" and "unexplained" are not
+  terminal.
+- **Prefer fixing over parking.** An S2 FAIL is a work item: reproduce it in the smallest
+  case, find the root cause, fix it, run `tools/preflight.sh`, re-seal, re-run the affected
+  cases, and continue. A FAIL stays terminal only when its cause is understood and it has
+  been escalated to the owner (or waived).
+- **A blocker does not stop the campaign.** If a group is waiting on something only the
+  owner can supply (G8's sealed `historical_access` store, the `repository_history`
+  opt-in) or on an escalation decision (S0/S1), record the blocker precisely on #152,
+  continue with the remaining groups, and return to the blocked group when the input
+  arrives.
+- **Do not stop early to report a favourable subset**, do not stop because the numbers
+  look good, and do not stop to optimize: acceptance is already bounded (<50 % or <10 ms),
+  so an accepted cell is done and the next group is the work.
+- The campaign ends only with the final report described in "Definition of done": all
+  groups posted, every selection terminal, bug ledger, architecture-guardrail evidence,
+  resource tables, limitations and open owner decisions.
 
 ## Working protocol — group by group
 
