@@ -76,7 +76,9 @@ Control arm — sealed v0.1.5 product with the byte-identical harness:
     | git -C /Users/yifanxu/Ephemeral-AI-Lab/layerfs-v016-control apply -
 
 Then build host + image inside the control worktree exactly as above, with its
-own LAYERFS_BENCH_IMAGE. Record in the ledger, for both arms: host binary
+own LAYERFS_BENCH_IMAGE. (This recipe was validated when the handoff was
+written: the patch applies cleanly to a v0.1.5 tree and yields a byte-identical
+harness, e.g. runner.py sha256 matches.) Record in the ledger, for both arms: host binary
 sha256, image ID, source seals, harness identity hashes (runner.py, runtime.py,
 cold.py, verify-selected.py) and the packages recompiled. The harness identity
 must match between arms; the product source is expected to differ.

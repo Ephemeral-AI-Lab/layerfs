@@ -94,6 +94,10 @@ git -C /Users/yifanxu/Ephemeral-AI-Lab/layerfs-v016-control apply /tmp/v016-harn
 # then build host + image inside the control worktree exactly as in 3.1
 ```
 
+Validated at handoff time: the patch applies cleanly to a detached v0.1.5 tree
+and produces a byte-identical harness (runner.py sha256 matches the candidate
+worktree).
+
 Harness comparability to verify explicitly (QUICKSTART): the runner hashes
 `runner.py`, `runtime.py`, `cold.py`, `verify-selected.py` for its harness
 identity; the workload sources are compiled into the image. Compare the
