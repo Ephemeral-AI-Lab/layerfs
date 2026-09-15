@@ -1292,3 +1292,77 @@ decision this campaign may not take. Reported, not excused (AGENTS.md §1).
 Diagnostics: `benchmark-results/issue152/g3-diag/` (7 candidate timelines +
 `-memdiag` receipts) and `/Users/yifanxu/layerfs-v016-control/benchmark-results/issue152-control/`.
 Group report: #152 comment 5675608355.
+
+### L25 — 2026-09-18: #152 G4 — v0.1.6 could not truncate a workspace file (fixed, `58e4f7f47`)
+
+#### The defect
+
+All four `git_tool_workflow` cells failed on the frozen candidate with
+
+    git ["commit","--no-gpg-sign","--no-verify","-m","layerfs v0.1.3 tool workflow"]:
+      fatal: could not open '.git/COMMIT_EDITMSG': Invalid argument
+
+The reconstructed v0.1.5 control (`276c5970…`, image
+`layerfs-bench-infra:40bb391e1efccde7`) passed the same cells 2/2 on the same
+harness, so it was a product regression.
+
+#### How it was pinned
+
+A full `git init/add/commit` sequence with the workload's exact `GIT_CONFIG`,
+environment and `umask` passes in a fresh workspace, so the trigger needed the
+fixture/workload state. Instrumenting the FUSE daemon and following the sample
+container's `docker logs` live gave the end of the trace:
+
+    LAYERFS-OPEN-ENTER ino=315 flags=0x20001 stateless=true   # the only O_WRONLY open in the run
+    LAYERFS-OP Open            -> Ok
+    LAYERFS-OP Setattr         -> size=Some(0)                # the kernel's O_TRUNC
+    LAYERFS-TRUNCATE node=315 size=0
+    LAYERFS-ERRNO Invalid                                     # EINVAL
+
+#### Root cause
+
+The sandbox-local rewrite moved the payload backing into the workspace
+(`LocalSpool`) and the host immutable-base service rejects the removed payload
+opcodes — `crates/layerfs-workspace/src/live_backing.rs` carries
+`immutable_base_service_rejects_removed_payload_opcodes`, whose list includes
+`wire::CHECK`. `truncate_async` was the one edit path never migrated (compare
+`v0.1.5`, where the host owned the spool): it sent a `CHECK` frame to the host
+before applying a prepared edit, so the host refused it, `PortError::Invalid`
+became `EINVAL`, and every **size-changing** truncate failed. The kernel turns
+`open(O_TRUNC)` into `setattr(size)`, so ordinary open-for-truncate failed too.
+
+#### Fix — `58e4f7f47` (`layerfs-fuse: apply truncate edits locally`)
+
+Remove the host frame; the window of still-referenced segments is expressed by
+the local spool's `BackingRef` graph, and the write path already applies edits
+with no host payload traffic. Focused regression test
+`truncate_applies_locally_without_a_removed_host_payload_check` asserts a
+size-changing truncate succeeds and only `SEED` reaches the backing; verified to
+**fail without the fix** (`panicked … unexpected backing opcode 7`) and pass with
+it. `tools/preflight.sh`: all steps passed.
+
+#### Impact set and identity
+
+Any cell that reached the branch would have failed, and G1–G3 all passed, so no
+passing cell took it; the blast radius of the fix is exactly the four git cells.
+New candidate identity: source
+`957eae85366e771ae228305387cb2d9ed85d86c17558dbc5fb06260fe252ebbe` @ `58e4f7f47`,
+**product `ce2336b71afe6b04b7daf8d063347bf07e01f55aae78f3a7cdc468750aca8350`**,
+compilation `1d17454b4ca232b33e67540edd797d777db682a0e05ff4695db0cc608b74d238`,
+harness `daa74be0…` and workload `821b2404…` unchanged, image
+`layerfs-bench-infra:957eae85366e771a`. All 20 G4 cells were re-collected on the
+new seal (not just the four) so the group is not split across two products; the
+pre-fix receipts stay on disk under `benchmark-results/issue152/g4/`. G1–G3 keep
+their recorded pre-fix identity and their numbers are not re-labelled.
+
+#### G4 results on the new seal
+
+`git_tool_workflow` 0.92× / 0.89× / 0.79× / 0.94×; `namespace_mutation`
+0.83–0.92×; `directory_construction_traversal` 0.83–1.14×. **20/20 comparative
+PASS, 20/20 cleanup PASS, 20/20 proofs PASS.** Complete commands ≤ 8.56 s
+(`git-tool-500-mixed-v4`), inside the 15 s rule; its 29.85 s end-to-end wall is
+preparation (closed-master clone + the one-time `docker cp` of the qualified Git
+reference tree), excluded by the rule.
+
+Group report: #152 comment 5676373486 (that comment contains a typo,
+`--no-gpus-sign`; the workload argument is `--no-gpg-sign`).
