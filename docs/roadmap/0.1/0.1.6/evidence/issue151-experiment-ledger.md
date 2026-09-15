@@ -616,3 +616,180 @@ Same flags, extended allowances, seed 1, `--setup clone`, one worker per arm.
   old trees. A fresh pair must be created from `main` (`ef1c2aa0a`) and from the
   `v0.1.5` tag, built with the current harness (whose workload-source hash
   changed with the L16 `writeln!` fix), before B3 or the breadth pass can run.
+
+### L18 — 2026-09-16: owner rulings (B1 accepted, memory amplification forbidden, no warm-cache credit) and the bounded-resident-cache repair
+
+#### Owner rulings that reset the remaining work
+
+1. **B1 is not an issue.** The promoted direction is one construction worker, and a
+   single worker is expected to be slower than the sealed control's released
+   default (four workers for small content). The B1 commit-phase FAIL recorded in
+   L12 is therefore recorded as *accepted*: the candidate's extra time there is the
+   frozen-records pull plus the payload transfer inside the measured Commit, work
+   the host-authority control does not do. Amended on #151
+   (issuecomment-5673868383).
+2. **Memory amplification must not be allowed.** The sandbox may not hold the
+   workspace payload resident just because it owns it.
+3. **A warm cache must not be used to flatter a measured phase.** Prepared data in
+   setup is legitimate benchmark infrastructure; letting a measured phase be
+   credited by page-cache warmth left by an earlier phase of the same run is not.
+   This directly invalidated the basis on which the pre-fix B2 Commit number was
+   read: its ~500 MiB transfer was served from the sandbox's page cache at
+   19 GB/s (measured: 500 MiB in 0.026 s) because the workload's own writes had
+   left it resident.
+
+#### Mechanism measurements (containers, gate shape 2 CPU / 2 GiB / no swap)
+
+- Writing the B2 payload at B2's pacing with no hygiene reproduces B2 exactly:
+  container lifetime peak 522.2 MiB, of which `file` 500.3 MiB and `anon` 4.6 MB.
+  The sandbox's accounted memory *was* the payload, not process memory.
+- `POSIX_FADV_DONTNEED` evicts **only pages that are already clean at call time**:
+  on a dirty range the first call starts writeback and evicts nothing (dirty→0,
+  `file` unchanged); a second call on the now-clean range evicts it (64 MiB → 0).
+  Read-only and writable descriptors behave the same; the discriminator is
+  cleanliness.
+- A single offer per sealed segment is not enough (peak 499.9 MiB with a window of
+  one), because the offer arrives while the range is still dirty. Re-offering the
+  window on each seal keeps 500 MiB of payload to a **13.0 MiB** lifetime peak
+  (5.1 MiB max resident spool cache, 1 MiB dirty); a window of eight gives
+  14.1 MiB. The bound is a constant, not a fraction of the payload.
+- Cold re-read of that payload from storage: 500 MiB in 0.23 s (2.1 GiB/s), i.e.
+  the honest cost of a transfer that is not served from cache.
+
+#### Repair — `c0ebedd2d` (`layerfs-fuse: bound the sandbox spool's resident cache`)
+
+`LocalSpool` now keeps a bounded resident window: sealing a segment pushes the
+previous target into a fixed-size window and offers the whole window back with
+`POSIX_FADV_DONTNEED`; a segment is offered again on every later seal until it
+slides out. Serving a frozen range to the host drops that range after it has been
+copied out, so a bulk transfer cannot re-inflate the charge with the payload it
+hands over. The hint is not a durability barrier (no flush is waited on, the
+backing stays volatile, and the kernel never discards dirty, in-writeback or
+mapped pages, so an eviction can only drop bytes already on storage). It comes
+from the crate's existing Linux-only `nix` dependency; other targets keep the
+default behaviour. CI-exact `cargo +1.96.0 fmt --all --check` and
+`cargo +1.96.0 clippy --workspace --locked -- -D warnings` pass; 44 lib + 6
+integration tests pass, including a new test that the window stays bounded and
+that eviction never disturbs readable bytes.
+
+New candidate arm identities (harness and workload source unchanged, so the
+recorded control samples stay valid): source commit `c0ebedd2d`,
+source seal `94d1cd234584ae92b961035df5446bc1cf4c48a7fcfecad68314113275cc0458`,
+source tree `827667b539314ea91dc20155d51ddbdddd5c507d`, product seal
+`31a42c95197a21c5acd54cb12e7398bd8cb5308fab916e62b9439ca0a17bf01d`,
+compilation seal `0f397b536f74c4ba3eaf8e869bc42ae828cbba3aa9dd619aa72bfe65fa7385db`,
+host binary `98e63fdde58b46d82597686eea8c38c28fb688d00a13ce3e8fe49e88c78c7226`,
+image `layerfs-bench-infra:94d1cd234584ae92` =
+`sha256:1435035ffedb783b34cf2f1e7784b3b58ee632f836be378b3c3cac10d844385f`,
+harness identity `daa74be0c3a0b40a824617a6403c70ce4e7be115e7c47f4f1faf26029c55b044`,
+`WORKLOAD_SOURCE_SHA256 821b240458fe968cec8ec61bf09f1db09e109bf1a3f64fc62e94c449e3c302b8`.
+Command shape for both gates (one sample, seed 1, `--setup clone`, one worker):
+
+    LAYERFS_CONSTRUCTION_WORKERS=1 bash benchmark/fs-bench-pro/families/tiny_file_churn/perf.sh \
+      --case <case> --seed 1 --setup clone --image layerfs-bench-infra:94d1cd234584ae92 \
+      --perf-fast --collection-mode --product-timeout 600 --timeout 630 --setup-timeout 600 \
+      --output benchmark-results/issue151/<receipt>
+
+#### B1 re-measured (`tiny-create-500-mixed-v4`)
+
+Receipt `perf-candidate5-tiny-create-500-mixed-v4`, against the contemporaneous
+control `perf-control2-tiny-create-500-mixed-v4` of L12 (unchanged identities).
+
+| phase | control | candidate | limit | verdict |
+|---|---|---|---|---|
+| create | 8,835,083 | 9,083,791 | 10,160,345 | PASS |
+| exec | 176,370,625 | 174,008,250 | 202,826,219 | PASS |
+| complete Commit | 53,037,416 | 57,568,333 | 60,993,028 | **PASS** (was FAIL at 65,461,500) |
+| visibility | 85,209 | 73,583 | 3,085,209 | PASS |
+| End/cleanup | 4,155,125 | 3,618,167 | 7,155,125 | PASS |
+| whole workflow | 242,483,458 | 244,352,124 | 278,855,977 | PASS |
+| container CPU | 112,224,000 | 135,386,000 | 129,057,600 | **FAIL** (+4.9%) |
+| host-process CPU | 106,418,876 | 106,165,542 | 122,381,707 | PASS |
+| CPU sum (declared) | 218,642,876 | 241,551,542 | 251,439,307 | PASS |
+| peak-sum memory | 40,706,048 | 42,352,640 | 49,094,656 | PASS |
+| temporary backing | 827,392 | 824,450 | 1,851,392 | PASS |
+
+The commit phase now passes its gate (5.6% under the limit) even before the
+owner's ruling that B1 is not a blocker; the only non-passing line is the
+container-only CPU sub-gate at +4.9%, a 23 ms difference on a 112 ms control.
+
+#### B2 re-measured (`tiny-bulk-create-500-mixed-v3`)
+
+Receipt `perf-candidate3-tiny-bulk-create-500-mixed-v3`, against the L13 control
+`perf-control-tiny-bulk-create-500-mixed-v3`.
+
+| phase | control | candidate | limit | verdict |
+|---|---|---|---|---|
+| create | 7,211,625 | 8,804,666 | 10,211,625 | PASS |
+| exec | 2,758,683,417 | 2,541,289,250 | 3,172,485,930 | PASS |
+| complete Commit | 1,573,941,917 | 2,198,331,166 | 1,810,033,205 | **FAIL** (+21.4%) |
+| visibility | 87,208 | 81,750 | 3,087,208 | PASS |
+| End/cleanup | 14,994,250 | 6,183,500 | 17,994,250 | PASS |
+| whole workflow | 4,354,918,417 | 4,754,690,332 | 5,008,156,180 | PASS (5.1% under) |
+| container CPU | 1,403,415,000 | 2,254,290,000 | 1,613,927,250 | FAIL (+39.7%) |
+| host-process CPU | 2,720,046,499 | 2,802,701,583 | 3,128,053,474 | PASS |
+| CPU sum (declared) | 4,123,461,499 | 5,056,991,583 | 4,741,980,724 | **FAIL** (+6.6%; was PASS pre-fix) |
+| temporary backing | 524,529,664 | 524,288,000 | 602,931,200 | PASS |
+| peak-sum memory | 111,472,640 | 156,405,760 | 128,193,536 | FAIL as measured (was FAIL at 658,649,088) |
+
+Consequences, stated plainly:
+
+- The bounded-cache policy costs **~0.41 s of exec** (2.128 → 2.541 s; the
+  writeback it forces is work the pre-fix path deferred and then skipped when the
+  spool files were deleted) and **~0.40 s of Commit** (1.802 → 2.198 s; the
+  transfer now reads the payload from storage instead of from cache). Both are
+  inside the *workflow* allowance (5.1% under), which is the gate the owner ruled
+  matters, but the Commit sub-gate and the CPU sum now fail.
+- The Commit limit is derived from a control whose equivalent read is served from
+  the host page cache, so the candidate is measured on the strictly harder
+  footing: the pre-fix Commit number that "passed" was itself cache-credited and
+  is exactly what ruling 3 forbids counting.
+- Removed amplification, measured on the product: the sandbox's resident spool
+  cache during the whole B2 window is **≤ 2.6 MiB** (`file` 1.3–2.6 MiB, `shmem`
+  0, `file_dirty` ≤ 1 MiB, `file_writeback` 0) while 500 MiB of payload is written
+  and 516 spool files exist — versus ~500 MiB of resident payload pre-fix.
+
+#### The harness memory number is not a product-memory measurement
+
+Six identical post-fix B2 runs (same image, case, seed, flags, one worker; the
+first is the declared gate sample, the rest are instrumentation runs) gave
+container *lifetime* peaks of 24,633,344 / 25,530,368 / 25,829,376 / 26,185,728 /
+**57,462,784 (declared sample)** / 189,788,160 bytes while the product's own
+residency was ~2 MB in every run that was instrumented. Live timelines
+(`issue151-postfix/mem_timeline*.log`) show the payload's pages being evicted as
+the segments seal, the spool reaching 500 MiB and 516 files, and the cgroup's
+`file` cache returning to 0 when the spool is destroyed.
+
+So the frozen harness's only symmetric sandbox number — the container cgroup
+lifetime peak, which includes image layers, harness `docker exec` helpers and any
+other page cache charged to that cgroup — varies by ~8× on identical inputs and
+cannot decide a memory gate. The declared metric ("sandbox-process peak resident
+bytes") is still not emitted by the frozen harness. The ruling requested in L14
+#2 is therefore now backed by direct evidence rather than by an argument, and it
+blocks B2's memory verdict: with the product-attributable residency (~2 MB) the
+gate is comfortably PASS; with the declared sample's container peak it is FAIL
+(+22%); with two of the six runs it would be PASS.
+
+#### Separate verification (exact identities from each receipt)
+
+- `verify-candidate5-tiny-create-500-mixed-v4` → **PASS**, source
+  `94d1cd23…`, input `ca3ad683…`, image source `94d1cd23…`, wall 0.86 s.
+- `verify-candidate3-tiny-bulk-create-500-mixed-v3` → **PASS**, source
+  `94d1cd23…`, input `1295ab34…`, image source `94d1cd23…`, wall 5.39 s.
+Both runs also produced smoke `smoke-candidate-6` (PASS) on the same identities.
+
+#### State after L18
+
+- The memory-amplification defect is repaired in the product and verified by
+  direct measurement; the cost of the repair is time and CPU, and B2's Commit and
+  CPU-sum gates now fail against a limit derived from a cache-warm control.
+- Open owner decisions: (a) the sandbox memory metric for B2 (L14 #2, now with
+  variance evidence), and (b) whether the control arm must be re-measured under a
+  cold-cache stance — which requires recreating the sealed v0.1.5 control worktree
+  and changing the harness, i.e. re-collecting both arms.
+- B3 (`local-snapshot-create-25000-onebyte-v1`) remains unstarted; the pipeline's
+  strict order still blocks it behind B2's unpassed memory line.
+- Evidence for this entry: `benchmark-results/issue151/` and its copy
+  `benchmark-results/handoff-20260915/issue151-postfix/` (perf, verify and smoke
+  receipts, the five post-fix B2 instrumentation runs, and the raw memory
+  timelines), plus `candidate-host-binary.identity.json`.
