@@ -1164,3 +1164,82 @@ a limitation with a recommended cheap `stat`-only guard.
 Evidence: `benchmark-results/issue152/g1/` (perf + verify receipts, wall seconds,
 command logs) and `benchmark-results/issue152/quarantine/`. Group report:
 issue #152 comment 5675349936.
+
+### L23 — 2026-09-18: #152 G2 SDK-edit families (56 PASS + 5 NOT_RUN_OPTIONAL) and the mapped-write Commit-visibility regression
+
+Identical collection identity to L22 (source `0debfccb…` @ `8b5e0955e`, product
+`31a42c95…`, compilation `79dab102…`, harness `daa74be0…`, workload `821b2404…`,
+image `layerfs-bench-infra:0debfccbfe56516f`). Command shape: one sample per cell,
+`--repetition 1 --setup clone --perf-fast --collection-mode`,
+600/630/900 s allowances, `LAYERFS_CONSTRUCTION_WORKERS=1`.
+
+#### Results
+
+56 of 61 registered selections collected — `edit_length_preserving` 12,
+`edit_canonical_chunk_count` 12, `edit_length_changing` 32. **56/56 comparative
+PASS, 56/56 cleanup PASS, 56/56 independent proofs PASS.** Worst ratio 1.24×
+(`overwrite-fixed-64k-chunk-count-decrease-on-100mib-ops-1`, +2.63 ms); 48 of 56
+are faster than their v0.1.5 comparator, down to 0.50×, which is the expected
+effect of removing the whole-Commit lifecycle lock on this route. Complete
+commands 1–4 s (no 25 s exception needed); verification walls 0.32–0.50 s.
+
+The five `edit_length_changing_capped` cells are **NOT_RUN_OPTIONAL**: they fail
+closed with `family is not admitted to host-store execution`
+(`shared/runner.py:31,309`). They are version-retained duplicates — verified
+one-for-one against the measured `edit_length_changing`
+`-result-capped-v2-ops-1` successors, same registered `fixture_bytes`
+(524,283,904 ×4, 524,285,952 ×1) — and `QUICKSTART.md` states obsolete capped-edit
+entries outside the host runner are not additional active cases. Not admitted to
+`HOST_FAMILIES` deliberately: that harness change would resurrect a retired
+workload and move the frozen harness identity.
+
+#### Per-case guardrail counters (all 56 cells)
+
+`capture_mode=Live`; `commit_pause_fence_ns=0` in 56/56 (no pause fence on the
+Commit path); `live_backing_request_bytes=81` constant; `fuse_kernel_write_bytes=0`
+and `fuse_host_frame_bytes=0`; `spool_write_bytes=0`;
+`physical_spool_high_water_bytes=0`; `final_live_non_base_bytes=4096` at every
+tier from 1 MiB to 500 MiB; `commit_cdc_bytes_scanned=4096` (65,536 for the
+chunk-count family by design). cgroup `file_peak=4096` B on every cell
+**including the 500 MiB tiers**, `file_dirty_peak=4096` B, `shmem=0`, `swap=0`,
+`anon_peak` 0.66–1.26 MB — bounded and independent of fixture size, so the L18
+file-cache-amplification signature is absent.
+
+#### Correctness regression — kernel-dirty mapped bytes are outside the Commit frontier
+
+Focused probes (env-gated, not part of any gate):
+
+    RUSTUP_TOOLCHAIN=1.85.1 LAYERFS_LIVE_DOCKER=1 \
+      LAYERFS_LIVE_DOCKER_IMAGE=layerfs-bench-infra:0debfccbfe56516f \
+      cargo test -p layerfs-sdk --locked --test live_docker \
+      running_commands_and_dirty_mappings_continue_across_commit -- --nocapture
+
+Candidate: **FAIL 5/5** (`mapped snapshot exact stable bytes: path=held-a
+later=false first_mismatch_index=0 expected=65 observed=0`). Control arm
+(`/Users/yifanxu/layerfs-v016-control`, product `276c5970…`, image
+`layerfs-bench-infra:40bb391e1efccde7`): **PASS 2/2** on the identical probes.
+Boundary isolated by a temporary `msync(p, 4096, MS_SYNC)` before the client's
+`ready` line: the first-Commit check then passes and the failure moves to the next
+checkpoint, so the rule is exactly "kernel-writeback bytes are captured, kernel-only
+dirty bytes are not". Root cause: `crates/layerfs-fuse/src/live_owner.rs:2070` —
+*"Take an operation cut for an SDK edit transaction… Commit capture never calls
+this; snapshots are stable by frontier ownership, not by pausing the workspace."*
+
+Both diagnostic edits to `crates/layerfs-sdk/tests/live_docker.rs` were reverted
+and the file hash restored (`a45c294cf0b7081d9fbfa4c5d353bba7b3bae80d5093c5583021fba18d3f08db`);
+the tree was clean for the whole collection.
+
+Not repaired, deliberately and in writing: the frozen spec
+(`sandbox-local-snapshot-spec-and-plan.md` §10 and §9 boundary) already declares
+that a local root snapshot does not establish kernel-dirty mmap visibility, forbids
+the workarounds ("do not disable supported mappings, omit their bytes silently,
+patch a dependency/kernel to pass"), and instructs that the exact remaining
+limitation be reported when no compliant mechanism is found; the architecture doc
+and the roadmap README's adoption recommendation carry it as "dirty shared-mmap
+visibility stays unsolved". The two candidate repairs are out of bounds for this
+campaign — a pause/drainage in the Commit path is a declared-architecture change,
+the §9.1 direct-I/O variant is "PROPOSED, not adopted", and `AGENTS.md` §4 forbids
+dependency/kernel patches. No registered selection is on this path: the registered
+families write through ordinary FUSE/SDK routes, which are in the frontier.
+
+Group report: #152 comment 5675466677.
