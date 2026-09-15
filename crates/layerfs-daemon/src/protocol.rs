@@ -3,6 +3,8 @@ use std::io::{self, Read, Write};
 pub const SOCKET_PATH: &str = "/run/layerfs/daemon.sock";
 pub const CAPABILITY_PATH: &str = "/run/layerfs/capability";
 pub const WORKSPACE_ROOT: &str = "/workspace";
+// Private per-Workspace packed payload backing root (see #149/#150).
+pub const SNAPSHOT_ROOT: &str = "/snapshots";
 pub const MAGIC: [u8; 8] = *b"LFSDAEM3";
 pub const VERSION: u16 = 1;
 pub const MAX_CONTROL: usize = 1024 * 1024;

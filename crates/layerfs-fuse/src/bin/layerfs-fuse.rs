@@ -45,6 +45,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err("unexpected argument".into());
     }
     let endpoint = endpoint.to_str().ok_or("endpoint text")?;
+    // Private packed payload backing for this helper's Workspace. The
+    // standalone helper owns one Workspace for its whole process lifetime, so
+    // a process-scoped directory under the daemon-private root is sufficient
+    // and cannot collide with a daemon-managed `/snapshots/<workspace-id>/`.
+    // A stale directory from a previous process with a recycled pid is
+    // refused by starting from a clean directory.
+    let backing = std::path::PathBuf::from(format!("/snapshots/fuse-{}", std::process::id()));
+    std::fs::create_dir_all("/snapshots")?;
+    let _ = std::fs::remove_dir_all(&backing);
     let runtime = layerfs_fuse::live_runtime::LiveRuntime::shared()?;
     let client = Arc::new(
         runtime
@@ -52,6 +61,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 endpoint.to_owned(),
                 capability,
                 runtime.scheduler(),
+                backing.clone(),
             ))
             .map_err(|error| std::io::Error::other(format!("live owner: {error:?}")))?,
     );
@@ -71,11 +81,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(error) = control.wait_for_shutdown() {
         let _ = client.prepare_shutdown();
         let _ = mount.unmount();
+        let _ = client.spool().destroy();
         return Err(error.into());
     }
     client.prepare_shutdown()?;
     let shutdown = mount
         .unmount()
+        .and_then(|()| {
+            client
+                .spool()
+                .destroy()
+                .map_err(|error| std::io::Error::other(format!("snapshot backing: {error:?}")))
+        })
         .and_then(|()| cleanup_owned(&mountpoint, &capability_text));
     let acknowledged = control.finish_shutdown(shutdown.is_ok());
     shutdown?;
