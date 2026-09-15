@@ -5,11 +5,10 @@
 // layout can be debugged without a container or a Store. This path never
 // produces a benchmark receipt.
 use super::v016_common::{self as v016};
-use super::v016_stages::{self as stages, Stage};
+use super::v016_stages::{self as stages};
 use super::workspace_common as common;
 use super::Result;
 use std::collections::BTreeMap;
-use std::error::Error as _;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::process::Command;

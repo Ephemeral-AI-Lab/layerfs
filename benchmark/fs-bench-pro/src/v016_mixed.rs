@@ -12,10 +12,6 @@ use workload_source::v016_common as v016;
 use workload_source::v016_stages::{self as stages, MixedCase, Stage, Topology};
 use workload_source::workspace_common::Case;
 
-pub(crate) const FAMILY_MIXED: &str = "mixed_load_bearing";
-pub(crate) const FAMILY_WORKSPACE: &str = "multi_workspace_development";
-pub(crate) const FAMILY_BRANCH: &str = "branch_development";
-
 /// The two-workspace discard/reopen event is fixed at local commit 5.
 const DISCARD_COMMIT: usize = 5;
 /// The trunk fork point of the branch topology.
@@ -238,7 +234,6 @@ pub(crate) struct Runtime {
     client: Arc<Client>,
     pub(crate) store: Arc<LayerStackStore>,
     container: ContainerId,
-    root: PathBuf,
     pub(crate) case_id: String,
     pub(crate) plan: RunPlan,
     pub(crate) shared: Arc<Shared>,
@@ -470,8 +465,6 @@ fn sdk_stage2_edits(runtime: &Runtime, session: WorkspaceId, cycle: usize) -> An
 struct StageOutcome {
     commit_id: CommitId,
     root: layerfs_content::ObjectId,
-    commit_ns: u64,
-    execution_ns: u64,
 }
 
 fn run_stage(
@@ -629,8 +622,6 @@ fn run_stage(
     Ok(StageOutcome {
         commit_id,
         root: pinned.root,
-        commit_ns,
-        execution_ns,
     })
 }
 
@@ -1168,7 +1159,6 @@ pub(crate) fn run_case(
         client,
         store: store.clone(),
         container,
-        root: root.to_path_buf(),
         case_id: case.id.clone(),
         plan: RunPlan {
             mixed,

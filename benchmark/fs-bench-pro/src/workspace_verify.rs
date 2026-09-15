@@ -381,6 +381,7 @@ fn alias_binding(source: &dyn ObjectSource, root: ObjectId, path: &str) -> AnyRe
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn verify_alias_classes(
     before_source: &dyn ObjectSource,
     before_root: ObjectId,
@@ -688,7 +689,6 @@ pub(crate) fn declared_content_root(entry: &Entry) -> AnyResult<Option<ObjectId>
 /// One commit's identity and parent edge, observed through the public query
 /// surface after a reopen.
 pub(crate) struct CommitRecord {
-    pub(crate) id: layerfs_sdk::CommitId,
     pub(crate) parent_commit_id: Option<layerfs_sdk::CommitId>,
 }
 
@@ -707,7 +707,6 @@ pub(crate) fn commit_records(
                     records.insert(
                         commit.id,
                         CommitRecord {
-                            id: commit.id,
                             parent_commit_id: commit.parent_commit_id,
                         },
                     );
@@ -739,10 +738,6 @@ pub(crate) fn inode_regular() -> inode::InodeKind {
 
 pub(crate) fn inode_directory() -> inode::InodeKind {
     inode::InodeKind::Directory
-}
-
-pub(crate) fn inode_symlink() -> inode::InodeKind {
-    inode::InodeKind::Symlink
 }
 
 /// The declared logical length of one persisted regular file. SmallContent
@@ -779,11 +774,7 @@ pub(crate) fn verify_declared_range(
     let id = view
         .inode(path)
         .ok_or_else(|| format!("declared verification path absent from the snapshot: {path}"))?;
-    let record = view
-        .paths
-        .get(path)
-        .ok_or("declared verification record")?
-        .clone();
+    let record = view.paths.get(path).ok_or("declared verification record")?;
     if record.kind != inode::InodeKind::RegularFile {
         return Err(format!("declared verification path is not regular: {path}").into());
     }

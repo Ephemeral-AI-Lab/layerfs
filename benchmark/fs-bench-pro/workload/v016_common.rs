@@ -496,7 +496,7 @@ fn link_roles_of(move_dest: &[String], link_targets: &[String]) -> Result<LinkRo
         hardlinks.push((format!("{}/hl{index:02}", move_dest[0]), target.clone()));
     }
     let mut symlinks = Vec::new();
-    for index in 0..SYMLINK_COUNT {
+    for (index, target) in link_targets.iter().enumerate().take(SYMLINK_COUNT) {
         let kind = match index {
             0 | 1 => SymlinkKind::Resolvable,
             2 => SymlinkKind::Dangling,
@@ -507,7 +507,7 @@ fn link_roles_of(move_dest: &[String], link_targets: &[String]) -> Result<LinkRo
             // Relative to the link's own parent: one level below the fixture
             // root while the populated directory sits under `move_dest`, and at
             // the fixture root in the cycles that keep it in place.
-            SymlinkKind::Resolvable => format!("../{}", link_targets[index]),
+            SymlinkKind::Resolvable => format!("../{target}"),
             SymlinkKind::Dangling => "ghost-v016".to_string(),
             SymlinkKind::SelfLoop => ".".to_string(),
         };
@@ -941,8 +941,8 @@ pub(crate) fn self_check() -> Result<()> {
         return Err("v0.1.6 K100 must rotate beyond the hot cohort".into());
     }
     // Every requested recurrent write must differ from the value it replaces.
-    let mut visits = vec![0usize; REFRESH_COHORTS];
-    let mut state = vec![0u8; REFRESH_COHORTS];
+    let mut visits = [0usize; REFRESH_COHORTS];
+    let mut state = [0u8; REFRESH_COHORTS];
     for cycle in 1..=100 {
         let cohort = cohort_for_cycle(cycle)?;
         let value = recurrent_value(visits[cohort]);

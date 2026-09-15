@@ -2969,8 +2969,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                 "self-check",
                 &[
                     ("status", quote("pass")),
-                    ("timed_case_count", "154".into()),
-                    ("sample_slot_count", "462".into()),
+                    ("timed_case_count", "161".into()),
+                    ("sample_slot_count", "483".into()),
                 ],
             );
             Ok(())

@@ -189,14 +189,14 @@ fn stage2_recipe(
     role: &str,
     len: u64,
 ) -> AnyResult<Content> {
-    Ok(workload_source::dedup_workloads::content(
+    workload_source::dedup_workloads::content(
         v016::FAMILY_MIXED,
         "v016-stage2",
         fixture.seed,
         ordinal,
         role,
         len,
-    )?)
+    )
 }
 
 /// Stage 1: unlink/recreate 64 selected 4 KiB files with the cycle's cohort.
@@ -230,12 +230,12 @@ fn splice_of(
     delete_len: u64,
     replacement: Content,
 ) -> AnyResult<Content> {
-    Ok(shadow
+    shadow
         .paths
         .get(path)
         .ok_or_else(|| format!("v0.1.6 shadow target absent: {path}"))?
         .content()
-        .splice(start, delete_len, replacement)?)
+        .splice(start, delete_len, replacement)
 }
 
 /// Stage 2 POSIX operations, in the declared order of the sixteen targets.

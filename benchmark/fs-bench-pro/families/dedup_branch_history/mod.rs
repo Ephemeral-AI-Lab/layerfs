@@ -1,5 +1,5 @@
 use super::dedup_workloads as d;
-use super::v016_compact::{self as s, SProfile};
+use super::v016_compact::{self as s};
 use super::workspace_common::{self, Case, Content, Entry, EntryKind, SdkEdit};
 use super::Result;
 pub(crate) const FAMILY: &str = "dedup_branch_history";

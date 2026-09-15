@@ -121,9 +121,9 @@ pub(crate) fn operations(case: &Case) -> Result<Vec<BoundaryOp>> {
         rows.push(BoundaryOp::Remove { len: 1, visit: 1 });
         return Ok(rows);
     }
-    for index in 0..plan.commits {
+    for (index, offset) in OVERWRITE_OFFSETS.iter().enumerate().take(plan.commits) {
         rows.push(BoundaryOp::Overwrite {
-            offset: OVERWRITE_OFFSETS[index],
+            offset: *offset,
             len: OVERWRITE_LEN,
             visit: index,
         });

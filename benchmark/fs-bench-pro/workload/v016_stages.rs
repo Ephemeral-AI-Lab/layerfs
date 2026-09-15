@@ -590,7 +590,7 @@ impl MixedCase {
 pub(crate) fn mixed_case(id: &str) -> Result<Option<MixedCase>> {
     let lookup = |ids: &[&'static str], topology: Topology| -> Option<MixedCase> {
         let index = ids.iter().position(|candidate| *candidate == id)?;
-        Some(match_row(&ids[index], topology))
+        Some(match_row(ids[index], topology))
     };
     for (ids, topology) in [
         (&MIXED_IDS[..], Topology::Sequential),

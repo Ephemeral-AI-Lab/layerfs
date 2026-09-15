@@ -457,7 +457,7 @@ impl Helper {
                 stages::Stage2Op::BoundaryShrink => {
                     let (below, above) = stages::boundary_lengths(cycle);
                     let current = fs::metadata(&path)?.len();
-                    let mut file = OpenOptions::new().write(true).open(&path)?;
+                    let file = OpenOptions::new().write(true).open(&path)?;
                     self.ledger.open += 1;
                     file.set_len(below)?;
                     self.ledger.ftruncate += 1;
@@ -491,7 +491,7 @@ impl Helper {
                         drop(file);
                         self.ledger.close += 1;
                     } else if above < current {
-                        let mut file = OpenOptions::new().write(true).open(&path)?;
+                        let file = OpenOptions::new().write(true).open(&path)?;
                         self.ledger.open += 1;
                         file.set_len(above)?;
                         self.ledger.ftruncate += 1;

@@ -118,14 +118,18 @@ pub(crate) fn steps(case: &Case) -> usize {
 
 pub(crate) fn self_check() -> Result<()> {
     let rows = cases();
-    if rows.len() != 155 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 155 {
-        return Err(format!("Workspace registry must have 155 unique timed IDs, observed {} rows / {} unique", rows.len(), rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len()).into());
+    // Declared membership: 8+20+12+4+4+16+10+10+20+14+26+7+5+4+1. The 26
+    // history rows are the 20 inherited cases plus the six v0.1.6 profiles; the
+    // fifteen families are the twelve that were registered before #154 plus the
+    // three #122 families and the sandbox route's local_snapshot.
+    if rows.len() != 161 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 161 {
+        return Err(format!("Workspace registry must have 161 unique timed IDs, observed {} rows / {} unique", rows.len(), rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len()).into());
     }
     let observed: Vec<(&&str, usize)> = FAMILIES
         .iter()
         .map(|family| (family, rows.iter().filter(|r| r.family == *family).count()))
         .collect();
-    let declared: [usize; 15] = [8, 20, 12, 4, 4, 16, 10, 10, 20, 14, 20, 7, 5, 4, 1];
+    let declared: [usize; 15] = [8, 20, 12, 4, 4, 16, 10, 10, 20, 14, 26, 7, 5, 4, 1];
     for ((family, count), expected) in observed.iter().zip(declared) {
         if *count != expected {
             return Err(format!("wrong membership for {family}: observed {count}, declared {expected}").into());
@@ -207,7 +211,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
         }
         [command] if command == "workspace-self-check" => {
             self_check()?;
-            println!("registry_status=pass\ntimed_case_count=155\nsample_slot_count=465");
+            println!("registry_status=pass\ntimed_case_count=161\nsample_slot_count=483");
         }
         [command, id, seed, step, mode] if command == "workspace-apply" => {
             if !matches!(mode.as_str(), "performance" | "verify") { return Err("invalid workload mode".into()); }
