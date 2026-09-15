@@ -7,9 +7,15 @@ For the owner-directed `v016-local-snapshot-experiment-v1` only, follow
 legacy hosting/sampling text below or in the general guide/quick start. The
 candidate may own mutable Workspace metadata, snapshot generations and temporary
 payload backing in the sandbox. SQLite, the benchmark/SDK coordinator, canonical
-construction and publication remain on the macOS host. Use one Commit compute
-worker and one performance sample per case/arm; no n3/repeated-sample campaign.
-This exception does not change unrelated benchmark or release contracts.
+construction and publication remain on the macOS host. Use **one** Commit compute
+worker for commit, capture and snapshot, and one performance sample per case/arm; no
+n3/repeated-sample campaign. The released small-content path used four workers
+(`SMALL_CONTENT_WORKERS = 4`) and `construction_worker_limit()` still defaults to
+available parallelism, so a **performance drop against v0.1.5 is expected**: it is
+accepted by the bounded acceptance rule (sub-50 % or sub-10 ms), never repaired by
+adding workers. Single-worker must become the product default during this campaign,
+not merely an exported variable. This exception does not change unrelated benchmark or
+release contracts.
 
 ## Existing profiles
 

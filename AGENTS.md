@@ -120,6 +120,15 @@ the report.
    reused from a qualifying receipt with its evidence cited, or recorded as `NOT_RUN`
    with the measured wall time and the reason — never made to fit by moving work
    outside the timer, enlarging a timeout, or shrinking the workload.
+8. **One construction worker for commit, capture and snapshot.** Every run exports
+   `LAYERFS_CONSTRUCTION_WORKERS=1`; no run raises it and no second lane or helper
+   worker is added to pass a gate. Four workers is the released behaviour this
+   direction deliberately gives up — the Store's small-content path caps at
+   `SMALL_CONTENT_WORKERS = 4` and `construction_worker_limit()` still defaults to
+   `available_parallelism().min(8)` — so the candidate must be single-worker **by
+   default**, not by environment variable. **A performance drop against v0.1.5 is
+   expected** and is absorbed by the bounded acceptance rule, never by adding workers
+   back.
 
 ## 4. Code, build and docs
 

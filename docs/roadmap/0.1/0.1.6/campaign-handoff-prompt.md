@@ -86,6 +86,14 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
   `--locked` (AGENTS.md §4).
 - **No CI exists.** Run `tools/preflight.sh` before every push; a push may never claim
   "CI green".
+- **One construction worker for commit, capture and snapshot.** Every run exports
+  `LAYERFS_CONSTRUCTION_WORKERS=1`, no run raises it, and no second lane or helper
+  worker is added to pass a gate. v0.1.5's small-content path used four
+  (`SMALL_CONTENT_WORKERS = 4`) and `construction_worker_limit()` still defaults to
+  `available_parallelism().min(8)`, so **expect a performance drop against v0.1.5** —
+  it is absorbed by the bounded acceptance rule (<50 % or <10 ms), never repaired by
+  adding workers. Making single-worker the **product default** is part of this
+  campaign's work; an exported variable is not enough.
 - Banked receipts — B1 `tiny-create-500-mixed-v4`, B2 `tiny-bulk-create-500-mixed-v3`,
   B3 `local-snapshot-create-25000-onebyte-v1` — are **cited, not re-collected**.
 
@@ -154,6 +162,9 @@ v0.1.6 was promoted days ago and has passed only a handful of end-to-end cases. 
 product bugs exist.** The campaign is also a bug hunt: a failing benchmark is a lead, not
 a verdict, and a passing gate is not proof that the mechanism behind it is sound.
 
+- The default wiring is a work item too: `construction_worker_limit()` and the Store's
+  small-content cap must be single-worker **by default** (`SMALL_CONTENT_WORKERS = 4`
+  today), so that a run cannot silently use four workers.
 - Reproduce in the **smallest case that shows the defect** (usually a compact-1 or 100
   tier), read the code path, fix the cause, add or extend a focused test, run
   `tools/preflight.sh`, commit, re-seal, and **re-run only the affected cases** (impact
