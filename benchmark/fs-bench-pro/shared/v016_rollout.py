@@ -84,6 +84,34 @@ def wait_for_lock(limit_seconds=3600):
     return False
 
 
+def host_load():
+    """The host's 1/5/15-minute load averages at invocation time. A sample taken
+    while the host is oversubscribed is not comparable with a quiet one, so the
+    condition is recorded next to the number instead of being inferred later."""
+    try:
+        one, five, fifteen = os.getloadavg()
+        return {"load_1m": round(one, 2), "load_5m": round(five, 2), "load_15m": round(fifteen, 2),
+                "cpu_count": os.cpu_count()}
+    except OSError:
+        return None
+
+
+def remove_orphan_samples():
+    """Remove only this benchmark's own leftover sample containers.
+
+    A wrapper-killed invocation cannot run its own cleanup, and a leftover
+    container keeps competing for the declared 2 CPU / 2 GiB budget. The label
+    is the benchmark's own owner label, so another owner's run is never touched.
+    """
+    listed = subprocess.run(
+        ["docker", "ps", "-q", "--filter", "label=dev.layerfs.fs-bench.owner=benchmark-infrastructure-v1"],
+        capture_output=True, text=True)
+    removed = [name for name in listed.stdout.split() if name]
+    for container in removed:
+        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+    return removed
+
+
 def fresh_output(path):
     """Append-only receipts: a live path is archived, never overwritten."""
     if path.exists():
@@ -250,6 +278,9 @@ def main():
     current = json.loads(ledger.read_text()) if ledger.is_file() else {"image": args.image, "rows": []}
     verdicts = {(row["case"], row["seed"]): row for row in current["rows"]}
     print(f"self-check: {json.dumps(self_check(args.image), sort_keys=True)}", flush=True)
+    orphans = remove_orphan_samples()
+    if orphans:
+        print(f"removed {len(orphans)} leftover sample container(s) before the phase", flush=True)
 
     for case_id in rows:
         family = case_row(case_id)["family"]
@@ -289,6 +320,7 @@ def main():
             for attempt in (1, 2):
                 if not wait_for_lock():
                     raise SystemExit("measurement lock never became available")
+                load_before = host_load()
                 fresh_output(perf_output)
                 code, stdout, stderr, wall = perf_invocation(
                     family, case_id, seed, args.image, perf_output, extended, ceiling_for(case_id))
@@ -315,6 +347,7 @@ def main():
                 "receipt": str(perf_output.relative_to(REPO)),
                 "error": (sample or {}).get("error"),
                 "infrastructure_invalid_attempts": infrastructure_retries,
+                "host_load": load_before,
             }
             if header:
                 row["identities"] = {
@@ -347,6 +380,7 @@ def main():
             else:
                 if not wait_for_lock():
                     raise SystemExit("measurement lock never became available")
+                load_before = host_load()
                 fresh_output(verify_output)
                 code, stdout, stderr, wall = verify_invocation(
                     family, case_id, seed, args.image, verify_output, identities, extended, ceiling_for(case_id))
@@ -365,6 +399,7 @@ def main():
                     "reused_proof_identities": receipt.get("reused_proof_identities"),
                     "receipt": str(verify_output.relative_to(REPO)),
                     "error": receipt.get("error"),
+                    "host_load": load_before,
                 }
         verdicts[(case_id, seed)] = row
         current["rows"] = list(verdicts.values())

@@ -1,0 +1,1619 @@
+{
+ "cases": [
+  {
+   "case": "v016-history-large-hotset-k10-v1",
+   "family": "dedup_branch_history",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.814
+     },
+     "tag": "f5-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.727
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.094
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.782
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.954
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.854
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-history-large-hotset-k100-v1",
+   "family": "dedup_branch_history",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.232
+     },
+     "tag": "f5-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.615
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.572
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.736
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.817
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.741
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-history-namespace-inode-k10-v1",
+   "family": "dedup_branch_history",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.769
+     },
+     "tag": "f5-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.689
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.752
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.649
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.967
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.822
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-history-namespace-inode-k100-v1",
+   "family": "dedup_branch_history",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.67
+     },
+     "tag": "f5-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.951
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.533
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.85
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 2.003
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "FAIL",
+      "verdict": "FAIL",
+      "wall": 1.805
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-history-boundary-cycle-k10-v1",
+   "family": "dedup_branch_history",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.889
+     },
+     "tag": "f5-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.773
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.886
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.67
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.963
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.919
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-history-boundary-cycle-k100-v1",
+   "family": "dedup_branch_history",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.681
+     },
+     "tag": "f5-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.812
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.346
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.615
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.537
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.973
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-small-control-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.227
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.969
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.093
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.937
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.969
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.841
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-below-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.916
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.925
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.852
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.929
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.934
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.988
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-exact-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.856
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.909
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.981
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.939
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.987
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.858
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-above-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.906
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.41
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.994
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.786
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.045
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.932
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-large-control-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.351
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.062
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.885
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.244
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.964
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.187
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-roundtrip-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.078
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.223
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.954
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.855
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.116
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.029
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-boundary-alias-roundtrip-v1",
+   "family": "file_size_transition",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.424
+     },
+     "tag": "f1-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.914
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.16
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.052
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.859
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 1.681
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-mixed-development-100mb-5000-k10-v1",
+   "family": "mixed_load_bearing",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.169
+     },
+     "tag": "f2-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 4.325
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 2.995
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 4.083
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.44
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 4.209
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-mixed-development-100mb-5000-k100-v1",
+   "family": "mixed_load_bearing",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 6.582
+     },
+     "tag": "f2-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 12.062
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.617
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 12.704
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 10.622
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 13.558
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-mixed-development-500mb-30000-k10-v1",
+   "family": "mixed_load_bearing",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.227
+     },
+     "tag": "f2-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.943
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.443
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.812
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 15.26,
+       "load_1m": 7.81,
+       "load_5m": 12.93
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 6.481
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 15.22,
+       "load_1m": 7.9,
+       "load_5m": 12.87
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.889
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-mixed-development-500mb-30000-k100-v1",
+   "family": "mixed_load_bearing",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 14.53
+     },
+     "tag": "f2-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 23.013
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 17.782
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 23.016
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.98,
+       "load_1m": 7.56,
+       "load_5m": 12.38
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 17.674
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.83,
+       "load_1m": 7.97,
+       "load_5m": 12.15
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.859
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-workspace-mixed-100mb-5000-k10-v1",
+   "family": "multi_workspace_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.326
+     },
+     "tag": "f3-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.886
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.304
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.941
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.5
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 6.055
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-workspace-mixed-100mb-5000-k100-v1",
+   "family": "multi_workspace_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 6.935
+     },
+     "tag": "f3-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 21.124
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.18
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 20.318
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 9.767
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 21.522
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-workspace-mixed-500mb-30000-k10-v1",
+   "family": "multi_workspace_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.782
+     },
+     "tag": "f3-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.909
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.759
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.848
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.66,
+       "load_1m": 7.79,
+       "load_5m": 11.84
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 5.598
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.66,
+       "load_1m": 8.29,
+       "load_5m": 11.88
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.887
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-workspace-mixed-500mb-30000-k100-v1",
+   "family": "multi_workspace_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 15.847
+     },
+     "tag": "f3-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.949
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 15.564
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.927
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.48,
+       "load_1m": 8.46,
+       "load_5m": 11.62
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 16.069
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.38,
+       "load_1m": 8.44,
+       "load_5m": 11.46
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.977
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-branch-mixed-100mb-5000-k10-v1",
+   "family": "branch_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.383
+     },
+     "tag": "f4-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.171
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.394
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.285
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.18,
+       "load_1m": 8.28,
+       "load_5m": 11.16
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 3.802
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.18,
+       "load_1m": 8.28,
+       "load_5m": 11.16
+      },
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.597
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-branch-mixed-100mb-5000-k100-v1",
+   "family": "branch_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.063
+     },
+     "tag": "f4-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.624
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.296
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.711
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.09,
+       "load_1m": 7.92,
+       "load_5m": 10.99
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.484
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 14.03,
+       "load_1m": 7.69,
+       "load_5m": 10.89
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.762
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-branch-mixed-500mb-30000-k10-v1",
+   "family": "branch_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 6.493
+     },
+     "tag": "f4-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.978
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.003
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.946
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 13.85,
+       "load_1m": 7.71,
+       "load_5m": 10.64
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "PASS",
+      "wall": 7.256
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 13.8,
+       "load_1m": 7.49,
+       "load_5m": 10.55
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.991
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-branch-mixed-500mb-30000-k100-v1",
+   "family": "branch_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 17.522
+     },
+     "tag": "f4-seed1",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.913
+     }
+    },
+    "2": {
+     "performance": {
+      "host_load": null,
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 17.327
+     },
+     "tag": "q2",
+     "verification": {
+      "host_load": null,
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.875
+     }
+    },
+    "3": {
+     "performance": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 13.66,
+       "load_1m": 7.91,
+       "load_5m": 10.42
+      },
+      "infrastructure_invalid_attempts": 0,
+      "status": "PASS",
+      "verdict": "EXCEPTION",
+      "wall": 17.38
+     },
+     "tag": "q3",
+     "verification": {
+      "host_load": {
+       "cpu_count": 14,
+       "load_15m": 13.57,
+       "load_1m": 8.46,
+       "load_5m": 10.39
+      },
+      "status": "TIMEOUT",
+      "verdict": "FAIL",
+      "wall": 22.967
+     }
+    }
+   }
+  },
+  {
+   "case": "v016-branch-convergent-content-v1",
+   "family": "branch_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-branch-fork-descendant-v1",
+   "family": "branch_development",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-access-boundary-before-v1",
+   "family": "historical_access",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-access-boundary-after-v1",
+   "family": "historical_access",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-access-inode-before-v1",
+   "family": "historical_access",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-access-inode-after-v1",
+   "family": "historical_access",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-access-fork-point-v1",
+   "family": "historical_access",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  },
+  {
+   "case": "v016-access-divergent-head-v1",
+   "family": "historical_access",
+   "lane": "regular",
+   "seeds": {
+    "1": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "2": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    },
+    "3": {
+     "reason": "not collected",
+     "status": "NOT_RUN"
+    }
+   }
+  }
+ ],
+ "identity": {
+  "compilation_seal": "4ad3b7b2cd7d94e9cfee627fc66644a8376c4a4b47592047dd438ee4f9c8baee",
+  "image": "layerfs-bench-infra:8ef48ec2b762f720",
+  "product_seal": "970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd",
+  "source_commit": "b4349ae9194e36dff321d965b1f7239842ff159c",
+  "source_seal": "8ef48ec2b762f7201c08b6beda91c60526c33a199ef1c2e000bd0bd01a5732f3"
+ },
+ "schema": "layerfs-v016-seed-qualification-v1"
+}
