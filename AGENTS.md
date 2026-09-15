@@ -49,34 +49,43 @@ If a phase's cache state is undeclared, unknown, or different between arms, its
 number is `INCOMPLETE` or `INELIGIBLE` — never `PASS`. Say so in the receipt and
 in the report.
 
-## 2. Reuse preparation proactively; never reuse measurement
+## 2. Reuse setup (`--setup clone`); never reuse measurement
 
-Agents MUST reuse preparation rather than repeat it, and MUST NOT let that reuse
-reach inside a timed phase. The test is where the saved work lives: reuse that
-removes work **outside** the timers is required; reuse that removes work **inside**
-a timed phase is cheating.
+Agents MUST avoid repeating setup, and MUST NOT let that reuse reach inside a
+timed phase. The test is where the saved work lives: reuse that removes work
+**outside** the timers is required; reuse that removes work **inside** a timed
+phase is cheating.
 
-Reuse this, proactively:
-
-- `--reuse-pass <verification.json>` — accept one `status=PASS`, cleanup-`PASS`,
-  identity-matched verification receipt instead of re-running verification. It
-  fails closed on any identity, schema, hard-limit or wall mismatch and records
-  `reused_proof_identities` plus an explicit omission.
-- prepared immutable inputs — acquisition runs automatically on a cache miss.
-  Do not repeat setup before every sample, do not clear protected caches
-  routinely, and never reuse a mutated sample: each mutation sample gets its own
-  fresh writable copy, and paired arms use the identical qualified Store
-  artifact.
-- incremental host builds, the shared Cargo target, image layers keyed by the
-  compilation seal, and immutable `binary-archive/<sha256>/` executables
-  (a host-only Python/shell change may reuse an image whose compilation seal
-  still matches; `--prune-builds` retains owned targets).
+- **Fixtures: use `--setup clone`, not a fresh regeneration, for every
+  post-initialization case.** Clone takes the closed, validated prepared master
+  and gives the run an independent writable byte copy, so no sample pays the
+  preparation again. `--setup fresh` is for initialization and fresh-output cases
+  only — the harness rejects `clone` there. Do not run a family's `setup.sh`
+  before every sample, do not clear protected caches routinely, and never reuse a
+  mutated sample.
+- **A clone is setup reuse, never a cold claim.** Clone means a closed,
+  validated, independent writable byte copy — not an APFS clone and not a
+  cold-OS-cache claim. Declare the clone/copy method with the row, treat ordinary
+  OS-cache effects consistently, never pool clone and fresh rows, and never let
+  the master's or the clone's warmed pages credit a timed phase. A family that
+  needs a cold claim needs the cold contract's invalidation-plus-residency check,
+  not a clone.
+- **Verification: `--reuse-pass <verification.json>`** accepts one
+  identity-matched `status=PASS`, cleanup-`PASS` receipt instead of re-running
+  verification. It fails closed on any schema, identity, hard-limit or wall
+  mismatch and records `reused_proof_identities` plus an explicit omission.
+- **Builds and images: reuse through seals.** Incremental host builds, the shared
+  Cargo target, image layers keyed by the compilation seal, and immutable
+  `binary-archive/<sha256>/` executables (a host-only Python/shell change may
+  reuse an image whose compilation seal still matches; `--prune-builds` retains
+  owned targets).
 
 Never: warm starts, replaying a previous receipt as a new sample, moving cold
-product work into setup, or treating a cached acquisition as evidence about the
-measured operation. Anything reused MUST be visible in the receipt
-(`build_mode`, `dependency_reuse`, `clone_method`, `reused_proof_identities`,
-`cache_contract`) and stated in the report.
+product work into setup, priming the paths a timed phase will read, or treating a
+cached acquisition or a clone as evidence about the measured operation. Anything
+reused MUST be visible in the receipt (`clone_method`, `build_mode`,
+`dependency_reuse`, `reused_proof_identities`, `cache_contract`) and stated in
+the report.
 
 ## 3. Running a measurement
 

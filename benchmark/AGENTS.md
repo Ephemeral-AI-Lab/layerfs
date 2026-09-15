@@ -26,26 +26,36 @@ Reuse preparation proactively; never let reuse or residual warmth credit a
 measured phase. `../AGENTS.md` §1–2 states the rule; this section names the
 mechanics that exist in this tree.
 
-There is no bare `--reuse` flag: setup reuse is automatic (the prepared-input
-cache prepares on a cache miss and is keyed by content/format compatibility), and
-`--reuse-pass` reuses one identity-matched verification PASS. Builds and images
-reuse through their seals.
+Setup reuse is `--setup clone`; verification reuse is `--reuse-pass`; builds and
+images reuse through their seals. There is no bare `--reuse` flag.
 
 Reuse this (do, and say so in the report):
 
+- `--setup clone` — the default and required choice for every
+  post-initialization case. The runner takes the closed, validated prepared
+  master and hands the sample an independent writable byte copy
+  (`closed_store_copy`; deliberately a byte copy, not an APFS clone), so no sample
+  re-pays preparation. `--setup fresh` exists only for initialization and
+  fresh-output cases, where the runner rejects `clone` outright. Preparation runs
+  automatically on a cache miss: never run a family's `setup.sh` before every
+  sample, never clear protected caches routinely, never reuse a mutated sample.
+  Paired arms use the identical qualified Store artifact and each mutation sample
+  gets its own fresh writable copy (hard links to the master are forbidden).
 - `--reuse-pass <verification.json>` — accept one identity-matched
   `status=PASS`/cleanup-`PASS` verification instead of re-running it. It fails
   closed on schema, identity, hard-limit or wall mismatch, and records
   `reused_proof_identities` plus an explicit omission.
-- prepared immutable inputs — `_host_acquire` prepares automatically on a cache
-  miss; never repeat setup before every sample, never clear protected caches
-  routinely, never reuse a mutated sample. Each mutation sample gets its own
-  fresh writable copy, and paired arms use the identical qualified Store
-  artifact.
-- incremental host builds and the shared Cargo target, image layers keyed by the
+- incremental host builds, the shared Cargo target, image layers keyed by the
   compilation seal, immutable `binary-archive/<sha256>/` executables, and
   `--prune-builds KEEP` for retention. A host-only Python/shell change may reuse
   an image whose compilation seal still matches, but needs a new host identity.
+
+A clone is setup reuse, **not** a cold claim: the receipt records
+`clone_method: closed-quiescent-byte-copy` and `master_unchanged`, and the
+QUICKSTART states plainly that clone is not an APFS clone and not a cold-OS-cache
+claim. Declare the method, treat ordinary OS-cache effects consistently, never
+pool clone and fresh rows, and never let the master's or the clone's warmed pages
+credit a timed phase.
 
 Never: warm starts, replaying an old receipt as a new sample, moving cold product
 work into setup, priming the paths a timed phase will read, dropping caches for
