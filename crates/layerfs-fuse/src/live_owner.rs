@@ -166,14 +166,6 @@ fn io(_: std::io::Error) -> PortError {
     PortError::Io
 }
 
-/// Whether a records page exhausted the frontier: the page ended at `last`
-/// without hitting a page boundary earlier than the frontier end. The host
-/// stops pulling when `done` is set or the page returns zero records after a
-/// non-zero cursor.
-fn state_frontier_exhausted(frontier_len: u64, after: NodeId, count: u64, last: NodeId) -> bool {
-    count == 0 && after.0 != 0 || count != 0 && (count < wire::FACT_PAGE_NODES as u64)
-}
-
 /// Decode one completion record's attribute header. Mirrors `Attr` exactly:
 /// size, mode, links, mtime and kind; the node id rides the record itself.
 fn decode_complete_attr(input: &mut Input<'_>, node: NodeId) -> PortResult<Attr> {
@@ -2656,8 +2648,12 @@ impl LiveOwner {
                 input.done().map_err(io)?;
                 let mut page = Vec::with_capacity(wire::FACT_PAGE_BYTES);
                 let mut count = 0u64;
+                // Set when the scan stopped at a page boundary with frontier
+                // ids still unread: a short page is not an exhausted frontier,
+                // because a byte-bounded page can hold far fewer than
+                // `FACT_PAGE_NODES` records.
+                let mut more = false;
                 let generation;
-                let frontier_len;
                 {
                     let state = self.state()?;
                     generation = {
@@ -2667,7 +2663,6 @@ impl LiveOwner {
                             .map(|slot| slot.token.generation)
                             .ok_or(PortError::Invalid)?
                     };
-                    frontier_len = state.frontier_len() as u64;
                     for id in state.frontier_ids() {
                         if id <= after {
                             continue;
@@ -2688,6 +2683,9 @@ impl LiveOwner {
                             && (page.len() + encoded.len() + 4 > wire::FACT_PAGE_BYTES
                                 || count == wire::FACT_PAGE_NODES as u64)
                         {
+                            // This id and every id after it stay for the next
+                            // page; the frontier is not exhausted.
+                            more = true;
                             break;
                         }
                         wire::bytes_out(&mut page, &encoded).map_err(io)?;
@@ -2716,7 +2714,7 @@ impl LiveOwner {
                     }
                     last
                 };
-                let done = u8::from(state_frontier_exhausted(frontier_len, after, count, last));
+                let done = u8::from(!more);
                 out.push(done);
                 wire::u64_out(&mut out, generation);
                 wire::u64_out(&mut out, count);
