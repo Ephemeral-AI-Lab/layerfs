@@ -1077,3 +1077,90 @@ isolation measurement, and the unresolved dirty-mmap visibility research.
   current automation, which is now none.
 - Reversal, if ever wanted: re-enable Actions in repository settings and restore the
   workflow from git history (`git show 7b9b9df5e:.github/workflows/ci.yml`).
+
+### L22 — 2026-09-18: #152 full-suite campaign, G1 `init_namespace` — collected, plus a host prepared-input truncation found and repaired
+
+Campaign: issue #152, group 1 of 8. Same one-sample rule, bounded acceptance
+(< 50 % worse **or** < 10 ms absolute) and single construction worker as L18–L20.
+
+#### Collection identity
+
+Source seal `0debfccbfe56516fe32efd906d90a98f42cc023c28be7b8861a13267f893eab7`
+@ `8b5e0955e` (tree `ec127964b4`, clean); product
+`31a42c95197a21c5acd54cb12e7398bd8cb5308fab916e62b9439ca0a17bf01d`; compilation
+`79dab102022084ac3926eaa4b1c81585bee3d90eeb25a4940f510dac10083688`; harness
+`daa74be0c3a0b40a824617a6403c70ce4e7be115e7c47f4f1faf26029c55b044`; workload
+`821b240458fe968cec8ec61bf09f1db09e109bf1a3f64fc62e94c449e3c302b8`; image
+`layerfs-bench-infra:0debfccbfe56516f` =
+`sha256:f0c86469d31f0841e103626d20aea144866935df90b25075c87b7011009cf852`.
+
+The source seal is three commits past the issue's frozen `9e3a4c91…` because
+`4787e7474`/`35980634e` changed `tools/preflight.sh`; `tools/` is inside the
+source seal but host-only, outside the Docker context and outside the harness
+identity. Product, compilation, harness, workload and image identities all match
+the frozen table; only the source seal differs.
+
+Command shape (all four cells):
+
+    LAYERFS_CONSTRUCTION_WORKERS=1 bash benchmark/fs-bench-pro/families/init_namespace/perf.sh \
+      --case <case> --seed 1 --setup fresh --image layerfs-bench-infra:0debfccbfe56516f \
+      --perf-fast --collection-mode --product-timeout 600 --timeout 630 --setup-timeout 900 \
+      --output benchmark-results/issue152/g1/<case>
+
+#### Results (one sample per cell; comparators are the recorded #120 rows)
+
+| case | timer | candidate | v0.1.5 (#120) | ratio | Δ abs | disposition |
+|---|---|---|---|---|---|---|
+| `namespace-100-compact-v3` | `layerstack_init_ns` | 31,667,167 | 28,703,959 | 1.10× | +2.96 ms | PASS |
+| `namespace-1000-compact-v3` | `layerstack_init_ns` | 130,366,708 | 112,732,750 | 1.16× | +17.63 ms | PASS |
+| `namespace-10000` | `layerstack_init_ns` | 1,100,711,333 | 1,020,422,292 | 1.08× | +80.29 ms | PASS |
+| `namespace-100000` | `layerstack_init_ns` (cold) | 4,986,155,625 | 4,397,542,208 | 1.13× | +588.61 ms | comparative PASS; **absolute 2.7 s → FAIL — OWNER-WAIVED** |
+
+Complete commands (`command_wall_ns`): 0.46 / 0.52 / 1.53 / **5.69 s**, all inside
+the ≤ 15 s rule. `namespace-100000` also paid 18.57 s cold acquisition and 26.6 s
+one-time fixture regeneration inside `preparation_wall_ns` (45.20 s); both are
+excluded from the complete command under the rule's "excluding one-time
+prepared-input validation" clause, and `wall_ns` (51.76 s) is recorded so the
+exclusion is auditable. Cold contract: `VERIFIED_COLD`, 100,000 files, 125,169
+pages, 0 resident, metadata VERIFIED, detector self-check 32 warm pages,
+`fixture_digest 6fc793a9…` identical to the comparator's. 4/4 cleanups PASS,
+4/4 independent proofs PASS (walls 2/2/3/7 s).
+
+CANONICAL Store after the command (allocated/apparent): 5,152,768 / 20,570,112 /
+304,939,008 (304,705,536) / 520,560,640 (515,366,912) B. Store growth per ingested
+byte 54.6 → 20.6 → 3.05 → 0.52 B, i.e. sub-linear. Container `memory_current_bytes`
+4.51 / 1.93 / 1.63 / 1.86 MB, swap 0, OOM kills 0; lifetime peaks 5.66/5.93/5.67/5.69
+MB are lifetime numbers, not phase peaks (L18).
+
+#### Defect found and repaired — four prepared native fixtures had been truncated
+
+`namespace-10000`, `namespace-100000`, `store-footprint-unique-100000` and
+`store-footprint-metadata-cardinality-100000` were each missing their 100 MiB
+anchor file(s) — `payload/d0028/f002805`, `payload/d0071/f007187` +
+`payload/d0193/f019315`, and the same pair for both store-footprint fixtures.
+The two `init_namespace` samples on the `registered-fixture` tiers failed closed
+with `LayerStack initialization scan receipt mismatch`; the two
+`compact-low-tier-v2` tiers (anchors intact) passed. A manifest-versus-disk sweep
+of all 44 fixture entries found exactly these four, and every damaged payload
+directory carried mtime **2026-09-15 10:20** while intact ones still carried the
+2023-11-15 generation time. It was silent because `runner.py` deliberately trusts
+an owned *native* fixture's recipe and only re-validates content for non-native
+masters.
+
+Repair (no harness change, so `daa74be0…` and every banked receipt stay valid):
+quarantined the four entries plus the pre-existing `.damaged-…` entry under
+`benchmark-results/issue152/quarantine/`, let preparation regenerate them, and
+proved byte identity — file-by-file SHA256 against the quarantined copy shows
+10,002 identical files, exactly one added file (`payload/d0028/f002805`), and only
+`manifest.json` differing (it embeds generation timings). Impact set re-run:
+`namespace-10000`, `namespace-100000`; the two store-footprint cells are
+re-collected in G7 on the regenerated fixtures.
+
+An improved scan-mismatch error message was written and then **reverted**: it
+moved the compilation seal off the frozen `79dab102…` for a cosmetic diagnostic.
+The underlying gap (native fixtures are trusted, not re-validated) is recorded as
+a limitation with a recommended cheap `stat`-only guard.
+
+Evidence: `benchmark-results/issue152/g1/` (perf + verify receipts, wall seconds,
+command logs) and `benchmark-results/issue152/quarantine/`. Group report:
+issue #152 comment 5675349936.
