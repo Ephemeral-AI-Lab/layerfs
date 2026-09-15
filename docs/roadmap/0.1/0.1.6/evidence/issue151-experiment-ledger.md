@@ -1483,3 +1483,54 @@ policy. The failed directories were removed before this was recorded — the `rc
 lines survive in `benchmark-results/issue152/g6.log`.
 
 Group report: #152 comment 5676984615.
+
+### L28 — 2026-09-18: #152 G7 — store_footprint clean (harness fix `b9bca593c`), six reliability injections not migrated
+
+Identity: source `d1bbf882067d824b…` @ `b9bca593c`, **product
+`dc2b3a14f45a4eb7d07b132562b3eadaba5e87644b517aaf6189ce1008e8490d` (unchanged)**,
+compilation `2c4ec5ee…`, image `layerfs-bench-infra:d1bbf882067d824b`.
+
+#### store_footprint — 6/6 PASS after a harness-only fix
+
+All six cells first failed with `Store-footprint Workspace temporary-byte
+accounting`. Instrumenting the message gave `commit edit_spool allocated=10
+live=10 superseded=0 peak=10 fuse spool_write_bytes=0`: the Commit's own
+accounting is internally consistent, and only the cross-subsystem conjunct
+failed, because the host shell's FUSE write-spool metric is dead on this route
+— v0.1.6 moved the payload spool into the sandbox (`projection.rs`: "The remote
+workspace's physical spool lives in the sandbox"). Harness-only fix
+`b9bca593c`: keep the internal-consistency assertions unconditional, apply the
+host cross-check only where the host metric is populated, and keep the observed
+versus expected error text. Product seal unchanged. Cells now 1.00× / 1.03× /
+1.07× / 1.06× / 0.74× / 0.83× with clean proofs; canonical Store growth within
+1.4 % of v0.1.5 and the metadata-cardinality overhead identical to v0.1.5's.
+
+#### workspace_reliability — 21/28 PASS, 6 FAIL, 1 NOT_RUN_OPTIONAL
+
+The six failures share one cause: their fault-injection points sit on the
+pre-v0.1.6 host-owned routes. `candidate-failure-retry` arms
+`INJECT_CANDIDATE_FAILURE` in `Workspace::build_candidate` (`changes.rs:333`)
+while the host-continuation route builds through `build_remote_candidate`
+(`remote_commit.rs:143`); `deferred-nospace` and `short-spool-write` inject into
+the host shell's append path (`file_io.rs:466`, `:797`);
+`published-presentation-failure-smoke-v3` injects into the host materialized
+projection; `admission-batch-failure-retry` and `final-publication-failure-retry`
+surface `faulted Commit did not surface exact injected error` and, for the
+latter, the sandbox route's retained-stage guard
+(`Workspace(Storage(InvalidInput("workspace stage retained")))`,
+`remote_commit.rs:50`).
+
+Control A/B: all six **PASS** on the reconstructed v0.1.5 control
+(`/Users/yifanxu/layerfs-v016-control/benchmark-results/issue152-control3/`), so
+they are not stale-in-both-arms tests.
+
+Recorded as **FAIL (diagnosed)**, not WARN: their purpose is recovery evidence
+and on the sandbox route that evidence does not exist. Not repaired here —
+re-pointing six injections into `build_remote_candidate`, the sandbox admission
+path and `LocalSpool` is feature-sized test instrumentation and #152 is an
+execution/reporting issue. Follow-up named in the report. The other 21 proofs
+(non-injection surface) PASS; `sustained-600s` is NOT_RUN_OPTIONAL
+(`verification_supported: false`; the 600 s sustained proof is a separately
+accounted optional long test).
+
+Group report: #152 comment 5677526128.
