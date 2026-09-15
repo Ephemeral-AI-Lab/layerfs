@@ -1,4 +1,4 @@
-# v0.1.6: sandbox-local snapshot experiment (worktree view)
+# v0.1.6: sandbox-local snapshots and the retained-history roadmap
 
 > **Current replacement experiment, 2026-09-15:** the owner-directed
 > [sandbox-local snapshot specification and implementation plan](sandbox-local-snapshot-spec-and-plan.md)
@@ -6,9 +6,12 @@
 > one Commit worker, one sample per case/arm, and hard v0.1.5 comparison gates
 > for create-500, then bulk-create-500, then 25,000 files.
 
-This directory on the `codex/v016-sandbox-local-experiment` branch contains only
-the frozen planning documents for the scoped experiment; the broader historical
-v0.1.6 overlay documents live on `main` and are not part of this execution.
+This directory holds the frozen planning documents for the sandbox-local
+snapshot experiment that is now the v0.1.6 direction on `main`, together with the
+retained-history work they supersede where the two conflict. The scoped
+experiment starts from v0.1.5 source; the earlier host-overlay implementation
+whose measurements motivated the replacement is preserved on
+`archive/v016-overlay-7b73c4b33` and is no longer on `main`.
 
 | Document | Purpose |
 | --- | --- |
@@ -23,5 +26,9 @@ Execution evidence: [issue151 experiment ledger](evidence/issue151-experiment-le
 [why the host-authority route became expensive](../../../research/v016-sandbox-snapshot-review-2026-09-15.md).
 
 Source base: peeled `v0.1.5^{commit}` =
-`6ee1ec94cfdcb7bc8c55830e8348d553c20e2f13`. The experiment does not
-automatically merge main, close #149/#150, or release v0.1.6.
+`6ee1ec94cfdcb7bc8c55830e8348d553c20e2f13`. Promotion to `main` (2026-09-15,
+owner-directed) selected this implementation as the v0.1.6 direction; it did not
+close #149/#150, cut a release tag, or claim the remaining gates: B1's
+complete-Commit gate is recorded as a FAIL, B2's memory metric is unresolved, and
+B3 (25,000 one-byte files) has not been run. See the ledger for exact identities
+and per-phase arithmetic.

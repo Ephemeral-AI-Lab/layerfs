@@ -497,3 +497,39 @@ Same flags, extended allowances, seed 1, `--setup clone`, one worker per arm.
   (`local-snapshot-create-25000-onebyte-v1`) has not been started; the pipeline
   forbids advancing past an unpassed gate. All receipts and raw event streams
   above are retained with their exact identities.
+
+### L15 — 2026-09-15: owner directive — promote this implementation to `main` (local and origin)
+
+- Owner decision: the measured sandbox-local implementation is the v0.1.6
+  direction. `main` (local `7b73c4b33c950c3ce3cd192ea7b571398bda3f8f`, equal to
+  `origin/main`) is replaced by this branch's tip; the earlier host-overlay
+  v0.1.6 work on `main` is discarded from `main` **but preserved**:
+  - local + remote branch `archive/v016-overlay-7b73c4b33` at the old tip;
+  - the uncommitted documents that lived only in the `main` worktree were
+    stashed (`stash@{0}`, pushed as a ref) and copied verbatim to
+    `/Users/yifanxu/Ephemeral-AI-Lab/layerfs-main-uncommitted-20260915T0930Z/`;
+    nine of the ten are byte-identical to files already committed on this
+    branch; two documents are *not* on this branch and therefore leave `main`
+    with this promotion: `docs/roadmap/0.1/0.1.6/README.md` (the previous
+    broader version) and `docs/roadmap/0.1/0.1.6/overlay-snapshot-rule.md`
+    (untracked-relative to this branch). Both remain recoverable from the
+    archive branch and the stash.
+- What the promotion does and does not claim:
+  - it selects the implementation direction; it does **not** close #149/#150,
+    cut a release tag, or assert release readiness;
+  - the recorded gate state travels with it: B1 complete Commit FAIL
+    (+7.3 % on the contemporaneous pair), B2 memory metric unresolved (the
+    declared sandbox-process input is not emitted; the container-cgroup proxy is
+    658.6 MB against a 128.2 MB limit because it includes the payload page
+    cache), B3 not run;
+  - the four carried limitations remain: retention amplification (measured 0 in
+    B1/B2 but unexercised under hostile write-during-transfer), no
+    cross-snapshot diffing, unsolved mmap dirty visibility, and no
+    durability/recovery by design;
+  - the control arm, the sealed v0.1.5 worktree
+    (`/Users/yifanxu/Ephemeral-AI-Lab/layerfs-v016-control`) and all receipts
+    under `benchmark-results/issue151/` are unaffected by this promotion.
+- Product identity of the promoted revision is unchanged by this entry: it is
+  documentation only, so the product seal of the measured samples
+  (`c2e6dc0a…`) still describes it; the source seal changes because the tree
+  changed.
