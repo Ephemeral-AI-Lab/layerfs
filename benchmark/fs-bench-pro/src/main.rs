@@ -1911,12 +1911,29 @@ fn store_footprint_case(
     let commit_candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
     let commit_receipt = operation_workspace_commit(&snapshot)?;
     let fuse = operation_fuse_write(&snapshot)?;
-    if commit_receipt.edit_spool_allocated_bytes != fuse.spool_write_bytes
-        || commit_receipt.edit_spool_live_bytes + commit_receipt.edit_spool_superseded_bytes
-            != commit_receipt.edit_spool_allocated_bytes
+    // The payload spool is sandbox-owned on the host-store route, so the host
+    // shell no longer observes it and its FUSE write-spool metric reads zero
+    // (`projection.rs`: "The remote workspace's physical spool lives in the
+    // sandbox"). Assert the Commit's temporary-byte accounting always for
+    // internal consistency, and cross-check it against the host metric only
+    // where that metric is populated; a zero there means "not observed on this
+    // route", not "nothing was written".
+    let host_spool_observed = fuse.spool_write_bytes != 0;
+    if commit_receipt.edit_spool_live_bytes + commit_receipt.edit_spool_superseded_bytes
+        != commit_receipt.edit_spool_allocated_bytes
         || commit_receipt.edit_spool_peak_bytes < commit_receipt.edit_spool_allocated_bytes
+        || (host_spool_observed
+            && commit_receipt.edit_spool_allocated_bytes != fuse.spool_write_bytes)
     {
-        return Err("Store-footprint Workspace temporary-byte accounting".into());
+        return Err(format!(
+            "Store-footprint Workspace temporary-byte accounting: commit edit_spool allocated={} live={} superseded={} peak={} fuse spool_write_bytes={}",
+            commit_receipt.edit_spool_allocated_bytes,
+            commit_receipt.edit_spool_live_bytes,
+            commit_receipt.edit_spool_superseded_bytes,
+            commit_receipt.edit_spool_peak_bytes,
+            fuse.spool_write_bytes,
+        )
+        .into());
     }
     let canonical = store.canonical_storage()?;
     let storage = store.storage_snapshot()?;
