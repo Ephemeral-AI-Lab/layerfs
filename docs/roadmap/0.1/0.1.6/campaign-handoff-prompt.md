@@ -86,14 +86,18 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
   `--locked` (AGENTS.md §4).
 - **No CI exists.** Run `tools/preflight.sh` before every push; a push may never claim
   "CI green".
-- **One construction worker for commit, capture and snapshot.** Every run exports
-  `LAYERFS_CONSTRUCTION_WORKERS=1`, no run raises it, and no second lane or helper
-  worker is added to pass a gate. v0.1.5's small-content path used four
-  (`SMALL_CONTENT_WORKERS = 4`) and `construction_worker_limit()` still defaults to
-  `available_parallelism().min(8)`, so **expect a performance drop against v0.1.5** —
-  it is absorbed by the bounded acceptance rule (<50 % or <10 ms), never repaired by
-  adding workers. Making single-worker the **product default** is part of this
-  campaign's work; an exported variable is not enough.
+- **One construction worker — for every case except namespace init.** Commit, capture
+  and snapshot are single-producer in the *default* wiring: `construction_worker_limit()`
+  (`crates/layerfs-workspace/src/changes.rs`) and `objects::construct_files`'s
+  small-content cap (`SMALL_CONTENT_WORKERS = 4`) both still allow more, so making them
+  single-producer is part of this campaign's work — an exported
+  `LAYERFS_CONSTRUCTION_WORKERS=1` is not enough. **`init_namespace` is the only
+  exception:** its init path (`initialize_layerstack`,
+  `direct_initialize_root_directories_inner`, `prepare_parallel_root_directories`) keeps
+  multiple workers/threads and its 2.7 s cold Init target — never collapse it to one.
+  For the single-worker cases, **expect a performance drop against v0.1.5** (its
+  small-content path used four workers); it is absorbed by the bounded acceptance rule
+  (<50 % or <10 ms), never repaired by adding workers.
 - Banked receipts — B1 `tiny-create-500-mixed-v4`, B2 `tiny-bulk-create-500-mixed-v3`,
   B3 `local-snapshot-create-25000-onebyte-v1` — are **cited, not re-collected**.
 
@@ -164,7 +168,8 @@ a verdict, and a passing gate is not proof that the mechanism behind it is sound
 
 - The default wiring is a work item too: `construction_worker_limit()` and the Store's
   small-content cap must be single-worker **by default** (`SMALL_CONTENT_WORKERS = 4`
-  today), so that a run cannot silently use four workers.
+  today), so that a run cannot silently use four workers — while leaving
+  `init_namespace`'s initialization parallelism intact.
 - Reproduce in the **smallest case that shows the defect** (usually a compact-1 or 100
   tier), read the code path, fix the cause, add or extend a focused test, run
   `tools/preflight.sh`, commit, re-seal, and **re-run only the affected cases** (impact

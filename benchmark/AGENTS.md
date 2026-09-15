@@ -14,7 +14,11 @@ n3/repeated-sample campaign. The released small-content path used four workers
 available parallelism, so a **performance drop against v0.1.5 is expected**: it is
 accepted by the bounded acceptance rule (sub-50 % or sub-10 ms), never repaired by
 adding workers. Single-worker must become the product default during this campaign,
-not merely an exported variable. This exception does not change unrelated benchmark or
+not merely an exported variable.
+**`init_namespace` is the one case allowed multiple workers/threads** — its
+initialization path (`initialize_layerstack`, `prepare_parallel_root_directories`)
+keeps its parallelism and its 2.7 s cold Init target; every other family's measured
+work must be single-worker. This exception does not change unrelated benchmark or
 release contracts.
 
 ## Existing profiles
