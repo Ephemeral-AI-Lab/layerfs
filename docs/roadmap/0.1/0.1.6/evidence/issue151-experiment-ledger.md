@@ -1534,3 +1534,34 @@ execution/reporting issue. Follow-up named in the report. The other 21 proofs
 accounted optional long test).
 
 Group report: #152 comment 5677526128.
+
+### L29 — 2026-09-18: #152 G8 — historical_access NOT_RUN (sealed v2 Store unavailable), campaign final report
+
+`runner.py --family historical_access --list` returns the intact v2 fixture
+(`store_sha256 f323de0e0f9ae1030efc142402bc033ad427134dd8c69f21eb5b5d6ef7426eb7`,
+branch `1101a0877559737f07bccc2ffe2a82d9f3`, 11 cases). Search for that Store:
+
+1. `benchmark-results/host-store/prepared/` — no history/access preparation
+   (this family prepares nothing) and no matching hash.
+2. `benchmark-results/host-store/issue118/20260912/` — three sealed full157
+   stores and the 2026-09-12 access receipts exist, but those runs used the v1
+   template ids against a different store: `full157-candidate-1/…/frozen-measured-store/store.sqlite`
+   hashes `0e767a7f…` with branch `1101a094892f39783da6dca308acdba50b`.
+3. Every `store.sqlite` ≥ 50 MB under the whole `benchmark-results` tree (185
+   candidates: 9 outside `prepared/`, 176 inside) plus all 6 in the control
+   worktree were hashed — **no match**.
+4. The path named by `docs/roadmap/0.1/0.1.5/issue101/results.md:64`
+   (`layerfs-issue100-45mb-evidence/retained-full157-1/…`) was removed by the L17
+   cleanup; a bounded search under `/Users/yifanxu` finds no such directory.
+
+Disposition: **NOT_RUN** for 11 performance cases + 11 proofs, with that reason.
+No Store was reconstructed, no substitute used, no v1 receipt promoted to a v2
+row. `repository_history` (3 optional profiles) is **NOT_RUN_OPTIONAL**;
+`workspace-sustained-600s` is **NOT_RUN_OPTIONAL**.
+
+The campaign final report is committed at
+`docs/roadmap/0.1/0.1.6/evidence/issue152-final-report.md`: identity chain,
+terminal tally, the complete `family → per-test` table (196 collected cells plus
+REUSED-FROM and non-collected terminal rows), the bug ledger, the architecture
+guardrails, the resource tables, the remaining limitations and the decisions.
+Group report: #152 comment 5677788950.
