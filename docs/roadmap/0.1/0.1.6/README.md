@@ -61,5 +61,17 @@ close #149/#150, cut a release tag, or claim the remaining gates:
   per-Commit evidence collision, missing bounded native recipe), all on the
   verification path and none in either product — ledger L19.
 
-See the ledger (L18 in particular) for exact identities, the memory timelines and
-per-phase arithmetic.
+See the ledger (L18–L20 in particular) for exact identities, the memory timelines
+and per-phase arithmetic.
+
+**Status after L20.** The owner accepted the measured one-worker cost, and the
+three gates are recorded as accepted: B1 with one informational container-CPU
+line over its sub-gate, B2 with its Commit/CPU-sum deltas inside the accepted
+tolerance and its sandbox-memory line recorded as not measurable on this harness,
+and B3 with both absolute 25k gates and both separate verifications passing. The
+adoption recommendation is to take this direction for v0.1.6 at one construction
+worker, with the limitations listed in L20 attached — sandbox *process* memory is
+not emitted by the frozen harness, the time comparison is cache-stance and
+host-load sensitive beyond the 15% allowance, dirty shared-mmap visibility stays
+unsolved, and the breadth families were not run. This is not a release decision:
+no merge, issue closure or tag follows from it.

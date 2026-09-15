@@ -980,3 +980,79 @@ product seals unchanged (`31a42c95…` / `276c5970…`), images
   holding the fixture. The B3 time lines therefore carry a larger uncertainty than
   the 15% allowance this case is measured against, and only the two absolute 25k
   gates (backing, memory) plus the verification are decisive here.
+
+### L20 — 2026-09-17: owner acceptance of the one-worker cost; final applicability, limitations and adoption recommendation
+
+Owner ruling on the B3 numbers ("that is good, not really bad numbers"): the
+measured deltas are accepted as the cost of the promoted one-worker direction.
+This entry converts that ruling and the L18/L19 evidence into the closing record
+required by the pipeline's checklist (*final evidence/applicability table, cleanup
+and adoption recommendation recorded*). It does **not** merge, close or release
+anything: the pipeline states that passing this experiment does not automatically
+merge `main`, close #149/#150 or release v0.1.6.
+
+#### Disposition of the three gates
+
+| gate | case | disposition | decisive evidence |
+|---|---|---|---|
+| B1 | `tiny-create-500-mixed-v4` | **accepted** | every gate passes on revision `c0ebedd2d` except the container-only CPU sub-gate (+4.9%, a 23 ms difference); the complete-Commit reading that failed in L12 now passes (57,568,333 vs limit 60,993,028). The owner had already ruled the earlier commit-phase reading not a blocker (L18). |
+| B2 | `tiny-bulk-create-500-mixed-v3` | **accepted, with a declared metric caveat** | workflow 4,754,690,332 vs limit 5,008,156,180 PASS, exec/End/backing PASS, canonical Store growth comparable; Commit +21.4% and CPU sum +6.6% over limits derived from a control whose equivalent read is cache-served, both inside the owner's one-worker tolerance. The memory-amplification defect is repaired (sandbox residency ~500 MiB → ≤ 2.6 MiB); the harness's container-lifetime proxy cannot decide the memory line (L18), so that line is recorded as *not measurable on this harness*, not as PASS. |
+| B3 | `local-snapshot-create-25000-onebyte-v1` | **accepted** | separate verification PASS on both arms (per-Commit C1/C2/C3 canonical checks, sampled native reopen, cleanup PASS); both 25k absolute gates PASS (transient backing 25,000 B vs 32 MiB; peak-sum memory 130.2 MB vs control 134.6 MB, limit 154.8 MB); five time/CPU lines miss the strict +15% allowance by +1.7% to +36.1% while an earlier pair on the same product seals passed all five, i.e. inside the host-state spread and inside the owner's ≤50% tolerance. |
+
+#### Source applicability — which implementation each result validates
+
+| item | revision | evidence | status |
+|---|---|---|---|
+| I0 frozen inputs | L0–L2 | ledger L0–L2 | recorded |
+| I1–I3 ownership, snapshot structure, bounded transfer | `ab2a6f9cb` (daemon route), `fuse`/`workspace` crates as promoted | ledger L4, L5, L11 smoke + verification PASS on the public path | recorded |
+| I3–I5 host route, canonical construction, publication | `55b531bc5`, promoted to `main` | ledger L5, L15 | recorded |
+| I6 focused checks and sealed candidate | `e03dae88…`/`31a42c95…` product seals | fast cycles and smoke PASS (ledger L7, L10, L11); the section 9 focused proofs (held-builder, deliberate stall, partial-transfer cancel) were part of the implementation phase and were **not re-run in this measurement span** | recorded, not re-run here |
+| B1 create-500 | `c0ebedd2d`, product `31a42c95…` | `perf-candidate5-…` + `verify-candidate5-…` | accepted (one informational line) |
+| B2 bulk-create-500 | `c0ebedd2d`, product `31a42c95…` | `perf-candidate3-…` + `verify-candidate3-…`, plus the five post-fix B2 instrumentation runs | accepted with metric caveat |
+| B3 25k three-Commit | `9104bcb4f`, product `31a42c95…` | `perf-CAND-25k-r5` + `verify-CAND-25k-r5` (control `perf-CTRL-25k-r5` + `verify-CTRL-25k-r5`) | accepted |
+| non-pausing execution during Commit | `fa642c5ea` (freeze/pause/quiesce removed) | code path removed and exercised by every B1/B2/B3 Commit; no dedicated proof re-run in this span | implemented, exercised |
+| multi-Workspace isolation | — | **not measured in this span** | outstanding limitation |
+
+#### Reported resources (candidate, accepted samples)
+
+| case | workflow | Commit(s) | container CPU | host CPU | peak-sum memory | temporary backing | canonical Store growth |
+|---|---|---|---|---|---|---|---|
+| B1 | 244,352,124 ns | 57,568,333 ns | 135,386,000 ns | 106,165,542 ns | 42,352,640 B | 824,450 B | +897,024 B |
+| B2 | 4,754,690,332 ns | 2,198,331,166 ns | 2,254,290,000 ns | 2,802,701,583 ns | (see caveat) | 524,288,000 B | +530,894,848 B |
+| B3 | 10,381,383,418 ns | 521,839,917 / 76,904,333 / 67,380,500 ns | 6,242,791,000 ns | 748,738,417 ns | 130,150,400 B | 25,000 B (32 MiB gate) | n/a (three Commits, reported per step) |
+
+#### Remaining limitations, stated rather than hidden
+
+- **Sandbox memory is not measurable on the frozen harness.** The only symmetric
+  sandbox number is a container *lifetime* cgroup peak, which includes image
+  layers, harness exec helpers and fixture-preparation high-water; it varied
+  24.6–189.8 MB across six identical B2 runs while the product's own residency
+  stayed ≤ 2.6 MiB. The spec's declared metric is a *process* peak sum with
+  cgroup/kernel reported separately, so the B2 memory line is `INCOMPLETE` here.
+- **The time comparison is cache-stance sensitive and host-load sensitive.** The
+  B3 control measured 9.06 s cold and 1.91 s when run back-to-back with another
+  run of the same case (4.7×); between the r3 and r5 pairs the candidate/control
+  ratio moved ~16% with no product change. The 15% allowance this experiment uses
+  is narrower than that spread, so individual time lines are not individually
+  conclusive; the accepted ruling absorbs this.
+- **Dirty shared-mmap visibility remains unsolved** (research, recorded in
+  `overlay-snapshot-contract-resolution.md`), and there is no cross-snapshot
+  diffing; durability is out of scope by design (volatile contract).
+- **The breadth families were not run.** 233 cases exist across 24 families; the
+  pipeline scopes this experiment to B1–B3 and forbids the broad matrix. A breadth
+  pass remains optional and owner-scoped, and `historical_access` would need the
+  sealed full157 Store path supplied by the owner.
+
+#### Adoption recommendation
+
+Adopt the sandbox-local snapshot ownership with host-authoritative canonical
+publication as the v0.1.6 direction, at one construction worker, on the strength of:
+a functionally complete public path (three gates reaching real Commits, exact
+end-to-end verification on both arms), the repaired memory-amplification defect
+(payload residency bounded by a constant instead of by payload size), both 25k
+absolute gates passing, and a CPU sum that stays within the accepted one-worker
+tolerance. Keep the three limitations above attached to the adoption. Do not treat
+this as a release decision: the remaining work is the optional breadth pass, a
+harness field for sandbox *process* memory if the B2 memory line is to be gated
+rather than reported, a declared repeat policy for the +15% lines, multi-Workspace
+isolation measurement, and the unresolved dirty-mmap visibility research.
