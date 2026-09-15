@@ -1434,3 +1434,52 @@ same shape at the other tiers 1.01× / 0.99× / 1.17×, recorded rather than
 explained away.
 
 Group report: #152 comment 5676750996.
+
+### L27 — 2026-09-18: #152 G6 dedup block (59 PASS + 6 diagnosed material regressions + 1 proof)
+
+Identity: source `bebc8c9805e2acef…` @ `29835f44d`, product
+`dc2b3a14f45a4eb7d07b132562b3eadaba5e87644b517aaf6189ce1008e8490d`, compilation
+`36a30d3c…`, image `layerfs-bench-infra:bebc8c9805e2acef`, harness `daa74be0…`,
+workload `821b2404…`. 65/65 registered selections terminal: 64 performance
+samples + `dedup-cdc-boundaries-proof` (PASS, 0.58 s). 64/64 cleanups PASS,
+64/64 independent proofs PASS. Complete commands 0.4–13.7 s.
+
+#### Six material regressions, all one cause
+
+`dedup-cross-file-identical-500` 1.65× (+136.61 ms);
+`dedup-cdc-scattered-500` 1.61× (+864.05 ms); `dedup-cdc-delete-100` 1.60×
+(+34.70 ms); `dedup-cdc-overwrite-500` 1.59× (+144.41 ms);
+`dedup-cdc-delete-500` 1.59× (+144.23 ms); `dedup-cdc-insert-500` 1.50×
+(+128.86 ms). All six fail both halves of the bounded-acceptance rule and are
+recorded as FAIL with this diagnosis rather than accepted.
+
+Each is a single `initialize_layerstack` call (`pure_call_sum_ns`, one
+`initialize` phase), i.e. host canonical construction.
+`crates/layerfs-layerstack-store/src/objects.rs:3545`/`:4488` admit
+`worker_limit.min(SMALL_CONTENT_WORKERS)` constructors, and directive 2 mandates
+`LAYERFS_CONSTRUCTION_WORKERS=1` in every run, so initialization drops from the
+released 4-way small-content parallelism to one producer. The #120 comparators
+predate directive 2.
+
+Direct proof (labelled diagnostic, not a gate row): re-running the worst cell
+with `env -u LAYERFS_CONSTRUCTION_WORKERS` and everything else identical gives
+**1,458.89 ms** against the comparator's 1,426.04 ms (1.02×), versus the gate
+sample's 2,290.09 ms (1.61×). The entire delta is the single-worker directive.
+Stored at `benchmark-results/issue152/g6-diag/`.
+
+Context only: the group's median ratio is ≈ 0.85×, 46 of 64 cells are faster than
+v0.1.5, and the effect scales with how much unique content construction has to do
+(`dedup-cdc-common-body-500` 1.18× vs `dedup-cdc-scattered-500` 1.61×). The
+`dedup-history-unrelated-500-mixed-v2` cell that #120 carried as its single
+unrepaired S2 against a `< 15 s` target measures 12.254 s here (0.76×) → PASS.
+
+#### Driver correction
+
+The first G6 attempt passed `--setup clone` to `dedup_cross_file` and
+`dedup_cdc_locality`, which are registered `fresh-output`: 30 invocations failed
+immediately with `initialization requires a fresh output Store; clone is not
+applicable`. Driver mistake, not a measurement; re-collected with the registered
+policy. The failed directories were removed before this was recorded — the `rc=`
+lines survive in `benchmark-results/issue152/g6.log`.
+
+Group report: #152 comment 5676984615.
