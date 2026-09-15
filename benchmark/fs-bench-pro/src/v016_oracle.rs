@@ -627,6 +627,13 @@ fn verify_root_against_shadow(
     let mut small = 0usize;
     let mut ranged_paths = 0usize;
     let mut mismatches: Vec<String> = Vec::new();
+    // The declared length of a persisted regular file is a property of its
+    // published file-state root, and one v0.1.6 branch shares most of its paths
+    // with its siblings and with its own fork point. Re-reading the same
+    // authenticated file-state once per path that references it proves nothing
+    // extra (#154); the first read for a root is the check, later paths reuse it.
+    let mut declared_lengths: std::collections::BTreeMap<layerfs_content::ObjectId, u64> =
+        std::collections::BTreeMap::new();
     for (path, state) in &shadow.paths {
         let record = view
             .paths
@@ -653,7 +660,14 @@ fn verify_root_against_shadow(
                 }
             }
         }
-        let observed_len = super::workspace_verify::declared_regular_length(source, record)?;
+        let observed_len = match declared_lengths.get(&record.content_root) {
+            Some(len) => *len,
+            None => {
+                let len = super::workspace_verify::declared_regular_length(source, record)?;
+                declared_lengths.insert(record.content_root, len);
+                len
+            }
+        };
         if state.len() != observed_len {
             mismatches.push(format!(
                 "length {path}: declared {} published {observed_len}",
