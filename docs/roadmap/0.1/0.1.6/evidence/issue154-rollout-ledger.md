@@ -1,0 +1,122 @@
+# #154 rollout ledger — the six #122 families on `main` (sandbox-local snapshot route)
+
+Append-only. One entry per phase or family closure, with the exact numbers, the
+identities they were taken on, the arithmetic, the reproduction command and every
+non-passing line. Superseded receipts stay on disk; nothing here is rewritten
+after the fact.
+
+The machine-readable per-case matrices live beside this file in
+`docs/roadmap/0.1/0.1.6/evidence/issue154/`. Raw receipts are retained under
+`benchmark-results/v016/<tag>/…` (gitignored local evidence) and are named by the
+matrix's `receipt` fields.
+
+## L1 — Phase 0: the port (no measurement)
+
+**What was ported.** The frozen specification restored from `7b73c4b33`
+(`cases.json`, `check_plan.py`, `benchmark-families.md`, `fixtures.md`,
+`workloads.md`, `execution-and-verification.md`, `review-decisions.md`,
+`benchmark-exclusions-issue122.json`) and the archived benchmark harness: three
+new family directories (`file_size_transition`, `multi_workspace_development`,
+`branch_development`), the v016 workload sources
+(`v016_common/stages/m1/boundary/compact/local`) and the host orchestrator and
+oracle (`src/v016_mixed.rs`, `src/v016_oracle.rs`), the fixture-preparation and
+matrix tooling, the two extensions and the six `dedup_branch_history` history
+profiles.
+
+**Route adaptations** (harness at the boundary only; declared operations,
+counters and oracles unchanged):
+
+| what | why | change |
+| --- | --- | --- |
+| `workspace_verify::verify_split_classes` | `main`'s `persist_snapshot` takes an evidence name | passes `canonical-verification` |
+| `verify-selected.py` selection deadline | `main` bounds authentication to 45 s; a v0.1.6 case is charged from entry to its declared complete-command deadline | authentication bound is the case's declared deadline when it declares one, 45 s otherwise |
+| declared deadlines | the overlay line carried 90 s regular / 300 s and 600 s extended allowances | frozen `cases.json` values: 25 s regular exception ceiling (22 s worker stop + 3 s cleanup), 120 s / 300 s / 60 s watchdogs |
+| `workspace_registry` membership | the archived declaration (154) did not match its own `cases()` output | measured membership 161 = 8+20+12+4+4+16+10+10+20+14+**26**+7+5+4+1, with `local_snapshot` kept |
+| `campaign-handoff-prompt.md` links | eight relative links resolved outside the tree, failing the frozen `check_plan.py` link gate | repaired to the real targets |
+
+**Not ported, by design:** the overlay product line
+(`crates/layerfs-workspace/src/overlay.rs`,
+`crates/layerfs-workspace-core/src/file_edit.rs`) and the overlay CI-policy
+commits. `main`'s own route work is preserved: the `local_snapshot` family, the
+#151 store-footprint spool accounting and the #152 remote verification faults.
+
+**Gates.** `python3 docs/roadmap/0.1/0.1.6/check_plan.py` →
+`{"status":"PASS","regular_cases":33,"extended_cases":3,"mixed_load_cases":12,"fixtures":10}`;
+`rustc --edition 2021 --test workload/main.rs` → 18 passed;
+`target/release/fs-benchmark-pro workspace-self-check` →
+`{"status":"pass","timed_case_count":161,"sample_slot_count":483}`;
+`tools/preflight.sh` → all steps passed (rustfmt 1.96, tools tests, workspace fast
+suite, `clippy --workspace --locked -- -D warnings`, benchmark harness tests).
+
+**Not yet implemented anywhere** (carried into F4/F6, per #154): the two compact
+`branch_development` controls and the six `historical_access` additions with their
+sealed-producer access route. `infra-list` reports 28 of the 36 declared case IDs
+registered.
+
+**Identities after the port.**
+
+| identity | value |
+| --- | --- |
+| source commit | `b4349ae9194e36dff321d965b1f7239842ff159c` (`LAYERFS_SOURCE_DIRTY=false`) |
+| source seal | `8ef48ec2b762f7201c08b6beda91c60526c33a199ef1c2e000bd0bd01a5732f3` |
+| source tree | `aecfb3687ddf61d9eb7f74ea520c3820f6000d66` |
+| product seal | `970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd` |
+| compilation seal | `4ad3b7b2cd7d94e9cfee627fc66644a8376c4a4b47592047dd438ee4f9c8baee` |
+| dependency seal | `d9ae8ff2144895cbb559e2270763d141b7a61f0fc559184f8cc77bd50beb0d4f` |
+| image | `layerfs-bench-infra:8ef48ec2b762f720` = `sha256:10ba09aa0f50a760b8314625c4e4abe12da9bd992b3763aab7fc8fef48a359c5` |
+| harness identity | `89c38e1f76388c7a1df2e830bc607ee97db01c9b1a03e419f2d385b8b84c8bc5` |
+| workload-source sha256 | `78e42fe5f86199f6e3874f2ca1f6fdeb4c5c79472d3b3352ae32e623037a4836` |
+| host binary sha256 | `02fa95f9a6ff1aac604f8e2ed8e4ce92efe0bcf61247851623c2977b4f2836b0` |
+
+## L2 — F1 `file_size_transition` (7 regular cases, seed 1) — terminal
+
+Command:
+
+```bash
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f1-seed1 \
+  --family file_size_transition --prepare
+```
+
+One performance and one separate verification invocation per case, `--setup
+clone` (declared `closed-quiescent-byte-copy`, master unchanged), one sample,
+fresh append-only outputs. The complete-command wall is measured by the driver
+around each invocation; every invocation fits the 15 s gate by a factor of six or
+better, so no declared exception is claimed.
+
+| case | perf status | perf wall | perf gate | verify status | verify wall | verify gate | Created | operation timer |
+| --- | --- | ---: | --- | --- | ---: | --- | ---: | ---: |
+| `v016-boundary-small-control-v1` | PASS | 2.23 s | PASS | PASS | 1.97 s | PASS | 2 | 20.26 ms |
+| `v016-boundary-below-v1` | PASS | 1.92 s | PASS | PASS | 1.93 s | PASS | 2 | 24.11 ms |
+| `v016-boundary-exact-v1` | PASS | 1.86 s | PASS | PASS | 1.91 s | PASS | 2 | 21.49 ms |
+| `v016-boundary-above-v1` | PASS | 1.91 s | PASS | PASS | 2.41 s | PASS | 2 | 21.44 ms |
+| `v016-boundary-large-control-v1` | PASS | 2.35 s | PASS | PASS | 2.06 s | PASS | 2 | 19.25 ms |
+| `v016-boundary-roundtrip-v1` | PASS | 2.08 s | PASS | PASS | 2.22 s | PASS | 4 | 29.61 ms |
+| `v016-boundary-alias-roundtrip-v1` | PASS | 2.42 s | PASS | PASS | 1.91 s | PASS | 5 | 53.80 ms |
+
+* No `UpToDate`, `Busy`, `HeadMoved`, presentation failure or error was observed
+  in any row: `commit_outcomes = {Created: n, UpToDate: 0, Busy: 0, HeadMoved: 0,
+  presentation_failures: 0}` with `n` the row's Created count.
+* Verification coverage: every row ran the canonical full-state verifier
+  (`canonical-verification`, whole-snapshot payload extents) plus the independent
+  native oracle over the declared paths (`oracle_scope=independent-source`).
+  `v016-boundary-alias-roundtrip-v1` additionally proved the declared inode-class
+  split (`v016-alias-inode-classes`) and replayed its four POSIX steps. Full-payload
+  and affected-set verification are separately named in the matrix; the standing
+  omission in every receipt is `no exhaustive Phase 1 replay`.
+* Resources (container command window): 4.7 MB current, 5.7 MB container lifetime
+  peak, 0 swap, 0 OOM kills; the host Store observations record 217 KB allocated
+  before the run and 348–356 KB after the first Commit. Reported as sampled, with
+  the container quota being the only capped scope.
+
+**Non-passing rows: none.** All seven cases are terminal at seed 1.
+
+**Defects found and fixed in F1: none.** The port ran green on the first
+invocation; the only F1 work was instrumenting the run and recording it.
+
+**Probe retained.** The first end-to-end probe
+(`benchmark-results/v016/r1/perf-file_size_transition-exact-seed1`,
+`…/verify-file_size_transition-exact-seed1`, status PASS 2.45 s / PASS 2.09 s on the
+same identity) is kept as a labelled diagnostic of the port; the F1 gate sample for
+that case is the one in the table above, taken with the family's declared
+instrumentation.
