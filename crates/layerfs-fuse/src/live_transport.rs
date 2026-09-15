@@ -284,6 +284,7 @@ impl Drop for BackingServer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn serve(
     mut stream: TcpStream,
     capability: [u8; 32],
@@ -395,6 +396,10 @@ pub struct BackingConnection {
     available: AtomicBool,
 }
 
+/// Client-side batching for multi-frame backing transactions. The sandbox-owned
+/// route sends one frame per request, so this path is exercised by the
+/// transport tests and the batch wire format rather than by a live Workspace.
+#[allow(dead_code)]
 pub(crate) struct BatchProgress {
     pub completed: usize,
     pub error: Option<PortError>,
@@ -405,6 +410,7 @@ struct ExchangeFailure {
     uncertain: bool,
 }
 impl BatchProgress {
+    #[allow(dead_code)]
     pub fn result(&self) -> PortResult<()> {
         self.error.map_or(Ok(()), Err)
     }
@@ -452,6 +458,7 @@ impl BackingConnection {
 
     /// Preserve acknowledged prefixes even when a later operation fails. Large
     /// transactions keep the original frame-at-a-time route and its bounds.
+    #[allow(dead_code)]
     pub(crate) async fn call_batch(
         &self,
         frames: &[&[u8]],
@@ -528,6 +535,7 @@ impl BackingConnection {
         }
     }
 
+    #[allow(dead_code)]
     async fn call_serial(&self, frames: &[&[u8]]) -> BatchProgress {
         for (completed, frame) in frames.iter().enumerate() {
             let (error, uncertain) = match self.call_exchange(frame).await {
@@ -552,6 +560,7 @@ impl BackingConnection {
         }
     }
 
+    #[allow(dead_code)]
     async fn poison(&self) {
         self.available.store(false, Ordering::Release);
         self.stream.lock().await.take();

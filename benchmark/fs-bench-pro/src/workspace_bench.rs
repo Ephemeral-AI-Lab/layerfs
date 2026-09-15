@@ -1766,8 +1766,7 @@ fn run_case(
                     // the branch head: C1, C2 and C3 states all carry exact
                     // bytes, namespace and metadata through the Store.
                     let expected = registry::expected(case, seed, step + 1)?;
-                    let receipt =
-                        super::workspace_verify::verify(&store, branch, &expected, root)?;
+                    let receipt = super::workspace_verify::verify(&store, branch, &expected, root)?;
                     emit(
                         "step-canonical-verification",
                         &[

@@ -127,6 +127,7 @@ pub fn batch_reply(completed: usize, error: Option<crate::PortError>) -> Vec<u8>
     out
 }
 
+#[allow(dead_code)]
 pub(crate) fn parse_batch_reply(
     bytes: &[u8],
     count: usize,

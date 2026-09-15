@@ -9,12 +9,12 @@
 
 use crate::changes::construction_worker_limit;
 use crate::live_backing::RemoteWorkspace;
-use crate::snapshot_input::{CaptureSummary, CompletionRecord, FrozenRemoteInput, SnapshotToken};
 use crate::session::{WorkspaceCommitResult, WorkspaceCommitStatus};
+use crate::snapshot_input::{CompletionRecord, FrozenRemoteInput, SnapshotToken};
 use crate::{Workspace, WorkspaceError, WorkspaceResult};
 use layerfs_content::ObjectId;
 use layerfs_layerstack_store::{
-    CommitOutcome, CommitId, CoreReader, LayerId, ObjectBuffer, StoreError,
+    CommitId, CommitOutcome, CoreReader, LayerId, ObjectBuffer, StoreError,
 };
 use layerfs_workspace_core::{Attr, Kind, Node, NodeId};
 use std::collections::HashMap;
@@ -94,9 +94,10 @@ pub(crate) fn commit_remote(
             .nodes
             .values()
             .filter_map(|node| match &node.data {
-                layerfs_workspace_core::Data::File(
-                    layerfs_workspace_core::FileData::Edited { spool_high_water, .. },
-                ) => Some(*spool_high_water),
+                layerfs_workspace_core::Data::File(layerfs_workspace_core::FileData::Edited {
+                    spool_high_water,
+                    ..
+                }) => Some(*spool_high_water),
                 _ => None,
             })
             .sum();
@@ -180,9 +181,9 @@ pub(crate) fn commit_remote(
     let started = Instant::now();
     let records = completion_records(worker, &input)?;
     let (root, head) = match &outcome {
-        CommitOutcome::Committed { commit_id, root_id, .. } => {
-            (*root_id, Some(commit_id.to_bytes()))
-        }
+        CommitOutcome::Committed {
+            commit_id, root_id, ..
+        } => (*root_id, Some(commit_id.to_bytes())),
         CommitOutcome::UpToDate { root_id } => {
             let expected = worker
                 .workspace
@@ -261,7 +262,12 @@ pub(crate) fn resolve_pending_completion(
         .map_err(|_| WorkspaceError::WorkspaceBusy)?;
     workspace.pending_completion = None;
     workspace.pending_publication = None;
-    rebase_host_workspace(&mut workspace, pending.root, pending.head, pending.expected_base)?;
+    rebase_host_workspace(
+        &mut workspace,
+        pending.root,
+        pending.head,
+        pending.expected_base,
+    )?;
     Ok(())
 }
 
@@ -290,7 +296,9 @@ fn publish_empty(worker: &crate::worker::WorkspaceWorker) -> WorkspaceResult<Out
         .map_err(|_| WorkspaceError::WorkspaceBusy)?;
     let empty = ObjectBuffer::new(&workspace.reader)
         .and_then(|buffer| buffer.finish(workspace.base_root, 0))?;
-    let admission = workspace.store.workspace_admission(workspace.workspace_id)?;
+    let admission = workspace
+        .store
+        .workspace_admission(workspace.workspace_id)?;
     let mut branch = workspace
         .store
         .branch(workspace.branch_id)?
@@ -389,7 +397,7 @@ fn completion_record(
 ) -> Result<(), StoreError> {
     let revision = nodes
         .get(&id)
-        .ok_or_else(|| StoreError::Integrity("completion revision"))?
+        .ok_or(StoreError::Integrity("completion revision"))?
         .revision;
     records.push(CompletionRecord {
         node: id,

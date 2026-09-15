@@ -15,9 +15,7 @@
 //! segments stay alive through the ordinary piece/reference ownership until
 //! nothing references them.
 
-use crate::{
-    Attr, Data, DirectoryData, Error, FileData, LiveWorkspace, Node, NodeId, Result,
-};
+use crate::{Attr, Data, DirectoryData, Error, FileData, LiveWorkspace, Node, NodeId, Result};
 use layerfs_content::tree::inode::InodeId;
 use layerfs_content::ObjectId;
 use std::collections::{BTreeSet, HashMap};
@@ -74,7 +72,9 @@ impl LiveWorkspace {
     }
 
     pub fn frontier_len(&self) -> usize {
-        self.frozen.as_ref().map_or(0, |frontier| frontier.ids.len())
+        self.frozen
+            .as_ref()
+            .map_or(0, |frontier| frontier.ids.len())
     }
 
     /// The frozen view of a frontier node: the capture-time copy if it was
@@ -116,9 +116,9 @@ impl LiveWorkspace {
         };
         let ids: Vec<NodeId> = frontier.ids.iter().copied().collect();
         for id in ids {
-            if !frontier.retained.contains_key(&id) {
+            if let std::collections::hash_map::Entry::Vacant(slot) = frontier.retained.entry(id) {
                 if let Some(value) = self.nodes.get(&id) {
-                    frontier.retained.insert(id, value.clone());
+                    slot.insert(value.clone());
                 }
             }
         }
@@ -146,9 +146,7 @@ impl LiveWorkspace {
         }
         if value.canonical == Some(inode)
             && match &value.data {
-                Data::File(FileData::Base { root, len }) => {
-                    root.0 == content && *len == attr.size
-                }
+                Data::File(FileData::Base { root, len }) => root.0 == content && *len == attr.size,
                 Data::Directory(DirectoryData { base, changes }) => {
                     base.is_some_and(|root| root.0 == content) && changes.is_empty()
                 }
@@ -181,7 +179,9 @@ impl LiveWorkspace {
                 }
             }
             Data::Directory(DirectoryData { base, changes }) => {
-                *base = Some(layerfs_content::tree::directory::DirectoryStateRoot(content));
+                *base = Some(layerfs_content::tree::directory::DirectoryStateRoot(
+                    content,
+                ));
                 changes.clear();
             }
             Data::Symlink(_) => {}
@@ -365,9 +365,16 @@ mod tests {
         // The live successor sees the newer state.
         assert_eq!(file_bytes(&live, a), b"aaaa");
         assert_eq!(live.nodes[&a].mode, 0o600);
-        assert!(!live.nodes.contains_key(&live.frozen_node(a).unwrap().attr(a).node)
-            || live.nodes[&live.frozen_node(a).unwrap().attr(a).node].revision > 0);
-        assert!(live.dirty.contains(&a), "post-capture edit stays live-dirty");
+        assert!(
+            !live
+                .nodes
+                .contains_key(&live.frozen_node(a).unwrap().attr(a).node)
+                || live.nodes[&live.frozen_node(a).unwrap().attr(a).node].revision > 0
+        );
+        assert!(
+            live.dirty.contains(&a),
+            "post-capture edit stays live-dirty"
+        );
         let Data::Directory(directory) = &live.nodes[&ROOT].data else {
             unreachable!()
         };
@@ -378,7 +385,10 @@ mod tests {
         assert!(!live.frontier_active());
         live.capture_frontier().unwrap();
         assert_eq!(live.frontier_len(), 2, "root (dirty from delete) + a");
-        assert!(live.frontier_ids().contains(&a), "post-capture edit is the new frontier");
+        assert!(
+            live.frontier_ids().contains(&a),
+            "post-capture edit is the new frontier"
+        );
         live.release_frontier();
     }
 
@@ -432,10 +442,12 @@ mod tests {
             .install_covered_record(b, captured_b, inode_b, content_b, attr_b)
             .unwrap());
         assert_eq!(live.nodes[&b].canonical, Some(inode_b));
-        assert!(!live
-            .install_covered_record(b, captured_b, inode_b, content_b, attr_b)
-            .unwrap(),
-            "duplicate completion is idempotent");
+        assert!(
+            !live
+                .install_covered_record(b, captured_b, inode_b, content_b, attr_b)
+                .unwrap(),
+            "duplicate completion is idempotent"
+        );
         // The live successor of a covered node edits the canonical base.
         assert!(matches!(
             live.nodes[&b].data,
@@ -448,4 +460,3 @@ mod tests {
         assert!(live.dirty.contains(&a), "post-cover edit survives");
     }
 }
-

@@ -105,8 +105,9 @@ impl LocalSpool {
             .and_then(|current| {
                 let segment = current.resource::<LocalSegmentHandle>()?;
                 let len = segment.len.load(Ordering::Acquire);
-                (len.checked_add(bytes).is_some_and(|end| end <= segment.capacity))
-                    .then(|| current.clone())
+                (len.checked_add(bytes)
+                    .is_some_and(|end| end <= segment.capacity))
+                .then(|| current.clone())
             });
         if let Some(current) = reusable {
             let segment = current
@@ -117,10 +118,7 @@ impl LocalSpool {
             return Ok((current, start));
         }
         let id = BackingId(inner.next_id);
-        inner.next_id = inner
-            .next_id
-            .checked_add(1)
-            .ok_or(PortError::NoSpace)?;
+        inner.next_id = inner.next_id.checked_add(1).ok_or(PortError::NoSpace)?;
         let path = self.directory.join(format!("payload-{:08}.bin", id.0));
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -144,22 +142,24 @@ impl LocalSpool {
 
     fn note_physical(&self, bytes: u64) {
         let physical = self.physical.fetch_add(bytes, Ordering::AcqRel) + bytes;
-        self.physical_peak.store(physical.max(self.physical_peak.load(Ordering::Acquire)), Ordering::Release);
+        self.physical_peak.store(
+            physical.max(self.physical_peak.load(Ordering::Acquire)),
+            Ordering::Release,
+        );
     }
 
     /// Install bytes at a reserved range. Positioned write; no durability
     /// flush. Must complete before the referencing piece is applied.
-    pub fn write(
-        &self,
-        segment: &BackingRef,
-        start: u64,
-        bytes: &[u8],
-    ) -> PortResult<()> {
-        let handle = segment.resource::<LocalSegmentHandle>().ok_or(PortError::Io)?;
+    pub fn write(&self, segment: &BackingRef, start: u64, bytes: &[u8]) -> PortResult<()> {
+        let handle = segment
+            .resource::<LocalSegmentHandle>()
+            .ok_or(PortError::Io)?;
         let end = start
             .checked_add(bytes.len() as u64)
             .ok_or(PortError::Invalid)?;
-        if end > handle.len.load(Ordering::Acquire) || handle.len.load(Ordering::Acquire) > handle.capacity {
+        if end > handle.len.load(Ordering::Acquire)
+            || handle.len.load(Ordering::Acquire) > handle.capacity
+        {
             return Err(PortError::Invalid);
         }
         if bytes.is_empty() {
@@ -172,23 +172,17 @@ impl LocalSpool {
     /// Read an owned range. Ranges referenced by pieces are always fully
     /// written (write-before-apply), so a miss below the high-water is an
     /// integrity error, not a wait.
-    pub fn read(
-        &self,
-        segment: &BackingRef,
-        offset: u64,
-        len: u64,
-    ) -> PortResult<Vec<u8>> {
-        let handle = segment.resource::<LocalSegmentHandle>().ok_or(PortError::Io)?;
+    pub fn read(&self, segment: &BackingRef, offset: u64, len: u64) -> PortResult<Vec<u8>> {
+        let handle = segment
+            .resource::<LocalSegmentHandle>()
+            .ok_or(PortError::Io)?;
         let end = offset.checked_add(len).ok_or(PortError::Invalid)?;
         if end > handle.len.load(Ordering::Acquire) {
             return Err(PortError::Io);
         }
         let mut out = vec![0; len as usize];
         if len != 0 {
-            handle
-                .file
-                .read_exact_at(&mut out, offset)
-                .map_err(io)?;
+            handle.file.read_exact_at(&mut out, offset).map_err(io)?;
         }
         Ok(out)
     }
@@ -197,11 +191,7 @@ impl LocalSpool {
     /// frozen payload ranges.
     pub fn segment_reference(&self, id: BackingId) -> PortResult<BackingRef> {
         let inner = self.inner.lock().map_err(|_| PortError::Io)?;
-        inner
-            .segments
-            .get(&id)
-            .cloned()
-            .ok_or(PortError::NotFound)
+        inner.segments.get(&id).cloned().ok_or(PortError::NotFound)
     }
 
     pub fn segment_len(&self, id: BackingId) -> PortResult<u64> {
@@ -332,7 +322,8 @@ mod tests {
     fn reads_beyond_high_water_fail_and_capacity_bounds_segments() {
         let spool = spool();
         let (segment, start) = spool.reserve(SEGMENT_CAPACITY).unwrap();
-        spool.write(&segment, 0, &[1u8; SEGMENT_CAPACITY as usize])
+        spool
+            .write(&segment, 0, &[1u8; SEGMENT_CAPACITY as usize])
             .unwrap();
         assert!(spool.read(&segment, SEGMENT_CAPACITY - 1, 2).is_err());
         // No room for another byte in the current segment; a new one opens.
@@ -357,7 +348,10 @@ mod tests {
         spool.retire_idle().unwrap();
         assert_eq!(spool.segment_count().unwrap(), 1, "held keeps the segment");
         assert_eq!(spool.physical_bytes(), 32);
-        assert_eq!(spool.read(&held, 0, 16).unwrap(), b"0123456789abcdef".to_vec());
+        assert_eq!(
+            spool.read(&held, 0, 16).unwrap(),
+            b"0123456789abcdef".to_vec()
+        );
         drop(held);
         spool.retire_idle().unwrap();
         assert_eq!(spool.segment_count().unwrap(), 0);

@@ -1784,14 +1784,12 @@ impl FrozenFile {
             // bounded fetch.
             FileData::Edited {
                 base: None, pieces, ..
-            } if pieces
-                .compact_spool()
-                .is_some_and(|slice| {
-                    slice
-                        .segment
-                        .resource::<crate::file_io::SpoolSegment>()
-                        .is_some()
-                }) =>
+            } if pieces.compact_spool().is_some_and(|slice| {
+                slice
+                    .segment
+                    .resource::<crate::file_io::SpoolSegment>()
+                    .is_some()
+            }) =>
             {
                 let slice = pieces.compact_spool().unwrap();
                 WorkspaceFileSource::Direct(slice.segment.clone(), slice.offset)

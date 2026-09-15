@@ -94,9 +94,9 @@ pub(crate) fn self_check() -> Result<()> {
         let mut text = String::new();
         for entry in entries {
             if let EntryKind::File(Content::Literal(bytes)) = &entry.kind {
-                let _ = write!(
+                let _ = writeln!(
                     text,
-                    "{}\t{:o}\t{}\t{}\t{}\n",
+                    "{}\t{:o}\t{}\t{}\t{}",
                     entry.path, entry.mode, entry.mtime_seconds, entry.mtime_nanoseconds,
                     bytes.first().copied().unwrap_or_default()
                 );

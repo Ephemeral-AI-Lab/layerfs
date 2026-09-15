@@ -5,10 +5,10 @@
 //! frozen generation locally and the host pulls its records and bytes over
 //! the snapshot lane.
 use crate::live_runtime::{LiveRuntime, OperationGate, Scheduler};
-use crate::local_spool::LocalSpool;
 use crate::live_transport::BackingConnection;
 use crate::live_wire::EditMetric;
 use crate::live_wire::{self as wire, Input};
+use crate::local_spool::LocalSpool;
 use crate::port::{DirectoryPage, KernelEntry, KernelReferences};
 use crate::{Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, ROOT};
 use layerfs_workspace_core::backing::BackingId;
@@ -186,8 +186,8 @@ fn decode_complete_attr(input: &mut Input<'_>, node: NodeId) -> PortResult<Attr>
         kind,
         mode,
         links,
-        // mtime_seconds travels as u64; restore the signed value.
-        mtime_seconds: mtime_seconds as i64,
+        // mtime_seconds travels as u64 and was restored to its signed value.
+        mtime_seconds,
         mtime_nanoseconds,
     })
 }
@@ -200,7 +200,7 @@ fn next_incarnation() -> u64 {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |value| value.as_nanos() as u64);
-    nanos ^ (NEXT.fetch_add(1, Ordering::Relaxed) as u64).rotate_left(32) ^ (std::process::id() as u64) << 32
+    nanos ^ NEXT.fetch_add(1, Ordering::Relaxed).rotate_left(32) ^ (std::process::id() as u64) << 32
 }
 
 // BTreeMap releases allocation on FORGET; HashMap spare capacity would outlive
@@ -999,9 +999,7 @@ impl LiveOwner {
                     let _ = self
                         .0
                         .scheduler
-                        .physical(move || {
-                            spool.abandon(abandoned).map_err(|_| wire::invalid())
-                        })
+                        .physical(move || spool.abandon(abandoned).map_err(|_| wire::invalid()))
                         .await;
                     return Err(core(error));
                 }
@@ -1019,7 +1017,8 @@ impl LiveOwner {
             self.0
                 .scheduler
                 .physical(move || {
-                    spool.write(&payload_segment, start, &payload)
+                    spool
+                        .write(&payload_segment, start, &payload)
                         .map_err(|_| wire::invalid())
                 })
                 .await
@@ -1112,7 +1111,9 @@ impl LiveOwner {
                         .0
                         .scheduler
                         .physical(move || {
-                            spool.read(&reader, offset, len).map_err(|_| wire::invalid())
+                            spool
+                                .read(&reader, offset, len)
+                                .map_err(|_| wire::invalid())
                         })
                         .await
                         .map_err(io)?;
@@ -2088,13 +2089,12 @@ impl LiveOwner {
         let cut = flush.finish().await;
         *self.0.cut.lock().map_err(|_| PortError::Io)? = Some(cut);
         note_edit(diagnostic, EditMetric::Gate, started);
-        Ok(self
-            .0
+        self.0
             .cut
             .lock()
             .map_err(|_| PortError::Io)?
             .take()
-            .ok_or(PortError::Io)?)
+            .ok_or(PortError::Io)
     }
 
     pub async fn local_control(&self, bytes: &[u8]) -> PortResult<Vec<u8>> {
@@ -2415,9 +2415,7 @@ impl LiveOwner {
             }
             wire::CAPTURE => {
                 input.done().map_err(io)?;
-                if self.0.failed.load(Ordering::Acquire)
-                    || self.0.closing.load(Ordering::Acquire)
-                {
+                if self.0.failed.load(Ordering::Acquire) || self.0.closing.load(Ordering::Acquire) {
                     return Err(PortError::Io);
                 }
                 let mut slot = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
@@ -2524,11 +2522,10 @@ impl LiveOwner {
                     }
                     let node = NodeId(input.u64().map_err(io)?);
                     let revision = input.u64().map_err(io)?;
-                    let inode =
-                        layerfs_content::tree::inode::InodeId::from_slice(
-                            input.raw(32).map_err(io)?,
-                        )
-                        .map_err(|_| PortError::Invalid)?;
+                    let inode = layerfs_content::tree::inode::InodeId::from_slice(
+                        input.raw(32).map_err(io)?,
+                    )
+                    .map_err(|_| PortError::Invalid)?;
                     let content = input.object().map_err(io)?;
                     let attr = decode_complete_attr(&mut input, node)?;
                     let mut state = self.state()?;
@@ -2637,8 +2634,7 @@ impl LiveOwner {
             let slots = self.0.snapshot.lock().map_err(|_| PortError::Io)?;
             match slots.as_ref() {
                 Some(slot)
-                    if slot.token.incarnation == incarnation
-                        && slot.token.attempt == attempt => {}
+                    if slot.token.incarnation == incarnation && slot.token.attempt == attempt => {}
                 _ => return Err(PortError::Invalid),
             }
         }
@@ -2741,7 +2737,9 @@ impl LiveOwner {
                     .0
                     .scheduler
                     .physical(move || {
-                        spool.read(&reference, offset, len).map_err(|_| wire::invalid())
+                        spool
+                            .read(&reference, offset, len)
+                            .map_err(|_| wire::invalid())
                     })
                     .await
                     .map_err(io)?;
@@ -2956,9 +2954,13 @@ impl LiveControl {
     }
     pub fn cancel(mut self) -> std::io::Result<()> {
         let runtime = LiveRuntime::shared()?;
-        for task in [self.thread.take(), self.observer.take()]
-            .into_iter()
-            .flatten()
+        for task in [
+            self.thread.take(),
+            self.observer.take(),
+            self.snapshot.take(),
+        ]
+        .into_iter()
+        .flatten()
         {
             task.abort();
             let _ = runtime.block_on(task);
@@ -2975,9 +2977,12 @@ impl LiveControl {
         let result = LiveRuntime::shared()?
             .block_on(self.thread.take().ok_or_else(wire::invalid)?)
             .map_err(|_| wire::invalid())?;
-        if let Some(observer) = self.observer.take() {
-            observer.abort();
-            let _ = LiveRuntime::shared()?.block_on(observer);
+        for task in [self.observer.take(), self.snapshot.take()]
+            .into_iter()
+            .flatten()
+        {
+            task.abort();
+            let _ = LiveRuntime::shared()?.block_on(task);
         }
         result
     }
@@ -2988,8 +2993,11 @@ impl Drop for LiveControl {
         if let Some(thread) = &self.thread {
             thread.abort();
         }
-        if let Some(observer) = &self.observer {
-            observer.abort();
+        for task in [self.observer.as_ref(), self.snapshot.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            task.abort();
         }
     }
 }
@@ -3135,7 +3143,9 @@ mod immutable_acquisition_tests {
         let backing = Arc::new(Mutex::new(BarrierBacking::default()));
         let owner = barrier_owner(&runtime, backing.clone());
         let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
-        runtime.block_on(owner.write_owned(file, 0, b"abcdef")).unwrap();
+        runtime
+            .block_on(owner.write_owned(file, 0, b"abcdef"))
+            .unwrap();
         runtime
             .block_on(owner.write_owned(file, 6, b"ghijkl"))
             .unwrap();
@@ -3166,7 +3176,9 @@ mod immutable_acquisition_tests {
         let backing = Arc::new(Mutex::new(BarrierBacking::default()));
         let owner = barrier_owner(&runtime, backing.clone());
         let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
-        runtime.block_on(owner.write_owned(file, 0, b"abc")).unwrap();
+        runtime
+            .block_on(owner.write_owned(file, 0, b"abc"))
+            .unwrap();
         // A write beyond every bound fails without poisoning the owner or
         // leaking a reservation.
         assert!(runtime
@@ -3194,7 +3206,9 @@ mod immutable_acquisition_tests {
         let backing = Arc::new(Mutex::new(BarrierBacking::default()));
         let owner = barrier_owner(&runtime, backing.clone());
         let file = owner.create_file(ROOT, b"a", 0o644).unwrap().node;
-        runtime.block_on(owner.write_owned(file, 0, b"AAAA")).unwrap();
+        runtime
+            .block_on(owner.write_owned(file, 0, b"AAAA"))
+            .unwrap();
 
         // CAPTURE.
         let reply = runtime
@@ -3211,7 +3225,9 @@ mod immutable_acquisition_tests {
         assert_eq!(incarnation, owner.incarnation());
 
         // Live successor writes continue without any pause.
-        runtime.block_on(owner.write_owned(file, 0, b"aaaa")).unwrap();
+        runtime
+            .block_on(owner.write_owned(file, 0, b"aaaa"))
+            .unwrap();
 
         // Pull the frozen records: the file's captured inline/spool state must
         // show the capture-time bytes, not the successor's.
@@ -3222,9 +3238,7 @@ mod immutable_acquisition_tests {
             wire::u64_out(&mut request, incarnation);
             wire::u64_out(&mut request, attempt);
             wire::u64_out(&mut request, after);
-            let page = runtime
-                .block_on(owner.snapshot_request(&request))
-                .unwrap();
+            let page = runtime.block_on(owner.snapshot_request(&request)).unwrap();
             let mut page_input = Input(&page);
             let done = page_input.byte().unwrap();
             let _page_generation = page_input.u64().unwrap();
@@ -3314,7 +3328,9 @@ mod immutable_acquisition_tests {
         let backing = Arc::new(Mutex::new(BarrierBacking::default()));
         let owner = barrier_owner(&runtime, backing.clone());
         let file = owner.create_file(ROOT, b"a", 0o644).unwrap().node;
-        runtime.block_on(owner.write_owned(file, 0, b"AAAA")).unwrap();
+        runtime
+            .block_on(owner.write_owned(file, 0, b"AAAA"))
+            .unwrap();
         let reply = runtime
             .block_on(owner.local_control(&[wire::CAPTURE]))
             .unwrap();
@@ -3325,7 +3341,8 @@ mod immutable_acquisition_tests {
         let _frontier_len = input.u64().unwrap();
 
         // Wrong incarnation and wrong attempt are rejected on both lanes.
-        for (bad_incarnation, bad_attempt) in [(incarnation + 1, attempt), (incarnation, attempt + 1)]
+        for (bad_incarnation, bad_attempt) in
+            [(incarnation + 1, attempt), (incarnation, attempt + 1)]
         {
             let mut request = vec![wire::SNAP_RECORDS];
             wire::u64_out(&mut request, bad_incarnation);

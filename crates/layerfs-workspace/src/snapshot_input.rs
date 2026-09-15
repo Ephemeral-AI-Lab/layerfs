@@ -29,7 +29,6 @@ pub(crate) struct SnapshotToken {
 pub(crate) struct CaptureSummary {
     pub token: SnapshotToken,
     pub frontier_len: u64,
-    pub base_root: layerfs_content::ObjectId,
 }
 
 /// One completion record: the canonical re-base of a covered node.
@@ -233,7 +232,6 @@ impl RemoteSegment {
 pub(crate) struct FrozenRemoteInput {
     pub nodes: HashMap<NodeId, Node>,
     pub dirty: BTreeSet<NodeId>,
-    pub canonical_nodes: HashMap<layerfs_content::tree::inode::InodeId, NodeId>,
     pub mutation_generation: u64,
 }
 
@@ -250,7 +248,7 @@ impl RemoteWorkspace {
         let attempt = input.u64().map_err(invalid)?;
         let generation = input.u64().map_err(invalid)?;
         let frontier_len = input.u64().map_err(invalid)?;
-        let base_root = input.object().map_err(invalid)?;
+        let _base_root = input.object().map_err(invalid)?;
         let _head = input.head().map_err(invalid)?;
         input.done().map_err(invalid)?;
         Ok(CaptureSummary {
@@ -260,7 +258,6 @@ impl RemoteWorkspace {
                 generation,
             },
             frontier_len,
-            base_root,
         })
     }
 
@@ -313,14 +310,9 @@ impl RemoteWorkspace {
                 break;
             }
         }
-        let canonical_nodes = nodes
-            .iter()
-            .filter_map(|(id, node)| node.canonical.map(|inode| (inode, *id)))
-            .collect();
         Ok(FrozenRemoteInput {
             nodes,
             dirty,
-            canonical_nodes,
             mutation_generation: token.generation,
         })
     }

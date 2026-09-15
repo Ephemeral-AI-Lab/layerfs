@@ -1,6 +1,5 @@
 //! Host-only physical backing and immutable input for a remote live owner.
 use crate::cow_tree::{acquire_inode, acquire_inodes, WorkspaceSnapshot};
-use crate::file_io::{spool_segment, HostSpool};
 use crate::ResourcePolicy;
 use layerfs_content::file::content::{read_range, FileContentRoot};
 use layerfs_content::tree::directory::{
@@ -10,11 +9,8 @@ use layerfs_content::tree::inode::InodeTableRoot;
 use layerfs_content::{CanonicalName, ObjectId};
 use layerfs_fuse::live_wire::{self as wire, Input};
 use layerfs_layerstack_store::{CoreReader, Result, StoreError};
-use layerfs_workspace_core::backing::{BackingId, BackingRef};
 use layerfs_workspace_core::{Node, NodeId};
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::os::unix::fs::FileExt;
-use std::path::PathBuf;
+use std::collections::{BTreeSet, HashSet};
 
 /// Host-side owner of the immutable-base service for one remote workspace:
 /// SEED, grouped/metadata lookup, directory pages and canonical Store reads.
@@ -23,7 +19,6 @@ use std::path::PathBuf;
 pub(crate) struct BackingOwner {
     pub(crate) snapshot: WorkspaceSnapshot,
     pub(crate) root: Node,
-    pub(crate) directory: PathBuf,
     pub(crate) policy: ResourcePolicy,
     directory_lookup: DirectoryLookupCache,
     request_profile: [u64; 18],
@@ -46,16 +41,10 @@ impl Drop for BackingOwner {
 }
 
 impl BackingOwner {
-    pub(crate) fn new(
-        snapshot: WorkspaceSnapshot,
-        root: Node,
-        directory: PathBuf,
-        policy: ResourcePolicy,
-    ) -> Self {
+    pub(crate) fn new(snapshot: WorkspaceSnapshot, root: Node, policy: ResourcePolicy) -> Self {
         Self {
             snapshot,
             root,
-            directory,
             policy,
             directory_lookup: DirectoryLookupCache::default(),
             request_profile: [0; 18],
@@ -329,7 +318,6 @@ mod tests {
                 reader: workspace.reader.clone(),
             },
             workspace.live.nodes[&crate::ROOT].clone(),
-            workspace.spool.clone(),
             workspace.live.policy,
         );
         test(&mut owner);
@@ -371,7 +359,6 @@ mod tests {
             assert!(!seed.is_empty());
         });
     }
-
 
     #[test]
     fn metadata_lookup_preserves_requested_node_without_acquiring_siblings() {
@@ -421,7 +408,6 @@ mod tests {
                     reader: workspace.reader.clone(),
                 },
                 workspace.live.nodes[&crate::ROOT].clone(),
-                workspace.spool.clone(),
                 workspace.live.policy,
             );
             let layerfs_workspace_core::Data::Directory(root) = &owner.root.data else {
@@ -753,11 +739,11 @@ mod tests {
 
     fn live_owner_check(_local: bool) {
         use crate::snapshot_input::CompletionRecord;
+        use crate::ROOT;
         use layerfs_fuse::live_owner::LiveOwner;
         use layerfs_fuse::live_runtime::LiveRuntime;
         use layerfs_fuse::FilesystemPort;
         use std::sync::{Arc, Mutex};
-        use crate::ROOT;
         let directory = std::env::temp_dir().join(format!(
             "layerfs-live-integrated-{}",
             crate::WorkspaceId::new()
@@ -790,28 +776,24 @@ mod tests {
                 reader: workspace.reader.clone(),
             },
             workspace.live.nodes[&crate::ROOT].clone(),
-            workspace.spool.clone(),
             workspace.live.policy,
         )));
         let handler_backing = backing.clone();
-        let handler: Arc<layerfs_fuse::live_transport::BackingHandler> =
-            Arc::new(move |bytes| {
-                handler_backing
-                    .lock()
-                    .map_err(|_| layerfs_fuse::PortError::Io)?
-                    .request(bytes)
-                    .map_err(crate::projection::storage_port_error)
-            });
+        let handler: Arc<layerfs_fuse::live_transport::BackingHandler> = Arc::new(move |bytes| {
+            handler_backing
+                .lock()
+                .map_err(|_| layerfs_fuse::PortError::Io)?
+                .request(bytes)
+                .map_err(crate::projection::storage_port_error)
+        });
         let runtime = LiveRuntime::new().unwrap();
         let backing_dir = directory.join("owner-backing");
         let owner = runtime
-            .block_on(LiveOwner::local(
-                handler,
-                runtime.scheduler(),
-                backing_dir,
-            ))
+            .block_on(LiveOwner::local(handler, runtime.scheduler(), backing_dir))
             .unwrap();
-        let server = Arc::new(layerfs_fuse::live_transport::BackingServer::local(owner.clone()));
+        let server = Arc::new(layerfs_fuse::live_transport::BackingServer::local(
+            owner.clone(),
+        ));
         let remote = RemoteWorkspace {
             backing: backing.clone(),
             server: server.clone(),
@@ -821,7 +803,9 @@ mod tests {
         // Create and write files through the live owner (sandbox-local
         // payload; no host payload traffic).
         let file = owner.create_file(ROOT, b"file", 0o644).unwrap().node;
-        runtime.block_on(owner.write_owned(file, 0, b"hello")).unwrap();
+        runtime
+            .block_on(owner.write_owned(file, 0, b"hello"))
+            .unwrap();
         runtime
             .block_on(owner.write_owned(file, 5, b" world"))
             .unwrap();
@@ -844,9 +828,7 @@ mod tests {
         assert!(input.nodes.len() as u64 >= summary.frontier_len);
 
         // Build through the existing single-worker pipeline and publish.
-        let prepared = workspace
-            .build_remote_candidate(&input, 1)
-            .unwrap();
+        let prepared = workspace.build_remote_candidate(&input, 1).unwrap();
         let crate::changes::PreparedCommit {
             built,
             checkpoint,
@@ -917,8 +899,7 @@ mod tests {
         // The published content is fully readable from the Store alone.
         let pinned = store.pin_branch(workspace.branch_id).unwrap();
         let found = records.iter().find(|record| record.node == file).unwrap();
-        let content_root =
-            layerfs_content::ObjectId::from_bytes(&found.content).unwrap();
+        let content_root = layerfs_content::ObjectId::from_bytes(&found.content).unwrap();
         let mut published = Vec::new();
         layerfs_content::file::content::read_range(
             &layerfs_layerstack_store::CoreReader(&pinned.reader),
@@ -994,7 +975,6 @@ impl RemoteWorkspace {
                 reader: workspace.reader.clone(),
             },
             workspace.live.nodes[&crate::ROOT].clone(),
-            workspace.spool.clone(),
             workspace.live.policy,
         )));
         let handler = backing.clone();
@@ -1156,9 +1136,9 @@ impl RemoteWorkspace {
             .observe()
             .map_err(|_| crate::WorkspaceError::InvalidExecution)?;
         let mut input = Input(&response);
-        let covered_generation = input.u64()?;
+        let _covered_generation = input.u64()?;
         let dirty = input.u64()?;
-        let charged_bytes = input.u64()?;
+        let _charged_bytes = input.u64()?;
         let physical_bytes = input.u64()?;
         let physical_peak_bytes = input.u64()?;
         let head = input
@@ -1168,8 +1148,6 @@ impl RemoteWorkspace {
         input.done()?;
         Ok(RemoteObservation {
             dirty,
-            covered_generation,
-            charged_bytes,
             physical_bytes,
             physical_peak_bytes,
             head,
@@ -1178,15 +1156,15 @@ impl RemoteWorkspace {
 }
 
 /// One sandbox observation of the live Workspace.
+///
+/// The physical counters are consumed by the test-instrumentation verification
+/// state, so a default build sees them as unread.
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub(crate) struct RemoteObservation {
     /// Live dirty count. Zero means the sandbox holds no unpublished change;
     /// the host exposes this as the remote mutation indicator.
     pub(crate) dirty: u64,
-    /// Generation covered by the last completed Commit.
-    pub(crate) covered_generation: u64,
-    /// Charged Workspace spool bytes (logical, admission-accounted).
-    pub(crate) charged_bytes: u64,
     /// Physical bytes currently allocated by the sandbox spool.
     pub(crate) physical_bytes: u64,
     /// Peak physical bytes allocated by the sandbox spool over its lifetime.

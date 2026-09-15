@@ -375,12 +375,7 @@ impl Workspaces {
         let observed = remote
             .map(|remote| remote.observe())
             .transpose()?
-            .map(|observation| {
-                (
-                    observation.physical_bytes,
-                    observation.physical_peak_bytes,
-                )
-            });
+            .map(|observation| (observation.physical_bytes, observation.physical_peak_bytes));
         let workspace = worker
             .workspace
             .lock()
