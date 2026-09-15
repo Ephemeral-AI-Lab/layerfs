@@ -57,6 +57,58 @@ def commit_outcomes(sample):
     return counts, latencies
 
 
+def m1_row(sample):
+    """The v0.1.6 M1 receipts: per-local-commit outcomes, declarative counters,
+    raw stage/Commit timings, the retained-root graph proof and worker records."""
+    records = sample.get("records", [])
+    commits = [rec for rec in records if rec.get("kind") == "v016-commit"]
+    outcomes = {"Created": 0, "UpToDate": 0, "Busy": 0, "HeadMoved": 0, "presentation_failures": 0}
+    authoring, execution = [], []
+    for commit in commits:
+        outcome = str(commit.get("outcome"))
+        if outcome in outcomes:
+            outcomes[outcome] += 1
+        if commit.get("presentation_failed"):
+            outcomes["presentation_failures"] += 1
+        if isinstance(commit.get("commit_ns"), int):
+            authoring.append(commit["commit_ns"])
+        if isinstance(commit.get("execution_ns"), int):
+            execution.append(commit["execution_ns"])
+
+    def stats(values):
+        if not values:
+            return {"count": 0, "min": None, "median": None, "max": None, "sum": None}
+        ordered = sorted(values)
+        return {"count": len(values), "min": ordered[0], "median": ordered[len(ordered) // 2],
+                "max": ordered[-1], "sum": sum(ordered)}
+
+    counters = next((rec for rec in records if rec.get("kind") == "v016-counters"), {})
+    timers = next((rec for rec in records if rec.get("kind") == "v016-timers"), {})
+    graph = next((rec for rec in records if rec.get("kind") == "v016-graph-proof"), {})
+    workers = [{key: rec.get(key) for key in ("role", "mount", "per_worker_commits", "branch", "workspace_id")}
+               for rec in records if rec.get("kind") == "v016-worker"]
+    heads = [rec for rec in records if rec.get("kind") == "v016-branch-head"]
+    stages = [rec for rec in records if rec.get("kind") == "v016-stage"]
+    return {
+        "local_commits_observed": len(commits),
+        "commit_outcomes": outcomes,
+        "commit_ns": stats(authoring),
+        "execution_ns": stats(execution),
+        "operation_counters": counters.get("counters"),
+        "concurrency_claim": counters.get("concurrency_claim"),
+        "observed_overlap_ns": counters.get("observed_overlap_ns"),
+        "declared_overlap_ns": counters.get("declared_overlap_ns"),
+        "timer_ns": timers.get("pure_call_sum_ns") or sample.get("pure_call_sum_ns"),
+        "timer_scope": timers.get("scope"),
+        "stages_observed": len(stages),
+        "branch_heads": [{"branch": head.get("branch"), "commits": len(head.get("commit_ids") or [])}
+                         for head in heads],
+        "graph_proof": {key: value for key, value in graph.items()
+                        if key not in ("kind", "case", "details")} if graph else None,
+        "workers": workers,
+    }
+
+
 def sample_row(path):
     rows = load_records(path)
     header = next((row for row in rows if row.get("kind") == "header"), None)
@@ -101,6 +153,7 @@ def sample_row(path):
                                    "workspace-spool-observation", "host-resources", "host-rss-samples",
                                    "runtime-observation-window", "graph-proof", "worker-intervals")
         },
+        "m1": m1_row(sample),
         "identities": (header or {}).get("identities"),
         "summary": {key: summary.get(key) for key in (
             "status", "attempted", "completed", "valid", "timer", "min_ns", "median_ns", "max_ns",
@@ -136,6 +189,9 @@ def verification_row(path):
     canonical = next((check for check in checks if check.get("kind") == "canonical-verification"), None)
     split = next((check for check in checks if check.get("kind") == "v016-alias-inode-classes"), None)
     published = [check for check in checks if check.get("kind") == "published-root"]
+    m1_verified = next((check for check in checks if check.get("kind") == "v016-verification"), None)
+    m1_oracle = next((check for check in checks if check.get("kind") == "v016-oracle-root"), None)
+    m1_graph = next((check for check in checks if check.get("kind") == "v016-graph-proof"), None)
     steps = next((check for check in checks if check.get("kind") == "v016-alias-posix-steps"), None)
     canonical_values = _canonical_receipt((canonical or {}).get("receipt")) if canonical else {}
     native_values = _native_receipt((native or {}).get("receipt")) if native else {}
@@ -166,6 +222,16 @@ def verification_row(path):
             "alias_inode_class_split": (split or {}).get("inode_class_split"),
             "alias_inode_separated": (split or {}).get("pre_replacement_inode") != (split or {}).get("alias_inode") if split else None,
             "posix_steps_replayed": len((steps or {}).get("steps", [])) if steps else None,
+            "m1_verification_scope": (m1_verified or {}).get("scope"),
+            "m1_created_commits": (m1_verified or {}).get("created_commits"),
+            "m1_oracle_regular_paths": (m1_oracle or {}).get("regular_paths"),
+            "m1_oracle_small_content_roots": (m1_oracle or {}).get("small_content_roots"),
+            "m1_oracle_declared_range_paths": (m1_oracle or {}).get("declared_range_paths"),
+            "m1_oracle_declared_directories": (m1_oracle or {}).get("declared_directories"),
+            "m1_retained_roots": (m1_graph or {}).get("retained_roots"),
+            "m1_distinct_commits": (m1_graph or {}).get("distinct_commits"),
+            "m1_longest_ancestry": (m1_graph or {}).get("longest_ancestry"),
+            "m1_graph_scope": (m1_graph or {}).get("scope"),
         },
     }
 

@@ -128,6 +128,33 @@ def perf_receipt(output):
     return header, sample, rows
 
 
+
+def _host_labels(image):
+    result = subprocess.run(["docker", "image", "inspect", image], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(f"docker image inspect failed for {image}: {result.stderr.strip()[-300:]}")
+    return json.loads(result.stdout)[0]["Config"]["Labels"]
+
+
+def unresolved_identity(family, case_id, seed, image):
+    """The runner's own selected-input identity for a case with no performance
+    receipt: the image's source seal and the registered recipe row."""
+    source = _host_labels(image)["dev.layerfs.source-seal"]
+    listed = subprocess.run(
+        [str(REPO / "target/release/fs-benchmark-pro"), "infra-list", family, case_id],
+        check=True, capture_output=True, text=True,
+        env={**os.environ, "LAYERFS_V013_IMAGE": image},
+    ).stdout
+    rows = [row for row in records(listed) if row.get("scenario_id") == case_id]
+    if len(rows) != 1:
+        raise SystemExit(f"select exactly one registered case: {case_id}")
+    return {
+        "source_identity": source,
+        "input_identity": hashlib.sha256(json.dumps(
+            {"family": family, "case": case_id, "seed": seed, "source": source, "recipe": rows[0]},
+            sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+    }
+
 def registered(family, case_id, image):
     result = subprocess.run(
         [str(REPO / "target/release/fs-benchmark-pro"), "infra-list", family, case_id],
@@ -255,12 +282,22 @@ def main():
         verify_output = results / "verification" / case_id / str(seed) / "candidate" / "run1"
         identities = None
         if args.mode in ("both", "perf") and case_id not in VERIFY_ONLY:
-            if not wait_for_lock():
-                raise SystemExit("measurement lock never became available")
-            fresh_output(perf_output)
-            code, stdout, stderr, wall = perf_invocation(
-                family, case_id, seed, args.image, perf_output, extended, ceiling_for(case_id))
-            header, sample, _ = perf_receipt(perf_output) or (None, None, None)
+            # An invocation that never reached the product produced no sample:
+            # that is infrastructure-invalid, not a measurement, and the
+            # invalid pair is re-run together with the failed attempt retained.
+            infrastructure_retries = 0
+            for attempt in (1, 2):
+                if not wait_for_lock():
+                    raise SystemExit("measurement lock never became available")
+                fresh_output(perf_output)
+                code, stdout, stderr, wall = perf_invocation(
+                    family, case_id, seed, args.image, perf_output, extended, ceiling_for(case_id))
+                header, sample, _ = perf_receipt(perf_output) or (None, None, None)
+                if sample is not None or attempt == 2:
+                    break
+                infrastructure_retries += 1
+                print(f"perf {case_id}: infrastructure-invalid attempt retained "
+                      f"(no sample record); {stdout.strip()[-200:]}{stderr.strip()[-200:]}", flush=True)
             status = (sample or {}).get("status", "NO-RECEIPT")
             print(f"perf {case_id} seed{seed}: status={status} rc={code} wall={wall:.2f}s", flush=True)
             if code != 0 and status == "NO-RECEIPT":
@@ -277,6 +314,7 @@ def main():
                      if rec.get("kind") == "sample-complete"), None),
                 "receipt": str(perf_output.relative_to(REPO)),
                 "error": (sample or {}).get("error"),
+                "infrastructure_invalid_attempts": infrastructure_retries,
             }
             if header:
                 row["identities"] = {
@@ -293,6 +331,11 @@ def main():
         if case_id in VERIFY_ONLY and args.mode in ("both", "perf"):
             row["performance"] = {"status": "N/A", "reason": "verify-only declared case; performance is N/A, never zero or PASS"}
         if args.mode in ("both", "verify"):
+            if identities is None and case_id in VERIFY_ONLY:
+                # A verify-only case has no performance binding: it consumes the
+                # declared sealed producer state and is selected by its own
+                # identity, never by a fabricated performance row.
+                identities = unresolved_identity(family, case_id, seed, args.image)
             if identities is None:
                 prior = row.get("identities") or {}
                 if prior.get("source_identity") and prior.get("input_identity"):

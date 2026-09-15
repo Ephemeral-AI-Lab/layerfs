@@ -120,3 +120,85 @@ invocation; the only F1 work was instrumenting the run and recording it.
 same identity) is kept as a labelled diagnostic of the port; the F1 gate sample for
 that case is the one in the table above, taken with the family's declared
 instrumentation.
+
+## L3 — F2 `mixed_load_bearing` (4 regular + 2 declared extensions, seed 1)
+
+Command:
+
+```bash
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f2-seed1 \
+  --family mixed_load_bearing --prepare                 # 4 regular cases
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f2-seed1 \
+  --family mixed_load_bearing --extended --prepare      # 2 declared extensions
+```
+
+### Regular cases
+
+| case | perf | perf wall | gate | verify | verify wall | gate | Created | max Commit | median Commit | verify stop point |
+| --- | --- | ---: | --- | --- | ---: | --- | ---: | ---: | ---: | --- |
+| `…100mb-5000-k10-v1` | PASS | 3.17 s | PASS | PASS | 4.33 s | PASS | 10 | 27.20 ms | 11.41 ms | — |
+| `…100mb-5000-k100-v1` | PASS | 6.58 s | PASS | PASS | 12.06 s | PASS | 100 | 26.67 ms | 11.82 ms | — |
+| `…500mb-30000-k10-v1` | PASS | 5.23 s | PASS | **TIMEOUT** | 22.94 s | **FAIL** | 10 | 59.65 ms | 16.64 ms | schedule complete, verifier still running at the declared stop |
+| `…500mb-30000-k100-v1` | PASS | 14.53 s | PASS | **TIMEOUT** | 23.01 s | **FAIL** | 100 | 58.41 ms | 16.43 ms | schedule complete, verifier still running at the declared stop |
+
+* Every perf row is a real `Created` schedule: `Created = 10/100`, `UpToDate =
+  Busy = HeadMoved = presentation_failures = 0`, one worker
+  (`concurrency_claim = not-a-concurrent-topology`, `observed_overlap_ns = 0`).
+* The four perf walls are 3.17 s / 6.58 s / 5.23 s / 14.53 s: **all inside the
+  15 s gate**, the K100 L500 row with 0.47 s of headroom. No exception is claimed
+  for performance.
+* Verification of the two L500 cases did not finish inside the 25 s declared
+  ceiling: both were stopped at the product-command deadline after the complete
+  10/100-Commit schedule and its stage records had been emitted, with cleanup
+  still reporting PASS. They are retained as `TIMEOUT` with their measured stop
+  wall (22.94 s / 23.01 s); they are **not** counted as passes and nothing was
+  widened to make them fit.
+
+### Declared extensions
+
+| case | mode | status | wall | watchdog | note |
+| --- | --- | --- | ---: | ---: | --- |
+| `v016-mixed-exhaustive-100mb-5000-k100-v1` | verify-only | **PASS** | 38.33 s | 120 s | all 101 retained states verified |
+| `v016-mixed-exhaustive-500mb-30000-k100-v1` | verify-only | **TIMEOUT** | 298.28 s | 300 s | did not finish its 101-state sweep inside its own declared watchdog |
+
+Performance for both extensions is `N/A` (verify-only declared cases), never 0 and
+never `PASS`.
+
+### Root-cause triage of the two L500 verification misses (one cycle, decisive)
+
+1. *Where does the time go?* The verification receipts show the full schedule
+   completed (`v016-stage` and `v016-commit` records for all 10/100 Commits,
+   `v016-sdk-range-edit` for all SDK edits) before the outer deadline stopped the
+   command; the tail is the verifier, not the schedule.
+2. *Is it the schedule or the fixture?* L100 K10 verifies in 4.33 s and L100 K100
+   in 12.06 s (Δ ≈ 7.7 s for 90 extra states ≈ 86 ms/state). L500 has 6× the
+   paths and 5× the bytes, so its per-state verification cost is ≈ 6× L100's:
+   ≈ 26 s of per-state work for the L500 K10 schedule alone, before the extra
+   K100 states. The miss therefore scales with the declared per-state
+   verification work, not with a constant.
+3. *Independent confirmation at a declared allowance:* the L500 exhaustive case,
+   whose own declared watchdog is 300 s, verified its 101 states for 298.28 s
+   without finishing, while the same case at L100 finished in 38.33 s. A ~8×
+   factor between L100 and L500 is consistent with the 6× path/5× byte ratio.
+4. *Owner: neither a product defect nor a harness defect was demonstrated.* The
+   verifier is doing the declared work (complete namespace inventory, recomputed
+   content roots for every sub-128 KiB regular file, declared large-file ranges,
+   every retained commit identity and parent edge) and the product's own
+   verification allowance is deliberately wider (600 s cap in
+   `src/v016_mixed.rs`), so the stop comes from the campaign's declared regular
+   ceiling. No oracle, limit or workload was weakened.
+
+**Escalated to the owner (rule 1 of the escalation list):** the two L500 regular
+verification rows cannot fit the 25 s ceiling without weakening the declared
+verification. They are retained as `TIMEOUT`/gate `FAIL`; the owner needs to rule
+between a declared larger exception and a `NOT_RUN` disposition.
+
+**Defects found and fixed in F2: none.** One harness robustness gap was fixed:
+an invocation that never reached the product (Docker daemon flap: `docker image
+inspect` returned "No such image" for a tag that existed) produced no sample
+record; the driver now classifies that as infrastructure-invalid, retains the
+failed attempt and re-runs the invalid pair once — it never re-samples a case that
+produced a sample. The four invalid attempts are retained under
+`benchmark-results/v016/f2-seed1/…/run-<timestamp>/`.
