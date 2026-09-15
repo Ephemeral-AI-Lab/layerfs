@@ -1,5 +1,6 @@
 use super::dedup_workloads as d;
 use super::v016_compact::{self as s};
+use super::v016_hn as hn;
 use super::workspace_common::{self, Case, Content, Entry, EntryKind, SdkEdit};
 use super::Result;
 pub(crate) const FAMILY: &str = "dedup_branch_history";
@@ -64,6 +65,11 @@ pub(crate) fn verification_steps(case: &Case) -> Vec<usize> {
         "distributed" if n > 200 => vec![0, 1, 199, 200, 201, n / 2, n - 1, n],
         "hotset" => vec![0, 1, 7, 8, 9, n / 2, n - 1, n],
         "recurring" => vec![0, 1, 2, 3, n - 1, n],
+        // The namespace-inode schedule adds the declared access states: commit
+        // n-6 publishes the stage-4 alias (two names, one inode) and commit n-5
+        // is the atomic save that replaces the destination and removes the
+        // alias. Both are verified with their own complete namespace proof.
+        "namespace-inode" => vec![0, 1, 2, n / 2 - 1, n / 2, n - 6, n - 5, n - 1, n],
         _ => vec![0, 1, 2, n / 2 - 1, n / 2, n - 1, n],
     };
     steps.sort_unstable();
@@ -137,29 +143,32 @@ fn v016_edits(case: &Case, kind: &str, seed: u8, step: usize) -> Result<Vec<SdkE
             }])
         }
         "boundary-cycle" => {
-            // Two single-file SDK calls per commit exchange one byte between
-            // the 131,071 B and 131,073 B files: the even commit shrinks the
-            // lower file and appends that byte to the higher one, the next
-            // commit reverses it. The declared byte is the last byte of the
-            // lower file's fixture content, so both directions move the same
-            // declared byte and every length stays inside the declared band.
+            // Two single-file SDK calls per commit exchange one byte between the
+            // 131,071 B and 131,073 B files, shrinking first and reversing on the
+            // next commit. The exchange moves the higher file's last byte *down*
+            // into the lower one, so the pair oscillates between
+            // (131,071, 131,073) and (131,072, 131,072): every other commit puts
+            // both names exactly on the 128 KiB boundary, which is the transition
+            // the profile exists to cycle and the state the two
+            // `v016-access-boundary-{before,after}-v1` consumers read at commits
+            // 48 and 49 (`benchmark-families.md` §historical_access, and
+            // `cases.json` `declared_full_read_bytes` 131071 / 131072).
             let below = s::s_boundary_path("below");
             let above = s::s_boundary_path("above");
-            let byte = *s::bytes_of(&fixture(case, seed)?, &below)?
+            let byte = *s::bytes_of(&fixture(case, seed)?, &above)?
                 .last()
                 .ok_or("boundary-cycle source byte")?;
             // The declared length of each name before this commit follows from
             // the exchange arithmetic: an even commit leaves the pair at its
             // initial sizes, an odd commit leaves them one byte exchanged.
-            let (below_now, above_now) = if step % 2 == 0 {
-                (s::BELOW_LEN, s::ABOVE_LEN)
-            } else {
-                (s::BELOW_LEN - 1, s::ABOVE_LEN + 1)
-            };
             let (shrink, grow, shrink_len, grow_len) = if step % 2 == 0 {
-                (below, above, below_now, above_now)
+                // First call shrinks the higher file onto the exact boundary,
+                // second call grows the lower file onto it.
+                (above, below, s::ABOVE_LEN, s::BELOW_LEN)
             } else {
-                (above, below, above_now, below_now)
+                // The next commit reverses the exchange: the lower file gives
+                // the byte back to the higher one.
+                (below, above, s::BELOW_LEN + 1, s::ABOVE_LEN - 1)
             };
             Ok(vec![
                 SdkEdit {
@@ -176,10 +185,17 @@ fn v016_edits(case: &Case, kind: &str, seed: u8, step: usize) -> Result<Vec<SdkE
                 },
             ])
         }
-        "namespace-inode" => Err(
-            "v0.1.6 namespace-inode compact schedule is not implemented yet: the five declared HN stages have no host orchestrator"
-                .into(),
-        ),
+        // HN is a five-stage schedule, not a pure SDK history: four of its five
+        // stages are POSIX helper executions the host orchestrator launches, and
+        // only stage 2 is the two ordered single-file SDK calls below.
+        "namespace-inode" => {
+            let (cycle, stage) = hn::stage_of(step + 1)?;
+            Ok(if stage == hn::EDITS {
+                hn::sdk_edits(seed, cycle)?
+            } else {
+                Vec::new()
+            })
+        }
         other => Err(format!("unknown v0.1.6 history profile {other}").into()),
     }
 }
@@ -232,6 +248,13 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
     let mut entries = genesis.clone();
     if step == 0 {
         return Ok(entries);
+    }
+    if v016_case(&case.id).is_some_and(|(kind, _)| kind == "namespace-inode") {
+        // The HN schedule is not a sequence of SDK edits: its states follow from
+        // the declared five-stage algebra (unlink/recreate, SDK pair, directory
+        // move, alias plus attributes, atomic save), so the oracle derives them
+        // from the declaration rather than replaying a byte-splice transcript.
+        return hn::expected(seed, step);
     }
     if v016_case(&case.id).is_some() {
         // The v0.1.6 profiles replay their declared SDK calls over literal
@@ -325,6 +348,7 @@ pub(crate) fn self_check() -> Result<()> {
         }
     }
     v016_profiles_check()?;
+    hn::self_check()?;
     mixed_v2_check()
 }
 
@@ -380,6 +404,39 @@ fn v016_check(case: &Case, kind: &str) -> Result<()> {
         }
         if format!("{previous:?}") != format!("{:?}", expected(case, seed, case.tier)?) {
             return Err(format!("{kind} declared replay differs from the oracle").into());
+        }
+        if kind == "boundary-cycle" && case.tier >= 49 {
+            // The two declared `historical_access` consumers read commit 48 and
+            // commit 49 of this producer: one byte below the 128 KiB boundary and
+            // the same name exactly on it. The exchange therefore has to carry
+            // the pair across the boundary, not away from it.
+            let length = |entries: &[Entry], path: &str| -> Result<u64> {
+                let entry = entries
+                    .iter()
+                    .find(|entry| entry.path == path)
+                    .ok_or("boundary-cycle consumer path")?;
+                let EntryKind::File(content) = &entry.kind else {
+                    return Err("boundary-cycle consumer kind".into());
+                };
+                Ok(content.len())
+            };
+            let below = s::s_boundary_path("below");
+            let above = s::s_boundary_path("above");
+            let before = expected(case, seed, 48)?;
+            let after = expected(case, seed, 49)?;
+            if length(&before, &below)? != s::BELOW_LEN
+                || length(&before, &above)? != s::ABOVE_LEN
+                || length(&after, &below)? != s::EXACT_LEN
+                || length(&after, &above)? != s::EXACT_LEN
+            {
+                return Err(format!("boundary-cycle consumer states at seed {seed}").into());
+            }
+            for step in [48usize, 49] {
+                let state = expected(case, seed, step)?;
+                if length(&state, &s::s_boundary_path("exact"))? != s::EXACT_LEN {
+                    return Err("boundary-cycle exact control unchanged".into());
+                }
+            }
         }
         if let Some(counterpart) = match case.id.as_str() {
             LARGE_HOTSET_K10 => Some(LARGE_HOTSET_K100),
@@ -605,7 +662,16 @@ mod checkpoint_tests {
             assert_eq!(steps.last(), Some(&case.tier));
             assert!(steps.windows(2).all(|pair| pair[0] < pair[1]));
             if case.tier > 10 {
-                assert!((6..=8).contains(&steps.len()));
+                if case.kind == "namespace-inode" {
+                    // The HN selection adds the producer's own declared access
+                    // states: commit 94 publishes the stage-4 alias and commit
+                    // 95 is the atomic save that replaces the destination and
+                    // removes the alias.
+                    assert_eq!(steps.len(), 9);
+                    assert!(steps.contains(&94) && steps.contains(&95));
+                } else {
+                    assert!((6..=8).contains(&steps.len()));
+                }
                 assert!(steps.contains(&(case.tier - 1)));
                 if case.kind == "hotset" { assert!(steps.contains(&8) && steps.contains(&9)); }
                 if case.kind == "distributed" && case.tier > 200 {

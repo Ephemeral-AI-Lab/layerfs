@@ -18,6 +18,8 @@ mod repository_init;
 mod sdk_edit_verify;
 mod sdk_file_edit;
 mod storage_smoke;
+mod v016_access;
+mod v016_compact;
 mod v016_mixed;
 mod v016_oracle;
 mod workspace_bench;

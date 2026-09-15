@@ -494,6 +494,305 @@ pub(crate) const EXTENDED_IDS: [&str; 3] = [
     "v016-workspace-four-100mb-5000-k100-v1",
 ];
 
+// ------------------------------------------------- two compact branch controls
+
+/// The two compact `branch_development` controls of `benchmark-families.md`
+/// §"Two compact branch controls". They are fixture-S graph controls, not M1
+/// load-bearing schedules: every local commit is one 256 B SDK overwrite on the
+/// first medium file, at the ancestral ordinal's declared offset and value.
+pub(crate) const COMPACT_CONVERGENT: &str = "v016-branch-convergent-content-v1";
+pub(crate) const COMPACT_DESCENDANT: &str = "v016-branch-fork-descendant-v1";
+pub(crate) const COMPACT_IDS: [&str; 2] = [COMPACT_CONVERGENT, COMPACT_DESCENDANT];
+/// Trunk depth, child depth, the trunk commit both children fork from, and the
+/// local commit of A that the descendant forks from.
+pub(crate) const COMPACT_TRUNK_COMMITS: usize = 10;
+pub(crate) const COMPACT_CHILD_COMMITS: usize = 10;
+pub(crate) const COMPACT_FORK_COMMIT: usize = 5;
+pub(crate) const COMPACT_DESCENDANT_FORK: usize = 5;
+/// The declared content profile of the two controls.
+pub(crate) const COMPACT_PROFILE: &str = "v016-branch-compact";
+
+/// One parsed compact control.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CompactCase {
+    pub(crate) descendant: bool,
+}
+
+/// The four branches of a compact control, in declared order.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) enum CompactRole {
+    Trunk = 0,
+    A = 1,
+    B = 2,
+    C = 3,
+}
+
+impl CompactRole {
+    pub(crate) fn of(self) -> &'static str {
+        match self {
+            Self::Trunk => "trunk",
+            Self::A => "a",
+            Self::B => "b",
+            Self::C => "c",
+        }
+    }
+    pub(crate) fn index(self) -> usize {
+        self as usize
+    }
+}
+
+/// One declared compact commit: the branch, its local 1-based ordinal and the
+/// ancestral ordinal `j` the offset and payload value follow from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CompactStep {
+    pub(crate) role: CompactRole,
+    pub(crate) local: usize,
+    pub(crate) ancestral: usize,
+}
+
+impl CompactCase {
+    pub(crate) fn roles(self) -> Vec<CompactRole> {
+        if self.descendant {
+            vec![
+                CompactRole::Trunk,
+                CompactRole::A,
+                CompactRole::B,
+                CompactRole::C,
+            ]
+        } else {
+            vec![CompactRole::Trunk, CompactRole::A, CompactRole::B]
+        }
+    }
+    pub(crate) fn total_commits(self) -> usize {
+        COMPACT_TRUNK_COMMITS + (self.roles().len() - 1) * COMPACT_CHILD_COMMITS
+    }
+    pub(crate) fn roots(self) -> usize {
+        1 + self.total_commits()
+    }
+    pub(crate) fn longest_ancestry(self) -> usize {
+        if self.descendant {
+            COMPACT_FORK_COMMIT + COMPACT_DESCENDANT_FORK + COMPACT_CHILD_COMMITS
+        } else {
+            COMPACT_FORK_COMMIT + COMPACT_CHILD_COMMITS
+        }
+    }
+    pub(crate) fn branches(self) -> usize {
+        self.roles().len()
+    }
+    /// `cases.json` declares every mode inside the unchanged 15 s budget.
+    pub(crate) fn watchdog_seconds(self) -> u64 {
+        15
+    }
+    /// The inherited ancestry of one branch, as an ancestral-ordinal prefix.
+    pub(crate) fn fork_ancestry(self, role: CompactRole) -> usize {
+        match role {
+            CompactRole::Trunk => 0,
+            CompactRole::A | CompactRole::B => COMPACT_FORK_COMMIT,
+            CompactRole::C => COMPACT_FORK_COMMIT + COMPACT_DESCENDANT_FORK,
+        }
+    }
+}
+
+/// The declared branch name of one compact control's branch. The host
+/// orchestrator publishes it and the `historical_access` route resolves it from
+/// the sealed producer Store, so both read the same declaration.
+pub(crate) fn compact_branch_name(case_id: &str, role: CompactRole) -> String {
+    format!("v0.1.6-compact-{case_id}-{}", role.of())
+}
+
+/// Resolve one registered compact control, or `None` when the ID is not one.
+pub(crate) fn compact_case(id: &str) -> Result<Option<CompactCase>> {
+    Ok(match id {
+        COMPACT_CONVERGENT => Some(CompactCase { descendant: false }),
+        COMPACT_DESCENDANT => Some(CompactCase { descendant: true }),
+        _ => None,
+    })
+}
+
+/// The declared commit sequence of one compact control, in execution order:
+/// the trunk, then each child, and finally the descendant.
+pub(crate) fn compact_steps(compact: CompactCase) -> Vec<CompactStep> {
+    let mut rows = Vec::with_capacity(compact.total_commits());
+    for role in compact.roles() {
+        let base = compact.fork_ancestry(role);
+        let count = if role == CompactRole::Trunk {
+            COMPACT_TRUNK_COMMITS
+        } else {
+            COMPACT_CHILD_COMMITS
+        };
+        for local in 1..=count {
+            rows.push(CompactStep {
+                role,
+                local,
+                ancestral: base + local,
+            });
+        }
+    }
+    rows
+}
+
+/// The declared 256 B region offset of one ancestral ordinal: `4096*((j-1) mod 2)`.
+pub(crate) fn compact_offset(ancestral: usize) -> Result<u64> {
+    if ancestral == 0 {
+        return Err("v0.1.6 compact ancestral ordinals are 1-based".into());
+    }
+    Ok(4_096 * ((ancestral - 1) % 2) as u64)
+}
+
+/// The branch salt of one compact commit. The convergent control changes
+/// identical content on both children; the descendant control salts B and C by
+/// branch while A keeps the shared value.
+pub(crate) fn compact_salt(compact: CompactCase, role: CompactRole) -> &'static str {
+    match (compact.descendant, role) {
+        (true, CompactRole::B) => "branch-b",
+        (true, CompactRole::C) => "branch-c",
+        _ => "",
+    }
+}
+
+/// The declared payload of one compact commit: the value alternates A/B by
+/// `floor((j-1)/2) mod 2`, and a salted branch carries its salt in the recipe.
+pub(crate) fn compact_payload(
+    family: &str,
+    seed: u8,
+    ancestral: usize,
+    salt: &str,
+) -> Result<Content> {
+    if ancestral == 0 {
+        return Err("v0.1.6 compact ancestral ordinals are 1-based".into());
+    }
+    let second = ((ancestral - 1) / 2) % 2 == 1;
+    let role = match (second, salt.is_empty()) {
+        (false, true) => "A".to_owned(),
+        (true, true) => "B".to_owned(),
+        (false, false) => format!("A-{salt}"),
+        (true, false) => format!("B-{salt}"),
+    };
+    d::content(
+        family,
+        COMPACT_PROFILE,
+        seed,
+        ancestral,
+        &role,
+        super::dedup_workloads::BRANCH_REGION_LEN,
+    )
+}
+
+/// The declared per-control operation totals.
+pub(crate) fn compact_counters(compact: CompactCase) -> BTreeMap<&'static str, usize> {
+    BTreeMap::from([
+        ("created_commits", compact.total_commits()),
+        ("sdk_edit_calls", compact.total_commits()),
+        ("sdk_edit_members", compact.total_commits()),
+        ("sdk_batch_calls", 0),
+        ("posix_helper_executions", 0),
+    ])
+}
+
+/// Product-free self-check of the two compact controls: the declared
+/// cardinalities, the ancestral arithmetic, and the control's own no-op rule
+/// (every write must differ from the value it inherits).
+pub(crate) fn compact_self_check() -> Result<()> {
+    use super::v016_compact as s;
+    for (id, descendant, commits, roots, ancestry, branches) in [
+        (COMPACT_CONVERGENT, false, 30usize, 31usize, 15usize, 3usize),
+        (COMPACT_DESCENDANT, true, 40, 41, 20, 4),
+    ] {
+        let compact = compact_case(id)?.ok_or("v0.1.6 compact control is not registered")?;
+        if compact.descendant != descendant
+            || compact.total_commits() != commits
+            || compact.roots() != roots
+            || compact.longest_ancestry() != ancestry
+            || compact.branches() != branches
+            || compact_steps(compact).len() != commits
+        {
+            return Err(format!("v0.1.6 compact cardinality {id}").into());
+        }
+        let counters = compact_counters(compact);
+        if counters.get("created_commits") != Some(&commits)
+            || counters.get("sdk_edit_calls") != Some(&commits)
+            || counters.get("posix_helper_executions") != Some(&0)
+        {
+            return Err("v0.1.6 compact counter table".into());
+        }
+        for seed in 1..=3u8 {
+            for role in compact.roles() {
+                // Every branch replays the frozen `check_plan.py` control model
+                // over its inherited prefix and its own commits; a repeated
+                // value in the same region is the no-op the contract forbids.
+                let mut state = [None::<u8>; 2];
+                let mut apply = |ancestral: usize| -> Result<()> {
+                    let offset = compact_offset(ancestral)?;
+                    if offset % 4_096 != 0 || offset > 4_096 {
+                        return Err("v0.1.6 compact region offset".into());
+                    }
+                    let value = ((ancestral - 1) / 2) % 2;
+                    let slot = (offset / 4_096) as usize;
+                    if state[slot] == Some(value as u8) {
+                        return Err(format!(
+                            "v0.1.6 compact control no-op at ancestral {ancestral}"
+                        )
+                        .into());
+                    }
+                    state[slot] = Some(value as u8);
+                    Ok(())
+                };
+                let inherited = compact.fork_ancestry(role);
+                for ancestral in 1..=inherited {
+                    apply(ancestral)?;
+                }
+                let salt = compact_salt(compact, role);
+                for step in compact_steps(compact)
+                    .iter()
+                    .filter(|row| row.role == role)
+                {
+                    let payload =
+                        compact_payload("branch_development", seed, step.ancestral, salt)?;
+                    if payload.len() != super::dedup_workloads::BRANCH_REGION_LEN {
+                        return Err("v0.1.6 compact payload length".into());
+                    }
+                    apply(step.ancestral)?;
+                }
+            }
+            // Convergent children must be one content function; the descendant
+            // control must salt B/C by branch. The salt of a branch is exactly
+            // what its declared commits carry.
+            let child_a = compact_payload(
+                "branch_development",
+                seed,
+                15,
+                compact_salt(compact, CompactRole::A),
+            )?
+            .digest()?;
+            let child_b = compact_payload(
+                "branch_development",
+                seed,
+                15,
+                compact_salt(compact, CompactRole::B),
+            )?
+            .digest()?;
+            if compact.descendant == (child_a == child_b) {
+                return Err("v0.1.6 compact branch salt declaration".into());
+            }
+        }
+        // The fixture profile declares exactly the two control regions, at Z.
+        let regions = s::SProfile::BranchControl.regions();
+        if regions.len() != 1
+            || regions[0].0 != s::s_medium_path(0)
+            || regions[0].1.len() != 2
+            || regions[0].1.iter().any(|region| {
+                region.label != super::dedup_workloads::BRANCH_Z
+                    || region.len != super::dedup_workloads::BRANCH_REGION_LEN
+            })
+            || regions[0].1[0].offset != 0
+            || regions[0].1[1].offset != 4_096
+        {
+            return Err("v0.1.6 compact fixture regions".into());
+        }
+    }
+    Ok(())
+}
+
 /// One parsed M1 case: the load tier name, the local depth and the topology.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MixedCase {
@@ -648,7 +947,7 @@ pub(crate) fn family_case_ids(topology: Topology) -> Vec<&'static str> {
 }
 
 /// Product-free plan self-check: the declared case table, the per-stage counter
-/// split and the topology cardinalities.
+/// split, the topology cardinalities and the two compact controls.
 pub(crate) fn self_check() -> Result<()> {
     let mut ids = Vec::new();
     for (table, topology) in [
@@ -678,6 +977,7 @@ pub(crate) fn self_check() -> Result<()> {
             return Err("v0.1.6 four-workspace cardinality".into());
         }
     }
+    compact_self_check()?;
     for (topology, expected) in [
         (Topology::Sequential, [(10usize, 10usize, 11usize, 10usize), (100, 100, 101, 100)]),
         (Topology::Concurrent, [(10, 20, 21, 10), (100, 200, 201, 100)]),

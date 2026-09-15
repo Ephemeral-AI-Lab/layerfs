@@ -575,6 +575,37 @@ pub(crate) fn expected_transcripts(
     completed_steps: usize,
 ) -> Result<BTreeMap<String, Vec<Extent>>> {
     use super::workload_source::{self as w, workspace_common::EntryKind};
+    if case.family == "dedup_branch_history" && w::v016_hn::is_hn(&case.id) {
+        // The HN schedule is not a byte-splice replay: its states follow from
+        // the declared five-stage algebra (unlink/recreate, the SDK pair, the
+        // populated-directory move, the alias plus attributes, the atomic
+        // save). Every published regular path is transcribed, the declared
+        // alias included, because a hard-link name is a real namespace path
+        // whose content is the target's.
+        if completed_steps > case.tier {
+            return Err("history oracle steps".into());
+        }
+        let entries = w::dedup_branch_history::expected(case, seed, completed_steps)?;
+        let mut result = BTreeMap::new();
+        for entry in &entries {
+            let content = match &entry.kind {
+                EntryKind::File(content) => content,
+                EntryKind::Hardlink(target) => {
+                    match entries
+                        .iter()
+                        .find(|row| row.path == *target)
+                        .map(|row| &row.kind)
+                    {
+                        Some(EntryKind::File(content)) => content,
+                        _ => return Err("history alias target is not a regular file".into()),
+                    }
+                }
+                _ => continue,
+            };
+            result.insert(entry.path.clone(), transcript(content.reader())?);
+        }
+        return Ok(result);
+    }
     let entries = if case.family == "dedup_branch_history" {
         w::dedup_branch_history::fixture(case, seed)?
     } else {
@@ -715,19 +746,28 @@ pub(crate) fn verify_file_transcripts(
     let mut small_count = 0;
     for (path, got) in actual_extents {
         if got.len() == 1 && actual_file_roots.get(path) == Some(&got[0].id) {
-            let content = entries
-                .iter()
-                .find_map(|entry| {
-                    if &entry.path == path {
-                        if let super::workload_source::workspace_common::EntryKind::File(content) =
-                            &entry.kind
-                        {
-                            return Some(content);
+            let resolve =
+                |wanted: &str| -> Option<&super::workload_source::workspace_common::Content> {
+                    let entry = entries.iter().find(|entry| entry.path == wanted)?;
+                    match &entry.kind {
+                        super::workload_source::workspace_common::EntryKind::File(content) => {
+                            Some(content)
                         }
+                        // A declared hard-link name is charged its referent's
+                        // bytes: the alias and its target share one file-state.
+                        super::workload_source::workspace_common::EntryKind::Hardlink(target) => {
+                            let referent = entries.iter().find(|entry| entry.path == *target)?;
+                            match &referent.kind {
+                                super::workload_source::workspace_common::EntryKind::File(
+                                    content,
+                                ) => Some(content),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
                     }
-                    None
-                })
-                .ok_or("SmallContent original oracle missing")?;
+                };
+            let content = resolve(path).ok_or("SmallContent original oracle missing")?;
             expected.insert(path.clone(), whole_small(content)?);
             small_count += 1;
         }

@@ -38,6 +38,15 @@ GRANTED_LIMIT = 60.0
 VERIFY_ONLY = {
     "v016-mixed-exhaustive-100mb-5000-k100-v1",
     "v016-mixed-exhaustive-500mb-30000-k100-v1",
+    # The six historical access additions create no commits and declare
+    # performance N/A; they have one verification invocation each, bound to the
+    # sealed producer identity rather than to a performance receipt.
+    "v016-access-boundary-before-v1",
+    "v016-access-boundary-after-v1",
+    "v016-access-inode-before-v1",
+    "v016-access-inode-after-v1",
+    "v016-access-fork-point-v1",
+    "v016-access-divergent-head-v1",
 }
 EXTENDED_LIMITS = {
     "v016-mixed-exhaustive-100mb-5000-k100-v1": 120.0,

@@ -86,6 +86,14 @@ pub(crate) mod v016_compact {
     include!("v016_compact.rs");
 }
 #[allow(dead_code)]
+pub(crate) mod v016_hn {
+    include!("v016_hn.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod historical_access {
+    include!("../families/historical_access/mod.rs");
+}
+#[allow(dead_code)]
 pub(crate) mod sdk_edit_common {
     include!("sdk_edit_common.rs");
 }
@@ -1162,6 +1170,12 @@ fn run() -> Result<()> {
     }
     if args.first().is_some_and(|arg| arg == "v016-boundary-alias") {
         return v016_boundary::run_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-hn-stage") {
+        return v016_hn::run_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-access-read") {
+        return historical_access::run_command(&args[1..]);
     }
     if args.first().is_some_and(|arg| arg == "workspace-verify-fast") {
         let [_, id, seed, step, binding] = args.as_slice() else { return Err("workspace-verify-fast CASE SEED STEP CERT_BINDING".into()); };

@@ -30,7 +30,8 @@ class LayoutTests(unittest.TestCase):
 
     def test_family_entrypoints_and_docker_source(self):
         families = sorted(path.parent for path in (BENCH / "families").glob("*/mod.rs"))
-        self.assertEqual(len(families), 22)
+        # 21 inherited families plus the v0.1.6 historical_access additions.
+        self.assertEqual(len(families), 23)
         for family in families:
             for name in ("setup.sh", "perf.sh", "verify.sh"):
                 path = family / name

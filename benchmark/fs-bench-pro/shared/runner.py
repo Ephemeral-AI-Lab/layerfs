@@ -34,7 +34,8 @@ HOST_FAMILIES = ("payload_create_read", "dedup_workspace_reuse", "dedup_cross_fi
                  "namespace_mutation", "directory_construction_traversal",
                  "workspace_change_locality", "dedup_branch_history", "git_tool_workflow",
                  "mixed_load_bearing", "workspace_reliability", "file_size_transition",
-                 "multi_workspace_development", "branch_development", "local_snapshot")
+                 "multi_workspace_development", "branch_development", "historical_access",
+                 "local_snapshot")
 PRODUCT_TARGET_NS = 15_000_000_000
 HISTORICAL_PRODUCT_TARGET_SCOPE = (
     "reporting-only historical 15-second family target; not a collection acceptance gate"
@@ -501,6 +502,9 @@ def _host_acquire(args, selection, deadline):
                 }))
             else:
                 _command([args.host_binary, "infra-prepare", selection["family"], selection["case"], str(selection["seed"]), str(staging)], deadline, env=host_env)
+            seal = None
+            if selection["family"] == "historical_access":
+                seal = _seal_producer(args, selection, staging, deadline)
             (staging / "host-owner.json").write_text(json.dumps({"owner": runtime.OWNER}))
             if not native:
                 master = staging / "payload/store.sqlite"
@@ -513,6 +517,8 @@ def _host_acquire(args, selection, deadline):
             files = runtime.host_tree_identity(staging, _deadline(deadline))
             manifest = {"compatibility": compatibility, "producer": selection["host_executor"], "created_ns": time.time_ns(),
                         "files": files, "data_bytes": sum(item.get("bytes", 0) for item in files.values())}
+            if seal is not None:
+                manifest["producer_seal"] = seal
             (staging / "host-cache.json").write_text(json.dumps(manifest, sort_keys=True))
             for path in staging.rglob("*"):
                 if path.is_file() and not path.is_symlink() and not (native and path.is_relative_to(staging / "payload")):
@@ -540,6 +546,56 @@ def _host_acquire(args, selection, deadline):
             "one_shot": fresh, "producer": manifest["producer"], "compatibility": compatibility,
             "fixture": fixture, "data_bytes": manifest["data_bytes"], "evicted": removed,
             "input_validation": "owned-prepared-recipe" if native else "full-master-identity"}
+
+
+def _seal_producer(args, selection, staging, deadline):
+    """Publish one `historical_access` producer into a freshly prepared master.
+
+    An access case reads one selected retained state of a *sealed* producer, so
+    the store a case acquires must already carry that producer's history. The
+    sealing step runs here, once, with its own container and outside every
+    measured window; the access invocation itself never builds history.
+    """
+    name = "layerfs-infra-seal-" + uuid.uuid4().hex[:12]
+    environment = {
+        **os.environ,
+        **_host_command_env(args, selection),
+        "LAYERFS_EXEC_TRANSPORT": "daemon",
+        "LAYERFS_FUSE_TRANSPORT": "daemon",
+        "LAYERFS_BENCH_WORKLOAD": "/usr/local/bin/fs-benchmark-workload",
+        "LAYERFS_BENCH_PREPARED_INPUT": str(Path(staging) / "payload" / "input"),
+        "TMPDIR": str(staging),
+    }
+    sample = runtime.start_sample(
+        selection["image"], name,
+        {"family": selection["family"], "case": selection["case"], "run": name, "phase": "seal"},
+        deadline=_deadline(deadline))
+    try:
+        started = time.monotonic()
+        command = _command([args.host_binary, "infra-seal-producer", selection["family"],
+                            selection["case"], str(selection["seed"]), str(staging), sample.id],
+                           deadline, env=environment, output_limit=16 * 1024**2)
+        wall = time.monotonic() - started
+        published = [row for row in records(command.stdout) if row.get("kind") == "v016-access-seal"]
+        if command.returncode or len(published) != 1:
+            raise RuntimeError(
+                f"producer sealing failed: {_text(command.stderr)[-2048:]}")
+        receipt = published[0]
+        return {"schema": "v016-access-producer-seal-v1",
+                "case": selection["case"], "seed": selection["seed"],
+                "image": selection["image"], "container": sample.id,
+                "wall_seconds": round(wall, 3),
+                "producer": receipt.get("producer"),
+                "producer_family": receipt.get("producer_family"),
+                "selected_ordinal": receipt.get("selected_ordinal"),
+                "declared_roots": receipt.get("declared_roots"),
+                "branch_role": receipt.get("branch_role")}
+    finally:
+        runtime.run(["docker", "rm", "--force", name],
+                    deadline=runtime.Deadline.after(60), output_limit=4096, check=False)
+        control = Path(staging) / "container-control"
+        if control.exists():
+            shutil.rmtree(control, ignore_errors=True)
 
 
 def _host_sample(prepared, selection, name, deadline):

@@ -448,6 +448,23 @@ fn prepare(family: &str, id: &str, seed: u8, root: &Path) -> AnyResult<()> {
     Ok(())
 }
 
+/// Seal one `historical_access` producer into its prepared history input. The
+/// preparation step owns the container; the access invocation never runs this.
+fn seal_producer(family: &str, id: &str, seed: u8, root: &Path, container: &str) -> AnyResult<()> {
+    if family != "historical_access" {
+        return Err("producer sealing is declared for historical_access only".into());
+    }
+    let case = workload_source::workspace_registry::resolve(id)?;
+    if case.family != family {
+        return Err("family/case mismatch".into());
+    }
+    let payload = root.join("payload");
+    if !payload.join("store.sqlite").is_file() {
+        return Err("producer sealing requires a prepared Store".into());
+    }
+    super::v016_access::seal_producer(&payload, &case, seed, ContainerId(container.into()))
+}
+
 fn run_selected(
     family: &str,
     id: &str,
@@ -591,6 +608,7 @@ fn run_selected(
                     | "file_size_transition"
                     | "multi_workspace_development"
                     | "branch_development"
+                    | "historical_access"
             )
             && case.kind != "boundaries"
             && workload_source::v016_stages::mixed_case(&case.id)?.is_none();
@@ -662,6 +680,7 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         ["infra-list",family]=>list(Some(family), None),
         ["infra-list",family,case]=>list(Some(family), Some(case)),
         ["infra-prepare",family,id,seed,root]=>prepare(family,id,seed.parse()?,Path::new(root)),
+        ["infra-seal-producer",family,id,seed,root,container]=>seal_producer(family,id,seed.parse()?,Path::new(root),container),
         ["infra-run",family,id,seed,mode,root,container]=>run_selected(family,id,seed.parse()?,mode,Path::new(root),container),
         _=>Err("usage: infra-list | infra-prepare FAMILY CASE SEED DIR | infra-run FAMILY CASE SEED performance|verify DIR CONTAINER".into())
     }

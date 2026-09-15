@@ -13,9 +13,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
+import uuid
 
 BENCH = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BENCH))
@@ -58,6 +60,75 @@ def list_row(binary, family, case, image, extended=False):
     return rows[0]
 
 
+def seal_producer(binary, args, case, stage, key, fixture):
+    """Publish one declared producer schedule into the staged prepared Store.
+
+    The sealing container carries the benchmark's own owner label, is created
+    with the declared 2 CPU / 2 GiB budget, and is removed before the master is
+    sealed. The seal receipt is recorded in the master manifest so the access
+    invocation can name the producer identity it read.
+    """
+    name = "layerfs-infra-seal-" + uuid.uuid4().hex[:12]
+    deadline = runtime.Deadline.after(1800)
+    sample = runtime.start_sample(
+        args.image,
+        name,
+        {"family": "historical_access", "case": case, "run": name, "phase": "seal"},
+        deadline=deadline,
+    )
+    try:
+        env = {
+            **os.environ,
+            "LAYERFS_V013_IMAGE": args.image,
+            "LAYERFS_EXEC_TRANSPORT": "daemon",
+            "LAYERFS_FUSE_TRANSPORT": "daemon",
+            "LAYERFS_BENCH_WORKLOAD": "/usr/local/bin/fs-benchmark-workload",
+            "LAYERFS_BENCH_PREPARED_INPUT": str(stage / "payload" / "input"),
+            "TMPDIR": str(stage),
+        }
+        started = time.monotonic()
+        result = subprocess.run(
+            [str(binary), "infra-seal-producer", args.family, case, str(args.seed),
+             str(stage), sample.id],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        wall = time.monotonic() - started
+        print(f"{case}: seal rc={result.returncode} wall={wall:.1f}s", flush=True)
+        if result.returncode != 0:
+            print(result.stdout[-4000:])
+            print(result.stderr[-4000:])
+            raise SystemExit(1)
+        records = runner.records(result.stdout)
+        published = [row for row in records if row.get("kind") == "v016-access-seal"]
+        if len(published) != 1:
+            raise SystemExit(f"seal published {len(published)} receipts for {case}")
+        receipt = published[0]
+        return {
+            "schema": "v016-access-producer-seal-v1",
+            "case": case,
+            "family": args.family,
+            "seed": args.seed,
+            "image": args.image,
+            "container": sample.id,
+            "wall_seconds": round(wall, 3),
+            "producer": receipt.get("producer"),
+            "producer_family": receipt.get("producer_family"),
+            "selected_ordinal": receipt.get("selected_ordinal"),
+            "declared_roots": receipt.get("declared_roots"),
+            "branch_role": receipt.get("branch_role"),
+            "fixture_plan_sha256": fixture.get("input_plan_sha256"),
+            "cache_key": key,
+        }
+    finally:
+        runtime.run(["docker", "rm", "--force", name], deadline=runtime.Deadline.after(60),
+                    output_limit=4096, check=False)
+        control = stage / "container-control"
+        if control.exists():
+            shutil.rmtree(control, ignore_errors=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--family", default="mixed_load_bearing")
@@ -86,15 +157,16 @@ def main():
             raise SystemExit(f"{case} is an explicit extended case; pass --extended")
         fixture = fixture_row(binary, args.family, case, args.seed, args.image)
         source = host_identity["LAYERFS_SOURCE_SEAL"]
-        key = digest(
-            {
-                "family": args.family,
-                "case": case,
-                "seed": args.seed,
-                "source": source,
-                "recipe": recipe,
-            }
-        )
+        # The master is keyed exactly as `runner.py::_host_acquire` looks it up,
+        # so a prepared (and, for historical access, sealed) input is reused
+        # instead of being rebuilt inside a gated invocation.
+        compatibility = {
+            "contract": "layerfs-canonical-v5-workspace-fixture-v1",
+            "fixture": fixture,
+            "schema_sha256": host_identity["schema_sha256"],
+            "seed": args.seed,
+        }
+        key = runner.digest(compatibility)
         root = runner.HOST_ROOT / "prepared" / key
         if root.exists():
             print(f"{case}: cache hit {root}")
@@ -118,6 +190,12 @@ def main():
             print(result.stdout[-4000:])
             print(result.stderr[-4000:])
             raise SystemExit(1)
+        seal = None
+        if args.family == "historical_access":
+            # An access case reads one selected retained state of a sealed
+            # producer. The producer schedule is published here, once, with its
+            # own container; no access invocation ever builds history.
+            seal = seal_producer(binary, args, case, stage, key, fixture)
         master = stage / "payload" / "store.sqlite"
         if not master.is_file():
             raise SystemExit(f"prepared master absent: {master}")
@@ -126,21 +204,21 @@ def main():
         checked.unlink()
         master.rename(stage / "store.sqlite")
         (stage / "store.sqlite").chmod(0o444)
+        # The owner marker is part of the master identity, so it is written
+        # before the identity is computed; `host-cache.json` itself is excluded
+        # by `runtime.host_tree_identity`.
+        (stage / "host-owner.json").write_text(json.dumps({"owner": runtime.OWNER}))
         files = runtime.host_tree_identity(stage, deadline)
         manifest = {
-            "compatibility": {
-                "contract": "layerfs-canonical-v5-workspace-fixture-v1",
-                "fixture": fixture,
-                "schema_sha256": host_identity["schema_sha256"],
-                "seed": args.seed,
-            },
+            "compatibility": compatibility,
             "producer": source,
             "created_ns": time.time_ns(),
             "files": files,
             "data_bytes": sum(item.get("bytes", 0) for item in files.values()),
         }
+        if seal is not None:
+            manifest["producer_seal"] = seal
         (stage / "host-cache.json").write_text(json.dumps(manifest, sort_keys=True))
-        (stage / "host-owner.json").write_text(json.dumps({"owner": runtime.OWNER}))
         for path in stage.rglob("*"):
             if path.is_file() and not path.is_symlink():
                 path.chmod(path.stat().st_mode & ~0o222)

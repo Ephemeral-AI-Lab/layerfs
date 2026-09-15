@@ -2,12 +2,13 @@ use super::workspace_common::{Case, Entry, Receipt};
 use super::Result;
 use std::path::Path;
 
-pub(crate) const FAMILIES: [&str; 15] = [
+pub(crate) const FAMILIES: [&str; 16] = [
     "payload_create_read", "tiny_file_churn", "directory_construction_traversal",
     "git_tool_workflow", "namespace_mutation", "workspace_change_locality",
     "mixed_load_bearing", "dedup_cross_file", "dedup_cdc_locality",
     "dedup_workspace_reuse", "dedup_branch_history", "file_size_transition",
-    "multi_workspace_development", "branch_development", "local_snapshot",
+    "multi_workspace_development", "branch_development", "historical_access",
+    "local_snapshot",
 ];
 
 pub(crate) fn cases() -> Vec<Case> {
@@ -26,6 +27,7 @@ pub(crate) fn cases() -> Vec<Case> {
     rows.extend(super::file_size_transition::cases());
     rows.extend(super::multi_workspace_development::cases());
     rows.extend(super::branch_development::cases());
+    rows.extend(super::historical_access::cases());
     rows.extend(super::local_snapshot::cases());
     rows
 }
@@ -59,6 +61,7 @@ macro_rules! dispatch_family {
             "file_size_transition" => super::file_size_transition::$function($case $(, $arg)*),
             "multi_workspace_development" => super::multi_workspace_development::$function($case $(, $arg)*),
             "branch_development" => super::branch_development::$function($case $(, $arg)*),
+            "historical_access" => super::historical_access::$function($case $(, $arg)*),
             "local_snapshot" => super::local_snapshot::$function($case $(, $arg)*),
             other => Err(format!("unknown Workspace family: {other}").into()),
         }
@@ -113,23 +116,30 @@ pub(crate) fn steps(case: &Case) -> usize {
     if case.family == "local_snapshot" {
         return 3;
     }
+    if case.family == "historical_access" {
+        // One declared retained state is mounted; no commit is created.
+        return 0;
+    }
     1
 }
 
 pub(crate) fn self_check() -> Result<()> {
     let rows = cases();
-    // Declared membership: 8+20+12+4+4+16+10+10+20+14+26+7+5+4+1. The 26
+    // Declared membership: 8+20+12+4+4+16+10+10+20+14+26+7+5+6+6+1. The 26
     // history rows are the 20 inherited cases plus the six v0.1.6 profiles; the
-    // fifteen families are the twelve that were registered before #154 plus the
-    // three #122 families and the sandbox route's local_snapshot.
-    if rows.len() != 161 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 161 {
-        return Err(format!("Workspace registry must have 161 unique timed IDs, observed {} rows / {} unique", rows.len(), rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len()).into());
+    // six branch rows are the four M1 branch forks plus the two compact graph
+    // controls; the six access rows mount one selected retained state each; and
+    // the sixteen families are the twelve that were registered before #154 plus
+    // the three #122 families, the six #154 access additions and the sandbox
+    // route's local_snapshot.
+    if rows.len() != 169 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 169 {
+        return Err(format!("Workspace registry must have 169 unique timed IDs, observed {} rows / {} unique", rows.len(), rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len()).into());
     }
     let observed: Vec<(&&str, usize)> = FAMILIES
         .iter()
         .map(|family| (family, rows.iter().filter(|r| r.family == *family).count()))
         .collect();
-    let declared: [usize; 15] = [8, 20, 12, 4, 4, 16, 10, 10, 20, 14, 26, 7, 5, 4, 1];
+    let declared: [usize; 16] = [8, 20, 12, 4, 4, 16, 10, 10, 20, 14, 26, 7, 5, 6, 6, 1];
     for ((family, count), expected) in observed.iter().zip(declared) {
         if *count != expected {
             return Err(format!("wrong membership for {family}: observed {count}, declared {expected}").into());
@@ -150,6 +160,7 @@ pub(crate) fn self_check() -> Result<()> {
     super::file_size_transition::self_check()?;
     super::multi_workspace_development::self_check()?;
     super::branch_development::self_check()?;
+    super::historical_access::self_check()?;
     super::v016_stages::self_check()?;
     super::v016_common::self_check()?;
     Ok(())
@@ -211,7 +222,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
         }
         [command] if command == "workspace-self-check" => {
             self_check()?;
-            println!("registry_status=pass\ntimed_case_count=161\nsample_slot_count=483");
+            println!("registry_status=pass\ntimed_case_count=169\nsample_slot_count=507");
         }
         [command, id, seed, step, mode] if command == "workspace-apply" => {
             if !matches!(mode.as_str(), "performance" | "verify") { return Err("invalid workload mode".into()); }

@@ -849,6 +849,20 @@ pub(crate) fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> A
             .as_bytes(),
         );
         None
+    } else if let Some(access) = workload_source::historical_access::access_case(&case.id)? {
+        // A historical access case reads one selected retained state of one
+        // sealed producer: its prepared history input is identified by the
+        // producer, the retained graph size and the selected ordinal, never by
+        // the genesis fixture alone. Two access cases of the same producer
+        // therefore keep two independent sealed inputs.
+        plan = workload_source::sdk_edit_common::sha256_hex(
+            format!(
+                "v016-access\n{}\n{}\n{}\n{plan}",
+                access.producer, access.ordinal, access.roots
+            )
+            .as_bytes(),
+        );
+        None
     } else {
         None
     };
@@ -860,6 +874,8 @@ pub(crate) fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> A
         workload_source::ordinary_workloads::MIXED_V4_PROFILE
     } else if workload_source::dedup_workloads::history_unrelated_mixed_v2(case) {
         workload_source::dedup_workloads::HISTORY_UNRELATED_MIXED_V2_PROFILE
+    } else if workload_source::historical_access::access_case(&case.id)?.is_some() {
+        "v016-access-sealed-producer"
     } else {
         "workspace-input-v1"
     };
@@ -1321,7 +1337,7 @@ fn native_verify(
     Ok(())
 }
 
-fn run_case(
+pub(crate) fn run_case(
     root: &Path,
     input: &Path,
     case: &Case,
@@ -1344,7 +1360,9 @@ fn run_case(
             || case.family == "workspace_reliability"
             || case.family == "edit_length_changing_capped"
             || case.family == "file_size_transition"
-            || super::v016_mixed::is_mixed(case))
+            || super::v016_mixed::is_mixed(case)
+            || super::v016_compact::is_compact(case)
+            || super::v016_access::is_access(case))
     {
         return Err("fast-verify-v2 is for active ordinary/dedup routine cases; targeted and already-qualified capped cases keep their own route".into());
     }
@@ -1815,6 +1833,125 @@ fn run_case(
                         );
                     }
                     observed(&client, &mut last_operation)?;
+                } else if workload_source::v016_hn::is_hn(&case.id) {
+                    // The v0.1.6 HN history schedule. One commit per stage and
+                    // five stages per cycle: stage 2 is the host's two ordered
+                    // single-file SDK calls, every other stage is one POSIX
+                    // helper execution whose receipt must equal the declared
+                    // per-stage operation table. Helpers finish before the
+                    // Commit that follows them.
+                    let (cycle, stage) = workload_source::v016_hn::stage_of(step + 1)?;
+                    let stage_counters = workload_source::v016_hn::stage_counters(stage);
+                    if stage == workload_source::v016_hn::EDITS {
+                        // Stage 2 is the host's own ordered SDK pair: the host
+                        // publishes the declared target and call counts and no
+                        // helper receipt exists for it.
+                        let edits = workload_source::v016_hn::sdk_edits(seed, cycle)?;
+                        if edits.len() != 2 {
+                            return Err("v0.1.6 HN stage 2 declares two ordered SDK calls".into());
+                        }
+                        for (name, expected) in &stage_counters {
+                            if !workload_source::v016_hn::is_host_counter(stage, name) {
+                                return Err(format!(
+                                    "v0.1.6 HN stage 2 declares the non-host operation {name}"
+                                )
+                                .into());
+                            }
+                            if *expected != edits.len() {
+                                return Err(format!(
+                                    "v0.1.6 HN stage 2 declares {name}={expected}, observed {}",
+                                    edits.len()
+                                )
+                                .into());
+                            }
+                        }
+                        for edit in edits {
+                            let request = WorkspaceFileRangeEdit {
+                                workspace_id: session.id,
+                                path: edit.path,
+                                start: edit.start,
+                                delete_len: edit.delete_len,
+                                replacement: WorkspaceFileReplacement::Inline(edit.replacement),
+                            };
+                            product_budget.begin("sdk-edit")?;
+                            let start = product_budget.start_clock("sdk-edit")?;
+                            let result = client.edit_workspace_file_range(request);
+                            let edit_ns = product_budget.finish_clock(start)?;
+                            product_budget.end(
+                                "sdk-edit",
+                                edit_ns,
+                                result.as_ref().err().map(ToString::to_string),
+                            )?;
+                            result?;
+                            pure_call_sum_ns = pure_call_sum_ns
+                                .checked_add(edit_ns)
+                                .ok_or("phase sum overflow")?;
+                            emit(
+                                "phase",
+                                &[
+                                    ("phase", quote("sdk-edit")),
+                                    ("step", step.to_string()),
+                                    ("cycle", cycle.to_string()),
+                                    ("stage", stage.to_string()),
+                                    ("elapsed_ns", edit_ns.to_string()),
+                                ],
+                            );
+                        }
+                        observed(&client, &mut last_operation)?;
+                    } else {
+                        let argv = vec![
+                            OsString::from("/usr/local/bin/fs-benchmark-workload"),
+                            OsString::from("v016-hn-stage"),
+                            OsString::from(seed.to_string()),
+                            OsString::from(cycle.to_string()),
+                            OsString::from(stage.to_string()),
+                        ];
+                        product_budget.begin("hn-stage")?;
+                        let start = product_budget.start_clock("hn-stage")?;
+                        let result = super::execute(&client, session.id, argv);
+                        let stage_ns = product_budget.finish_clock(start)?;
+                        product_budget.end(
+                            "hn-stage",
+                            stage_ns,
+                            result.as_ref().err().map(ToString::to_string),
+                        )?;
+                        let output = result?;
+                        pure_call_sum_ns = pure_call_sum_ns
+                            .checked_add(stage_ns)
+                            .ok_or("phase sum overflow")?;
+                        let receipt = output_text(&output)?;
+                        let mut observed_counters =
+                            workload_source::v016_hn::parse_stage_receipt(&receipt, stage)?;
+                        for name in stage_counters.keys() {
+                            if workload_source::v016_hn::is_host_counter(stage, name) {
+                                observed_counters.remove(name);
+                            }
+                        }
+                        let mut declared = stage_counters.clone();
+                        for name in stage_counters.keys() {
+                            if workload_source::v016_hn::is_host_counter(stage, name) {
+                                declared.remove(name);
+                            }
+                        }
+                        if observed_counters != declared {
+                            return Err(format!(
+                                "v0.1.6 HN stage {stage} receipt counters {observed_counters:?} != declared {declared:?}"
+                            )
+                            .into());
+                        }
+                        emit(
+                            "phase",
+                            &[
+                                ("phase", quote("hn-stage")),
+                                ("step", step.to_string()),
+                                ("cycle", cycle.to_string()),
+                                ("stage", stage.to_string()),
+                                ("elapsed_ns", stage_ns.to_string()),
+                                ("workload_receipt", quote(&receipt)),
+                            ],
+                        );
+                        observed(&client, &mut last_operation)?;
+                    }
                 } else if case.kind != "workspace-clean-commit" {
                     let argv = vec![
                         OsString::from("/usr/local/bin/fs-benchmark-workload"),
@@ -1894,7 +2031,16 @@ fn run_case(
                         history.push(commit_id);
                         Some(commit_id)
                     }
-                    WorkspaceCommitResult::UpToDate { head } => head,
+                    WorkspaceCommitResult::UpToDate { head } => {
+                        if workload_source::v016_hn::is_hn(&case.id) {
+                            return Err(format!(
+                                "v0.1.6 HN commit {} must be Created, observed UpToDate",
+                                step + 1
+                            )
+                            .into());
+                        }
+                        head
+                    }
                     other => return Err(format!("unexpected Commit outcome {other:?}").into()),
                 };
                 emit(
@@ -2969,8 +3115,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                 "self-check",
                 &[
                     ("status", quote("pass")),
-                    ("timed_case_count", "161".into()),
-                    ("sample_slot_count", "483".into()),
+                    ("timed_case_count", "169".into()),
+                    ("sample_slot_count", "507".into()),
                 ],
             );
             Ok(())
@@ -3055,6 +3201,40 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                         mode == "verify",
                     );
                     resource_receipt("after-mi", process_resource_snapshot()?);
+                    return outcome;
+                }
+                if super::v016_compact::is_compact(&case) {
+                    if !matches!(mode.as_str(), "performance" | "verify") {
+                        return Err(
+                            "v0.1.6 compact controls run performance and verify through their own route"
+                                .into(),
+                        );
+                    }
+                    resource_receipt("before-compact", process_resource_snapshot()?);
+                    let _sampler = HostSampler::start()?;
+                    let outcome = super::v016_compact::run_case(
+                        Path::new(root),
+                        &case,
+                        seed.parse()?,
+                        mode,
+                        ContainerId(container.clone()),
+                        mode == "verify",
+                    );
+                    resource_receipt("after-compact", process_resource_snapshot()?);
+                    return outcome;
+                }
+                if super::v016_access::is_access(&case) {
+                    resource_receipt("before-access", process_resource_snapshot()?);
+                    let _sampler = HostSampler::start()?;
+                    let outcome = super::v016_access::run_case(
+                        Path::new(root),
+                        &case,
+                        seed.parse()?,
+                        mode,
+                        ContainerId(container.clone()),
+                        mode == "verify",
+                    );
+                    resource_receipt("after-access", process_resource_snapshot()?);
                     return outcome;
                 }
                 if case.family == "workspace_reliability" {

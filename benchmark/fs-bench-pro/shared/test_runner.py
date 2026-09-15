@@ -248,8 +248,9 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual((args.topology, args.cpus, args.memory_mib, args.timeout),
                              ("host-store", 2, 2048, 130))
             self.assertIsNone(args.perf_samples)
-        self.assertEqual(len(runner.HOST_FAMILIES), 21)
+        self.assertEqual(len(runner.HOST_FAMILIES), 22)
         self.assertIn("tiny_file_churn", runner.HOST_FAMILIES)
+        self.assertIn("historical_access", runner.HOST_FAMILIES)
         for family in ("workspace_change_locality", "dedup_branch_history", "git_tool_workflow",
                        "mixed_load_bearing", "workspace_reliability"):
             self.assertIn(family, runner.HOST_FAMILIES)
