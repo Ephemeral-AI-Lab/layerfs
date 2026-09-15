@@ -1745,3 +1745,76 @@ v0.1.5 parity, not a timing miss — the kernel-dirty shared-mmap limitation, th
 dead host write-spool metric and §5.1's failed-append dead range above). No merge,
 tag or release follows; #151 keeps the experiment's create-500 / bulk-create-500 /
 25k gates.
+
+### L31 — 2026-09-19: retained deepseek-harness history profiles re-run on the v0.1.6 candidate (#153)
+
+Owner follow-up after #152 closed: `repository_history` closed #152 as
+`NOT_RUN_OPTIONAL` and had never run on the v0.1.6 sandbox-local candidate. Requested
+and executed: the **157-commit `deepseek-full`** history (`stride-1`) and **`stride-3`**,
+with `stride-10` as the shakedown, plus a paired reconstructed v0.1.5 control for
+`stride-3`. Specification and group report:
+[#153](https://github.com/Ephemeral-AI-Lab/layerfs/issues/153)
+([comment 5684860153](https://github.com/Ephemeral-AI-Lab/layerfs/issues/153#issuecomment-5684860153));
+in-tree report `docs/roadmap/0.1/0.1.6/evidence/issue153-retained-history-report.md`.
+
+#### Identity
+
+Candidate: source `8308cd8e628a97cd8b7d17d184a8f69ff5f212d21b0646d84913a6df5d444e9a` @
+`7fab1027a` (clean), product
+`970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd`, compilation
+`bff3ff08…`, dependency `a1cf72ac…`, harness `daa74be0…`, workload `821b2404…`, image
+`layerfs-bench-infra:8308cd8e628a97cd`. Control (v0.1.5, reconstructed worktree
+`/Users/yifanxu/layerfs-v016-control`): product `276c5970aabf…`, source `40bb391e1efccde7…`
+@ `6ee1ec94c`, image `layerfs-bench-infra:40bb391e1efccde7`.
+
+#### Results — 6/6 phases PASS, every state verified against its original oracle
+
+| profile | states | Store allocated / apparent B | Commit sum (median) | perf wall | verify wall | verified path-states / bytes |
+|---|--:|--|--|--|--|--|
+| `stride-10` | 17 | 49,344,512 / 49,315,940 | 11.371 s (564.3 ms) | 98.0 s | 67.5 s | 101,477 / 561,010,345 |
+| `stride-3` | 53 | 64,024,576 / 64,000,100 | 24.815 s (421.0 ms) | 241.7 s | 199.8 s | 306,861 / 1,676,767,835 |
+| `stride-1` (157) | 157 | 83,947,520 / 82,677,860 | 64.108 s (341.7 ms) | 617.6 s | 570.6 s | 904,143 / 4,936,693,030 |
+| control `stride-3` (v0.1.5) | 53 | 65,064,960 / 64,036,964 | 22.914 s (396.6 ms) | 235.4 s | 188.9 s | 306,861 / 1,676,767,835 |
+
+Paired `stride-3` (identical selection, harness and fixture cache; byte-identical
+canonical content 589,423,458 B / 73,476 objects in both arms): Store **0.984×** (1.6 %
+less), Commit sum **1.083×** (+1.90 s; median +24.4 ms/commit), complete phases 1.027×
+and 1.058× — both inside the bounded-acceptance rule's absolute branch. This is the
+comparator that matters; the 2026-09-10 #100-era public row (100,700,160 B) and the
+offline structural artifact (59,760,640 B) are superseded/different formats and were not
+used as v0.1.6 comparators.
+
+`stride-1` against the recorded 2026-09-12 rows (cited, not paired): allocated
+83,910,656 / 83,943,424 / 83,959,808 B → **parity within 0.02 %**, apparent
+82,583,652–83,525,732 B, canonical 871,588,115 B / 104,705 objects identical, Commit sum
+61.991 s → 64.108 s (**+3.4 %**). Matched-Git comparators cited from the frozen Git
+policy: Git53 49,332,224 B → candidate **1.298×**; Git157 56,373,248 B → **1.489×**.
+
+Budgets: these are long selections outside #152's 15 s rule (declared in the issue);
+per-state fixture install (18.6 / 63.7 / 132.0 s) is inside the measured work wall and is
+reported, not excluded. Fixture preparation is one-time and outside the measured phases.
+`LAYERFS_CONSTRUCTION_WORKERS=1` exported for every run; one sample and one verification
+per profile; fresh output directories.
+
+#### Non-passing lines
+
+1. **Two pre-measurement harness transients**, no measurement affected: one
+   `docker image inspect` on the candidate tag returned "No such image" (resolved by a
+   fresh process; the same tag served every later run), and one run died in
+   `compilation_seals()` with `rustc failed: deadline` against the 10 s seal deadline
+   (`rustc +1.85.1 -vV` measures 0.33 s warm). Both were retried; the retries produced the
+   receipts above. Recorded because a 10 s seal deadline is marginal on a loaded machine.
+2. **Container-lifetime `memory_peak` and `file` peaks differ between arms** (candidate
+   `stride-3` 159,789,056 B / 63,774,720 B vs control 137,150,464 B / 4,435,968 B). These
+   are lifetime/domain values and decide nothing (`L18`); the direction follows the
+   architecture — the candidate's payload spool and its page cache live in the sandbox,
+   which is also why the candidate's host disk writes are 130.5 MB versus the control's
+   817.9 MB for the same 53 states. Stated, not excused.
+3. **No `historical_access` run**: its sealed v2 Store (`f323de0e…`) is still absent
+   (`L29`), so that family stays `NOT_RUN` independently of this result.
+4. These profiles are `admission_eligible: false` exploratory selections; nothing here is
+   a release claim.
+
+Receipts: `benchmark-results/repository-history/{stride-10,stride-3,stride-1}/` and
+`/Users/yifanxu/layerfs-v016-control/benchmark-results/repository-history/stride-3/`
+(634 MB of state receipts, custody manifests and per-state oracles).

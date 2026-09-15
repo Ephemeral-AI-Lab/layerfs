@@ -21,6 +21,7 @@ whose measurements motivated the replacement is preserved on
 | [Connection review record](sandbox-host-connection-review.md) | Three independent subagent reviews, ranked findings, source evidence and dispositions; no implementation/performance claim |
 | [Experimental agent handoff prompt](experimental-agent-handoff-prompt.md) | The exact handoff instructions followed by the implementing agent |
 | [#152 reliability fix report](evidence/issue152-reliability-fix-report.md) | Outcome of the six `workspace_reliability` failures handed over by [#152](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152): per-case fix, identity chain, 27/27 proofs, non-passing lines |
+| [Retained-history report](evidence/issue153-retained-history-report.md) | [#153](https://github.com/Ephemeral-AI-Lab/layerfs/issues/153): the 157-commit `deepseek-full` and `stride-3`/`stride-10` profiles re-run on the v0.1.6 candidate with a paired v0.1.5 control |
 
 Execution evidence: [issue151 experiment ledger](evidence/issue151-experiment-ledger.md)
 (append-only). Research motivation:
