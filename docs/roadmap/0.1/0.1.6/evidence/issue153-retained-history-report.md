@@ -147,3 +147,7 @@ python3 benchmark/fs-bench-pro/shared/runner.py --family repository_history \
 No release claim: these profiles are exploratory (`admission_eligible: false`), and the
 result is a v0.1.6-candidate measurement of the retained-history storage and iteration
 cost, nothing more.
+
+## 8. Closure
+
+#153 closed at the owner's direction on 2026-09-15 ([comment 5685053999](https://github.com/Ephemeral-AI-Lab/layerfs/issues/153#issuecomment-5685053999)). The closure accepts the non-passing lines in §6 **as recorded** — the two pre-measurement harness transients and the container-lifetime domain differences — and does not waive them. `historical_access` remains `NOT_RUN` independently, pending its sealed v2 Store. No merge, tag or release claim follows.

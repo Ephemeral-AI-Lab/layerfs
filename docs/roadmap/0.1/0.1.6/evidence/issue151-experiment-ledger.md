@@ -1818,3 +1818,12 @@ per profile; fresh output directories.
 Receipts: `benchmark-results/repository-history/{stride-10,stride-3,stride-1}/` and
 `/Users/yifanxu/layerfs-v016-control/benchmark-results/repository-history/stride-3/`
 (634 MB of state receipts, custody manifests and per-state oracles).
+
+#### Closure
+
+#153 closed at the owner's direction on 2026-09-15
+([closing record, comment 5685053999](https://github.com/Ephemeral-AI-Lab/layerfs/issues/153#issuecomment-5685053999))
+with all three profiles PASS and the paired control attached. The closure accepts the
+non-passing lines above **as recorded** — the two harness transients and the
+container-lifetime domain differences — and does not waive them; `historical_access`
+stays `NOT_RUN` until its sealed v2 Store reappears. No merge, tag or release follows.
