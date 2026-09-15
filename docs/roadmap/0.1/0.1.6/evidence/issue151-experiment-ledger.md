@@ -325,3 +325,175 @@ Cases, in order, one sample per arm each: `tiny-create-500-mixed-v4` (B1) →
   `smoke-candidate-4/`, `smoke-candidate-5/`, `verify-smoke-candidate/`,
   `verify-smoke-candidate-2/`.
 - Next: Phase D gate B1, control first, against the sealed identities above.
+
+### L12 — 2026-09-15: gate B1 `tiny-create-500-mixed-v4` — PASS does not reproduce; commit gate FAILS
+
+Both arms, seed 1, `--setup clone`, `--perf-fast --collection-mode
+--product-timeout 600 --timeout 630 --setup-timeout 600`,
+`LAYERFS_CONSTRUCTION_WORKERS=1` exported for both arms (inert in the control —
+see L14). Every sample below is preserved.
+
+| sample | receipt (under that arm's `benchmark-results/issue151/`) | workflow ns | exec ns | commit ns | container CPU ns | host CPU ns | CPU sum ns |
+|---|---|---|---|---|---|---|---|
+| control c1 | `perf-control-tiny-create-500-mixed-v4` | 212,317,917 | 156,949,500 | 40,037,458 | 108,536,000 | 88,442,082 | 196,978,082 |
+| control c2 (fresh) | `perf-control2-tiny-create-500-mixed-v4` | 242,483,458 | 176,370,625 | 53,037,416 | 112,224,000 | 106,418,876 | 218,642,876 |
+| candidate r1 (rev A) | `perf-candidate2-tiny-create-500-mixed-v4` | 191,581,542 | 136,831,042 | 42,342,583 | 121,660,000 | 83,658,292 | 205,318,292 |
+| candidate r2 (rev B) | `perf-candidate3-tiny-create-500-mixed-v4` | 244,905,375 | 166,733,750 | 64,953,250 | 131,794,000 | 95,056,876 | 226,850,876 |
+| candidate r3 (rev B, clean host) | `perf-candidate4-tiny-create-500-mixed-v4` | 269,016,874 | 191,666,916 | 65,461,500 | 123,361,000 | 121,792,708 | 245,153,708 |
+| candidate probe (rev A, default workers) | `perf-candidate-defaultworkers-tiny-create-500-mixed-v4` | 310,707,125 | 158,965,583 | 140,759,625 | — | — | — |
+
+Revision A = `3a1c35eb4` (segment read-ahead); revision B = `58a54b446`
+(A + the frozen-records page-exhaustion fix). The B fix touches the
+`SNAP_RECORDS` path B1 exercises, so B1's revision-A sample was invalidated and
+re-collected (L14 records the environment problem found while doing that).
+
+Gate arithmetic on the contemporaneous pair (control c2 09:26, candidate r3
+09:27; `time_limit(T0) = T0 + max(0.15*T0, 3 ms)`,
+`cpu_limit(C0) = C0 + max(0.15*C0, 1 ms)`):
+
+| phase | control | candidate | limit | verdict |
+|---|---|---|---|---|
+| create | 8,835,083 | 8,819,375 | 11,835,083 | PASS |
+| exec | 176,370,625 | 191,666,916 | 202,826,219 | PASS |
+| complete Commit | 53,037,416 | 65,461,500 | 60,993,028 | **FAIL** (+4,468,472 ns, +7.3%) |
+| visibility | 85,209 | 66,083 | 3,085,209 | PASS |
+| End/cleanup | 4,155,125 | 3,003,000 | 7,155,125 | PASS |
+| whole workflow | 242,483,458 | 269,016,874 | 278,855,977 | PASS |
+| container CPU | 112,224,000 | 123,361,000 | 129,057,600 | PASS |
+| host-process CPU | 106,418,876 | 121,792,708 | 122,381,707 | PASS |
+| CPU sum (declared metric) | 218,642,876 | 245,153,708 | 251,439,307 | PASS |
+| peak-sum memory | 40,706,048 | 40,300,544 | 49,094,656 | PASS |
+| temporary backing | 827,392 | 824,450 | 1,851,392 | PASS |
+
+Canonical Store growth: control +888,832 B (page_count 129,478→129,707),
+candidate +897,024 B (129,500→129,719); both keep their temporary backing
+peak (827,392 / 824,450 B) separate from that growth.
+
+Commit sub-phases (ns; `publication_ns` in the candidate also contains
+`object_admission_ns`, which it does not in the control — an attribution
+difference, not extra time):
+
+| phase | control c2 | cand r1 (A) | cand r2 (B) | cand r3 (B) |
+|---|---|---|---|---|
+| total | 53,026,958 | 42,336,250 | 64,943,500 | 65,451,666 |
+| capture | 338,666 | 270,208 | 424,833 | 377,750 |
+| candidate plan (frozen pull) | 5,084 | 1,822,458 | 3,055,791 | 3,367,750 |
+| content | 22,744,834 | 18,551,875 | 26,367,209 | 34,709,125 |
+| consumer idle | 3,732,500 | 7,133,333 | 8,993,709 | 9,029,251 |
+| namespace | 8,519,625 | 6,276,084 | 10,648,916 | 7,957,792 |
+| object admission | 11,704,958 | 10,942,666 | 17,815,417 | 12,254,125 |
+| publication (incl. admission) | 108,167 | 11,228,501 | 18,170,166 | 12,549,333 |
+| checkpoint | 5,206,334 | 2,852,375 | 4,354,541 | 2,679,125 |
+
+Diagnosis of the FAIL: the candidate's complete Commit carries work the control
+does not do — the frozen-records pull (`candidate_plan` 3.4 ms vs 0.005 ms) and
+the payload transfer inside construction (`content` +4 to +12 ms). Both are
+required by the design (the sandbox owns the mutable state and its bytes), and
+both are inside the measured Complete-Commit phase, so they are measured, not
+hidden. The same candidate revision measured 2 minutes apart reproduces
+(64.95 ms and 65.46 ms), so the failure is stable on this host, but the earlier
+revision-A pair measured +5.8% and passed; the 15% allowance is not resolvable
+to better than the host's run-to-run spread (L14). No product fix was applied
+for this gate: no counter identifies a defect, and the remaining difference is
+the declared transfer plus machine noise. B1 is recorded as **FAIL**.
+
+Separate verifications (exact identities from each arm's receipt), all PASS:
+- control: `verify-control-tiny-create-500-mixed-v4` (source `e5efac1d…`,
+  input `bbc74746…`, image `sha256:179ee8a2…`), `sampled-canonical-` and
+  `sampled-native-verification`, wall 4.1-6.1 s.
+- candidate r1 identities: `verify-candidate-tiny-create-500-mixed-v4` PASS.
+- candidate r3 identities: `verify-candidate2-tiny-create-500-mixed-v4`
+  (source `002eb534a9cb2585d59dd6437c08fb7664ab103eb068b882eb920ecc4ffb3d0e`,
+  input `18641680b47bf881cec7ee060c96e814af5332ef7d91ed61002ba7be540c4a08`,
+  image `sha256:87e09334e057957d9b18ba14c137e86d1185bdfd2f4a7c6a46f48203e121351a`)
+  PASS, wall 4.22 s.
+- Next: B1 is not a PASS; B2 was reached before this failure was understood and
+  is recorded below; the strict order therefore stops here pending an owner
+  ruling (L14).
+
+### L13 — 2026-09-15: gate B2 `tiny-bulk-create-500-mixed-v3` — time/CPU/storage PASS, memory metric unresolved
+
+Same flags, extended allowances, seed 1, `--setup clone`, one worker per arm.
+
+| metric | control | candidate | limit | verdict |
+|---|---|---|---|---|
+| create | 7,211,625 | 9,096,709 | 10,211,625 | PASS |
+| exec | 2,758,683,417 | 2,127,819,333 | 3,172,485,930 | PASS |
+| complete Commit | 1,573,941,917 | 1,801,882,000 | 1,810,033,205 | PASS (+14.5%) |
+| visibility | 87,208 | 75,375 | 3,087,208 | PASS |
+| End/cleanup | 14,994,250 | 5,081,375 | 17,994,250 | PASS |
+| whole workflow | 4,354,918,417 | 3,943,954,792 | 5,008,156,180 | PASS |
+| container CPU | 1,403,415,000 | 1,879,520,000 | 1,613,927,250 | FAIL |
+| host-process CPU | 2,720,046,499 | 2,323,990,625 | 3,128,053,474 | PASS |
+| CPU sum (declared metric) | 4,123,461,499 | 4,203,510,625 | 4,741,980,724 | PASS |
+| temporary backing | 524,529,664 | 524,288,000 | 603,209,114 | PASS |
+| canonical Store growth | +530,878,464 | +530,894,848 | — | comparable |
+| peak-sum memory (host peak + container lifetime peak) | 111,472,640 | 658,649,088 | 128,193,536 | FAIL as measured |
+
+- The declared CPU metric is the sum of host and sandbox CPU over the
+  corresponding window, and it PASSES; the container-only window FAILS because
+  the candidate's sandbox now does the payload ownership work the control did on
+  the host (this is the measured design difference, not a hidden worker).
+- The memory line is the only non-passing metric and its *definition* decides
+  the verdict: the declared metric is "host-process + sandbox-process peak
+  resident bytes", but the frozen harness emits no sandbox *process* peak for
+  this route — only the container lifetime cgroup peak, which includes page
+  cache and kernel memory. The candidate's extra 563 MB is ~500 MiB of page
+  cache for the payload it legitimately holds in `/snapshots/<id>/` (the same
+  bytes the control holds in its host spool, where they appear in no process
+  RSS and in no container cgroup). Under the cgroup-proxy reading B2 memory is
+  FAIL; under the declared process reading the required input is missing, which
+  is INCOMPLETE, never PASS. Escalated in L14.
+- First attempt (revision B before the paging fix):
+  `perf-candidate-tiny-bulk-create-500-mixed-v3` FAIL
+  `Workspace(Storage(Integrity("frontier node")))`; repaired in `58a54b446`
+  (a byte-bounded frozen-records page was reported as an exhausted frontier, so
+  the host pulled one page and the namespace walk lost nodes). Preserved.
+- Separate verifications, both PASS: control
+  `verify-control-tiny-bulk-create-500-mixed-v3` (input `40c5fcbf…`, wall 6.1 s)
+  and candidate `verify-candidate-tiny-bulk-create-500-mixed-v3`
+  (source `002eb534…`, input `3a4e3b4c…`, image `sha256:87e09334…`, wall 6.7 s,
+  policy `selected-verification-v1` 45 s work / 59 s hard).
+- Next: B2 is not a clean PASS (memory metric), so B3 was not started under the
+  pipeline's strict order.
+
+### L14 — 2026-09-15: measurement environment, worker count and open rulings
+
+- **Environment contamination found and removed.** For 34 minutes
+  (≈08:53–09:26) an unrelated `grep -rn LAYERFS_LIVE_FUSE .` (PID 43307,
+  cwd `/Users/yifanxu/Ephemeral-AI-Lab/layerfs`, 30m27s CPU time, ~54% CPU) was
+  running in the *main checkout* and was active during control c1, candidate r1
+  and candidate r2. It was killed before control c2 and candidate r3, which is
+  why those two are treated as the contemporaneous pair. Receipts from both
+  regimes are preserved; the desktop session also keeps the host loaded
+  (load average ≈5 with browser and editor processes), so run-to-run spread on
+  this workstation is ±15–30% at the few-tens-of-milliseconds scale B1 measures.
+- **Worker count.** `LAYERFS_CONSTRUCTION_WORKERS` exists only in the candidate
+  (`55b531bc5`); v0.1.5 has no such knob and uses
+  `available_parallelism().min(8)`, further capped to 4 for the small-content
+  format (`SMALL_CONTENT_WORKERS`). The L2 note that the knob is "shared" is
+  wrong. Both arms were run with the same exported value (`1`); it binds the
+  candidate to one construction worker and is inert in the control, which is
+  the conservative direction (the candidate is measured under the stricter
+  contract). The probe sample
+  `perf-candidate-defaultworkers-tiny-create-500-mixed-v4` (knob unset, four
+  workers) is retained for information only and is not used in any gate.
+- **Rulings needed from the owner** (both are about the measurement contract,
+  not about product behaviour):
+  1. B1's Complete-Commit gate fails by 7.3% on a stable, contemporaneous pair,
+     while the same candidate behaviour measured 5.8% *under* the control an
+     hour earlier under a different host load. Should the experiment accept a
+     recorded B1 FAIL for the commit phase (with the transfer-inside-Commit
+     cause), or should the pair be re-collected on a quiet host / with a
+     declared repeat count?
+  2. B2's memory metric: should the gate use the harness's only symmetric
+     sandbox number (container cgroup lifetime peak, which includes the page
+     cache of the 500 MiB payload the B2 clause explicitly permits the sandbox
+     to hold → FAIL), or a sandbox *process* peak that the frozen harness does
+     not emit (→ INCOMPLETE)? A third option is a minimal symmetric harness
+     addition, which would change the harness identity and invalidate the
+     comparability of every sample collected so far.
+- Next: with B1 FAIL recorded and B2's memory metric unresolved, B3
+  (`local-snapshot-create-25000-onebyte-v1`) has not been started; the pipeline
+  forbids advancing past an unpassed gate. All receipts and raw event streams
+  above are retained with their exact identities.
