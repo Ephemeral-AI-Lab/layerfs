@@ -12,11 +12,27 @@
 //! segment is retired once no live piece, frozen frontier or reader retains
 //! a reference to it. Bytes are written before the piece that references the
 //! range is applied, so every piece range is always physically readable.
+//!
+//! The backing is also bounded in *resident* terms. Every payload byte the
+//! sandbox owns is written through the sandbox's page cache, so leaving that
+//! cache alone makes the sandbox's memory charge grow with the workspace
+//! payload and lets a later transfer read its own recent writes out of cache
+//! instead of storage. Both are forbidden by the #151 resource contract: the
+//! sandbox must not amplify memory, and a measured phase must not be flattered
+//! by residual warmth. The spool therefore keeps only a bounded window of its
+//! own bytes resident (see `CACHE_WINDOW_SEGMENTS`) and offers the rest back
+//! with `POSIX_FADV_DONTNEED`.
+//!
+//! That hint is *not* a durability barrier: no flush is waited on, and the
+//! kernel never discards dirty, in-writeback or mapped pages, so an eviction
+//! can only drop bytes that are already on storage. Bytes evicted here are
+//! simply re-read from storage by whoever needs them next.
 
 use crate::{PortError, PortResult};
 use layerfs_workspace_core::backing::{BackingId, BackingRef};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
+use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -47,14 +63,47 @@ struct SpoolInner {
     /// non-payload reference, so `is_unique` remains a piece-only signal.
     current: Option<BackingId>,
     next_id: u64,
+    /// Sealed segments still inside the resident window, oldest first, with
+    /// the high-water they were sealed at.
+    cache_window: VecDeque<(BackingId, u64)>,
 }
 
 /// Segment capacity bounds dead-range retention inside one shared segment.
 pub(crate) const SEGMENT_CAPACITY: u64 = 1024 * 1024;
 
+/// How many sealed segments stay inside the window the kernel may keep cached
+/// on the spool's behalf. Sealing one segment offers the whole window back, so
+/// a segment is offered repeatedly until it slides out; the first offer starts
+/// writeback of any dirty pages in it and a later offer evicts them. The bound
+/// is a constant, not a fraction of the payload: a 500 MiB workspace and a
+/// 5 MiB workspace keep the same amount of the spool resident.
+const CACHE_WINDOW_SEGMENTS: usize = 4;
+
 fn io(_: std::io::Error) -> PortError {
     PortError::Io
 }
+
+/// Ask the kernel to drop its cached copy of a spool range. Linux only: the
+/// crate's `nix` dependency and the sandbox placement itself are Linux only,
+/// and on other targets the default caching behaviour stands. This is a hint
+/// with no durability meaning, so a failure is deliberately ignored.
+#[cfg(target_os = "linux")]
+fn drop_cached_range(fd: RawFd, offset: u64, len: u64) {
+    match (i64::try_from(offset), i64::try_from(len)) {
+        (Ok(offset), Ok(len)) if len > 0 => {
+            let _ = nix::fcntl::posix_fadvise(
+                fd,
+                offset,
+                len,
+                nix::fcntl::PosixFadviseAdvice::POSIX_FADV_DONTNEED,
+            );
+        }
+        _ => {}
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn drop_cached_range(_fd: RawFd, _offset: u64, _len: u64) {}
 
 impl LocalSpool {
     /// The directory is created with private permissions; it is removed by
@@ -67,6 +116,7 @@ impl LocalSpool {
                 segments: HashMap::new(),
                 current: None,
                 next_id: 1,
+                cache_window: VecDeque::new(),
             }),
             physical: AtomicU64::new(0),
             physical_peak: AtomicU64::new(0),
@@ -135,7 +185,19 @@ impl LocalSpool {
         });
         let reference = BackingRef::new(id, LocalSegmentHandle(segment));
         inner.segments.insert(id, reference.clone());
-        inner.current = Some(id);
+        // Sealing the previous target is the moment its bytes stop growing and
+        // can be offered back to the kernel; the new segment holds none yet.
+        if let Some(previous) = inner.current.replace(id) {
+            let sealed = inner
+                .segments
+                .get(&previous)
+                .and_then(|segment| segment.resource::<LocalSegmentHandle>())
+                .map(|segment| segment.len.load(Ordering::Acquire))
+                .unwrap_or(0);
+            inner.cache_window.push_back((previous, sealed));
+        }
+        drop(inner);
+        self.evict_cache_window();
         self.note_physical(bytes);
         Ok((reference, 0))
     }
@@ -185,6 +247,45 @@ impl LocalSpool {
             handle.file.read_exact_at(&mut out, offset).map_err(io)?;
         }
         Ok(out)
+    }
+
+    /// Offer the resident window back to the kernel. Called when a segment is
+    /// sealed: every segment still inside the window is offered again, so a
+    /// range that was dirty at the previous offer is evicted by this one, and
+    /// a segment leaves the window once enough newer segments have sealed.
+    /// Best effort by construction: a refused or ineffective hint leaves pages
+    /// resident, which is a memory outcome, never a correctness one.
+    fn evict_cache_window(&self) {
+        let offers: Vec<(RawFd, u64)> = {
+            let Ok(mut inner) = self.inner.lock() else {
+                return;
+            };
+            while inner.cache_window.len() > CACHE_WINDOW_SEGMENTS {
+                inner.cache_window.pop_front();
+            }
+            inner
+                .cache_window
+                .iter()
+                .filter_map(|(id, sealed)| {
+                    let segment = inner.segments.get(id)?.resource::<LocalSegmentHandle>()?;
+                    Some((segment.file.as_raw_fd(), *sealed))
+                })
+                .collect()
+        };
+        for (fd, sealed) in offers {
+            drop_cached_range(fd, 0, sealed);
+        }
+    }
+
+    /// Drop the resident copy of a range that was just served to the host.
+    /// The bytes were read, so their pages are clean and the kernel can evict
+    /// them at once; a later reader re-reads them from storage. This is what
+    /// keeps a bulk transfer from re-inflating the sandbox's memory charge
+    /// with the payload it is handing over.
+    pub fn evict_served(&self, segment: &BackingRef, offset: u64, len: u64) {
+        if let Some(segment) = segment.resource::<LocalSegmentHandle>() {
+            drop_cached_range(segment.file.as_raw_fd(), offset, len);
+        }
     }
 
     /// The registered reference for a segment id, for read-only serving of
@@ -263,6 +364,7 @@ impl LocalSpool {
         let mut inner = self.inner.lock().map_err(|_| PortError::Io)?;
         inner.current = None;
         inner.segments.clear();
+        inner.cache_window.clear();
         self.physical.store(0, Ordering::Release);
         std::fs::remove_dir_all(&self.directory).map_err(io)?;
         Ok(())
@@ -332,6 +434,30 @@ mod tests {
         assert_ne!(next.id(), segment.id());
         assert_eq!(spool.segment_count().unwrap(), 2);
         spool.destroy().unwrap();
+    }
+
+    #[test]
+    fn resident_cache_window_is_bounded_and_eviction_keeps_bytes_readable() {
+        let spool = spool();
+        let mut held = Vec::new();
+        for index in 0..CACHE_WINDOW_SEGMENTS + 3 {
+            let (segment, start) = spool.reserve(SEGMENT_CAPACITY).unwrap();
+            spool.write(&segment, start, &[index as u8; 64]).unwrap();
+            held.push((segment, start));
+        }
+        assert!(
+            spool.inner.lock().unwrap().cache_window.len() <= CACHE_WINDOW_SEGMENTS,
+            "the resident window must not grow with the number of sealed segments"
+        );
+        // Bytes stay readable whatever the kernel did with the hint, and an
+        // eviction must not disturb contents.
+        spool.evict_served(&held[0].0, 0, 64);
+        for (index, (segment, start)) in held.iter().enumerate() {
+            assert_eq!(
+                spool.read(segment, *start, 64).unwrap(),
+                vec![index as u8; 64]
+            );
+        }
     }
 
     #[test]

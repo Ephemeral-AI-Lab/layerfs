@@ -2737,9 +2737,15 @@ impl LiveOwner {
                     .0
                     .scheduler
                     .physical(move || {
-                        spool
+                        let bytes = spool
                             .read(&reference, offset, len)
-                            .map_err(|_| wire::invalid())
+                            .map_err(|_| wire::invalid())?;
+                        // The host owns these bytes now, so the sandbox releases
+                        // its resident copy: a bulk transfer must not re-inflate
+                        // the sandbox's memory charge with the payload it hands
+                        // over, and a re-read is served from storage instead.
+                        spool.evict_served(&reference, offset, len);
+                        Ok(bytes)
                     })
                     .await
                     .map_err(io)?;
