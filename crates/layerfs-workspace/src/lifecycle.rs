@@ -363,14 +363,34 @@ impl Workspaces {
         id: WorkspaceId,
     ) -> WorkspaceResult<VerificationWorkspaceState> {
         let worker = self.worker(id)?;
+        // A remote workspace owns its spool in the sandbox, so its temporary
+        // physical backing is the sandbox's maintained allocation counters,
+        // observed through the daemon. Asking before the workspace lock keeps
+        // no lock held across the observation round-trip.
+        let remote = worker
+            .remote
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .clone();
+        let observed = remote
+            .map(|remote| remote.observe())
+            .transpose()?
+            .map(|observation| {
+                (
+                    observation.physical_bytes,
+                    observation.physical_peak_bytes,
+                )
+            });
         let workspace = worker
             .workspace
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
         let (physical_current, physical_peak, physical_errors, physical_observations) =
-            workspace.physical_spool_snapshot();
-        // Remote workspaces own their spool in the sandbox; the verification
-        // state reports the host-owned (materialized) spool only.
+            match observed {
+                // One successful observation of the sandbox's own counters.
+                Some((current, peak)) => (Some(current), Some(peak), 0, 1),
+                None => workspace.physical_spool_snapshot(),
+            };
         let (open_spool_files, spool_segment_bytes) = if workspace.remote.is_some() {
             (0, 0)
         } else {
@@ -1135,7 +1155,12 @@ fn remote_session(worker: &WorkspaceWorker) -> WorkspaceResult<Option<(Workspace
     let Some(remote) = remote else {
         return Ok(None);
     };
-    let (generation, _, _, head) = remote.observe()?;
+    let observation = remote.observe()?;
+    // The sandbox's live dirty count is the remote mutation indicator
+    // (zero means clean), exactly as the host-side mutation generation is
+    // used for a materialized workspace.
+    let generation = observation.dirty;
+    let head = observation.head;
     Ok(Some((
         WorkspaceSession {
             id: worker.id,

@@ -2610,6 +2610,7 @@ impl LiveOwner {
                 wire::u64_out(&mut out, state.dirty.len() as u64);
                 wire::u64_out(&mut out, state.spool_bytes);
                 wire::u64_out(&mut out, self.0.spool.physical_bytes());
+                wire::u64_out(&mut out, self.0.spool.physical_peak_bytes());
                 let head = self.0.head.lock().map_err(|_| PortError::Io)?;
                 wire::bytes_out(&mut out, head.as_ref().map_or(&[][..], |bytes| &bytes[..]))
                     .map_err(io)?;

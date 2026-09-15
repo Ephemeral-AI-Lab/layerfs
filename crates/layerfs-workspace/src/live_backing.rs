@@ -1112,28 +1112,51 @@ impl RemoteWorkspace {
         Ok(())
     }
 
-    /// (covered generation, live dirty count, charged spool bytes, physical
-    /// spool bytes, head). Dirty-ness is the live dirty count: the sandbox
-    /// owns the mutable state and the host never mirrors it.
-    pub(crate) fn observe(
-        &self,
-    ) -> crate::WorkspaceResult<(u64, u64, u64, Option<layerfs_layerstack_store::CommitId>)> {
+    /// Ask the sandbox for its exact view of the live Workspace. The sandbox
+    /// owns the mutable state, so the host never mirrors it. The physical
+    /// spool numbers are the sandbox's own maintained allocation counters.
+    pub(crate) fn observe(&self) -> crate::WorkspaceResult<RemoteObservation> {
         let response = self
             .server
             .observe()
             .map_err(|_| crate::WorkspaceError::InvalidExecution)?;
         let mut input = Input(&response);
-        let covered = input.u64()?;
+        let covered_generation = input.u64()?;
         let dirty = input.u64()?;
-        let charged = input.u64()?;
-        let _physical = input.u64()?;
+        let charged_bytes = input.u64()?;
+        let physical_bytes = input.u64()?;
+        let physical_peak_bytes = input.u64()?;
         let head = input
             .head()?
             .map(layerfs_layerstack_store::CommitId::from_bytes)
             .transpose()?;
         input.done()?;
-        Ok((dirty, covered, charged, head))
+        Ok(RemoteObservation {
+            dirty,
+            covered_generation,
+            charged_bytes,
+            physical_bytes,
+            physical_peak_bytes,
+            head,
+        })
     }
+}
+
+/// One sandbox observation of the live Workspace.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RemoteObservation {
+    /// Live dirty count. Zero means the sandbox holds no unpublished change;
+    /// the host exposes this as the remote mutation indicator.
+    pub(crate) dirty: u64,
+    /// Generation covered by the last completed Commit.
+    pub(crate) covered_generation: u64,
+    /// Charged Workspace spool bytes (logical, admission-accounted).
+    pub(crate) charged_bytes: u64,
+    /// Physical bytes currently allocated by the sandbox spool.
+    pub(crate) physical_bytes: u64,
+    /// Peak physical bytes allocated by the sandbox spool over its lifetime.
+    pub(crate) physical_peak_bytes: u64,
+    pub(crate) head: Option<layerfs_layerstack_store::CommitId>,
 }
 
 pub(crate) fn generation(worker: &crate::worker::WorkspaceWorker) -> crate::WorkspaceResult<u64> {
@@ -1143,7 +1166,7 @@ pub(crate) fn generation(worker: &crate::worker::WorkspaceWorker) -> crate::Work
         .map_err(|_| crate::WorkspaceError::WorkspaceBusy)?
         .clone();
     if let Some(remote) = remote {
-        return remote.observe().map(|values| values.0);
+        return remote.observe().map(|observation| observation.dirty);
     }
     Ok(worker
         .workspace

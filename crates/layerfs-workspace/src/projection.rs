@@ -368,7 +368,7 @@ pub(crate) fn is_dirty(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<bool> {
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
         .clone()
     {
-        return remote.observe().map(|values| values.0 != 0);
+        return remote.observe().map(|observation| observation.dirty != 0);
     }
     let root = {
         let handle = worker
