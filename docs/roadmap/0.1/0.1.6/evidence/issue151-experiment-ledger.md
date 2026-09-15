@@ -134,3 +134,21 @@ Cases, in order, one sample per arm each: `tiny-create-500-mixed-v4` (B1) →
   the immutable-base opcode-rejection proof).
 - Next: I6 focused checks (fastcdc/extent/small-chain suite subset), then
   B1 → B2 → B3 gates with freshly collected v0.1.5 controls.
+
+### L6 — 2026-09-15: execution handed over at the measurement boundary
+
+- Candidate state: HEAD `adfe869a3` (product commits `141244a3f`, `ab2a6f9cb`,
+  `55b531bc5`; harness-only B3 adapter `adfe869a3`; ledger L4/L5
+  `164efede7`). Working tree clean; `benchmark-results/` ignored.
+- Correctness evidence: `tools/test-fast.sh` PASS (111 s, 4 jobs);
+  focused `fastcdc_shifted_stream`, `extent_model`, `small_candidate`,
+  `small_chain`; 96 harness tests; workload/host self-checks.
+- Not started: candidate host/image build (one attempt interrupted after ~1 min
+  of dependency compilation; `benchmark-results/host-store/builds/`
+  `incremental-1.85.1-release` resumable), control worktree and build, smoke,
+  gates B1–B3, final report.
+- Continuation instructions for the receiving agent:
+  [issue151-execution-continuation.md](issue151-execution-continuation.md)
+  (locations, build/control recipes, gate flags, hard rules, carried
+  limitations).
+- Commit: `b124bbdd5` — docs only.
