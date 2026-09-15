@@ -774,7 +774,35 @@ fn entry_info(entries: &[Entry]) -> AnyResult<(u64, usize, String)> {
     Ok((bytes, files, workload_source::hex(&hash.finish())))
 }
 
+/// Fixture and input identity of one registered v0.1.6 M1 case. The extended
+/// rows are registered by ID rather than through the workspace registry, so the
+/// fixture contract is reported from the same class tables the fixture uses.
 pub(crate) fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> AnyResult<()> {
+    if let Some(row) = workload_source::v016_stages::mixed_case(&case.id)? {
+        let tier = if row.tier == "L100" {
+            &workload_source::v016_common::L100
+        } else {
+            &workload_source::v016_common::L500
+        };
+        let fixture = workload_source::v016_common::load_fixture(tier, seed)?;
+        let (bytes, files, plan) = entry_info(&fixture.entries)?;
+        let plan = workload_source::sdk_edit_common::sha256_hex(
+            format!(
+                "v016-m1-{}-t{}-k{}\n{plan}",
+                row.tier, row.topology as u8, row.k
+            )
+            .as_bytes(),
+        );
+        print!(
+            "{{\"fixture_profile\":\"workspace-input-v1\",\"fixture_bytes\":{bytes},\"regular_files\":{files},\"input_plan_sha256\":{},\"input_mode\":\"store\"",
+            quote(&plan)
+        );
+        if let Some(branch) = branch {
+            print!(",\"branch_id\":{}", quote(&branch.to_string()));
+        }
+        println!("}}");
+        return Ok(());
+    }
     let entries = registry::fixture(case, seed)?;
     let (bytes, files, mut plan) = entry_info(&entries)?;
     if case.kind == "git-tool" {
@@ -1129,7 +1157,7 @@ pub(crate) fn observed(client: &Client, after: &mut u64) -> AnyResult<()> {
     Ok(())
 }
 
-fn resource_receipt(label: &str, snapshot: ProcessResourceSnapshot) {
+pub(crate) fn resource_receipt(label: &str, snapshot: ProcessResourceSnapshot) {
     emit(
         "host-resources",
         &[
@@ -1314,7 +1342,9 @@ fn run_case(
         && (case.kind == "git-tool"
             || case.kind == "boundaries"
             || case.family == "workspace_reliability"
-            || case.family == "edit_length_changing_capped")
+            || case.family == "edit_length_changing_capped"
+            || case.family == "file_size_transition"
+            || super::v016_mixed::is_mixed(case))
     {
         return Err("fast-verify-v2 is for active ordinary/dedup routine cases; targeted and already-qualified capped cases keep their own route".into());
     }
@@ -1347,6 +1377,11 @@ fn run_case(
     let mut final_root = None;
     let branch;
     let mut history = Vec::new();
+    // The declared POSIX steps of the v0.1.6 alias schedule, with their
+    // receipts, and the retained root after every published Commit. The alias
+    // oracle needs the root immediately before the replacement Commit.
+    let mut alias_steps: Vec<(usize, String)> = Vec::new();
+    let mut published_roots: Vec<(usize, layerfs_content::ObjectId)> = Vec::new();
     let mut genesis_root = None;
     let mut genesis_head = None;
     let mut fast_certificate = None;
@@ -1619,7 +1654,129 @@ fn run_case(
                 return Ok(());
             }
             for step in 0..registry::steps(case) {
-                if case.kind == "workspace-distributed-sdk-edit"
+                if case.family == "file_size_transition" {
+                    // v0.1.6 boundary transitions: one declared public SDK edit
+                    // per Commit, driven from the host. The alias plan uses the
+                    // same public surface; its POSIX alias stages run in verify
+                    // mode only, outside the performance distribution.
+                    let operations = workload_source::file_size_transition::operations(case)?;
+                    let operation = operations
+                        .get(step)
+                        .ok_or("boundary operation outside the declared schedule")?;
+                    use workload_source::file_size_transition::BoundaryOp;
+                    let (edit_start, delete_len, len, visit) = match operation {
+                        BoundaryOp::Overwrite { offset, len, visit } => {
+                            (*offset, *len, *len, *visit)
+                        }
+                        BoundaryOp::Append { len, visit } => {
+                            let current =
+                                workload_source::file_size_transition::declared_length(case, step)?;
+                            (current, 0, *len, *visit)
+                        }
+                        BoundaryOp::Remove { len, visit } => {
+                            let current =
+                                workload_source::file_size_transition::declared_length(case, step)?;
+                            (current - *len, *len, 0, *visit)
+                        }
+                        BoundaryOp::AliasAppend { len } => {
+                            let current =
+                                workload_source::file_size_transition::declared_length(case, step)?;
+                            (current, 0, *len, step)
+                        }
+                        BoundaryOp::AliasTruncate { len } => {
+                            let current =
+                                workload_source::file_size_transition::declared_length(case, step)?;
+                            (current - *len, *len, 0, step)
+                        }
+                        BoundaryOp::AtomicReplace { len } => {
+                            let current =
+                                workload_source::file_size_transition::declared_length(case, step)?;
+                            (0, current, *len, step)
+                        }
+                    };
+                    let alias_plan = workload_source::file_size_transition::plan(&case.id)?.alias;
+                    if alias_plan {
+                        // The declared alias schedule is POSIX: append through
+                        // the alias, append through the target, truncate
+                        // through each name, then one atomic replacement that
+                        // must leave the original alias holding the
+                        // pre-replacement inode. It runs inside the live
+                        // workspace, so the same schedule is measured in both
+                        // modes and no SDK/POSIX ratio is pooled.
+                        let alias_start = product_budget.start_clock("posix-alias-step")?;
+                        let result = super::execute(
+                            &client,
+                            session.id,
+                            vec![
+                                "/usr/local/bin/fs-benchmark-workload".into(),
+                                "v016-boundary-alias".into(),
+                                seed.to_string().into(),
+                                (step + 1).to_string().into(),
+                            ],
+                        );
+                        let alias_ns = product_budget.finish_clock(alias_start)?;
+                        product_budget.end(
+                            "posix-alias-step",
+                            alias_ns,
+                            result.as_ref().err().map(ToString::to_string),
+                        )?;
+                        let output = result?;
+                        pure_call_sum_ns = pure_call_sum_ns
+                            .checked_add(alias_ns)
+                            .ok_or("phase sum overflow")?;
+                        let receipt = output_text(&output)?;
+                        emit(
+                            "phase",
+                            &[
+                                ("phase", quote("posix-alias-step")),
+                                ("step", step.to_string()),
+                                ("elapsed_ns", alias_ns.to_string()),
+                                ("operation", quote(&format!("{operation:?}"))),
+                                ("receipt", quote(&receipt)),
+                            ],
+                        );
+                        alias_steps.push((step, receipt));
+                        observed(&client, &mut last_operation)?;
+                    } else {
+                        let replacement = if len == 0 {
+                            Vec::new()
+                        } else {
+                            workload_source::file_size_transition::replacement(
+                                case, seed, visit, len,
+                            )?
+                        };
+                        let request = WorkspaceFileRangeEdit {
+                            workspace_id: session.id,
+                            path: workload_source::file_size_transition::TARGET.to_string(),
+                            start: edit_start,
+                            delete_len,
+                            replacement: WorkspaceFileReplacement::Inline(replacement),
+                        };
+                        product_budget.begin("sdk-edit")?;
+                        let start = product_budget.start_clock("sdk-edit")?;
+                        let result = client.edit_workspace_file_range(request);
+                        let edit_ns = product_budget.finish_clock(start)?;
+                        product_budget.end(
+                            "sdk-edit",
+                            edit_ns,
+                            result.as_ref().err().map(ToString::to_string),
+                        )?;
+                        result?;
+                        pure_call_sum_ns = pure_call_sum_ns
+                            .checked_add(edit_ns)
+                            .ok_or("phase sum overflow")?;
+                        emit(
+                            "phase",
+                            &[
+                                ("phase", quote("sdk-edit")),
+                                ("step", step.to_string()),
+                                ("elapsed_ns", edit_ns.to_string()),
+                                ("operation", quote(&format!("{operation:?}"))),
+                            ],
+                        );
+                        observed(&client, &mut last_operation)?;
+                    }
+                } else if case.kind == "workspace-distributed-sdk-edit"
                     || workload_source::dedup_workloads::is_sdk(case)
                 {
                     let edits = if case.kind == "workspace-distributed-sdk-edit" {
@@ -1755,6 +1912,7 @@ fn run_case(
                 {
                     let pinned = store.pin_branch(branch)?;
                     final_root = Some(pinned.root);
+                    published_roots.push((step, pinned.root));
                     emit(
                         "published-root",
                         &[
@@ -1997,7 +2155,25 @@ fn run_case(
             }
         }
         if !fast && !sampled && case.family != "dedup_branch_history" {
-            let mut expected = registry::expected(case, seed, registry::steps(case))?;
+            // v0.1.6 boundary cases declare a final state that differs from the
+            // initial fixture (length transitions, an alias split by the final
+            // atomic replacement), so the oracle comes from the family's own
+            // recipe and operation algebra.
+            // The v0.1.6 alias plan declares a final state in which the alias
+            // and the target are two separate inode classes; the generic
+            // verifier derives one reference count per class, so that case
+            // verifies the target, the alias and the witness separately and
+            // then proves the inode separation explicitly below.
+            let alias_plan = case.family == "file_size_transition"
+                && workload_source::file_size_transition::plan(&case.id)?.alias;
+            let mut expected = if case.family == "file_size_transition" {
+                workload_source::file_size_transition::expected(case, seed, registry::steps(case))?
+            } else {
+                registry::expected(case, seed, registry::steps(case))?
+            };
+            // The alias plan declares the target's inode class separately from
+            // the surviving alias class; the separation proof below closes the
+            // relationship. Every other class keeps hard-link-derived counts.
             if case.kind == "git-tool" {
                 let manifest = std::fs::read_to_string(
                     Path::new(&std::env::var("LAYERFS_V013_VERIFIER_EXCHANGE_HOST")?)
@@ -2009,11 +2185,130 @@ fn run_case(
                         .filter(|e| e.path != "."),
                 );
             }
-            let receipt = super::workspace_verify::verify(&reopened, branch, &expected, root)?;
+            let split_class = if alias_plan {
+                workload_source::file_size_transition::TARGET
+            } else {
+                ""
+            };
+            let receipt = super::workspace_verify::verify_split_classes(
+                &reopened,
+                branch,
+                &expected,
+                root,
+                split_class,
+            )?;
             emit(
                 "canonical-verification",
-                &[("receipt", quote(&format!("{:?}", receipt.receipt)))],
+                &[
+                    ("receipt", quote(&format!("{:?}", receipt.receipt))),
+                    ("inode_class_split", quote(split_class)),
+                ],
             );
+            if case.family == "file_size_transition" {
+                // v0.1.6 alias proof: the surviving alias must keep the
+                // pre-replacement inode while the target holds a separate one.
+                if workload_source::file_size_transition::plan(&case.id)?.alias {
+                    // The pre-replacement state is the root the previous Commit
+                    // published, so the oracle compares two retained states of
+                    // the same branch rather than a fixture with a result.
+                    let before_root = published_roots
+                        .iter()
+                        .find(|(published, _)| *published == registry::steps(case) - 2)
+                        .map(|(_, root)| *root)
+                        .ok_or("v0.1.6 alias oracle: pre-replacement root absent")?;
+                    let declared_before = workload_source::file_size_transition::declared_length(
+                        case,
+                        registry::steps(case) - 1,
+                    )?;
+                    let declared_after = workload_source::file_size_transition::declared_length(
+                        case,
+                        registry::steps(case),
+                    )?;
+                    let declared_alias = workload_source::file_size_transition::declared_length(
+                        case,
+                        registry::steps(case) - 1,
+                    )?;
+                    let final_published =
+                        final_root.ok_or("v0.1.6 alias oracle: final root absent")?;
+                    let before_reader = reopened.snapshot_reader(before_root);
+                    let after_reader = reopened.snapshot_reader(final_published);
+                    let classes = super::workspace_verify::verify_alias_classes(
+                        &before_reader,
+                        before_root,
+                        &after_reader,
+                        final_published,
+                        workload_source::file_size_transition::TARGET,
+                        workload_source::file_size_transition::ALIAS,
+                        declared_before,
+                        declared_after,
+                        declared_alias,
+                    )?;
+                    let shared =
+                        workload_source::file_size_transition::pre_replacement_shared(case, seed)?;
+                    emit(
+                        "v016-alias-inode-classes",
+                        &[
+                            ("kind_scope", quote("independent declared oracle")),
+                            ("pre_replacement_root", quote(&before_root.to_string())),
+                            (
+                                "pre_replacement_inode",
+                                quote(&workload_source::hex(&classes.before_inode.0)),
+                            ),
+                            (
+                                "pre_replacement_ref_count",
+                                classes.before_ref_count.to_string(),
+                            ),
+                            (
+                                "pre_replacement_content_root",
+                                quote(&classes.before_content_root.to_string()),
+                            ),
+                            (
+                                "target_inode",
+                                quote(&workload_source::hex(&classes.after_inode.0)),
+                            ),
+                            ("target_ref_count", classes.target_ref_count.to_string()),
+                            (
+                                "target_content_root",
+                                quote(&classes.target_content_root.to_string()),
+                            ),
+                            (
+                                "alias_inode",
+                                quote(&workload_source::hex(&classes.alias_inode.0)),
+                            ),
+                            ("alias_ref_count", classes.alias_ref_count.to_string()),
+                            (
+                                "alias_content_root",
+                                quote(&classes.alias_content_root.to_string()),
+                            ),
+                            (
+                                "separated",
+                                (classes.after_inode != classes.alias_inode).to_string(),
+                            ),
+                            ("pre_replacement_shared", shared.to_string()),
+                        ],
+                    );
+                    if classes.after_inode == classes.alias_inode || !shared {
+                        return Err("v0.1.6 alias replacement did not separate the inode".into());
+                    }
+                    emit(
+                        "v016-alias-posix-steps",
+                        &[
+                            (
+                                "steps",
+                                format!(
+                                    "[{}]",
+                                    alias_steps
+                                        .iter()
+                                        .map(|(step, receipt)| quote(&format!("{step}:{receipt}")))
+                                        .collect::<Vec<_>>()
+                                        .join(",")
+                                ),
+                            ),
+                            ("posix_operations", "true".into()),
+                        ],
+                    );
+                }
+            }
             if case.family.starts_with("dedup_") {
                 let dedup = if case.kind == "boundaries" {
                     super::dedup_verify::verify_boundaries(&receipt, boundary_small_content)?
@@ -2462,6 +2757,102 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .map(|s| s.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     match args.as_slice() {
+        [command, root, id, seed, container] if command == "workspace-v016-chmod-probe" => {
+            // Diagnostic only: one bounded chmod probe on the sealed input. It
+            // produces no benchmark receipt and answers whether a directory
+            // chmod and a file chmod reach the published Store.
+            let case = registry::resolve(id)?;
+            if !super::v016_mixed::is_mixed(&case) {
+                return Err("the chmod probe requires a v0.1.6 M1 case".into());
+            }
+            let path = Path::new(root).join("store.sqlite");
+            let store = Arc::new(LayerStackStore::connect(&path)?);
+            let container = ContainerId(container.clone());
+            let binding = sample_binding(Path::new(root), &container)?;
+            let client = sample_client(store.clone(), &binding)?;
+            let branch: BranchId = std::fs::read_to_string(Path::new(root).join("branch-id"))?
+                .trim()
+                .parse()?;
+            let pristine_root = store.pin_branch(branch)?.root;
+            let session = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: case_placement(
+                    &Some(container.clone()),
+                    Path::new(root),
+                    seed.parse()?,
+                    "v016-chmod-probe",
+                ),
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let output = execute(
+                &client,
+                session.id,
+                vec![
+                    "/usr/local/bin/fs-benchmark-workload".into(),
+                    "v016-m1-setmode".into(),
+                    "d052".into(),
+                    "700".into(),
+                ],
+            )?;
+            let directory_receipt = output_text(&output)?;
+            let output = execute(
+                &client,
+                session.id,
+                vec![
+                    "/usr/local/bin/fs-benchmark-workload".into(),
+                    "v016-m1-setmode".into(),
+                    "d000/f00050".into(),
+                    "600".into(),
+                ],
+            )?;
+            let file_receipt = output_text(&output)?;
+            // Touch nothing else: the commit must publish exactly the two chmod
+            // changes if the runtime records attribute-only mutations.
+            let status = client.commit_workspace_session_with_status(session.id)?;
+            let created = match &status.result {
+                WorkspaceCommitResult::Created { commit_id, .. } => Some(*commit_id),
+                WorkspaceCommitResult::UpToDate { head } => *head,
+                _ => None,
+            };
+            let pinned = store.pin_branch(branch)?;
+            let view = super::workspace_verify::namespace_view(&pinned.reader, pinned.root)?;
+            let directory_mode = view
+                .metadata
+                .get("d052")
+                .map(|meta| format!("{:o}", meta.permission_mode))
+                .unwrap_or_else(|| "absent".into());
+            let file_mode = view
+                .metadata
+                .get("d000/f00050")
+                .map(|meta| format!("{:o}", meta.permission_mode))
+                .unwrap_or_else(|| "absent".into());
+            client.end_workspace_session(session.id, EndWorkspaceMode::Clean)?;
+            emit(
+                "v016-chmod-probe",
+                &[
+                    ("case", quote(&case.id)),
+                    ("pristine_root", quote(&pristine_root.to_string())),
+                    ("directory_receipt", quote(&directory_receipt)),
+                    ("file_receipt", quote(&file_receipt)),
+                    ("commit_outcome", quote(&format!("{status:?}"))),
+                    (
+                        "commit_id",
+                        created
+                            .map(|id| quote(&id.to_string()))
+                            .unwrap_or_else(|| "null".into()),
+                    ),
+                    ("published_directory_mode", quote(&directory_mode)),
+                    ("published_file_mode", quote(&file_mode)),
+                    (
+                        "scope",
+                        quote(
+                            "diagnostic only: one workspace, one directory chmod, one file chmod, one full-status Commit, then the published modes are read back from the Store",
+                        ),
+                    ),
+                ],
+            );
+            Ok(())
+        }
         [command, root, id, seed, evidence] if command == "workspace-qualify-input" => {
             resource_receipt("before-input-qualification", process_resource_snapshot()?);
             let _sampler = HostSampler::start()?;
@@ -2559,6 +2950,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         [command] if command == "workspace-static-additions-check" => {
             workload_source::edit_length_changing_capped::self_check()?;
             workload_source::workspace_reliability::self_check()?;
+            workload_source::file_size_transition::self_check()?;
+            workload_source::v016_common::self_check()?;
             emit(
                 "static-additions-check",
                 &[
@@ -2576,8 +2969,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                 "self-check",
                 &[
                     ("status", quote("pass")),
-                    ("timed_case_count", "132".into()),
-                    ("sample_slot_count", "396".into()),
+                    ("timed_case_count", "154".into()),
+                    ("sample_slot_count", "462".into()),
                 ],
             );
             Ok(())
@@ -2623,12 +3016,47 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         [command, id, seed] if command == "workspace-fixture-info" => {
             fixture_info(&registry::resolve(id)?, seed.parse()?, None)
         }
+        [command, id, seed] if command == "workspace-v016-fixture-info" => {
+            let row = workload_source::v016_stages::mixed_case(id)?
+                .ok_or("v0.1.6 extended fixture info requires a registered M1 case")?;
+            let declared = Case {
+                id: id.clone(),
+                family: if row.topology == workload_source::v016_stages::Topology::Four {
+                    "multi_workspace_development"
+                } else {
+                    "mixed_load_bearing"
+                },
+                tier: if row.k > 10 { 100 } else { 10 },
+                kind: "v016-m1-extended",
+            };
+            fixture_info(&declared, seed.parse()?, None)
+        }
         [command, root, id, seed] if command == "workspace-prepare" => {
             prepare(Path::new(root), &registry::resolve(id)?, seed.parse()?)
         }
         [command, root, input, id, seed, mode, container] if command == "workspace-run" => {
             let case = registry::resolve(id)?;
             runtime_observation_window(id, mode, || {
+                if super::v016_mixed::is_mixed(&case) {
+                    if !matches!(mode.as_str(), "performance" | "verify") {
+                        return Err(
+                            "v0.1.6 M1 cases run performance and verify through their own route"
+                                .into(),
+                        );
+                    }
+                    resource_receipt("before-mi", process_resource_snapshot()?);
+                    let _sampler = HostSampler::start()?;
+                    let outcome = super::v016_mixed::run_case(
+                        Path::new(root),
+                        &case,
+                        seed.parse()?,
+                        mode,
+                        ContainerId(container.clone()),
+                        mode == "verify",
+                    );
+                    resource_receipt("after-mi", process_resource_snapshot()?);
+                    return outcome;
+                }
                 if case.family == "workspace_reliability" {
                     if mode != "verify" || seed != "1" {
                         return Err("reliability requires verify mode and fixed seed1".into());

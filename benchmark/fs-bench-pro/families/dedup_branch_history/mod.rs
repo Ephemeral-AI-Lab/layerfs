@@ -1,7 +1,35 @@
 use super::dedup_workloads as d;
+use super::v016_compact::{self as s, SProfile};
 use super::workspace_common::{self, Case, Content, Entry, EntryKind, SdkEdit};
 use super::Result;
 pub(crate) const FAMILY: &str = "dedup_branch_history";
+
+/// The three v0.1.6 history profiles, each at K10 and K100. They extend the
+/// family with profiles the inherited depth-10/100 cases do not cover instead
+/// of renaming an existing small-hotset or distributed scenario.
+pub(crate) const LARGE_HOTSET_K10: &str = "v016-history-large-hotset-k10-v1";
+pub(crate) const LARGE_HOTSET_K100: &str = "v016-history-large-hotset-k100-v1";
+pub(crate) const NAMESPACE_INODE_K10: &str = "v016-history-namespace-inode-k10-v1";
+pub(crate) const NAMESPACE_INODE_K100: &str = "v016-history-namespace-inode-k100-v1";
+pub(crate) const BOUNDARY_CYCLE_K10: &str = "v016-history-boundary-cycle-k10-v1";
+pub(crate) const BOUNDARY_CYCLE_K100: &str = "v016-history-boundary-cycle-k100-v1";
+
+/// The v0.1.6 additions, in registration order.
+pub(crate) const V016: [(&str, &str, usize); 6] = [
+    (LARGE_HOTSET_K10, "large-hotset", 10),
+    (LARGE_HOTSET_K100, "large-hotset", 100),
+    (NAMESPACE_INODE_K10, "namespace-inode", 10),
+    (NAMESPACE_INODE_K100, "namespace-inode", 100),
+    (BOUNDARY_CYCLE_K10, "boundary-cycle", 10),
+    (BOUNDARY_CYCLE_K100, "boundary-cycle", 100),
+];
+
+pub(crate) fn v016_case(id: &str) -> Option<(&'static str, usize)> {
+    V016.iter()
+        .find(|(case, _, _)| *case == id)
+        .map(|(_, kind, tier)| (*kind, *tier))
+}
+
 pub(crate) fn cases() -> Vec<Case> {
     let mut rows = d::cases(
         FAMILY,
@@ -18,6 +46,12 @@ pub(crate) fn cases() -> Vec<Case> {
             row.id.push_str("-mixed-v2");
         }
     }
+    rows.extend(V016.into_iter().map(|(id, kind, tier)| Case {
+        id: id.to_owned(),
+        family: FAMILY,
+        tier,
+        kind,
+    }));
     rows
 }
 /// Routine proof coverage; workload depth and all-parent checks are unchanged.
@@ -39,6 +73,9 @@ pub(crate) fn verification_steps(case: &Case) -> Vec<usize> {
 
 pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
     d::validate(case, FAMILY, seed)?;
+    if let Some((kind, _)) = v016_case(&case.id) {
+        return s::fixture(s::profile_of(kind)?, kind, seed);
+    }
     if d::history_unrelated_mixed_v2(case) {
         d::mixed_v2_entries(seed)
     } else {
@@ -46,7 +83,145 @@ pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
     }
 }
 pub(crate) fn edit(case: &Case, seed: u8, step: usize) -> Result<SdkEdit> {
-    d::history_edit(case, seed, step, &fixture(case, seed)?)
+    let mut rows = edits(case, seed, step)?;
+    if rows.len() != 1 {
+        return Err("history edit cardinality".into());
+    }
+    Ok(rows.remove(0))
+}
+
+/// Every declared SDK call of one commit, in order. The inherited profiles make
+/// exactly one call per commit; the v0.1.6 boundary-cycle profile makes two.
+pub(crate) fn edits(case: &Case, seed: u8, step: usize) -> Result<Vec<SdkEdit>> {
+    if let Some((kind, _)) = v016_case(&case.id) {
+        return v016_edits(case, kind, seed, step);
+    }
+    Ok(vec![d::history_edit(case, seed, step, &fixture(case, seed)?)?])
+}
+
+/// The declared SDK calls of one v0.1.6 history commit. Both profiles derive
+/// every byte from the fixture recipe and the declared visit arithmetic, so a
+/// commit is a pure function of its ordinal and never of observed state.
+fn v016_edits(case: &Case, kind: &str, seed: u8, step: usize) -> Result<Vec<SdkEdit>> {
+    if step >= case.tier {
+        return Err("history step outside prefix".into());
+    }
+    match kind {
+        "large-hotset" => {
+            // Commit j (1-based) selects file (j-1) mod 2 and region
+            // floor((j-1)/2) mod 3, and alternates B/A by the visit count to
+            // that exact (file,region); the fixture initialized it to A.
+            let file = step % 2;
+            let region = (step / 2) % 3;
+            let visits = (0..step)
+                .filter(|t| t % 2 == file && (t / 2) % 3 == region)
+                .count();
+            let label = if visits % 2 == 0 {
+                d::HOTSET_B
+            } else {
+                d::HOTSET_A
+            };
+            let replacement = v016_bytes(
+                case,
+                kind,
+                seed,
+                file * 3 + region,
+                label,
+                d::HOTSET_REGION_LEN,
+            )?;
+            Ok(vec![SdkEdit {
+                path: s::s_large_path(file),
+                start: s::hotset_offset(region),
+                delete_len: d::HOTSET_REGION_LEN,
+                replacement,
+            }])
+        }
+        "boundary-cycle" => {
+            // Two single-file SDK calls per commit exchange one byte between
+            // the 131,071 B and 131,073 B files: the even commit shrinks the
+            // lower file and appends that byte to the higher one, the next
+            // commit reverses it. The declared byte is the last byte of the
+            // lower file's fixture content, so both directions move the same
+            // declared byte and every length stays inside the declared band.
+            let below = s::s_boundary_path("below");
+            let above = s::s_boundary_path("above");
+            let byte = *s::bytes_of(&fixture(case, seed)?, &below)?
+                .last()
+                .ok_or("boundary-cycle source byte")?;
+            // The declared length of each name before this commit follows from
+            // the exchange arithmetic: an even commit leaves the pair at its
+            // initial sizes, an odd commit leaves them one byte exchanged.
+            let (below_now, above_now) = if step % 2 == 0 {
+                (s::BELOW_LEN, s::ABOVE_LEN)
+            } else {
+                (s::BELOW_LEN - 1, s::ABOVE_LEN + 1)
+            };
+            let (shrink, grow, shrink_len, grow_len) = if step % 2 == 0 {
+                (below, above, below_now, above_now)
+            } else {
+                (above, below, above_now, below_now)
+            };
+            Ok(vec![
+                SdkEdit {
+                    path: shrink,
+                    start: shrink_len - 1,
+                    delete_len: 1,
+                    replacement: Vec::new(),
+                },
+                SdkEdit {
+                    path: grow,
+                    start: grow_len,
+                    delete_len: 0,
+                    replacement: vec![byte],
+                },
+            ])
+        }
+        "namespace-inode" => Err(
+            "v0.1.6 namespace-inode compact schedule is not implemented yet: the five declared HN stages have no host orchestrator"
+                .into(),
+        ),
+        other => Err(format!("unknown v0.1.6 history profile {other}").into()),
+    }
+}
+
+fn v016_bytes(
+    case: &Case,
+    kind: &str,
+    seed: u8,
+    ordinal: usize,
+    role: &str,
+    len: u64,
+) -> Result<Vec<u8>> {
+    let content = d::content(case.family, kind, seed, ordinal, role, len)?;
+    let mut out = Vec::with_capacity(len as usize);
+    content.write_to(&mut out)?;
+    if out.len() as u64 != len {
+        return Err("v0.1.6 history replacement length".into());
+    }
+    Ok(out)
+}
+
+/// Apply one declared SDK call to a literal file map.
+fn apply_edit(entries: &mut [Entry], edit: &SdkEdit) -> Result<()> {
+    let entry = entries
+        .iter_mut()
+        .find(|entry| entry.path == edit.path)
+        .ok_or("history edit target")?;
+    let EntryKind::File(content) = &entry.kind else {
+        return Err("history edit type".into());
+    };
+    let mut bytes = Vec::with_capacity(content.len() as usize);
+    content.write_to(&mut bytes)?;
+    let start = edit.start as usize;
+    let end = start
+        .checked_add(edit.delete_len as usize)
+        .ok_or("history edit overflow")?;
+    if end > bytes.len() {
+        return Err("history edit bounds".into());
+    }
+    bytes.splice(start..end, edit.replacement.iter().copied());
+    entry.kind = EntryKind::File(Content::Literal(bytes));
+    Ok(())
 }
 // step is the number of completed Created commits; zero denotes genesis.
 pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>> {
@@ -56,6 +231,16 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
     let genesis = fixture(case, seed)?;
     let mut entries = genesis.clone();
     if step == 0 {
+        return Ok(entries);
+    }
+    if v016_case(&case.id).is_some() {
+        // The v0.1.6 profiles replay their declared SDK calls over literal
+        // bytes, so every state is an exact declaration.
+        for ordinal in 0..step {
+            for edit in edits(case, seed, ordinal)? {
+                apply_edit(&mut entries, &edit)?;
+            }
+        }
         return Ok(entries);
     }
     if case.kind == "unrelated" {
@@ -120,21 +305,127 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
     Ok(entries)
 }
 pub(crate) fn self_check() -> Result<()> {
-    d::check_registry(&cases(), 20)?;
+    d::check_registry(&cases(), 26)?;
     for case in cases() {
+        if let Some((kind, tier)) = v016_case(&case.id) {
+            // The v0.1.6 profiles use fixture S: sixteen declared files and
+            // 2,658,304 declared bytes, independent of the requested depth.
+            if case.tier != tier || v016_envelope(&case, kind)? != 16 {
+                return Err("history v0.1.6 profile bound".into());
+            }
+            if kind != "namespace-inode" {
+                v016_check(&case, kind)?;
+            }
+            continue;
+        }
         if d::total(&fixture(&case, 1)?) != d::MIB
             || (case.tier as u64 + 1) * d::MIB >= 1_073_741_824
         {
             return Err("history size bound".into());
         }
     }
+    v016_profiles_check()?;
     mixed_v2_check()
+}
+
+/// The declared fixture-S envelope of one v0.1.6 profile: sixteen regular
+/// files, 2,658,304 declared bytes and five directories excluding root.
+fn v016_envelope(case: &Case, kind: &str) -> Result<u64> {
+    let entries = fixture(case, 1)?;
+    let inventory = s::declared_inventory();
+    let files = entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, EntryKind::File(_)))
+        .count();
+    if files != inventory.len()
+        || workspace_common::validate_entries(&entries)? != s::S_BYTES
+        || entries
+            .iter()
+            .filter(|entry| matches!(entry.kind, EntryKind::Directory))
+            .count()
+            != 6
+    {
+        return Err(format!("{kind} fixture S envelope").into());
+    }
+    for (path, len) in &inventory {
+        let entry = entries
+            .iter()
+            .find(|entry| entry.path == *path)
+            .ok_or("fixture S inventory path")?;
+        let EntryKind::File(content) = &entry.kind else {
+            return Err("fixture S inventory type".into());
+        };
+        if content.len() != *len {
+            return Err(format!("fixture S inventory length {path}").into());
+        }
+    }
+    Ok(files as u64)
+}
+
+/// The declared schedule of one flat v0.1.6 profile: every commit is Created
+/// because each edit changes bytes against the state it is applied to, and K10
+/// is exactly the first ten commits of K100 for the same profile and seed.
+fn v016_check(case: &Case, kind: &str) -> Result<()> {
+    for seed in 1..=3u8 {
+        let mut previous = fixture(case, seed)?;
+        for step in 0..case.tier {
+            let mut next = previous.clone();
+            for edit in edits(case, seed, step)? {
+                apply_edit(&mut next, &edit)?;
+            }
+            if format!("{next:?}") == format!("{previous:?}") {
+                return Err(format!("{kind} step {step} is a no-op").into());
+            }
+            previous = next;
+        }
+        if format!("{previous:?}") != format!("{:?}", expected(case, seed, case.tier)?) {
+            return Err(format!("{kind} declared replay differs from the oracle").into());
+        }
+        if let Some(counterpart) = match case.id.as_str() {
+            LARGE_HOTSET_K10 => Some(LARGE_HOTSET_K100),
+            BOUNDARY_CYCLE_K10 => Some(BOUNDARY_CYCLE_K100),
+            _ => None,
+        } {
+            let other = cases()
+                .into_iter()
+                .find(|row| row.id == counterpart)
+                .ok_or("v0.1.6 history counterpart")?;
+            for step in 0..=10 {
+                if format!("{:?}", expected(case, seed, step)?)
+                    != format!("{:?}", expected(&other, seed, step)?)
+                {
+                    return Err(format!("{kind} K10 prefix of K100 at step {step}").into());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The namespace-inode profile is registered but its five-stage compact
+/// schedule is not implemented yet: report it instead of pretending to run it.
+fn v016_profiles_check() -> Result<()> {
+    for (id, kind, tier) in V016 {
+        let case = Case {
+            id: id.to_owned(),
+            family: FAMILY,
+            tier,
+            kind,
+        };
+        if v016_case(&case.id) != Some((kind, tier))
+            || s::profile_of(kind).is_err()
+            || cases().iter().filter(|row| row.id == id).count() != 1
+        {
+            return Err("v0.1.6 history registration".into());
+        }
+    }
+    Ok(())
 }
 
 fn mixed_v2_check() -> Result<()> {
     use std::collections::BTreeMap;
     let rows = cases();
-    if rows.len() != 20
+    if rows.len() != 26
         || rows
             .iter()
             .filter(|row| row.id.ends_with("-mixed-v2"))

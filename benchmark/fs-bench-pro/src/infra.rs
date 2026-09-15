@@ -11,6 +11,18 @@ fn fixture_info(family: &str, case: &str, seed: u8) -> AnyResult<()> {
     if SDK.contains(&family) {
         return sdk_edit_fixture_info(sdk_edit_scenario(family, case)?.fixture_bytes);
     }
+    if workload_source::v016_stages::mixed_case(case)?.is_some_and(|row| row.extended) {
+        println!(
+            "{}",
+            capture(&[
+                "workspace-v016-fixture-info".into(),
+                case.into(),
+                seed.to_string().into(),
+            ])?
+            .trim()
+        );
+        return Ok(());
+    }
     let (plan, bytes, files) = if family == "init_namespace" {
         let plan = workload_source::namespace_plan(case)?;
         (
@@ -145,12 +157,55 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
             true,
         );
     }
+    // The three explicit extended cases are listed with their own declared
+    // watchdog and are never admitted as a regular default selection.
+    for id in workload_source::v016_stages::EXTENDED_IDS {
+        let row = workload_source::v016_stages::mixed_case(id)?
+            .ok_or("v0.1.6 extended case is not registered")?;
+        let family = if row.topology == workload_source::v016_stages::Topology::Four {
+            "multi_workspace_development"
+        } else {
+            "mixed_load_bearing"
+        };
+        if !selected(family, id) {
+            continue;
+        }
+        let entries = workload_source::v016_common::fixture_for_case(id, 1)?;
+        let fixture_bytes = workload_source::workspace_common::validate_entries(&entries)?;
+        let fixture_files = entries
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry.kind,
+                    workload_source::workspace_common::EntryKind::File(_)
+                        | workload_source::workspace_common::EntryKind::Hardlink(_)
+                )
+            })
+            .count() as u64;
+        let verify_only = row.exhaustive_verify_only();
+        println!("{{\"family_id\":\"{family}\",\"scenario_id\":\"{id}\",\"route\":\"workspace\",\"setup_policy\":\"post-init\",\"proof_only\":false,\"seed_min\":1,\"seed_max\":3,\"supported\":{},\"unsupported_reason\":{},\"verification_supported\":true,\"inherited\":false,\"tier\":100,\"fixture_bytes\":{fixture_bytes},\"fixture_files\":{fixture_files},\"fixture_profile\":\"v016-m1-{}\",\"smoke_supported\":false,\"full_workload\":true,\"extended\":true,\"extended_verify_only\":{verify_only},\"extended_watchdog_seconds\":{}}}",
+            !verify_only,
+            if verify_only {
+                "\"explicit extended case is verify-only and declares performance N/A\"".to_string()
+            } else {
+                "null".to_string()
+            },
+            row.tier.to_lowercase(),
+            row.watchdog_seconds());
+    }
     let registry = workload_source::workspace_registry::cases()
         .into_iter()
         .chain(workload_source::workspace_registry::proofs())
         .chain(workload_source::workspace_registry::inherited());
     for case in registry {
         if !selected(case.family, &case.id) {
+            continue;
+        }
+        let v016 = workload_source::v016_stages::mixed_case(&case.id)
+            .ok()
+            .flatten();
+        if v016.is_some_and(|row| row.extended) {
+            // Explicit extended cases are never listed as regular selections.
             continue;
         }
         let reliability = case.family == "workspace_reliability";
@@ -167,6 +222,23 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
                 )
             })
             .count() as u64;
+        if let Some(v016_row) = v016 {
+            // v0.1.6 M1 cases carry their own fixture contract and their own
+            // complete verification route; the fast path never applies to them.
+            let family = case.family;
+            let id = case.id.as_str();
+            println!("{{\"family_id\":\"{family}\",\"scenario_id\":\"{id}\",\"route\":\"workspace\",\"setup_policy\":\"post-init\",\"proof_only\":false,\"seed_min\":1,\"seed_max\":3,\"supported\":true,\"verification_supported\":true,\"inherited\":false,\"tier\":{},\"fixture_bytes\":{fixture_bytes},\"fixture_files\":{fixture_files},\"fixture_profile\":\"v016-m1-{}\",\"smoke_supported\":false,\"full_workload\":true,\"extended\":{},\"extended_watchdog_seconds\":{}}}",
+                if v016_row.k > 10 { 100 } else { 10 },
+                v016_row.tier.to_lowercase(),
+                v016_row.extended,
+                match (v016_row.topology, v016_row.extended) {
+                    (workload_source::v016_stages::Topology::Four, _) => 60,
+                    (_, false) => 15,
+                    (_, true) if v016_row.tier == "L500" => 300,
+                    (_, true) => 120,
+                });
+            continue;
+        }
         row(
             case.family,
             &case.id,
@@ -219,6 +291,14 @@ fn validate(family: &str, id: &str, seed: u8, performance: bool) -> AnyResult<()
         }
         if performance && (family == "workspace_reliability" || case.kind == "boundaries") {
             return Err("proof-only case does not support performance".into());
+        }
+        if let Some(row) = workload_source::v016_stages::mixed_case(&case.id)? {
+            if performance && row.exhaustive_verify_only() {
+                return Err(
+                    "selected extended case is verify-only and has no performance distribution"
+                        .into(),
+                );
+            }
         }
     }
     let maximum = if SDK.contains(&family) || family == "edit_length_changing_capped" {
@@ -499,12 +579,21 @@ fn run_selected(
         Ok(())
     } else {
         let case = workload_source::workspace_registry::resolve(id)?;
+        // The fast verifier compares against `registry::fixture`, which is the
+        // initial state. Families whose declared final state differs from that
+        // fixture keep the full verify route instead.
         let fast = mode == "verify"
             && !matches!(
                 family,
-                "git_tool_workflow" | "edit_length_changing_capped" | "workspace_reliability"
+                "git_tool_workflow"
+                    | "edit_length_changing_capped"
+                    | "workspace_reliability"
+                    | "file_size_transition"
+                    | "multi_workspace_development"
+                    | "branch_development"
             )
-            && case.kind != "boundaries";
+            && case.kind != "boundaries"
+            && workload_source::v016_stages::mixed_case(&case.id)?.is_none();
         let args = [
             OsString::from("workspace-run"),
             payload.as_os_str().into(),

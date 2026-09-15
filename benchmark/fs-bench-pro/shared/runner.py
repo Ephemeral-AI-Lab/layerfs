@@ -33,7 +33,8 @@ HOST_FAMILIES = ("payload_create_read", "dedup_workspace_reuse", "dedup_cross_fi
                  "init_namespace", "store_footprint", "tiny_file_churn",
                  "namespace_mutation", "directory_construction_traversal",
                  "workspace_change_locality", "dedup_branch_history", "git_tool_workflow",
-                 "mixed_load_bearing", "workspace_reliability", "local_snapshot")
+                 "mixed_load_bearing", "workspace_reliability", "file_size_transition",
+                 "multi_workspace_development", "branch_development", "local_snapshot")
 PRODUCT_TARGET_NS = 15_000_000_000
 HISTORICAL_PRODUCT_TARGET_SCOPE = (
     "reporting-only historical 15-second family target; not a collection acceptance gate"
@@ -55,10 +56,45 @@ def verification_policy(selection):
     scaled = (selection.get("family") == "init_namespace"
               and sequence.get("schema") == "workspace-sequence-v1"
               and sequence.get("edit_count", 0) * sequence.get("commits", 0) > 1000)
+    if v016_watchdog_seconds(selection) is not None:
+        # The v0.1.6 M1 cases declare their own complete-command allowance: the
+        # long-history and load-bearing allowance for every regular case and the
+        # extended case's own fixed watchdog. The 15-second family target stays
+        # reported separately in the performance receipt.
+        declared = v016_watchdog_seconds(selection)
+        return {"id": "v016-selected-verification-v1",
+                "work_limit_seconds": float(declared), "hard_limit_seconds": float(declared) + 10.0,
+                "cleanup_reserve_seconds": 3.0, "publication_guard_seconds": 0.25,
+                "declared_complete_deadline_seconds": declared}
     return {"id": "workspace-sequence-scaling-v1" if scaled else "selected-verification-v1",
             "work_limit_seconds": 600.0 if scaled else 45.0,
             "hard_limit_seconds": 614.0 if scaled else 59.0,
             "cleanup_reserve_seconds": 4.0, "publication_guard_seconds": 0.25}
+
+
+# The complete-command deadline of each v0.1.6 case, in seconds. The three
+# explicit extended cases carry their own frozen watchdog; every regular case
+# carries the 15-second regular deadline. Keyed by the exact registered ID so a
+# renamed or unregistered case is never silently admitted.
+V016_EXTENDED_WATCHDOGS = {
+    "v016-mixed-exhaustive-100mb-5000-k100-v1": 120,
+    "v016-mixed-exhaustive-500mb-30000-k100-v1": 300,
+    "v016-workspace-four-100mb-5000-k100-v1": 60,
+}
+# A regular v0.1.6 case is gated at the 15-second complete-command deadline; the
+# declared exception ceiling is 25 seconds, and the three-second cleanup reserve
+# lives inside it, so the worker stop is 22 seconds. A case that cannot finish
+# inside the ceiling is retained as NOT_RUN with its measured wall, never
+# repaired by enlarging this number.
+V016_REGULAR_DEADLINE_SECONDS = 25
+
+
+def v016_watchdog_seconds(selection):
+    """The declared complete-command deadline of one v0.1.6 case, or None."""
+    case = selection.get("case") or selection.get("scenario_id") or ""
+    if not case.startswith("v016-"):
+        return None
+    return V016_EXTENDED_WATCHDOGS.get(case, V016_REGULAR_DEADLINE_SECONDS)
 
 
 def issue47_assessment(selection, elapsed_ns):
@@ -109,6 +145,8 @@ def build_parser(include_modes=True):
         mode.add_argument("--perf-samples", type=int)
         mode.add_argument("--verification", action="store_true")
     p.add_argument("--prepare-only", action="store_true")
+    p.add_argument("--extended", action="store_true",
+                   help="Explicitly select one declared extended case by its exact ID; never a regular default")
     p.add_argument("--smoke", action="store_true", help="Select the smallest registered supported case; performance/setup only")
     p.add_argument("--list", action="store_true", help="Print registered selections without running workloads")
     p.add_argument("--image", default=os.environ.get("LAYERFS_BENCH_IMAGE"))
@@ -332,10 +370,14 @@ def resolve_selection(args, deadline):
         else:
             raise ValueError("no bounded low-tier smoke case: explicit large/proof selections are not run automatically")
     matches = [row for row in rows if row.get("scenario_id") == args.case]
+    if not getattr(args, "extended", False):
+        matches = [row for row in matches if not row.get("extended")]
+    else:
+        matches = [row for row in matches if row.get("extended")]
     if len(matches) != 1:
         raise ValueError("select exactly one registered --case (or --smoke for performance)")
     row = matches[0]
-    if not row.get("supported", True):
+    if not row.get("supported", True) and not getattr(args, "extended", False):
         raise ValueError(row.get("unsupported_reason", "historical/unsupported selection"))
     if args.seed is not None and args.repetition is not None:
         raise ValueError("choose seed or inherited repetition, not both")
@@ -605,7 +647,15 @@ def execute_selected(args, *, deadline, verification=False):
         command_env = {"LAYERFS_V013_IMAGE": selection["image"],
                        "LAYERFS_BENCH_SOURCE_ARM": selection["source_arm"]}
         if not verification:
-            command_env["LAYERFS_BENCH_PRODUCT_TIMEOUT_SECONDS"] = str(args.product_timeout)
+            declared = v016_watchdog_seconds(selection)
+            if declared is None:
+                command_env["LAYERFS_BENCH_PRODUCT_TIMEOUT_SECONDS"] = str(args.product_timeout)
+            else:
+                # The roadmap's worker stop, with the three-second cleanup
+                # reserve inside the declared complete-command deadline.
+                command_env["LAYERFS_BENCH_PRODUCT_TIMEOUT_SECONDS"] = str(
+                    max(1, declared - 3)
+                )
         if args.performance_rows != "-":
             command_env["LAYERFS_SDK_EDIT_PERFORMANCE_ROWS"] = args.performance_rows
         if selection["family"] in ("dedup_cross_file", "dedup_cdc_locality"):
@@ -682,7 +732,31 @@ def execute_selected(args, *, deadline, verification=False):
                 assessment = issue47_assessment(selection, elapsed)
                 if assessment is not None:
                     result["issue47_assessment"] = assessment
-                if getattr(args, "collection_mode", False):
+                declared_complete = v016_watchdog_seconds(selection)
+                if declared_complete is not None:
+                    # The v0.1.6 complete-command gate: the whole selected
+                    # invocation, including acquisition, runtime readiness,
+                    # scheduled work, receipt publication and cleanup, must fit
+                    # the case's declared allowance. The 15-second family target
+                    # is reported separately and never silently reduces work.
+                    complete = result["command_wall_ns"]
+                    limit_ns = declared_complete * 1_000_000_000
+                    result["family_target_ns"] = PRODUCT_TARGET_NS
+                    result["family_target_status"] = (
+                        "PASS" if complete <= PRODUCT_TARGET_NS else "TARGET_MISS"
+                    )
+                    result["declared_complete_deadline_ns"] = limit_ns
+                    result["declared_complete_deadline_seconds"] = declared_complete
+                    result["complete_command_status"] = (
+                        "PASS" if complete <= limit_ns else "TARGET_MISS"
+                    )
+                    if result["complete_command_status"] == "TARGET_MISS":
+                        result["status"] = "TARGET_MISS"
+                        result["error"] = (
+                            f"complete selected invocation {complete} ns exceeds the declared "
+                            f"{declared_complete}-second deadline"
+                        )
+                elif getattr(args, "collection_mode", False):
                     result["status"] = "PASS"
                     if historical == "TARGET_MISS":
                         result["historical_product_target_note"] = (
@@ -876,6 +950,79 @@ def prune_build_caches(keep=DEFAULT_RETAINED_SEALED_BUILDS, apply=False):
     return receipt
 
 
+def image_retention(keep=2, apply=False):
+    """Bounded retention for the benchmark's own Docker images (#118).
+
+    Every source change tags a new `layerfs-bench-infra:<source-seal-16>`, so the
+    build path accumulates one ~2.4 GB image per edit until it is pruned. The
+    newest `keep` images are retained. Every other owned image is first given its
+    immutable binary archive (`image-archive/<image-id>/`: the two daemon-side
+    binaries, the workload helper and the full image identity), so a deleted
+    image is always reconstructible from the archived binaries plus the seals the
+    receipts already carry. Unrecognized or foreign images are never candidates.
+    """
+    if type(keep) is not int or keep < 0:
+        raise ValueError("retained image count must be a nonnegative integer")
+    archive = HOST_ROOT / "image-archive"
+    listed = runtime.run(
+        ["docker", "images", "--format", "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedAt}}"],
+        deadline=runtime.Deadline.after(30),
+    ).stdout.decode("utf-8", "replace")
+    owned = []
+    for line in listed.splitlines():
+        fields = line.split("\t")
+        if len(fields) != 4 or fields[0] != "layerfs-bench-infra":
+            continue
+        owned.append({"tag": fields[1], "id": fields[2], "created": fields[3]})
+    owned.sort(key=lambda row: row["created"], reverse=True)
+    complete = {"fs-benchmark-workload", "layerfs-daemon", "layerfs-fuse", "identity.json"}
+    retained, candidates = [], []
+    for index, row in enumerate(owned):
+        if index < keep:
+            retained.append({**row, "reason": "newest retained image"})
+            continue
+        # The binary archive is keyed by the full image ID, which `docker images`
+        # reports shortened; resolve the full digest before deciding.
+        info = image_info(row["id"], time.monotonic() + 30)
+        full_id = info["Id"]
+        root = archive / full_id.split(":")[-1]
+        files = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
+        needs_archive = not complete.issubset(set(files))
+        candidates.append({**row, "full_id": full_id, "archive": str(root),
+                           "archive_complete": not needs_archive,
+                           "archive_required": needs_archive})
+    for entry in candidates:
+        if entry["archive_required"]:
+            archive_image(entry["full_id"])
+            entry["archive_complete"] = True
+            entry["archive_required"] = False
+        root = Path(entry["archive"])
+        files = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
+        if not complete.issubset(set(files)):
+            raise ValueError("refusing to delete an image without a complete archive: " + entry["tag"])
+        saved = json.loads((root / "identity.json").read_text())
+        for name, digest in saved["binaries"].items():
+            if runtime.file_sha256(root / name) != digest:
+                raise ValueError("archived image binary changed: " + entry["tag"])
+    if apply:
+        for entry in candidates:
+            runtime.run(
+                ["docker", "image", "rm", entry["full_id"]],
+                deadline=runtime.Deadline.after(120),
+            )
+    return {
+        "schema": "layerfs-image-retention-v1",
+        "policy": {"retained_newest": keep, "protected": ["image-archive", "binary-archive",
+                                                          "fixtures", "prepared", "samples"]},
+        "owned_images": len(owned),
+        "retained": retained,
+        "candidates": candidates,
+        "removed": [entry["tag"] for entry in candidates] if apply else [],
+        "removed_count": len(candidates) if apply else 0,
+        "apply": apply,
+    }
+
+
 def verify_linked_schema(binary, expected):
     with tempfile.TemporaryDirectory(prefix="layerfs-build-schema-") as folder:
         observed = int(runtime.run([str(binary), "infra-schema-probe", str(Path(folder) / "store.sqlite")],
@@ -979,13 +1126,22 @@ def main(argv=None):
     if "--storage-smoke" in argv:
         import storage_smoke
         return storage_smoke.main(argv)
-    if argv[:1] == ["--prune-builds"] or argv in (["--build-image"], ["--build-host"], ["--build-storage-smoke-image"]):
+    if argv[:1] == ["--prune-builds"] or argv[:1] == ["--prune-images"] or argv in (["--build-image"], ["--build-host"], ["--build-storage-smoke-image"]):
         lock_path = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
         with lock_path.open("a") as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as error:
                 raise RuntimeError("another benchmark owns the measurement lock") from error
+            if argv[:1] == ["--prune-images"]:
+                pruning = argparse.ArgumentParser(description="Retain recent benchmark images whose immutable binary archive is complete")
+                pruning.add_argument("--prune-images", nargs="?", type=int, default=DEFAULT_RETAINED_SEALED_BUILDS,
+                                     const=DEFAULT_RETAINED_SEALED_BUILDS, metavar="KEEP")
+                pruning.add_argument("--apply", action="store_true", help="Delete the selected images (default: preview only)")
+                options = pruning.parse_args(argv)
+                receipt = image_retention(keep=options.prune_images, apply=options.apply)
+                print(json.dumps(receipt, sort_keys=True))
+                return 0
             if argv[:1] == ["--prune-builds"]:
                 pruning = argparse.ArgumentParser(description="Retain recent owned Cargo targets; preserve immutable archives and inputs")
                 pruning.add_argument("--prune-builds", nargs="?", type=int, default=DEFAULT_RETAINED_SEALED_BUILDS,

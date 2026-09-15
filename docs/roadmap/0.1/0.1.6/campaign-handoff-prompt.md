@@ -11,12 +11,12 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
 
 | file | what you need from it |
 |---|---|
-| [`AGENTS.md`](../../../AGENTS.md) | repo-wide agent rules: no warm-cache credit, `--setup clone` reuse discipline, budgets, the third-party ban, no-CI/preflight |
-| [`benchmark/AGENTS.md`](../../../benchmark/AGENTS.md) | benchmark-tree mechanics: prepared inputs, `--reuse-pass`, clone semantics, budgets, the v0.1.6 hosting exception |
-| [`docs/general/benchmark_rules.md`](../../general/benchmark_rules.md) | the measurement contract: cache state, memory domains, reuse, reporting fields |
-| [`docs/general/release-policy.md`](../../general/release-policy.md), [`docs/general/documentation-policy.md`](../../general/documentation-policy.md) | what may be claimed, committed and released |
-| [`benchmark/fs-bench-pro/QUICKSTART.md`](../../../benchmark/fs-bench-pro/QUICKSTART.md) | build/reuse/run mechanics, `--setup fresh` vs `--setup clone`, family entrypoints |
-| [`tools/preflight.sh`](../../../tools/preflight.sh) | the local gate you run before **every** push — this repository has no CI |
+| [`AGENTS.md`](../../../../AGENTS.md) | repo-wide agent rules: no warm-cache credit, `--setup clone` reuse discipline, budgets, the third-party ban, no-CI/preflight |
+| [`benchmark/AGENTS.md`](../../../../benchmark/AGENTS.md) | benchmark-tree mechanics: prepared inputs, `--reuse-pass`, clone semantics, budgets, the v0.1.6 hosting exception |
+| [`docs/general/benchmark_rules.md`](../../../general/benchmark_rules.md) | the measurement contract: cache state, memory domains, reuse, reporting fields |
+| [`docs/general/release-policy.md`](../../../general/release-policy.md), [`docs/general/documentation-policy.md`](../../../general/documentation-policy.md) | what may be claimed, committed and released |
+| [`benchmark/fs-bench-pro/QUICKSTART.md`](../../../../benchmark/fs-bench-pro/QUICKSTART.md) | build/reuse/run mechanics, `--setup fresh` vs `--setup clone`, family entrypoints |
+| [`tools/preflight.sh`](../../../../tools/preflight.sh) | the local gate you run before **every** push — this repository has no CI |
 
 ### This campaign's contract
 
@@ -45,7 +45,7 @@ Read issue #152 itself first — it is the contract; this prompt is how to execu
 | file / path | what you need from it |
 |---|---|
 | [`evidence/issue151-experiment-ledger.md`](evidence/issue151-experiment-ledger.md) | L12–L14 gate history and host-state spread; **L18** bounded-cache repair, cache-stance evidence, memory-metric finding; **L19** B3 and the three harness defects; **L20** accepted dispositions, limitations, adoption recommendation; **L21** CI removal |
-| [`evidence/issue151-implementation-design.md`](evidence/issue151-implementation-design.md), [`evidence/issue151-execution-continuation.md`](evidence/issue151-execution-continuation.md), [`issue151-handoff-agent-prompt.md`](issue151-handoff-agent-prompt.md) | how the implementation was built, what was already repaired, and how it was handed over |
+| [`evidence/issue151-implementation-design.md`](evidence/issue151-implementation-design.md), [`evidence/issue151-execution-continuation.md`](evidence/issue151-execution-continuation.md), [`issue151-handoff-agent-prompt.md`](evidence/issue151-handoff-agent-prompt.md) | how the implementation was built, what was already repaired, and how it was handed over |
 | `docs/roadmap/0.1/0.1.5/issue120/finalization-contract.md` | the disposition, severity and cache rules this campaign inherits (Tier 1/2/3, S0–S3, H) |
 | `docs/roadmap/0.1/0.1.5/issue120/final-report.md` and `family-*.md` | the `family → per-test` reporting shape to match, and the v0.1.5 context for old ratios |
 | `benchmark-results/host-store/issue120/{performance,verification,diagnostics}` | the recorded v0.1.5 comparator rows you cite instead of re-running |

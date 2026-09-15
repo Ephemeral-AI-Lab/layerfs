@@ -18,6 +18,8 @@ mod repository_init;
 mod sdk_edit_verify;
 mod sdk_file_edit;
 mod storage_smoke;
+mod v016_mixed;
+mod v016_oracle;
 mod workspace_bench;
 mod workspace_reliability;
 mod workspace_sequence;
@@ -4676,7 +4678,7 @@ fn lifecycle(
     })
 }
 
-fn execute(
+pub(crate) fn execute(
     client: &Client,
     workspace_id: WorkspaceId,
     argv: Vec<OsString>,

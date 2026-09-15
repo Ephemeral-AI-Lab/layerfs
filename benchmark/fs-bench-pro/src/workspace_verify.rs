@@ -247,6 +247,27 @@ fn verify_named(
     Ok(result)
 }
 
+/// Verify a snapshot whose declared classes are not derived from hard-link
+/// edges alone.
+///
+/// `inode_classes` maps each declared path to its declared inode-class key and
+/// `class_ref_counts` gives the declared reference count for every class. This
+/// is the v0.1.6 alias route: an alias may legitimately separate from its
+/// target inside one declared schedule, so the two names end in different
+/// classes even though the initial fixture linked them.
+pub(crate) fn verify_split_classes(
+    store: &LayerStackStore,
+    branch: BranchId,
+    entries: &[Entry],
+    evidence: &Path,
+    split_class: &str,
+) -> AnyResult<SnapshotEvidence> {
+    let pinned = store.pin_branch(branch)?;
+    let mut result = verify_root_split(&pinned.reader, pinned.root, entries, split_class)?;
+    persist_snapshot(entries, &mut result, evidence, "canonical-verification")?;
+    Ok(result)
+}
+
 pub(crate) fn persist_snapshot(
     entries: &[Entry],
     result: &mut SnapshotEvidence,
@@ -309,6 +330,149 @@ pub(crate) fn persist_snapshot(
     Ok(())
 }
 
+/// The dedicated v0.1.6 alias oracle: one declared path pair is proved to share
+/// exactly one inode before the replacement Commit and to hold two distinct
+/// inodes afterwards, each with the reference count its declared class requires.
+///
+/// This is deliberately separate from the generic class verifier: the generic
+/// route derives one reference count per declared class for the whole snapshot
+/// and therefore cannot express "one shared inode before, two classes after"
+/// inside a single schedule. The reference-count check itself is unchanged and
+/// still applies to both states.
+pub(crate) struct AliasClassProof {
+    pub(crate) before_inode: inode::InodeId,
+    pub(crate) before_ref_count: u64,
+    pub(crate) after_inode: inode::InodeId,
+    pub(crate) alias_inode: inode::InodeId,
+    pub(crate) target_ref_count: u64,
+    pub(crate) alias_ref_count: u64,
+    pub(crate) before_content_root: ObjectId,
+    pub(crate) target_content_root: ObjectId,
+    pub(crate) alias_content_root: ObjectId,
+}
+
+/// One inode's declared proof material, read from a retained root.
+struct AliasBinding {
+    inode: inode::InodeId,
+    ref_count: u64,
+    content_root: ObjectId,
+    length: u64,
+}
+
+fn alias_binding(source: &dyn ObjectSource, root: ObjectId, path: &str) -> AnyResult<AliasBinding> {
+    let view = namespace_view(source, root)?;
+    let inode = view
+        .inodes
+        .get(path)
+        .copied()
+        .ok_or_else(|| format!("v0.1.6 alias oracle: path absent: {path}"))?;
+    let record = view
+        .paths
+        .get(path)
+        .ok_or_else(|| format!("v0.1.6 alias oracle: record absent: {path}"))?;
+    if record.kind != inode_regular() {
+        return Err(format!("v0.1.6 alias oracle: {path} is not a regular file").into());
+    }
+    Ok(AliasBinding {
+        inode,
+        ref_count: record.namespace_ref_count,
+        content_root: record.content_root,
+        length: declared_regular_length(source, record)?,
+    })
+}
+
+pub(crate) fn verify_alias_classes(
+    before_source: &dyn ObjectSource,
+    before_root: ObjectId,
+    after_source: &dyn ObjectSource,
+    after_root: ObjectId,
+    target: &str,
+    alias: &str,
+    declared_before_len: u64,
+    declared_after_len: u64,
+    declared_alias_len: u64,
+) -> AnyResult<AliasClassProof> {
+    let shared = alias_binding(before_source, before_root, target)?;
+    let before_alias = alias_binding(before_source, before_root, alias)?;
+    // (a) both names hold one shared inode before the replacement.
+    if shared.inode != before_alias.inode {
+        return Err(format!(
+            "v0.1.6 alias oracle: {target} and {alias} are not one shared inode before the replacement"
+        )
+        .into());
+    }
+    if shared.ref_count != 2 {
+        return Err(format!(
+            "v0.1.6 alias oracle: shared inode reference count {}, declared 2",
+            shared.ref_count
+        )
+        .into());
+    }
+    if shared.content_root != before_alias.content_root {
+        return Err("v0.1.6 alias oracle: shared inode content roots differ".into());
+    }
+    if shared.length != declared_before_len {
+        return Err(format!(
+            "v0.1.6 alias oracle: pre-replacement target length {}, declared {declared_before_len}",
+            shared.length
+        )
+        .into());
+    }
+    // (b) and (c) two distinct inodes after, each with its declared class count.
+    let after_target = alias_binding(after_source, after_root, target)?;
+    let after_alias = alias_binding(after_source, after_root, alias)?;
+    if after_target.inode == after_alias.inode {
+        return Err(format!(
+            "v0.1.6 alias oracle: {target} and {alias} still share inode {:?} after the replacement",
+            after_target.inode
+        )
+        .into());
+    }
+    if after_target.ref_count != 1 || after_alias.ref_count != 1 {
+        return Err(format!(
+            "v0.1.6 alias oracle: reference counts {} and {} after the replacement, declared 1 and 1",
+            after_target.ref_count, after_alias.ref_count
+        )
+        .into());
+    }
+    if after_target.length != declared_after_len {
+        return Err(format!(
+            "v0.1.6 alias oracle: replacement target length {}, declared {declared_after_len}",
+            after_target.length
+        )
+        .into());
+    }
+    if after_alias.length != declared_alias_len {
+        return Err(format!(
+            "v0.1.6 alias oracle: surviving alias length {}, declared {declared_alias_len}",
+            after_alias.length
+        )
+        .into());
+    }
+    // The surviving alias keeps the pre-replacement inode and its content.
+    if after_alias.inode != shared.inode {
+        return Err(format!(
+            "v0.1.6 alias oracle: surviving alias inode {:?} is not the pre-replacement inode {:?}",
+            after_alias.inode, shared.inode
+        )
+        .into());
+    }
+    if after_alias.content_root != shared.content_root {
+        return Err("v0.1.6 alias oracle: surviving alias content root changed".into());
+    }
+    Ok(AliasClassProof {
+        before_inode: shared.inode,
+        before_ref_count: shared.ref_count,
+        after_inode: after_target.inode,
+        alias_inode: after_alias.inode,
+        target_ref_count: after_target.ref_count,
+        alias_ref_count: after_alias.ref_count,
+        before_content_root: shared.content_root,
+        target_content_root: after_target.content_root,
+        alias_content_root: after_alias.content_root,
+    })
+}
+
 /// Read the complete authenticated global inode index once per immutable proof.
 /// Directory entries already carry inode IDs, so callers need not resolve each
 /// path from the root again. This does not certify or skip any file content.
@@ -362,6 +526,293 @@ pub(crate) fn verify_root(
     root: ObjectId,
     entries: &[Entry],
 ) -> AnyResult<SnapshotEvidence> {
+    verify_root_split(source, root, entries, "")
+}
+
+/// One path's explicit metadata from the live namespace view.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ViewMetadata {
+    pub(crate) permission_mode: u32,
+    pub(crate) mtime_seconds: i64,
+    pub(crate) mtime_nanoseconds: u32,
+}
+
+/// One complete namespace snapshot: every canonical path with its resolved
+/// inode record and its explicit metadata. Reading the namespace is bounded; no
+/// file byte, content root or payload is read here.
+pub(crate) struct NamespaceView {
+    pub(crate) paths: BTreeMap<String, inode::InodeRecordV1>,
+    pub(crate) inodes: BTreeMap<String, inode::InodeId>,
+    pub(crate) metadata: BTreeMap<String, ViewMetadata>,
+}
+
+impl NamespaceView {
+    pub(crate) fn inode(&self, path: &str) -> Option<inode::InodeId> {
+        self.inodes.get(path).copied()
+    }
+}
+
+/// Read the explicit mode and mtime of one inode from its metadata tree.
+fn read_view_metadata(
+    reader: &CoreReader<'_>,
+    root: ObjectId,
+    path: &str,
+) -> AnyResult<ViewMetadata> {
+    let entries = metadata::metadata_tree_entries(reader, root)?;
+    let mut mode = None;
+    let mut timestamp = None;
+    for entry in entries {
+        if entry.key.domain != "portable" || !matches!(entry.key.key.as_slice(), b"mode" | b"mtime")
+        {
+            return Err(format!("unexpected canonical metadata: {path}").into());
+        }
+        let maximum = if entry.key.key == b"mode" { 4 } else { 12 };
+        let state = rope::state(
+            reader,
+            rope::FileStateRoot(entry.value_file_root),
+            &mut Default::default(),
+        )?;
+        if state.logical_len != maximum {
+            return Err("canonical metadata length".into());
+        }
+        let mut value = Vec::new();
+        rope::read_all(
+            reader,
+            rope::FileStateRoot(entry.value_file_root),
+            &mut value,
+        )?;
+        if entry.key.key == b"mode" {
+            mode = Some(u32::from_be_bytes(value.as_slice().try_into()?));
+        } else {
+            timestamp = Some((
+                i64::from_be_bytes(value[..8].try_into()?),
+                u32::from_be_bytes(value[8..].try_into()?),
+            ));
+        }
+    }
+    let (mtime_seconds, mtime_nanoseconds) =
+        timestamp.ok_or_else(|| format!("canonical metadata mtime: {path}"))?;
+    Ok(ViewMetadata {
+        permission_mode: mode.ok_or_else(|| format!("canonical metadata mode: {path}"))?,
+        mtime_seconds,
+        mtime_nanoseconds,
+    })
+}
+
+/// Read the complete authenticated namespace of one snapshot. Every path the
+/// snapshot contains is visited through the directory tree, so a missing or
+/// extra path is observable without trusting a cached manifest.
+pub(crate) fn namespace_view(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+) -> AnyResult<NamespaceView> {
+    let reader = CoreReader(source);
+    let namespace = AuthenticatedNamespaceIndex::load(source, root)?;
+    let mut paths = BTreeMap::new();
+    let mut inodes = BTreeMap::new();
+    let mut metadata = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    let mut pending = vec![(".".to_owned(), namespace.root_inode)];
+    while let Some((path, id)) = pending.pop() {
+        if !seen.insert(path.clone()) {
+            return Err("canonical path repeated".into());
+        }
+        let resolved = namespace.resolve_inode(id)?;
+        resolved.record.validate(path == ".")?;
+        let is_directory = resolved.record.kind == inode::InodeKind::Directory;
+        if inodes.insert(path.clone(), id).is_some() {
+            return Err("canonical namespace repeated an inode binding".into());
+        }
+        let value = read_view_metadata(&reader, resolved.record.metadata_root, &path)?;
+        metadata.insert(path.clone(), value);
+        if is_directory {
+            let mut after = None;
+            loop {
+                let page = directory::directory_page_after(
+                    &reader,
+                    directory::DirectoryStateRoot(resolved.record.content_root),
+                    after.as_ref(),
+                    127,
+                    8192,
+                    &mut Default::default(),
+                )?;
+                for (name, child_inode) in &page.entries {
+                    let child = if path == "." {
+                        name.as_str().to_owned()
+                    } else {
+                        format!("{path}/{}", name.as_str())
+                    };
+                    pending.push((child, *child_inode));
+                }
+                match page.continuation {
+                    Some(next) => {
+                        if after.as_ref().is_some_and(|previous| previous >= &next) {
+                            return Err("canonical directory cursor did not advance".into());
+                        }
+                        after = Some(next);
+                    }
+                    None => break,
+                }
+            }
+        }
+        paths.insert(path, resolved.record);
+    }
+    if paths.len() != seen.len() {
+        return Err("canonical namespace size".into());
+    }
+    Ok(NamespaceView {
+        paths,
+        inodes,
+        metadata,
+    })
+}
+
+/// Independently recompute the persisted content root of one regular file from
+/// its declared bytes. This proves the Store's own content identity without
+/// reading the payload back through the Store.
+pub(crate) fn declared_content_root(entry: &Entry) -> AnyResult<Option<ObjectId>> {
+    let content = match &entry.kind {
+        EntryKind::File(content) => content,
+        _ => return Ok(None),
+    };
+    // SmallContent carries 1..131,071 bytes; empty files have their own
+    // representation and are proved by their declared length and type.
+    if content.len() == 0 || content.len() >= 131_072 {
+        return Ok(None);
+    }
+    let mut bytes = Vec::with_capacity(content.len() as usize);
+    content.write_to(&mut bytes)?;
+    Ok(Some(expected_small_root(&bytes)?))
+}
+
+/// One commit's identity and parent edge, observed through the public query
+/// surface after a reopen.
+pub(crate) struct CommitRecord {
+    pub(crate) id: layerfs_sdk::CommitId,
+    pub(crate) parent_commit_id: Option<layerfs_sdk::CommitId>,
+}
+
+pub(crate) fn commit_records(
+    client: &Client,
+    wanted: &[layerfs_sdk::CommitId],
+) -> AnyResult<BTreeMap<layerfs_sdk::CommitId, CommitRecord>> {
+    let expected: BTreeSet<layerfs_sdk::CommitId> = wanted.iter().copied().collect();
+    let mut records = BTreeMap::new();
+    let mut query = Query::new(QueryKind::Commits).limit(127);
+    loop {
+        let page = client.query(query.clone())?;
+        for item in &page.items {
+            if let QueryItem::Commit(commit) = item {
+                if expected.contains(&commit.id) {
+                    records.insert(
+                        commit.id,
+                        CommitRecord {
+                            id: commit.id,
+                            parent_commit_id: commit.parent_commit_id,
+                        },
+                    );
+                }
+            }
+        }
+        if records.len() == expected.len() {
+            break;
+        }
+        let Some(next) = page.into_next_query(&query) else {
+            break;
+        };
+        query = next;
+    }
+    if records.len() != expected.len() {
+        return Err(format!(
+            "reopened Store does not expose every retained commit: {} of {}",
+            records.len(),
+            expected.len()
+        )
+        .into());
+    }
+    Ok(records)
+}
+
+pub(crate) fn inode_regular() -> inode::InodeKind {
+    inode::InodeKind::RegularFile
+}
+
+pub(crate) fn inode_directory() -> inode::InodeKind {
+    inode::InodeKind::Directory
+}
+
+pub(crate) fn inode_symlink() -> inode::InodeKind {
+    inode::InodeKind::Symlink
+}
+
+/// The declared logical length of one persisted regular file. SmallContent
+/// carries its bytes inline; chunked files declare a logical length in their
+/// file-state record. Reading the file-state header performs no payload read.
+pub(crate) fn declared_regular_length(
+    source: &dyn ObjectSource,
+    record: &inode::InodeRecordV1,
+) -> AnyResult<u64> {
+    if record.kind != inode::InodeKind::RegularFile {
+        return Err("declared regular length requires a regular inode".into());
+    }
+    let reader = CoreReader(source);
+    Ok(
+        reader.with_authenticated_canonical(record.content_root, |canonical| {
+            Ok(match small_bytes(canonical)? {
+                Some(raw) => raw.len() as u64,
+                None => extent_codec::decode_file_state(canonical)?.logical_len,
+            })
+        })?,
+    )
+}
+
+/// Read one declared byte range of a persisted regular file through the Store
+/// reader and compare it with the independent recipe value.
+pub(crate) fn verify_declared_range(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+    path: &str,
+    range: std::ops::Range<u64>,
+    expected: &[u8],
+) -> AnyResult<()> {
+    let view = namespace_view(source, root)?;
+    let id = view
+        .inode(path)
+        .ok_or_else(|| format!("declared verification path absent from the snapshot: {path}"))?;
+    let record = view
+        .paths
+        .get(path)
+        .ok_or("declared verification record")?
+        .clone();
+    if record.kind != inode::InodeKind::RegularFile {
+        return Err(format!("declared verification path is not regular: {path}").into());
+    }
+    let reader = CoreReader(source);
+    let mut observed = Vec::with_capacity(expected.len());
+    read_regular(
+        &reader,
+        rope::FileStateRoot(record.content_root),
+        range,
+        &mut observed,
+    )?;
+    if observed != expected {
+        return Err(format!("declared range mismatch: {path}").into());
+    }
+    let _ = id;
+    Ok(())
+}
+
+/// Verify one snapshot. `split_class` names a declared path whose inode class
+/// is declared to be its own rather than its hard-link target's: the v0.1.6
+/// alias plan replaces the target name while the alias keeps the previous
+/// inode, so the two names hold one class each even though the fixture linked
+/// them. Every other class keeps the hard-link-derived reference count.
+pub(crate) fn verify_root_split(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+    entries: &[Entry],
+    split_class: &str,
+) -> AnyResult<SnapshotEvidence> {
     let logical = common::validate_entries(entries)?;
     let reader = CoreReader(source);
     let namespace = AuthenticatedNamespaceIndex::load(source, root)?;
@@ -371,10 +822,14 @@ pub(crate) fn verify_root(
         .collect::<BTreeMap<_, _>>();
     let mut reference_counts = BTreeMap::<&str, u64>::new();
     for entry in entries {
-        let class = match &entry.kind {
-            EntryKind::File(_) => entry.path.as_str(),
-            EntryKind::Hardlink(target) => target.as_str(),
-            _ => continue,
+        let class = if !split_class.is_empty() && entry.path == split_class {
+            entry.path.as_str()
+        } else {
+            match &entry.kind {
+                EntryKind::File(_) => entry.path.as_str(),
+                EntryKind::Hardlink(target) => target.as_str(),
+                _ => continue,
+            }
         };
         *reference_counts.entry(class).or_default() += 1;
     }
@@ -490,14 +945,22 @@ pub(crate) fn verify_root(
                     return Err(format!("canonical hard-link class mismatch: {path}").into());
                 }
                 if resolved.record.namespace_ref_count != reference_counts[class] {
-                    return Err(format!("canonical hard-link reference count: {path}").into());
+                    return Err(format!(
+                        "canonical hard-link reference count: {path} observed {} declared {}",
+                        resolved.record.namespace_ref_count, reference_counts[class]
+                    )
+                    .into());
                 }
                 let file_root = rope::FileStateRoot(resolved.record.content_root);
                 file_roots.insert(path.clone(), resolved.record.content_root);
                 validate_regular(&reader, file_root)?;
                 let length = regular_length(&reader, file_root)?;
                 if length != content.len() {
-                    return Err(format!("canonical length: {path}").into());
+                    return Err(format!(
+                        "canonical length: {path} observed {length} expected {}",
+                        content.len()
+                    )
+                    .into());
                 }
                 let mut sink = CompareSink {
                     expected: content,
@@ -1421,7 +1884,11 @@ pub(crate) fn verify_fast_snapshot(
                         .insert(class.to_owned(), id)
                         .is_some_and(|old| old != id)
                 {
-                    return Err("fast regular type/alias/reference count".into());
+                    return Err(format!(
+                        "fast regular type/alias/reference count: {path} observed {} declared {}",
+                        record.namespace_ref_count, reference_counts[class]
+                    )
+                    .into());
                 }
                 if !delta.changed_paths.contains(&path)
                     && certificate

@@ -1,0 +1,1723 @@
+{
+  "cases": [
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "dedup_branch_history",
+      "fixture": "S",
+      "id": "v016-history-large-hotset-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 10,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 11,
+      "schedule": "H-large-hotset",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "dedup_branch_history",
+      "fixture": "S",
+      "id": "v016-history-large-hotset-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 100,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 101,
+      "schedule": "H-large-hotset",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "dedup_branch_history",
+      "fixture": "S",
+      "id": "v016-history-namespace-inode-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 10,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 11,
+      "schedule": "H-namespace-inode",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "dedup_branch_history",
+      "fixture": "S",
+      "id": "v016-history-namespace-inode-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 100,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 101,
+      "schedule": "H-namespace-inode",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "dedup_branch_history",
+      "fixture": "S",
+      "id": "v016-history-boundary-cycle-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 10,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 11,
+      "schedule": "H-boundary-cycle",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "dedup_branch_history",
+      "fixture": "S",
+      "id": "v016-history-boundary-cycle-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 100,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 101,
+      "schedule": "H-boundary-cycle",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        2
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "B-small-control",
+      "id": "v016-boundary-small-control-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 2,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 2,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 3,
+      "schedule": "B-small-control",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        2
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "B-below",
+      "id": "v016-boundary-below-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 2,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 2,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 3,
+      "schedule": "B-below",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        2
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "B-exact",
+      "id": "v016-boundary-exact-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 2,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 2,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 3,
+      "schedule": "B-exact",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        2
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "B-above",
+      "id": "v016-boundary-above-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 2,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 2,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 3,
+      "schedule": "B-above",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        2
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "B-large-control",
+      "id": "v016-boundary-large-control-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 2,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 2,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 3,
+      "schedule": "B-large-control",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        4
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "B-roundtrip",
+      "id": "v016-boundary-roundtrip-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 4,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 4,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 5,
+      "schedule": "B-roundtrip",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        5
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "file_size_transition",
+      "fixture": "BA",
+      "id": "v016-boundary-alias-roundtrip-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 5,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 5,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 6,
+      "schedule": "B-alias-roundtrip",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 10,
+      "development_workers": 1,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "mixed_load_bearing",
+      "fixture": "L100",
+      "fork_source_trunk_commit": null,
+      "id": "v016-mixed-development-100mb-5000-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 10,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 11,
+      "schedule": "M1-sequential",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 100,
+      "development_workers": 1,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "mixed_load_bearing",
+      "fixture": "L100",
+      "fork_source_trunk_commit": null,
+      "id": "v016-mixed-development-100mb-5000-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 100,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 101,
+      "schedule": "M1-sequential",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 10,
+      "development_workers": 1,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "mixed_load_bearing",
+      "fixture": "L500",
+      "fork_source_trunk_commit": null,
+      "id": "v016-mixed-development-500mb-30000-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 10,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 11,
+      "schedule": "M1-sequential",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 100,
+      "development_workers": 1,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "mixed_load_bearing",
+      "fixture": "L500",
+      "fork_source_trunk_commit": null,
+      "id": "v016-mixed-development-500mb-30000-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 100,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 101,
+      "schedule": "M1-sequential",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 2,
+      "branch_local_new_commits": [
+        10,
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 10,
+      "development_workers": 2,
+      "discard_after_local_commit": 5,
+      "discard_reopen_events": 1,
+      "family": "multi_workspace_development",
+      "fixture": "L100",
+      "fork_source_trunk_commit": null,
+      "id": "v016-workspace-mixed-100mb-5000-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 20,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 21,
+      "schedule": "M1-concurrent",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 2,
+      "branch_local_new_commits": [
+        100,
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 100,
+      "development_workers": 2,
+      "discard_after_local_commit": 5,
+      "discard_reopen_events": 1,
+      "family": "multi_workspace_development",
+      "fixture": "L100",
+      "fork_source_trunk_commit": null,
+      "id": "v016-workspace-mixed-100mb-5000-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 200,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 201,
+      "schedule": "M1-concurrent",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 2,
+      "branch_local_new_commits": [
+        10,
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 10,
+      "development_workers": 2,
+      "discard_after_local_commit": 5,
+      "discard_reopen_events": 1,
+      "family": "multi_workspace_development",
+      "fixture": "L500",
+      "fork_source_trunk_commit": null,
+      "id": "v016-workspace-mixed-500mb-30000-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 10,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 20,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 21,
+      "schedule": "M1-concurrent",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 2,
+      "branch_local_new_commits": [
+        100,
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 100,
+      "development_workers": 2,
+      "discard_after_local_commit": 5,
+      "discard_reopen_events": 1,
+      "family": "multi_workspace_development",
+      "fixture": "L500",
+      "fork_source_trunk_commit": null,
+      "id": "v016-workspace-mixed-500mb-30000-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 200,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 201,
+      "schedule": "M1-concurrent",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 3,
+      "branch_local_new_commits": [
+        10,
+        10,
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 10,
+      "development_workers": 2,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "branch_development",
+      "fixture": "L100",
+      "fork_source_trunk_commit": 5,
+      "id": "v016-branch-mixed-100mb-5000-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 15,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 30,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 31,
+      "schedule": "M1-branch",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 10,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 3,
+      "branch_local_new_commits": [
+        10,
+        100,
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 100,
+      "development_workers": 2,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "branch_development",
+      "fixture": "L100",
+      "fork_source_trunk_commit": 5,
+      "id": "v016-branch-mixed-100mb-5000-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 105,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 210,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 211,
+      "schedule": "M1-branch",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 10,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 3,
+      "branch_local_new_commits": [
+        10,
+        10,
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 10,
+      "development_workers": 2,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "branch_development",
+      "fixture": "L500",
+      "fork_source_trunk_commit": 5,
+      "id": "v016-branch-mixed-500mb-30000-k10-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 15,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 30,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 31,
+      "schedule": "M1-branch",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 10,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 3,
+      "branch_local_new_commits": [
+        10,
+        100,
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "development_commits_per_branch": 100,
+      "development_workers": 2,
+      "discard_after_local_commit": null,
+      "discard_reopen_events": 0,
+      "family": "branch_development",
+      "fixture": "L500",
+      "fork_source_trunk_commit": 5,
+      "id": "v016-branch-mixed-500mb-30000-k100-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 105,
+      "max_live_workspaces": 2,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 210,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 211,
+      "schedule": "M1-branch",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 10,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 3,
+      "branch_local_new_commits": [
+        10,
+        10,
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "branch_development",
+      "fixture": "S",
+      "fork_source_trunk_commit": 5,
+      "id": "v016-branch-convergent-content-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 15,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 30,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 31,
+      "schedule": "C-convergent",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 4,
+      "branch_local_new_commits": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "descendant_fork_source_local_commit": 5,
+      "family": "branch_development",
+      "fixture": "S",
+      "fork_source_trunk_commit": 5,
+      "id": "v016-branch-fork-descendant-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 20,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 40,
+      "perf_complete_limit_ms": 15000,
+      "qualified": false,
+      "retained_graph_roots": 41,
+      "schedule": "C-descendant",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        0
+      ],
+      "cache_profile": "fresh-session-uncontrolled-os-cache",
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "declared_full_read_bytes": 131071,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "historical_access",
+      "fixture": "S",
+      "id": "v016-access-boundary-before-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": 15000,
+      "producer_case": "v016-history-boundary-cycle-k100-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 101,
+      "schedule": "A-boundary-before",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "selected_branch_role": "main",
+      "selected_commit_local_ordinal": 48,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        0
+      ],
+      "cache_profile": "fresh-session-uncontrolled-os-cache",
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "declared_full_read_bytes": 131072,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "historical_access",
+      "fixture": "S",
+      "id": "v016-access-boundary-after-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": 15000,
+      "producer_case": "v016-history-boundary-cycle-k100-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 101,
+      "schedule": "A-boundary-after",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "selected_branch_role": "main",
+      "selected_commit_local_ordinal": 49,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        0
+      ],
+      "cache_profile": "fresh-session-uncontrolled-os-cache",
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "declared_full_read_bytes": 8192,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "historical_access",
+      "fixture": "S",
+      "id": "v016-access-inode-before-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": 15000,
+      "producer_case": "v016-history-namespace-inode-k100-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 101,
+      "schedule": "A-inode-before",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "selected_branch_role": "main",
+      "selected_commit_local_ordinal": 94,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        0
+      ],
+      "cache_profile": "fresh-session-uncontrolled-os-cache",
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "declared_full_read_bytes": 4096,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "historical_access",
+      "fixture": "S",
+      "id": "v016-access-inode-after-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": 15000,
+      "producer_case": "v016-history-namespace-inode-k100-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 101,
+      "schedule": "A-inode-after",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "selected_branch_role": "main",
+      "selected_commit_local_ordinal": 95,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 3,
+      "branch_local_new_commits": [
+        0,
+        0,
+        0
+      ],
+      "cache_profile": "fresh-session-uncontrolled-os-cache",
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "declared_full_read_bytes": 65536,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "historical_access",
+      "fixture": "S",
+      "id": "v016-access-fork-point-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 15,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": 15000,
+      "producer_case": "v016-branch-convergent-content-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 31,
+      "schedule": "A-fork-point",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "selected_branch_role": "trunk",
+      "selected_commit_local_ordinal": 5,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 4,
+      "branch_local_new_commits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "cache_profile": "fresh-session-uncontrolled-os-cache",
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "declared_full_read_bytes": 65536,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "family": "historical_access",
+      "fixture": "S",
+      "id": "v016-access-divergent-head-v1",
+      "implemented": false,
+      "lane": "regular",
+      "longest_ancestry_commits": 20,
+      "max_live_workspaces": 1,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": 15000,
+      "producer_case": "v016-branch-fork-descendant-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 41,
+      "schedule": "A-divergent-head",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "selected_branch_role": "B",
+      "selected_commit_local_ordinal": 10,
+      "verify_complete_limit_ms": 15000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        0
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "default_status": "NOT_RUN_EXTENDED",
+      "family": "mixed_load_bearing",
+      "fixture": "L100",
+      "id": "v016-mixed-exhaustive-100mb-5000-k100-v1",
+      "implemented": false,
+      "lane": "extended",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": null,
+      "producer_case": "v016-mixed-development-100mb-5000-k100-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 101,
+      "schedule": "V-exhaustive",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 120000,
+      "version": 1
+    },
+    {
+      "branch_count": 1,
+      "branch_local_new_commits": [
+        0
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "default_status": "NOT_RUN_EXTENDED",
+      "family": "mixed_load_bearing",
+      "fixture": "L500",
+      "id": "v016-mixed-exhaustive-500mb-30000-k100-v1",
+      "implemented": false,
+      "lane": "extended",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 1,
+      "modes": [
+        "verification"
+      ],
+      "new_commits_total": 0,
+      "perf_complete_limit_ms": null,
+      "producer_case": "v016-mixed-development-500mb-30000-k100-v1",
+      "qualified": false,
+      "requires_sealed_history_input": true,
+      "retained_graph_roots": 101,
+      "schedule": "V-exhaustive",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "verify_complete_limit_ms": 300000,
+      "version": 1
+    },
+    {
+      "branch_count": 4,
+      "branch_local_new_commits": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "cleanup_reserve_ms": 3000,
+      "container_count": 1,
+      "default_admission_eligible": false,
+      "default_seed": 1,
+      "default_status": "NOT_RUN_EXTENDED",
+      "development_commits_per_branch": 100,
+      "development_workers": 4,
+      "discard_reopen_events": 0,
+      "family": "multi_workspace_development",
+      "fixture": "L100",
+      "id": "v016-workspace-four-100mb-5000-k100-v1",
+      "implemented": false,
+      "lane": "extended",
+      "longest_ancestry_commits": 100,
+      "max_live_workspaces": 4,
+      "modes": [
+        "performance",
+        "verification"
+      ],
+      "new_commits_total": 400,
+      "perf_complete_limit_ms": 60000,
+      "qualified": false,
+      "retained_graph_roots": 401,
+      "schedule": "M1-four",
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "trunk_new_commits": 0,
+      "verify_complete_limit_ms": 60000,
+      "version": 1
+    }
+  ],
+  "content_schedule": {
+    "cohort_for_even_cycle": "(cycle // 2 - 1) % 16",
+    "cohort_for_odd_cycle": 0,
+    "cross_file_sdk_batches": false,
+    "first_visit": "B",
+    "per_file_region_visit_parity": true,
+    "recurrence_initial": "A",
+    "refresh_cohorts": 16,
+    "refresh_files_per_cohort": 64,
+    "refresh_pool_files": 1024,
+    "second_visit": "A"
+  },
+  "date": "2026-09-13",
+  "environment": {
+    "container_cpus": 2,
+    "container_memory_bytes": 2147483648,
+    "container_pids": 256,
+    "container_swap_bytes": 0,
+    "coordinator_owner": "host",
+    "default_all": false,
+    "default_extended": false,
+    "host_os": "macOS",
+    "host_resource_caps": "not constrained by container; record separately",
+    "host_store_count": 1,
+    "linux_container_count": 1,
+    "mount_roots": [
+      "/workspace/a",
+      "/workspace/b",
+      "/workspace/c",
+      "/workspace/d"
+    ],
+    "prepared_input": "sealed pristine Init only; independent byte copy per mutation invocation",
+    "reference_host_fingerprint_status": "must freeze before paired measurement",
+    "regular_cleanup_reserve_ms": 3000,
+    "regular_complete_deadline_ms": 15000,
+    "regular_worker_deadline_ms": 12000,
+    "selected_case_required": true,
+    "source_arms": "selected one; explicit frozen control/candidate qualification",
+    "spool_owner": "host",
+    "sqlite_owner": "host"
+  },
+  "extended_case_count": 3,
+  "extended_existing_families": [
+    "dedup_branch_history",
+    "mixed_load_bearing",
+    "historical_access"
+  ],
+  "fixtures": {
+    "B-above": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 135169,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 135169,
+      "initial_non_directory_paths": 2,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 2097152,
+      "max_non_directory_paths": 3,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 131073
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "B-below": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 135167,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 135167,
+      "initial_non_directory_paths": 2,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 2097152,
+      "max_non_directory_paths": 3,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 131071
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "B-exact": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 135168,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 135168,
+      "initial_non_directory_paths": 2,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 2097152,
+      "max_non_directory_paths": 3,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 131072
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "B-large-control": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 1052672,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 1052672,
+      "initial_non_directory_paths": 2,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 2097152,
+      "max_non_directory_paths": 3,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 1048576
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "B-roundtrip": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 135167,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 135167,
+      "initial_non_directory_paths": 2,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 2097152,
+      "max_non_directory_paths": 3,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 131071
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "B-small-control": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 8192,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 8192,
+      "initial_non_directory_paths": 2,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 2097152,
+      "max_non_directory_paths": 3,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 4096
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "BA": {
+      "initial_directories_excluding_root": 1,
+      "initial_distinct_inode_bytes": 135167,
+      "initial_hardlinks": [
+        131071
+      ],
+      "initial_logical_path_bytes": 266238,
+      "initial_non_directory_paths": 3,
+      "initial_regular_inodes": 2,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 2,
+      "max_logical_path_bytes": 1048576,
+      "max_non_directory_paths": 4,
+      "regular_file_classes": [
+        {
+          "count": 1,
+          "size_bytes": 131071
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    },
+    "L100": {
+      "initial_directories_excluding_root": 62,
+      "initial_distinct_inode_bytes": 99934464,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 99934464,
+      "initial_non_directory_paths": 4984,
+      "initial_regular_inodes": 4984,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 62,
+      "max_logical_path_bytes": 100000000,
+      "max_non_directory_paths": 5000,
+      "regular_file_classes": [
+        {
+          "count": 34,
+          "size_bytes": 0
+        },
+        {
+          "count": 3950,
+          "size_bytes": 4096
+        },
+        {
+          "count": 706,
+          "size_bytes": 28146
+        },
+        {
+          "count": 244,
+          "size_bytes": 28147
+        },
+        {
+          "count": 1,
+          "size_bytes": 131071
+        },
+        {
+          "count": 1,
+          "size_bytes": 131072
+        },
+        {
+          "count": 1,
+          "size_bytes": 131073
+        },
+        {
+          "count": 46,
+          "size_bytes": 1048576
+        },
+        {
+          "count": 1,
+          "size_bytes": 8388608
+        }
+      ]
+    },
+    "L500": {
+      "initial_directories_excluding_root": 312,
+      "initial_distinct_inode_bytes": 499934464,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 499934464,
+      "initial_non_directory_paths": 29984,
+      "initial_regular_inodes": 29984,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 312,
+      "max_logical_path_bytes": 500000000,
+      "max_non_directory_paths": 30000,
+      "regular_file_classes": [
+        {
+          "count": 284,
+          "size_bytes": 0
+        },
+        {
+          "count": 23700,
+          "size_bytes": 4096
+        },
+        {
+          "count": 3736,
+          "size_bytes": 22566
+        },
+        {
+          "count": 2064,
+          "size_bytes": 22567
+        },
+        {
+          "count": 1,
+          "size_bytes": 131071
+        },
+        {
+          "count": 1,
+          "size_bytes": 131072
+        },
+        {
+          "count": 1,
+          "size_bytes": 131073
+        },
+        {
+          "count": 195,
+          "size_bytes": 1048576
+        },
+        {
+          "count": 2,
+          "size_bytes": 33554432
+        }
+      ]
+    },
+    "S": {
+      "initial_directories_excluding_root": 5,
+      "initial_distinct_inode_bytes": 2658304,
+      "initial_hardlinks": [],
+      "initial_logical_path_bytes": 2658304,
+      "initial_non_directory_paths": 16,
+      "initial_regular_inodes": 16,
+      "initial_symlinks": 0,
+      "max_directories_excluding_root": 8,
+      "max_logical_path_bytes": 4194304,
+      "max_non_directory_paths": 20,
+      "regular_file_classes": [
+        {
+          "count": 8,
+          "size_bytes": 4096
+        },
+        {
+          "count": 2,
+          "size_bytes": 65536
+        },
+        {
+          "count": 1,
+          "size_bytes": 131071
+        },
+        {
+          "count": 1,
+          "size_bytes": 131072
+        },
+        {
+          "count": 1,
+          "size_bytes": 131073
+        },
+        {
+          "count": 2,
+          "size_bytes": 1048576
+        },
+        {
+          "count": 1,
+          "size_bytes": 4096
+        }
+      ]
+    }
+  },
+  "mixed_cycle": {
+    "alias_probe_writes": 4,
+    "created_commits": 5,
+    "directory_chmod": 4,
+    "directory_creates": 9,
+    "directory_removes": 9,
+    "expected_eexist_probes": 1,
+    "explicit_mtime_calls": 16,
+    "file_chmod": 16,
+    "hardlink_creates": 8,
+    "hardlink_unlinks": 8,
+    "main_edit_targets": 16,
+    "max_extra_directories": 0,
+    "max_extra_logical_path_bytes": 37120,
+    "max_extra_non_directory_paths": 13,
+    "ordinary_regular_creates": 96,
+    "populated_directory_moves": 2,
+    "posix_helper_executions": 5,
+    "regular_unlinks": 96,
+    "rename_overwrites": 4,
+    "sdk_batch_calls": 0,
+    "sdk_edit_calls": 2,
+    "sdk_edit_members": 2,
+    "symlink_creates": 4,
+    "symlink_unlinks": 4,
+    "temporary_regular_creates": 4,
+    "unlinked_descriptor_writes": 1
+  },
+  "new_families": [
+    "file_size_transition",
+    "multi_workspace_development",
+    "branch_development"
+  ],
+  "regular_case_count": 33,
+  "required_github_issues_status": "bound-all-six-families",
+  "schema": "layerfs-v0.1.6-benchmark-roadmap-v1",
+  "specification_commit_status": "frozen-for-implementation; see the v0.1.6 specification commit recorded on issue #122",
+  "status": "planned-unimplemented-unqualified",
+  "tracking_issue": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/122"
+}
