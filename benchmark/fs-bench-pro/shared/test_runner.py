@@ -268,14 +268,27 @@ class RunnerTests(unittest.TestCase):
         for case_id, seconds in runner.V016_EXTENDED_WATCHDOGS.items():
             self.assertEqual(cases[case_id]["lane"], "extended", case_id)
             self.assertEqual(cases[case_id]["verify_complete_limit_ms"], seconds * 1000, case_id)
-        self.assertEqual(runner.V016_REGULAR_DEADLINE_SECONDS, 25)
+        # Owner ruling on #154: 60-second execution allowance, 15-second target,
+        # 25-second narrower exception band — three distinct numbers.
+        self.assertEqual(runner.V016_REGULAR_DEADLINE_SECONDS, 60)
+        self.assertEqual(runner.V016_VERIFY_DEADLINE_SECONDS, 25)
+        self.assertEqual(runner.V016_TARGET_SECONDS, 15)
+        self.assertEqual(runner.PRODUCT_TARGET_NS, 15_000_000_000)
         for case_id, case in cases.items():
             if case["lane"] == "regular":
                 self.assertEqual(case["perf_complete_limit_ms"], 15_000, case_id)
         # A renamed or unregistered case is never silently admitted.
         self.assertIsNone(runner.v016_watchdog_seconds({"family": "dedup_branch_history", "case": "dedup-history-hotset-10"}))
-        self.assertEqual(runner.v016_watchdog_seconds({"family": "file_size_transition", "case": "v016-boundary-exact-v1"}), 25)
-        self.assertEqual(runner.verification_policy({"family": "file_size_transition", "case": "v016-boundary-exact-v1"})["work_limit_seconds"], 25.0)
+        # The execution allowance is the owner ruling; the frozen plan's 15 s
+        # remains the target and is never rewritten by it.
+        self.assertEqual(runner.v016_watchdog_seconds({"family": "multi_workspace_development", "case": "v016-workspace-mixed-100mb-5000-k10-v1"}), 60)
+        # The performance ruling must not move the verification gate.
+        regular = runner.verification_policy({"family": "file_size_transition", "case": "v016-boundary-exact-v1"})
+        self.assertEqual(regular["work_limit_seconds"], 25.0)
+        self.assertEqual(regular["declared_complete_deadline_seconds"], 25)
+        self.assertEqual(regular["cleanup_reserve_seconds"], 3.0)
+        self.assertEqual(runner.v016_watchdog_seconds({"family": "file_size_transition", "case": "v016-boundary-exact-v1"}), 60)
+        self.assertEqual(runner.v016_verify_watchdog_seconds({"family": "file_size_transition", "case": "v016-boundary-exact-v1"}), 25)
         extended = runner.verification_policy({"family": "mixed_load_bearing",
                                                "case": "v016-mixed-exhaustive-500mb-30000-k100-v1"})
         self.assertEqual(extended["declared_complete_deadline_seconds"], 300)

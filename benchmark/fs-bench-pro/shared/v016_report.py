@@ -239,6 +239,7 @@ def verification_row(path):
 CASES = json.loads((REPO / "docs/roadmap/0.1/0.1.6/cases.json").read_text())["cases"]
 REGULAR_LIMIT = 15.0
 EXCEPTION_LIMIT = 25.0
+GRANTED_LIMIT = 60.0
 EXTENDED_LIMITS = {
     "v016-mixed-exhaustive-100mb-5000-k100-v1": 120.0,
     "v016-mixed-exhaustive-500mb-30000-k100-v1": 300.0,
@@ -262,12 +263,18 @@ def effective_verdict(driver, case_id):
     limit = EXTENDED_LIMITS.get(case_id, REGULAR_LIMIT)
     if status not in ("PASS", "TARGET_MISS"):
         return "FAIL"
+    # `TARGET_MISS` means the 15-second family target was not met but the
+    # invocation completed; the wall decides which allowance it fits.
     if wall is None:
         return "INCOMPLETE"
     if wall <= limit:
         return "PASS"
-    if case_id not in EXTENDED_LIMITS and wall <= EXCEPTION_LIMIT:
+    if case_id in EXTENDED_LIMITS:
+        return "FAIL_BUDGET"
+    if wall <= EXCEPTION_LIMIT:
         return "EXCEPTION"
+    if wall <= GRANTED_LIMIT:
+        return "GRANTED"
     return "FAIL_BUDGET"
 
 

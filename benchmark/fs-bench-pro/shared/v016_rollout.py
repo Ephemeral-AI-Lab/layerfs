@@ -28,8 +28,13 @@ BENCH = REPO / "benchmark" / "fs-bench-pro"
 CASES = json.loads((REPO / "docs/roadmap/0.1/0.1.6/cases.json").read_text())["cases"]
 LOCK = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
 
+# The 15-second regular family target, the narrower ≤25 s declared exception band,
+# and the owner-granted 60-second complete-command allowance for a regular v0.1.6
+# invocation (owner ruling on #154, 2026-09-16). The target is reported separately
+# and is never redefined by the allowance.
 REGULAR_LIMIT = 15.0
 EXCEPTION_LIMIT = 25.0
+GRANTED_LIMIT = 60.0
 VERIFY_ONLY = {
     "v016-mixed-exhaustive-100mb-5000-k100-v1",
     "v016-mixed-exhaustive-500mb-30000-k100-v1",
@@ -50,20 +55,24 @@ def limit_for(case_id):
 
 
 def ceiling_for(case_id):
-    """The declared ceiling of one invocation: 25 s regular, the case's own
-    watchdog for an extended case, and 5 % of margin for process exit."""
+    """The execution allowance of one invocation: the owner-granted 60 s for a
+    regular v0.1.6 case, the case's own watchdog for an extended case."""
     if case_id in EXTENDED_LIMITS:
         return EXTENDED_LIMITS[case_id]
-    return EXCEPTION_LIMIT
+    return GRANTED_LIMIT
 
 
 def gate(wall, case_id):
+    """Target / declared-exception / owner-granted-allowance / failure."""
     limit = limit_for(case_id)
-    ceiling = ceiling_for(case_id)
     if wall <= limit:
         return "PASS"
-    if wall <= min(ceiling, EXCEPTION_LIMIT):
+    if case_id in EXTENDED_LIMITS:
+        return "FAIL_BUDGET"
+    if wall <= EXCEPTION_LIMIT:
         return "EXCEPTION"
+    if wall <= GRANTED_LIMIT:
+        return "GRANTED"
     return "FAIL_BUDGET"
 
 

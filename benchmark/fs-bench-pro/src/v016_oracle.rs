@@ -697,9 +697,13 @@ fn verify_root_against_shadow(
                     let mut expected_bytes = vec![0u8; (end - start) as usize];
                     let read = content.read_at(start, &mut expected_bytes)?;
                     expected_bytes.truncate(read);
-                    if super::workspace_verify::verify_declared_range(
+                    // The caller already holds this path's record from the
+                    // snapshot inventory, so the range comparison uses that
+                    // file-state root instead of rebuilding the namespace view
+                    // once per range (#154).
+                    if super::workspace_verify::verify_declared_range_at(
                         source,
-                        root,
+                        record.content_root,
                         path,
                         start..end,
                         &expected_bytes,

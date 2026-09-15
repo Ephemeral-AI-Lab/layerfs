@@ -763,6 +763,12 @@ pub(crate) fn declared_regular_length(
 
 /// Read one declared byte range of a persisted regular file through the Store
 /// reader and compare it with the independent recipe value.
+///
+/// This form resolves the path through a fresh namespace view, which is
+/// O(persisted paths). A verification pass that checks many ranges of one
+/// snapshot must use [`verify_declared_range_at`] with the file-state root it has
+/// already resolved: rebuilding the view per range repeats identical traversal
+/// work without proving anything extra (#154).
 pub(crate) fn verify_declared_range(
     source: &dyn ObjectSource,
     root: ObjectId,
@@ -771,25 +777,35 @@ pub(crate) fn verify_declared_range(
     expected: &[u8],
 ) -> AnyResult<()> {
     let view = namespace_view(source, root)?;
-    let id = view
-        .inode(path)
-        .ok_or_else(|| format!("declared verification path absent from the snapshot: {path}"))?;
     let record = view.paths.get(path).ok_or("declared verification record")?;
     if record.kind != inode::InodeKind::RegularFile {
         return Err(format!("declared verification path is not regular: {path}").into());
     }
+    verify_declared_range_at(source, record.content_root, path, range, expected)
+}
+
+/// The same range comparison against a file-state root the caller already
+/// resolved from the same snapshot. Identical read and identical comparison; no
+/// namespace traversal, because the caller's own inventory already proved the
+/// path set and every record's kind.
+pub(crate) fn verify_declared_range_at(
+    source: &dyn ObjectSource,
+    content_root: ObjectId,
+    path: &str,
+    range: std::ops::Range<u64>,
+    expected: &[u8],
+) -> AnyResult<()> {
     let reader = CoreReader(source);
     let mut observed = Vec::with_capacity(expected.len());
     read_regular(
         &reader,
-        rope::FileStateRoot(record.content_root),
+        rope::FileStateRoot(content_root),
         range,
         &mut observed,
     )?;
     if observed != expected {
         return Err(format!("declared range mismatch: {path}").into());
     }
-    let _ = id;
     Ok(())
 }
 

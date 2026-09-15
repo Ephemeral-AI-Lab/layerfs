@@ -56,12 +56,11 @@ def verification_policy(selection):
     scaled = (selection.get("family") == "init_namespace"
               and sequence.get("schema") == "workspace-sequence-v1"
               and sequence.get("edit_count", 0) * sequence.get("commits", 0) > 1000)
-    if v016_watchdog_seconds(selection) is not None:
-        # The v0.1.6 M1 cases declare their own complete-command allowance: the
-        # long-history and load-bearing allowance for every regular case and the
-        # extended case's own fixed watchdog. The 15-second family target stays
-        # reported separately in the performance receipt.
-        declared = v016_watchdog_seconds(selection)
+    if v016_verify_watchdog_seconds(selection) is not None:
+        # The v0.1.6 M1 cases declare their own verification ceiling: the
+        # extended case's own fixed watchdog, and the unchanged 25-second regular
+        # ceiling. The 15-second family target stays reported separately.
+        declared = v016_verify_watchdog_seconds(selection)
         return {"id": "v016-selected-verification-v1",
                 "work_limit_seconds": float(declared), "hard_limit_seconds": float(declared) + 10.0,
                 "cleanup_reserve_seconds": 3.0, "publication_guard_seconds": 0.25,
@@ -81,20 +80,38 @@ V016_EXTENDED_WATCHDOGS = {
     "v016-mixed-exhaustive-500mb-30000-k100-v1": 300,
     "v016-workspace-four-100mb-5000-k100-v1": 60,
 }
-# A regular v0.1.6 case is gated at the 15-second complete-command deadline; the
-# declared exception ceiling is 25 seconds, and the three-second cleanup reserve
-# lives inside it, so the worker stop is 22 seconds. A case that cannot finish
-# inside the ceiling is retained as NOT_RUN with its measured wall, never
-# repaired by enlarging this number.
-V016_REGULAR_DEADLINE_SECONDS = 25
+# Owner ruling on #154 (2026-09-16): the declared complete-command allowance for
+# a regular v0.1.6 invocation is 60 seconds. This is an *execution allowance*, not
+# a redefinition of the family target: the 15-second regular target stays reported
+# separately (`historical_product_target_status` / `performance_target_status`),
+# and a row that finishes above it is still a TARGET_MISS. The three-second
+# cleanup reserve lives inside the allowance, so the worker stop is 57 seconds.
+# The measured wall of every invocation is reported either way.
+V016_REGULAR_DEADLINE_SECONDS = 60
+# The verification gate is unchanged by that ruling: a regular v0.1.6 verification
+# still carries the pre-existing 25-second complete-command ceiling (three-second
+# cleanup reserve inside it). Making a verification fit is a job for removing
+# redundant work in the verifier, never for this number.
+V016_VERIFY_DEADLINE_SECONDS = 25
+V016_TARGET_SECONDS = 15
 
 
 def v016_watchdog_seconds(selection):
-    """The declared complete-command deadline of one v0.1.6 case, or None."""
+    """The declared complete-command allowance of one v0.1.6 *performance*
+    invocation, or None. The owner-granted 60 seconds applies here."""
     case = selection.get("case") or selection.get("scenario_id") or ""
     if not case.startswith("v016-"):
         return None
     return V016_EXTENDED_WATCHDOGS.get(case, V016_REGULAR_DEADLINE_SECONDS)
+
+
+def v016_verify_watchdog_seconds(selection):
+    """The declared complete-command ceiling of one v0.1.6 *verification*
+    invocation, or None. Unchanged by the performance ruling."""
+    case = selection.get("case") or selection.get("scenario_id") or ""
+    if not case.startswith("v016-"):
+        return None
+    return V016_EXTENDED_WATCHDOGS.get(case, V016_VERIFY_DEADLINE_SECONDS)
 
 
 def issue47_assessment(selection, elapsed_ns):

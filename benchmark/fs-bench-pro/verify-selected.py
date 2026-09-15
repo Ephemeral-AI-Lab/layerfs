@@ -281,7 +281,7 @@ def run(runner, argv=None, clock=time.monotonic, publisher=publish_receipt):
         # v0.1.6 case that declares a complete-command deadline authenticates
         # inside that declared deadline, because acquisition, copying,
         # authentication and cleanup are all charged to it.
-        watchdog = getattr(runner, "v016_watchdog_seconds", None)
+        watchdog = getattr(runner, "v016_verify_watchdog_seconds", None)
         declared = watchdog(
             {"family": args.family, "case": getattr(args, "case", None) or ""}
         ) if watchdog else None
