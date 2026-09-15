@@ -1366,3 +1366,71 @@ reference tree), excluded by the rule.
 
 Group report: #152 comment 5676373486 (that comment contains a typo,
 `--no-gpus-sign`; the workload argument is `--no-gpg-sign`).
+
+### L26 — 2026-09-18: #152 G5 — host-continuation Commit reported itself as its own predecessor (fixed, `29835f44d`)
+
+G5 collected `mixed_load_bearing` 4/4 PASS and then failed **8/8
+`payload_create_read` verifications** with
+
+    fs-benchmark-pro: host continuation returned/published Commit mismatch
+
+while the same cells' perf samples passed and all four `mixed_load_bearing`
+proofs passed. `host_continuation_proof`
+(`benchmark/fs-bench-pro/src/workspace_bench.rs`, present since `95508a3d7`,
+unmodified by the harness commits since #120, gated on
+`case.family == "payload_create_read"`) commits twice in one live workspace and
+asserts that the second Commit's `previous_head` is the first Commit's
+`commit_id`. Its `host-continuation-commit-proof` step-0 record exists, so the
+failure was in the lineage assertion, not in publication.
+
+#### Root cause
+
+`remote_commit.rs`'s host-continuation route re-bases the host shell onto the
+published root (`rebase_host_workspace` sets `workspace.expected_head` to the
+head just published) and only afterwards assembles the result through
+`result_from_outcome`, which reads `workspace.expected_head`. The verification
+receipt shows the consequence directly:
+
+    WorkspaceCommitStatus { result: Created { previous_head: Some(CommitId(12875b96…)),
+                                             commit_id:     CommitId(12875b96…) }, … }
+
+Publication was correct — `published-root` and the branch head agree with
+`commit_id`. The `Published` route is unaffected because it returns before any
+re-base. `previous_head` is a public SDK field used for change detection and CAS,
+so this is a correctness defect, not a cosmetic one.
+
+#### Fix — `29835f44d`
+
+Sample `expected_head` inside the block that already holds the workspace lock,
+before the re-base, and assemble the result from it with a pure helper
+(`result_from_pre_publication_head`). No extra lock; publication, published root,
+storage and timers untouched. `tools/preflight.sh`: all steps passed.
+
+Regression coverage: the registered proof itself — 8/8 FAIL without the fix,
+8/8 PASS with it, PASS on the reconstructed v0.1.5 control on the same harness.
+The pre-existing `crates/layerfs-workspace/tests/reconciliation.rs` assertion on
+`previous_head` covers only the host-materialized route, which is why the
+sandbox route's regression survived.
+
+#### New candidate identity and impact set
+
+Source `bebc8c9805e2acefa637881213e952ac835ec35f6149254dacd91effaad88c6e` @
+`29835f44d`, **product
+`dc2b3a14f45a4eb7d07b132562b3eadaba5e87644b517aaf6189ce1008e8490d`**,
+compilation `36a30d3cd0f86cf4167f3b7ff2fc61db2d71823b1288b91c2aa109e521ffb7c2`,
+image `layerfs-bench-infra:bebc8c9805e2acef`. Impact set by call path: only the
+returned value of one field on the host-continuation route changes, so only the
+8 `payload_create_read` cells were re-collected (perf + verify) — matching #152's
+"re-run only the affected cases". `mixed_load_bearing` keeps the L25 seal;
+G1–G4 keep their recorded identities.
+
+#### Results
+
+`mixed_load_bearing` 0.87× / 1.24× / 0.71× / **0.44×**; `payload_create_read`
+0.74–1.38×. **12/12 comparative PASS, 12/12 cleanup PASS, 12/12 proofs PASS.**
+Complete commands ≤ 4.15 s. The single cell above 1.25× is
+`payload-create-1m-compact-v2` (1.38×, +11.29 ms) — accepted by the ratio test,
+same shape at the other tiers 1.01× / 0.99× / 1.17×, recorded rather than
+explained away.
+
+Group report: #152 comment 5676750996.
