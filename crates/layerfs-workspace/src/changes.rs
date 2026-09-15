@@ -573,6 +573,15 @@ pub(crate) fn construction_worker_limit() -> usize {
         })
 }
 
+/// One shared host canonical-construction admission for the process: the
+/// sandbox-local experiment admits exactly one Commit build at a time across
+/// Workspaces, matching the single construction worker of both arms.
+static CONSTRUCTION_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub(crate) fn construction_gate() -> &'static std::sync::Mutex<()> {
+    &CONSTRUCTION_GATE
+}
+
 struct CandidateInputs<'a> {
     scope: Option<ObjectId>,
     serials: std::sync::Arc<std::sync::Mutex<Option<std::ops::Range<u64>>>>,

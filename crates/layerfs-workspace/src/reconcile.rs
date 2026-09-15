@@ -347,7 +347,6 @@ impl Workspaces {
             .lifecycle
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        crate::projection::pause(&worker)?;
         let result = (|| {
             let _quiesced = worker.quiesce()?;
             crate::projection::capture(&worker)?;

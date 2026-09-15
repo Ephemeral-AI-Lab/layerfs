@@ -545,23 +545,28 @@ impl Workspaces {
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
             .reader
             .read_metrics_snapshot()?;
-        let started = Instant::now();
-        let paused = crate::projection::pause(&worker);
-        layerfs_layerstack_store::note_workspace_commit_phase(
-            WorkspaceCommitPhase::PauseFence,
-            elapsed_ns(started),
-        );
-        paused?;
+        // Sandbox-owned route: capture the frozen generation, pull the changed
+        // records, build through the shared canonical construction worker and
+        // publish exactly, without pausing, quiescing or checkpoint-resuming
+        // the live Workspace.
+        if let Some(remote) = remote.as_ref() {
+            crate::projection::record_write_metrics(&worker)?;
+            return crate::remote_commit::commit_remote(
+                crate::changes::construction_gate(),
+                &worker,
+                remote,
+            );
+        }
+        // No pause fence and no quiesce: the sandbox-owned route commits from a
+        // frozen generation captured by ownership, so the live Workspace keeps
+        // serving commands throughout Commit. The materialized route below
+        // keeps its existing writer/admission gates.
         if let Err(error) = crate::projection::record_write_metrics(&worker) {
             let _ = crate::projection::resume(&worker);
             return Err(error);
         }
         let started = Instant::now();
-        let quiesced = if remote.is_some() {
-            worker.quiesce()
-        } else {
-            worker.wait_for_writers().and_then(|()| worker.quiesce())
-        };
+        let quiesced = worker.wait_for_writers().and_then(|()| worker.quiesce());
         layerfs_layerstack_store::note_workspace_commit_phase(
             WorkspaceCommitPhase::Quiesce,
             elapsed_ns(started),
@@ -723,16 +728,6 @@ impl Workspaces {
         {
             return Err(WorkspaceError::InvalidExecution);
         }
-        // A failed resume may already have ended the projection. Its control
-        // channel cannot be paused again; attach below creates a fresh owner.
-        let attached = worker
-            .projection_handle
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?
-            .is_some();
-        if attached {
-            crate::projection::pause(&worker)?;
-        }
         let _quiesced = worker.quiesce()?;
         crate::projection::end(&worker)?;
         {
@@ -827,7 +822,6 @@ impl Workspaces {
         if worker.has_executions()? {
             return Err(WorkspaceError::WorkspaceBusy);
         }
-        crate::projection::pause(&worker)?;
         let quiesced = worker.wait_for_writers().and_then(|()| worker.quiesce());
         let _quiesced = match quiesced {
             Ok(value) => value,
@@ -919,12 +913,8 @@ impl Workspaces {
         {
             return Err(WorkspaceError::InvalidPlacement);
         }
-        // Discard must remain usable after a backing write failure. FREEZE
-        // flushes pending bytes and rejects a failed owner; shutdown below
-        // closes admission and releases those bytes without publishing them.
-        if mode == EndWorkspaceMode::Clean {
-            crate::projection::pause(&worker)?;
-        }
+        // Discard must remain usable after a backing write failure. Shutdown
+        // below closes admission and releases unpublished bytes.
         let _quiesced = match worker.quiesce() {
             Ok(quiesced) => quiesced,
             Err(error) => {

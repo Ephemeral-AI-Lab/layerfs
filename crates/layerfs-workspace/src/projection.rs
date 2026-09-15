@@ -172,21 +172,6 @@ pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
     Ok(())
 }
 
-pub(crate) fn pause(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
-    let remote = worker
-        .remote
-        .lock()
-        .map_err(|_| WorkspaceError::WorkspaceBusy)?
-        .clone();
-    if let Some(remote) = remote {
-        remote
-            .server
-            .control("pause")
-            .map_err(|_| WorkspaceError::InvalidExecution)?;
-    }
-    Ok(())
-}
-
 pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
     let started = std::time::Instant::now();
     let remote = worker
@@ -340,23 +325,18 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
     Ok(())
 }
 
+/// Presentation recovery for a workspace whose commit reported a failed
+/// presentation. The sandbox-owned route has no freeze/resume: its live
+/// Workspace keeps running commands during and after a Commit, and the
+/// projection is re-attached from scratch, so this only owns the recorded
+/// failure state (and the injected fault used by verification).
 pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
+    let _ = worker;
     #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
     if INJECT_RESUME_FAILURE.with(|inject| inject.replace(false)) {
         return Err(WorkspaceError::Io(std::io::Error::other(
             "injected projection resume failure",
         )));
-    }
-    let remote = worker
-        .remote
-        .lock()
-        .map_err(|_| WorkspaceError::WorkspaceBusy)?
-        .clone();
-    if let Some(remote) = remote {
-        remote
-            .server
-            .control("resume")
-            .map_err(|_| WorkspaceError::InvalidExecution)?;
     }
     Ok(())
 }
