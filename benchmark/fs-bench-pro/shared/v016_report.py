@@ -247,7 +247,11 @@ EXTENDED_LIMITS = {
 }
 
 
-def effective_verdict(driver, case_id):
+def effective_verdict(driver, case_id, mode):
+    """`mode` is "performance" or "verification". The owner granted a 60-second
+    execution allowance for v0.1.6 *performance* invocations; the verification
+    gate is unchanged (15-second target, 25-second declared exception), so a
+    verification that only fits 60 s is a failure, not a granted exception."""
     """The gate verdict of one invocation.
 
     A killed or failed invocation is a failure whatever its stop wall; a
@@ -273,7 +277,7 @@ def effective_verdict(driver, case_id):
         return "FAIL_BUDGET"
     if wall <= EXCEPTION_LIMIT:
         return "EXCEPTION"
-    if wall <= GRANTED_LIMIT:
+    if mode == "performance" and wall <= GRANTED_LIMIT:
         return "GRANTED"
     return "FAIL_BUDGET"
 
@@ -305,8 +309,8 @@ def main():
         identities = (row.get("identities") or {})
         perf_receipt = REPO / row["performance"]["receipt"] if row.get("performance", {}).get("receipt") else None
         entry["verdicts"] = {
-            "performance": effective_verdict(row.get("performance"), row["case"]),
-            "verification": effective_verdict(row.get("verification"), row["case"]),
+            "performance": effective_verdict(row.get("performance"), row["case"], "performance"),
+            "verification": effective_verdict(row.get("verification"), row["case"], "verification"),
         }
         entry["performance"] = {
             "driver": row.get("performance"),

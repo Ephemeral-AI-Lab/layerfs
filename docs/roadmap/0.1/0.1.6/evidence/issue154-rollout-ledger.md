@@ -431,3 +431,91 @@ Two of the six also depend on producers that do not exist yet:
 `v016-access-inode-before/after-v1` need the F5 namespace-inode history
 (`history-namespace-inode-k100`, Commit 94/95) and
 `v016-access-fork-point/divergent-head-v1` need the F4 compact controls.
+
+## L10 — verification redundancy removed; the seven stopped rows now pass (supersedes L3/L5)
+
+Owner rulings this phase: **the performance allowance for a v0.1.6 invocation is
+60 s**, the **verification gate is unchanged** (15 s target, 25 s declared
+exception ceiling, 3 s cleanup reserve), and **one run per case per mode** — no
+repeated samples and no seed 2/3 requirement. Making a verification fit is a job
+for removing redundant work, never for the ceiling.
+
+### What was redundant (profile first, then fix)
+
+A macOS `sample` of the `workspace-run` child process — not the host wrapper, which
+only `wait4`s — showed where the time went, and two defects were fixed at the root:
+
+1. **A full namespace walk rebuilt per verified range** (`497138431`). 95 % of the
+   L500 verification's CPU sat in
+   `verify_root_against_shadow → verify_declared_range → namespace_view`: the
+   complete O(persisted paths) traversal was rebuilt for *every* declared
+   large-file range, while the caller already held that path's record. The
+   comparison itself is unchanged — same bytes read from the Store, same
+   byte-for-byte comparison (`verify_declared_range_at` takes the file-state root
+   the caller resolved).
+2. **Super-linear re-validation of shared recipe subtrees** (`a6cec6736`).
+   `Content::slice` wraps one shared `Arc<Content>` source, so a plain recursive
+   `validate()` re-validated the same subtree once per path to it; the M1 oracle
+   replays a schedule that splices the same declared content every cycle. The walk
+   now visits each distinct node once; every check (bounds, digest-custody rule,
+   sha256 form, length overflow) still runs on every distinct node.
+3. **Repeated authenticated reads of one file-state** (`ed9cacebd`). The declared
+   length of a persisted regular file is a property of its published file-state
+   root, so the first read for a root is the check and later paths reuse it.
+
+### Before → after on the rows that were stopped (seed 1, same identity per pair)
+
+| case | verification before | verification after |
+| --- | ---: | ---: |
+| `v016-mixed-development-500mb-30000-k10-v1` | 22.94 s **stopped** | 7.72 s **PASS** |
+| `v016-mixed-development-500mb-30000-k100-v1` | 23.01 s **stopped** | 20.36 s **PASS** (declared exception) |
+| `v016-workspace-mixed-500mb-30000-k10-v1` | 22.91 s **stopped** | 10.00 s **PASS** |
+| `v016-workspace-mixed-500mb-30000-k100-v1` | 22.95 s **stopped** | 20.62 s **PASS** (declared exception) |
+| `v016-branch-mixed-100mb-5000-k100-v1` | 22.62 s **stopped** | 8.30 s **PASS** |
+| `v016-branch-mixed-500mb-30000-k10-v1` | 22.98 s **stopped** | 13.12 s **PASS** |
+| `v016-branch-mixed-500mb-30000-k100-v1` | 22.91 s **stopped** | 22.83 s **PASS** (declared exception, boundary) |
+
+No oracle, coverage, limit or workload was weakened: every declared range is still
+read and compared, the complete namespace inventory is still proved per branch,
+every retained commit identity and parent edge is still checked, and the counters
+are still compared against the frozen table. The escalation of L3/L5 is therefore
+**resolved by the product-side fix**, not by a ruling.
+
+### Final seed-1 matrix (one run per case per mode)
+
+Identity: source commit `ed9cacebd095f40f061e89ee2e45f1e360c85a99`,
+`SOURCE_DIRTY=false`, source seal
+`221f445fabac7e39807f96ac7bd507ffbb7311983a4c3f8ce2419e59cc3bd5b5`, product seal
+`970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd` (unchanged: this
+work touched only the benchmark harness and oracle), image
+`layerfs-bench-infra:221f445fabac7e39`, host binary
+`cda339a4263c968d3e77eee96edc30a9400d84fd112651f81432814da0079041`.
+
+Committed evidence: `evidence/issue154/final-seed1-matrix.json` (25 rows).
+
+| verdict class | slots of 50 (25 registered cases × 2 modes) |
+| --- | ---: |
+| PASS inside the 15 s target | **40** |
+| declared ≤25 s exception (listed by case) | **6** |
+| FAIL | **4** — the two `namespace-inode` cases only |
+
+Declared exceptions: `mixed …500mb-30000-k100-v1` perf 18.21 s / verify 20.36 s;
+`workspace …500mb-30000-k100-v1` perf 16.54 s / verify 20.62 s; `branch
+…500mb-30000-k100-v1` perf 16.52 s / verify 22.83 s.
+
+The four FAIL slots are `v016-history-namespace-inode-k{10,100}-v1` (perf and
+verify each): the workload exits with `unsupported dedup native workload` because
+the frozen five-stage HN schedule has no host orchestrator. Their measured walls
+(1.6–1.9 s) show they are not budget misses; they are missing implementation.
+
+The eight unregistered regular cases (two compact branch controls, six
+`historical_access` cases) remain `NOT_READY` — never implemented on the archived
+line either.
+
+### Scope note
+
+Per the owner's instruction this phase collected **one run per case per mode at
+seed 1**. The earlier seeds 2 and 3 sweeps remain on disk
+(`benchmark-results/v016/q2`, `q3`, `final-seed2`, `final-seed3`) as retained
+history, but they are no longer the qualification criterion and no further
+repeated sampling was taken.

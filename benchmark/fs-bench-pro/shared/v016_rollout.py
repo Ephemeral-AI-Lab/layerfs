@@ -62,8 +62,10 @@ def ceiling_for(case_id):
     return GRANTED_LIMIT
 
 
-def gate(wall, case_id):
-    """Target / declared-exception / owner-granted-allowance / failure."""
+def gate(wall, case_id, mode="performance"):
+    """Target / declared-exception / owner-granted-allowance / failure. The
+    granted 60-second allowance covers performance invocations only; the
+    verification gate stays at the unchanged 25-second ceiling."""
     limit = limit_for(case_id)
     if wall <= limit:
         return "PASS"
@@ -71,7 +73,7 @@ def gate(wall, case_id):
         return "FAIL_BUDGET"
     if wall <= EXCEPTION_LIMIT:
         return "EXCEPTION"
-    if wall <= GRANTED_LIMIT:
+    if mode == "performance" and wall <= GRANTED_LIMIT:
         return "GRANTED"
     return "FAIL_BUDGET"
 
@@ -345,7 +347,7 @@ def main():
                 print(stdout[-1500:], stderr[-1500:], flush=True)
             row["performance"] = {
                 "status": status, "returncode": code, "complete_wall_seconds": round(wall, 3),
-                "gate": gate(wall, case_id),
+                "gate": gate(wall, case_id, "performance"),
                 "timer_ns": (sample or {}).get("pure_call_sum_ns"),
                 "command_wall_ns": (sample or {}).get("command_wall_ns"),
                 "preparation_wall_ns": (sample or {}).get("preparation_wall_ns"),
@@ -401,7 +403,7 @@ def main():
                     print(stdout[-1500:], stderr[-1500:], flush=True)
                 row["verification"] = {
                     "status": status, "returncode": code, "complete_wall_seconds": round(wall, 3),
-                    "gate": gate(wall, case_id),
+                    "gate": gate(wall, case_id, "verification"),
                     "policy": receipt.get("verification_policy"),
                     "cleanup": receipt.get("cleanup"),
                     "omissions": receipt.get("omissions"),

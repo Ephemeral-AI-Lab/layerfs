@@ -1,0 +1,29 @@
+Container runs node script
+that creates fuse mount
+backed by virtual in memory
+node fs and establishes
+communication channel with DO
+File System
+Exec in container with
+FUSE mounted
+Container
+FUSE Mount
+filesystem changes are
+reflected back in the DO.
+Node Virtual FS
+Sync protocol ensures
+FUSE mount sees same
+Syne Protocol
+view as DO.
+Node Virtual Fs
+Exec/Child Process
+Durable Object
+sQLite Storage
+sQLite Storage is source
+DurableObject has fake
+of truth for filesystem
+Node Virtual FS
+implementation backed by
+sQLite storage
+Mounts
+R2 /Artifact？
