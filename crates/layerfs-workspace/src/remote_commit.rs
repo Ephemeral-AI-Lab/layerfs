@@ -200,12 +200,15 @@ pub(crate) fn commit_remote(
     );
     let completion_delivered = delivered.is_ok();
 
-    // Re-base the host workspace onto the published root.
-    {
+    // Re-base the host workspace onto the published root. The Commit result
+    // must report the head this route observed *before* publication, so it is
+    // sampled here, under the lock this block already holds.
+    let previous_head = {
         let mut workspace = worker
             .workspace
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        let previous_head = workspace.expected_head;
         rebase_host_workspace(&mut workspace, root, head, expected_base)?;
         if !completion_delivered {
             // The publication is authoritative; its exact completion is
@@ -218,7 +221,8 @@ pub(crate) fn commit_remote(
                 records,
             });
         }
-    }
+        previous_head
+    };
 
     // Read-metrics observation failure does not roll back publication but
     // marks presentation as failed, exactly as on the materialized route.
@@ -232,7 +236,7 @@ pub(crate) fn commit_remote(
             layerfs_layerstack_store::note_workspace_commit_reads(commit_read_before, after)
         });
 
-    let result = result_from_outcome(outcome, worker)?;
+    let result = result_from_pre_publication_head(outcome, previous_head);
     Ok(WorkspaceCommitStatus {
         result,
         presentation_failed: !completion_delivered || observations.is_err(),
@@ -287,6 +291,17 @@ fn result_from_outcome(
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
         .expected_head;
     Ok(WorkspaceCommitResult::from_outcome(outcome, previous_head))
+}
+
+/// Assemble the Commit result from the head observed *before* publication.
+/// Re-basing the host shell advances `expected_head` to the newly published
+/// head, so reading it afterwards would report a Commit as its own
+/// predecessor on the host-continuation route.
+fn result_from_pre_publication_head(
+    outcome: CommitOutcome,
+    previous_head: Option<CommitId>,
+) -> WorkspaceCommitResult {
+    WorkspaceCommitResult::from_outcome(outcome, previous_head)
 }
 
 fn publish_empty(worker: &crate::worker::WorkspaceWorker) -> WorkspaceResult<Outcome> {
