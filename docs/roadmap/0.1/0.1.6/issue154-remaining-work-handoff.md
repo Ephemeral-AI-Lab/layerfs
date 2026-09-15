@@ -1,3 +1,12 @@
+> **Status update (2026-09-16).** Sections 2 and 3 of this document are
+> superseded. The verifier redundancy was removed at the root cause (ledger L10):
+> the seven stopped verification rows now pass inside the unchanged 25 s gate, so
+> there is no outstanding budget ruling. Section 3 still describes the three
+> missing implementations, but the actionable, up-to-date brief is
+> [`issue154-remaining-implementation-handoff-prompt.md`](issue154-remaining-implementation-handoff-prompt.md),
+> and the current one-run-per-case state is
+> `evidence/issue154/final-seed1-matrix.json`.
+
 # #154 continuation handoff — what is measured, what is blocked, what to implement
 
 State at `b4349ae91` + the rollout commits on `main`. Read
