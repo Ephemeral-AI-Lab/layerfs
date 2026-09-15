@@ -64,6 +64,14 @@ close #149/#150, cut a release tag, or claim the remaining gates:
 See the ledger (L18–L20 in particular) for exact identities, the memory timelines
 and per-phase arithmetic.
 
+**Next campaign.** The full existing suite is tracked in
+[#152](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152): 8 family groups in the
+same phase order the v0.1.5 finalization campaign used, one sample per case per arm, a
+cell accepted when it is < 50 % worse than its v0.1.5 comparator or under 10 ms absolute
+difference, and verification defects fixed fast-path in the harness (the three classes
+L19 records) without touching either product. The B1/B2/B3 receipts above are reused by
+citation rather than re-collected.
+
 **Status after L20.** The owner accepted the measured one-worker cost, and the
 three gates are recorded as accepted: B1 with one informational container-CPU
 line over its sub-gate, B2 with its Commit/CPU-sum deltas inside the accepted
