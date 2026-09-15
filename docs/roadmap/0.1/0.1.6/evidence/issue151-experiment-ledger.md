@@ -152,3 +152,176 @@ Cases, in order, one sample per arm each: `tiny-create-500-mixed-v4` (B1) →
   (locations, build/control recipes, gate flags, hard rules, carried
   limitations).
 - Commit: `b124bbdd5` — docs only.
+
+### L7 — 2026-09-15: Phase A builds — both arms built; first repair (candidate)
+
+- Candidate arm (`/Users/yifanxu/Ephemeral-AI-Lab/layerfs-v016`,
+  `codex/v016-sandbox-local-experiment`), sealed identity after the repairs in
+  L8–L10:
+  - product commits `141244a3f`, `ab2a6f9cb`, `55b531bc5`; harness-only B3
+    adapter `adfe869a3`; measurement repairs `1939f7781`, `e52aeaa98`,
+    `fa642c5ea`, `e1a317a4d` (HEAD)
+  - source tree `440e3aae4870b325f10dfffe58e635833915579d`, dirty=false
+  - source seal `5447aeecbe1d713545e1635e091e0846e7ccd4905da7d389fde5621133e25536`
+  - product seal `e03dae88c3226febdd5538c0d412c7e90de0d65018ede2e3fd3936bf7ff67dc2`
+  - host binary sha256 `6099eaaafdf33ab7314be0383451d601e0037bc280a460d3bdee834c19bdbda8`
+  - image `sha256:97be8c92b743d16444282907051a353e564757aa43d9c6a1ccb83ba65c172029`
+    (tag `layerfs-bench-infra:5447aeecbe1d7135`), source-dirty=false
+  - in-image binaries: daemon `cedd25a1351545312ad00e96f9e4d88e83339a455d6b49b8eda04e43c0cef454`,
+    fuse `47345303fe57aad522e9c213bd7555091fe9835526116018c810e6ebb8f200b9`,
+    workload `f2cf9b9f6e803638f6d29163182916ef10e761c3ea641ce6519f1639568f64ae`
+  - first-party packages recompiled for the sealed host binary:
+    `layerfs-fuse`, `layerfs-workspace`, `layerfs-monitor`, `layerfs-sdk`,
+    `fs-benchmark-pro`
+- Control arm (`/Users/yifanxu/Ephemeral-AI-Lab/layerfs-v016-control`, detached
+  at `6ee1ec94cfdcb7bc8c55830e8348d553c20e2f13` plus the harness patch applied
+  exactly as handed over):
+  - source tree `739550b79159f4120cb60ddc8310b7cb7168c352`, dirty=true
+    (harness patch uncommitted by design in the control worktree)
+  - source seal `e5efac1de312f7441d064ec2a6eac4af221beba42a768788154d87ea3a839d93`
+  - product seal `276c5970aabf485594d90ae30920b3cdb310134a7572589c558063a9d52ce093`
+  - host binary sha256 `39d3c3ef92dd58cd6211863651dec2b5780f20f91fea92a01e8efd701ba56039`
+  - image `sha256:179ee8a2b812af4674c26dd722e59de60cebc09b434bc0d1fe0bae8364c1bef5`
+    (tag `layerfs-bench-infra:e5efac1de312f744`)
+  - in-image binaries: daemon `8e3807fc4e74745c62366df265ddcb2d2318f20234f4ab6b34554a4d02e3e5f6`,
+    fuse `ef64c44e10828a53186a20a8736f9f1c45fbbc1d4ad7601862f9c5c99868cb20`,
+    workload `f2cf9b9f6e803638f6d29163182916ef10e761c3ea641ce6519f1639568f64ae`
+  - first-party packages recompiled: `layerfs-content`,
+    `layerfs-workspace-core`, `layerfs-materialization`, `layerfs-daemon`,
+    `layerfs-fuse`, `layerfs-layerstack-store`, `layerfs-workspace`,
+    `layerfs-monitor`, `layerfs-sdk`, `fs-benchmark-pro`
+- Harness identity (the runner hashes `runner.py`, `runtime.py`, `cold.py`,
+  `verify-selected.py`): `daa74be0c3a0b40a824617a6403c70ce4e7be115e7c47f4f1faf26029c55b044`
+  in **both** arms. Harness files verified byte-identical across the worktrees
+  (`runner.py dcca7391a01d9765499b1f33fdb05169c1a74bcf09147235ab68b1aeaf00c971`,
+  `runtime.py 36fd4a6c2bb3df8a263ef827e24364105ff97b8390a21c65c91ed4a3669cbc7a`,
+  `cold.py fef5391ed771155230d5f8920f8d4c3ada4d726eebac9ad4251b2e9e55a445cc`,
+  `verify-selected.py 8c0f387861f93830ab4bcdd28f4ecdee97f7d7c5653021fac0af2a22b4daa84a`),
+  and the workload binary hash is identical in both images. The product source
+  is the intended, measured difference.
+- Repair recorded here: the candidate image build failed outright —
+  `crates/layerfs-daemon/src/main.rs` used `protocol::SNAPSHOT_ROOT`, which was
+  never defined. macOS builds cfg the entire `mod linux` out, so neither the host
+  build nor the native suite could see it and **no candidate image could be
+  built**, i.e. no gate was reachable. Fixed in `1939f7781` by defining the
+  owner-selected daemon-private root `SNAPSHOT_ROOT = "/snapshots"` and by giving
+  the standalone `layerfs-fuse` helper (docker/legacy mount route, not the
+  measured daemon route) the backing directory `LiveOwner::connect` now
+  requires. Fast cycle after the change:
+  `PASS full workspace native tests in 104s with 4 bounded jobs`.
+- Next: Phase C smoke before spending any gate sample.
+
+### L8 — 2026-09-15: smoke #1 FAIL (candidate, tiny-create-1-compact-v2) — spool metric unobtainable
+
+- Command: `bash benchmark/fs-bench-pro/families/tiny_file_churn/perf.sh
+  --case tiny-create-1-compact-v2 --seed 1 --setup clone
+  --image layerfs-bench-infra:61d5952b9509a63c --perf-fast --collection-mode
+  --output benchmark-results/issue151/smoke-candidate`
+- Receipt: `benchmark-results/issue151/smoke-candidate/` (`failure.log`,
+  `perf.jsonl`); FAIL, `error = "fs-benchmark-pro: physical spool current
+  allocation unavailable"`, phase `product-command`.
+- Cause: `Workspace::physical_spool_snapshot` returned `(None, None, 0, 0)` for a
+  sandbox-owned Workspace, but the frozen harness reads
+  `verification_workspace_state` before and after Commit and rejects an
+  unobservable physical-spool allocation. The sandbox already maintained the
+  numbers (`LocalSpool::physical_bytes`/`physical_peak`); the host never asked
+  for them.
+- Repair (`e52aeaa98`): `OBSERVE` additionally returns
+  `LocalSpool::physical_peak_bytes()`; `RemoteWorkspace::observe` decodes the
+  whole observation into a named `RemoteObservation` (the physical numbers were
+  being dropped and the returned tuple order contradicted its own documented
+  order); `verification_workspace_state` reports the sandbox's maintained
+  current/peak counters (observation count 1, zero errors) instead of `None`,
+  observing before taking the workspace lock. `is_dirty`, `summary`/`diff` and
+  `session` keep their existing semantics. Fast cycle after the change:
+  PASS 104s / 4 bounded jobs.
+- Next: re-run the smoke.
+
+### L9 — 2026-09-15: smoke #2 and #3 FAIL (candidate) — Commit never entered the new route
+
+- Commands: the same smoke with images `layerfs-bench-infra:3fef887fdc562987`
+  → `benchmark-results/issue151/smoke-candidate-2` and
+  `layerfs-bench-infra:1def237c480c86d4` → `.../smoke-candidate-3`.
+- Receipts: FAIL with `Workspace(InvalidExecution)` 267 µs into the Commit
+  phase; create and exec had succeeded.
+- Cause (two defects, one symptom):
+  1. `commit_remote` had **no caller**: the public
+     `commit_workspace_session_with_status` always took the materialized path,
+     whose first step is `projection::pause(&worker)` → `FREEZE` — an opcode the
+     rewritten sandbox owner no longer implements → immediate InvalidExecution.
+     The route integration test in `live_backing.rs` drives
+     `build_remote_candidate` / `commit_workspace_candidate` /
+     `complete_generation` by hand, so the public entry point was never covered.
+  2. Nothing could Commit, and End(Clean) would have hit the same FREEZE.
+- Repair (`fa642c5ea`), following the owner's directive that freeze/pause/quiesce
+  must be removed because the new architecture lets the Workspace keep running
+  commands during Commit:
+  - the public Commit dispatches a sandbox-owned Workspace to `commit_remote`
+    before any projection machinery: capture → pull → build → publish →
+    complete, with no pause fence, no wait-for-writers and no quiesce;
+  - one shared process-wide construction gate admits one canonical build at a
+    time across Workspaces (the experiment's single construction worker);
+  - `projection::pause` deleted; `resume` no longer contacts the owner and keeps
+    its recorded-failure and injected-fault role; the End(Clean),
+    presentation-recovery, SDK-edit and reconciliation call sites drop the
+    removed pause step. The materialized route keeps its writer/admission gates,
+    and the FUSE-proxy protocol keeps its own pause/resume control.
+  Fast cycle after the change: PASS 98s / 4 bounded jobs.
+- Next: rebuild both artifacts and re-run the smoke.
+
+### L10 — 2026-09-15: smoke #4 perf PASS, verification FAIL — host `READ_BASE` arm missing
+
+- Perf: `benchmark-results/issue151/smoke-candidate-4` PASS
+  (`pure_call_sum_ns=29655377`), full lifecycle create → exec → Commit(Created)
+  → visibility → End, host and sandbox cleanup observations back to 0.
+- Verification: `benchmark-results/issue151/verify-smoke-candidate/` FAIL with
+  `fs-benchmark-workload: Invalid argument (os error 22)` inside the frozen
+  `sampled-native-verification` step (a second Workspace reopened over the
+  published root, reading a fixture witness file through FUSE).
+- Attribution: added the env-gated `LAYERFS_BACKING_FAILURE_DIAGNOSTIC` hook on
+  the host backing handler (mirroring the existing daemon-side
+  `LAYERFS_EDIT_FAILURE_DIAGNOSTIC`) and reproduced the failure with the same
+  identity-pinned verification selection. Host output:
+  `{"kind":"backing-failure","opcode":6,"request_bytes":45,"error":"InvalidInput(\"backing request\")"}`.
+  Opcode 6 is `READ_BASE`: the host answered every immutable-base content read
+  with its unknown-opcode error, which the wire can only report as
+  `PortError::Invalid` → EINVAL.
+- Cause: the rewritten `BackingOwner::request` kept SEED,
+  LOOKUP/LOOKUP_METADATA and DIRECTORY_PAGE but lost the `READ_BASE` arm, so no
+  unchanged file could be read through FUSE. The create-only perf workload never
+  read base bytes; the sampled verification reads a fixture witness and hit it
+  immediately. B1/B2 perf would have failed the same way (their workloads read
+  and rewrite fixture files).
+- Repair (`e1a317a4d`): restored the released v0.1.5 `READ_BASE` arm verbatim —
+  authenticated `read_range` over the Store reader, the same 1 MiB bound, the
+  same `note_rope_read` accounting, no policy change. Fast cycle after the
+  change: PASS 104s / 4 bounded jobs.
+- Next: re-prepare the input for the new product seal, then re-run smoke and its
+  separate verification.
+
+### L11 — 2026-09-15: smoke PASS and separate verification PASS (candidate)
+
+- Smoke command: `bash
+  benchmark/fs-bench-pro/families/tiny_file_churn/perf.sh --case
+  tiny-create-1-compact-v2 --seed 1 --setup clone --image
+  layerfs-bench-infra:5447aeecbe1d7135 --perf-fast --collection-mode --output
+  benchmark-results/issue151/smoke-candidate-5`
+  → PASS, `pure_call_sum_ns=22505667`, cleanup PASS. Identities: source
+  `5447aeecbe1d713545e1635e091e0846e7ccd4905da7d389fde5621133e25536`, input
+  `afd55b3b52e2e44528cff407861b3a182e553922b02f991e6c6bf3c79977a1f9`, image
+  `sha256:4c0ea352bcf9d57f123363a8806f1f04a10b3bc5f87cf6fa1e1ef1c09173283c`
+  (pre-commit build of the same source seal and the same in-image binaries and
+  product seal `e03dae88…`; the sealed gate image is
+  `sha256:97be8c92b743d16444282907051a353e564757aa43d9c6a1ccb83ba65c172029`).
+- Verification (separate run with exactly those identities):
+  `benchmark-results/issue151/verify-smoke-candidate-2/verification.json` →
+  **PASS**. Both `sampled-canonical-verification` (through the Store) and
+  `sampled-native-verification` (fresh FUSE reopened over the published root,
+  `benchmark_reopen_count=1`, `fresh_fuse_reopened=true`) pass; sampled paths
+  `.`, `wide/s000-f000.dat`, `tiny`, `tiny/p0/f116.dat`, range
+  `wide/s000-f000.dat:0..2097`.
+- A smoke is not a gate sample. Every attempt is preserved:
+  `smoke-candidate/`, `smoke-candidate-2/`, `smoke-candidate-3/`,
+  `smoke-candidate-4/`, `smoke-candidate-5/`, `verify-smoke-candidate/`,
+  `verify-smoke-candidate-2/`.
+- Next: Phase D gate B1, control first, against the sealed identities above.
