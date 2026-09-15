@@ -533,3 +533,45 @@ Same flags, extended allowances, seed 1, `--setup clone`, one worker per arm.
   documentation only, so the product seal of the measured samples
   (`c2e6dc0a…`) still describes it; the source seal changes because the tree
   changed.
+
+### L16 — 2026-09-15: `main` promoted, CI repaired, repository reduced to `main` only
+
+- Promotion (L15) landed: `main` = `be5beef21`, then `feec2defd` after the CI
+  repair below. The image built for the promotion is the direction of record.
+- CI repair (`feec2defd`): the promoted branch descends from v0.1.5, which
+  predates the repository's rustfmt-1.96 and clippy passes, so
+  `cargo +1.96.0 fmt --all --check` failed on the first push and every later
+  step was skipped. Ran `cargo +1.96.0 fmt --all` (8 files) and fixed
+  `clippy --workspace -D warnings` — an entry-match in `frozen.rs`; the dead
+  batch-transport items and the eight-argument `serve` marked where only the
+  transport tests exercise them; the snapshot-lane task now torn down with the
+  observer task in `cancel`/`finish_shutdown`/`Drop`; redundant casts and an
+  `Ok(..?)` wrapper removed; the vestigial host-spool leftovers
+  (`BackingOwner.directory` and its constructor argument at four call sites,
+  `CaptureSummary.base_root`, `FrozenRemoteInput.canonical_nodes`) and the
+  never-read observation fields removed; the B3 adapter's receipt writer uses
+  `writeln!`. CI run
+  [34919465788](https://github.com/Ephemeral-AI-Lab/layerfs/actions/runs/34919465788)
+  is green (fmt, tools unit tests, `tools/test-fast.sh`, clippy).
+- Branch cleanup (owner directive): every branch except `main` was deleted,
+  locally and on `origin` (9 branches: the two `archive/*` rescue branches,
+  `codex/v016-sandbox-local-experiment`, `codex/issue130-m2-control`, four
+  `codex/issue144-*` branches, `codex/hybrid-transition-report`). Following the
+  repository's existing convention (see
+  `archive/main-branch-cleanup-20260905-063146/heads/*` tags), each removed
+  branch is preserved as the tag
+  `archive/main-branch-cleanup-20260915-1005/heads/<branch>`, pushed to
+  `origin`: `v016-overlay-7b73c4b33` = `7b73c4b33` (the discarded host-overlay
+  history), `v016-sandbox-local-experiment` = `be5beef21` (the promoted tip),
+  `main-uncommitted-20260915T0930Z` = `c5f85d546b` (the `main` worktree's
+  uncommitted documents), plus the four `issue144` heads, `issue130-m2-control`
+  and `hybrid-transition-report`.
+- Measurement consequence: the `writeln!` change to the local_snapshot adapter
+  is semantics-free but alters the workload-source hash, so any further sample
+  needs a rebuilt image **and** a matching control; the harness identity of the
+  samples recorded in L7–L14 (`daa74be0…`) therefore no longer describes the
+  tree on `main`.
+- Working state: `main` and the `layerfs` checkout are at `feec2defd`; the
+  measurement worktree is detached at the same commit; the sealed v0.1.5 control
+  worktree is untouched at `6ee1ec94c`. The next measurement work starts from
+  `main` with a rebuilt pair.
