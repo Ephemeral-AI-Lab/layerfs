@@ -237,6 +237,38 @@ def verification_row(path):
 
 
 CASES = json.loads((REPO / "docs/roadmap/0.1/0.1.6/cases.json").read_text())["cases"]
+REGULAR_LIMIT = 15.0
+EXCEPTION_LIMIT = 25.0
+EXTENDED_LIMITS = {
+    "v016-mixed-exhaustive-100mb-5000-k100-v1": 120.0,
+    "v016-mixed-exhaustive-500mb-30000-k100-v1": 300.0,
+    "v016-workspace-four-100mb-5000-k100-v1": 60.0,
+}
+
+
+def effective_verdict(driver, case_id):
+    """The gate verdict of one invocation.
+
+    A killed or failed invocation is a failure whatever its stop wall; a
+    completed one passes inside 15 s (or its declared extension watchdog) and is
+    a declared exception up to 25 s for a regular case.
+    """
+    if not driver:
+        return "NOT_RUN"
+    status = driver.get("status")
+    if status == "N/A":
+        return "N/A"
+    wall = driver.get("complete_wall_seconds")
+    limit = EXTENDED_LIMITS.get(case_id, REGULAR_LIMIT)
+    if status not in ("PASS", "TARGET_MISS"):
+        return "FAIL"
+    if wall is None:
+        return "INCOMPLETE"
+    if wall <= limit:
+        return "PASS"
+    if case_id not in EXTENDED_LIMITS and wall <= EXCEPTION_LIMIT:
+        return "EXCEPTION"
+    return "FAIL_BUDGET"
 
 
 def case_commits(case_id):
@@ -265,6 +297,10 @@ def main():
         entry = {key: row.get(key) for key in ("case", "family", "seed", "image", "limit_seconds")}
         identities = (row.get("identities") or {})
         perf_receipt = REPO / row["performance"]["receipt"] if row.get("performance", {}).get("receipt") else None
+        entry["verdicts"] = {
+            "performance": effective_verdict(row.get("performance"), row["case"]),
+            "verification": effective_verdict(row.get("verification"), row["case"]),
+        }
         entry["performance"] = {
             "driver": row.get("performance"),
             "receipt": sample_row(perf_receipt / "perf.jsonl") if perf_receipt else None,

@@ -202,3 +202,53 @@ record; the driver now classifies that as infrastructure-invalid, retains the
 failed attempt and re-runs the invalid pair once — it never re-samples a case that
 produced a sample. The four invalid attempts are retained under
 `benchmark-results/v016/f2-seed1/…/run-<timestamp>/`.
+
+## L4 — F3 `multi_workspace_development` (4 regular + 1 declared extension, seed 1)
+
+```bash
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f3-seed1 \
+  --family multi_workspace_development --prepare
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image layerfs-bench-infra:8ef48ec2b762f720 --tag f3-seed1 \
+  --family multi_workspace_development --extended --prepare
+```
+
+### Regular cases
+
+| case | perf | perf wall | verdict | verify | verify wall | verdict | Created | workers | overlap |
+| --- | --- | ---: | --- | --- | ---: | --- | ---: | ---: | ---: |
+| `…100mb-5000-k10-v1` | PASS | 3.33 s | PASS | PASS | 5.89 s | PASS | 20 | 2 | 187.0 ms |
+| `…100mb-5000-k100-v1` | PASS | 6.94 s | PASS | PASS | 21.12 s | **EXCEPTION (declared)** | 200 | 2 | 195.5 ms |
+| `…500mb-30000-k10-v1` | PASS | 5.78 s | PASS | TIMEOUT | 22.91 s | **FAIL** | 20 | 2 | 125.8 ms |
+| `…500mb-30000-k100-v1` | PASS | 15.85 s | **EXCEPTION (declared)** | TIMEOUT | 22.95 s | **FAIL** | 200 | 2 | 132.2 ms |
+
+* Both live workspaces are real: `/workspace/a` and `/workspace/b`, one worker
+  record each, `observed_overlap_ns` 125–196 ms with
+  `concurrency_claim = observed-overlap-required`. Every Commit is `Created`
+  (`UpToDate = Busy = HeadMoved = presentation_failures = 0`), and the discard/reopen
+  witness is emitted by the branch's own schedule
+  (`DISCARD_COMMIT = 5`, i.e. after local Commit 5 of the primary branch).
+* Declared exceptions (allowed to 25 s, listed by case):
+  `…100mb-5000-k100-v1` verification 21.12 s and `…500mb-30000-k100-v1`
+  performance 15.85 s.
+* The two L500 verifications are the same miss as F2 (per-state verification of a
+  30 000-path fixture), stopped at 22.91 s / 22.95 s with the schedule complete.
+
+### Declared extension
+
+| case | mode | status | wall | watchdog |
+| --- | --- | --- | ---: | ---: |
+| `v016-workspace-four-100mb-5000-k100-v1` | performance **and** verification, separately | **PASS / PASS** | 9.54 s / 33.05 s | 60 s each |
+
+400 Commits across four workspaces (`/workspace/a`–`/workspace/d`), all `Created`,
+`observed_overlap_ns = 82.0 ms`, each mode inside its own 60 s watchdog.
+
+**Defects found and fixed in F3: none.** The two L500 verification misses are the
+F2 escalation, not a new defect.
+
+**Verdict accounting fix (harness, not an oracle):** the driver's wall-only gate
+classified a killed invocation with a stop wall under the ceiling as an
+"exception". A killed or failed invocation is a failure whatever its stop wall, so
+the rendered matrix now derives the verdict from status *and* wall
+(`TIMEOUT` → `FAIL`). No measured number changed.
