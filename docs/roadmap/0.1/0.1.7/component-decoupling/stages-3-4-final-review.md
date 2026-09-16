@@ -415,6 +415,12 @@ emitted); memory is unmeasured.
 
 ## 7. Verdict
 
+**Implementation is complete for both stages.** Every functional acceptance item in
+§2.1 and §2.2 has production code and an external test that exercises that code, the
+whole-mapping rebuild route is gone, and the sealed reference oracle agrees in all nine
+cases. The two open items below are measurement gates; they are the reason the issues
+stay open, not missing functionality.
+
 - **Stage 3 (#168) — functional criteria PASS, one qualification gate open.** E1–E3,
   the window/reopen/failure semantics and the packed lane all have code, external tests
   and retained evidence; one defect found during the batch was fixed and covered. The

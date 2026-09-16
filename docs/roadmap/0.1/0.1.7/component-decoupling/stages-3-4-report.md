@@ -1,11 +1,18 @@
 # Stages 3–4 implementation report
 
-> **Status:** implementation report for
-> [#168](https://github.com/Ephemeral-AI-Lab/layerfs/issues/168) (Stage 3,
-> physical encoding) and [#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169)
-> (Stage 4, localized edits). Parent [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165)
-> and Stages 5–7 stay open. Both issues are **not** closed: §6 and §7 name the
-> unmet criteria.
+> **Status: implementation complete for Stages 3–4.** Every functional acceptance
+> item of [#168](https://github.com/Ephemeral-AI-Lab/layerfs/issues/168) (Stage 3,
+> physical encoding and pooling) and
+> [#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169) (Stage 4, localized
+> edits) has production code and an external test that drives that code, and the
+> sealed v0.1.6 reference agrees in all nine edit cases. What is *not* complete is
+> measurement, not implementation: two qualification gates remain open and are named
+> in §7 — #168's simultaneous index/codec/SQL memory instrumentation, and #169's
+> "existing-or-better qualified latency/storage/memory" item, which the matched C1
+> pair could not resolve at one sample per arm (identical roots, interleaving times).
+> Implementation completeness is not an acceptance verdict: **both issues stay open**,
+> and parent [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165) and
+> Stages 5–7 stay open with them.
 
 Read with the [handoff](stages-3-4-handoff.md), its
 [file plan](stages-3-4-file-plan.md), the [verification contract](stages-3-4-verification.md)
