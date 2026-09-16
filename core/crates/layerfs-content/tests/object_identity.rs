@@ -41,7 +41,13 @@ const MAPPING_PROFILE_ID: &str = "e99288f3bc4adea6901bcbb2b14c16f5f573c9cb436309
 const EMPTY_STATE_ID: &str = "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f";
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write as _;
+
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(text, "{byte:02x}").expect("writing into a String cannot fail");
+    }
+    text
 }
 
 #[test]

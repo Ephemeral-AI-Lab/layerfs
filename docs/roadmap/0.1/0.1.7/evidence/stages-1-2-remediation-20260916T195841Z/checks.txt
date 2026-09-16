@@ -1,0 +1,71 @@
+# Checks run on the remediation tree
+
+Toolchain: cargo +1.85.1, --locked --offline, core workspace (independent of the
+root workspace; see core/AGENTS.md).
+
+## Tests
+
+```
+$ cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --offline -p layerfs-content -p layerfs-storage
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+## Clippy (-D warnings, all targets, the two product crates and telemetry)
+
+```
+$ cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --offline -p layerfs-content -p layerfs-storage -p layerfs-telemetry --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+```
+
+## Formatting
+
+```
+$ cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check
+clean (no diff)
+```
+
+## Production LOC
+
+```
+$ python3 tools/production_loc.py --root /tmp/loc-head      # before = 38d47cfd3
+core         6039 production lines in   52 files
+reference   68476 production lines in  206 files
+combined    74515 production lines
+$ python3 tools/production_loc.py --root .                   # after = working tree
+core         6110 production lines in   52 files
+reference   68476 production lines in  206 files
+combined    74586 production lines
+```

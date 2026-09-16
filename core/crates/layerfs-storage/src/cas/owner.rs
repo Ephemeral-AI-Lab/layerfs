@@ -81,6 +81,9 @@ pub struct MutationOwner {
     capacities: StorageCapacities,
     baseline_pack_id: i64,
     next_pack_id: i64,
+    /// Highest pack id this save created; becomes the publication watermark on
+    /// acknowledgement and is left untouched on any failure.
+    ceiling: i64,
     placement: [LanePlacement; 3],
     groups: [PendingGroup; 3],
     transaction: TransactionState,
@@ -100,19 +103,31 @@ impl MutationOwner {
         policy: StoragePolicy,
         capacities: StorageCapacities,
     ) -> StorageResult<Self> {
+        // Ownership first: the baseline and cursor are only meaningful when no
+        // other writer can publish a pack between reading them and using them.
+        write::begin_immediate(&connection)?;
         let baseline_pack_id = lookup::highest_pack_id(&connection)?;
+        let published = crate::sqlite::schema::retained_pack_ceiling(&connection)?;
+        if published != baseline_pack_id {
+            // Undeleted packs from a save whose cleanup did not complete. Writing
+            // now would have to guess their ownership, so the save is refused.
+            return Err(StorageError::UninspectedState {
+                ceiling: published,
+                highest_pack_id: baseline_pack_id,
+            });
+        }
         let next_pack_id = baseline_pack_id
             .checked_add(1)
             .ok_or(StorageError::Integrity("pack identifier overflow"))?;
         let compression = CompressionWorkspace::new()?;
         let decompression = DecompressionWorkspace::new()?;
-        write::begin_immediate(&connection)?;
         let _ = policy;
         Ok(Self {
             connection,
             capacities,
             baseline_pack_id,
             next_pack_id,
+            ceiling: baseline_pack_id,
             placement: [
                 LanePlacement::new(),
                 LanePlacement::new(),
@@ -306,6 +321,7 @@ impl MutationOwner {
             write::append_pack(&self.connection, write.pack_id, &write.bytes)?;
             self.counters.pack_appends += 1;
         }
+        self.ceiling = self.ceiling.max(write.pack_id);
         self.transaction.rows += 1;
         self.transaction.bytes += write.bytes.len() as u64;
         Ok(())
@@ -318,6 +334,10 @@ impl MutationOwner {
                 || self.transaction.bytes >= self.capacities.transaction_bytes)
         {
             write::commit(&self.connection)?;
+            // Clear the flag before the re-acquire: if the lock is lost here, no
+            // transaction is open and cleanup must proceed to the deletion pass
+            // instead of trying to roll back a transaction that does not exist.
+            self.transaction_open = false;
             self.counters.commits += 1;
             write::begin_immediate(&self.connection)?;
             self.transaction_open = true;
@@ -350,16 +370,36 @@ impl MutationOwner {
             self.seal_group(lane, &mut availability)?;
         }
         let pending_rows = self.transaction.rows.saturating_sub(1);
-        if self.transaction_open {
-            if pending_rows == 0 && self.transaction.bytes == 0 {
-                write::rollback(&self.connection)?;
-                self.transaction_open = false;
-            } else {
-                write::commit(&self.connection)?;
-                self.counters.commits += 1;
-                self.transaction_open = false;
-            }
+        let has_pending = pending_rows > 0 || self.transaction.bytes > 0;
+        // A save that created no pack has nothing to publish. It releases its
+        // acquisition with ROLLBACK: no COMMIT is issued for an empty write.
+        let publishes = self.ceiling > self.baseline_pack_id;
+        if !self.transaction_open {
+            return Ok(self.counters);
         }
+        if !has_pending && !publishes {
+            write::rollback(&self.connection)?;
+            self.transaction_open = false;
+            return Ok(self.counters);
+        }
+        if !has_pending {
+            // An earlier bounded commit already published this save's last packs.
+            // The watermark still needs its own acknowledgement, so the empty
+            // acquisition is released and a dedicated final transaction carries
+            // the publication. It is the last thing this save does; if it is lost,
+            // the packs stay unpublished and the Store is uninspected rather than
+            // silently exposed.
+            write::rollback(&self.connection)?;
+            write::begin_immediate(&self.connection)?;
+            self.counters.transactions += 1;
+        }
+        // The watermark names the packs this save created. It advances only here,
+        // so either the save's output and its watermark both become visible, or
+        // neither does.
+        crate::sqlite::schema::advance_retained_pack_ceiling(&self.connection, self.ceiling)?;
+        write::commit(&self.connection)?;
+        self.counters.commits += 1;
+        self.transaction_open = false;
         Ok(self.counters)
     }
 

@@ -1,0 +1,54 @@
+# F1 differential: an unrelated reader versus an open save
+
+One harness (harness-watermark.rs, copied here), one workload, two trees.
+Both arms printed the same root, so the arms are matched:
+  root 4476e02d20894c49466d4c8946eb747988705c287cb80d1eae17f3ce3f77388e
+  file 5,242,880 bytes, 277 canonical objects
+
+The harness creates a store, builds the file through C1, accepts every object
+into one save, and then asks a SECOND Store handle on the same database for each
+accepted id, one call at a time, while the save is still open. It then calls
+finish and asks again. 'other_refusals' are absent-row refusals: objects still
+held in an unsealed write group, which no reader is entitled to at any point.
+
+## Arm BEFORE: commit 38d47cfd3 (pre-watermark)
+
+Tree: git worktree add --detach /tmp/loc-head 38d47cfd3
+Manifest: /tmp/rev-harness-before/Cargo.toml (path dependencies into /tmp/loc-head)
+Build: cargo build --release --offline --bin watermark
+Command: /tmp/rev-harness-before/target/release/watermark
+
+```text
+workload: file 5242880 bytes, objects 277, root 4476e02d20894c49466d4c8946eb747988705c287cb80d1eae17f3ce3f77388e
+WHILE SAVE OPEN: readable=233 visibility_ceiling=0 other_refusals=44 of 277
+AFTER ACKNOWLEDGEMENT: readable=277 visibility_ceiling=0 other_refusals=0 of 277
+root readable after acknowledgement: true
+```
+
+233 of 277 objects were readable by an unrelated reader with NO error reported:
+the save had committed bounded transactions early, and each read took its own
+ceiling as 'the highest pack that exists now'. This is finding F1.
+
+## Arm AFTER: the working tree with the publication watermark
+
+Command: /tmp/rev-harness/target/release/watermark
+
+```text
+workload: file 5242880 bytes, objects 277, root 4476e02d20894c49466d4c8946eb747988705c287cb80d1eae17f3ce3f77388e
+WHILE SAVE OPEN: readable=0 visibility_ceiling=233 other_refusals=44 of 277
+AFTER ACKNOWLEDGEMENT: readable=277 visibility_ceiling=0 other_refusals=0 of 277
+root readable after acknowledgement: true
+```
+
+The same 233 objects are now refused, and every refusal is attributed to the
+publication watermark (VisibilityCeiling) rather than to an absent row or a
+generic error. The 44 absent-row refusals are unchanged in both arms, so the
+change did not make any object readable that was not readable before.
+
+## Bounds of this evidence
+
+- Single observation per arm, deterministic workload, no timing claim.
+- Two arms of one harness, but the harness lives outside the repository and is
+  reproduced by the copy above; it is not part of the product's own test suite.
+- The product's own external target tests/visibility.rs covers the same
+  contract, plus acknowledgement, failure, reopen and open-time rejection.

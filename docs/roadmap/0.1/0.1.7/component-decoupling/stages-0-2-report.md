@@ -58,7 +58,7 @@ never clamped:
 | Per-field ceiling | 8 MiB |
 | Largest object any role produces | 131,094 B whole-file · 32,789 B chunk · 8,192 B mapping page |
 | Maximum file size | none declared; bounded by `u64` and by cost |
-| Format profile | `1`; schema `application_id = 1279677261`, `user_version = 1` |
+| Format profile | `1`; schema `application_id = 1279677261`, `user_version = 1` — **superseded: `user_version = 2`, see §8** |
 | Encoding | **FULL only** (may be compressed); no DELTA, no pooling |
 
 Physical limits: pack `<= 256 KiB`; group body `<= 64 KiB` (one record per group
@@ -121,7 +121,7 @@ production LOC.
 | `core/crates/layerfs-content/src/object/mod.rs` | 6–14 | 11 | 17 | within |  |
 | `core/crates/layerfs-content/src/object/output.rs` | 60–110 | 111 | 170 | above | Above range. Role codes, the finalized-object type and the discarding consumer; the consumer carries real bounded accounting, not a test stub. |
 | `core/crates/layerfs-content/src/policy.rs` | 70–130 | 105 | 165 | within | Within range. Typed policy, the accepted-value validation and the derived capacities. |
-| `core/crates/layerfs-storage/sql/schema.sql` | 80–140 | 44 | 56 | below | Below range. Four tables and two indexes need less DDL than the estimate; column count is exactly nineteen. |
+| `core/crates/layerfs-storage/sql/schema.sql` | 80–140 | 44 | 56 | below | Below range. Four tables and two indexes need less DDL than the estimate; column count was nineteen — **superseded: twenty, see §8** |
 | `core/crates/layerfs-storage/src/cas/batch.rs` | 110–190 | 58 | 87 | below | Below range. The bounded buffer is small by design; the limits live in `policy.rs`. |
 | `core/crates/layerfs-storage/src/cas/dependencies.rs` | 100–180 | 62 | 88 | below | Below range. One availability set and one bounded validation. |
 | `core/crates/layerfs-storage/src/cas/finish.rs` | 100–180 | 16 | 25 | below | Below range. One terminal disposition; deliberately not merged into `store.rs` so the single failure boundary is visible. |
@@ -250,3 +250,66 @@ DELTA selection with chain bounds, metadata value pooling and pooled leaf
 encoding, grouped node reads, larger accepted cutoffs with a capacity-aware pack
 grammar, remote/daemon adapters under the same operation contract, and the
 release qualification campaign for C1/C2. None of these is claimed here.
+
+## 8. Amendment: publication watermark (post-review)
+
+The review of Stages 1–2 (`stages-1-2-review-20260916T185553Z.md`, findings F1–F3)
+showed that the visibility argument in §2 and §5 did not hold. Bounded write
+transactions release the eager write lock between commits, so a save that
+committed a pack, lost its lock or failed later, and then released ownership left
+that pack **readable by unrelated readers** — the exact state the "one deliberate
+deviation" claimed to prevent.
+
+The fix is a durable publication watermark on the existing `store_policy` row:
+
+| Item | Value |
+| --- | --- |
+| Schema identity | `application_id = 1279677261`, `user_version = 2` (v1 rejected, not migrated) |
+| Column count | twenty: the nineteen above plus `store_policy.retained_pack_ceiling INTEGER NOT NULL CHECK (>= 0)` |
+| Watermark meaning | highest `pack_id` belonging to a *completed* save; `0` when no save has completed |
+| Advance point | only inside a save's final transaction, never in an early bounded commit |
+| Ordinary read | clamps to the watermark; above it the read fails with `VisibilityCeiling` |
+| Open check | `retained_pack_ceiling <= MAX(pack_id)`, otherwise `Integrity("publication watermark is ahead of storage")` |
+| Acquire check | watermark must equal `MAX(pack_id)`, otherwise `UninspectedState { ceiling, highest_pack_id }` |
+| Cleanup | deletes only rows above the failing save's baseline and never moves the watermark |
+
+`sql/schema.sql` consequently grows from 44 to 55 physical lines and the
+`store_policy` DDL from five to six columns. New external target
+`crates/layerfs-storage/tests/visibility.rs` (5 tests) proves: an unrelated reader
+cannot see an open save's early-committed packs and sees them after
+acknowledgement; a definite failure after an early commit neither publishes nor
+moves the watermark; a store with an unacknowledged baseline refuses to start a
+new save; a watermark ahead of storage is rejected at open; and the watermark
+survives reopen while still hiding a later open save.
+
+Two further defects were reproduced by an independent harness outside this
+repository while this evidence was being built. They are **not** fixed by the
+watermark, they are recorded here rather than silently, and no part of this
+report or the READMEs claims them as passing:
+
+| Finding | State at this commit | Reproduction |
+| --- | --- | --- |
+| A read inside the save that accepted an object fails with `ObjectMissing` while that object's write group is still open, although `accept` acknowledged it | Open; outcome in §9 | `SaveOperation::read_batch` on a small-record workload (CDC-sized chunks leave a lane's last group partial) |
+| A repeated canonical identity whose occurrences fall on opposite sides of a preparation wave fails the save with `UNIQUE constraint failed: objects.object_id` | Open; outcome in §9 | 2 MiB of one repeated byte: 66 objects, 3 distinct, 63 repeated occurrences; also at 4 MiB |
+
+The second is the deduplication case the store exists for, so it is treated as
+severity-high rather than as an edge case.
+
+### 8a. Production LOC comparison for this amendment
+
+Method: `python3 tools/production_loc.py --root <snapshot>` (counter
+`09568dbd352a103ff097067a39060754d8c57330e9429d14a205475a45a80d59`), before =
+commit `38d47cfd3` tree, after = the amendment tree.
+
+| Scope | Before | After | Delta |
+| --- | --- | --- | --- |
+| `core` (C1 + C2 + telemetry) | 6039 | 6110 | +71 |
+| `core/crates/layerfs-storage` | 2971 | 3042 | +71 |
+| `core/crates/layerfs-content` | 2336 | 2336 | 0 |
+| `core/crates/layerfs-telemetry` | 732 | 732 | 0 |
+| reference `crates/` | 68476 | 68476 | 0 |
+| combined | 74515 | 74586 | +71 |
+
+The growth is the watermark itself: schema DDL, the two watermark accessors, the
+three checks above, the `UninspectedState` variant, the `store.rs` clamp, and the
+`finish_inner` advance. No test, documentation or example line is counted.

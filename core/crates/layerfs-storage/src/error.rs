@@ -36,6 +36,17 @@ pub enum StorageError {
     },
     /// Another writer holds the Store's write ownership.
     OwnershipUnavailable,
+    /// The Store holds packs from a save whose cleanup did not complete.
+    ///
+    /// The publication watermark is behind the highest pack, so those packs are
+    /// unowned: neither published nor deleted. Writes are refused until a
+    /// separately requested inspection establishes a safe state.
+    UninspectedState {
+        /// Highest published pack id.
+        ceiling: i64,
+        /// Highest pack id present.
+        highest_pack_id: i64,
+    },
     /// The requested policy or profile is not implemented by this slice.
     UnsupportedPolicy {
         /// The rejected field or profile.
@@ -92,6 +103,14 @@ impl fmt::Display for StorageError {
                 )
             }
             Self::OwnershipUnavailable => formatter.write_str("save ownership unavailable"),
+            Self::UninspectedState {
+                ceiling,
+                highest_pack_id,
+            } => write!(
+                formatter,
+                "Store holds uninspected packs: published through {ceiling}, present through \
+                 {highest_pack_id}"
+            ),
             Self::UnsupportedPolicy { field } => {
                 write!(formatter, "unsupported storage policy: {field}")
             }

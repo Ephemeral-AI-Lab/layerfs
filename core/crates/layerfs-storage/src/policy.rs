@@ -15,7 +15,11 @@ pub const FORMAT_PROFILE: u8 = 1;
 /// SQLite application id written by the candidate schema.
 pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// SQLite `user_version` written by the candidate schema.
-pub const SCHEMA_VERSION: i64 = 1;
+///
+/// Version 2 added `store_policy.retained_pack_ceiling`, the publication
+/// watermark that keeps an unfinished save's early-committed output invisible to
+/// ordinary readers. A version-1 Store is rejected rather than migrated.
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// Declared storage schema identifier.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -13,8 +13,8 @@ needs no Workspace, branch, commit, mount or daemon.
 | Item | Accepted value |
 | --- | --- |
 | Format profile | `1` |
-| Schema identity | `application_id = 1279677261`, `user_version = 1` |
-| Persisted policy | one row, `id = 1`, the frozen 128 KiB / 8 / 4 values |
+| Schema identity | `application_id = 1279677261`, `user_version = 2` (v1 is rejected, not migrated) |
+| Persisted policy | one row, `id = 1`, the frozen 128 KiB / 8 / 4 values plus the publication watermark |
 | Encoding | **FULL only**. DELTA, value pooling and pooled metadata are not implemented |
 | Pack framings | v1 ordinary groups, v2 native chunk records, v4 compact whole-file records |
 | Pack size | `<= 256 KiB` for every framing |
@@ -40,13 +40,29 @@ is required and remains the acknowledgement. A lost write lock fails immediately
 a lost `COMMIT` acknowledgement is an unknown persistence outcome and is never
 resent, polled or deleted.
 
-## One deliberate deviation
+## Two deliberate deviations
 
-Writer authority is acquired by a single eager `BEGIN IMMEDIATE` attempt, not by
-a later lazy one. Holding the write lock for the whole save is what keeps
-unfinished-save output invisible to unrelated readers. An operation that writes
+**Eager writer authority.** Writer authority is acquired by a single eager
+`BEGIN IMMEDIATE` attempt, not by a later lazy one. An operation that writes
 nothing releases that acquisition with `ROLLBACK`, so no `COMMIT` is ever issued
 for an empty write.
+
+**Publication watermark.** The eager lock is not what keeps an unfinished save
+invisible: bounded transactions release it between commits, so a save that
+commits a pack early and then fails would otherwise leave that pack readable.
+Visibility is therefore carried by `store_policy.retained_pack_ceiling`, the
+highest pack identifier belonging to a *completed* save. It is advanced only
+inside a save's final transaction, and ordinary reads clamp to it:
+
+- `W <= MAX(pack_id)` must hold when the store is opened (`Integrity`); a
+  persisted watermark ahead of storage is rejected rather than trusted.
+- A save acquires only when `W == MAX(pack_id)`; otherwise it fails with
+  `UninspectedState`, because it cannot tell another attempt's live output from
+  its own baseline.
+- A definite failure removes only packs newer than its baseline and never moves
+  `W`, so early-committed packs of a failed save stay unreadable.
+- A read of an object above the captured ceiling fails with
+  `VisibilityCeiling`; it is never silently visible.
 
 ## Public surface
 
@@ -54,7 +70,7 @@ for an empty write.
 Store::create / open / policy / capacities / begin_save / read_batch / contains
 SaveOperation::accept / read_batch / finish / abort / pending / retained_tail_bytes
 SaveHandoff               the C1 -> C2 finalized-object adapter
-StorageError              includes UnknownOutcome and CleanupFailed
+StorageError              includes UnknownOutcome, CleanupFailed and UninspectedState
 ```
 
 ## Failure semantics
@@ -72,8 +88,9 @@ destructor.
   adapters and cloud placement are later scope.
 - Only the four tables above exist; `metadata_value_groups` is shipped and empty,
   which is not a claim that value pooling is implemented.
-- A read captures its retained-pack ceiling once; an object stored beyond that
-  ceiling fails the read rather than being silently visible.
+- A read captures `retained_pack_ceiling` once; an object stored beyond it fails
+  the read rather than being silently visible. This bounds visibility, not
+  durability: the persistence profile above still provides none.
 - Evidence for memory is declared-limits and live-ownership accounting, not RSS.
 
 ## Checks
@@ -84,5 +101,5 @@ sh core/../tools/preflight.sh   # from the repository root
 ```
 
 External targets: `cas_roundtrip`, `cas_reuse`, `pack_locator`,
-`persistence_failure`, `memory_bounds`, `timing`, `core_pipeline`; runnable
-example: `examples/measure_components.rs`.
+`persistence_failure`, `memory_bounds`, `visibility`, `timing`, `core_pipeline`;
+runnable example: `examples/measure_components.rs`.

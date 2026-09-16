@@ -148,7 +148,10 @@ impl Store {
     ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
         scope.run(|read_scope| {
             let connection = connection::open(&self.path, false)?;
-            let ceiling = lookup::highest_pack_id(&connection)?;
+            // The ceiling is the publication watermark: the last pack belonging to
+            // a COMPLETED save. Deriving it from MAX(pack_id) would let an
+            // unfinished save's early-committed packs leak into this read.
+            let ceiling = schema::retained_pack_ceiling(&connection)?;
             let mut workspace = read_scope
                 .child("storage.decode")
                 .run(|_| DecompressionWorkspace::new())?;
@@ -175,7 +178,8 @@ impl Store {
     ) -> StorageResult<Vec<ObjectId>> {
         scope.run(|_contains| {
             let connection = connection::open(&self.path, false)?;
-            lookup::present(&connection, ids, i64::MAX)
+            let ceiling = schema::retained_pack_ceiling(&connection)?;
+            lookup::present(&connection, ids, ceiling)
         })
     }
 }

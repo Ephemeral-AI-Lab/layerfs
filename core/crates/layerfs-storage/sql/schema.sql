@@ -1,11 +1,11 @@
--- Candidate C2 schema: four tables, nineteen declared columns.
+-- Candidate C2 schema: four tables, twenty declared columns.
 --
 -- This identifier is deliberately not the reference schema 10 application id and
 -- user_version: the candidate stores a role column, a nullable direct base and a
 -- persisted storage policy, so a file that carries this header must not be
 -- mistaken for a schema-10 Store.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -15,7 +15,12 @@ CREATE TABLE store_policy (
     whole_file_delta_max_depth INTEGER NOT NULL
         CHECK (whole_file_delta_max_depth BETWEEN 0 AND 8),
     chunk_delta_max_depth INTEGER NOT NULL
-        CHECK (chunk_delta_max_depth BETWEEN 0 AND 4)
+        CHECK (chunk_delta_max_depth BETWEEN 0 AND 4),
+    -- Publication watermark: the highest pack id belonging to a COMPLETED save.
+    -- It advances only inside a save's final transaction, so a pack is visible to
+    -- an ordinary reader exactly when the save that created it was acknowledged.
+    retained_pack_ceiling INTEGER NOT NULL
+        CHECK (retained_pack_ceiling >= 0)
 ) STRICT;
 
 CREATE TABLE object_packs (

@@ -15,6 +15,8 @@ use crate::sqlite::connection::pragma_i64;
 pub const SCHEMA_SQL: &str = include_str!("../../sql/schema.sql");
 
 const POLICY_ROW: i64 = 1;
+/// A Store with no completed save has published no packs.
+const NO_PACKS_PUBLISHED: i64 = 0;
 
 /// Declared shape of one table: column names in declaration order.
 const REQUIRED_TABLES: [(&str, &[&str]); 4] = [
@@ -26,6 +28,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 4] = [
             "small_file_threshold_bytes",
             "whole_file_delta_max_depth",
             "chunk_delta_max_depth",
+            "retained_pack_ceiling",
         ],
     ),
     ("object_packs", &["pack_id", "data"]),
@@ -65,14 +68,16 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
     connection.execute_batch(SCHEMA_SQL)?;
     connection.execute(
         "INSERT INTO store_policy \
-         (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, chunk_delta_max_depth) \
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+         (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, \
+          chunk_delta_max_depth, retained_pack_ceiling) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![
             POLICY_ROW,
             policy.format_profile(),
             policy.small_file_threshold_bytes() as i64,
             policy.whole_file_delta_max_depth(),
             policy.chunk_delta_max_depth(),
+            NO_PACKS_PUBLISHED,
         ],
     )?;
     validate(connection, Some(policy))
@@ -106,6 +111,15 @@ pub fn validate(
     )?;
     if unexpected != 0 {
         return Err(StorageError::Integrity("unexpected table in Store"));
+    }
+    // I1: the watermark can never be ahead of storage. A Store whose watermark
+    // exceeds its highest pack id has been corrupted or written out of band.
+    let ceiling = retained_pack_ceiling(connection)?;
+    let highest = crate::sqlite::lookup::highest_pack_id(connection)?;
+    if ceiling > highest {
+        return Err(StorageError::Integrity(
+            "publication watermark is ahead of storage",
+        ));
     }
     let stored = load_policy(connection)?;
     if let Some(expected) = expected {
@@ -196,6 +210,38 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
         field: "chunk_delta_max_depth",
     })?;
     StoragePolicy::new(profile, threshold, whole, chunk).validated()
+}
+
+/// Highest pack id belonging to a completed save.
+pub fn retained_pack_ceiling(connection: &Connection) -> StorageResult<i64> {
+    connection
+        .query_row(
+            "SELECT retained_pack_ceiling FROM store_policy WHERE id = ?1",
+            [POLICY_ROW],
+            |row| row.get(0),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => {
+                StorageError::Integrity("policy row is missing")
+            }
+            other => StorageError::Engine(other),
+        })
+}
+
+/// Advances the publication watermark inside the caller's open transaction.
+///
+/// The caller must hold write ownership; the caller also decides whether the
+/// advance shares the transaction that publishes the packs it names.
+pub fn advance_retained_pack_ceiling(connection: &Connection, ceiling: i64) -> StorageResult<()> {
+    let affected = connection.execute(
+        "UPDATE store_policy SET retained_pack_ceiling = ?2 \
+         WHERE id = ?1 AND retained_pack_ceiling < ?2",
+        rusqlite::params![POLICY_ROW, ceiling],
+    )?;
+    if affected > 1 {
+        return Err(StorageError::Integrity("watermark update cardinality"));
+    }
+    Ok(())
 }
 
 /// Number of stored object rows; used to reject a non-empty create target.

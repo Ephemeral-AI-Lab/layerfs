@@ -52,7 +52,7 @@ enum Target<'a> {
     },
 }
 
-impl<'a, S> TimingScope<'a, S> {
+impl<S> TimingScope<'_, S> {
     /// Returns true when this scope can still contribute a measured node.
     ///
     /// Adapters use it to request optional timing only when it will be recorded.

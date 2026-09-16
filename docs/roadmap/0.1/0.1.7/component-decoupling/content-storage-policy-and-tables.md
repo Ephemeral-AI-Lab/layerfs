@@ -303,6 +303,11 @@ Proposed content-storage tables:
 The [save/persistence design](admission-and-persistence.md) selects four tables and
 19 columns. It owns writer authority, bounded transactions, required indexes and
 cleanup order; this document owns their meanings and configuration compatibility.
+**As implemented, the schema has 20 columns and `user_version = 2`:** the review of
+Stages 1–2 showed that bounded transactions release the write lock between
+commits, so a failed save's early-committed packs stayed readable. The
+`store_policy` row therefore also carries `retained_pack_ceiling`, the publication
+watermark described below. `user_version = 1` is rejected, not migrated.
 
 ```text
 store_policy                      one persisted policy per Store
@@ -356,9 +361,18 @@ without creating any history entities or requiring their table families.
 | small_file_threshold_bytes | Configurable Cluster 1 construction cutoff; default 131,072 bytes |
 | whole_file_delta_max_depth | Configurable WHOLE_FILE dependency bound; default 8 links |
 | chunk_delta_max_depth | Configurable CHUNK dependency bound; default 4 links |
+| retained_pack_ceiling | Highest pack identifier belonging to a *completed* save; ordinary reads clamp to it and it is advanced only inside a save's final transaction |
 
 Use typed fields, not an arbitrary key/value configuration system. Schema version
-remains the SQLite schema identifier, separate from content policy. Validate the
+remains the SQLite schema identifier, separate from content policy.
+
+`retained_pack_ceiling` is state, not configuration: it is the only persisted
+value this slice mutates, it is not overridable at open, and it is not a second
+durability claim. Opening requires `retained_pack_ceiling <= MAX(pack_id)`
+(`Integrity` otherwise); a save acquires only when the watermark equals
+`MAX(pack_id)`, and reports `UninspectedState` rather than treating another
+attempt's live output as its own baseline. Cleanup deletes only rows above the
+failing save's baseline, so a definite failure never moves the watermark. Validate the
 profile and values before accepting work, load them at Store open, and pass the
 policy explicitly. Do not query it once per object. Existing Store policy is
 immutable in this first design; conflicting open-time overrides fail explicitly.
