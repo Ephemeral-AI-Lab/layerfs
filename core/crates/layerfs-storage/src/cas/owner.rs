@@ -18,7 +18,7 @@ use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::pack::placement::LanePlacement;
 use crate::pack::{build_group, SelectedWrite};
-use crate::policy::{StorageCapacities, StoragePolicy};
+use crate::policy::{StorageCapacities, StoragePolicy, METADATA_RECORD_LIMIT};
 use crate::sqlite::lookup;
 use crate::sqlite::write::{self, ObjectRow, TransactionState};
 use std::collections::BTreeMap;
@@ -144,6 +144,8 @@ pub struct PoolCounters {
     pub full_leaves: u64,
     /// Delta trials attempted.
     pub trials: u64,
+    /// Candidates refused because the resulting chain would exceed its budget.
+    pub work_exceeded: u64,
 }
 
 impl MutationOwner {
@@ -483,7 +485,7 @@ impl MutationOwner {
         let full = crate::encoding::pool::leaf::encode_full(&body)?;
         // One base acquisition, then one instruction trial. A missing or
         // ineligible base, or a losing comparison, stores the leaf in full.
-        let base = self.pool_base(advisory)?;
+        let base = self.pool_base(advisory, object.canonical_len() as u64)?;
         let Some((base_id, base_body)) = base else {
             self.pool.full_leaves += 1;
             return Ok(crate::encoding::EncodedRecord {
@@ -640,8 +642,14 @@ impl MutationOwner {
     ///
     /// The base must already be stored: a leaf this same save accepted but has not
     /// sealed is not read for a trial, and an absent or too-deep base selects a
-    /// full leaf by policy.
-    fn pool_base(&mut self, advisory: &[ObjectId]) -> StorageResult<Option<(ObjectId, Vec<u8>)>> {
+    /// full leaf by policy. A base whose chain plus the dependent leaf would exceed
+    /// the chain budgets is refused for the same reason the payload lane refuses
+    /// one: no stored object may depend on bytes a later read could not reconstruct.
+    fn pool_base(
+        &mut self,
+        advisory: &[ObjectId],
+        target_canonical: u64,
+    ) -> StorageResult<Option<(ObjectId, Vec<u8>)>> {
         let depth_cap = self.capacities.metadata_delta_max_depth;
         if depth_cap == 0 {
             return Ok(None);
@@ -653,10 +661,21 @@ impl MutationOwner {
             if location.role != ObjectRole::InodeLeaf {
                 continue;
             }
-            let Some(depth) = self.depths.depth_of(&self.connection, *id)? else {
+            let Some(cost) = self.depths.cost_of(&self.connection, *id)? else {
                 continue;
             };
-            if depth >= depth_cap {
+            if cost.depth >= depth_cap {
+                continue;
+            }
+            // The dependent leaf is charged to both budgets exactly as a read of it
+            // would be; the encoded side uses the reader's own per-record bound.
+            let canonical = cost.canonical.saturating_add(target_canonical);
+            let records = u64::from(cost.depth).saturating_add(2);
+            let encoded = records.saturating_mul(METADATA_RECORD_LIMIT as u64);
+            if canonical > self.capacities.metadata_chain_canonical_limit
+                || encoded > self.capacities.metadata_chain_encoded_limit
+            {
+                self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
                 continue;
             }
             let mut reader = crate::encoding::pool::PoolReader::new();
@@ -667,11 +686,6 @@ impl MutationOwner {
                 &mut self.decompression,
                 location,
             )?;
-            let depth = self
-                .depths
-                .depth_of(&self.connection, *id)?
-                .ok_or(StorageError::Integrity("pooled base depth"))?;
-            let _ = depth;
             return Ok(Some((*id, body)));
         }
         Ok(None)

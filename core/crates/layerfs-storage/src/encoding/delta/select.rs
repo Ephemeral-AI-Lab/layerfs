@@ -47,10 +47,23 @@ pub struct DeltaCounters {
     pub work_exceeded: u64,
 }
 
-/// Bounded per-save cache of dependency depths.
+/// Depth and canonical cost of one object's dependency chain.
+///
+/// `canonical` is exactly what a read of that object charges its chain budget: the
+/// object itself and every dependency, so a producer can refuse to create a
+/// dependency a later read could not reconstruct.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChainCost {
+    /// Dependency edges below this object.
+    pub depth: u8,
+    /// Canonical bytes of this object and its dependencies.
+    pub canonical: u64,
+}
+
+/// Bounded per-save cache of dependency depths and chain costs.
 #[derive(Debug, Default)]
 pub struct DepthCache {
-    depths: BTreeMap<ObjectId, u8>,
+    costs: BTreeMap<ObjectId, ChainCost>,
 }
 
 impl DepthCache {
@@ -61,57 +74,78 @@ impl DepthCache {
 
     /// Live entries held.
     pub fn len(&self) -> usize {
-        self.depths.len()
+        self.costs.len()
     }
 
-    /// True when no depth is cached yet.
+    /// True when no cost is cached yet.
     pub fn is_empty(&self) -> bool {
-        self.depths.is_empty()
+        self.costs.is_empty()
     }
 
     /// Depth of `id` in its dependency chain, or `None` when it is not stored.
+    pub fn depth_of(&mut self, connection: &Connection, id: ObjectId) -> StorageResult<Option<u8>> {
+        Ok(self.cost_of(connection, id)?.map(|cost| cost.depth))
+    }
+
+    /// Depth and canonical cost of `id`'s chain, or `None` when it is not stored.
     ///
     /// The walk is iterative and bounded by the profile maximum; a stored chain
     /// longer than that is corrupt and is reported rather than absorbed.
-    pub fn depth_of(&mut self, connection: &Connection, id: ObjectId) -> StorageResult<Option<u8>> {
-        let mut path: Vec<ObjectId> = Vec::new();
+    pub fn cost_of(
+        &mut self,
+        connection: &Connection,
+        id: ObjectId,
+    ) -> StorageResult<Option<ChainCost>> {
+        let mut path: Vec<(ObjectId, u64)> = Vec::new();
         let mut current = id;
-        let depth = loop {
-            if let Some(depth) = self.depths.get(&current).copied() {
-                break depth;
+        let cost = loop {
+            if let Some(cost) = self.costs.get(&current).copied() {
+                break cost;
             }
             let Some(location) = lookup::location(connection, current, i64::MAX)? else {
                 return Ok(None);
             };
-            path.push(current);
+            path.push((current, location.canonical_length as u64));
             if path.len() > usize::from(MAXIMUM_DELTA_MAX_DEPTH) {
                 return Err(StorageError::Integrity("stored dependency chain depth"));
             }
             match location.base_object_id {
                 Some(base) => current = base,
-                None => break 0,
+                None => {
+                    break ChainCost {
+                        depth: 0,
+                        canonical: 0,
+                    }
+                }
             }
         };
-        // The walk stopped either at the chain root (`depth` zero) or at an
-        // already known depth. Recording walks back up the path, so the queried
-        // identity receives the depth it actually has - not one more.
-        let mut next = depth;
-        let mut result = depth;
-        for id in path.iter().rev() {
-            self.record(*id, next);
-            result = next;
-            next = next.saturating_add(1);
+        // The walk stopped either at the chain root (`cost` zero, which is already
+        // the root's own depth) or at an already known cost (that object's depth).
+        // Recording walks back up the path, so the deepest element keeps the depth
+        // it actually has and each ancestor below it adds exactly one edge.
+        let mut level = cost;
+        let mut result = cost;
+        for (position, (id, own)) in path.iter().rev().enumerate() {
+            let depth = cost
+                .depth
+                .saturating_add(u8::try_from(position).unwrap_or(u8::MAX));
+            level = ChainCost {
+                depth,
+                canonical: level.canonical.saturating_add(*own),
+            };
+            self.record(*id, level);
+            result = level;
         }
         Ok(Some(result))
     }
 
-    /// Records the depth of one identity.
-    pub fn record(&mut self, id: ObjectId, depth: u8) {
-        if self.depths.len() >= DEPTH_CACHE_ENTRIES {
+    /// Records the depth and chain cost of one identity.
+    pub fn record(&mut self, id: ObjectId, cost: ChainCost) {
+        if self.costs.len() >= DEPTH_CACHE_ENTRIES {
             // Bounded live capacity: the cache is dropped whole rather than grown.
-            self.depths.clear();
+            self.costs.clear();
         }
-        self.depths.insert(id, depth);
+        self.costs.insert(id, cost);
     }
 }
 
@@ -234,13 +268,17 @@ pub fn select(
     input.counters.trials = input.counters.trials.saturating_add(1);
     let prefix = encode_prefix(canonical, role, base_id, base_raw, input.capacities, encode)?;
     if prefix.record.len() < full.record.len() {
-        let depth = input
+        let base_cost = input
             .depths
-            .depth_of(input.connection, base_id)?
+            .cost_of(input.connection, base_id)?
             .ok_or(StorageError::Integrity("selected base is not stored"))?;
-        input
-            .depths
-            .record(ObjectId::for_bytes(canonical), depth.saturating_add(1));
+        input.depths.record(
+            ObjectId::for_bytes(canonical),
+            ChainCost {
+                depth: base_cost.depth.saturating_add(1),
+                canonical: base_cost.canonical.saturating_add(canonical.len() as u64),
+            },
+        );
         input.counters.prefix_selected = input.counters.prefix_selected.saturating_add(1);
         Ok(prefix)
     } else {

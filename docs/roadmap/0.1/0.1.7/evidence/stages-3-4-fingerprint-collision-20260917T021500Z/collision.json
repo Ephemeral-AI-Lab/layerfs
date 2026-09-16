@@ -1,0 +1,8 @@
+{
+  "work_hashes": 435008316,
+  "attempts": 431,
+  "fingerprint": "972d4e33fafff505",
+  "first_hex": "010000000000000001c9b8525eb4ccd5b796b9fa361957ca8bf2a265aebe4dc695be4dc695f2a265aea5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+  "second_hex": "0100000000000000011a991dd849bcbad78957f75a23b3033bc04ee2d5bdd6c8ecbdd6c8ecc04ee2d5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+  "method": "distinguished-point collision search"
+}
