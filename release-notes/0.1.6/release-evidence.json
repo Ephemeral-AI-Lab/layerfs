@@ -196,13 +196,26 @@
   },
   "publication": {
     "tag": "v0.1.6",
-    "tag_commit": "RECORDED_AFTER_TAG",
+    "tag_commit": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
     "github_release": "https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.6",
     "assets": "layerfs-0.1.6.tar.gz, layerfs-0.1.6.zip, layerfs-0.1.6-benchmark-data.tar.gz, Cargo.lock, LICENSE, SHA256SUMS",
-    "checksums": "recorded in release-notes/0.1.6/artifacts.md after the assets are built from the tag",
+    "checksums": {
+      "layerfs-0.1.6.tar.gz": "7ab7538946130d1dcd19d6d258ba1db966e9d0b51fccc3307ad8e0cd32805aab",
+      "layerfs-0.1.6.zip": "c77ce44066e8786cc93ed09927a487ac7b73eb08f3ffa5561714d118270b83bb",
+      "layerfs-0.1.6-benchmark-data.tar.gz": "4932d3ee85c9c835bedfcd97786f9b0e47fc1760efa7369164b5d2db8c473c1e",
+      "Cargo.lock": "210a6c8f96899af557fed53a917f5a3446acf3a73ac2bd93257dd40a3d2d63a1",
+      "LICENSE": "e20a92efe4b92c0460bd0c475395166e37b6450ed410af155fa0ed99d479f676"
+    },
     "no_crates_io_package": true,
     "no_prebuilt_executable": true,
-    "no_public_runtime_image": true
+    "no_public_runtime_image": true,
+    "tag_object": "dbdf0fed6fceba9f72997287eaa7d7ee9ae0fd79",
+    "released_at": "2026-09-16",
+    "assets_built_members": {
+      "source": 4921,
+      "evidence": 180
+    },
+    "checksums_note": "the published SHA256SUMS asset was re-downloaded from the release and compares byte-identical to this set"
   },
   "publication_authorization": "Owner directed the v0.1.6 closure and release on 2026-09-16: close the v0.1.6 issue set honestly, prepare the release documents, bump the version, tag v0.1.6, publish the source-only GitHub release and push main, using the campaign measured in this tree.",
   "closeout_report": "benchmark-closeout.md"

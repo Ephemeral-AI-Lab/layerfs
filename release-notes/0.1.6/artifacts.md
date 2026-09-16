@@ -32,8 +32,23 @@ limitation is stated here rather than implied.
 ## Published checksums
 
 <!-- CHECKSUMS:BEGIN -->
-Checksums are recorded here after the assets are built from the tag, so that no
-hash is invented before it exists.
+Resolved from the annotated tag object `dbdf0fed6fceba9f72997287eaa7d7ee9ae0fd79`
+at commit `44cf748486863ab7c21ca47e731bd88e2b9a7b4a` and built from that tree with
+`prepare_artifacts.py` (4921 tracked source members, 180 evidence members, set
+validation PASS):
+
+```text
+7ab7538946130d1dcd19d6d258ba1db966e9d0b51fccc3307ad8e0cd32805aab  layerfs-0.1.6.tar.gz
+c77ce44066e8786cc93ed09927a487ac7b73eb08f3ffa5561714d118270b83bb  layerfs-0.1.6.zip
+4932d3ee85c9c835bedfcd97786f9b0e47fc1760efa7369164b5d2db8c473c1e  layerfs-0.1.6-benchmark-data.tar.gz
+210a6c8f96899af557fed53a917f5a3446acf3a73ac2bd93257dd40a3d2d63a1  Cargo.lock
+e20a92efe4b92c0460bd0c475395166e37b6450ed410af155fa0ed99d479f676  LICENSE
+```
+
+The published `SHA256SUMS` asset was downloaded again from the release and
+compares byte-identical to this set. `layerfs-0.1.6.tar.gz` is 64,308,867 B,
+`layerfs-0.1.6.zip` 70,411,650 B and `layerfs-0.1.6-benchmark-data.tar.gz`
+563,579 B.
 <!-- CHECKSUMS:END -->
 
 ## Publication sequence

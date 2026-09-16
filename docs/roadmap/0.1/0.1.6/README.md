@@ -1,5 +1,12 @@
 # v0.1.6: sandbox-local snapshots and the retained-history roadmap
 
+> **Released, 2026-09-16:** `v0.1.6` is published as a source-only Developer
+> Preview — [release record](../../../../release-notes/0.1.6/README.md),
+> [release and downloads](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.6),
+> [acceptance](../../../../release-notes/0.1.6/acceptance.md) and
+> [every measured selection](../../../../release-notes/0.1.6/benchmark-closeout.md).
+> Everything below is the planning and evidence trail behind that release.
+
 > **Current replacement experiment, 2026-09-15:** the owner-directed
 > [sandbox-local snapshot specification and implementation plan](sandbox-local-snapshot-spec-and-plan.md)
 > starts from v0.1.5, with local mutable ownership, no pausing/quiescing,

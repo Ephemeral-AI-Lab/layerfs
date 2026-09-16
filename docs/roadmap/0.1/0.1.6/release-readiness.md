@@ -1,8 +1,11 @@
 # v0.1.6 release readiness
 
-> **Status:** preparation record, 2026-09-16. This page states what is complete,
-> what is missing and which decisions are the owner's. It is **not** a release
-> contract, a release note or a tag, and nothing here claims the release is cut.
+> **Status:** preparation record, 2026-09-16, **closed**. The owner authorized the
+> closure, the release preparation, the tag and the publication in the same
+> session; the execution record is below and the released documents are
+> [release-notes/0.1.6](../../../../release-notes/0.1.6/README.md). The analysis in
+> this page is kept as written — the audit that found the gaps is part of the
+> record — and only this header and the final section were updated after the tag.
 
 ## Where the line stands
 
@@ -45,27 +48,52 @@ is unsolved, and the breadth families were not run.
 * The audit above, the [roadmap README](README.md) status and the ledger, so the
   release notes can cite committed evidence rather than paraphrase it.
 
-## Remaining steps, in order
+## Closure executed (2026-09-16)
 
-1. **#151 disposition** — the owner closes it (or records what remains) so the
-   product-side scope of the release is settled.
-2. **Compatibility boundary** — one owner statement: public API, CLI, daemon
-   protocol, canonical identity and Store format for v0.1.6, with the migration /
-   downgrade boundary if any.
-3. **Versioned manual** — `docs/versioned/0.1.6/{README,quickstart,specification,cli,sdk,container-runtime,storage-format,limitations}.md`
-   from the released source.
-4. **Release notes** — `release-notes/0.1.6/{release-contract,README,acceptance,verification,benchmark-closeout,waivers,github-release}.md`
-   plus `release-evidence.json`; `waivers.md` lists the declared benchmark
-   exceptions (three ≤25 s rows, one ≤30 s verification row) and any product-side
-   waiver the owner grants for #151.
-5. **Version bump and gates** — `Cargo.toml` `0.1.5` → `0.1.6`, `cargo +1.96.0 fmt --all --check`,
-   `tools/preflight.sh`, `check_plan.py`; note that the bump changes the *source*
-   seal (root `Cargo.toml`/`Cargo.lock`) while the **product seal stays
-   `970964e9…`**, so the benchmark claim remains "released source or the exact
-   recorded source seal `86f14b2d…`".
-6. **Tag and publish** — `git tag -s v0.1.6` on the reviewed tree, push the tag,
-   publish the source-only GitHub release with its checksums (v0.1.5 published no
-   package, prebuilt executable or runtime image; nothing indicates a change here).
+The six steps this page listed, with what actually happened:
 
-Steps 1–2 and 6 need the owner; 3–5 are authoring and mechanical work that can be
-executed on the word.
+1. **#151 disposition.** The three B1/B2/B3 gates are recorded as accepted after
+   ledger L20 (B1's commit phase passes with one informational container-CPU line
+   over its sub-gate; B2's Commit/CPU-sum deltas are inside the owner's tolerance
+   and its sandbox-memory line is recorded as not measurable on this harness;
+   B3 passes both absolute 25k gates and both verifications). #151 is closed with
+   that disposition and its non-passing lines linked, not summarised away.
+2. **Compatibility boundary.** Stated once, in
+   [`release-contract.md`](../../../../release-notes/0.1.6/release-contract.md):
+   **Store format unchanged** (`SCHEMA_VERSION` 10, no schema or static SQL change
+   since v0.1.5, `layerfs-content` and `layerfs-layerstack-store` byte-identical),
+   public CLI unchanged, SDK additions behind `test-instrumentation`, daemon
+   protocol additive (the sandbox's snapshot backing root), and mixed-version live
+   sessions refused.
+3. **Versioned manual.** `docs/versioned/0.1.6/{README,quickstart,specification,cli,sdk,container-runtime,storage-format,limitations}.md`
+   written from the released source, with the sandbox-local facts and the
+   one-worker cost stated where the manual makes a promise.
+4. **Release notes.** `release-notes/0.1.6/` carries the contract, record,
+   acceptance, waivers, verification, generated closeout, derived tables,
+   `release-evidence.json`, the artifact preparation helper and its fixture check,
+   and the announcement text.
+5. **Version bump and gates.** `Cargo.toml` `0.1.5` → `0.1.6` plus the 12
+   project-owned packages in `Cargo.lock`; `tools/preflight.sh` **PASS**
+   (`preflight: all steps passed`, 72 test binaries, 512 tests, 0 failures,
+   258 s; the 120 s warm-suite soft ceiling was exceeded by 138 s and reported as
+   a warning), `cargo +1.96.0 fmt --all --check` **PASS**, clippy `--workspace
+   --locked -D warnings` **PASS**, harness tests 97/97 **PASS**, and
+   `check_plan.py` **PASS** (33 regular + 3 extended). The seal prediction on this
+   page was verified exactly: the **product seal stays `970964e9…`** and the
+   source seal reconstructs byte-for-byte from the measured revision's Cargo files
+   plus the three pre-declaration harness files, so the benchmark claim is the
+   recorded product identity, not the tag's own source seal.
+6. **Tag and publish.** Annotated tag `v0.1.6` →
+   commit `44cf748486863ab7c21ca47e731bd88e2b9a7b4a`; six assets built from the
+   tag by `prepare_artifacts.py` (validation PASS, 4921 source members, 180
+   evidence members) and published at
+   <https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.6>; the
+   published `SHA256SUMS` re-downloaded and compared byte-identical; the
+   checksums recorded in
+   [`artifacts.md`](../../../../release-notes/0.1.6/artifacts.md) in a post-tag
+   documentation commit, as v0.1.5 did.
+
+What this closure did **not** do: re-measure anything, relabel a `FAIL`,
+`TARGET_MISS` or declared exception as a pass, add a worker back, enlarge a
+timeout at run time, or claim endurance, crash durability or sandbox process
+memory.
