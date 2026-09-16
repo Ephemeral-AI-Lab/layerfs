@@ -622,14 +622,52 @@ pub(crate) fn expected_transcripts(
             return Err("history oracle steps".into());
         }
         if w::dedup_workloads::is_sdk(case) {
+            // A splice that carries a file across the exact 128 KiB boundary
+            // cannot be modelled by extending the previous extent list: the
+            // published representation changes class, so the product re-encodes
+            // the whole file. Those paths are transcribed from the declared
+            // content instead, exactly as a fresh import is.
+            let mut recoded = BTreeSet::new();
             for step in 0..completed_steps {
                 for edit in w::dedup_workloads::sdk_edits(case, seed, step)? {
                     let previous = result
                         .get(&edit.path)
                         .ok_or("history oracle missing file")?;
+                    let before = extent_len(previous)?;
                     let next =
                         splice_model(previous, edit.start, edit.delete_len, &edit.replacement[..])?;
+                    let after = extent_len(&next)?;
+                    let class = |len: u64| len < 131_072;
+                    if class(before) != class(after) {
+                        recoded.insert(edit.path.clone());
+                    }
                     result.insert(edit.path, next);
+                }
+            }
+            if !recoded.is_empty() {
+                let declared = w::dedup_branch_history::expected(case, seed, completed_steps)?;
+                for path in recoded {
+                    let entry = declared
+                        .iter()
+                        .find(|entry| entry.path == path)
+                        .ok_or("history recoded path absent from the declaration")?;
+                    let content = match &entry.kind {
+                        EntryKind::File(content) => content,
+                        EntryKind::Hardlink(target) => {
+                            match declared
+                                .iter()
+                                .find(|entry| entry.path == *target)
+                                .map(|entry| &entry.kind)
+                            {
+                                Some(EntryKind::File(content)) => content,
+                                _ => {
+                                    return Err("history recoded alias is not a regular file".into())
+                                }
+                            }
+                        }
+                        _ => return Err("history recoded path is not a regular file".into()),
+                    };
+                    result.insert(path.clone(), transcript(content.reader())?);
                 }
             }
         } else if case.kind == "unrelated" && completed_steps > 0 {
@@ -641,6 +679,15 @@ pub(crate) fn expected_transcripts(
         }
     }
     Ok(result)
+}
+
+/// The logical length of one transcript.
+fn extent_len(extents: &[Extent]) -> Result<u64> {
+    extents.iter().try_fold(0u64, |total, extent| {
+        total
+            .checked_add(extent.len)
+            .ok_or_else(|| "extent length overflow".into())
+    })
 }
 
 fn union(files: &BTreeMap<String, Vec<Extent>>) -> Result<BTreeMap<ObjectId, u64>> {
@@ -788,7 +835,9 @@ pub(crate) fn verify_file_transcripts(
                 payload_len: e.payload_len,
             })
             .collect();
-        compare(want, &got)?;
+        if let Err(error) = compare(want, &got) {
+            return Err(format!("{path}: {error}\n  oracle: {want:?}\n  actual: {got:?}").into());
+        }
     }
     let mut receipt = verify_expected_contract(
         case,
