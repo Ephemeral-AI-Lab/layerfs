@@ -29,7 +29,7 @@ use layerfs_content::{
     FinalizedObject, ObjectId, Replacements,
 };
 use layerfs_storage::{SaveHandoff, StorageError, StoragePolicy, Store};
-use layerfs_telemetry::timer::{Timing, TimingReport};
+use layerfs_telemetry::timer::{Active, Timing, TimingReport, TimingScope};
 
 type Failure = Box<dyn std::error::Error>;
 
@@ -99,6 +99,27 @@ struct Options {
     case: Case,
     threshold: u64,
     output: PathBuf,
+    /// Run the timed bodies with the clocks on or off.
+    timing: bool,
+}
+
+/// Runs `operation` with the clocks on or off as requested.
+///
+/// Both paths run the same body, so the identities, counters and readback checks of
+/// the two modes are directly comparable.
+fn timed<T, E, F>(
+    options: &Options,
+    name: &'static str,
+    operation: F,
+) -> (Result<T, E>, TimingReport)
+where
+    F: FnOnce(&TimingScope<'_, Active>) -> Result<T, E>,
+{
+    if options.timing {
+        Timing::record(name, operation)
+    } else {
+        Timing::disabled(name, operation)
+    }
 }
 
 fn parse_options() -> Result<Options, Failure> {
@@ -106,6 +127,7 @@ fn parse_options() -> Result<Options, Failure> {
     let mut case = None;
     let mut threshold = None;
     let mut output = None;
+    let mut timing = true;
     let mut arguments = std::env::args().skip(1);
     while let Some(flag) = arguments.next() {
         let value = arguments
@@ -118,6 +140,13 @@ fn parse_options() -> Result<Options, Failure> {
                 threshold = Some(value.parse::<u64>().map_err(|_| "invalid threshold")?)
             }
             "--output" => output = Some(PathBuf::from(value)),
+            "--timing" => {
+                timing = match value.as_str() {
+                    "on" => true,
+                    "off" => false,
+                    other => return Err(format!("unsupported timing mode {other}").into()),
+                }
+            }
             other => return Err(format!("unsupported argument {other}").into()),
         }
     }
@@ -126,6 +155,7 @@ fn parse_options() -> Result<Options, Failure> {
         case: case.ok_or("--case is required")?,
         threshold: threshold.ok_or("--threshold-bytes is required")?,
         output: output.ok_or("--output is required")?,
+        timing,
     };
     if options.output.exists() {
         return Err(format!("--output {} already exists", options.output.display()).into());
@@ -290,6 +320,7 @@ fn main() -> Result<(), Failure> {
     println!("mode: {}", options.mode.name());
     println!("case: {}", options.case.name());
     println!("threshold-bytes: {}", options.threshold);
+    println!("timing: {}", if options.timing { "on" } else { "off" });
     println!(
         "fixture: base {} bytes, {} edit(s), {} replacement bytes",
         fixture.base.len(),
@@ -325,7 +356,7 @@ fn run_c1(
     println!("base root: {root}");
     let mut consumer = DiscardingConsumer::new();
     let (result, report): (Result<_, ContentError>, TimingReport) =
-        Timing::record("file.edit", |edit| {
+        timed(options, "file.edit", |edit| {
             apply_edits(
                 policy,
                 &policy.capacities(),
@@ -372,7 +403,7 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     let store_path = options.output.join("store.sqlite");
     let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
     type SaveResult = Result<(Store, Vec<Vec<u8>>), StorageError>;
-    let (result, report): (SaveResult, TimingReport) = Timing::record("storage.save", |save| {
+    let (result, report): (SaveResult, TimingReport) = timed(options, "storage.save", |save| {
         let store = Store::create(&store_path, policy_row, save.child("store.create"))?;
         let base = FinalizedObject::new(
             layerfs_content::ObjectRole::WholeFile,
@@ -452,7 +483,7 @@ fn run_pipeline(
     let (result, report): (
         Result<(ObjectId, layerfs_storage::SaveOutcome), StorageError>,
         TimingReport,
-    ) = Timing::record("edit.save", |scope| {
+    ) = timed(options, "edit.save", |scope| {
         // The base is read back through the real Store, exactly as a Workspace
         // would supply it: no in-memory copy of the base objects is required.
         let reader = StoreReader { store: &store };
@@ -490,7 +521,7 @@ fn run_pipeline(
         outcome.full_records
     );
     let (verify, verify_report): (Result<Vec<u8>, ContentError>, TimingReport) =
-        Timing::record("verify.readback", |read| {
+        timed(options, "verify.readback", |read| {
             let reader = StoreReader { store: &store };
             let mut out = Vec::new();
             read_all(&reader, edited_root, &mut out, read.child("content.read"))?;
