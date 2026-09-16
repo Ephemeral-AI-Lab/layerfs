@@ -13,5 +13,5 @@ pub use codec::{
     CodecProfile, CompressionWorkspace, DecompressionWorkspace, DECODE_WORKSPACE_BYTES,
     ENCODE_WORKSPACE_BYTES, GROUP_LIMIT,
 };
-pub use decode::{decode_canonical, framed_record};
+pub use decode::{decode_canonical, framed_record, group_records};
 pub use full::{encode_full, encode_prefix, lane_body_limit, raw_payload, EncodedRecord};

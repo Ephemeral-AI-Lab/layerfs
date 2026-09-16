@@ -102,6 +102,28 @@ impl<'a> Resolver<'a> {
     ) -> StorageResult<Vec<u8>> {
         *self.counters = ChainCounters::default();
         let id = root.object_id;
+        if root.role == layerfs_content::ObjectRole::InodeLeaf {
+            // A pooled leaf owns its whole chain: the physical body is rebuilt
+            // from pooled COPY/INSERT instructions and the ordinals are resolved
+            // through authenticated value groups.
+            let mut pool = crate::encoding::pool::PoolReader::new();
+            let canonical = pool.leaf_canonical(
+                self.connection,
+                self.capacities,
+                self.ceiling,
+                self.workspace,
+                root,
+            )?;
+            if ObjectId::for_bytes(&canonical) != id {
+                return Err(StorageError::Integrity("pooled leaf identity"));
+            }
+            self.counters.objects = self.counters.objects.saturating_add(1);
+            self.counters.canonical_bytes = self
+                .counters
+                .canonical_bytes
+                .saturating_add(canonical.len() as u64);
+            return Ok(canonical);
+        }
         let role_depth = self.capacities.delta_depth_for_role(root.role);
         let mut chain: Vec<ObjectLocation> = Vec::with_capacity(usize::from(role_depth) + 1);
         let mut current = root;

@@ -11,6 +11,6 @@ mod read;
 mod save;
 mod store;
 
-pub use owner::OutcomeCounters;
+pub use owner::{OutcomeCounters, PoolCounters};
 pub use read::ReadCounters;
 pub use store::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreReadCounters};

@@ -1,13 +1,14 @@
--- Candidate C2 schema: four tables, twenty declared columns.
+-- Candidate C2 schema: four tables, twenty-one declared columns.
 --
 -- This identifier is deliberately not the reference schema 10 application id and
 -- user_version: the candidate stores a role column, a nullable direct base and a
 -- persisted storage policy, so a file that carries this header must not be
--- mistaken for a schema-10 Store. Version 3 widens the persisted policy CHECK
--- ranges to the supported configurable profile; a version-2 Store is rejected
--- rather than migrated.
+-- mistaken for a schema-10 Store. Version 3 widened the persisted policy CHECK
+-- ranges to the supported configurable profile. Version 4 adds
+-- `store_policy.metadata_delta_max_depth`, the pooled-metadata dependency bound.
+-- Older Stores are rejected rather than migrated.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -20,6 +21,9 @@ CREATE TABLE store_policy (
         CHECK (whole_file_delta_max_depth BETWEEN 0 AND 50),
     chunk_delta_max_depth INTEGER NOT NULL
         CHECK (chunk_delta_max_depth BETWEEN 0 AND 50),
+    -- Pooled-metadata dependency bound: separate from both payload depths.
+    metadata_delta_max_depth INTEGER NOT NULL
+        CHECK (metadata_delta_max_depth BETWEEN 0 AND 50),
     -- Publication watermark: the highest pack id belonging to a COMPLETED save.
     -- It advances only inside a save's final transaction, so a pack is visible to
     -- an ordinary reader exactly when the save that created it was acknowledged.

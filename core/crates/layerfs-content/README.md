@@ -41,6 +41,7 @@ object::codec             canonical envelope encode/decode with checked lengths
 object::AuthenticatedObjects  narrow provider: read_canonical_batch, read_canonical
 object::FinalizedObject   identity + role + owned canonical bytes + direct references
 object::FinalizedConsumer bounded sink; DiscardingConsumer is the non-persisting one
+object::inode_leaf        checked compact inode value/leaf grammar and pooled layout
 file::construct_bytes     known-length complete-file construction
 file::construct_stream    unknown-length construction with a bounded cutoff probe
 file::read_all(_bounded)  logical read of a whole file
@@ -56,6 +57,9 @@ enabled or disabled changes no product work and no result.
 
 ## Scope limits
 
+- The compact inode-leaf grammar (`object/inode_leaf.rs`) is the pooling input
+  format only: it implements no directory traversal, inode allocation, hardlink
+  update or tree construction, and it does not decide whether a leaf is pooled.
 - Filesystem trees, attributes and metadata ropes are not implemented here.
 - Known-edit construction is implemented for ordered edit streams. It re-derives
   the mapping from the retained extent sequence: unchanged chunk payloads are

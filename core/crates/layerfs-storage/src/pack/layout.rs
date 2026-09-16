@@ -89,10 +89,10 @@ impl PackLane {
         match role {
             ObjectRole::WholeFile => Self::WholeFile,
             ObjectRole::Chunk => Self::Native,
-            ObjectRole::InodeLeaf => Self::PooledMetadata,
-            ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch | ObjectRole::FileState => {
-                Self::Ordinary
-            }
+            ObjectRole::ExtentLeaf
+            | ObjectRole::ExtentBranch
+            | ObjectRole::FileState
+            | ObjectRole::InodeLeaf => Self::Ordinary,
         }
     }
 
@@ -340,10 +340,7 @@ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> Storag
             1 if encoded <= decoded && decoded <= header.lane.body_limit() => GroupCodec::Zstandard,
             _ => return Err(StorageError::Integrity("group codec")),
         };
-        if matches!(
-            header.lane,
-            PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton
-        ) && codec != GroupCodec::Raw
+        if matches!(header.lane, PackLane::Native | PackLane::Singleton) && codec != GroupCodec::Raw
         {
             return Err(StorageError::Integrity("lane group codec"));
         }

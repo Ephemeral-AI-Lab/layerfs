@@ -27,6 +27,7 @@ pub use file::{
     read_all_bounded, read_range, whole_file_payload, ConstructedFile, Edit, EditRequest,
     EditSource, EditStream, FileContent, FileView, Replacements, MAXIMUM_EDITS_PER_OPERATION,
 };
+pub use object::inode_leaf;
 pub use object::{
     AdvisoryPredecessor, AdvisoryPredecessors, AuthenticatedObjects, DiscardingConsumer,
     FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance, DIGEST_BYTES,

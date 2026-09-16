@@ -308,3 +308,16 @@ pub fn corrupt_first_pack(path: &Path) {
         .expect("pack update");
     assert_eq!(affected, 1);
 }
+
+/// Damages the digest of the first stored value-group catalogue row.
+pub fn corrupt_value_group_digest(path: &Path) {
+    let connection = rusqlite::Connection::open(path).expect("external connection");
+    let affected = connection
+        .execute(
+            "UPDATE metadata_value_groups SET digest = ?1 WHERE first_ordinal = \
+             (SELECT MIN(first_ordinal) FROM metadata_value_groups)",
+            rusqlite::params![vec![0xab_u8; 32]],
+        )
+        .expect("digest damage");
+    assert_eq!(affected, 1);
+}

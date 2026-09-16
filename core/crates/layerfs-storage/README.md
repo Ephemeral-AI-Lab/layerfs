@@ -1,7 +1,7 @@
 # layerfs-storage (C2)
 
-> **Status:** Implemented slice; FULL and PREFIX payload records plus an explicit
-> multi-lane format matrix. Metadata value pooling is not implemented.
+> **Status:** Implemented slice; FULL and PREFIX payload records, pooled physical
+> metadata and an explicit multi-lane format matrix.
 
 Content-addressed physical storage. C2 accepts already-finalized canonical
 objects, performs exact CAS reuse, writes supported FULL records into framed
@@ -14,9 +14,9 @@ needs no Workspace, branch, commit, mount or daemon.
 | Item | Accepted value |
 | --- | --- |
 | Format profile | `1` |
-| Schema identity | `application_id = 1279677261`, `user_version = 3` (v1/v2 are rejected, not migrated) |
-| Persisted policy | one row, `id = 1`: cutoff, both depths, the publication watermark |
-| Accepted policy | cutoff a power of two in `131072..=1048576`; each depth `0..=50`; default 128 KiB / 8 / 4 |
+| Schema identity | `application_id = 1279677261`, `user_version = 4` (older versions are rejected, not migrated) |
+| Persisted policy | one row, `id = 1`, twenty-one columns: cutoff, three depths, the publication watermark |
+| Accepted policy | cutoff a power of two in `131072..=1048576`; each depth `0..=50`; defaults 128 KiB / whole-file 8 / chunk 4 / pooled metadata 8 |
 | Encoding | **FULL and PREFIX** payload records. One PREFIX trial per object against at most one eligible candidate; the complete framed record cost decides |
 | Pack framings | v1 ordinary groups, v2 native chunk records, v4 compact whole-file records, v6 pooled metadata groups, v7 singleton packs |
 | Rejected framings | v3, v5 and unknown versions fail explicitly; no trial decoding |
@@ -25,16 +25,20 @@ needs no Workspace, branch, commit, mount or daemon.
 | Records per group | `<= 8191`; `1` in the compact, pooled and singleton lanes |
 | Groups per pack | `<= 256`; `1` in the singleton lane |
 | Chain budgets | `512 KiB` canonical and `256 KiB` encoded per chain, independent of the accepted depths |
-| Metadata pooling | **not implemented**: `metadata_value_groups` is shipped and empty |
+| Metadata pooling | implemented: supplied canonical inode leaves are stored pooled; 165 values per value group, 100 rows per leaf page, ordinals assigned in first-encounter order |
+| Pooled record grammar | `0 | physical body` (FULL) or `1 | base id | output length | instruction count | program` (COPY/INSERT), the ordinary lane's tags read under the `InodeLeaf` role |
+| Pooled chain budgets | depth `0..=50` (own persisted field); 64 KiB canonical and 139 KiB encoded per chain; 8 KiB per pooled record; match budget 128 KiB per trial |
+| Pooled index | Store-owned `BTreeSet<(fingerprint, ordinal)>`, at most 131,072 retained entries, whole-window reset, invalidated on any failed save; the fingerprint filters candidates and full value bytes decide |
 | Lookup page | `128` identifiers |
 | Pending batch | `512` objects and `512 KiB` canonical bytes |
 | Write transaction | `8191` rows and `4 MiB - 1` canonical bytes, shared across batches |
 | Stored canonical object | `<= 16 MiB` envelope ceiling, `<= 8 MiB` per field; the binding limits are the lane caps below (`65,527` B ordinary, `135,169` B whole-file) |
 
 Object roles are persisted as `1..=6` (`WHOLE_FILE`, `CHUNK`, `EXTENT_LEAF`,
-`EXTENT_BRANCH`, `FILE_STATE`, `INODE_LEAF`). `INODE_LEAF` is the declared
-physical-pooling input role; nothing produces such an object yet, because the
-pooling lane is not implemented. `base_object_id` records the direct physical base
+`EXTENT_BRANCH`, `FILE_STATE`, `INODE_LEAF`). `INODE_LEAF` is the pooled metadata
+role: its physical record is the pooled body and its dependencies are resolved
+through authenticated value groups. Producing those leaves is a filesystem-tree
+concern and remains Stage 5 scope; C2 accepts any supplied canonical leaf. `base_object_id` records the direct physical base
 of a PREFIX record and is `NULL` for a FULL record; it is constrained by a direct
 self-FK and by the `objects_bases` index.
 
@@ -105,10 +109,14 @@ destructor.
 
 ## Scope limits
 
-- Metadata value pooling, filesystem trees, runtime adapters and cloud placement
-  are later scope. Payload DELTA chains up to the accepted depth are implemented.
-- Only the four tables above exist; `metadata_value_groups` is shipped and empty,
-  which is not a claim that value pooling is implemented.
+- Filesystem trees, runtime adapters and cloud placement are later scope. Payload
+  DELTA chains and pooled metadata are implemented.
+- Only the four tables above exist: the pooled catalogue is
+  `metadata_value_groups`, and the values themselves live only inside v6 packs.
+- The retained index window boundary (131,072 entries) and its cold-start replay
+  are implemented but not exercised end to end: reaching them needs 131,072 stored
+  values. The rule is covered by the catalogue-only replay path and reported as a
+  coverage gap, not as a verified boundary.
 - A base that this same save accepted but has not stored yet is not read for a
   delta trial: the object is stored FULL by policy rather than sealing a group for
   an optional optimisation.
@@ -132,7 +140,7 @@ no checks; verify this workspace with the core manifest.
 External targets: `cas_roundtrip`, `cas_reuse`, `pack_locator`,
 `persistence_failure`, `memory_bounds`, `visibility`, `timing`, `core_pipeline`,
 `delta_payload`, `delta_chains`, `policy_capacity`, `physical_formats`,
-`edit_pipeline`; runnable examples: `examples/measure_components.rs` and
+`edit_pipeline`, `metadata_pool`, `metadata_pool_index`; runnable examples: `examples/measure_components.rs` and
 `examples/measure_edits.rs` (`--mode c1|c2|pipeline --case
 small|chunked|small-to-large|large-to-small|batch --threshold-bytes N --output
 FRESH_DIR`).

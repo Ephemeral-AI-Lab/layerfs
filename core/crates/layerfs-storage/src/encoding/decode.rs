@@ -155,6 +155,23 @@ fn decode_payload(
     }
 }
 
+/// Returns every framed record of a group body, in ordinal order.
+pub fn group_records(group: &[u8]) -> StorageResult<Vec<&[u8]>> {
+    if group.len() < 4 {
+        return Err(StorageError::Integrity("group framing"));
+    }
+    let count = u32::from_le_bytes(
+        group[..4]
+            .try_into()
+            .map_err(|_| StorageError::Integrity("group record count"))?,
+    ) as usize;
+    let mut records = Vec::with_capacity(count.min(crate::policy::RECORD_COUNT_LIMIT));
+    for ordinal in 0..count {
+        records.push(framed_record(group, ordinal)?);
+    }
+    Ok(records)
+}
+
 /// Extracts one framed record from a group body.
 pub fn framed_record(group: &[u8], ordinal: usize) -> StorageResult<&[u8]> {
     if group.len() < 4 {

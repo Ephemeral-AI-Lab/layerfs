@@ -28,6 +28,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 4] = [
             "small_file_threshold_bytes",
             "whole_file_delta_max_depth",
             "chunk_delta_max_depth",
+            "metadata_delta_max_depth",
             "retained_pack_ceiling",
         ],
     ),
@@ -69,14 +70,15 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
     connection.execute(
         "INSERT INTO store_policy \
          (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, \
-          chunk_delta_max_depth, retained_pack_ceiling) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+          chunk_delta_max_depth, metadata_delta_max_depth, retained_pack_ceiling) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         rusqlite::params![
             POLICY_ROW,
             policy.format_profile(),
             policy.small_file_threshold_bytes() as i64,
             policy.whole_file_delta_max_depth(),
             policy.chunk_delta_max_depth(),
+            policy.metadata_delta_max_depth(),
             NO_PACKS_PUBLISHED,
         ],
     )?;
@@ -179,7 +181,8 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
     let row = connection
         .query_row(
             "SELECT format_profile, small_file_threshold_bytes, \
-             whole_file_delta_max_depth, chunk_delta_max_depth \
+             whole_file_delta_max_depth, chunk_delta_max_depth, \
+             metadata_delta_max_depth \
              FROM store_policy WHERE id = ?1",
             [POLICY_ROW],
             |row| {
@@ -188,6 +191,7 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
                     row.get::<_, i64>(1)?,
                     row.get::<_, i64>(2)?,
                     row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
                 ))
             },
         )
@@ -209,7 +213,12 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
     let chunk = u8::try_from(row.3).map_err(|_| StorageError::UnsupportedPolicy {
         field: "chunk_delta_max_depth",
     })?;
-    StoragePolicy::new(profile, threshold, whole, chunk).validated()
+    let metadata = u8::try_from(row.4).map_err(|_| StorageError::UnsupportedPolicy {
+        field: "metadata_delta_max_depth",
+    })?;
+    StoragePolicy::new(profile, threshold, whole, chunk)
+        .with_metadata_depth(metadata)
+        .validated()
 }
 
 /// Highest pack id belonging to a completed save.

@@ -212,6 +212,49 @@ fn collected_canonical(collected: &support::Collected, root: layerfs_content::Ob
 }
 
 #[test]
+fn the_pooled_metadata_depth_is_persisted_and_checked_separately() {
+    let dir = TempDir::new("policy-metadata");
+    let path = dir.store_path("policy");
+    let store = create(&path, policy_for(131_072, 8, 4).with_metadata_depth(12));
+    assert_eq!(store.policy().metadata_delta_max_depth(), 12);
+    assert_eq!(store.capacities().metadata_delta_max_depth, 12);
+    // The pooled bound never widens or narrows a payload bound.
+    assert_eq!(store.capacities().whole_file_delta_max_depth, 8);
+    assert_eq!(store.capacities().chunk_delta_max_depth, 4);
+    assert_eq!(store.capacities().metadata_chain_canonical_limit, 8 * 8_192);
+    drop(store);
+    let reopened = open_store(&path);
+    assert_eq!(reopened.policy().metadata_delta_max_depth(), 12);
+
+    // A persisted value outside the supported range fails the open, and a
+    // creation with one is rejected before any file exists.
+    drop(reopened);
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let affected = connection
+        .execute(
+            "UPDATE store_policy SET metadata_delta_max_depth = 50 WHERE id = 1",
+            [],
+        )
+        .expect("in-range update");
+    assert_eq!(affected, 1);
+    drop(connection);
+    assert_eq!(
+        open_store(&path).policy().metadata_delta_max_depth(),
+        50,
+        "50 is the documented maximum and is accepted"
+    );
+
+    let other = dir.store_path("rejected");
+    let policy = policy_for(131_072, 8, 4).with_metadata_depth(51);
+    let error = disabled(|scope| Store::create(&other, policy, scope.child("store"))).unwrap_err();
+    assert!(
+        matches!(error, StorageError::UnsupportedPolicy { field } if field == "metadata_delta_max_depth"),
+        "got {error}"
+    );
+    assert!(!other.exists());
+}
+
+#[test]
 fn the_minimum_supported_cutoff_is_the_published_minimum() {
     assert_eq!(MINIMUM_SMALL_FILE_THRESHOLD_BYTES, 131_072);
     assert_eq!(

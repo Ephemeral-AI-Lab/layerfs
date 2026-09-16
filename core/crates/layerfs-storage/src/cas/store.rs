@@ -7,6 +7,7 @@
 //! capture their retained-pack ceiling once.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use layerfs_content::{ContentError, FinalizedConsumer, FinalizedObject, ObjectId};
 use layerfs_telemetry::timer::TimingScope;
@@ -16,6 +17,7 @@ use crate::cas::owner::{MutationOwner, OutcomeCounters};
 use crate::cas::{finish, read, save};
 use crate::encoding::delta::read::ChainCounters;
 use crate::encoding::delta::select::DeltaCounters;
+use crate::encoding::pool::PoolIndex;
 use crate::encoding::DecompressionWorkspace;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{StorageCapacities, StoragePolicy};
@@ -44,6 +46,8 @@ pub struct SaveOutcome {
     pub delta: DeltaCounters,
     /// Work spent acquiring delta bases.
     pub chain: ChainCounters,
+    /// Pooled metadata lane outcomes.
+    pub pool: crate::cas::owner::PoolCounters,
 }
 
 impl From<OutcomeCounters> for SaveOutcome {
@@ -59,6 +63,7 @@ impl From<OutcomeCounters> for SaveOutcome {
             prefix_records: counters.prefix_records,
             delta: counters.delta,
             chain: counters.chain,
+            pool: counters.pool,
         }
     }
 }
@@ -88,6 +93,12 @@ pub struct Store {
     path: PathBuf,
     policy: StoragePolicy,
     capacities: StorageCapacities,
+    /// Store-owned bounded ordered set of pooled value candidates.
+    ///
+    /// It is disposable derivation: the catalogue is authoritative, a failed save
+    /// invalidates it whole, and a reopened Store synchronizes it from the
+    /// catalogue on first use.
+    pool_index: Arc<Mutex<PoolIndex>>,
 }
 
 impl Store {
@@ -109,6 +120,7 @@ impl Store {
                 path,
                 policy: stored,
                 capacities,
+                pool_index: Arc::new(Mutex::new(PoolIndex::new())),
             })
         })
     }
@@ -125,6 +137,7 @@ impl Store {
                 path,
                 policy: stored,
                 capacities,
+                pool_index: Arc::new(Mutex::new(PoolIndex::new())),
             })
         })
     }
@@ -149,11 +162,32 @@ impl Store {
         &self.path
     }
 
+    /// Entries retained by the Store-owned pooled-value ordered set.
+    ///
+    /// Reported live capacity, not a test hook: the memory ledger needs the
+    /// simultaneous size of the bounded derivation the Store owns.
+    pub fn pool_index_entries(&self) -> usize {
+        self.pool_index.lock().map(|index| index.len()).unwrap_or(0)
+    }
+
+    /// Live bytes charged by the pooled-value ordered set.
+    pub fn pool_index_bytes(&self) -> usize {
+        self.pool_index
+            .lock()
+            .map(|index| index.live_bytes())
+            .unwrap_or(0)
+    }
+
     /// Acquires exclusive write ownership for one save operation.
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
             let connection = connection::open(&self.path, false)?;
-            let owner = MutationOwner::acquire(connection, self.policy, self.capacities)?;
+            let owner = MutationOwner::acquire(
+                connection,
+                self.policy,
+                self.capacities,
+                Arc::clone(&self.pool_index),
+            )?;
             Ok(SaveOperation {
                 owner: Some(owner),
                 batch: PendingBatch::new(self.capacities),
@@ -377,6 +411,14 @@ impl SaveOperation {
         self.owner
             .as_ref()
             .map(MutationOwner::delta_counters)
+            .unwrap_or_default()
+    }
+
+    /// Pooled metadata lane outcomes so far.
+    pub fn pool_counters(&self) -> crate::cas::owner::PoolCounters {
+        self.owner
+            .as_ref()
+            .map(MutationOwner::pool_counters)
             .unwrap_or_default()
     }
 

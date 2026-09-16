@@ -5,9 +5,11 @@
 pub mod cleanup;
 pub mod connection;
 pub mod lookup;
+pub mod pool;
 pub mod schema;
 pub mod write;
 
 pub use cleanup::CleanupReport;
 pub use lookup::ObjectLocation;
+pub use pool::ValueGroupRow;
 pub use write::{ObjectRow, TransactionState};
