@@ -162,6 +162,7 @@ python3 -m unittest discover -s tools -p 'test_production_loc.py'
 | `metadata_pool` | 9 | PASS |
 | `metadata_pool_index` | 5 | PASS |
 | `policy_capacity` (extended) | 7 | PASS |
+| `edit_model` (required target, added here) | 6 | PASS |
 | `edit_reference` | 2 | **FAIL: six recorded counterexamples** |
 | every other existing target | unchanged | PASS |
 
