@@ -1,0 +1,22 @@
+{
+  "name": "c2.only.save",
+  "elapsed_ns": 13422667,
+  "children": [
+    {"name": "store.create", "elapsed_ns": 5138625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 5253125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 8500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1792, "children": []}
+      ]
+    },
+    {
+      "name": "storage.finish",
+      "elapsed_ns": 2748709,
+      "children": [
+        {"name": "storage.finish", "elapsed_ns": 382500, "children": []}
+      ]
+    }
+  ]
+}

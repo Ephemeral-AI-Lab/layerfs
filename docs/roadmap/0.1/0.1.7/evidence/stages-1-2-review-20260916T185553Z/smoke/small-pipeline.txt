@@ -1,0 +1,24 @@
+input: docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/small.bin (16384 bytes)
+mode: pipeline
+root: 3438ec94e9d7eddba104ff44e95b0c21d513f4066d3b0bcfa73152b47ca4c208
+logical length: 16384
+readback bytes: 16384
+save result: inserted 1 reused 0 packs 1
+readback: verified byte-for-byte against the input
+exclusions: C2 reuse decisions are inside the save scope; no warmed setup is claimed
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c1c2.pipeline  24.114ms
+  store.create  8.411ms
+  storage.begin  8.223ms
+  content.construct  901.666us
+    content.probe  23.042us
+    content.encode  29.458us
+    content.identify  753.666us
+    content.emit  56.334us
+  storage.finish  826.125us
+    storage.finish  65.833us
+  content.read  5.542ms
+    content.acquire  5.532ms
+    content.emit  2.625us
+timings: 13 nodes at 3 levels
+timings: written to docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/small-pipeline.json

@@ -54,7 +54,10 @@ never clamped:
 | `length >= T` | `FILE_STATE` (v3 mapping grammar) → extent tree → `CHUNK` objects |
 | Largest whole-file object | 131071 raw bytes, 131094 canonical bytes |
 | Largest chunk | 32768 raw bytes, 32789 canonical bytes |
-| Largest canonical object | 16 MiB |
+| Envelope ceiling per canonical object | 16 MiB (role-independent guard; **not** a file or chunk limit) |
+| Per-field ceiling | 8 MiB |
+| Largest object any role produces | 131,094 B whole-file · 32,789 B chunk · 8,192 B mapping page |
+| Maximum file size | none declared; bounded by `u64` and by cost |
 | Format profile | `1`; schema `application_id = 1279677261`, `user_version = 1` |
 | Encoding | **FULL only** (may be compressed); no DELTA, no pooling |
 

@@ -24,6 +24,7 @@ needs no Workspace, branch, commit, mount or daemon.
 | Lookup page | `128` identifiers |
 | Pending batch | `512` objects and `512 KiB` canonical bytes |
 | Write transaction | `8191` rows and `4 MiB - 1` canonical bytes, shared across batches |
+| Stored canonical object | `<= 16 MiB` envelope ceiling, `<= 8 MiB` per field; the binding limits are the lane caps below (`65,527` B ordinary, `135,169` B whole-file) |
 
 Object roles are persisted as `1..=5` (`WHOLE_FILE`, `CHUNK`, `EXTENT_LEAF`,
 `EXTENT_BRANCH`, `FILE_STATE`). `base_object_id` exists, is constrained by a

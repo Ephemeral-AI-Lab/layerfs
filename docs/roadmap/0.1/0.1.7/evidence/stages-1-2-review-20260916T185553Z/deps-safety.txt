@@ -1,0 +1,31 @@
+### strict test-only marker scan in product src
+none
+
+### direct dependency usage audit
+-- blake3 in layerfs-content: 4 uses
+-- blake3 in layerfs-storage: 0 uses
+-- rusqlite in layerfs-content: 0 uses
+-- rusqlite in layerfs-storage: 32 uses
+-- zstd_sys in layerfs-content: 0 uses
+-- zstd_sys in layerfs-storage: 3 uses
+
+-- blake3 call sites in layerfs-storage
+  (no blake3 use in src)
+
+### layerfs_telemetry uses per crate
+content: 4
+storage: 1
+
+### unsafe blocks
+core/crates/layerfs-storage/src/lib.rs:19:#![deny(unsafe_op_in_unsafe_fn)]
+core/crates/layerfs-storage/src/encoding/codec.rs:93:    if unsafe { ZSTD_isError(code) } != 0 {
+core/crates/layerfs-storage/src/encoding/codec.rs:101:    if unsafe { ZSTD_getErrorCode(code) } == ZSTD_ErrorCode::ZSTD_error_memory_allocation {
+core/crates/layerfs-storage/src/encoding/codec.rs:145:        let context = unsafe {
+core/crates/layerfs-storage/src/encoding/codec.rs:175:        unsafe {
+core/crates/layerfs-storage/src/encoding/codec.rs:230:        unsafe {
+core/crates/layerfs-storage/src/encoding/codec.rs:290:        let context = unsafe {
+core/crates/layerfs-storage/src/encoding/codec.rs:325:        unsafe {
+core/crates/layerfs-storage/src/encoding/codec.rs:370:        unsafe {
+core/crates/layerfs-storage/src/encoding/codec.rs:409:unsafe fn parse_frame_header(frame: &[u8]) -> StorageResult<zstd_sys::ZSTD_FrameHeader> {
+core/crates/layerfs-storage/src/encoding/codec.rs:417:    unsafe {
+core/crates/layerfs-content/src/lib.rs:16:#![forbid(unsafe_code)]

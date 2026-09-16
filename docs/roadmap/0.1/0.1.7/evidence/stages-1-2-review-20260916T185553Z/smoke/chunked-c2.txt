@@ -1,0 +1,23 @@
+input: docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/chunked.bin (614400 bytes)
+mode: c2
+fixture: one canonical whole-file object built from the first 131071 bytes of the input
+exclusions: fixture construction is outside the storage scope below
+fixture root: e5298cc9f61b748e4628cb34c3ef94fee9504182aa8e0a5312f99f4a84e474e3 (131071 bytes)
+save result: inserted 1 reused 0
+readback: verified 1 object(s) from 1 pack(s)
+exclusions: input acquisition, fixture construction and Store creation are separate scopes
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c2.only.save  13.422ms
+  store.create  5.138ms
+  storage.begin  5.253ms
+  storage.accept  8.500us
+    storage.batch  1.792us
+  storage.finish  2.748ms
+    storage.finish  382.500us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c2.only.read  9.534ms
+  storage.read  9.530ms
+    storage.decode  1.494ms
+    storage.read  6.937ms
+timings: 7 nodes at 3 levels
+timings: written to docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/chunked-c2.json

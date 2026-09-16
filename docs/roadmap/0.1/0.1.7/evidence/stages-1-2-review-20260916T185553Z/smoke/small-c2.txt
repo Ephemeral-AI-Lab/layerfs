@@ -1,0 +1,23 @@
+input: docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/small.bin (16384 bytes)
+mode: c2
+fixture: one canonical whole-file object built from the first 16384 bytes of the input
+exclusions: fixture construction is outside the storage scope below
+fixture root: 3438ec94e9d7eddba104ff44e95b0c21d513f4066d3b0bcfa73152b47ca4c208 (16384 bytes)
+save result: inserted 1 reused 0
+readback: verified 1 object(s) from 1 pack(s)
+exclusions: input acquisition, fixture construction and Store creation are separate scopes
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c2.only.save  15.075ms
+  store.create  7.964ms
+  storage.begin  6.084ms
+  storage.accept  6.417us
+    storage.batch  1.875us
+  storage.finish  816.250us
+    storage.finish  60.125us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c2.only.read  2.932ms
+  storage.read  2.927ms
+    storage.decode  1.319ms
+    storage.read  1.061ms
+timings: 7 nodes at 3 levels
+timings: written to docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/small-c2.json

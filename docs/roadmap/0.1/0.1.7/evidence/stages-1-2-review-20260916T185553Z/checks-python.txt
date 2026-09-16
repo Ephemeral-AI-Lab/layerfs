@@ -1,0 +1,42 @@
+### python3 core/tools/check_product_boundary.py
+PASS: scanned 52 production Rust/SQL files; semantic review still required
+exit=0
+
+### python3 -m unittest discover -s core/tools -p 'test_*.py'
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.009s
+
+OK
+exit=0
+
+### python3 -m unittest discover -s tools -p 'test_production_loc.py'
+.............
+----------------------------------------------------------------------
+Ran 13 tests in 0.024s
+
+OK
+exit=0
+
+### python3 -m unittest discover -s tools -p 'test_*.py' (does this discover anything else?)
+test_per_file_and_total_use_the_same_classification (test_production_loc.CounterTests.test_per_file_and_total_use_the_same_classification) ... ok
+test_per_file_reporting_separates_production_and_physical_lines (test_production_loc.CounterTests.test_per_file_reporting_separates_production_and_physical_lines) ... ok
+test_reference_runtime_sql_is_still_counted (test_production_loc.CounterTests.test_reference_runtime_sql_is_still_counted) ... ok
+test_scan_separates_scopes_and_reports_a_combined_total (test_production_loc.CounterTests.test_scan_separates_scopes_and_reports_a_combined_total) ... ok
+test_sql_comments_do_not_count_but_sql_code_does (test_production_loc.CounterTests.test_sql_comments_do_not_count_but_sql_code_does) ... ok
+test_strings_and_characters_do_not_open_comments (test_production_loc.CounterTests.test_strings_and_characters_do_not_open_comments) ... ok
+test_target_directories_are_excluded (test_production_loc.CounterTests.test_target_directories_are_excluded) ... ok
+test_tests_examples_and_benches_are_excluded (test_production_loc.CounterTests.test_tests_examples_and_benches_are_excluded) ... ok
+test_committed_timings_are_measured_hints (test_test_fast.TestFastChecks.test_committed_timings_are_measured_hints) ... ok
+test_exact_selection_count_and_failure_are_enforced (test_test_fast.TestFastChecks.test_exact_selection_count_and_failure_are_enforced) ... ok
+test_invalid_jobs_cannot_skip_execution (test_test_fast.TestFastChecks.test_invalid_jobs_cannot_skip_execution) ... ok
+test_missing_or_damaged_timings_only_cost_ordering (test_test_fast.TestFastChecks.test_missing_or_damaged_timings_only_cost_ordering) ... ok
+test_plan_is_longest_first_and_covers_every_test (test_test_fast.TestFastChecks.test_plan_is_longest_first_and_covers_every_test) ... ok
+test_split_binary_covers_every_test_once_within_the_batch_cap (test_test_fast.TestFastChecks.test_split_binary_covers_every_test_once_within_the_batch_cap) ... ok
+test_split_binary_separates_heavy_tests_and_keeps_every_test_once (test_test_fast.TestFastChecks.test_split_binary_separates_heavy_tests_and_keeps_every_test_once) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.052s
+
+OK
+exit=0

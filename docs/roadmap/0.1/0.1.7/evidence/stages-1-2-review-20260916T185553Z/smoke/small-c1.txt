@@ -1,0 +1,16 @@
+input: docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/small.bin (16384 bytes)
+mode: c1
+root: 3438ec94e9d7eddba104ff44e95b0c21d513f4066d3b0bcfa73152b47ca4c208
+logical length: 16384
+emitted objects: 1
+emitted canonical bytes: 16407
+exclusions: no storage, no pack, no database, no input fixture copy
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c1.only  1.186ms
+  content.construct  1.042ms
+    content.probe  101.708us
+    content.encode  78.375us
+    content.identify  696.083us
+    content.emit  1.750us
+timings: 6 nodes at 3 levels
+timings: written to docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/small-c1.json

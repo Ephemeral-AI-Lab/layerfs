@@ -1,0 +1,32 @@
+# Issue and repository updates made after the review (owner-authorized)
+
+Performed at 2026-09-16T19:19:20Z on explicit owner instruction
+("yes proceed"). The review handoff forbade these by default; this file records
+what was done so the deviation is auditable.
+
+## Push
+  a8a1ba848..f485c456b  main -> main   (origin https://github.com/Ephemeral-AI-Lab/layerfs.git)
+  Note: the review document and this evidence directory are NOT committed;
+  they remain untracked in the working tree by design.
+
+## Checklist updates (only genuinely met items ticked)
+  #165  ticked=5   left unchecked=10
+    ticked: #166 child line; independently callable C1/C2 with bounded handoff;
+            four-table/19-column schema with indexes; canonical/CDC/transition/
+            collision/retention preservation; per-commit LOC reports
+    left:   #167 child; #168-#172; all-seven-children; aggregate singleton/index
+            bound proof; matched v0.1.6 performance/storage/memory qualification;
+            Stage 7 runtime integration
+  #166  ticked=7   left unchecked=0    (Stage 1 PASS)
+  #167  ticked=5   left unchecked=3
+    left:   ordinary-reader visibility (F1); terminal cleanup (F3);
+            complete/bounded reports (F10)
+
+## Comments posted
+  #166  https://github.com/Ephemeral-AI-Lab/layerfs/issues/166#issuecomment-5703187791
+  #167  https://github.com/Ephemeral-AI-Lab/layerfs/issues/167#issuecomment-5703191314
+  #165  https://github.com/Ephemeral-AI-Lab/layerfs/issues/165#issuecomment-5703193634
+
+## Issues left open
+  #165 OPEN, #166 OPEN, #167 OPEN, #168-#172 untouched.
+  #166 is complete but stays open so it can be closed alongside #167.

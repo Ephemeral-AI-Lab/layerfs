@@ -1,0 +1,18 @@
+warning: unused import: `AuthenticatedObjects`
+ --> src/main.rs:6:22
+  |
+6 |     construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentError, ContentResult,
+  |                      ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+== E1 unfinished-save visibility ==
+  constructed 274 objects, root e880487484d286db017e0d4dc93d6ab61bce0b0ccf986185b44f7a4dede75490
+  UNRELATED READ WHILE SAVE OPEN: visible=1 ceiling=19 packs_read=1
+  mid-save early commit observed: true
+  save outcome: inserted=274 commits=6 packs=23
+== E2 read path fixed cost ==
+  read_batch(ids=1) -> 1 values, packs_read=1, pages=1, elapsed=0.466ms, per-call=0.466ms
+  read_batch(ids=24) -> 24 values, packs_read=3, pages=1, elapsed=1.077ms, per-call=0.045ms
+  8 separate single-id read_batch calls: 2.117ms total, 0.265ms each
+done

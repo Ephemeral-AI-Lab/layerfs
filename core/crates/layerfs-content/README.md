@@ -21,7 +21,10 @@ bytes.
 | `length >= T` | `FILE_STATE` → extent tree → `CHUNK` objects | Frozen v3 mapping grammar |
 | Chunk window | `8192..=32768` bytes | Frozen two-byte rolling GEAR profile |
 | Mapping page | `<= 128` entries, `>= 64` for non-root pages, level `<= 31` | Canonical partition |
-| Largest canonical object | `16 MiB` | Envelope limit |
+| Envelope ceiling, per canonical object | `16 MiB` | Role-independent guard applied before the role tag is known; not a file or chunk limit |
+| Per-field ceiling | `8 MiB` | The frozen format bounds one field separately; a bytes-role value is one field |
+| Largest object any role produces | `131,094 B` whole-file, `32,789 B` chunk, `8,192 B` mapping page | The envelope ceiling never binds on a produced object |
+| Maximum file size | none declared | Logical length is `u64` with checked arithmetic; only cost bounds it in practice |
 
 Any other value fails with `ContentError::UnsupportedPolicy` before work begins.
 Nothing is silently clamped, and an opened Store's recorded policy is never

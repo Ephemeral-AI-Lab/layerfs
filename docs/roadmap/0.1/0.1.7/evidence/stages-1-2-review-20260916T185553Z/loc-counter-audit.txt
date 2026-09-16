@@ -1,0 +1,27 @@
+### Independent probe of tools/production_loc.py classification
+counter sha256: 09568dbd352a103ff097067a39060754d8c57330e9429d14a205475a45a80d59
+
+sql_block_comment                counted=3   IN SCOPE
+sql_dash_comment_and_blank       counted=1   IN SCOPE
+sql_under_src_dir                counted=1   out of scope
+empty_sql                        counted=0   IN SCOPE
+cfg_test_decl_only               counted=1   IN SCOPE
+cfg_all_test_feature             counted=1   IN SCOPE
+cfg_test_then_helper_then_prod   counted=1   IN SCOPE
+inline_test_module               counted=3   IN SCOPE
+nested_block_comment             counted=1   IN SCOPE
+comment_and_blank_only           counted=0   IN SCOPE
+string_with_slashes              counted=1   IN SCOPE
+raw_string_with_block_marker     counted=1   IN SCOPE
+char_literal_quote               counted=1   IN SCOPE
+tests_dir_excluded               counted=1   out of scope
+examples_dir_excluded            counted=1   out of scope
+target_dir_excluded              counted=1   out of scope
+
+### Reading of the two gaps
+1. blank_sql() strips only '--' line comments, so a SQL block comment is counted as code.
+   The shipped core/crates/layerfs-storage/sql/schema.sql uses only '--' comments, so
+   the two reported totals are unaffected; the script lives in tools/ outside src/.
+2. scope_files() requires the .rs suffix under src/ or the .sql suffix under a 'sql'
+   path component, so a future <crate>/src/*.sql would be omitted silently.
+   No such file exists in either snapshot.

@@ -1,0 +1,33 @@
+{
+  "name": "c1c2.pipeline",
+  "elapsed_ns": 24114083,
+  "children": [
+    {"name": "store.create", "elapsed_ns": 8411083, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 8223042, "children": []},
+    {
+      "name": "content.construct",
+      "elapsed_ns": 901666,
+      "children": [
+        {"name": "content.probe", "elapsed_ns": 23042, "children": []},
+        {"name": "content.encode", "elapsed_ns": 29458, "children": []},
+        {"name": "content.identify", "elapsed_ns": 753666, "children": []},
+        {"name": "content.emit", "elapsed_ns": 56334, "children": []}
+      ]
+    },
+    {
+      "name": "storage.finish",
+      "elapsed_ns": 826125,
+      "children": [
+        {"name": "storage.finish", "elapsed_ns": 65833, "children": []}
+      ]
+    },
+    {
+      "name": "content.read",
+      "elapsed_ns": 5542833,
+      "children": [
+        {"name": "content.acquire", "elapsed_ns": 5532250, "children": []},
+        {"name": "content.emit", "elapsed_ns": 2625, "children": []}
+      ]
+    }
+  ]
+}

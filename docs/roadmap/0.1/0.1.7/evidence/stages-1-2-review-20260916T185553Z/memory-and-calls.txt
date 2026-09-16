@@ -1,0 +1,77 @@
+### filesystem / spool surface in product src
+  (no filesystem access in product src)
+
+### declared capacity constants
+core/crates/layerfs-storage/src/policy.rs:13:pub const FORMAT_PROFILE: u8 = 1;
+core/crates/layerfs-storage/src/policy.rs:16:pub const APPLICATION_ID: i64 = 1_279_677_261;
+core/crates/layerfs-storage/src/policy.rs:18:pub const SCHEMA_VERSION: i64 = 1;
+core/crates/layerfs-storage/src/policy.rs:30:pub const SCHEMA_IDENTITY: SchemaIdentity = SchemaIdentity {
+core/crates/layerfs-storage/src/policy.rs:36:pub const GROUP_LIMIT: usize = 65_536;
+core/crates/layerfs-storage/src/policy.rs:38:pub const PACK_LIMIT: usize = 256 * 1024;
+core/crates/layerfs-storage/src/policy.rs:40:pub const GROUP_COUNT_LIMIT: usize = 256;
+core/crates/layerfs-storage/src/policy.rs:42:pub const RECORD_COUNT_LIMIT: usize = 8_191;
+core/crates/layerfs-storage/src/policy.rs:44:pub const CANONICAL_LIMIT: usize = 16 * 1024 * 1024;
+core/crates/layerfs-storage/src/policy.rs:46:pub const LOOKUP_PAGE_IDS: usize = 128;
+core/crates/layerfs-storage/src/policy.rs:48:pub const BATCH_OBJECT_LIMIT: usize = 512;
+core/crates/layerfs-storage/src/policy.rs:50:pub const BATCH_CANONICAL_BYTES_LIMIT: u64 = 512 * 1024;
+core/crates/layerfs-storage/src/policy.rs:52:pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
+core/crates/layerfs-storage/src/policy.rs:54:pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
+core/crates/layerfs-storage/src/policy.rs:56:pub const CLEANUP_PAGE_ROWS: usize = 128;
+core/crates/layerfs-storage/src/policy.rs:58:pub const WHOLE_FILE_RAW_LIMIT: usize = 131_071;
+core/crates/layerfs-storage/src/policy.rs:60:pub const WHOLE_FILE_FRAME_LIMIT: usize = 135_168;
+core/crates/layerfs-storage/src/policy.rs:62:pub const CHUNK_RAW_LIMIT: usize = 32_768;
+core/crates/layerfs-storage/src/policy.rs:64:pub const CHUNK_FRAME_LIMIT: usize = 33_024;
+core/crates/layerfs-storage/src/policy.rs:66:pub const OBJECT_ENVELOPE_OVERHEAD: usize = 23;
+core/crates/layerfs-storage/src/encoding/codec.rs:28:pub const ENCODE_WORKSPACE_BYTES: usize = 2 * 1024 * 1024;
+core/crates/layerfs-storage/src/encoding/codec.rs:30:pub const DECODE_WORKSPACE_BYTES: usize = 1024 * 1024;
+core/crates/layerfs-storage/src/encoding/codec.rs:32:pub const GROUP_LIMIT: usize = 65_536;
+core/crates/layerfs-storage/src/encoding/codec.rs:34:const GROUP_LEVEL: i32 = 1;
+core/crates/layerfs-storage/src/encoding/codec.rs:36:const GROUP_WINDOW_LOG_MAX: u32 = 16;
+core/crates/layerfs-storage/src/encoding/codec.rs:459:pub const fn group_body_parameters() -> (i32, u32) {
+core/crates/layerfs-content/src/policy.rs:12:pub const DEFAULT_SMALL_FILE_THRESHOLD_BYTES: u64 = 131_072;
+core/crates/layerfs-content/src/policy.rs:14:pub const DEFAULT_WHOLE_FILE_DELTA_MAX_DEPTH: u8 = 8;
+core/crates/layerfs-content/src/policy.rs:16:pub const DEFAULT_CHUNK_DELTA_MAX_DEPTH: u8 = 4;
+core/crates/layerfs-content/src/policy.rs:19:pub const MINIMUM_WHOLE_FILE_BYTES: u64 = 1;
+core/crates/layerfs-content/src/policy.rs:136:pub const OBJECT_ENVELOPE_BYTES: usize = 23;
+core/crates/layerfs-content/src/policy.rs:139:pub const MAX_CANONICAL_OBJECT_BYTES: usize = 16 * 1024 * 1024;
+core/crates/layerfs-content/src/policy.rs:142:pub const MAX_MAPPING_ENTRIES: usize = 128;
+core/crates/layerfs-content/src/policy.rs:144:const STREAM_FLUSH_HEADROOM: usize = 64;
+core/crates/layerfs-content/src/file/cdc/gear.rs:13:pub const MINIMUM_CHUNK_BYTES: usize = 8_192;
+core/crates/layerfs-content/src/file/cdc/gear.rs:15:pub const TARGET_CHUNK_BYTES: usize = 16_384;
+core/crates/layerfs-content/src/file/cdc/gear.rs:17:pub const MAXIMUM_CHUNK_BYTES: usize = 32_768;
+core/crates/layerfs-content/src/file/cdc/gear.rs:19:pub const NORMALIZATION_SHIFT: u32 = 2;
+core/crates/layerfs-content/src/file/cdc/gear.rs:21:pub const PROFILE_SEED: u64 = 0;
+core/crates/layerfs-content/src/file/cdc/gear.rs:23:const SMALL_MASK: u64 = 0x0000_d903_0353_7000;
+core/crates/layerfs-content/src/file/cdc/gear.rs:24:const LARGE_MASK: u64 = 0x0000_d901_0353_0000;
+core/crates/layerfs-content/src/file/cdc/gear.rs:25:const SHIFTED_SMALL_MASK: u64 = 0x0001_b206_06a6_e000;
+core/crates/layerfs-content/src/file/cdc/gear.rs:26:const SHIFTED_LARGE_MASK: u64 = 0x0001_b202_06a6_0000;
+core/crates/layerfs-content/src/file/cdc/gear.rs:281:pub const GEAR: [u64; 256] = [
+core/crates/layerfs-content/src/file/mapping/read.rs:20:pub const READ_WAVE_OBJECTS: usize = 32;
+core/crates/layerfs-content/src/file/mapping/read.rs:22:pub const READ_WAVE_BYTES: usize = READ_WAVE_OBJECTS * cdc::MAXIMUM_CHUNK_BYTES;
+
+### workspace allocation sites
+core/crates/layerfs-storage/src/cas/owner.rs:107:        let compression = CompressionWorkspace::new()?;
+core/crates/layerfs-storage/src/cas/owner.rs:108:        let decompression = DecompressionWorkspace::new()?;
+core/crates/layerfs-storage/src/cas/store.rs:154:                .run(|_| DecompressionWorkspace::new())?;
+core/crates/layerfs-storage/src/encoding/codec.rs:107:fn workspace(size: usize) -> StorageResult<Vec<u64>> {
+core/crates/layerfs-storage/src/encoding/codec.rs:142:        let mut memory = workspace(ENCODE_WORKSPACE_BYTES)?;
+core/crates/layerfs-storage/src/encoding/codec.rs:288:        let mut memory = workspace(DECODE_WORKSPACE_BYTES)?;
+
+### where read_batch opens a connection
+core/crates/layerfs-storage/src/cas/store.rs:84:            let connection = connection::open(&path, true)?;
+core/crates/layerfs-storage/src/cas/store.rs:100:            let connection = connection::open(&path, false)?;
+core/crates/layerfs-storage/src/cas/store.rs:130:            let connection = connection::open(&self.path, false)?;
+core/crates/layerfs-storage/src/cas/store.rs:150:            let connection = connection::open(&self.path, false)?;
+core/crates/layerfs-storage/src/cas/store.rs:177:            let connection = connection::open(&self.path, false)?;
+
+### C1 provider call sites in the read path
+core/crates/layerfs-content/src/object/access.rs:20:    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>>;
+core/crates/layerfs-content/src/object/access.rs:23:    fn read_canonical(&self, id: ObjectId) -> ContentResult<Vec<u8>> {
+core/crates/layerfs-content/src/object/access.rs:24:        let mut values = self.read_canonical_batch(std::slice::from_ref(&id))?;
+core/crates/layerfs-content/src/file/mapping/read.rs:87:        let values = self.reader.read_canonical_batch(&self.distinct)?;
+core/crates/layerfs-content/src/file/mapping/read.rs:175:    let canonical = reader.read_canonical(id)?;
+core/crates/layerfs-content/src/file/read.rs:29:            .run(|_| reader.read_canonical(root))?;
+core/crates/layerfs-content/src/file/read.rs:70:            .run(|_| reader.read_canonical(root))?;
+core/crates/layerfs-content/src/file/content.rs:124:            .run(|_| reader.read_canonical(root))?;
+
+### flush_batch clone site

@@ -1,0 +1,23 @@
+input: docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/chunked.bin (614400 bytes)
+mode: pipeline
+root: 5606ec094acf93320a5f0465990883de964205a8e9ce40cb8aa294aedb11ef42
+logical length: 614400
+readback bytes: 614400
+save result: inserted 36 reused 0 packs 4
+readback: verified byte-for-byte against the input
+exclusions: C2 reuse decisions are inside the save scope; no warmed setup is claimed
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c1c2.pipeline  85.221ms
+  store.create  5.506ms
+  storage.begin  5.532ms
+  content.construct  46.342ms
+    content.probe  42.459us
+    content.chunk  46.144ms
+    content.emit  108.417us
+  storage.finish  3.406ms
+    storage.finish  1.584ms
+  content.read  23.683ms
+    content.acquire  1.545ms
+    content.traverse  22.130ms
+timings: 12 nodes at 3 levels
+timings: written to docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/chunked-pipeline.json

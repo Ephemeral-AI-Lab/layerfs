@@ -1,0 +1,15 @@
+{
+  "name": "c1.only",
+  "elapsed_ns": 45192625,
+  "children": [
+    {
+      "name": "content.construct",
+      "elapsed_ns": 45149166,
+      "children": [
+        {"name": "content.probe", "elapsed_ns": 120041, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 44853042, "children": []},
+        {"name": "content.emit", "elapsed_ns": 103833, "children": []}
+      ]
+    }
+  ]
+}

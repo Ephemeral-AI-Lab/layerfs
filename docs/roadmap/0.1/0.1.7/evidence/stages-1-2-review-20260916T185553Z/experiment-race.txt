@@ -1,0 +1,5 @@
+A: completed_saves=9 final_max_pack=9 final_packs=9 A_failures=1 A_contended=3
+B: attempts=45062 acquisitions=45055 accept_collisions=0 final_max_pack=22533 final_packs=22533
+STALE BASELINE OBSERVATIONS = 0
+post-race read of A's object set: 39 / 39 objects (packs_read=4)
+final packs on disk = 22533

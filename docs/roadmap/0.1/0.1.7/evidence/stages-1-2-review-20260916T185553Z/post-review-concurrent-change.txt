@@ -1,0 +1,11 @@
+### post-review concurrent change (recorded 2026-09-16T19:15:30Z)
+git status --porcelain:
+?? docs/roadmap/0.1/0.1.7/component-decoupling/stages-1-2-review-20260916T185553Z.md
+?? docs/roadmap/0.1/0.1.7/evidence/
+?? docs/roadmap/0.1/0.1.7/study/radish/
+
+core/ and tools/ vs reviewed tree 69d34cbe:
+(empty = unchanged)
+
+origin/main is behind by:
+2

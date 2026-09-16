@@ -1,0 +1,24 @@
+### cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
+exit=0
+
+### test targets present
+core/crates/layerfs-content/tests/file_complete.rs
+core/crates/layerfs-content/tests/file_read.rs
+core/crates/layerfs-content/tests/object_identity.rs
+core/crates/layerfs-content/tests/streaming.rs
+core/crates/layerfs-content/tests/timing.rs
+core/crates/layerfs-storage/examples/measure_components.rs
+core/crates/layerfs-storage/tests/cas_reuse.rs
+core/crates/layerfs-storage/tests/cas_roundtrip.rs
+core/crates/layerfs-storage/tests/core_pipeline.rs
+core/crates/layerfs-storage/tests/memory_bounds.rs
+core/crates/layerfs-storage/tests/pack_locator.rs
+core/crates/layerfs-storage/tests/persistence_failure.rs
+core/crates/layerfs-storage/tests/timing.rs
+core/crates/layerfs-telemetry/tests/timer.rs
+core/crates/layerfs-telemetry/tests/timer_compile_fail.rs
+core/crates/layerfs-telemetry/tests/timer_format.rs
+core/crates/layerfs-telemetry/tests/timer_json.rs
+
+### cargo +1.85.1 test -p layerfs-content --tests -- --list (target inventory)
+45

@@ -1,0 +1,16 @@
+{
+  "name": "c1.only",
+  "elapsed_ns": 1186083,
+  "children": [
+    {
+      "name": "content.construct",
+      "elapsed_ns": 1042208,
+      "children": [
+        {"name": "content.probe", "elapsed_ns": 101708, "children": []},
+        {"name": "content.encode", "elapsed_ns": 78375, "children": []},
+        {"name": "content.identify", "elapsed_ns": 696083, "children": []},
+        {"name": "content.emit", "elapsed_ns": 1750, "children": []}
+      ]
+    }
+  ]
+}

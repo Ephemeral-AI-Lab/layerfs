@@ -1,0 +1,17 @@
+value   1048576 B (  1.0 MiB): encoded=  1048589 B  decode=ACCEPTED (1048576 B)
+value   4194304 B (  4.0 MiB): encoded=  4194317 B  decode=ACCEPTED (4194304 B)
+value   8388608 B (  8.0 MiB): encoded=  8388621 B  decode=ACCEPTED (8388608 B)
+value   8388609 B (  8.0 MiB): encoded=  8388622 B  decode=ACCEPTED (8388609 B)
+value  12582912 B ( 12.0 MiB): encoded= 12582925 B  decode=ACCEPTED (12582912 B)
+value  16777202 B ( 16.0 MiB): encoded= 16777215 B  decode=ACCEPTED (16777202 B)
+
+reference decode_bytes_object rejects value_len > MAX_OBJECT_FIELD_BYTES = 8 MiB
+candidate decode_bytes_object has no equivalent field check
+
+### reference (crates/layerfs-content), same value sizes
+reference MAX_OBJECT_FIELD_BYTES = 8388608
+value   1048576 B (  1.0 MiB): encoded=  1048589 B  reference decode=ACCEPTED (1048576 B)
+value   8388608 B (  8.0 MiB): encoded=  8388621 B  reference decode=ACCEPTED (8388608 B)
+value 8388609: reference encode rejected: ObjectLimitExceeded
+value 12582912: reference encode rejected: ObjectLimitExceeded
+value 16777202: reference encode rejected: ObjectLimitExceeded

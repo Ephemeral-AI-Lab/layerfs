@@ -1,0 +1,119 @@
+### candidate manifests
+# Independent replacement-product workspace (LayerFS v0.1.7).
+#
+# The reference workspace at the repository root keeps its own members, lockfile
+# and target directory; `core/` is excluded there. The candidate components under
+# implementation are layerfs-telemetry (timer), layerfs-content (C1) and
+# layerfs-storage (C2). Further packages are added with their real boundaries.
+# Third-party pins are added with the component that needs them.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/layerfs-content",
+    "crates/layerfs-storage",
+    "crates/layerfs-telemetry",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.6"
+rust-version = "1.85"
+license = "MIT"
+[package]
+name = "layerfs-content"
+description = "Canonical objects, complete-file construction and bounded logical reads (C1)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+layerfs-telemetry = { path = "../layerfs-telemetry" }
+[package]
+name = "layerfs-storage"
+description = "Content-addressed physical storage: FULL encoding, packs and SQLite (C2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-telemetry = { path = "../layerfs-telemetry" }
+rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }
+zstd-sys = { version = "=2.0.16", default-features = false, features = ["experimental"] }
+
+### external crate references actually used in candidate src
+blake3::
+layerfs_content::
+layerfs_telemetry::
+rusqlite::
+zstd_sys::
+
+### any reference-workspace path/import in candidate?
+none
+
+### feature graph (locked)
+layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+├── blake3 v1.8.5
+│   [build-dependencies]
+├── layerfs-content feature "default"
+├── layerfs-telemetry feature "default"
+├── rusqlite feature "blob"
+├── rusqlite feature "cache"
+├── rusqlite feature "default"
+├── rusqlite feature "hooks"
+├── rusqlite feature "limits"
+├── rusqlite feature "trace"
+└── zstd-sys feature "experimental"
+
+### test-only markers in product src
+core/crates/layerfs-content/src/policy.rs:4://! the two frozen depth defaults. Every other value is rejected before any work
+core/crates/layerfs-content/src/policy.rs:31:    pub const fn frozen_default() -> Self {
+core/crates/layerfs-content/src/policy.rs:56:    /// slice does not ship. Delta depths are recorded defaults; the range is
+core/crates/layerfs-content/src/policy.rs:118:impl Default for ConstructionPolicy {
+core/crates/layerfs-content/src/policy.rs:119:    fn default() -> Self {
+core/crates/layerfs-content/src/policy.rs:120:        Self::frozen_default()
+core/crates/layerfs-content/src/file/mapping/build.rs:22:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-content/src/file/mapping/build.rs:61:    let mut build = MappingBuild::default();
+core/crates/layerfs-content/src/file/mapping/read.rs:25:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-content/src/file/mapping/read.rs:61:            counters: ReadCounters::default(),
+core/crates/layerfs-content/src/file/mapping/read.rs:150:        return Ok(ReadCounters::default());
+core/crates/layerfs-content/src/file/cdc/gear.rs:52:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-content/src/file/cdc/gear.rs:61:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-content/src/file/cdc/gear.rs:82:        let mut counters = CdcCounters::default();
+core/crates/layerfs-content/src/file/read.rs:96:                ..ReadCounters::default()
+core/crates/layerfs-content/src/file/read.rs:119:                    ..ReadCounters::default()
+core/crates/layerfs-content/src/file/content.rs:236:            let mut empty = MappingBuild::default();
+core/crates/layerfs-content/src/object/output.rs:129:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-storage/src/cas/owner.rs:46:#[derive(Default)]
+core/crates/layerfs-storage/src/cas/owner.rs:62:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-storage/src/cas/owner.rs:122:                PendingGroup::default(),
+core/crates/layerfs-storage/src/cas/owner.rs:123:                PendingGroup::default(),
+core/crates/layerfs-storage/src/cas/owner.rs:124:                PendingGroup::default(),
+core/crates/layerfs-storage/src/cas/owner.rs:135:                ..OutcomeCounters::default()
+core/crates/layerfs-storage/src/cas/owner.rs:348:        let mut availability = Availability::default();
+core/crates/layerfs-storage/src/cas/store.rs:53:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-storage/src/cas/read.rs:19:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-storage/src/cas/read.rs:42:        ..ReadCounters::default()
+core/crates/layerfs-storage/src/cas/dependencies.rs:19:#[derive(Debug, Default)]
+core/crates/layerfs-storage/src/policy.rs:79:    pub const fn frozen_default() -> Self {
+core/crates/layerfs-storage/src/policy.rs:80:        let construction = ConstructionPolicy::frozen_default();
+core/crates/layerfs-storage/src/policy.rs:154:impl Default for StoragePolicy {
+core/crates/layerfs-storage/src/policy.rs:155:    fn default() -> Self {
+core/crates/layerfs-storage/src/policy.rs:156:        Self::frozen_default()
+core/crates/layerfs-storage/src/pack/placement.rs:44:#[derive(Clone, Debug, Default)]
+core/crates/layerfs-storage/src/sqlite/cleanup.rs:16:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+core/crates/layerfs-storage/src/sqlite/cleanup.rs:32:    let mut report = CleanupReport::default();
+core/crates/layerfs-storage/src/sqlite/write.rs:17:#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+
+### forbidden sync/retry surface
+core/crates/layerfs-content/src/file/content.rs:184:/// of the stable source, not a retry, and a short read that reaches end of input
+core/crates/layerfs-content/src/object/output.rs:118:/// receives that error once and no retry, resend or alternative path is taken.
+core/crates/layerfs-storage/src/lib.rs:11://! no WAL, no added crash-durability work and no `fsync`/`fdatasync`/`sync_all`/
+core/crates/layerfs-storage/src/lib.rs:12://! `sync_data` anywhere in the product path. `COMMIT` remains required, and one
+core/crates/layerfs-storage/src/sqlite/connection.rs:6://! durability, and no product path calls `fsync`, `fdatasync`, `sync_all` or
+core/crates/layerfs-storage/src/sqlite/connection.rs:7://! `sync_data`. A locked Store is a definite failure, not a wait.

@@ -1,0 +1,15 @@
+input: docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/chunked.bin (614400 bytes)
+mode: c1
+root: 5606ec094acf93320a5f0465990883de964205a8e9ce40cb8aa294aedb11ef42
+logical length: 614400
+emitted objects: 36
+emitted canonical bytes: 616624
+exclusions: no storage, no pack, no database, no input fixture copy
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+c1.only  45.192ms
+  content.construct  45.149ms
+    content.probe  120.041us
+    content.chunk  44.853ms
+    content.emit  103.833us
+timings: 5 nodes at 3 levels
+timings: written to docs/roadmap/0.1/0.1.7/evidence/stages-1-2-review-20260916T185553Z/smoke/chunked-c1.json
