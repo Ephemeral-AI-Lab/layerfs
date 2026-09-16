@@ -373,38 +373,38 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
     type SaveResult = Result<(Store, Vec<Vec<u8>>), StorageError>;
     let (result, report): (SaveResult, TimingReport) = Timing::record("storage.save", |save| {
-            let store = Store::create(&store_path, policy_row, save.child("store.create"))?;
-            let base = FinalizedObject::new(
-                layerfs_content::ObjectRole::WholeFile,
-                layerfs_content::file::encode_whole_file(&policy.capacities(), base_raw)?,
-            )?;
-            let base_id = base.id();
-            let mut predecessors = layerfs_content::AdvisoryPredecessors::new();
-            predecessors.push(
-                base_id,
-                layerfs_content::PredecessorProvenance::OriginalBase,
-            )?;
-            let dependent = FinalizedObject::new(
-                layerfs_content::ObjectRole::WholeFile,
-                layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?,
-            )?
-            .with_predecessors(predecessors);
-            let dependent_id = dependent.id();
-            let mut operation = store.begin_save(save.child("storage.begin"))?;
-            operation.accept(base, save.child("storage.accept"))?;
-            operation.accept(dependent, save.child("storage.accept"))?;
-            let outcome = operation.finish(save.child("storage.finish"))?;
-            println!(
-                "save: inserted {} reused {} prefix records {} full records {} trials {}",
-                outcome.inserted,
-                outcome.reused,
-                outcome.prefix_records,
-                outcome.full_records,
-                outcome.delta.trials
-            );
-            let (values, _) = store.read_batch(&[dependent_id], save.child("storage.read"))?;
-            Ok((store, values))
-        });
+        let store = Store::create(&store_path, policy_row, save.child("store.create"))?;
+        let base = FinalizedObject::new(
+            layerfs_content::ObjectRole::WholeFile,
+            layerfs_content::file::encode_whole_file(&policy.capacities(), base_raw)?,
+        )?;
+        let base_id = base.id();
+        let mut predecessors = layerfs_content::AdvisoryPredecessors::new();
+        predecessors.push(
+            base_id,
+            layerfs_content::PredecessorProvenance::OriginalBase,
+        )?;
+        let dependent = FinalizedObject::new(
+            layerfs_content::ObjectRole::WholeFile,
+            layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?,
+        )?
+        .with_predecessors(predecessors);
+        let dependent_id = dependent.id();
+        let mut operation = store.begin_save(save.child("storage.begin"))?;
+        operation.accept(base, save.child("storage.accept"))?;
+        operation.accept(dependent, save.child("storage.accept"))?;
+        let outcome = operation.finish(save.child("storage.finish"))?;
+        println!(
+            "save: inserted {} reused {} prefix records {} full records {} trials {}",
+            outcome.inserted,
+            outcome.reused,
+            outcome.prefix_records,
+            outcome.full_records,
+            outcome.delta.trials
+        );
+        let (values, _) = store.read_batch(&[dependent_id], save.child("storage.read"))?;
+        Ok((store, values))
+    });
     let (store, values) = result?;
     println!("store: {}", store.path().display());
     let expected = layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?;
