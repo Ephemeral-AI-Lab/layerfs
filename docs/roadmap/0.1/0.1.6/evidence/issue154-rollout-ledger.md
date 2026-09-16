@@ -519,3 +519,235 @@ seed 1**. The earlier seeds 2 and 3 sweeps remain on disk
 (`benchmark-results/v016/q2`, `q3`, `final-seed2`, `final-seed3`) as retained
 history, but they are no longer the qualification criterion and no further
 repeated sampling was taken.
+
+## L11 — the ten remaining regular cases implemented; one verification row at the ceiling
+
+**What was implemented** (all three pieces are new work, none of them existed on the
+archived line either): F5's HN history orchestrator, F4's two compact branch
+controls, and F6's `historical_access` route with the producer sealing it needs.
+Two harness defects were found and fixed at the root while doing it, and one
+frozen-spec conflict was resolved with evidence. Exact commands at the end.
+
+### L11.1 F5 — the HN (`namespace-inode`) compact history schedule
+
+`workload/v016_hn.rs` declares the five stages, the role arithmetic of fixture S
+(the movable `tiny`/`tiny-moved` directory, `t0`/`t1` refresh, `t2`/`t3` SDK edit
+targets, `t4` alias/replacement) and the exact state after every one of the
+K commits; `v016-hn-stage` executes the four POSIX stages inside the mount and the
+host orchestrator drives the two-call SDK stage and the Commit that follows every
+stage. Declared envelope: S+2 names and S+8192 logical bytes (the alias is charged
+its referent length and the atomic save's temporary is the second extra name),
+directories unchanged — asserted for all 100 states of K100 and all three seeds.
+
+A product-free rehearsal (`v016_hn::rehearsal`) runs the real stage code against a
+natively created fixture and proves every intermediate state with
+`verify_native`, which is what caught the one thing that is *not* derivable on
+paper: renaming an entry changes the parent directory's automatic mtime, so the
+fixture root's declared mode and mtime are set again in stage 3 exactly as every
+other directory this schedule touches. That test is retained.
+
+| case | perf | perf wall | verify | verify wall |
+| --- | --- | ---: | --- | ---: |
+| `v016-history-namespace-inode-k10-v1` | PASS | 1.97 s | PASS | 4.10 s |
+| `v016-history-namespace-inode-k100-v1` | PASS | 3.28 s | PASS | 9.80 s |
+
+Verification runs the case's own declared selection
+`[0, 1, 2, 49, 50, 94, 95, 99, 100]` — commits 94 and 95 are the states the two
+F6 inode consumers read — with 100 Created commits, 101 retained roots, topology
+and every parent edge checked, and the standing omission of the fast history route
+(`unselected historical snapshot content; exhaustive historical object/storage
+census`) stated beside it.
+
+### L11.2 F4 — the two compact branch controls
+
+`v016_stages.rs` declares the compact topology (trunk10; A10/B10 forked from trunk
+commit 5; the descendant control's C10 forked from A's local commit 5), the
+ancestral-ordinal arithmetic (`offset 4096*((j-1) mod 2)`, payload
+`floor((j-1)/2) mod 2` over regions initialised to Z), the branch salts and the
+per-control counters; `src/v016_compact.rs` drives one live workspace at a time and
+proves the graph and every branch head against the declaration.
+
+| case | perf | perf wall | verify | verify wall |
+| --- | --- | ---: | --- | ---: |
+| `v016-branch-convergent-content-v1` | PASS | 2.28 s | PASS | 2.45 s |
+| `v016-branch-fork-descendant-v1` | PASS | 2.09 s | PASS | 2.09 s |
+
+Measured on the final identity: 30 and 40 Created commits, longest ancestry 15 and
+20, and the control's own content contract — the convergent children publish the
+*same* first-medium-file content root (`82b78c4d…`), the descendant control's B and
+C publish branch-salted roots (`d45ef36b…`, `57bee450…`) that also differ from A's.
+
+**One frozen-contract clarification.** `retained_graph_roots` counts
+initial/commit state *references*, not distinct root ObjectIds
+(`benchmark-families.md` §dedup_branch_history), and the convergent control makes
+identical content changes on both children. The product's content-addressed
+identity therefore collapses trunk commits 6..10 onto A's local commits 1..5 (and
+B's onto both): 30 Created commits resolve to 15 distinct commit identities and 16
+distinct roots, while the *reference* count stays 31 as declared. The oracle
+records both numbers and asserts the declared reference count; it does not assert
+that the distinct count equals it.
+
+### L11.3 F6 — `historical_access`: the route, the sealing, and the six cases
+
+Each access case mounts exactly one selected retained state of a sealed producer
+with one live workspace and creates no commits. `infra-seal-producer` publishes the
+producer schedule once, during fixture preparation, with its own container; the
+access invocation only resolves the declared branch and ordinal, forks it, runs the
+declared full reads twice inside the mount (reader pass and verifier pass) and
+compares every byte with the producer's own declaration recomputed on the host.
+Performance is `N/A` for all six — the route refuses to run in performance mode.
+
+| case | producer / state | declared bytes | verify | verify wall |
+| --- | --- | ---: | --- | ---: |
+| `v016-access-boundary-before-v1` | boundary-cycle k100, commit 48, below role | 131 071 | PASS | 1.69 s |
+| `v016-access-boundary-after-v1` | boundary-cycle k100, commit 49, below role | 131 072 | PASS | 2.10 s |
+| `v016-access-inode-before-v1` | namespace-inode k100, commit 94, target + alias | 8 192 | PASS | 2.08 s |
+| `v016-access-inode-after-v1` | namespace-inode k100, commit 95, target, alias ENOENT | 4 096 | PASS | 1.91 s |
+| `v016-access-fork-point-v1` | compact convergent, trunk commit 5, first medium | 65 536 | PASS | 1.83 s |
+| `v016-access-divergent-head-v1` | compact descendant, B local commit 10, first medium | 65 536 | PASS | 1.82 s |
+
+The inode pair proves stat/nlink equivalence inside the mount (`nlink=2`, one
+device and inode for both names) and the replacement state proves the alias
+`ENOENT`; both are re-proved by the verifier pass.
+
+### L11.4 The boundary-cycle exchange direction (frozen-spec conflict, resolved)
+
+The frozen access table and `cases.json` require the below-role file at commit 49
+to be exactly 131 072 B. The implemented exchange moved the byte the other way
+(131 071→131 070 and 131 073→131 074), so no commit ordinal of that producer could
+ever publish 131 072 B, and the "boundary-cycle" profile never touched the boundary
+it is named for. The frozen one-line schedule ("exchange one byte between
+131071/131073 files, shrinking first, then reverse next commit") admits both
+directions; the two consumer rows admit only one. The exchange now moves the higher
+file's last byte **down** into the lower one, so the pair oscillates between
+(131 071, 131 073) and (131 072, 131 072) — every other commit puts both names
+exactly on the 128 KiB boundary and leaves the `exact` control unchanged, as
+declared. The two `boundary-cycle` rows are re-collected on the new identity
+(2.09 s / 3.78 s and 2.66 s / 3.84 s, all PASS).
+
+Consequence for the oracle: a splice that carries a file **across** the exact
+boundary is not an extension of the previous extent list — the published
+representation changes class, so the product re-encodes the whole file (measured,
+not assumed: the first form of the fix failed with
+`actual payload transcript differs from independent oracle` at the very step the
+class changes, and the mismatch report now names the path and both
+decompositions). `expected_transcripts` therefore transcribes exactly those paths
+from the declared content, as a fresh import is, and leaves every other path on the
+splice model. No check was removed: the recoded path is still compared byte for
+byte through its own canonical decomposition.
+
+### L11.5 Two harness defects fixed at the root
+
+1. **The drive-level preparation wrote its master where the runner never looks.**
+   `prepare_v016_fixture.py` keyed its prepared input by
+   `{family, case, seed, source, recipe}` while `runner.py::_host_acquire` keys it by
+   `{contract, fixture, schema_sha256, seed}`. Every `--prepare` therefore populated
+   a cache the gated invocation does not consult, and the first gated invocation of
+   each case re-constructed (and, for an access case, would have *unsealed*) the
+   master inside its own complete-command window — the 13–16 s first-use cost L7
+   measured. Preparation now writes at the key the runner acquires, and
+   `_host_acquire` seals an access case's producer itself if it ever has to build
+   the master, so no path can produce an unsealed access input.
+2. **The prepared master's identity omitted one file.**
+   `prepare_v016_fixture.py` computed `host_tree_identity` *before* writing
+   `host-owner.json`, so its own cache entry failed the runner's identity check
+   (`host prepared Store content mismatch`). Fixed ordering; the owner marker is
+   part of the identity, `host-cache.json` is excluded by the helper.
+
+### L11.6 Registry and bookkeeping
+
+`workspace_registry` now declares sixteen families and **169** timed IDs
+(`[8,20,12,4,4,16,10,10,20,14,26,7,5,6,6,1]`): `branch_development` 4 → 6 and the
+new `historical_access` family with its six additions. `sample_slot_count` 507.
+Harness layout and host-family counts updated with it; `historical_access` gained
+the `setup.sh`/`perf.sh`/`verify.sh` entrypoints every family has.
+
+### L11.7 Final seed-1 matrix (one run per case per mode)
+
+Identity: source seal `86f14b2d68ece2ae368f8aec29070520505a61c7aa69b445414b64561640e954`,
+product seal `970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd`
+(**unchanged**: this work touched only the benchmark harness, the oracle and the
+producer declarations), compilation seal
+`679b17f0e17636ae419144edb7377be03dd1709ac362d72ea0dff61d3b89306b`, dependency seal
+`374f4dfa08f98ced734e540f62dd4a8b0edb5a88c090c051ae704fbf7f67faf1`, image
+`layerfs-bench-infra:86f14b2d68ece2ae` = `sha256:af6a400356e36b2f58e5eb9df07a291d8567cb975adbb183ed5d76b0c5e7268d`,
+host binary `fcaa14d8decf96a6247d95a037e83eea7322aeb66a51d418acbee2e21fdd6aa7`,
+harness identity `42ace192351e57ee429e09dbb6480dfffb43e65045c154f72131a99ac7626ada`.
+
+`LAYERFS_SOURCE_DIRTY = true`: the tree carries another writer's uncommitted
+`docs/roadmap/0.1.7` study material, which is outside the source seal's scope
+(`crates/`, `tools/`, `benchmark/fs-bench-pro/`). The receipts name build-time HEAD
+`8357b1e336d1e16eae349a3313c5f3dbdc777b82`; the seal-covered content is byte-identical
+to the committed `823f556ca` (the rebuild after that commit produced the *same*
+source seal and image tag), so the matrix is valid for the committed source, and
+the recorded commit hash is the one that was HEAD when the binary was sealed.
+
+Committed evidence: `evidence/issue154/final-complete-matrix.json` (33 rows) and
+`evidence/issue154/final-complete-extended-matrix.json` (3 rows).
+
+| verdict class | slots of 39 (33 regular × 2 modes, minus six perf `N/A`) |
+| --- | ---: |
+| PASS inside the 15 s target | **29** perf/verify rows |
+| declared ≤25 s exception (listed by case) | **6** rows |
+| performance `N/A` (the six access cases, declared) | **6** rows |
+| **TIMEOUT** | **1** row |
+
+Declared exceptions: `mixed …500mb-30000-k100-v1` perf 19.62 s / verify 22.15 s;
+`workspace …500mb-30000-k100-v1` perf 15.92 s / verify 20.61 s; `branch
+…500mb-30000-k100-v1` perf 17.12 s / verify 22.99 s.
+
+**The one non-passing row** is `v016-branch-mixed-500mb-30000-k100-v1` verification:
+the host command was stopped by the declared complete-command window at a 22.99 s
+wall, after the 210-commit replay, both published heads and two of the three
+complete branch-state proofs had already been emitted. It was re-taken **once** on
+the same identity after the machine quietened (22.92 s → 22.99 s, host load
+8.4/8.8 on 14 CPUs both times) and both attempts are retained; L10 recorded the same
+row at 22.83 s PASS on the earlier identity, so it sits directly on the 25 s
+ceiling. No oracle, coverage or limit was changed to move it: it is reported as a
+`TIMEOUT` with its measured wall and escalated for an owner ruling (a declared
+larger verification exception, or `NOT_RUN`).
+
+### L11.8 Extensions re-collected on the final identity
+
+| case | mode | status | wall | watchdog |
+| --- | --- | --- | ---: | ---: |
+| `v016-mixed-exhaustive-100mb-5000-k100-v1` | verify-only | **PASS** | 15.42 s | 120 s |
+| `v016-mixed-exhaustive-500mb-30000-k100-v1` | verify-only | **PASS** | 62.68 s | 300 s |
+| `v016-workspace-four-100mb-5000-k100-v1` | perf + verify | **PASS / PASS** | 8.04 s / 9.24 s | 60 s |
+
+The L500 exhaustive replay that TIMEOUTed at 298.28 s in L8 now completes in
+62.68 s on its own 300 s watchdog, and the L100 exhaustive dropped from 38.33 s to
+15.42 s: the verifier redundancy removed in L10 is what the extension walls were
+paying for. Performance for the two verify-only cases stays `N/A`, never 0 and
+never `PASS`.
+
+### L11.9 Defects found and fixed in this phase
+
+| # | defect | root cause | fix |
+| --- | --- | --- | --- |
+| 1 | drive-level preparation cached a master the runner never acquires; first-use construction stayed inside the gate | two different cache keys for one artifact | `prepare_v016_fixture.py` keys by the runner's compatibility record |
+| 2 | the prepared master failed the runner's identity check | owner marker written after the identity was computed | write it first |
+| 3 | the boundary-cycle pair never reached the exact 128 KiB boundary its consumers read | exchange direction inverted | move the higher file's byte down; re-collect the two rows |
+| 4 | the transcript oracle could not model a file crossing the representation class | splice model assumes the surrounding decomposition survives | transcribe the recoded path from the declared content |
+
+### L11.10 Reproduction
+
+```bash
+python3 benchmark/fs-bench-pro/shared/runner.py --build-host
+IMG=$(python3 benchmark/fs-bench-pro/shared/runner.py --build-image)
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image "$IMG" --tag final2-seed1 --prepare --seed 1
+python3 benchmark/fs-bench-pro/shared/v016_rollout.py \
+  --image "$IMG" --tag final2-ext --prepare --extended --seed 1
+python3 benchmark/fs-bench-pro/shared/v016_report.py --tag final2-seed1 \
+  --out docs/roadmap/0.1/0.1.6/evidence/issue154/final-complete-matrix.json
+python3 benchmark/fs-bench-pro/shared/v016_report.py --tag final2-ext \
+  --out docs/roadmap/0.1/0.1.6/evidence/issue154/final-complete-extended-matrix.json
+```
+
+Product-free gates before the measurement: `python3 docs/roadmap/0.1/0.1.6/check_plan.py`
+(`PASS`, 33 regular + 3 extended), `rustc --edition 2021 --test workload/main.rs`
+(19 passed, including the HN rehearsal and the compact-control checks),
+`target/release/fs-benchmark-pro workspace-self-check`
+(`timed_case_count 169`, `sample_slot_count 507`) and
+`tools/preflight.sh` (all steps passed).
