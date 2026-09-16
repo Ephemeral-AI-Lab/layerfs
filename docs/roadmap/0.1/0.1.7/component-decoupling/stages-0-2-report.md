@@ -146,22 +146,54 @@ production LOC.
 | `core/crates/layerfs-storage/src/sqlite/schema.rs` | 130–220 | 187 | 212 | within | Within range. Exact creation and validation of four tables, two indexes and the policy row. |
 | `core/crates/layerfs-storage/src/sqlite/write.rs` | 180–320 | 83 | 117 | below | Below range. The statement bindings and the three transaction transitions. |
 
+## 3a. Production LOC comparison for this commit
+
+```text
+Production LOC: 69208 -> 74501 (delta +5293)
+  core      732 -> 6025   (layerfs-content 2322, layerfs-storage 2971, telemetry 732)
+  reference 68476 -> 68476 (unchanged)
+```
+
+Method: `python3 tools/production_loc.py` (the counter version committed with
+this change) run against both snapshots materialized from the exact trees — the
+first-parent tree `2242e867b6685f33e2dd52f62eeece153664839f` and the committed
+tree `6f30812efbe9ba86c749a48935890d11133930c4`. Nonblank, non-comment first-party
+product implementation including candidate runtime SQL; tests, examples,
+fixtures, tooling, docs, manifests and generated artifacts excluded. Reference and
+core subtotals are reported separately because both products coexist during
+migration.
+
+The delta is entirely new candidate implementation. No reference code was
+retired, moved or duplicated into the candidate: C1/C2 algorithms were ported and
+simplified, and no path dependency, source include or runtime fallback into
+`crates/` exists.
+
 ## 4. Commands and results
 
 All commands below were run from `/Users/yifanxu/Ephemeral-AI-Lab/layerfs`.
 
 ```sh
 python3 core/tools/check_product_boundary.py          # PASS: 52 files scanned
-python3 -m unittest discover -s core/tools -p 'test_*.py'
-python3 -m unittest discover -s tools -p 'test_production_loc.py'
-cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --tests
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests
-cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked
-cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
-cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_nested
-cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_composition
+python3 -m unittest discover -s core/tools -p 'test_*.py'          # PASS: 5 tests
+python3 -m unittest discover -s tools -p 'test_production_loc.py'  # PASS: 13 tests
+cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check    # PASS
+cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --tests   # PASS: 45 tests
+cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests   # PASS: 37 tests
+cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked                  # PASS
+cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings  # PASS
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_nested        # PASS
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_composition   # PASS
+tools/preflight.sh                                    # PASS: all steps; one soft budget note
 ```
+
+`tools/preflight.sh` was run with the new counter tests and the three
+`measure_components` modes wired in. Every step passed. The only non-passing line
+is the documented soft budget: the reference workspace fast suite took 220 s
+against its advisory 120 s warm-suite ceiling. That is a development-loop budget,
+not a correctness gate, and the suite itself passed. No timeout was raised, no
+test was dropped and no input was warmed to obtain this result. LayerFS has no
+CI, so "preflight passed" is the strongest available claim and no CI-green claim
+is made.
 
 Real-mode smoke runs (fresh outputs, 16 KiB explicit fixture):
 
