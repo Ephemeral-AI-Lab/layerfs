@@ -72,6 +72,7 @@ Three rounds of receipts exist and are retained as they were produced:
 | [`evidence/stages-3-4-smoke-20260916T210931Z/`](../evidence/) | first single-sample smoke runs of the three modes | wiring only, admission-ineligible; unchanged |
 | [`evidence/stages-3-4-fingerprint-collision-20260917T021500Z/`](../evidence/) | the searched 64-bit fingerprint collision pair and the search log | correctness fixture for the pooled candidate filter |
 | [`evidence/stages-3-4-timing-20260917T031000Z/`](../evidence/) | 21 declared arms (pooled lane, 15 edit lanes, two timing on/off pairs) with `ledger.md`, `tool-identities.txt` and timing trees | single sample per case, debug profile, in-process fixtures, no warm-cache credit; a wiring and correctness demonstration, explicitly **not** performance evidence |
+| [`evidence/stages-3-4-matched-c1-20260917T050000Z/`](../evidence/) | the matched C1 localized-edit pair (reference v0.1.6 against the candidate) with every observation in its `ledger.md` | identical edited root in all observations; the elapsed times interleave, so the latency gate stays **unqualified**; storage boundaries differ and memory is unmeasured |
 
 The round's declarations were committed before collection in
 [`stages-3-4-measurement-addendum.md`](stages-3-4-measurement-addendum.md); every arm
@@ -84,8 +85,9 @@ external test targets named in the
 [report](stages-3-4-report.md), and the component entry points are
 `core/crates/layerfs-storage/examples/measure_edits.rs` and
 `measure_pooled.rs`. The measured performance, storage and memory gates against
-v0.1.6 remain open: no matched arm exists because the two products share no public
-edit or pooled-save operation to time.
+v0.1.6 remain open. The matched C1 pair is the only reference comparison collected; it
+proves reference-equivalent roots but does not resolve latency at n=1, does not align the
+byte-accounting boundary and measures no memory.
 
 ## 5. Continuation adjustment: acceptance remains in Stages 3–4
 

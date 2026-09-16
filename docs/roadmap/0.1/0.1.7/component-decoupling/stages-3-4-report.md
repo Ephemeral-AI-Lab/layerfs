@@ -258,6 +258,7 @@ with their claims marked superseded.
 | Frozen reference equivalence | `edit/tree.rs`, `edit/apply.rs` | `edit_reference` against the sealed v0.1.6 oracle | all nine cases match the reference root, partition and surviving leaf identities exactly |
 | Real DB-free edit timing with enabled/disabled equivalence | `edit_timing.rs`, `examples/measure_edits.rs` | `edit_timing::*` (4), `--timing on\|off` receipts | same reads, result and identities with recording on and off |
 | Real edit → C2 → reopen → readback | `cas/*`, `edit_pipeline.rs`, `examples/measure_edits.rs` | `edit_pipeline::*` (4), the `e2-pipeline-*` receipts | exact bytes after reopen; C1-only and integrated runs return the same edited root |
+| Existing-or-better qualified latency/storage/memory | — | `evidence/stages-3-4-matched-c1-20260917T050000Z/` | **INCOMPLETE**: the matched C1 pair returns the identical reference root, but four observations interleave (reference 224 875–351 666 ns, candidate 186 000–468 333 ns) and n=1 cannot qualify the gate; storage is not a like-for-like boundary and memory is unmeasured |
 
 ## 7. Unmet criteria and honest gaps
 
@@ -285,7 +286,17 @@ with their claims marked superseded.
    the full 131 072-entry window is never filled by *distinct* identity-recorded rows
    in a single fixture, because the fixture that does fill it is exactly the crossing
    case reported.
-6. **The admitted-FULL cache is a heuristic.** Its min-hash sketch can miss a
+6. **The matched comparison does not qualify latency, storage or memory.** The
+   matched C1 pair in `evidence/stages-3-4-matched-c1-20260917T050000Z/` proves the
+   candidate returns the reference root for the same base and edit, but its four
+   observations interleave (reference 224 875–351 666 ns, candidate 186 000–468 333 ns),
+   so with one sample per arm neither "existing-or-better" nor "slower" is supported.
+   Storage is not a like-for-like boundary (the candidate emits the replacement
+   content inside the timed window; the reference wrote 13 826 B against the
+   candidate's 47 357 B) and memory is unmeasured. The smallest missing case is an
+   owner-approved repeated-sample campaign (n ≥ 5 per arm) on this fixture, plus an
+   aligned byte-accounting boundary.
+7. **The admitted-FULL cache is a heuristic.** Its min-hash sketch can miss a
    genuinely similar candidate (bounded candidate loss, never a correctness risk);
    `delta_payload::the_admitted_full_cache_supplies_a_candidate_within_one_save`
    documents the content shape it works for.

@@ -1,0 +1,13 @@
+implementation: reference v0.1.6 rope edit
+base_bytes: 3300000
+logical_length: 3300000
+edit: replace [1650000, 1690000)
+elapsed_ns: 224875
+edited_root: b6dca354fe1a8e4a9f7a3db9d0d144b0bddc9f5deacef6b7598920087c65207b
+objects_before: 176
+objects_written: 5
+objects_written_bytes: 13826
+nodes_created: 3
+nodes_read: 11
+wall_seconds: 0.054
+exit_code: 0

@@ -214,6 +214,7 @@ and the three measurement arms show `full leaves = work-exceeded + 1` at every s
 | Frozen reference equivalence across shapes | `edit_reference` — all nine cases match root, partition and survivors exactly | PASS |
 | Real edit → C2 → reopen → readback | `edit_pipeline` (4), the `e2-pipeline-*` receipts | PASS |
 | Enabled/disabled timing equivalence | `edit_timing` (4), the `e3*` receipts | PASS |
+| Existing-or-better qualified latency/storage/memory | matched C1 pair, `evidence/stages-3-4-matched-c1-20260917T050000Z/` | **INCOMPLETE**: identical reference root, but four observations interleave (reference 224 875–351 666 ns, candidate 186 000–468 333 ns); n=1 cannot qualify latency, the storage boundaries differ and memory is unmeasured |
 
 The 80+100 gap recorded in the previous report is **closed**: the new oracle case
 concatenates the 80-extent and 100-extent fixtures, replaces the whole extent run
@@ -330,14 +331,26 @@ output path differ, so the observable products do not depend on recording. The a
 node counts are in the receipts; a per-node overhead figure is not computed, because
 subtracting overlapping spans is not a CPU measurement.
 
-### 4.5 v0.1.6 comparison status
+### 4.5 Matched C1 pair (the only reference comparison collected)
+
+`evidence/stages-3-4-matched-c1-20260917T050000Z/`: same 3 300 000-byte base, same
+replacement of `[1 650 000, 1 690 000)`, release profile, one declared sample per arm,
+all four observations listed in its ledger. Both arms return the identical root
+`b6dca354…c65207b` in every observation, which is independent reference-equivalence
+evidence outside the fixtures. The elapsed times interleave (reference
+224 875–351 666 ns, candidate 186 000–468 333 ns), so **the latency gate stays
+unqualified**; the byte accounting is not a like-for-like boundary (5 objects /
+13 826 B against 7 objects / 47 357 B, dominated by where the replacement content is
+emitted); memory is unmeasured.
+
+### 4.6 v0.1.6 comparison status
 
 | Dimension | Status |
 | --- | --- |
 | Algorithm/result equivalence | **Proven for edits**: nine oracle cases with exact roots, partitions and survivor identities. Not applicable to pooling, because the reference's pooled lane exposes no public C2 save/read operation to drive from a test. |
-| Speed | **Unproven.** No matched arm exists. |
-| Storage | **Unproven at parity.** The pooled lane uses the reference's own formats, but no matched footprint comparison was run. |
-| Memory | **Unproven.** Declared-capacity evidence only; the reference's runtime index was not measured. |
+| Speed | **Unqualified.** One matched C1 pair exists and its observations interleave; see §4.5. |
+| Storage | **Unqualified.** The pooled lane uses the reference's own formats; the only matched pair has non-aligned write boundaries. |
+| Memory | **Unmeasured.** Declared-capacity evidence only; neither the candidate nor the reference was instrumented. |
 | New capabilities the reference does not expose (stored-tree COW as a public edit path, v6/v7 lanes with explicit dispatch) | Reported separately; never counted as a speedup. |
 
 ---
@@ -402,11 +415,18 @@ subtracting overlapping spans is not a CPU measurement.
 
 ## 7. Verdict
 
-- **Stage 3 (#168): PASS** — every criterion in §2.1 has code, an external test and
-  retained evidence; one defect found during the batch was fixed and covered.
-- **Stage 4 (#169): PASS** — every criterion in §2.2 has code, an external test and
-  retained evidence; the 80 + 100 → 90 + 90 case is realized explicitly and all nine
-  oracle cases match the sealed reference exactly.
+- **Stage 3 (#168) — functional criteria PASS, one qualification gate open.** E1–E3,
+  the window/reopen/failure semantics and the packed lane all have code, external tests
+  and retained evidence; one defect found during the batch was fixed and covered. The
+  open gate is #168's own "simultaneous index/codec/SQL memory" requirement: no
+  instrumentation exists, so it is **unmeasured**, and the pooled lane has no matched
+  reference counterpart to compare against.
+- **Stage 4 (#169) — functional criteria PASS, latency qualification open.** Every
+  functional item in §2.2 is evidenced, including the 80 + 100 → 90 + 90 case and all
+  nine oracle cases. #169's "existing-or-better qualified latency/storage/memory" item
+  is **INCOMPLETE**: the matched C1 pair returns the identical reference root but its
+  observations interleave at n=1, the storage boundaries differ and memory is
+  unmeasured. Neither issue should be closed on this evidence.
 - **Not claimed:** any v0.1.6 speed, storage or memory improvement; cold-cache behaviour;
   heap/RSS attribution; any release, tag or deployment state.
 - **Open elsewhere:** #165 stays open, and Stages 5–7 (filesystem algorithms, Stage 6
