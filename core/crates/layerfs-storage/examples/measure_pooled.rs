@@ -203,6 +203,13 @@ fn main() -> Result<(), Failure> {
     println!("leaves: {}", options.leaves);
     println!("rows-per-leaf: {}", options.rows);
     println!("timing: {}", if options.timing { "on" } else { "off" });
+    println!(
+        "policy: cutoff {} depths whole-file {} chunk {} metadata {}",
+        policy.small_file_threshold_bytes(),
+        policy.whole_file_delta_max_depth(),
+        policy.chunk_delta_max_depth(),
+        policy.metadata_delta_max_depth()
+    );
     println!("store: {}", store_path.display());
 
     // Save-to-acknowledgement: the Store is created inside the timed scope, and one
@@ -282,6 +289,10 @@ fn main() -> Result<(), Failure> {
         return Err("pooled readback differs from the admitted leaves".into());
     }
     println!("readback: {objects} object(s) verified byte-for-byte");
+    // The identities are printed so the observability-equivalence arm can compare
+    // the two timing modes on identities, not only on counters.
+    println!("readback first: {first}");
+    println!("readback last: {last}");
 
     // Retained footprint of the bounded derivation the Store owns, plus the physical
     // size of what it published.
