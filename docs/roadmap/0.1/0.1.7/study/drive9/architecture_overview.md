@@ -42,6 +42,25 @@ tenant-database providers, and the center of gravity is now the workspace
 kernel (layers, git workspaces, vault, journal, mounts). Where doc and code
 disagree, code wins; the divergences are noted where they matter.
 
+Drive9's own one-diagram presentation of itself (README.md:176-189,
+transcribed):
+
+```text
+AI agents / sandboxes / humans
+        │
+        ▼
+FUSE mount · CLI · Go SDK · HTTP API
+        │
+        ▼
+Drive9 server ──► workspace state (paths, revisions, layers,
+   │               checkpoints, scoped tokens)
+   ├──► local execution layer (.git, deps, build cache, packs)
+   └──► vault + journal (secrets, grants, audit)
+        │
+        ├──► (TiDB / MySQL-compatible metadata store)
+        └──► (S3-compatible object storage)
+```
+
 ## Component map
 
 ```text
@@ -107,6 +126,44 @@ nothing of Drive9's server runs inside the sandbox. Storage dependencies:
 one central meta DB (MySQL/TiDB), one user DB per tenant (provider-specific,
 pkg/tenant/provider.go:6-24), S3-compatible object storage (local-directory
 dev mode served on `/s3/`, pkg/server/server.go:543-552).
+
+```text
+Deployment topology (verified against code):
+
+┌──────────────── sandbox / host ─────────────────┐
+│ drive9 CLI ─── SDKs (Go/TS/Py/Rs/Kotlin/Swift)  │
+│     │                                           │
+│     │  drive9 mount                             │
+│     ▼                                           │
+│ SUPERVISOR (long-lived, flock .supervise.lock)  │
+│     │ child — never setsid                      │
+│     ▼                                           │
+│ WORKER: FUSE Dat9FS        WebDAV loopback      │
+│ (kernel ⇄ HTTP bridge)     objectfs (rclone)    │
+└─────────────────┬───────────────────────────────┘
+                  │ HTTPS, JSON + SSE (no gRPC);
+                  │ Authorization: Bearer JWT | scoped fs token
+                  ▼
+┌──────────────── server fleet ──────────────────┐
+│ drive9-server pod ×N (:9009)                   │
+│   every pod serves all requests;               │
+│   leader (MySQL GET_LOCK) gates background     │
+│   workers only (GC, quota replay, reconcilers) │
+│   pods heartbeat → pod_registry (10 s)         │
+└──────┬────────────────────────┬────────────────┘
+       │                        │
+       ▼                        ▼
+central meta DB           per-tenant user DB ×N
+(MySQL/TiDB):             (tidb_zero | tidb_cloud_native |
+tenants, API keys,        db9 | local):
+quota_mutation_log,      file_nodes/inodes/contents/semantic,
+pod_registry, outbox     fs_layer_*, git_workspace_*, journals,
+       │                 vault_*
+       │                        │
+       └────► S3-compatible object storage:
+              blobs/<ULID>  (content ≥ 50,000-byte inline threshold)
+              layers/<layerID>/<ULID>  (large layer payloads)
+```
 
 ## Authority and data flow
 
@@ -233,6 +290,25 @@ There is no in-place "reconnection": a supervisor restart is a cold remount,
 made data-safe by the stable cache-dir-keyed staging stores
 (docs/design/fuse-mount-supervision.md#49).
 
+```text
+write(2) ──► WriteBuffer (in-mem, 8 MB parts) ──spill──► ShadowStore
+                 │                                    (host-durable,
+  Flush ─────────┴─► stage shadow + append WAL journal   per-path)
+                    frame ──► return OK (~1-5 ms; the actual upload
+                    happens later, in Release)
+                 │
+  fsync (strict) / Release ──► CommitQueue (per-path serialized,
+                 │             ≤ 500 pending, PayloadBaseRev fence)
+                 ▼
+     conditional upload — CAS base = revision observed at open
+                 │
+                 └─ 409 → PendingConflict kept locally, never auto-resolved
+
+crash ──► next mount: journal replay → PendingIndex → RecoverPending
+always remote-sync regardless of profile: SQLite *-wal / *-journal
+sidecars and append-log-configured paths
+```
+
 Supervision: `drive9 mount` → SUPERVISOR (long-lived, flock-serialized) →
 WORKER ("Worker must NOT setsid — remain child of supervisor",
 pkg/mountsupervisor/supervisor.go:613-614). The worker has an honest typed
@@ -245,6 +321,21 @@ pkg/mountsupervisor/supervisor.go:414-439), and health-checks *locally only*
 — "never readdir/remote List. Backend outage while mounted is degraded
 status, not FUSE death" (pkg/mountsupervisor/supervisor.go:573-599). An
 external `drive9 mount ensure` reconciles orphaned trees (adopt or remount).
+
+```text
+drive9 mount ──► SUPERVISOR (detached, flock-serialized)
+                   │ spawns WORKER as a child (never setsid)
+                   ▼
+                 WORKER --foreground (FUSE)
+                   ├── typed exits: 0 external umount · 3 serve-abnormal
+                   │                 4 panic · 5 permanent · 6 transient
+                   ├── restarts: 1 s→30 s backoff; circuit 5/10 min
+                   │   → force-unmount, idle resident
+                   ├── health: local only (active mount + control socket)
+                   └── control socket: drain / status / ping
+
+drive9 mount ensure — external reconcile (adopt or remount)
+```
 FUSE platforms: Linux + macOS; Windows falls back to WebDAV
 (cmd/drive9/cli/fuse_bridge_windows.go). Drive9's own POSIX report claims
 8,941/8,941 passes across pjdfstest (8,798), LTP (133), flock, pyxattr, fsx
@@ -260,6 +351,25 @@ The V1 design (2026-06-03) and the CoW-fork spec (2026-08-13, "Canonical")
 are the two governing documents
 (docs/design/layered-filesystem-v1-design.md,
 docs/design/layered-filesystem-cow-fork-design.md). The model:
+
+```text
+main (live, mutable current state)   file_nodes / inodes / contents,
+                                     one revision counter per inode
+  ├── layer exp-a    create :/       fs_layers row (state active …)
+  │     ├── cp1, cp2 checkpoints     named entry_seq boundaries; no copy
+  │     └── layer exp-b  fork @ origin_seq = MAX(parent.entry_seq)
+  │                      (tip pin — never durable_seq, rule D1)
+  └── layer exp-c    sibling root
+
+The pin freezes the parent OVERLAY, not main: sibling commits to main
+stay visible to the child through the main fallback (rule D7).
+
+read (path):  local dirty → chain-folded layer entry → main fallback;
+              whiteout hides; readdir merges main + layer children
+write:        top active layer only; copy-up records base_inode_id +
+              base_revision claims for CAS
+commit:       any layer → main only; children never commit into parents
+```
 
 - **Layer** = one agent session/attempt: an `fs_layers` row (state
   `active | sealed | committing | committed | abandoned | conflicted`;
@@ -332,6 +442,42 @@ returns 409 pointing at layer fork (rule D9, pkg/server/fork.go:317-332).
    revision-CAS write; on any failure, snapshot-based best-effort rollback
    of the already-applied entries, layer → `conflicted`.
 6. Final CAS `committing → committed`.
+
+```text
+             idempotent fast path
+          ┌── already committed ──► 200 "committed"
+          │
+   active|sealed
+          │ conditional UPDATE (CAS) — fences duplicate commits
+          ▼
+      committing
+          │
+          ▼
+   build apply set   child: materialize chain, diff vs LIVE main (D18/D19)
+          │          root: ordered log replay
+          ▼
+   scope + PREFLIGHT (per entry, vs live main)
+          │   rename: source exists ∧ target absent (no-replace)
+          │   dir whiteout: directory empty
+          │   new-file claim (rev 0): path must NOT exist
+          │   revision claim: main.revision == entry.base_revision
+     ┌────┴─────┐
+  conflict      ok
+     │            │
+     ▼            ▼
+  409 +        snapshot touched main paths
+  conflicts[]      │
+  state →          ▼
+  conflicted    ordered apply (each write a revision-CAS; creates
+     │           shallow-first, whiteouts deep-first)
+     │              │ failure → snapshot rollback of applied
+     │              ▼           entries → conflicted
+     │           CAS committing → committed
+     ▼
+  conflicted = terminal for writing, preserved:
+  status / diff / rollback (→ abandoned) / delete all work;
+  no merge, no resolve API — detect-and-park by design
+```
 
 Two honest limitations, stated in Drive9's own docs: the commit "does not
 claim single-transaction atomicity across DB/filesystem mutations" and
@@ -469,16 +615,15 @@ per step (pkg/server/server.go:1620-1675,
 pkg/server/fs_authorization.go:36-127, 229-265). Admin auth is TiDB Cloud
 IAM, not bearer. Vault reads authenticate by capability token.
 
-**SDKs**: the Go client (`pkg/client`) is the reference surface (~50 files:
-full transfer engine, layers, git workspaces, journals, vault, SSE, admin).
+**SDKs**: the Go client (`pkg/client`) is the reference surface (full
+transfer engine, layers, git workspaces, journals, vault, SSE, admin).
 External SDKs re-implement natively with sharply uneven coverage: **TS**
 near-parity (layers, git, journals, vault grants, SSE, scoped tokens);
-**Python/Rust** core fs + transfer + basic vault only; **Kotlin/Swift**
-mobile-tier equivalents of the Python set. JS-only among external SDKs:
-layers, git workspaces, journals, scoped tokens, SSE. Go-only: admin,
-provisioning, STS minting, batch-write, setmeta, append-log. No MCP server
-exists (roadmap P5 only). Consistency matrix in the source report:
-Marcus, Interfaces (2026-09-16), spot-checked.
+**Python/Rust** core fs + transfer + basic vault; **Kotlin/Swift**
+mobile-tier equivalents of the Python set. Layers/git/journals/scoped
+tokens/SSE are JS-only among external SDKs; admin, provisioning, STS
+minting, batch-write, setmeta, append-log are Go-only. No MCP server exists
+(roadmap P5 only).
 
 ## What LayerFS can learn
 

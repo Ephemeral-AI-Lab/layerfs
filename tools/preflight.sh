@@ -11,6 +11,19 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 step() { printf '\n=== %s ===\n' "$1"; }
 
+step "replacement core product-source boundaries"
+python3 core/tools/check_product_boundary.py
+python3 -m unittest discover -s core/tools -p 'test_*.py'
+
+step "candidate core workspace (locked tests, examples, clippy, fmt)"
+# The candidate workspace has its own manifest, lockfile and target namespace;
+# the root workspace checks below do not exercise it.
+cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
+cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_nested >/dev/null
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_composition >/dev/null
+cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+
 step "rustfmt 1.96 (fmt --all --check)"
 cargo +1.96.0 fmt --all --check
 

@@ -1,0 +1,365 @@
+{
+  "traceEvents": [
+    {
+      "name": "process_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 0,
+      "args": {
+        "name": "SYNTHETIC example — no product execution"
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 1,
+      "args": {
+        "name": "Coordinator (synthetic lane)"
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 2,
+      "args": {
+        "name": "Logical construction (synthetic lane)"
+      }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1,
+      "tid": 3,
+      "args": {
+        "name": "Physical storage (synthetic lane)"
+      }
+    },
+    {
+      "name": "synthetic.object_pipeline",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 1,
+      "ts": 0,
+      "dur": 1500,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 1,
+        "parent_span_id": null,
+        "batch_id": null,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "canonical.construct",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 2,
+      "ts": 100,
+      "dur": 400,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 2,
+        "parent_span_id": 1,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "dependency.read",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 2,
+      "ts": 100,
+      "dur": 100,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 3,
+        "parent_span_id": 2,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "canonical.encode_and_hash",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 2,
+      "ts": 200,
+      "dur": 280,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 4,
+        "parent_span_id": 2,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "output.wait",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 2,
+      "ts": 480,
+      "dur": 20,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 5,
+        "parent_span_id": 2,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "storage.prepare",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 520,
+      "dur": 500,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 6,
+        "parent_span_id": 1,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "membership.lookup",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 520,
+      "dur": 100,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 7,
+        "parent_span_id": 6,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "codec.encode",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 620,
+      "dur": 300,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 8,
+        "parent_span_id": 6,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "pack.build",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 920,
+      "dur": 100,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 9,
+        "parent_span_id": 6,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "storage.persist",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1050,
+      "dur": 300,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 10,
+        "parent_span_id": 1,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "transaction.begin",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1050,
+      "dur": 25,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 11,
+        "parent_span_id": 10,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "records.insert",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1075,
+      "dur": 150,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 12,
+        "parent_span_id": 10,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "transaction.commit",
+      "cat": "layerfs.synthetic",
+      "ph": "X",
+      "pid": 1,
+      "tid": 3,
+      "ts": 1225,
+      "dur": 125,
+      "args": {
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 13,
+        "parent_span_id": 10,
+        "batch_id": 1,
+        "outcome": "success",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "synthetic.operation_started",
+      "cat": "layerfs.synthetic.log",
+      "ph": "I",
+      "s": "t",
+      "pid": 1,
+      "tid": 1,
+      "ts": 0.0,
+      "args": {
+        "schema_version": 1,
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 1,
+        "batch_id": null,
+        "lane_id": 1,
+        "offset_ns": 0,
+        "level": "info",
+        "code": "synthetic.operation_started",
+        "synthetic": true
+      }
+    },
+    {
+      "name": "synthetic.codec_selected_delta",
+      "cat": "layerfs.synthetic.log",
+      "ph": "I",
+      "s": "t",
+      "pid": 1,
+      "tid": 3,
+      "ts": 900.0,
+      "args": {
+        "schema_version": 1,
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 8,
+        "batch_id": 1,
+        "lane_id": 3,
+        "offset_ns": 900000,
+        "level": "debug",
+        "code": "synthetic.codec_selected_delta",
+        "canonical_bytes": 4096,
+        "encoded_bytes": 1024,
+        "synthetic": true
+      }
+    },
+    {
+      "name": "synthetic.operation_completed",
+      "cat": "layerfs.synthetic.log",
+      "ph": "I",
+      "s": "t",
+      "pid": 1,
+      "tid": 1,
+      "ts": 1500.0,
+      "args": {
+        "schema_version": 1,
+        "run_id": "synthetic-telemetry-demo",
+        "operation_id": 1,
+        "attempt_id": 1,
+        "span_id": 1,
+        "batch_id": null,
+        "lane_id": 1,
+        "offset_ns": 1500000,
+        "level": "info",
+        "code": "synthetic.operation_completed",
+        "outcome": "success",
+        "synthetic": true
+      }
+    }
+  ],
+  "displayTimeUnit": "ns",
+  "metadata": {
+    "synthetic": true,
+    "purpose": "Display/schema demonstration only; not LayerFS execution or benchmark evidence",
+    "run_id": "synthetic-telemetry-demo",
+    "clock_id": "synthetic-monotonic-clock",
+    "trace_complete": true,
+    "dropped_records": 0
+  }
+}

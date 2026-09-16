@@ -14,6 +14,9 @@ members = [
     "tools/layerfs-eval",
     "benchmark/fs-bench-pro",
 ]
+# The replacement product workspace under core/ has its own members, lockfile
+# and target directory; it is not part of this reference workspace.
+exclude = ["core"]
 
 [workspace.package]
 edition = "2021"

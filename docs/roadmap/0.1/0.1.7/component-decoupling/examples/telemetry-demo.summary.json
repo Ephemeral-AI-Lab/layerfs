@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "purpose": "Display/schema demonstration only; not LayerFS execution or benchmark evidence",
+  "run_id": "synthetic-telemetry-demo",
+  "clock_id": "synthetic-monotonic-clock",
+  "trace_complete": true,
+  "dropped_records": 0,
+  "mode": "trace",
+  "operation_id": 1,
+  "attempt_id": 1,
+  "outcome": "success",
+  "telemetry_status": "complete",
+  "operation_elapsed_ns": 1500000,
+  "objects": 1,
+  "canonical_bytes": 4096,
+  "encoded_bytes": 1024,
+  "phases": [
+    {
+      "phase": "canonical.construct",
+      "inclusive_elapsed_ns": 400000,
+      "count": 1
+    },
+    {
+      "phase": "dependency.read",
+      "inclusive_elapsed_ns": 100000,
+      "count": 1
+    },
+    {
+      "phase": "canonical.encode_and_hash",
+      "inclusive_elapsed_ns": 280000,
+      "count": 1
+    },
+    {
+      "phase": "output.wait",
+      "inclusive_elapsed_ns": 20000,
+      "count": 1
+    },
+    {
+      "phase": "storage.prepare",
+      "inclusive_elapsed_ns": 500000,
+      "count": 1
+    },
+    {
+      "phase": "membership.lookup",
+      "inclusive_elapsed_ns": 100000,
+      "count": 1
+    },
+    {
+      "phase": "codec.encode",
+      "inclusive_elapsed_ns": 300000,
+      "count": 1
+    },
+    {
+      "phase": "pack.build",
+      "inclusive_elapsed_ns": 100000,
+      "count": 1
+    },
+    {
+      "phase": "storage.persist",
+      "inclusive_elapsed_ns": 300000,
+      "count": 1
+    },
+    {
+      "phase": "transaction.begin",
+      "inclusive_elapsed_ns": 25000,
+      "count": 1
+    },
+    {
+      "phase": "records.insert",
+      "inclusive_elapsed_ns": 150000,
+      "count": 1
+    },
+    {
+      "phase": "transaction.commit",
+      "inclusive_elapsed_ns": 125000,
+      "count": 1
+    }
+  ],
+  "note": "Inclusive phases are nested. Do not sum them to obtain operation elapsed time. All values are invented."
+}
