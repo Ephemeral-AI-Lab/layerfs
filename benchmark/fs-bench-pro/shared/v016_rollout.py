@@ -53,6 +53,13 @@ EXTENDED_LIMITS = {
     "v016-mixed-exhaustive-500mb-30000-k100-v1": 300.0,
     "v016-workspace-four-100mb-5000-k100-v1": 60.0,
 }
+# One declared verification exception (owner ruling on #154, 2026-09-16). The row
+# is reported as a declared exception with its measured wall; the 15-second family
+# target is reported separately and unchanged, and every other regular
+# verification keeps the pre-existing 25-second ceiling.
+VERIFY_EXCEPTIONS = {
+    "v016-branch-mixed-500mb-30000-k100-v1": 30.0,
+}
 
 
 def case_row(case_id):
@@ -74,13 +81,17 @@ def ceiling_for(case_id):
 def gate(wall, case_id, mode="performance"):
     """Target / declared-exception / owner-granted-allowance / failure. The
     granted 60-second allowance covers performance invocations only; the
-    verification gate stays at the unchanged 25-second ceiling."""
+    verification gate stays at the unchanged 25-second ceiling except for the one
+    case the owner declared an exception for, which is reported as a declared
+    exception with its measured wall."""
     limit = limit_for(case_id)
     if wall <= limit:
         return "PASS"
     if case_id in EXTENDED_LIMITS:
         return "FAIL_BUDGET"
     if wall <= EXCEPTION_LIMIT:
+        return "EXCEPTION"
+    if mode == "verify" and wall <= VERIFY_EXCEPTIONS.get(case_id, 0.0):
         return "EXCEPTION"
     if mode == "performance" and wall <= GRANTED_LIMIT:
         return "GRANTED"

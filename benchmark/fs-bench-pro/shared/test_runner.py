@@ -248,6 +248,22 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual((args.topology, args.cpus, args.memory_mib, args.timeout),
                              ("host-store", 2, 2048, 130))
             self.assertIsNone(args.perf_samples)
+        # The verification ceiling stays at the pre-existing 25 seconds for every
+        # regular case except the one declared exception (owner ruling, #154).
+        self.assertEqual(runner.V016_VERIFY_DEADLINE_SECONDS, 25)
+        self.assertEqual(
+            runner.V016_VERIFY_EXCEPTIONS, {"v016-branch-mixed-500mb-30000-k100-v1": 30}
+        )
+        for case in ("v016-branch-mixed-500mb-30000-k10-v1", "v016-mixed-development-500mb-30000-k100-v1"):
+            self.assertEqual(
+                runner.v016_verify_watchdog_seconds({"family": "mixed_load_bearing", "case": case}), 25
+            )
+        self.assertEqual(
+            runner.v016_verify_watchdog_seconds(
+                {"family": "branch_development", "case": "v016-branch-mixed-500mb-30000-k100-v1"}
+            ),
+            30,
+        )
         self.assertEqual(len(runner.HOST_FAMILIES), 22)
         self.assertIn("tiny_file_churn", runner.HOST_FAMILIES)
         self.assertIn("historical_access", runner.HOST_FAMILIES)

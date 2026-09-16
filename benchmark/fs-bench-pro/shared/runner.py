@@ -94,6 +94,19 @@ V016_REGULAR_DEADLINE_SECONDS = 60
 # cleanup reserve inside it). Making a verification fit is a job for removing
 # redundant work in the verifier, never for this number.
 V016_VERIFY_DEADLINE_SECONDS = 25
+# Owner ruling on #154 (2026-09-16, second ruling on this gate): *one* regular
+# verification row is declared an exception above that ceiling. Its measured wall
+# (22.99 s complete command, of which 19.13 s is the product command: ~11.4 s for
+# the 210-commit replay and ~7.7 s of proof) is recorded in the ledger and the
+# group report, and the row is reported as a declared exception — never as a
+# silent watchdog change. Everything else is untouched: the 15-second family
+# target is still reported separately, the three-second cleanup reserve still sits
+# inside the ceiling, the verifier's oracle and coverage are unchanged, and every
+# other regular verification keeps 25 seconds. Keyed by the exact registered ID so
+# a renamed or unregistered case is never silently admitted.
+V016_VERIFY_EXCEPTIONS = {
+    "v016-branch-mixed-500mb-30000-k100-v1": 30,
+}
 V016_TARGET_SECONDS = 15
 
 
@@ -108,10 +121,13 @@ def v016_watchdog_seconds(selection):
 
 def v016_verify_watchdog_seconds(selection):
     """The declared complete-command ceiling of one v0.1.6 *verification*
-    invocation, or None. Unchanged by the performance ruling."""
+    invocation, or None. The 25-second regular ceiling is unchanged except for the
+    one case the owner declared an exception for."""
     case = selection.get("case") or selection.get("scenario_id") or ""
     if not case.startswith("v016-"):
         return None
+    if case in V016_VERIFY_EXCEPTIONS:
+        return V016_VERIFY_EXCEPTIONS[case]
     return V016_EXTENDED_WATCHDOGS.get(case, V016_VERIFY_DEADLINE_SECONDS)
 
 

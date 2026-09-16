@@ -751,3 +751,61 @@ Product-free gates before the measurement: `python3 docs/roadmap/0.1/0.1.6/check
 `target/release/fs-benchmark-pro workspace-self-check`
 (`timed_case_count 169`, `sample_slot_count 507`) and
 `tools/preflight.sh` (all steps passed).
+
+## L12 — owner ruling: one declared verification exception (supersedes L11.7's residual row)
+
+**Ruling.** The owner declared a larger verification ceiling for the single row
+that could not fit the pre-existing window after the L10 redundancy work:
+`v016-branch-mixed-500mb-30000-k100-v1` carries a **30-second** complete-command
+ceiling instead of 25 seconds. It is a *declared exception*, not a silent watchdog
+change: it is keyed by the exact registered ID in
+`runner.py::V016_VERIFY_EXCEPTIONS`, the driver reports the row as `EXCEPTION`
+with its measured wall (`v016_rollout.py::VERIFY_EXCEPTIONS`), and the ledger and
+the group report carry the number and its arithmetic.
+
+**What the ruling does *not* change.** The 15-second family target is still reported
+separately (`performance_target_status` / `historical_product_target_status`) and a
+row above it is still a TARGET_MISS. The three-second cleanup reserve still sits
+inside the ceiling, so the worker stop is 27 seconds. Every *other* regular
+verification keeps the unchanged 25-second ceiling — a new harness test asserts
+that, so the exception cannot widen by accident. No oracle, coverage, path
+selection, fixture or limit was touched: the verifier still proves three complete
+branch heads over 29 984 paths each, every retained commit identity and parent
+edge, and the declared counters.
+
+**Measured arithmetic behind the number** (same identity as L11.7, before the
+ruling): complete command 22.99–23.07 s stopped at the 22.0 s work window
+(25 s − 3 s reserve). Of that, 2.56 s is setup, ~11.4 s is the 210-commit replay
+(`pure_call_sum_ns` 22.77 s summed over the two concurrent children) and ≈7.7 s is
+the proof phase. The row therefore needs ~23–24 s of complete command; 30 s leaves
+the 3 s reserve plus a bounded margin for host noise, and is deliberately narrower
+than the 60 s performance allowance and than the extended cases' 60/120/300 s
+watchdogs.
+
+**Re-collected row** (harness revision with the declared exception, same image and
+source content as L11.7):
+
+| case | perf | perf wall | gate | verify | verify wall | gate |
+| --- | --- | ---: | --- | --- | ---: | --- |
+| `v016-branch-mixed-500mb-30000-k100-v1` | PASS | 18.18 s | EXCEPTION (≤25 s) | **PASS** | **24.17 s** | declared exception (≤30 s) |
+
+The verification now completes: the third complete branch-state proof, the counter
+identity and the verification record are all published instead of being cut at the
+work window. The two stopped attempts (22.92 s and 22.99 s) stay on disk as
+retained history.
+
+**Root cause still open.** The ≈7.7 s proof phase verifies the same published
+inode records, metadata roots and file-state roots once per branch head; the two
+children inherit most of the trunk's states. Sharing those per-object results
+across branch proofs — the L10 pattern, one scope wider — would remove that
+repetition and could bring the row back inside the 25-second ceiling. That work is
+*not* required by this ruling and is not a substitute for it: the exception stands
+as declared, and the redundant verification remains a named follow-up.
+
+**Re-collection scope.** The ruling changes `harness_identity` (it covers
+`runner.py`/`v016_rollout.py`), so the whole regular matrix and the three
+extensions were re-collected once on the new revision rather than pooling rows
+from two harness identities: `final3-seed1` (33 rows) and `final3-ext` (3 rows),
+committed as
+`evidence/issue154/final-complete-matrix.json` and
+`evidence/issue154/final-complete-extended-matrix.json`.
