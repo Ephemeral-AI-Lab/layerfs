@@ -1,0 +1,1 @@
+./core/target/debug/examples/measure_edits --mode c1 --case large-to-small --threshold-bytes 131072 --output docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-c1-large-to-small/store

@@ -1,0 +1,28 @@
+mode: c1
+case: chunked
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 4096 replacement bytes
+stream: 1 edit(s), base 262144 -> final 262144 bytes
+base root: 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d
+result root: ca6c30a4355c63c3e3df39a478482cd57f80b5271885e48a573bbe34a031d6b7
+result length: 262144
+emitted: 3 objects, 4947 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  366.542us
+  edit.op  363.542us
+    edit.base  17.042us
+      edit.base_read  13.958us
+    edit.compare  49.209us
+      edit.compare.window  22.125us
+    edit.base_read  1.750us
+    edit.split  47.917us
+    edit.split  25.166us
+    edit.split  3.542us
+    content.chunk  125.125us
+    edit.finish  32.750us
+timings: 12 nodes at 4 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-c1-chunked/store/c1-edit.json
+wall_seconds: 0.049
+exit_code: 0

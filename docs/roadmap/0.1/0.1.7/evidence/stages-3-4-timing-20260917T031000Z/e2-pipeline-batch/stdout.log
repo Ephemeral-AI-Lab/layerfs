@@ -1,0 +1,43 @@
+mode: pipeline
+case: batch
+threshold-bytes: 131072
+timing: on
+fixture: base 196608 bytes, 3 edit(s), 1000 replacement bytes
+stream: 3 edit(s), base 196608 -> final 194308 bytes
+base preparation (untimed): root 9b67d5821a39fe14ddec724ab82b05dbb76c8bc99b9849dd5314ded1410c75b4 stored as 14 object(s), 2 pack(s), acknowledged true
+edited root: c887efb266fb423889ab26851d61652e52d017135fb4e6367530691c10383d84
+edited length: 194308
+save: acknowledged true inserted 4 reused 0 packs 2 prefix records 1 full records 3
+readback bytes: 194308
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  8.214ms
+  storage.begin  2.661ms
+  file.edit  3.785ms
+    edit.base  1.281ms
+      edit.base_read  1.275ms
+    edit.compare  2.625us
+    edit.base_read  1.036ms
+    edit.split  1.096ms
+    edit.split  125ns
+    edit.split  1.875us
+    content.chunk  49.208us
+    edit.split  34.666us
+    edit.split  18.750us
+    edit.split  3.833us
+    content.chunk  24.375us
+    edit.split  35.375us
+    edit.split  16.708us
+    edit.split  4.458us
+    edit.finish  32.875us
+  storage.finish  1.655ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  13.091ms
+  content.read  13.087ms
+    content.acquire  1.143ms
+    content.traverse  11.939ms
+timings: 20 nodes at 4 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-pipeline-batch/store/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-pipeline-batch/store/pipeline-readback.json
+wall_seconds: 0.077
+exit_code: 0

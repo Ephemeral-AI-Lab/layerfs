@@ -1,0 +1,14 @@
+{
+  "name": "pooled.readback",
+  "elapsed_ns": 6953292,
+  "children": [
+    {
+      "name": "storage.read",
+      "elapsed_ns": 6949459,
+      "children": [
+        {"name": "storage.decode", "elapsed_ns": 758291, "children": []},
+        {"name": "storage.read", "elapsed_ns": 5821625, "children": []}
+      ]
+    }
+  ]
+}

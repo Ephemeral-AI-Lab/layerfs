@@ -38,6 +38,21 @@ use support::{disabled_scope, MemoryStore};
 const ORACLE_DIR: &str =
     "../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected";
 
+/// Directory of one case's fixture. `repartition-80-100` was produced later, into
+/// its own generation directory: the earlier receipts are append-only and were not
+/// touched, and the reference, the base and the edit tuple are identical between
+/// the two generations for every case they share.
+fn oracle_path(case: &str) -> PathBuf {
+    let generation = if case == "repartition-80-100" {
+        "../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260917T034500Z"
+    } else {
+        ORACLE_DIR
+    };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(generation)
+        .join(format!("{case}.json"))
+}
+
 #[derive(Debug)]
 struct Page {
     root: bool,
@@ -123,6 +138,59 @@ fn file_with_extents(wanted: u64) -> Vec<u8> {
 /// One raw edit: start, deleted length and replacement bytes.
 type RawEdit = (u64, u64, Vec<u8>);
 
+/// Boundaries of the extent run straddling `seam`: from an extent start to an
+/// extent end, so the replacement removes and adds whole extents.
+fn seam_region(bytes: &[u8], seam: u64) -> (u64, u64) {
+    let policy = ConstructionPolicy::frozen_default();
+    let mut store = MemoryStore::new();
+    let constructed = disabled_scope(|scope| {
+        construct_bytes(
+            policy,
+            &policy.capacities(),
+            bytes,
+            &mut store,
+            scope.child("content"),
+        )
+    })
+    .expect("probe");
+    let state =
+        decode_file_state(store.canonical(constructed.root).expect("state")).expect("file state");
+    let mut extents: Vec<(u64, u64)> = Vec::new();
+    let mut cursor = 0_u64;
+    let mut level = vec![(state.mapping_root, true)];
+    while let Some((id, is_root)) = level.pop() {
+        let node = decode_node_with_context(store.canonical(id).expect("node"), is_root)
+            .expect("canonical page");
+        match node {
+            ExtentNode::Leaf { extents: rows, .. } => {
+                for row in rows {
+                    let length = u64::from(row.logical_length());
+                    extents.push((cursor, cursor + length));
+                    cursor += length;
+                }
+            }
+            ExtentNode::Branch { children, .. } => {
+                for child in children.iter().rev() {
+                    level.push((child.child_object_id, false));
+                }
+            }
+        }
+    }
+    extents.sort_unstable();
+    let start = extents
+        .iter()
+        .rev()
+        .find(|(start, _)| *start < seam)
+        .expect("an extent before the seam")
+        .0;
+    let end = extents
+        .iter()
+        .find(|(_, end)| *end > seam)
+        .expect("an extent after the seam")
+        .1;
+    (start, end)
+}
+
 /// Fixture inputs and the edit stream in current-result coordinates.
 fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
     let (base, raw_edits): (Vec<u8>, Vec<RawEdit>) = match case {
@@ -133,6 +201,25 @@ fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
             let mut joined = left;
             joined.extend_from_slice(&right);
             (joined, vec![(seam, 0, noise(200_000))])
+        }
+        "repartition-80-100" => {
+            // The literal 80+100 join: two files whose own constructions hold 80 and
+            // 100 extents are concatenated, and an edit that replaces the whole
+            // extent run straddling the seam keeps the joined extent count, so the
+            // reference must repartition the join. The oracle's edited partition is
+            // 90 + 90 with the second leaf surviving by identity. The coordinates are
+            // computed from the candidate's own probe here; the test asserts the base
+            // root matches the oracle's, and identical roots imply the same layout.
+            let left = file_with_extents(80);
+            let right = file_with_extents(100);
+            let mut joined = left.clone();
+            joined.extend_from_slice(&right);
+            let seam = left.len() as u64;
+            let (start, end) = seam_region(&joined, seam);
+            (
+                joined,
+                vec![(start, end - start, noise((end - start) as usize))],
+            )
         }
         "half-partition-90-90" => {
             // 180 extents constructed as two 90-entry leaves; the edit sits exactly
@@ -151,7 +238,7 @@ fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
             })
             .expect("probe");
             let canonical = store.canonical(probe.root).expect("state");
-            let state = decode_file_state(&canonical).expect("file state");
+            let state = decode_file_state(canonical).expect("file state");
             let node =
                 decode_node_with_context(store.canonical(state.mapping_root).expect("root"), true)
                     .expect("page");
@@ -285,9 +372,7 @@ fn parse_edits(text: &str) -> Vec<(u64, u64, u64)> {
 }
 
 fn load(case: &str) -> Fixture {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(ORACLE_DIR)
-        .join(format!("{case}.json"));
+    let path = oracle_path(case);
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("oracle fixture {}: {error}", path.display()));
     // A tiny hand parser keeps the fixture reading dependency-free: the files are
@@ -475,6 +560,7 @@ fn compare(case: &str) -> BTreeMap<String, String> {
 fn the_candidate_reproduces_the_reference_root_and_partition() {
     let cases = [
         "join-80-100",
+        "repartition-80-100",
         "half-partition-90-90",
         "unequal-height-join",
         "untouched-sibling",
@@ -518,10 +604,8 @@ fn the_candidate_reproduces_the_reference_root_and_partition() {
 
 #[test]
 fn the_oracle_fixtures_are_the_sealed_reference_revision() {
-    for case in ["join-80-100", "untouched-sibling"] {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join(ORACLE_DIR)
-            .join(format!("{case}.json"));
+    for case in ["join-80-100", "repartition-80-100", "untouched-sibling"] {
+        let path = oracle_path(case);
         let text = std::fs::read_to_string(&path).expect("fixture");
         assert!(
             text.contains("44cf748486863ab7c21ca47e731bd88e2b9a7b4a"),

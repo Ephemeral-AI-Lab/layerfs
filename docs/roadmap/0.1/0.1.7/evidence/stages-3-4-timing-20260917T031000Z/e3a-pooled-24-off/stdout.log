@@ -1,0 +1,20 @@
+leaves: 24
+rows-per-leaf: 100
+timing: off
+policy: cutoff 131072 depths whole-file 8 chunk 4 metadata 8
+store: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e3a-pooled-24-off/store/store.sqlite
+save-to-ack: inserted 24 reused 0 packs 48 commits 24
+pooled lane: leaves 24 new values 123 reused values 2277 groups 24 full 3 delta 21 trials 21 work-exceeded 2
+readback: 2 object(s) verified byte-for-byte
+readback first: 9427ef095d723683b95f4ccb270c75f5284ea1514d6df7c553188375cbc7f070
+readback last: 330bffb79d7b0ae2f78a95670397108addba1badc9460e4ddb8bc98af60e3970
+retained: pool index 123 entries / 2952 bytes
+store-file: 49152 bytes
+catalogue: 24 group(s), 123 ordinal(s)
+exclusions: fixture construction and fixture identity checks are inside pooled.save
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+disabled: no timing recorded
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+disabled: no timing recorded
+wall_seconds: 0.196
+exit_code: 0

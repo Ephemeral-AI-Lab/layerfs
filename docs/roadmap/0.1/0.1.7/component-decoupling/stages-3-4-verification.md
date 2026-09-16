@@ -64,15 +64,60 @@ tests use (`noise` = fixed xorshift stream, `patterned` = index-derived bytes).
 
 ## 4. Current state of collection
 
-**No comparison campaign was collected for this batch.** The only artifacts are
-the single-sample smoke runs recorded in
-[`evidence/stages-3-4-smoke-20260916T210931Z/`](../evidence/) (see the directory
-README for the exact commands and observed numbers). They demonstrate wiring and
-correctness of the three modes; they are explicitly **not** performance evidence
-and no v0.1.6 comparison, speedup or storage-reduction claim is made anywhere in
-the Stages 3–4 report.
+**No v0.1.6 comparison campaign was collected for this batch, and none is claimed.**
+Three rounds of receipts exist and are retained as they were produced:
 
-The families this contract lists remain available for the later qualification
-issue; the candidate entry points they need exist in
-`core/crates/layerfs-storage/examples/measure_edits.rs` and the external test
-targets named in the report.
+| Round | Contents | Status |
+| --- | --- | --- |
+| [`evidence/stages-3-4-smoke-20260916T210931Z/`](../evidence/) | first single-sample smoke runs of the three modes | wiring only, admission-ineligible; unchanged |
+| [`evidence/stages-3-4-fingerprint-collision-20260917T021500Z/`](../evidence/) | the searched 64-bit fingerprint collision pair and the search log | correctness fixture for the pooled candidate filter |
+| [`evidence/stages-3-4-timing-20260917T031000Z/`](../evidence/) | 21 declared arms (pooled lane, 15 edit lanes, two timing on/off pairs) with `ledger.md`, `tool-identities.txt` and timing trees | single sample per case, debug profile, in-process fixtures, no warm-cache credit; a wiring and correctness demonstration, explicitly **not** performance evidence |
+
+The round's declarations were committed before collection in
+[`stages-3-4-measurement-addendum.md`](stages-3-4-measurement-addendum.md); every arm
+finished inside the 15 s per-command budget (longest 3.155 s) and the timing on/off
+pairs print identical product lines.
+
+The families this contract lists (payload FULL/DELTA, transitions, pooling reuse
+and turnover, pack boundaries, grouped reads and failure cleanup) are covered by the
+external test targets named in the
+[report](stages-3-4-report.md), and the component entry points are
+`core/crates/layerfs-storage/examples/measure_edits.rs` and
+`measure_pooled.rs`. The measured performance, storage and memory gates against
+v0.1.6 remain open: no matched arm exists because the two products share no public
+edit or pooled-save operation to time.
+
+## 5. Continuation adjustment: acceptance remains in Stages 3–4
+
+The preceding collection statement records the initial partial implementation;
+its smoke receipts remain unchanged. The current [continuation prompt](stages-3-4-continuation-prompt.md)
+requires pooling and exact stored-tree edit proof, then the original Stage 3–4
+performance/storage/resource gates before closing #168/#169. The earlier reference
+to later qualification does not defer those issue requirements to Stage 6.
+
+Before new benchmark implementation or collection, commit a versioned specification
+addendum with the missing pooling/window/reopen families, reference-root partition
+oracles, physically realized localized-edit scaling cases, exact per-case cache/
+index state, matching successful operations, identities, numerical/resource limits
+and acknowledgement boundaries. The table above and an unspecified per-case cache
+state are insufficient for the complete claim. No new measurements or numerical
+targets are asserted by this scheduling adjustment.
+
+## 6. Component-specific continuation order
+
+The later [completion report](stages-3-4-completion-report.md) records implemented
+pooling and an initial edit oracle. Follow the [three continuation prompts](stages-3-4-continuation-prompt.md):
+independent pooling boundary/reopen/chain checks and eligible component measurements
+can proceed before D. Combined edit qualification requires aligned oracle inputs
+and the implemented stored-tree algorithm. Final acceptance must validate the
+identity/reuse eligibility of every component receipt against the final artifact.
+This clarification changes scheduling only; it neither qualifies current results
+nor relaxes any correctness, cache, performance or resource requirement.
+
+## 7. Final review and acceptance state
+
+The seven required deliverables and a criterion-by-criterion verdict are collected in
+[`stages-3-4-final-review.md`](stages-3-4-final-review.md). That document is a
+**self-review** by the implementing agent: independence is not claimed, and the
+independent pass described by
+[`stages-3-4-reviewer-handoff.md`](stages-3-4-reviewer-handoff.md) remains open.

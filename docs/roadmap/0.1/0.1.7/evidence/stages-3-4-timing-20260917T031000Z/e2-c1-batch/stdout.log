@@ -1,0 +1,34 @@
+mode: c1
+case: batch
+threshold-bytes: 131072
+timing: on
+fixture: base 196608 bytes, 3 edit(s), 1000 replacement bytes
+stream: 3 edit(s), base 196608 -> final 194308 bytes
+base root: 9b67d5821a39fe14ddec724ab82b05dbb76c8bc99b9849dd5314ded1410c75b4
+result root: c887efb266fb423889ab26851d61652e52d017135fb4e6367530691c10383d84
+result length: 194308
+emitted: 4 objects, 1872 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  424.125us
+  edit.op  420.417us
+    edit.base  20.916us
+      edit.base_read  17.167us
+    edit.compare  1.750us
+    edit.base_read  1.625us
+    edit.split  45.333us
+    edit.split  375ns
+    edit.split  2.208us
+    content.chunk  39.083us
+    edit.split  32.542us
+    edit.split  18.709us
+    edit.split  3.875us
+    content.chunk  23.875us
+    edit.split  39.167us
+    edit.split  16.542us
+    edit.split  4.541us
+    edit.finish  33.416us
+timings: 18 nodes at 4 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-c1-batch/store/c1-edit.json
+wall_seconds: 0.047
+exit_code: 0

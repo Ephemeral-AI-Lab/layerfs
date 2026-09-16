@@ -128,6 +128,45 @@ fn pages(store: &Memory, root: ObjectId) -> Vec<(u8, bool, usize, String)> {
     pages
 }
 
+/// Boundaries of the extent run that straddles `seam`, from an extent start to an
+/// extent end, so replacing it removes and adds whole extents.
+fn seam_region(store: &Memory, root: ObjectId, seam: u64) -> (u64, u64) {
+    let state: FileStateV3 = decode_file_state(&store.get(root).expect("root")).expect("state");
+    let mut level = vec![(state.mapping_root, true)];
+    let mut extents: Vec<(u64, u64)> = Vec::new();
+    let mut cursor = 0_u64;
+    while let Some((id, is_root)) = level.pop() {
+        let node = decode_node_with_context(&store.get(id).expect("node"), is_root).expect("page");
+        match node {
+            ExtentNodeV3::Leaf { extents: rows, .. } => {
+                for row in rows {
+                    let length = u64::from(row.logical_length);
+                    extents.push((cursor, cursor + length));
+                    cursor += length;
+                }
+            }
+            ExtentNodeV3::Branch { children, .. } => {
+                for child in children.iter().rev() {
+                    level.push((child.child_object_id, false));
+                }
+            }
+        }
+    }
+    extents.sort_unstable();
+    let left = extents
+        .iter()
+        .rev()
+        .find(|(start, _)| *start < seam)
+        .expect("an extent before the seam")
+        .0;
+    let right = extents
+        .iter()
+        .find(|(_, end)| *end > seam)
+        .expect("an extent after the seam")
+        .1;
+    (left, right)
+}
+
 fn state_len(store: &Memory, root: ObjectId) -> u64 {
     let state: FileStateV3 = decode_file_state(&store.get(root).expect("root")).expect("state");
     state.logical_len
@@ -153,6 +192,22 @@ fn main() {
             let seam = left.len() as u64;
             let replacement = noise(200_000);
             (joined, vec![(seam, 0, replacement)])
+        }
+        "repartition-80-100" => {
+            // The 80+100 join with an extent-neutral edit: the extents straddling the
+            // seam are overwritten with the same number of bytes, so the joined
+            // partition still holds 180 extents and the concatenation must decide how
+            // to repartition them.
+            let left = file_with_extents(80);
+            let right = file_with_extents(100);
+            let mut joined = left.clone();
+            joined.extend_from_slice(&right);
+            let seam = left.len() as u64;
+            let mut store = Memory::default();
+            let (root, _) = rope::build_bytes(&mut store, &joined).expect("probe");
+            let (start, end) = seam_region(&store, root.0, seam);
+            let replacement = noise((end - start) as usize);
+            (joined, vec![(start, end - start, replacement)])
         }
         "interior-multi-level" => {
             let base = file_with_extents(400);

@@ -1,0 +1,31 @@
+{
+  "name": "storage.save",
+  "elapsed_ns": 41100334,
+  "children": [
+    {"name": "store.create", "elapsed_ns": 4455416, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 3127041, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1000, "children": []}
+      ]
+    },
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 83, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 21517792, "children": []},
+    {
+      "name": "storage.read",
+      "elapsed_ns": 6887541,
+      "children": [
+        {"name": "storage.decode", "elapsed_ns": 826000, "children": []},
+        {"name": "storage.read", "elapsed_ns": 5674875, "children": []}
+      ]
+    }
+  ]
+}

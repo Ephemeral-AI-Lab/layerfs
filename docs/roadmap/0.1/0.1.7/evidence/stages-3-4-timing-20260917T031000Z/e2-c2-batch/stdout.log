@@ -1,0 +1,25 @@
+mode: c2
+case: batch
+threshold-bytes: 131072
+timing: on
+fixture: base 196608 bytes, 3 edit(s), 1000 replacement bytes
+stream: 3 edit(s), base 196608 -> final 194308 bytes
+save: inserted 2 reused 0 prefix records 0 full records 2 trials 0
+store: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-c2-batch/store/store.sqlite
+readback: verified 131094 canonical bytes through an independent read wave
+exclusions: no C1 file construction and no full-file object collection is timed
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+storage.save  41.100ms
+  store.create  4.455ms
+  storage.begin  3.127ms
+  storage.accept  2.542us
+    storage.batch  1.000us
+  storage.accept  375ns
+    storage.batch  83ns
+  storage.finish  21.517ms
+  storage.read  6.887ms
+    storage.decode  826.000us
+    storage.read  5.674ms
+timings: 11 nodes at 3 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-c2-batch/store/c2-save.json
+wall_seconds: 0.079
+exit_code: 0

@@ -1,0 +1,34 @@
+mode: pipeline
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+base preparation (untimed): root 950a13bc1eb6c354370bdf5971770706139f7caf29021e6ee0ffdfb489428603 stored as 1 object(s), 1 pack(s), acknowledged true
+edited root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+edited length: 65536
+save: acknowledged true inserted 1 reused 0 packs 1 prefix records 1 full records 0
+readback bytes: 65536
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  12.840ms
+  storage.begin  2.903ms
+  file.edit  5.342ms
+    edit.base  4.131ms
+      edit.base_read  4.127ms
+    edit.compare  9.167us
+      edit.compare.window  1.417us
+    edit.assemble  5.167us
+    content.encode  15.041us
+    content.emit  1.083us
+  storage.finish  4.487ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  5.664ms
+  content.read  5.661ms
+    content.acquire  5.654ms
+    content.emit  3.250us
+timings: 11 nodes at 4 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-pipeline-small/store/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e2-pipeline-small/store/pipeline-readback.json
+wall_seconds: 0.070
+exit_code: 0

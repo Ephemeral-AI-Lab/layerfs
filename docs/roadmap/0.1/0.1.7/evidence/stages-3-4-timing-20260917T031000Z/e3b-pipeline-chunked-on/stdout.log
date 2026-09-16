@@ -1,0 +1,37 @@
+mode: pipeline
+case: chunked
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 4096 replacement bytes
+stream: 1 edit(s), base 262144 -> final 262144 bytes
+base preparation (untimed): root 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d stored as 18 object(s), 3 pack(s), acknowledged true
+edited root: ca6c30a4355c63c3e3df39a478482cd57f80b5271885e48a573bbe34a031d6b7
+edited length: 262144
+save: acknowledged true inserted 3 reused 0 packs 2 prefix records 0 full records 3
+readback bytes: 262144
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  12.635ms
+  storage.begin  2.845ms
+  file.edit  8.477ms
+    edit.base  1.486ms
+      edit.base_read  1.480ms
+    edit.compare  4.362ms
+      edit.compare.window  4.325ms
+    edit.base_read  1.133ms
+    edit.split  1.207ms
+    edit.split  31.875us
+    edit.split  5.083us
+    content.chunk  140.709us
+    edit.finish  35.208us
+  storage.finish  1.198ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  16.417ms
+  content.read  16.414ms
+    content.acquire  1.204ms
+    content.traverse  15.206ms
+timings: 14 nodes at 4 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e3b-pipeline-chunked-on/store/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> docs/roadmap/0.1/0.1.7/evidence/stages-3-4-timing-20260917T031000Z/e3b-pipeline-chunked-on/store/pipeline-readback.json
+wall_seconds: 0.871
+exit_code: 0

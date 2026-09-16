@@ -1,0 +1,2305 @@
+{
+  "name": "pooled.save",
+  "elapsed_ns": 3105519375,
+  "incomplete": true,
+  "children": [
+    {"name": "store.create", "elapsed_ns": 3603333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 3076708, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 3000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2102125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2699709, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2583792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2633833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 291, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2598958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2561625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 3667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2410666, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2575000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2446417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2516042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 791,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2440541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2541541, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2742500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2786000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 3250,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2660834, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2690042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1834,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2341333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2665709, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2567875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2647708, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1208,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2445125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2659666, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2563750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2632209, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1042, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2632458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2587250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2560833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2615667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 959,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2534708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2643416, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 6709,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2432792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2542666, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 958,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2295833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2636166, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2465708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2543500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2414959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2547334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2459708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2577459, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2555750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2568250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 584, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2448708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2609417, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2494167, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2567375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2514334, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2578125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1208,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2635917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2770959, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2472083, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2652916, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1416,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1042, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2555375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2693166, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1041, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2480500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2567333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2509000, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2625208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2482208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2549000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1292,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2503750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2537292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 5708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2392625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2540250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 459,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2186250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2588416, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 541, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2439875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2634667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1250,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2448250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2546458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 709,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2514125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2757458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2419375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2577291, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 833, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2587042, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2655708, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 834,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 291, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2610208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2588042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2543375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2590292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1250,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 750, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2284167, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2551167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 958,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2401291, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2533459, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2432958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2618958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2456125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2518000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 958,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2437375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2552833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1167,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2568583, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2615292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2571250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2591625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2507333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2562167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2277541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2576958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 541, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2358708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2550250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 584,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2324791, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2533125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2445334, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2557375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2611000, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2595625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2460334, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2599458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2586750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2528542, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 791,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2514708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2517541, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2246875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2608333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 750, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2410333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2628959, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1458,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2509375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2780333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2602833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2754792, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2435375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2688375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2411250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2622500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2484166, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2724458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2562667, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2672292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2242750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2558834, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2404958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2518125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2429541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2524208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2648208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2756208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 584, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2504500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2569500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2466167, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2547917, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 959, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2571792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2627209, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2491042, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2483834, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 291, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2165209, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2572375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 750, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2616541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2602833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2457625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2562834, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1417,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 750, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2444541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2545209, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1417,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2602041, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2573000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 709,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2570958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2563250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2410708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2546166, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1042,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2571917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2589000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2265459, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2537417, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2362709, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2495958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 791,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 291, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2335708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2538458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2388541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2515709, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2397625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2588500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 584,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2399417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2551291, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2514417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2564750, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2479916, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2600125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2336292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2566625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2386959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2681208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1292,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 791, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2454500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2530959, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2441541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2545000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2453583, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2710875, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1291,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2636125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2683750, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1208,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2555792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2690292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2512375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2716166, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2247333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2718458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1333,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 750, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2431042, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2701167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1208,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 584, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2569708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2808208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2470500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2677625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1125,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2491250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2624250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2624292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2624667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2561583, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2518084, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2454500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2576667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2258417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2555000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1459,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 666, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2503958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2545833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 291, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2388875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2673375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1084,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 541, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2568125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2599958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 792, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2625916, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2724292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2543000, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2753375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2443708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2776833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2471458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2672667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2275417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2679792, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2374042, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2646625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2511042, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2545459, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2522209, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2595125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 958,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2478458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2547000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2507792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2576750, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 834,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2619834, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2577292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 708, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2635167, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2578875, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 666,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2296500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2809083, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2345875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2655333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2399709, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2608916, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2427125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2699750, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2448875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2638542, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 709,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2410625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2636083, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2413375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 3056666, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 5458,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2760625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2574334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1000, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2655250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2744334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1000, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2554000, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2586125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2391250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2503959, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2680333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2596166, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2918959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2577958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2504500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2558250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 791, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2619208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2585334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1208,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2724541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2594000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1167,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2386708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2597584, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1167,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2455583, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2696250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2530959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2565375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2564125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2581458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2478625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2862833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1584,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 708, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2551041, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2557542, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2508542, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2531583, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2502875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2551167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1167,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 666, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2246209, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2554334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1375,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 708, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2451375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2564542, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 834,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 7575208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2927208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 3073625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 4484208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 3068459, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 3073250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2417,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2865000, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 3270333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 3006667, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2693916, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 2708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2899666, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2918250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 584, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2543333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2984958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2681250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2772000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 709, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2496125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2685292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1125,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2584875, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2597000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2499500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2904750, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 5833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2585458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2669000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 875, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2523625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2553167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 291, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2532500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2588958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2207167, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2526000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2375625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2580958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2433667, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2515708, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2444500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2813625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 666, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2511166, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2593750, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2524458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2626583, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1166,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 584, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2648667, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2750042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2551208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2732667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 834,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2226709, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2750167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2458166, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2735208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 709,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2457292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2698250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2447500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2586250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2473584, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2567375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1125,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2535375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2566834, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2532375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2508416, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2509583, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2551292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2287833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2557208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 584,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2381458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2518000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2448375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2648667, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2569083, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2548791, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2506417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2722666, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 666,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2480292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2690084, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2499791, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2603416, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2489167, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2585917, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2415292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2816334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1333,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 708, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2527958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2681250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2391958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2717041, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1042,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2444959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2706709, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2394291, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2558333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2407042, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2694958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 584,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2436458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2684875, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2484292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2673625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2246792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2687584, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2346708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2702458, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2352625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2710833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2524917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2616084, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 583,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2468083, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2564292, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2455959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2511042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2435125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2517083, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2535917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2524167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2198250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2500500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2324417, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2491250, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2369500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2474042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2357500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2474917, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2367750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2462000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2374958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2492834, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 167, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2406833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2494375, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 167, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2469583, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2515459, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 458,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2201459, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2486000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2379625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2609792, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 666,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2405000, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2701500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1125,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 459, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2458500, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2685542, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 208, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2370958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2628500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2435542, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2674333, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2502250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2543791, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 209, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2422125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2655584, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 541,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 167, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2183917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2622583, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 542,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 250, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2331917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2725042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1959,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1000, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2666541, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2739792, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1083,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 708, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2568458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2681459, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 416, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2481292, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2569167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2582334, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2754834, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1917,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 917, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2844333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2712000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2859333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2734083, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2300458, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2675167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 875, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2433916, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2770167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1083, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2787916, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2742000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 542, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2585250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2540792, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2624375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2544541, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2614125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2745083, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1292,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 750, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2624833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2557958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 834,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2950708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2674208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1125,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2418708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2598500, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1833,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 792, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2494792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2913334, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1459,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2512375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2574708, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2787834, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2689041, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1291,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 625, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2512291, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2816958, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 584, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2618666, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2957583, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1750,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 1083, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 3058542, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2714833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1500,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 792, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2859792, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2723000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 666,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 334, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2370208, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2590167, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1167,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2485750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2585917, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1292,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 667, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2472125, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2549000, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2652333, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2631833, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2523709, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2545125, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 458, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2500791, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2654459, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1041,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 333, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2571291, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2521875, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 791,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2607375, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2537916, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 792,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2248750, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2709542, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1166,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 500, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2424708, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2676083, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 708,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2514416, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2543208, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 667,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2411959, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2803625, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1000,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 292, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2506625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2757042, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 1625,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2605625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2598792, "children": []},
+    {
+      "name": "storage.accept",
+      "elapsed_ns": 875,
+      "children": [
+        {"name": "storage.batch", "elapsed_ns": 417, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 2837917, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 2723500, "children": []},
+    {"name": "storage.accept", "elapsed_ns": 916, "incomplete": true, "children": []}
+  ]
+}

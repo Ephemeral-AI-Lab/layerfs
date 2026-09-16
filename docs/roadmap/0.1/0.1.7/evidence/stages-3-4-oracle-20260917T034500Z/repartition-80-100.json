@@ -1,0 +1,13 @@
+{
+  "case": "repartition-80-100",
+  "reference": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "base_root": "42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b",
+  "base_len": 3356500,
+  "edited_root": "d70a88deb900a35951ddc84d394573b50782735f11ff321ec1cc0e1e7e94e9d2",
+  "edited_len": 3356500,
+  "nodes_created": 3,
+  "nodes_read": 11,
+  "edits": [[1479511, 16398, 16398]],
+  "base_pages": [{"level": 1, "root": true, "entries": 2, "id": "99305740cff437870156b41240bd86be8a5e8bdbe2abb90f5d83f2954d9e374b"}, {"level": 0, "root": false, "entries": 89, "id": "37df577426d825bde98144757070ef85b5e63d9dd8a5a7e97663ab127cdc7b7a"}, {"level": 0, "root": false, "entries": 90, "id": "3a98cf7dfa3f83d7924784f85bebbc348c92265431cb6745ac7aa989c83fa514"}],
+  "edited_pages": [{"level": 1, "root": true, "entries": 2, "id": "a1ff52784341588d733dbcc864b5bd710301b38cad1ad2ceede0b9ed648e3c57"}, {"level": 0, "root": false, "entries": 90, "id": "73c2099109105af5c13389d4d8ba40692f712785daf68d648ac6579bab82f7fd"}, {"level": 0, "root": false, "entries": 90, "id": "3a98cf7dfa3f83d7924784f85bebbc348c92265431cb6745ac7aa989c83fa514"}]
+}
