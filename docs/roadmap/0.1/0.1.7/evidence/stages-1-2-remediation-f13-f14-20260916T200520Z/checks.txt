@@ -1,0 +1,80 @@
+# Checks run on the F13/F14 tree
+
+Toolchain: cargo +1.85.1, --locked --offline, core workspace.
+
+## Tests
+
+```
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+## Clippy
+
+```
+$ cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --offline -p layerfs-content -p layerfs-storage -p layerfs-telemetry --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+```
+
+## Formatting
+
+```
+$ cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check
+clean (no diff)
+```
+
+## Production LOC
+
+```
+$ python3 tools/production_loc.py --root /tmp/loc-head   # before = acefc3179
+core         6110 production lines in   52 files
+reference   68476 production lines in  206 files
+combined    74586 production lines
+$ python3 tools/production_loc.py --root .                # after = working tree
+core         6152 production lines in   52 files
+reference   68476 production lines in  206 files
+combined    74628 production lines
+```
+
+Per-crate: layerfs-storage 3042 -> 3084; layerfs-content 2336 unchanged;
+layerfs-telemetry 732 unchanged.
+
+## Physical lines of every changed production file (999 ceiling)
+
+```
+  471  core/crates/layerfs-storage/src/cas/owner.rs
+   70  core/crates/layerfs-storage/src/cas/save.rs
+  414  core/crates/layerfs-storage/src/cas/store.rs
+```

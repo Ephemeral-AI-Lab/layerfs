@@ -36,6 +36,12 @@ fn lane_body_limit(capacities: &StorageCapacities, lane: PackLane) -> usize {
 }
 
 /// One record waiting for its group to be framed and placed.
+///
+/// Only identifiers and lengths are retained, never the payload: a group is bounded
+/// by its framed bytes, so retaining canonical bytes could hold far more than the
+/// group target whenever records compress well. An identity that is still waiting
+/// here has no row yet, which is why the owner can seal its group on demand and let
+/// the ordinary verified storage path answer for it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct PendingMember {
     object_id: ObjectId,
@@ -185,6 +191,40 @@ impl MutationOwner {
                 .checked_add(self.placement[lane.index()].retained_bytes(*lane)?)
                 .ok_or(StorageError::Integrity("retained tail accounting"))
         })
+    }
+
+    /// Frames and places the open group holding any of `ids`.
+    ///
+    /// A member of an unfinished group has no row yet: its group is framed but not
+    /// placed, so no locator exists for it. Rather than retain a second copy of every
+    /// waiting payload, the owner seals that group on demand and lets the ordinary
+    /// verified storage path answer for the identity. Retaining the canonical bytes
+    /// instead would be unbounded in practice: a group is bounded by its *framed*
+    /// bytes, so highly compressible records could hold far more canonical data than
+    /// the group target. The cost here is packing granularity for the caller that
+    /// needs the identity, never correctness, and each identity is sealed at most
+    /// once: afterwards its row exists and the membership lookup finds it.
+    pub fn seal_pending(&mut self, ids: &[ObjectId]) -> StorageResult<()> {
+        let mut lanes: Vec<PackLane> = Vec::new();
+        for id in ids {
+            for lane in PackLane::ALL {
+                let holds = self.groups[lane.index()]
+                    .members
+                    .iter()
+                    .any(|member| member.object_id == *id);
+                if holds && !lanes.contains(&lane) {
+                    lanes.push(lane);
+                }
+            }
+        }
+        if lanes.is_empty() {
+            return Ok(());
+        }
+        let mut availability = Availability::default();
+        for lane in lanes {
+            self.seal_group(lane, &mut availability)?;
+        }
+        Ok(())
     }
 
     /// Reads objects inside this owner's transaction, with no ceiling.

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use layerfs_content::{construct_bytes, ConstructionPolicy, ObjectId};
 use layerfs_storage::{StorageError, Store};
-use support::{create_store, disabled, noise, open_store, TempDir};
+use support::{construct_file, create_store, disabled, noise, open_store, read_objects, TempDir};
 
 fn whole_file(raw: &[u8]) -> layerfs_content::FinalizedObject {
     let policy = ConstructionPolicy::frozen_default();
@@ -151,6 +151,51 @@ fn same_save_reads_see_accepted_objects_before_the_finish_barrier() {
         .0;
     assert_eq!(values.len(), 1);
     let _ = &mut external;
+}
+
+#[test]
+fn same_save_reads_resolve_objects_waiting_in_an_unfinished_group() {
+    let dir = TempDir::new("pending_read");
+    let path = dir.store_path("pending_read");
+    let store = create_store(&path);
+    // CDC-sized chunks leave the last group of a lane partial: those members have no
+    // row yet when the same save reads them. The narrow case above stays inside the
+    // preparation batch; this one is larger than one batch, so it exercises the
+    // pending group rather than the pending batch.
+    let bytes = noise(5 * 1024 * 1024);
+    let (collected, root, _) = construct_file(&bytes);
+    let ids: Vec<ObjectId> = collected
+        .objects()
+        .iter()
+        .map(|(id, _, _, _)| *id)
+        .collect();
+    assert!(ids.len() > 256, "the workload must span several waves");
+
+    disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        for object in collected.finalized() {
+            operation.accept(object, scope.child("storage.accept"))?;
+        }
+        // Every identity `accept` acknowledged reads back its exact canonical bytes,
+        // whether it is in the pending batch, in an unfinished group or already
+        // written.
+        for (id, _, expected, _) in collected.objects() {
+            let values =
+                operation.read_batch(std::slice::from_ref(id), scope.child("storage.read"))?;
+            assert_eq!(values.len(), 1);
+            assert_eq!(
+                &values[0], expected,
+                "identity {id} read inside its own save"
+            );
+        }
+        let values = operation.read_batch(&ids, scope.child("storage.read"))?;
+        assert_eq!(values.len(), ids.len());
+        operation.finish(scope.child("storage.finish"))
+    })
+    .unwrap();
+
+    let (values, _) = read_objects(&store, &[root]).unwrap();
+    assert_eq!(values.len(), 1);
 }
 
 #[test]

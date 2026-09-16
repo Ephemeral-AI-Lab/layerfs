@@ -97,6 +97,28 @@ fn a_streamed_file_survives_construction_storage_and_readback() {
 }
 
 #[test]
+fn many_distinct_compressible_records_share_groups_and_read_back_identically() {
+    let dir = TempDir::new("compressible");
+    let path = dir.store_path("compressible");
+    let store = create_store(&path);
+    // Distinct chunks that each compress to a few dozen bytes: a group is bounded by
+    // its framed bytes, so many records share one group. Every chunk must still read
+    // back as its own bytes, and the whole file must survive construction, storage
+    // and an independent read.
+    let mut bytes = repeat(4 * 1024 * 1024, 0x00);
+    for (index, stamp) in bytes.chunks_mut(64 * 1024).enumerate() {
+        stamp[..4].copy_from_slice(&(index as u32).to_be_bytes());
+    }
+    let result = pipeline(&store, &bytes).expect("pipeline succeeds");
+    assert_eq!(result.logical_len, bytes.len() as u64);
+    assert_eq!(read_back(&store, result.root), bytes);
+
+    // The same file again: every identity is already stored, so it is reused.
+    let repeated = pipeline(&store, &bytes).expect("second pipeline succeeds");
+    assert_eq!(repeated.root, result.root);
+}
+
+#[test]
 fn integrated_and_independent_runs_produce_the_same_roots() {
     let dir = TempDir::new("equivalence");
     let store = create_store(&dir.store_path("equivalence"));

@@ -251,9 +251,12 @@ impl SaveOperation {
     /// Reads objects inside this save's own transaction, with no ceiling.
     ///
     /// Identities still held in the bounded pending batch are served from that
-    /// state; the remainder is read through the open transaction. A same-save
-    /// read therefore observes accepted output without a separate mechanism and
-    /// without exposing it to unrelated readers.
+    /// state. An identity that is waiting in an unfinished write group has no row
+    /// yet, so the group holding it is sealed first and the remainder is read
+    /// through the open transaction; sealing is the owner's own write, happens
+    /// inside this read's scope and takes the save's terminal boundary if it fails.
+    /// A same-save read therefore observes every object `accept` acknowledged,
+    /// without exposing any of it to unrelated readers.
     pub fn read_batch(
         &mut self,
         ids: &[ObjectId],
@@ -273,6 +276,22 @@ impl SaveOperation {
                 .copied()
                 .filter(|id| !pending.iter().any(|(candidate, _)| candidate == id))
                 .collect();
+            // Sealing is a preparation write, so it takes the same terminal boundary
+            // as every other preparation write: a lost lock or a failed commit here
+            // leaves an unproven transaction state that cleanup must resolve once.
+            // The query that follows it is a query, and a missing object is a caller
+            // error rather than a broken save, so it does not terminate anything.
+            if !remaining.is_empty() {
+                let sealed = {
+                    let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
+                    read_scope
+                        .child("storage.read")
+                        .run(|_| owner.seal_pending(&remaining))
+                };
+                if let Err(error) = sealed {
+                    return Err(self.terminate(error));
+                }
+            }
             let stored = if remaining.is_empty() {
                 Vec::new()
             } else {

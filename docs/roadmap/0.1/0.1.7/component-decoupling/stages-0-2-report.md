@@ -313,3 +313,43 @@ commit `38d47cfd3` tree, after = the amendment tree.
 The growth is the watermark itself: schema DDL, the two watermark accessors, the
 three checks above, the `UninspectedState` variant, the `store.rs` clamp, and the
 `finish_inner` advance. No test, documentation or example line is counted.
+
+## 9. Amendment: duplicate identities across waves, and same-save reads of waiting records
+
+Section 8 recorded two open defects. Both are now fixed, and both fixes are in one
+mechanism: an identity waiting in an unfinished write group has no row yet, so the
+owner frames and places that group on demand and the ordinary verified storage path
+answers for the identity.
+
+| Finding | Was | Now |
+| --- | --- | --- |
+| A repeated canonical identity whose occurrences fall on opposite sides of a preparation wave | `UNIQUE constraint failed: objects.object_id`; the save failed. Demonstrated by 2 MiB of one repeated byte (66 objects, 3 distinct, 63 repeated occurrences) and at 4 MiB | The duplicate is resolved through the same byte comparison against stored bytes that a cross-batch duplicate uses. The same two workloads store 3 distinct objects in 2 packs |
+| A read inside the save that accepted an object, while that object's group is still open | `ObjectMissing` for 2 of 277 acknowledged objects of a 5 MiB file with CDC-sized chunks | All 277 read back their exact canonical bytes |
+
+The retain-first alternative — keeping the canonical bytes of every waiting member —
+was implemented and then rejected on measurement: a group is bounded by its *framed*
+bytes, and 4 MiB of zeros with a 4-byte stamp every 64 KiB leaves 64 distinct
+32,789-byte payloads (4,196,992 bytes) waiting in one open group. Sealing costs packing
+granularity for the caller that needs the identity and retains no payload.
+
+Evidence:
+[`stages-1-2-remediation-f13-f14-20260916T200520Z`](../evidence/stages-1-2-remediation-f13-f14-20260916T200520Z/README.md)
+— one harness, two trees, plus the new external tests run against the pre-fix tree,
+where they fail with the reported errors and pass after the fix.
+
+### 9a. Production LOC comparison for this amendment
+
+Method as in §8a; before = commit `acefc3179` tree, after = this amendment tree.
+
+| Scope | Before | After | Delta |
+| --- | --- | --- | --- |
+| `core` (C1 + C2 + telemetry) | 6110 | 6152 | +42 |
+| `core/crates/layerfs-storage` | 3042 | 3084 | +42 |
+| `core/crates/layerfs-content` | 2336 | 2336 | 0 |
+| `core/crates/layerfs-telemetry` | 732 | 732 | 0 |
+| reference `crates/` | 68476 | 68476 | 0 |
+| combined | 74586 | 74628 | +42 |
+
+Four new external tests (`cas_reuse`, `pack_locator`, `core_pipeline`) and this
+amendment are test and documentation lines and are not counted.
+

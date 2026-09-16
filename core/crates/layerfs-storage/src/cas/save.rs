@@ -33,6 +33,11 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     // A wave may carry the same identity several times. The first occurrence
     // decides the row; every later occurrence still receives the required exact
     // comparison against the bytes that were actually prepared for this identity.
+    // The same holds across waves: an identity whose group is still open has no row
+    // yet, so it is sealed on demand and resolved through the ordinary verified path
+    // instead of being inserted a second time. Inserting a second row is a hard
+    // constraint failure, and a store that fails on repeated content fails on
+    // exactly the workload it exists for.
     let mut prepared: BTreeMap<ObjectId, usize> = BTreeMap::new();
     for index in 0..objects.len() {
         if let Some(prior) = prepared.get(&objects[index].id()).copied() {
@@ -46,6 +51,15 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
         prepared.insert(object.id(), index);
         match by_id.get(&object.id()).copied() {
             Some(location) => {
+                membership::reuse_or_collide(owner, &object, location)?;
+                owner.note_reuse();
+            }
+            None if owner.pending_member(object.id()) => {
+                owner.seal_pending(std::slice::from_ref(&object.id()))?;
+                let location = lookup::locations(owner.connection(), &[object.id()], i64::MAX)?
+                    .into_iter()
+                    .next()
+                    .ok_or(StorageError::Integrity("sealed identity has no row"))?;
                 membership::reuse_or_collide(owner, &object, location)?;
                 owner.note_reuse();
             }

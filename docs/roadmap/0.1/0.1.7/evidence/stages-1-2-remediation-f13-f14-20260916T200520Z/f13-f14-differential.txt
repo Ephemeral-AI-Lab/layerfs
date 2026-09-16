@@ -1,0 +1,118 @@
+# F13 and F14: a harness differential and two regression tests
+
+Both findings were reproduced by an independent harness outside the repository
+(harness-repro.rs, copied here) and then fixed in the product. Each arm below is
+the same harness source, built against a different tree: the pre-fix tree is a
+detached worktree at the parent commit, the fixed tree is the working tree.
+
+## Arm BEFORE: commit acefc3179 (pre-fix)
+
+Tree: git worktree add --detach /tmp/loc-head acefc3179
+Manifest: /tmp/rev-harness-before/Cargo.toml (path dependencies into /tmp/loc-head)
+Build: cargo build --release --offline --bin repro
+Command: /tmp/rev-harness-before/target/release/repro
+
+```text
+F14 2 MiB of one repeated byte: objects=66 distinct=3 chunks=64 dup_occurrences=63 -> FAILED: engine: UNIQUE constraint failed: objects.object_id
+F14 4 MiB of one repeated byte: objects=130 distinct=3 chunks=128 dup_occurrences=127 -> FAILED: engine: UNIQUE constraint failed: objects.object_id
+F13 same-save read of 98 accepted objects -> OK 98 values
+F13 small records (5 MiB noise, 277 objects): ok=275 refused=2
+    refused f611f22f2e24c1be95207691ebd2232c73d220d06fde3506537dd360e99f349d: object f611f22f2e24c1be95207691ebd2232c73d220d06fde3506537dd360e99f349d is not stored
+    refused e3c42c68e27979a704f8502005a7a846352495f246058aea3315f1697a939e45: object e3c42c68e27979a704f8502005a7a846352495f246058aea3315f1697a939e45 is not stored
+```
+
+F14: a file of one repeated byte is the deduplication case the store exists for,
+and the save failed outright. Its chunks are identical, the file is larger than one
+preparation wave, and the second occurrence of an identity was offered again while
+the first was still waiting in an unframed group, so a second row was inserted for
+the same object_id.
+
+F13: CDC-sized chunks leave the last group of a lane partial, so 2 of the 277
+objects a save had acknowledged through accept() were reported 'not stored' by that
+save's own read. The 98-object case above stays inside the preparation batch and was
+already served from it, which is why the smaller probe passed and this one did not.
+
+## Arm AFTER: the working tree
+
+Command: /tmp/rev-harness/target/release/repro
+
+```text
+F14 2 MiB of one repeated byte: objects=66 distinct=3 chunks=64 dup_occurrences=63 -> OK inserted=3 packs=2
+F14 4 MiB of one repeated byte: objects=130 distinct=3 chunks=128 dup_occurrences=127 -> OK inserted=3 packs=2
+F13 same-save read of 98 accepted objects -> OK 98 values
+F13 small records (5 MiB noise, 277 objects): ok=277 refused=0
+```
+
+## The regression tests fail on the pre-fix tree
+
+A test that cannot fail is not evidence. The two new external tests were copied
+unchanged into the pre-fix worktree and run against its unmodified source:
+
+```text
+$ cp core/crates/layerfs-storage/tests/{cas_reuse.rs,pack_locator.rs} /tmp/loc-head/core/crates/layerfs-storage/tests/
+$ cd /tmp/loc-head && cargo +1.85.1 test --locked --offline -p layerfs-storage --test cas_reuse
+test a_repetitive_file_spanning_waves_inserts_once_per_distinct_identity ... FAILED
+panicked at crates/layerfs-storage/tests/cas_reuse.rs:115:
+  a repetitive file is an ordinary workload: Engine(SqliteFailure(Error { code: ConstraintViolation, extended_code: 1555 }, Some("UNIQUE constraint failed: objects.object_id")))
+test result: FAILED. 7 passed; 1 failed
+
+$ cargo +1.85.1 test --locked --offline -p layerfs-storage --test pack_locator
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... FAILED
+panicked at crates/layerfs-storage/tests/pack_locator.rs:195:
+  called `Result::unwrap()` on an `Err` value: ObjectMissing(ObjectId("fc8b328646362143cc67884d05b8be5c8389567cd0146a0d4ec8e71353e3745c"))
+test result: FAILED. 6 passed; 1 failed
+```
+
+Both pass on the fixed tree (see checks.txt).
+
+## The fix, and what it deliberately does not do
+
+An identity waiting in an unfinished group has no row yet. The owner now seals the
+group holding it on demand, so the ordinary verified storage path answers for it:
+the duplicate occurrence goes through the same byte comparison against stored bytes
+that a cross-batch duplicate uses, and a same-save read reads the row it just
+created. The alternative -- retaining the canonical bytes of every waiting member --
+was implemented first and rejected: a group is bounded by its *framed* bytes, so a
+record that compresses to tens of bytes can carry 32 KiB of canonical data, and a
+64 KiB group could then retain tens of MiB. Sealing costs packing granularity for
+the caller that needs the identity and nothing else; an identity is sealed at most
+once, because afterwards its row exists and the membership lookup finds it.
+
+## Bounds of this evidence
+
+- Deterministic workloads, single observation per arm, no timing or memory claim.
+- The harness lives outside the repository and is reproduced by the copy above.
+- The F14 workload stores 3 distinct objects into 2 packs; that number is a
+  property of this workload, not a packing-efficiency claim.
+
+## Why the retain-first design was rejected, measured
+
+The first implementation kept the canonical bytes of every member waiting in an open
+group and served both the duplicate and the same-save read from that copy. A group is
+bounded by its *framed* bytes, so that retention is not bounded by the group target.
+
+Workload (harness-compressible.rs, copied here): 4 MiB of zeros with a 4-byte counter
+stamp every 64 KiB, which is ordinary compressible content with distinct chunks.
+
+```text
+$ /tmp/rev-harness/target/release/compressible
+file 4 MiB of zeros with a 4-byte stamp every 64 KiB
+objects=130 distinct chunks=128 chunk canonical bytes 32789..32789
+inserted=66 reused=64 packs_created=2 pack_appends=1
+canonical bytes retained if waiting members kept their payloads: up to 4196992 bytes per group
+```
+
+64 distinct 32,789-byte payloads (4,196,992 bytes) can be waiting in one open group of
+this workload, against a 64 KiB group target that bounds framed bytes only. The
+retain-first design was therefore replaced by sealing the group on demand; the
+fix that ships retains no payload at all.
+
+## A failed seal inside a read is terminal
+
+Sealing is a preparation write, so `SaveOperation::read_batch` runs it under the save's
+terminal boundary: a lost write lock or a failed commit at that moment leaves an
+unproven transaction state, and the one terminal boundary resolves it exactly as it
+does for `accept`. The query that follows the seal is a query, and a missing object is
+a caller error rather than a broken save, so it does not terminate anything. This path
+is not induced: reaching it needs an engine or transport failure, which product source
+cannot inject. It is a coverage gap recorded as such, not a passing test.

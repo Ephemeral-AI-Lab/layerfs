@@ -64,6 +64,19 @@ inside a save's final transaction, and ordinary reads clamp to it:
 - A read of an object above the captured ceiling fails with
   `VisibilityCeiling`; it is never silently visible.
 
+## Reading inside an open save
+
+`SaveOperation::read_batch` sees every object `accept` acknowledged. An identity still
+held in the bounded batch is served from memory. An identity waiting in an unfinished
+group has no row yet, so the group holding it is framed and placed first, inside the
+read's own `storage.read` scope, and the row is then read through the open transaction.
+The read therefore performs the owner's own write; the alternative — keeping a second
+copy of every waiting payload — was rejected because a group bounds only its *framed*
+bytes, so a compressible record set could retain megabytes per group. The cost here is
+packing granularity for the caller that reads inside a save, and it is paid once per
+identity: afterwards the row exists and the membership lookup finds it. Unrelated
+readers are unaffected and still see nothing above the publication watermark.
+
 ## Public surface
 
 ```text

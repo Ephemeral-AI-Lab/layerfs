@@ -88,6 +88,60 @@ fn repeated_identities_inside_one_batch_insert_once_and_reuse_the_rest() {
 }
 
 #[test]
+fn a_repetitive_file_spanning_waves_inserts_once_per_distinct_identity() {
+    let dir = TempDir::new("repeat_waves");
+    let path = dir.store_path("repeat_waves");
+    // One repeated byte. Every chunk resolves to the same identity, and 2 MiB of it
+    // is far larger than the 512-object / 512 KiB preparation batch, so the repeated
+    // identity is offered again after its first occurrence has already been prepared
+    // but while its group is still open. A duplicate row here is a hard constraint
+    // failure, and a store that fails on repeated content fails on the workload it
+    // exists for.
+    let bytes = repeat(2 * 1024 * 1024, 0x21);
+    let (collected, root, _) = construct_file(&bytes);
+    let distinct: std::collections::BTreeSet<_> = collected
+        .objects()
+        .iter()
+        .map(|(id, _, _, _)| *id)
+        .collect();
+    assert!(
+        collected.objects().len() > 3 * distinct.len(),
+        "the workload must repeat identities many times: {} objects, {} distinct",
+        collected.objects().len(),
+        distinct.len()
+    );
+
+    let store = create_store(&path);
+    let outcome = save_all(&store, &collected).expect("a repetitive file is an ordinary workload");
+    assert_eq!(
+        outcome.inserted,
+        distinct.len() as u64,
+        "one row per distinct identity"
+    );
+    assert_eq!(
+        outcome.reused,
+        (collected.objects().len() - distinct.len()) as u64
+    );
+
+    // Every stored identity reads back as the canonical bytes construction emitted.
+    let expected: std::collections::BTreeMap<_, _> = collected
+        .objects()
+        .iter()
+        .map(|(id, _, bytes, _)| (*id, bytes.clone()))
+        .collect();
+    let ids: Vec<_> = expected.keys().copied().collect();
+    let (values, _) = read_objects(&store, &ids).unwrap();
+    for (id, value) in ids.iter().zip(values) {
+        assert_eq!(&value, expected.get(id).unwrap());
+    }
+    assert_eq!(
+        read_objects(&store, &[root]).unwrap().0.len(),
+        1,
+        "the file root reads back"
+    );
+}
+
+#[test]
 fn repeated_identity_across_batches_reuses_without_rewriting() {
     let dir = TempDir::new("across");
     let path = dir.store_path("across");
