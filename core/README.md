@@ -52,10 +52,14 @@ cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --
 cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_components -- --mode pipeline --input "$run/input.bin" --store "$run/pipeline.sqlite" --timings "$run/pipeline.json"
 ```
 
-Both workspaces are checked by the repository pre-push gate:
+The two workspaces are checked separately: the commands above use the core manifest,
+and the reference workspace uses its own. There is no aggregate repository gate —
+`tools/preflight.sh` is permanently retired by owner decision (ledger L32), and it
+runs no checks. Do not restore it.
 
 ```sh
-tools/preflight.sh
+python3 core/tools/check_product_boundary.py
+python3 -m unittest discover -s core/tools -p 'test_*.py'
 ```
 
 The reference workspace keeps its own commands and lockfile:

@@ -1827,3 +1827,29 @@ with all three profiles PASS and the paired control attached. The closure accept
 non-passing lines above **as recorded** — the two harness transients and the
 container-lifetime domain differences — and does not waive them; `historical_access`
 stays `NOT_RUN` until its sealed v2 Store reappears. No merge, tag or release follows.
+
+### L32 — 2026-09-17: owner directive — retire the local preflight gate permanently
+
+- Directive, verbatim: "i want permanent preflight disable ... because we are in big
+  architecture shift, old preflight gate is useless and time consuming", followed by
+  "update agents.md to not to bring preflight back".
+- Actions: `tools/preflight.sh` was replaced by a retirement notice that runs no
+  checks and exits 0 with an explicit statement that the zero status is not a pass;
+  `AGENTS.md` §4 now states that the repository has no CI **and** no aggregate
+  pre-push gate, forbids running or restoring it, and forbids reintroducing an
+  equivalent aggregate gate, workflow or wrapper; `core/AGENTS.md`, `core/README.md`
+  and the C2 README were updated to name the per-workspace commands instead.
+- Consequence: nothing gates a push automatically, exactly as with L21. Verification
+  becomes an explicit, reported act per workspace: for the replacement product
+  `cargo +1.85.1 test/clippy/fmt --manifest-path core/Cargo.toml --locked` plus
+  `core/tools/check_product_boundary.py` and its self-tests. A push must state which
+  checks ran, which did not, and why; "preflight passed" is no longer a claim that
+  can be made, and no commit may imply it.
+- Scope: repository-wide, all workspaces, permanently — not a temporary suspension.
+- Retained deliberately: the per-workspace commands themselves, the core product
+  boundary guard, the LOC counter and its unit tests, and the production-LOC rule in
+  `AGENTS.md` §4. Only the aggregate, minutes-long gate is gone.
+- Reversal, if ever wanted: restore the script from git history
+  (`git show 30f5d0633:tools/preflight.sh`), and revert the `AGENTS.md` §4 paragraph
+  in the same commit so policy and tooling cannot disagree. Do not do this while the
+  architecture shift is in progress.

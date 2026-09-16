@@ -110,8 +110,10 @@ destructor.
 
 ```sh
 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests
-sh core/../tools/preflight.sh   # from the repository root
 ```
+
+The aggregate `tools/preflight.sh` gate is permanently retired (ledger L32) and runs
+no checks; verify this workspace with the core manifest.
 
 External targets: `cas_roundtrip`, `cas_reuse`, `pack_locator`,
 `persistence_failure`, `memory_bounds`, `visibility`, `timing`, `core_pipeline`;

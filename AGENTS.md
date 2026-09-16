@@ -10,7 +10,7 @@ the 999-physical-line production-file ceiling, and the stricter 200-line
 declaration/delegation limit for `lib.rs` and `mod.rs`. These
 rules apply to the replacement tree; existing root `crates/` remains reference
 code during migration. Follow the core-specific checks before claiming core work
-is verified; the existing root preflight alone does not exercise that workspace.
+is verified; the root checks alone do not exercise that workspace.
 
 Read before touching measurement, benchmark or release work:
 
@@ -151,12 +151,18 @@ the report.
   limit for lib.rs/mod.rs. Keep product-only source and external tests. Existing
   root crates/ remain reference; extend guard coverage when new product formats
   or adapter paths are introduced rather than using them to evade the rules.
-- **This repository runs no CI** (owner decision; GitHub Actions is disabled and
-  `.github/workflows/ci.yml` removed — see ledger L21). The former checks are now a
-  local pre-push gate: run **`tools/preflight.sh`** (rustfmt 1.96 `--all --check`,
-  tools unit tests, the workspace fast suite under 1.85.1, clippy
-  `--workspace --locked -- -D warnings`, plus the benchmark harness tests). CI being
-  off is not permission to skip them, and no push may claim "CI green".
+- **This repository runs no CI and no aggregate pre-push gate** (owner decisions:
+  GitHub Actions is disabled and `.github/workflows/ci.yml` removed — ledger L21 —
+  and `tools/preflight.sh` is **permanently retired** — ledger L32). Do not run
+  `tools/preflight.sh`, do not restore it, and do not reintroduce an equivalent
+  aggregate gate, workflow or wrapper. During the architecture shift it costs minutes
+  and verifies a tree that is no longer the deliverable.
+  CI being off is not permission to skip verification. Verify the tree you actually
+  changed, per workspace, with the commands that cover it — for the replacement
+  product that is `cargo +1.85.1 test/clippy/fmt --manifest-path core/Cargo.toml
+  --locked` plus `core/tools/check_product_boundary.py` — and report exactly which
+  checks ran, which did not, and why. No push may claim "CI green" or "the preflight
+  passed".
 - Keep the tree clean for sealed builds — a dirty source seal is recorded and cannot
   be compared against a sealed arm.
 - No new dependencies when an existing crate already provides the capability;

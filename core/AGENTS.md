@@ -161,11 +161,13 @@ functions, macros, manifest target paths, dependencies and generated inputs for
 the same ownership rules; a green scan alone does not establish product purity.
 
 Once a core workspace exists, run its locked tests, examples, formatting and
-warning-denying Clippy with an explicit core manifest. The existing root local
-preflight runs the boundary guard and its self-tests; core Cargo checks must be
-added when that workspace is introduced. Do not disable test
-discovery or omit checks to satisfy this policy. Follow the repository pre-push
-gate before publication; LayerFS has no CI.
+warning-denying Clippy with an explicit core manifest, together with the boundary
+guard and its self-tests (`python3 core/tools/check_product_boundary.py`,
+`python3 -m unittest discover -s core/tools -p 'test_*.py'`). Do not disable test
+discovery or omit checks to satisfy this policy. LayerFS has no CI and no aggregate
+pre-push gate: `tools/preflight.sh` is permanently retired (repository `AGENTS.md`
+§4, ledger L32), so this workspace is verified with the core manifest and nothing
+else is substituted for it. Report the exact commands and every gap.
 
 Report exact checks and gaps. Do not present an empty source scan as a built or
 tested implementation. Production behavior and required tests must both be present
