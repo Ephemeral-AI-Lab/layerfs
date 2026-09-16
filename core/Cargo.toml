@@ -1,0 +1,16 @@
+# Independent replacement-product workspace (LayerFS v0.1.7).
+#
+# The reference workspace at the repository root keeps its own members, lockfile
+# and target directory; `core/` is excluded there. Only the agreed candidate
+# component is a member so far: further packages are added when their boundaries
+# are decided. Third-party pins are added with the component that needs them.
+
+[workspace]
+resolver = "2"
+members = ["crates/layerfs-telemetry"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.6"
+rust-version = "1.85"
+license = "MIT"

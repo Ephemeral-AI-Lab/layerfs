@@ -4,6 +4,13 @@ Repo-wide rules for coding agents working in `layerfs`. This file routes; it doe
 not replace the normative documents below, and where they disagree with this page,
 they win.
 
+For the replacement product under `core/`, also read
+[`core/AGENTS.md`](core/AGENTS.md). It defines product-only source, external tests,
+and the 200-line declaration/delegation limit for `lib.rs` and `mod.rs`. These
+rules apply to the replacement tree; existing root `crates/` remains reference
+code during migration. Follow the core-specific checks before claiming core work
+is verified; the existing root preflight alone does not exercise that workspace.
+
 Read before touching measurement, benchmark or release work:
 
 - [`docs/general/benchmark_rules.md`](docs/general/benchmark_rules.md) — the measurement contract
@@ -157,6 +164,48 @@ the report.
   `sync_data`/`sync_all` on Workspace backing, and memory hints are hints.
 - Documentation states measured facts, limits and open rulings; roadmap READMEs
   link to the ledger rather than paraphrasing numbers.
+
+### Production LOC comparison for every commit
+
+Every Git commit must record **production source lines of code before, after,
+and the signed delta**. Test, documentation and tooling changes do not contribute
+to this number. This is a source-size comparison, not a performance claim.
+
+- **Count production code only.** Count nonblank, non-comment source lines in
+  first-party LayerFS product implementation, including required runtime SQL or
+  other shipped implementation outside Rust src/ directories. Imports, declarations
+  and forwarding code count. Exclude tests (including legacy inline test modules
+  and test-only branches), fixtures, mocks, examples, benchmark harnesses, development
+  tools, docs, manifests/lockfiles, third-party code and generated build artifacts.
+  A line with both code and a comment counts once. Do not substitute raw file-line
+  totals or Git insertion/deletion statistics for production LOC.
+- **Compare the exact commit snapshots.** Before is the commit's first parent;
+  after is the committed tree. Prepare the comparison from the parent and final
+  staged tree before committing, then confirm the resulting commit matches it.
+  Exclude unstaged/untracked work. Use an empty tree for an initial commit. For
+  merges declare the first-parent comparison; recompute after amendments/rebases
+  or any change to the staged source.
+- **Keep counting reproducible.** Use the same counter/version, source scope,
+  exclusions and handling of inline test code for both snapshots. Record the
+  command/method with the comparison. Review source classification when files
+  move or new product paths appear; do not silently drop code from the count.
+  A counter that includes legacy inline tests does not satisfy this rule.
+- **Report migration honestly.** While old and replacement implementations
+  coexist, report their production totals separately as well as the combined
+  total. Include application-adapter production code when introduced. Label
+  relocation, duplication and legacy retirement; do not call a scope change or
+  deletion of the reference an algorithmic simplification.
+- **Put the result in the commit message and handoff.** Use
+  `Production LOC: <before> -> <after> (delta <signed difference>)`, with scope
+  and counting method, plus migration subtotals when applicable. For multiple
+  commits, give a comparison for each. A test/docs-only commit still reports
+  the unchanged production total and delta 0; it does not report a fictitious
+  zero-sized product or add test/documentation LOC to the headline.
+
+LOC growth is allowed when justified by the product change; this rule does not
+require every commit to shrink. Never remove required validation, compress code
+into dense lines, or move implementation outside the declared scope to improve
+the number. Complete the comparison before committing; do not invent estimates.
 
 ## 5. Why these rules exist (worked example)
 
