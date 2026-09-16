@@ -92,8 +92,8 @@ fn a_real_edit_reports_its_scopes_without_a_database() {
         "scopes: {inner:?}"
     );
     assert!(
-        inner.contains(&"edit.stream".to_string()),
-        "the retained-extent pass is timed: {inner:?}"
+        inner.contains(&"edit.split".to_string()),
+        "the stored-tree split pass is timed: {inner:?}"
     );
     assert!(
         inner.contains(&"edit.finish".to_string()),

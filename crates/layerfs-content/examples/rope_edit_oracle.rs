@@ -177,6 +177,31 @@ fn main() {
             let cut = (base.len() - 400_000) as u64;
             (base, vec![(0, cut, Vec::new())])
         }
+        "half-partition-90-90" => {
+            // A file whose construction is exactly 180 extents has two 90-entry
+            // leaves; deleting 64 bytes at the seam between them forces the
+            // concatenation rule that must repartition a >128-entry join in half.
+            let base = file_with_extents(180);
+            let mut store = Memory::default();
+            let (root, _) = rope::build_bytes(&mut store, &base).expect("probe");
+            let state = decode_file_state(&store.get(root.0).expect("root")).expect("state");
+            let node = decode_node_with_context(&store.get(state.mapping_root).expect("node"), true)
+                .expect("node");
+            let seam = match node {
+                ExtentNodeV3::Branch { children, .. } => {
+                    children[0].cumulative_logical_end
+                }
+                ExtentNodeV3::Leaf { .. } => panic!("expected a branch root for 180 extents"),
+            };
+            (base, vec![(seam.saturating_sub(32), 64, Vec::new())])
+        }
+        "unequal-height-join" => {
+            // A small chunked file joined onto a taller tree: the append at end of
+            // file forces the unequal-height concatenation rules.
+            let base = file_with_extents(140);
+            let end = base.len() as u64;
+            (base, vec![(end, 0, noise(2_500_000))])
+        }
         "batch-normalized" => {
             let base = patterned(1_500_000);
             let edits = vec![
@@ -207,6 +232,14 @@ fn main() {
     println!("  \"edited_len\": {},", state_len(&store, edited_root.0));
     println!("  \"nodes_created\": {},", counters.nodes_created);
     println!("  \"nodes_read\": {},", counters.nodes_read);
+    let tuples = edits
+        .iter()
+        .map(|(start, delete, replacement)| {
+            format!("[{start}, {delete}, {}]", replacement.len())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("  \"edits\": [{tuples}],");
     println!("  \"base_pages\": {},", render(&base_pages));
     println!("  \"edited_pages\": {}", render(&edited_pages));
     println!("}}");

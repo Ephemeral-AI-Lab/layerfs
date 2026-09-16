@@ -15,8 +15,8 @@ pub use content::{
     inspect, whole_file_payload, ConstructedFile, FileContent, WHOLE_CANONICAL_OVERHEAD,
 };
 pub use edit::{
-    apply_edits, Edit, EditFrontier, EditRequest, EditSource, EditStream, Replacements,
-    MAXIMUM_EDITS_PER_OPERATION,
+    apply_edits, Edit, EditCounters, EditObjects, EditRequest, EditSource, EditStream,
+    Replacements, EDIT_DEFERRED_LIMIT, MAXIMUM_EDITS_PER_OPERATION,
 };
 pub use mapping::{ExtentBuilder, ReadCounters};
 pub use read::{read_all, read_all_bounded, read_range};

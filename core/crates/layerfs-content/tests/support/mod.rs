@@ -117,6 +117,15 @@ impl MemoryStore {
         }
     }
 
+    /// Adds every object held by `other` to this store.
+    pub fn absorb(&mut self, other: &MemoryStore) {
+        for (id, role) in other.order() {
+            let bytes = other.canonical(*id).expect("held object has bytes");
+            let object = FinalizedObject::new(*role, bytes.to_vec()).expect("canonical object");
+            self.accept(object).expect("absorb accepts");
+        }
+    }
+
     /// Copies every held object into a fresh store, preserving emission order.
     pub fn merged_clone(&self) -> MemoryStore {
         let mut target = MemoryStore::new();

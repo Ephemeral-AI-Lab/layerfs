@@ -16,7 +16,6 @@ use crate::error::{ContentError, ContentResult};
 use crate::file::content::{encode_whole_file, ConstructedFile};
 use crate::file::edit::compare::{compare_replacements, NoOpVerdict};
 use crate::file::edit::finish::{emit_empty_representation, emit_file_state};
-use crate::file::edit::frontier::EditFrontier;
 use crate::file::edit::input::{EditSource, EditStream, Plan, ReplacementReader, Segment};
 use crate::file::view::FileView;
 use crate::object::{
@@ -105,7 +104,7 @@ pub fn apply_edits(
                 })
             }
             crate::policy::Representation::Chunked => match view.file_state()? {
-                Some(_) => stream_chunked(capacities, &view, reader, &request, consumer, edit),
+                Some(_) => replace_chunked(capacities, &view, reader, &request, consumer, edit),
                 None => stream_combined(capacities, &view, &request, consumer, edit),
             },
         }
@@ -197,105 +196,143 @@ fn append_replacement(
     Ok(())
 }
 
-/// Streams a chunked base through the frontier, reusing retained extents.
-fn stream_chunked(
+/// Applies one ordered edit stream to a chunked base with stored-node splits.
+///
+/// Each edit is four operations over summaries: split the running mapping at the
+/// replacement start, split the remainder at the end of the deleted range, scan the
+/// replacement into its own subtree, and concatenate the three parts. A subtree the
+/// edit does not touch keeps its stored identity and is never read again, and only
+/// the nodes the final mapping reaches are published.
+fn replace_chunked(
     capacities: &ConstructionCapacities,
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
     request: &EditRequest<'_>,
     consumer: &mut dyn FinalizedConsumer,
-    edit: &TimingScope<'_, layerfs_telemetry::timer::Active>,
+    edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
-    let mut frontier = EditFrontier::new(capacities);
-    let mut plan = Plan::new(request.edits);
-    let mut pending = plan.advance()?;
-    let mut skip_to = 0_u64;
-    let mut origin = 0_u64;
-    let mut scan_error: Option<ContentError> = None;
-    let walked = edit.child("edit.stream").run(|_| {
-        view.walk_extents(reader, &mut |extent| {
-            let end = origin
-                .checked_add(u64::from(extent.logical_length()))
-                .ok_or(ContentError::LengthOverflow)?;
-            let mut local = origin.max(skip_to);
-            while local < end {
-                match pending {
-                    Some(Segment::Replace { index, base, len }) if base.0 <= local => {
-                        frontier.replace(request.source, index, len, consumer)?;
-                        local = base.1;
-                        skip_to = base.1;
-                        pending = plan.advance()?;
-                    }
-                    Some(Segment::Replace { base, .. }) => {
-                        let limit = end.min(base.0);
-                        frontier.retain(extent, origin, local, limit, consumer)?;
-                        local = limit;
-                    }
-                    Some(Segment::Retain { base }) => {
-                        let limit = end.min(base.1);
-                        if local < limit {
-                            frontier.retain(extent, origin, local, limit, consumer)?;
-                        }
-                        local = limit;
-                        if limit == base.1 {
-                            pending = plan.advance()?;
-                        }
-                    }
-                    None => {
-                        frontier.retain(extent, origin, local, end, consumer)?;
-                        local = end;
-                    }
+    let (mut state, mut summary) = edit
+        .child("edit.base_read")
+        .run(|_| crate::file::edit::tree::read_state(reader, view.root()))?;
+    let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer);
+    for (index, declared) in request.edits.edits().iter().enumerate() {
+        let replacement_len = declared.replacement_len();
+        let (left, tail) = edit.child("edit.split").run(|_| {
+            crate::file::edit::tree::split(&mut objects, summary, declared.start(), true)
+        })?;
+        let (_, right) = edit.child("edit.split").run(|_| match tail {
+            Some(tail) => {
+                crate::file::edit::tree::split(&mut objects, tail, declared.removed_len(), true)
+            }
+            None if declared.removed_len() == 0 => Ok((None, None)),
+            None => Err(ContentError::InvalidRange {
+                start: declared.removed_len(),
+                end: declared.removed_len(),
+                length: 0,
+            }),
+        })?;
+        // The replacement is scanned into its own subtree through the same
+        // canonical builder complete construction uses. Its first payload may
+        // continue the retained payload immediately before the insert position,
+        // which is a physical hint only.
+        let predecessor = match left {
+            Some(left) => edit
+                .child("edit.split")
+                .run(|_| rightmost_payload(&mut objects, left))?,
+            None => None,
+        };
+        // The declared replacement length is checked against the source before any
+        // work: a source that cannot serve the declared bytes is a caller error, not
+        // an I/O failure to be interpreted.
+        if request.source.replacement_len(index) != replacement_len {
+            return Err(ContentError::InvalidEdit {
+                what: "replacement length",
+            });
+        }
+        let middle = if replacement_len == 0 {
+            None
+        } else {
+            edit.child("content.chunk").run(|_| {
+                let mut builder = crate::file::mapping::ExtentBuilder::new(capacities);
+                let mut sink = crate::file::edit::tree::DeferredSink::new(&mut objects);
+                let source = crate::file::edit::input::ReplacementReader::new(
+                    request.source,
+                    index,
+                    replacement_len,
+                );
+                let scanned = crate::file::cdc::FastCdc::new().scan(source, |chunk| {
+                    builder
+                        .push_chunk(chunk, predecessor, &mut sink)
+                        .map(|_| ())
+                })?;
+                if scanned.bytes_scanned != replacement_len {
+                    return Err(ContentError::InvalidEdit {
+                        what: "replacement bytes",
+                    });
                 }
-            }
-            origin = end;
-            Ok(())
-        })
-    });
-    if let Err(error) = walked {
-        scan_error = Some(error);
+                builder.finish(&mut sink).map(|build| build.root)
+            })?
+        };
+        let prefix = crate::file::edit::tree::concat_optional(&mut objects, left, middle)?;
+        let joined = crate::file::edit::tree::concat_optional(&mut objects, prefix, right)?;
+        let mapping = match joined {
+            Some(mapping) => mapping,
+            None => crate::file::edit::tree::emit_leaf(&mut objects, Vec::new())?,
+        };
+        summary = mapping;
+        state = crate::file::mapping::FileState {
+            logical_len: mapping.bytes,
+            extent_count: mapping.extents,
+            tree_level: mapping.level,
+            profile_id: crate::file::mapping::profile_id(),
+            mapping_root: mapping.id,
+        };
     }
-    if let Some(error) = scan_error {
-        return Err(error);
+    if state.logical_len != request.edits.final_len() {
+        return Err(ContentError::LengthMismatch {
+            expected: request.edits.final_len(),
+            actual: state.logical_len,
+        });
     }
-    // A replacement at the very end of the base has no extent left to be reached
-    // from: the walk stops exactly at the end of the last extent, so the trailing
-    // append is applied here. Any other unreached segment would mean the plan and
-    // the base disagree, which is an error rather than something to absorb.
-    while let Some(segment) = pending {
-        match segment {
-            Segment::Replace { index, base, len } if base.0 == base.1 => {
-                frontier.replace(request.source, index, len, consumer)?;
-                pending = plan.advance()?;
+    // The unfinished nodes the final mapping reaches are published children first,
+    // then the file state that opens it. Nothing the edit discarded is emitted.
+    let root = edit.child("edit.finish").run(|_| objects.finish(summary))?;
+    Ok(ConstructedFile {
+        root,
+        logical_len: state.logical_len,
+    })
+}
+
+/// Payload of the rightmost extent under `summary`, if it has any.
+///
+/// Walking one path to the boundary is bounded by the tree height and is the only
+/// stored work the physical delta hint needs.
+fn rightmost_payload(
+    objects: &mut crate::file::edit::tree::EditObjects<'_>,
+    summary: crate::file::mapping::NodeSummary,
+) -> ContentResult<Option<ObjectId>> {
+    let mut current = summary;
+    let mut root = true;
+    loop {
+        match objects.load_node(current, root)? {
+            crate::file::mapping::ExtentNode::Leaf { extents, .. } => {
+                return Ok(extents.last().map(|extent| extent.payload_object_id()))
             }
-            Segment::Retain { base } if base.0 == base.1 => {
-                pending = plan.advance()?;
-            }
-            Segment::Replace { .. } => {
-                return Err(ContentError::InvalidEdit {
-                    what: "unreached replacement",
-                })
-            }
-            Segment::Retain { .. } => {
-                return Err(ContentError::InvalidEdit {
-                    what: "unreached retained range",
-                })
+            crate::file::mapping::ExtentNode::Branch {
+                level, children, ..
+            } => {
+                let last = children
+                    .last()
+                    .ok_or(ContentError::InvalidRecord("empty branch"))?;
+                let summaries = crate::file::edit::tree::child_summaries(&children, level - 1)?;
+                current = *summaries
+                    .last()
+                    .ok_or(ContentError::InvalidRecord("empty branch"))?;
+                let _ = last;
+                root = false;
             }
         }
     }
-    if frontier.logical_len() != request.edits.final_len() {
-        return Err(ContentError::LengthMismatch {
-            expected: request.edits.final_len(),
-            actual: frontier.logical_len(),
-        });
-    }
-    let build = edit
-        .child("edit.finish")
-        .run(|_| frontier.finish(consumer))?;
-    let emitted = emit_file_state(consumer, build)?;
-    Ok(ConstructedFile {
-        root: emitted.root,
-        logical_len: emitted.logical_len,
-    })
 }
 
 /// Streams a whole-file base and its replacements through the complete builder.

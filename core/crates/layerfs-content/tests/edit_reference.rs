@@ -28,8 +28,15 @@ use layerfs_content::{
 use support::{disabled_scope, MemoryStore};
 
 /// Frozen oracle fixtures, produced by the sealed reference.
+///
+/// This is the corrected generation: both sides execute the same current-result
+/// edit tuples and every fixture records those tuples, so the operations are
+/// compared before any tree is. The earlier generation
+/// (`stages-3-4-oracle-20260916T214846Z`) is retained unchanged, but its
+/// comparison claim is superseded: the candidate side translated coordinates
+/// wrongly there, which made four of its mismatches look like algorithm gaps.
 const ORACLE_DIR: &str =
-    "../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T214846Z";
+    "../../../docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-20260916T222738Z-corrected";
 
 #[derive(Debug)]
 struct Page {
@@ -46,6 +53,7 @@ struct Fixture {
     edited_len: u64,
     base_pages: Vec<Page>,
     edited_pages: Vec<Page>,
+    edits: Vec<(u64, u64, u64)>,
 }
 
 fn noise(len: usize) -> Vec<u8> {
@@ -126,6 +134,38 @@ fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
             joined.extend_from_slice(&right);
             (joined, vec![(seam, 0, noise(200_000))])
         }
+        "half-partition-90-90" => {
+            // 180 extents constructed as two 90-entry leaves; the edit sits exactly
+            // on the seam so the join must repartition more than 128 entries in half.
+            let base = file_with_extents(180);
+            let mut store = MemoryStore::new();
+            let policy = ConstructionPolicy::frozen_default();
+            let probe = disabled_scope(|scope| {
+                construct_bytes(
+                    policy,
+                    &policy.capacities(),
+                    &base,
+                    &mut store,
+                    scope.child("content"),
+                )
+            })
+            .expect("probe");
+            let canonical = store.canonical(probe.root).expect("state");
+            let state = decode_file_state(&canonical).expect("file state");
+            let node =
+                decode_node_with_context(store.canonical(state.mapping_root).expect("root"), true)
+                    .expect("page");
+            let seam = match node {
+                ExtentNode::Branch { children, .. } => children[0].cumulative_logical_end,
+                ExtentNode::Leaf { .. } => panic!("expected a branch root"),
+            };
+            (base, vec![(seam.saturating_sub(32), 64, Vec::new())])
+        }
+        "unequal-height-join" => {
+            let base = file_with_extents(140);
+            let end = base.len() as u64;
+            (base, vec![(end, 0, noise(2_500_000))])
+        }
         "untouched-sibling" => {
             let base = file_with_extents(300);
             let start = (base.len() / 4) as u64;
@@ -157,22 +197,18 @@ fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
         }
         other => panic!("unsupported case {other}"),
     };
-    // The reference applies edits in original coordinates in increasing order; the
-    // candidate takes current-result coordinates, so the accumulated delta of the
-    // earlier edits is added to every later start.
-    let mut delta = 0_i64;
+    // `FileMutationBatch::replace` applies each replacement to its **current** root
+    // and then advances that root, and the reference's own `extent_model` test
+    // proves the batch is equivalent to applying the same tuples sequentially to
+    // the running result. The tuples are therefore already in current-result
+    // coordinates and are passed through unchanged: no accumulated insertion
+    // offset is added.
     let mut edits = Vec::new();
     let mut source = Replacements::new();
     for (start, delete, replacement) in raw_edits {
-        let current = (start as i64 + delta) as u64;
         let index = source.push(replacement.clone());
-        assert_eq!(index, edits.len());
-        edits.push(Edit::new(
-            current,
-            current + delete,
-            replacement.len() as u64,
-        ));
-        delta += replacement.len() as i64 - delete as i64;
+        assert_eq!(index, edits.len(), "one replacement per edit");
+        edits.push(Edit::new(start, start + delete, replacement.len() as u64));
     }
     (base, edits, source)
 }
@@ -216,6 +252,36 @@ fn candidate_pages(store: &MemoryStore, root: ObjectId) -> Vec<Page> {
         level = next;
     }
     pages
+}
+
+/// Normalized edit tuples the reference executed: start, deleted, replacement bytes.
+fn parse_edits(text: &str) -> Vec<(u64, u64, u64)> {
+    let line = text
+        .lines()
+        .find(|line| line.trim_start().starts_with("\"edits\":"))
+        .expect("fixture records its edit tuples");
+    let body = line.split_once(':').expect("value").1.trim();
+    let body = body.trim_end_matches(',').trim();
+    let mut edits = Vec::new();
+    for entry in body
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split("], [")
+    {
+        let cleaned = entry.trim_matches(|character: char| {
+            character == '[' || character == ']' || character == ' '
+        });
+        if cleaned.is_empty() {
+            continue;
+        }
+        let numbers = cleaned
+            .split(',')
+            .map(|value| value.trim().parse::<u64>().expect("tuple field"))
+            .collect::<Vec<_>>();
+        assert_eq!(numbers.len(), 3, "tuple shape");
+        edits.push((numbers[0], numbers[1], numbers[2]));
+    }
+    edits
 }
 
 fn load(case: &str) -> Fixture {
@@ -265,7 +331,9 @@ fn load(case: &str) -> Fixture {
                             .nth(1)
                             .expect("field")
                             .trim()
-                            .trim_matches('"')
+                            .trim_matches(|character: char| {
+                                character == '"' || character == '}' || character == ']'
+                            })
                             .to_string()
                     })
                     .unwrap_or_default()
@@ -285,6 +353,7 @@ fn load(case: &str) -> Fixture {
         edited_len: scalar("edited_len").parse().expect("edited_len"),
         base_pages: pages("base_pages"),
         edited_pages: pages("edited_pages"),
+        edits: parse_edits(&text),
     }
 }
 
@@ -309,6 +378,16 @@ fn compare(case: &str) -> BTreeMap<String, String> {
         "{case}: base length matches the oracle"
     );
 
+    // Operation identity is asserted before any tree is compared: the candidate
+    // must execute exactly the tuples the reference executed.
+    let recorded: Vec<(u64, u64, u64)> = edits
+        .iter()
+        .map(|edit| (edit.start(), edit.removed_len(), edit.replacement_len()))
+        .collect();
+    assert_eq!(
+        recorded, oracle.edits,
+        "{case}: the candidate edit tuples differ from the reference's"
+    );
     let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
     let mut result_store = base_store.merged_clone();
     let edited = disabled_scope(|scope| {
@@ -396,6 +475,8 @@ fn compare(case: &str) -> BTreeMap<String, String> {
 fn the_candidate_reproduces_the_reference_root_and_partition() {
     let cases = [
         "join-80-100",
+        "half-partition-90-90",
+        "unequal-height-join",
         "untouched-sibling",
         "interior-multi-level",
         "height-growth",
