@@ -146,7 +146,9 @@ def main():
         if missing:
             raise SystemExit(f"{name}: missing receipts: {[e['case'] for e in missing]}")
         with (OUT / name).open("w", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=list(table[0].keys()))
+            writer = csv.DictWriter(
+                stream, fieldnames=list(table[0].keys()), lineterminator="\n"
+            )
             writer.writeheader()
             writer.writerows(table)
         print(f"wrote {OUT / name} ({len(table)} rows)")
