@@ -20,7 +20,9 @@ whose measurements motivated the replacement is preserved on
 | [Reviewed sandbox/host connection architecture](sandbox-host-connection-architecture.md) | [#150](https://github.com/Ephemeral-AI-Lab/layerfs/issues/150): explicit ASCII before/after diagrams, removal list, minimum remaining messages, service fairness and atomic publication boundaries |
 | [Connection review record](sandbox-host-connection-review.md) | Three independent subagent reviews, ranked findings, source evidence and dispositions; no implementation/performance claim |
 | [Experimental agent handoff prompt](experimental-agent-handoff-prompt.md) | The exact handoff instructions followed by the implementing agent |
+| [#152 final report](evidence/issue152-final-report.md) | [#152](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152): the 8-group campaign's per-family table (196 collected cells, candidate vs v0.1.5 comparator), its three candidate identities, and every `FAIL`/`NOT_RUN` row — the authoritative result set for the sandbox-local line |
 | [#152 reliability fix report](evidence/issue152-reliability-fix-report.md) | Outcome of the six `workspace_reliability` failures handed over by [#152](https://github.com/Ephemeral-AI-Lab/layerfs/issues/152): per-case fix, identity chain, 27/27 proofs, non-passing lines |
+| [#154 rolling evidence](evidence/issue154/README.md) | Which of the `#154` files is the current seed-1 matrix and which are superseded phase reports, with the identity each was taken on |
 | [Retained-history report](evidence/issue153-retained-history-report.md) | [#153](https://github.com/Ephemeral-AI-Lab/layerfs/issues/153): the 157-commit `deepseek-full` and `stride-3`/`stride-10` profiles re-run on the v0.1.6 candidate with a paired v0.1.5 control |
 
 Execution evidence: [issue151 experiment ledger](evidence/issue151-experiment-ledger.md)
@@ -106,3 +108,13 @@ a retained publication attempt, and **27/27 verification-supported
 [`issue152-reliability-fix-report.md`](evidence/issue152-reliability-fix-report.md);
 the original work specification stays in
 [`issue152-reliability-fix-handoff.md`](issue152-reliability-fix-handoff.md).
+
+Two rows of that campaign's result table stay non-passing by owner decision and
+are **not** the v0.1.6 registered benchmark requirement: the six single-worker
+material regressions and the waived 2.7 s cold `namespace-100000` Init are
+accepted as recorded, and the inherited v0.1.5-era `historical_access` artifact
+(11 performance cases + 11 proofs) remains `NOT_RUN` because its sealed v2 Store
+(`store_sha256 f323de0e…`) was removed before the campaign. The six
+`historical_access` additions that v0.1.6 actually registers are a separate,
+new implementation with their own sealed producers; they are measured, verified
+and reported in [#154](https://github.com/Ephemeral-AI-Lab/layerfs/issues/154).
