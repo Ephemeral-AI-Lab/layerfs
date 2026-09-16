@@ -36,8 +36,10 @@ repeating the repository name in the product directory.
     Cargo.toml
     Cargo.lock
     crates/
-      layerfs-telemetry/           # only agreed candidate crate so far
-      ...                         # other crate names/boundaries undecided
+      layerfs-telemetry/           # implemented
+      layerfs-content/             # selected C1 home; create with Stage 1 code
+      layerfs-storage/             # selected C2 home; create with Stage 2 code
+      ...                         # later runtime/application boundaries undecided
     benchmark/                    # maintained product harness/workloads
     containers/                   # maintained product image definitions
     tools/                        # product build, tests and evaluation
@@ -52,8 +54,9 @@ repeating the repository name in the product directory.
   benchmark-results/              # retained existing evidence, not relocated
 ```
 
-Only layerfs-telemetry is agreed as a candidate crate so far. Other crate names,
-counts, responsibilities and dependency boundaries remain open. Existing crates
+The [Stages 0–2 handoff](stages-0-2-handoff.md) selects layerfs-content and
+layerfs-storage alongside implemented layerfs-telemetry. Later package names,
+counts and boundaries remain open. Existing crates
 and candidate clusters describe the current implementation and design discussions;
 neither is a template for a one-to-one replacement package inventory. Decide each
 additional crate when its component design is settled. Adapter names above are
@@ -61,7 +64,11 @@ future integration projects, not approved Rust crate boundaries.
 
 The [core agent rules](../../../../../core/AGENTS.md) require production-only
 src/ trees, external tests/examples and lib.rs/mod.rs files no longer than 200
-physical lines with declaration/delegation responsibilities only. The source
+physical lines with declaration/delegation responsibilities only. Every other
+production file must stay under 1,000 physical lines (maximum 999); large components
+use focused responsibility folders. The [implementation plan](implementation-plan.md#1-proposed-folders-and-implementation-rules)
+shows the selected C1/C2 package homes; create no empty scaffolding ahead of code.
+The source
 boundary guard runs from local preflight; semantic responsibility review is also
 required. Policy/check tooling is present before the first product crate.
 
@@ -181,9 +188,9 @@ fixes must be explicit and must not silently move the pinned comparison baseline
    public behavior remain stable.
 
 During the transition, test routing must make reference/candidate selection
-explicit. Root preflight currently exercises the reference; it must not be
-reported as candidate proof. Add the candidate checks as components land and
-switch the default only after the candidate is the qualified product.
+explicit. Root preflight currently checks both the reference and the candidate
+telemetry workspace; those passes do not prove future components. Extend candidate
+coverage as real members land and switch the product default only after qualification.
 
 ## Source-backed migration work
 
@@ -223,7 +230,8 @@ active tooling tests as part of the concrete move.
 - [ ] New components are independently testable and measurable under declared
       inputs, with no hidden setup/DB/runtime dependence claimed away by timers.
 - [ ] SDK/CLI, daemon protocol, canonical identity and Store compatibility meet
-      the v0.1.7 boundary; runtime cleanup and retry retain their contracts.
+      the v0.1.7 boundary; cleanup preserves ownership and operations enforce the
+      [single-attempt rule](physical-encoding-and-packing.md#one-attempt-no-retries).
 - [ ] Source seals, image/build selection and benchmark attribution name the
       implementation actually executed; performance meets the agreed gates.
 - [ ] Local preflight covers the candidate, current docs/links match it, and no
@@ -234,6 +242,6 @@ active tooling tests as part of the concrete move.
 The first implementation step has landed: the independent `core/` workspace with
 `layerfs-telemetry` as its only member, the root-workspace exclusion and the
 candidate checks in `tools/preflight.sh`. No reference source was moved, deleted
-or rebuilt by this proposal, no benchmark run was performed, and no other crate
-name or boundary is settled. Folder names and the remaining migration sequencing
-are ready for discussion.
+or rebuilt by this proposal, and no benchmark run was performed. The first handoff
+now selects layerfs-content/layerfs-storage, but neither is implemented yet. Later
+runtime/application package choices remain open.

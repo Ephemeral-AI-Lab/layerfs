@@ -50,9 +50,15 @@ the constraints described below.
 This proposal defines the design work and its acceptance criteria. Exact
 interfaces, crate moves and implementation slices follow a source-linked
 inventory; the diagrams below do not freeze them.
-Only layerfs-telemetry has been agreed as a candidate crate. Other crate names,
-counts and boundaries remain open; current source crates and candidate clusters
-must not be read as an approved replacement package inventory.
+The [Stages 0–2 handoff](stages-0-2-handoff.md) now selects layerfs-content and
+layerfs-storage alongside implemented layerfs-telemetry. Later package choices
+remain open; current source crates and candidate clusters do not imply a one-to-one
+replacement package inventory.
+
+Owner scope update: public logical diff, conflict handling and conflict resolution
+are [deferred to v0.2.0](diff-conflict-deferral.md). The release plan records the
+limited SDK/CLI parity exception. Ordinary path resolution, equality/reuse, physical
+delta, reference accounting and stale-head publication protection remain required.
 
 ## Meaning of plugin
 
@@ -84,10 +90,10 @@ and alternate entry points. These are design areas, not prescribed crates.
 
 | Area | Boundary to investigate | Information that legitimately crosses it |
 | --- | --- | --- |
-| Canonical model and algorithms | Identity, encoding, trees, file representation, CDC, structural COW, Diff and reconciliation | Typed roots, canonical objects, ranges, changes and deterministic results |
+| Canonical model and algorithms | Identity, encoding, trees, file representation, CDC, structural COW, ordinary reads and local equality | Typed roots, canonical objects, ranges, changes and deterministic results |
 | Store and physical storage | Object access, authentication, deduplication, delta/compression, packing, admission and transactions | Object IDs, authenticated bytes, bounded batches, admission outcomes and optional provenance hints |
 | Workspace state and backing | Mutable namespace, edits, piece state, backing bytes, frozen input and checkpoints | Filesystem operations, stable snapshots, byte ranges and lifetime-bearing handles |
-| Product workflows and publication | Init, fork, capture, construction, Commit, reconciliation, Add and End | Explicit operation inputs, expected head/base, outcomes, failure and retry state |
+| Product workflows and publication | Init, fork, capture, construction, conditional Commit, Add and End | Explicit operation inputs, expected head/base, outcomes, failure and authoritative outcome state |
 | Projection and transport | FUSE, materialization, live protocol, host/sandbox communication | Filesystem semantics, bounded messages, authentication, acknowledgements and cleanup |
 | Execution and runtime ownership | Host/container execution, daemon ownership, process cancellation and output | Compatible execution bindings, commands, process handles and bounded output |
 | SDK, CLI and observation | Public compatibility, operation receipts, diagnostics and accounting | Public requests/results and bounded observations of the actual operation |
@@ -149,13 +155,18 @@ dependencies expressed through neutral contracts.
 7. **Keep policy at its decision point.** File representation, physical encoding,
    operation ordering and deployment selection have separate owners. Format
    choices that affect canonical identity remain versioned compatibility rules.
-8. **State cleanup limits.** Explicit shutdown can report failure; `Drop` is a
-   fallback. Cleanup cannot undo an already published Commit. Pending completion
-   and retry must preserve the authoritative outcome and exact attempt identity.
+8. **State cleanup limits.** Explicit shutdown reports failure; destructor cleanup
+   is not a success guarantee. Cleanup cannot undo an already published Commit.
+   Lost acknowledgement fails with unknown persistence outcome; it never authorizes
+   replay or deletion. A separate requested inspection can determine that outcome.
+9. **One attempt.** A condition requiring retry is failure. No automatic codec,
+   SQL, transaction, lock, transport or SDK retries; no stale-state reprepare loop.
+   Normal representation selection and pre-attempt backpressure remain ordinary
+   work. See the [C2 single-attempt contract](physical-encoding-and-packing.md#one-attempt-no-retries).
 
 For each proposed boundary, keep a short record with: responsibility; current
 providers/callers and source links; inputs/outputs; owned state and lifetimes;
-failure/retry/cleanup; resource limits; and allowed/forbidden dependencies.
+single-attempt failure/outcome/cleanup; resource limits; and allowed/forbidden dependencies.
 Record intended coupling as well as coupling to remove.
 
 ## Existing seams and concrete investigation points
@@ -198,9 +209,16 @@ use delta encoding. A small object is not necessarily a small file.
 Within physical storage, delta encoding exploits similarity to another object;
 compression reduces the encoded byte size; packing groups records and supplies
 framing and locations for bounded access; SQLite persists packs, object locators
-and history facts under transactions. These are separate responsibilities even
+and executes storage transactions. LayerStack/Branch/logical Commit entities,
+history records and their SQL commands belong to the external history/workflow
+owner. It may share the same SQLite transaction facility where atomicity requires
+it. These are separate responsibilities even
 when the implementation combines them. In particular, a codec can compress with
 a predecessor as its prefix, so delta and compression need not be separate passes.
+
+The [ordered cluster 1/2 decision list](content-storage-co-design.md#remaining-co-design-decisions)
+tracks the remaining API, ownership, format, session and measurement contracts.
+Do not infer that history belongs to cluster 2 from the reference crate name.
 
 ```mermaid
 flowchart TB
@@ -252,14 +270,16 @@ Store; naming it "prepared" alone does not establish an independent boundary.
 
 The proposed separation is a stable input/read view, computation, and a bounded
 output destination. Pass the needed dependency explicitly; prefer the existing
-object interfaces, ordinary callbacks and concrete types. Keep required
-read-your-writes state in bounded construction scratch. Replacing a destination
+object interfaces, ordinary callbacks and concrete types. Keep unfinished state
+inside the algorithm and emit finalized objects directly. Remove generic payload
+spill/scratch on proven paths; multi-edit and namespace ordering remain explicit
+proof obligations in the [I/O contract](content-io.md). Replacing a destination
 must not discard information the algorithm still needs.
 
 | Measurement boundary | Supplied input | Output / measured responsibility |
 | --- | --- | --- |
 | Workspace capture | Independent mutable Workspace state and owned backing | Frozen generation and capture metadata; no canonical construction |
-| Candidate construction | Frozen changes, immutable base reader, format/identity-allocation context | Canonical root, checkpoint information and bounded object batches; no canonical Store writes |
+| Candidate construction | Neutral stable changes, immutable base reader, explicit format and authorized identities | Canonical root, length/count summaries and bounded object batches; no canonical Store writes; caller completion correlation stays outside C1 |
 | Storage preparation | Canonical batches, explicit membership/base readers and encoding policy | New/reused dispositions, encoded records, packs and logical locator metadata |
 | Persistence | Compatible prepared batches and a real independently writable Store | SQL writes, indexes, transaction work and required consistency checks |
 | Publication/completion | Persisted candidate, expected head/base and exact capture token | Conditional visible history change and generation-matched completion |
@@ -282,7 +302,9 @@ Object and pack batches remain bounded and can flow directly from one component
 to the next. Independent entry points do not require materializing a whole
 candidate or adding a queue, worker or scratch file at every boundary. A finite
 in-memory collector is suitable for bounded component fixtures; larger cases
-need a bounded consumer/scratch strategy whose actual cost is measured. Full-file
+need bounded consumers and unfinished algorithm state whose actual cost is measured.
+Budgets span many-file operations; file results feed namespace construction
+incrementally, and small files share storage batches. Full-file
 memory or spool growth is not justified by making a benchmark independent.
 
 Prepared storage work must carry sufficient identity and dependency information
@@ -352,14 +374,20 @@ dependencies found by the inventory.
 
 The [v0.1.7 boundary](../README.md#boundary) and
 [release policy](../../../../general/release-policy.md) apply: preserve public SDK
-and CLI behavior, daemon protocol, canonical bytes/identities and Store format.
+and CLI behavior except the recorded diff/conflict deferral, plus daemon protocol,
+canonical bytes/identities and Store format, subject to the targeted
+[file-cutoff/depth direction](../README.md#owner-direction-file-cutoff-and-delta-depth).
+That direction retains default construction/encoding policy while making its
+three limits configurable. Supported non-default profiles and any schema/format
+change need an explicit old-Store compatibility contract before implementation;
+the direction does not grant a blanket identity or format waiver.
 New 0.2 semantics and mechanisms are outside this proposal. Incompatible work
 needs the explicit owner decision required by the release checklist or moves
 to 0.2.
 
 Verification must cover the affected contracts: deterministic canonical output;
 authenticated full/delta reads; range and structural-edit equivalence; snapshot
-lifetimes; failed admission and head races; exact-attempt retry after publication;
+lifetimes; failed admission and head races; lost acknowledgement with zero replay;
 projection/execution failure; explicit End and partial-initialization cleanup.
 Reuse existing tests and add the smallest missing check for an actual gap.
 Use compile-time visibility and Cargo dependencies to enforce boundaries where

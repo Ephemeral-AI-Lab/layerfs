@@ -6,18 +6,39 @@ Read with the [joint co-design review](content-storage-co-design.md),
 [physical storage review](object-storage.md) and [shared proposal](proposal.md).
 Tracking issue: [#160](https://github.com/Ephemeral-AI-Lab/layerfs/issues/160).
 
+This is the Cluster 1 overview. The component-level
+[canonical objects design](canonical-objects.md) owns identity/framing, checked
+decoding/construction, reuse targets and the minimal object-access contract.
+The [file-content design](file-content.md) owns complete/known-edit inputs,
+small/large behavior, immutable file COW, bounded reads and delta cooperation.
+The [filesystem-tree design](filesystem-tree.md) owns directories, inline inode
+values, attributes and the compact reference-ordering decision. It defines native
+checked logical inputs without requiring a Workspace-shaped planner or lifecycle.
+File content and filesystem tree/metadata keep their respective role codecs.
+
 ## Purpose and review verdict
 
 Own canonical bytes and identity, logical file/namespace representation, CDC,
-persistent COW, and pure Diff/reconciliation algorithms. Own the semantic CAS
+persistent COW, ordinary reads and local equality/validation. Own the semantic CAS
 object-access contract; cluster 2 supplies physical storage implementations.
 Live Workspace ownership, runtime transport, persistence and history publication
 are external responsibilities.
+
+LayerStack, Branch and logical Commit types are not inputs or outputs of this
+cluster. An outer workflow supplies stable changes and authorized identity
+reservations, receives content/namespace roots, and coordinates storage and
+publication. The exact object/read/output and namespace contracts remain in the
+[ordered co-design decisions](content-storage-co-design.md#remaining-co-design-decisions).
 
 Read-only review at `8357b1e336d1e16eae349a3313c5f3dbdc777b82` found a strong
 existing independent library and a full candidate builder that still crosses
 the proposed boundaries. Extraction is feasible; complete isolation is not yet
 implemented or proven. No builds, benchmarks or implementation changes were made.
+
+Public logical diff, three-way reconciliation, conflicts and conflict resolution
+are [deferred to v0.2.0](diff-conflict-deferral.md). Existing source/tests may contain
+those features; they are not part of the v0.1.7 replacement target. Retain ordinary
+path lookup, no-op checks and reference accounting needed by construction.
 
 ## Existing foundations
 
@@ -48,19 +69,23 @@ implemented or proven. No builds, benchmarks or implementation changes were made
    runs before both Commit and Preview; it reserves through the Store when new
    nodes need a range. [Reservation, schema.rs:198](../../../../../crates/layerfs-layerstack-store/src/schema.rs#L198)
    commits before IDs escape and deliberately burns ranges on failed attempts.
-   Supply authorized identity context explicitly. Production operations still
-   pay reservation cost; construction diagnostics declare supplied context.
+   Supply authorized identity context explicitly. Full operations pay required
+   identity-acquisition costs; C1 does not mandate this SQLite reservation
+   mechanism for another allocator. Construction diagnostics declare supplied context.
 3. **Broad object interface.**
    [ObjectStore, access.rs:64](../../../../../crates/layerfs-content/src/object/access.rs#L64)
    mixes byte access with format flags, allocation, physical hints and accounting.
    Simplify internal capabilities around actual consumers. No-op defaults can
    change canonical representation and are not an equivalent diagnostic provider.
-4. **Read-your-writes and scratch.**
+4. **Intermediate object staging.**
    [ObjectBuffer, objects.rs:3297](../../../../../crates/layerfs-layerstack-store/src/objects.rs#L3297)
    reads owned candidate objects before its immutable source. Its
    [scratch index, spill.rs:687](../../../../../crates/layerfs-layerstack-store/src/objects/spill.rs#L687)
    can use private SQLite. A canonical-Store-write-free mode does not establish
-   an entirely SQLite-free mode. Preserve bounded scratch and lifetime ownership.
+an entirely SQLite-free mode. The target removes this generic store on proven
+   finalized-output paths; keep unfinished decoded boundaries in the algorithm.
+   Multi-edit equivalence and namespace reference ordering still need proof; see
+   [the final-only contract](content-io.md#finalized-output-replaces-candidate-staging).
 5. **Physical work inside the producer.**
    [put_file_payload, objects.rs:880](../../../../../crates/layerfs-layerstack-store/src/objects.rs#L880)
    can precompute a signature for physical delta selection. Preserve useful
@@ -80,8 +105,8 @@ implemented or proven. No builds, benchmarks or implementation changes were made
 stable semantic changes
   + explicit canonical format and reserved identity context
   + immutable authenticated object reader
-  + bounded read-your-writes scratch
-  + bounded canonical output destination
+  + bounded unfinished algorithm state
+  + bounded finalized canonical output destination
     -> candidate root, logical counters and completion correlations
 ```
 
@@ -89,6 +114,14 @@ The builder has no mount, process, daemon connection, live Workspace, publicatio
 handle or writable canonical Store. A supplied reader may perform I/O, which is
 part of the declared measurement scope. Checkpoint installation and history
 acknowledgement stay with the owning workflow.
+
+The budget spans all files and namespace changes in an operation. Consume file
+results incrementally, with cross-file output batches and no all-files result
+map. Do not port a generic payload spill service or add automatic disk overflow.
+The filesystem-tree proposal retains narrowly scoped compact inode-effects
+ordering, with operation-owned backing and qualification of its exact layout/bounds.
+A stable ordered input contract does not erase caller sorting costs or prescribe
+the future Workspace representation.
 
 Public API/format compatibility remains a constraint, but private types, wrappers
 and module layouts are disposable. Prefer removing broad context and duplicate
@@ -109,11 +142,11 @@ prescribe a new crate.
    run with isolated and production destinations. Compare canonical output under
    identical namespace identities, metadata, profiles and ordering; prove no
    canonical Store writes in the isolated construction scope.
-4. **Stronger no-SQL mode:** separately qualify input and scratch providers,
-   including declared capacity and resource limits. A finite memory fixture does
-   not prove a bounded large-candidate implementation.
+4. **Stronger no-SQL mode:** use the existing complete-file final-only path first;
+   separately prove multi-edit boundaries, namespace ordering and operation-wide
+   capacities. A finite memory fixture does not prove a bounded many-file operation.
 
-Include intrinsic hashing, reads, copies, scratch and required output handling
+Include intrinsic hashing, reads, copies, ordering and required output handling
 inside their declared scopes. Producer elapsed time includes backpressure unless
 the waiting interval is independently identified; it is not construction CPU.
 The joint review defines measurement ownership and performance acceptance.

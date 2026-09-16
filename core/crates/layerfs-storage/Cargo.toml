@@ -1,0 +1,14 @@
+[package]
+name = "layerfs-storage"
+description = "Content-addressed physical storage: FULL encoding, packs and SQLite (C2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-telemetry = { path = "../layerfs-telemetry" }
+rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }
+zstd-sys = { version = "=2.0.16", default-features = false, features = ["experimental"] }

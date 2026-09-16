@@ -3,10 +3,16 @@
 
 Production code is nonblank, non-comment first-party product implementation:
 the replacement product under core/crates/*/src and the reference product under
-crates/*/src, plus the reference SQL that ships with the store. Tests, examples,
-benches, fixtures, benchmark harnesses, development tools, docs, manifests and
-generated artifacts are excluded. Legacy inline #[cfg(test)] items are removed
-before counting, because the reference tree keeps tests inside src/.
+crates/*/src, plus the runtime SQL that ships with either product under
+<crate>/sql/. Tests, examples, benches, fixtures, benchmark harnesses,
+development tools, docs, manifests and generated artifacts are excluded. Legacy
+inline #[cfg(test)] items are removed before counting, because the reference tree
+keeps tests inside src/.
+
+Runtime SQL is counted for both scopes: a candidate package that ships schema or
+query text under <crate>/sql/ contributes it exactly like the reference schema.
+Per-file reporting uses the same classification as the totals, and prints the
+physical line count separately so the two measures are never confused.
 
 Method: comments are blanked by a Rust-aware scanner (line/nested block comments,
 normal/raw/byte strings, char literals and lifetimes) and a line counts once when
@@ -182,11 +188,14 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-def scope_files(root: Path, scope: str) -> list:
+def scope_base(root: Path, scope: str) -> Path:
     if scope == "core":
-        base = root / "core" / "crates"
-    else:
-        base = root / "crates"
+        return root / "core" / "crates"
+    return root / "crates"
+
+
+def scope_files(root: Path, scope: str) -> list:
+    base = scope_base(root, scope)
     if not base.is_dir():
         return []
     files = []
@@ -198,10 +207,34 @@ def scope_files(root: Path, scope: str) -> list:
             continue
         if "src" in parts and path.suffix in CODE_SUFFIXES:
             files.append(path)
-        elif scope == "reference" and "sql" in parts and path.suffix == ".sql":
-            # Runtime SQL is shipped implementation, included from src/.
+        elif "sql" in parts and path.suffix == ".sql":
+            # Runtime SQL is shipped implementation for either product scope.
             files.append(path)
     return files
+
+
+def physical_lines(path: Path) -> int:
+    """Every physical line, including comments and blanks; a ceiling measure."""
+    with path.open(encoding="utf-8") as handle:
+        return sum(1 for _ in handle)
+
+
+def per_file(root: Path) -> dict:
+    """Per-file production LOC and physical lines for both scopes."""
+    result = {"root": str(root), "files": []}
+    for scope in ("core", "reference"):
+        base = scope_base(root, scope)
+        for path in scope_files(root, scope):
+            result["files"].append(
+                {
+                    "path": str(path.relative_to(root)),
+                    "scope": scope,
+                    "crate": path.relative_to(base).parts[0],
+                    "production_loc": counted_lines(path),
+                    "physical_lines": physical_lines(path),
+                }
+            )
+    return result
 
 
 def scan(root: Path) -> dict:
@@ -229,7 +262,21 @@ def main() -> int:
     parser.add_argument("--root", default=".", help="tree to count (default: current directory)")
     parser.add_argument("--detail", action="store_true", help="print per-crate totals")
     parser.add_argument("--json", action="store_true", help="print the full result as JSON")
+    parser.add_argument(
+        "--files",
+        action="store_true",
+        help="print per-file production LOC and physical lines",
+    )
     args = parser.parse_args()
+    if args.files:
+        report = per_file(Path(args.root).resolve())
+        print(f"{'path':<78} {'scope':<9} {'prod':>7} {'physical':>9}")
+        for entry in report["files"]:
+            print(
+                f"{entry['path']:<78} {entry['scope']:<9} "
+                f"{entry['production_loc']:>7} {entry['physical_lines']:>9}"
+            )
+        return 0
     result = scan(Path(args.root).resolve())
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))

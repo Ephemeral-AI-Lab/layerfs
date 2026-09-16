@@ -1,9 +1,18 @@
 # How to use the timer
 
+> **Status:** Current general guide.
+
 A step-by-step guide for instrumenting a new LayerFS module. It assumes nothing
 about the crate beyond what is written here; the API reference, limits and
 semantics are in the [crate README](README.md), and the normative specification is
 [`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md).
+The [C1/C2 measurement contract](../../../docs/roadmap/0.1/0.1.7/component-decoupling/content-io.md#7-measurement-and-completion)
+requires construction-only, storage-only and integrated timing in the real component
+implementations. This guide's small domain functions illustrate scope wiring;
+they do not implement canonical hashing, CAS or SQLite and are not benchmarks.
+LayerFS C1/C2 timing adds no retry, fallback or fsync/fdatasync/sync_all/sync_data.
+Ordinary buffered output flush is not a sync-to-disk operation. SQL COMMIT remains
+part of real storage completion under the no-WAL, synchronous-OFF contract.
 
 ## Who owns what
 
@@ -101,6 +110,12 @@ process, or a peer behind an existing adapter — measure the call locally, then
 attach the owned report:
 
 ```rust
+#[derive(Debug)]
+pub enum StoreError {
+    Content(ContentError),
+    Engine,
+}
+
 pub fn save(object: &Object, scope: TimingScope<'_>) -> Result<usize, StoreError> {
     scope.run(|store| {
         let packed = store.child("pack").run(|_| Ok(object.bytes.len()))?;
@@ -116,13 +131,18 @@ pub fn save(object: &Object, scope: TimingScope<'_>) -> Result<usize, StoreError
 
 /// Independent recording, normally behind an existing request/response adapter.
 fn engine_write(rows: usize, requested: bool) -> (Result<(), StoreError>, Option<TimingReport>) {
-    let (result, report) = Timing::record("storage.execute", |root| {
+    let run = |root: &TimingScope<'_, Active>| {
+        if rows == 0 {
+            return Err(StoreError::Engine);
+        }
         root.child("compress").run(|_| Ok::<(), StoreError>(()))?;
-        root.child("fsync").run(|_| Ok(()))
-    });
-    if rows == 0 {
-        return (Err(StoreError::Engine), None);
-    }
+        root.child("sqlite.execute").run(|_| Ok(()))
+    };
+    let (result, report) = if requested {
+        Timing::record("storage.execute", run)
+    } else {
+        Timing::disabled("storage.execute", run)
+    };
     (result, requested.then_some(report))
 }
 ```
@@ -145,18 +165,17 @@ Rules for this pattern:
 ## 4. Own an operation root
 
 Exactly one root per semantic operation, started at entry and finished after the
-last required acknowledgement. The root's elapsed time therefore includes queueing,
-locking, retries and instrumentation/transport cost — inclusive by design.
+last required acknowledgement. The root's elapsed time therefore includes required
+acquisition, handoff waits and instrumentation/transport cost. C1/C2 operations
+do not retry failed work or select another execution path after failure.
 
 ```rust
 use layerfs_telemetry::timer::{Active, Timing, TimingReport, TimingScope};
 
 fn create_object(input: &[u8], recording: bool) -> (Result<usize, StoreError>, TimingReport) {
     let run = |root: &TimingScope<'_, Active>| {
-        let object = match construct(input, root.child("canonical.construct")) {
-            Ok(object) => object,
-            Err(_error) => return Ok(0), // recovery is your policy, not a timer rule
-        };
+        let object = construct(input, root.child("canonical.construct"))
+            .map_err(StoreError::Content)?;
         save(&object, root.child("storage.save"))
     };
     if recording {
@@ -169,8 +188,8 @@ fn create_object(input: &[u8], recording: bool) -> (Result<usize, StoreError>, T
 
 - Independent later operations get independent recordings. Do not keep one
   workspace-lifetime tree: it grows without bound and stops describing causality.
-- Each retry attempt is its own sibling node. The timer never retries anything; a
-  recovered parent stays successful while retaining the failed child.
+- A required component error fails the operation. The timer never retries or
+  converts it to success; a separately requested operation gets a new root.
 - To measure **one component alone**, call its own entry point under a diagnostic
   root and simply do not call the other components. A timer cannot remove hidden
   I/O or admission from a coupled function.
@@ -231,7 +250,6 @@ fn save_json_once(report: &TimingReport, path: &std::path::Path) -> std::io::Res
 | --- | --- | --- |
 | Success | original `Ok(value)` | full tree; durations inclusive (parent ≥ child, never summed, no derived self-time) |
 | Component error | original `Err(error)` | node and ancestors `outcome: error`; siblings never called have no node |
-| Parent recovers from a child error | `Ok` | failed child retained with `error`; parent `ok` |
 | Early `?` return | original `Err` | completed nodes kept; uncalled operations absent |
 | Repeated label | unchanged | distinct invocations, in start order |
 | Disabled recording | unchanged | no root; `is_recording()` false everywhere; JSON `null` |
@@ -271,7 +289,7 @@ fn save_json_once(report: &TimingReport, path: &std::path::Path) -> std::io::Res
 - [ ] `scope.run` wraps the real body; every labelled child describes a causal step.
 - [ ] Labels are stable, dotted and low-cardinality.
 - [ ] Optional peer timing is requested only when `is_recording()` and attached as owned data.
-- [ ] Error paths return the original `Result`; recovery is explicit and keeps the failed child.
+- [ ] Required errors propagate; no retry, fallback or recovery-to-success in the C1/C2 path.
 - [ ] No scope is stored, awaited, sent across threads or returned.
 - [ ] The component opens no file and reads no configuration; the caller renders and saves.
 - [ ] Tests cover success, error, early return, disabled execution and missing detail structurally.

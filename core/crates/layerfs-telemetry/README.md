@@ -80,7 +80,9 @@ inside a recorded operation names its error type once, for example
   early; uncalled operations have no node; repeated labels are distinct
   invocations in start order.
 - A parent may recover from a child error and still succeed. Error outcome and
-  measurement incompleteness are independent.
+  measurement incompleteness are independent. This describes the generic recorder;
+  the C1/C2 product contract requires propagation of required errors with no retry
+  or recovery-to-success path.
 - An attached report becomes a child of the attaching node, keeping its own
   descendants and labels. `None`, a disabled report, a clipped report or an
   incomplete imported node marks the affected node and its ancestors incomplete

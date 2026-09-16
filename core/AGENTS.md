@@ -10,11 +10,15 @@ This file adds the owner's product-source and module-structure requirements.
 
 - `core/` is the replacement product workspace. Existing root `crates/` is a
   temporary reference, not a dependency, binary fallback or source include.
-- Only `layerfs-telemetry` is agreed as a candidate crate. All other crate names,
-  counts and boundaries remain open. Create no placeholder packages or modules.
+- `layerfs-telemetry` is implemented. The Stages 0–2 handoff selects
+  `layerfs-content` (C1) and `layerfs-storage` (C2) under core/crates/; add each
+  workspace member with real implementation, not an empty placeholder. Later
+  runtime/application package names and counts remain open.
 - Read the component's approved roadmap before implementing it. For telemetry,
   use the [timer specification](../docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md)
   and [repository layout](../docs/roadmap/0.1/0.1.7/component-decoupling/repository-layout.md).
+  For Stages 0–2, use the [handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-0-2-handoff.md)
+  and the detailed C1/C2 contracts it lists.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 
@@ -66,7 +70,25 @@ or use sleeps and narrow wall-time thresholds. Verify disabled behavior through
 its public result and inspection of the clock/allocation paths; stronger external
 instrumentation must not add test-only branches to the product.
 
-## lib.rs and mod.rs are thin entry files
+## Production file size and responsibility
+
+Every first-party production implementation file must have **fewer than 1,000
+physical lines: maximum 999**, including comments and blank lines. This includes
+runtime SQL and other shipped implementation outside src/. Existing root crates/
+remain reference code; apply this rule as implementation enters core/.
+
+Split a large component into a folder of focused named files before reaching the
+limit. Split by responsibility (lookup, reconstruction, placement, transactions),
+not arbitrary numbered parts or a renamed god object. Small cohesive modules need
+no extra folders. Do not minify, expand macros or use includes to evade the limit.
+
+Apply SRP/SOLID through clear ownership, explicit inputs and small real I/O
+boundaries. Use ordinary functions and concrete types internally. Do not create
+an interface/factory per algorithm, a service locator or a plugin registry.
+The component's public contract must remain independently usable; its internal
+implementation need not be made public to support tests.
+
+### lib.rs and mod.rs remain smaller
 
 Every product `lib.rs` and `mod.rs` has a hard maximum of **200 physical lines**,
 including comments and blank lines.
@@ -80,6 +102,25 @@ algorithms, branching, loops, conversions, validation, formatting and I/O in
 focused named implementation files. Keep helpers there too. Do not evade the
 limit with minified lines, macro expansion, includes, or a renamed god module.
 File size is a ceiling, not an instruction to fill entry files to 200 lines.
+
+## Failure, persistence and dependencies
+
+- One attempted operation. No automatic retry, busy handler, refresh/reprepare,
+  error-driven alternate algorithm, backend or legacy implementation. Unsupported
+  required capabilities fail explicitly; platform cfgs do not justify silent no-op
+  substitutes. Deliberately disabled optional timing is ordinary configuration.
+- No WAL or added crash-durability work in the current C1/C2 implementation.
+  Embedded SQLite uses the selected MEMORY journal / synchronous OFF profile;
+  retain runtime transaction atomicity and definite-failure abort. Do not switch
+  journal mode to OFF or add recovery/checkpoint services or durable manifests.
+  No fsync, fdatasync, File::sync_all or File::sync_data in product operations or
+  timer report output. Ordinary buffered writes/flush and SQL COMMIT remain;
+  neither introduces a crash-durability promise. Selected backends must honor
+  the no-sync/no-WAL contract without third-party patches.
+  Unknown persistence outcome is a failed result; never resend or delete on a guess.
+- No third-party patches, forks, vendoring or registry edits. Follow the repository
+  dependency rule and locked builds; an incompatible provider/dependency is a
+  reported limitation, not permission to patch it or silently select another path.
 
 ## Production LOC for every commit
 
@@ -95,8 +136,9 @@ comments, blank lines and generated build artifacts. Report reference and core
 subtotals separately during migration, plus the combined product total. Keep
 source classification stable across moves and include new product paths.
 
-The **200-line lib.rs/mod.rs limit is different**: it counts every physical line,
-including comments/blanks. Do not use that count as production LOC. Tests remain
+The **999-line production-file and 200-line lib.rs/mod.rs limits are different**
+from production LOC: they count every physical line, including comments/blanks.
+Do not use those counts as production LOC. Tests remain
 required, but their size does not enter the per-commit production comparison.
 Record unchanged production totals with delta 0 for policy/test/docs-only commits.
 
@@ -109,8 +151,10 @@ python3 core/tools/check_product_boundary.py
 python3 -m unittest discover -s core/tools -p 'test_*.py'
 ```
 
-The source-text guard detects prohibited test/configuration markers, oversized
-entry files and common implementation constructs in them. Its checks also apply
+The source-text guard checks the line caps for Rust under src/ and SQL under src/
+or package sql/, prohibited Rust test/configuration markers and common implementation
+constructs in entry files. Extend coverage for other shipped source formats as
+they are introduced; a missing scanner is not an exemption. Its Rust checks also apply
 to marker examples embedded in product-source comments/strings; put such examples
 in external documentation. It is not a Rust semantic proof. Review ordinary helper
 functions, macros, manifest target paths, dependencies and generated inputs for

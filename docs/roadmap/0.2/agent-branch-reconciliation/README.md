@@ -7,6 +7,12 @@
 
 ## Fixed premise
 
+Implementation workstream: [v0.2.0 issue #164](https://github.com/Ephemeral-AI-Lab/layerfs/issues/164).
+The v0.1.7 replacement deliberately defers logical diff, conflict handling and
+conflict resolution; ordinary captured-base conditional publication remains.
+The current-model document describes the existing reference, including features
+that will not be ported into v0.1.7.
+
 ```text
 LayerStack
   role: main

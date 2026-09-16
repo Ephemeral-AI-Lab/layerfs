@@ -12,6 +12,13 @@ Related: [co-design review](content-storage-co-design.md), [shared proposal](pro
 
 ## Final design decision
 
+Independent C1 construction, independent C2 save/read and integrated timing are
+mandatory acceptance requirements for their first real slices. The detailed
+[measurement contract](content-io.md#7-measurement-and-completion) defines supplied
+inputs, included work, bounded detail and root-cause interpretation. The timer is
+implemented; this requirement concerns wiring it into independently callable
+production operations, not waiting for Workspace or a new Monitor component.
+
 One operation owns one bounded timing tree. It injects child scopes into local
 components and can attach independently completed timing subtrees. The outer
 caller receives the assembled report and optionally saves it as JSON. Existing
@@ -81,7 +88,9 @@ Future memory/, cpu/ and storage/ modules are siblings, created when implemented
 Each owns its units, scope, availability, cost and typed report. Memory deltas
 are not peaks; CPU usage is not elapsed time; disk occupancy, physical I/O and
 logical bytes are different observations. Unsupported observations are unavailable,
-not zero. Follow cfg/fallback rules and keep future providers independent of timer.
+not zero. Respect platform cfg and explicit availability; required unsupported
+capabilities fail, with no automatic provider fallback. Keep future providers
+independent of timer.
 No universal metric object or empty future scaffolding is required.
 
 ## Public API and data
@@ -424,7 +433,7 @@ A callee making a further remote call returns that nested tree the same way.
 These are future wiring examples, not changes to approved benchmark topology.
 The timer does not arrange networking, connectivity, mounting or deployment.
 
-### D. Ordinary error, retry and missing remote data
+### D. Ordinary error and missing remote data
 
 ```text
 object.create                 4 ms  error
@@ -434,8 +443,10 @@ object.create                 4 ms  error
 ```
 
 Construction returns its original error and timing; storage was not called.
-An existing retrying caller retains each actual attempt as a separate sibling.
-Telemetry never adds retries; recovered parents can succeed with failed children.
+The operation fails once; telemetry never restarts it. Under the
+[single-attempt product rule](physical-encoding-and-packing.md#one-attempt-no-retries),
+there are no automatic retry siblings or recovered-success parent for failed
+required work. A separately requested operation has its own root timing.
 
 For a timeout retain caller elapsed/error and mark remote detail incomplete.
 For product success with missing timings preserve success and set incomplete.

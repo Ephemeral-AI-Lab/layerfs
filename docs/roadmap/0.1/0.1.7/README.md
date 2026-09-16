@@ -38,6 +38,94 @@ architecture that will carry them.
   acceleration are out of scope for v0.1.7.
 - A refactor that cannot fit this boundary moves to 0.2.0.
 
+### Owner scope decision: diff and conflict features
+
+Owner decision, 2026-09-16: the v0.1.7 replacement omits public logical diff,
+three-way reconciliation, conflict inspection and conflict resolution. Their
+replacement design and implementation move to
+[v0.2.0 issue #164](https://github.com/Ephemeral-AI-Lab/layerfs/issues/164).
+This is an explicit feature-scope exception to SDK/CLI parity for those surfaces;
+it does not waive canonical identity, data integrity or stale-head protection.
+
+Ordinary snapshot/edit/construction/conditional Commit and Add remain. A stale
+captured head/base is rejected explicitly, with no automatic merge, rebase or
+fallback into the reference implementation. Path resolution, local equality,
+no-op checks, physical delta encoding and authoritative publication/completion state remain
+required. See the [deferral review](component-decoupling/diff-conflict-deferral.md)
+for exact removal candidates, shared helpers and staging constraints.
+
+Existing root crates remain reference during migration. Preserve released manuals
+and historical receipts; explicitly record affected candidate API and benchmark
+coverage before release rather than treating omitted cases as passed.
+
+### Owner direction: no retries
+
+Owner decision, 2026-09-17: an operation gets one attempt. A condition that needs
+retry is failure. This explicitly replaces reference behavior that retries SQLite
+lock acquisition, refreshes invalidated admission state or masks codec failures
+by selecting FULL. Selected adapters must disable SDK/query/transaction retries.
+Planned representation selection and bounded backpressure before execution remain
+ordinary work; re-executing failed work is forbidden.
+
+A lost acknowledgement fails with an unknown persistence outcome. Never resend
+the write or delete possibly committed data. A separately requested authoritative
+inspection may establish what persisted. Successful versions remain immutable.
+The [single-attempt design](component-decoupling/physical-encoding-and-packing.md#one-attempt-no-retries)
+defines the details. This is an explicit failure-behavior exception for the
+replacement; canonical integrity, valid ordinary workloads and performance gates
+remain required. Released manuals and reference code are unchanged by this plan.
+
+### Owner direction: implementation rules and persistence scope
+
+Independent C1-only construction, C2-only save/read and integrated timing are
+mandatory acceptance requirements from the first real component slices. They must
+use the same production bodies, bounded output and existing layerfs-telemetry,
+without Workspace/FUSE/history setup. The [measurement contract](component-decoupling/content-io.md#7-measurement-and-completion)
+defines scope, backpressure/overlap and root-cause diagnostics. Timer availability
+alone does not establish that the components are independently measurable.
+
+Owner direction, 2026-09-17: replacement production files must stay below 1,000
+physical lines (maximum 999); lib.rs/mod.rs retain their stricter 200-line limit
+and declaration/delegation-only role. Split large components into cohesive folders;
+keep tests/examples outside product source. The core guard now checks Rust and
+shipped SQL file lengths. This is separate from per-commit production LOC counting.
+
+No retry, fallback, fsync/fdatasync/sync_all/sync_data, WAL or added crash-durability
+work is part of the current target.
+Use embedded SQLite's selected MEMORY journal / synchronous OFF profile with zero
+busy timeout; preserve runtime atomicity/abort rather than disabling journaling.
+Do not patch, fork, vendor or modify third-party dependencies. Cloudflare Durable
+Objects is a future placement study because its documented SQLite storage uses WAL.
+The [implementation plan and fuller review](component-decoupling/implementation-plan.md)
+records the folder map, before/after diagrams, memory/disk owners and staged proof.
+
+### Owner direction: file cutoff and delta depth
+
+The objective is configurable transparency: expose policy values and make their
+supported overrides work consistently, with derived capacities and explicit
+resource bounds. Finding the best numerical settings is outside this refactor.
+
+Latest owner direction, 2026-09-16: retain defaults of **128 KiB small-file cutoff,
+8 whole-file delta links and 4 chunk delta links**, with all three configurable
+within an explicitly supported Store profile. This supersedes the earlier 1 MiB
+default target and a single numerical delta-depth cap. See the
+[co-design decision](component-decoupling/content-storage-co-design.md#file-cutoff-and-delta-depth)
+and [performance admission](component-decoupling/content-storage-co-design.md#performance-admission-before-changing-defaults).
+The
+[simplified payload policy](component-decoupling/content-storage-co-design.md#simplified-payload-storage-model)
+uses common selection/reconstruction code with role-specific policy data and
+preserves current byte/work limits. First qualify the refactor at unchanged
+defaults. Larger values such as 1 MiB/50 remain experimental profiles and cannot
+silently increase safety budgets or become accepted merely because a knob exists.
+
+A non-default cutoff can change canonical file roots; physical delta depth alone
+does not change canonical identity. Supported override ranges, exact format/schema
+compatibility and old Store opening/conversion must be specified before
+implementation. Defaults preserve the reference representation policy. This is
+not a blanket canonical/format compatibility waiver, silent migration or fallback
+authorization. Same-profile determinism, authentication and performance acceptance
+remain mandatory. No runtime setting or performance result is claimed here.
+
 ## Plan status
 
 Design planning (owner direction, 2026-09-16). The
@@ -52,8 +140,61 @@ The design workstream is tracked in
 The [proposed repository layout](component-decoupling/repository-layout.md)
 places the replacement product in core/ and future application adapters in
 adapters/, retaining existing crates as a reference until replacement qualification.
-Only layerfs-telemetry is agreed as a candidate crate so far; the remaining crate
-inventory and boundaries will follow component-design decisions.
+The first handoff selects core/crates/layerfs-content and core/crates/layerfs-storage
+alongside implemented layerfs-telemetry; later runtime/application packages remain
+undecided. [Implementation parent #165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165)
+has seven children, with [#166](https://github.com/Ephemeral-AI-Lab/layerfs/issues/166)
+and [#167](https://github.com/Ephemeral-AI-Lab/layerfs/issues/167) assigned by the
+[Stages 0–2 handoff](component-decoupling/stages-0-2-handoff.md).
+Stages 0–2 are now implemented in the candidate workspace: `layerfs-content` (C1)
+and `layerfs-storage` (C2) ship a real complete-file construction path, exact CAS
+reuse, three pack framings, the four-table SQLite schema and independent timing.
+The [Stages 0–2 report](component-decoupling/stages-0-2-report.md) records the
+frozen profile, expected-versus-actual production LOC, the run commands, the
+observed roots and every declared gap (DELTA, larger cutoffs, pooling, RSS
+evidence and the un-induced unknown-outcome case). Stages 3–7 remain open, and no
+part of v0.1.7 is claimed complete.
+The [agreed cluster 1/2 overview](component-decoupling/cluster-1-2-components.md)
+contains three canonical-content components and four physical-storage components,
+with shared telemetry and external runtime/workflow ownership. Detailed contracts
+and implementation packaging remain open for the next design discussion.
+
+The [integrated content-storage design](component-decoupling/content-storage-design.md)
+now covers canonical edits and size transitions, repeated chunk deltas,
+compression/packing, database dependency cleanup, Git comparison and mandatory
+performance qualification. The detailed
+[physical encoding and packing proposal](component-decoupling/physical-encoding-and-packing.md)
+now fixes terminology, candidate policy, placement-first compatible append,
+metadata pooling/index replacement and concrete cuts. Three further read-only
+reviews cover payloads, pack lifetimes and metadata/format behavior. Implementation
+and at-least-existing performance remain to be proven.
+The final [object save and SQLite persistence proposal](component-decoupling/admission-and-persistence.md)
+now covers the remaining two C2 responsibilities. All seven component proposals
+are recorded. Next is one consistency review and the first complete-file ->
+standalone save -> readback implementation, with format/capacity/receipt and
+performance proofs still required. Save ownership is proposed as immediate
+try-acquisition; producer backpressure remains bounded. Removing distinct-reuse
+diagnostic indexing requires an explicit compatible receipt/API decision first.
+
+The [content I/O contract](component-decoupling/content-io.md) and
+[v0.1.6 memory/call audit](component-decoupling/content-io-memory-audit.md)
+define the next core-only work: finalized-object streaming, removal of generic
+candidate payload staging, fewer copies/transforms/DB calls, and memory bounds
+across many files and directories. Multi-edit finality and namespace reference
+ordering remain proof gaps; zero temporary storage is not claimed universally.
+Host/daemon and remote-SQL placement use neutral boundaries. Workspace mode and
+transport remain later integration decisions. The
+[ordered component discussions](component-decoupling/content-storage-co-design.md#remaining-co-design-decisions)
+track remaining implementation proofs, including concrete schema/profile codes,
+writer authority and selected single-attempt remote batch/outcome semantics.
+
+LayerStack, Branch and logical Commit remain in the history/workflow layer,
+outside clusters 1 and 2. SQLite transaction mechanics belong to persistence;
+sharing a database does not transfer history ownership. The
+[remaining co-design decisions](component-decoupling/content-storage-co-design.md#remaining-co-design-decisions)
+are ordered from canonical object/read/output contracts through namespace inputs,
+configuration/format capacity, SQL sessions, measurements and the first standalone
+implementation slice.
 
 Time-only parent/child measurement is specified in
 [layerfs-telemetry](component-decoupling/telemetry.md) and was implemented for

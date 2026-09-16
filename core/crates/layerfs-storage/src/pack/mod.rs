@@ -1,0 +1,15 @@
+//! Pack grammars, group framing, placement and record extraction.
+//!
+//! Entry module: declarations and re-exports only.
+
+pub mod assemble;
+pub mod layout;
+pub mod placement;
+
+pub use assemble::{assemble, build_group, frame_group, framed_length, FULL_TAG};
+pub use layout::{
+    assembled_length, fits, group_view, parse_header, EncodedGroup, GroupCodec, GroupView,
+    PackHeader, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, PACK_MAGIC, VERSION_NATIVE,
+    VERSION_ORDINARY, VERSION_WHOLE_FILE, WHOLE_FILE_COMPACT_DROP, WHOLE_FILE_ENTRY_LEN,
+};
+pub use placement::{LanePlacement, PlacedGroup, SelectedWrite};

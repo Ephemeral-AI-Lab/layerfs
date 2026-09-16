@@ -11,6 +11,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 step() { printf '\n=== %s ===\n' "$1"; }
 
+step "production LOC counter"
+python3 -m unittest discover -s tools -p 'test_production_loc.py'
+
 step "replacement core product-source boundaries"
 python3 core/tools/check_product_boundary.py
 python3 -m unittest discover -s core/tools -p 'test_*.py'
@@ -20,8 +23,16 @@ step "candidate core workspace (locked tests, examples, clippy, fmt)"
 # the root workspace checks below do not exercise it.
 cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked
+cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --tests
+cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests
 cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_nested >/dev/null
 cargo +1.85.1 run --manifest-path core/Cargo.toml --locked --example timer_composition >/dev/null
+core_stage02="$(mktemp -d "${TMPDIR:-/tmp}/layerfs-stage02.XXXXXX")"
+python3 -c 'from pathlib import Path; import sys; Path(sys.argv[1]).write_bytes(bytes(range(256)) * 64)' "$core_stage02/input.bin"
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_components -- --mode c1 --input "$core_stage02/input.bin" --timings "$core_stage02/c1.json" >/dev/null
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_components -- --mode c2 --input "$core_stage02/input.bin" --store "$core_stage02/c2.sqlite" --timings "$core_stage02/c2.json" >/dev/null
+cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_components -- --mode pipeline --input "$core_stage02/input.bin" --store "$core_stage02/pipeline.sqlite" --timings "$core_stage02/pipeline.json" >/dev/null
+rm -rf "$core_stage02"
 cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
 
 step "rustfmt 1.96 (fmt --all --check)"

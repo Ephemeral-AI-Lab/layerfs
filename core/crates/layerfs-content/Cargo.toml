@@ -1,0 +1,11 @@
+[package]
+name = "layerfs-content"
+description = "Canonical objects, complete-file construction and bounded logical reads (C1)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+layerfs-telemetry = { path = "../layerfs-telemetry" }

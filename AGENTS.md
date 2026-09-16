@@ -6,7 +6,8 @@ they win.
 
 For the replacement product under `core/`, also read
 [`core/AGENTS.md`](core/AGENTS.md). It defines product-only source, external tests,
-and the 200-line declaration/delegation limit for `lib.rs` and `mod.rs`. These
+the 999-physical-line production-file ceiling, and the stricter 200-line
+declaration/delegation limit for `lib.rs` and `mod.rs`. These
 rules apply to the replacement tree; existing root `crates/` remains reference
 code during migration. Follow the core-specific checks before claiming core work
 is verified; the existing root preflight alone does not exercise that workspace.
@@ -145,6 +146,11 @@ the report.
 
 ## 4. Code, build and docs
 
+- New replacement-product and future application-adapter production files follow
+  the 999-physical-line ceiling and the stricter 200-line declaration/delegation
+  limit for lib.rs/mod.rs. Keep product-only source and external tests. Existing
+  root crates/ remain reference; extend guard coverage when new product formats
+  or adapter paths are introduced rather than using them to evade the rules.
 - **This repository runs no CI** (owner decision; GitHub Actions is disabled and
   `.github/workflows/ci.yml` removed — see ledger L21). The former checks are now a
   local pre-push gate: run **`tools/preflight.sh`** (rustfmt 1.96 `--all --check`,
@@ -154,7 +160,8 @@ the report.
 - Keep the tree clean for sealed builds — a dirty source seal is recorded and cannot
   be compared against a sealed arm.
 - No new dependencies when an existing crate already provides the capability;
-  keep platform-specific code `cfg`-gated and behind a no-op fallback.
+  keep platform-specific code `cfg`-gated. In the replacement product, unsupported
+  required capabilities fail explicitly; no silent no-op or error-driven fallback.
 - **Never patch, vendor, fork or locally modify a third-party crate or package.**
   No `[patch]`/`[replace]` sections, no vendored copies, no edits in the Cargo
   registry or under `~/.cargo`, no forked dependency substituted for a published

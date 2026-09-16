@@ -50,6 +50,11 @@ type names.
 
 ### 1. Agent Branch reconciliation and conflict policy
 
+Tracking: [v0.2.0 diff, conflict handling and resolution #164](https://github.com/Ephemeral-AI-Lab/layerfs/issues/164).
+The owner deferred this feature family from the v0.1.7 replacement; existing
+reference capabilities inform the design but do not require a one-to-one port.
+See the [deferral and retained correctness boundary](../0.1/0.1.7/component-decoupling/diff-conflict-deferral.md).
+
 The [agent Branch reconciliation task](agent-branch-reconciliation/README.md) is a
 release-defining 0.2 task.
 
