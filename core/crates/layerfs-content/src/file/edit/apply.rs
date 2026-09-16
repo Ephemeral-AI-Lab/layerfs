@@ -257,10 +257,30 @@ fn stream_chunked(
     if let Some(error) = scan_error {
         return Err(error);
     }
-    if pending.is_some() {
-        return Err(ContentError::InvalidEdit {
-            what: "unreached segment",
-        });
+    // A replacement at the very end of the base has no extent left to be reached
+    // from: the walk stops exactly at the end of the last extent, so the trailing
+    // append is applied here. Any other unreached segment would mean the plan and
+    // the base disagree, which is an error rather than something to absorb.
+    while let Some(segment) = pending {
+        match segment {
+            Segment::Replace { index, base, len } if base.0 == base.1 => {
+                frontier.replace(request.source, index, len, consumer)?;
+                pending = plan.advance()?;
+            }
+            Segment::Retain { base } if base.0 == base.1 => {
+                pending = plan.advance()?;
+            }
+            Segment::Replace { .. } => {
+                return Err(ContentError::InvalidEdit {
+                    what: "unreached replacement",
+                })
+            }
+            Segment::Retain { .. } => {
+                return Err(ContentError::InvalidEdit {
+                    what: "unreached retained range",
+                })
+            }
+        }
     }
     if frontier.logical_len() != request.edits.final_len() {
         return Err(ContentError::LengthMismatch {

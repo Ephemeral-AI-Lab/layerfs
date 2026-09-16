@@ -1,0 +1,12 @@
+{
+  "case": "root-collapse",
+  "reference": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "base_root": "d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9",
+  "base_len": 3835286,
+  "edited_root": "ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f",
+  "edited_len": 400000,
+  "nodes_created": 1,
+  "nodes_read": 6,
+  "base_pages": [{"level": 1, "root": true, "entries": 2, "id": "8c423679ac6bd87782d0f12d1421ca2af9bcdf4e098b09b4f660c546b5e5ccfb"}, {"level": 0, "root": false, "entries": 128, "id": "fc8b328646362143cc67884d05b8be5c8389567cd0146a0d4ec8e71353e3745c"}, {"level": 0, "root": false, "entries": 72, "id": "e35519fe4f620e152ce488c1639f5ac63093dc2bf78fe66ae4feb61ee56918fa"}],
+  "edited_pages": [{"level": 0, "root": true, "entries": 21, "id": "00aab7eb13556de5357453a328d8e03e2aef60496c8cc42741e276c8581cf4b0"}]
+}

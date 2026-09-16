@@ -1,0 +1,20 @@
+  candidate_survivors: 
+  edited_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  length: 400000 / 400000
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 21/00aab7eb
+  oracle_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  oracle_survivors: 
+  partition: 21/00aab7eb
+=== batch-normalized
+  base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  candidate_survivors: 
+  edited_root: c4204dadd25e2034f312bc8f2d48e88204c1c0957948ad539f1ad0fb18ae4694
+  length: 1495700 / 1495700
+  oracle_base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  oracle_partition: 51/fd110d5b
+  oracle_root: 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+  oracle_survivors: 
+  partition: 51/3faba35a
+thread 'the_candidate_reproduces_the_reference_root_and_partition' panicked at crates/layerfs-content/tests/edit_reference.rs:444:5:
+    the_candidate_reproduces_the_reference_root_and_partition

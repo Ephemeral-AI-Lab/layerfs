@@ -1,0 +1,12 @@
+{
+  "case": "batch-normalized",
+  "reference": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "base_root": "d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366",
+  "base_len": 1500000,
+  "edited_root": "793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1",
+  "edited_len": 1495700,
+  "nodes_created": 1,
+  "nodes_read": 19,
+  "base_pages": [{"level": 0, "root": true, "entries": 46, "id": "463bf2925ca5f38277576504931743d74886e571e9d576bb56e295edf3f24c9a"}],
+  "edited_pages": [{"level": 0, "root": true, "entries": 51, "id": "fd110d5bc76333041e4313a60fb56d8389ac377b53266ad70ed6eeaae9b6cef7"}]
+}

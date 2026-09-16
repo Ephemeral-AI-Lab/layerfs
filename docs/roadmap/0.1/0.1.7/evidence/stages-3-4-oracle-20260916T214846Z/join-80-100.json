@@ -1,0 +1,12 @@
+{
+  "case": "join-80-100",
+  "reference": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "base_root": "42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b",
+  "base_len": 3356500,
+  "edited_root": "333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b",
+  "edited_len": 3556500,
+  "nodes_created": 3,
+  "nodes_read": 10,
+  "base_pages": [{"level": 1, "root": true, "entries": 2, "id": "99305740cff437870156b41240bd86be8a5e8bdbe2abb90f5d83f2954d9e374b"}, {"level": 0, "root": false, "entries": 89, "id": "37df577426d825bde98144757070ef85b5e63d9dd8a5a7e97663ab127cdc7b7a"}, {"level": 0, "root": false, "entries": 90, "id": "3a98cf7dfa3f83d7924784f85bebbc348c92265431cb6745ac7aa989c83fa514"}],
+  "edited_pages": [{"level": 1, "root": true, "entries": 2, "id": "94f0c9bd755938ca564036ef70fdf2a7991a9693230fe16bfd28e185f2a6c1b1"}, {"level": 0, "root": false, "entries": 96, "id": "8940b1613783642d47e128642d5716c1beda63b16f9a80ccd25a89d5a8dfc6af"}, {"level": 0, "root": false, "entries": 97, "id": "414e45e5f85ba76572ba598c604f258f58a78211b99e859e8bcd707edcaf79c4"}]
+}

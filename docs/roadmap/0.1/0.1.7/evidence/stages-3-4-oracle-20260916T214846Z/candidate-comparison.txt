@@ -1,0 +1,92 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.50s
+     Running tests/edit_reference.rs (core/target/debug/deps/edit_reference-7e23162249881c1e)
+
+running 2 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+=== join-80-100
+  base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  candidate_survivors: 
+  edited_root: 523276d804fb6ec15173607f66476323895e46005d73eb5cb2d697adc49a300e
+  length: 3556500 / 3556500
+  oracle_base_root: 42670567953f6fec19b076d8ce181b1362cda277cee7526dffe34f18f977e58b
+  oracle_partition: 2/94f0c9bd 96/8940b161 97/414e45e5
+  oracle_root: 333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b
+  oracle_survivors: 
+  partition: 2/1d1b0508 128/d19eaa75 65/cf0c738a
+=== untouched-sibling
+  base_root: 43851dcb5272f804972c10d917f72d2a902168c0165ad4bbb48a1c0a52fa2458
+  candidate_survivors: 
+  edited_root: f122073ccdffac4dcf9cb46a4cfec078a2fd32c86dd749c566ed6862b7428755
+  length: 5803494 / 5803494
+  oracle_base_root: 43851dcb5272f804972c10d917f72d2a902168c0165ad4bbb48a1c0a52fa2458
+  oracle_partition: 4/b9fbdfcc 73/4878e4e0 74/59ba6c20 69/1b68d681 86/c5a59b6c
+  oracle_root: c60cf6588b3662ac6c2ef3ff18a240d6504a7f41270b46d6a8da033f0fd336b7
+  oracle_survivors: c5a59b6c
+  partition: 3/ad38393d 128/2cf3921b 87/ff76120e 87/100e81f4
+=== interior-multi-level
+  base_root: b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f
+  candidate_survivors: fc8b3286
+  edited_root: 7a61fffd6f9d9489c2c05b65aaf24f24393a080049c6ffd7bd6740f41a130c4e
+  length: 7746133 / 7746133
+  oracle_base_root: b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f
+  oracle_partition: 4/809b593d 102/425b01bf 103/eba4dae2 98/bef0eb1d 99/c9f09eab
+  oracle_root: 57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0
+  oracle_survivors: 
+  partition: 4/deaf3cbe 128/fc8b3286 128/32e5d8f0 73/94b810f6 73/1a2c31db
+=== height-growth
+  base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  candidate_survivors: fc8b3286
+  edited_root: 2f1439fb6a302166ea52b7107087e162d4fb91386e9a9003c3e1a602f2670190
+  length: 6835286 / 6835286
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 4/ee7f3b17 128/fc8b3286 72/e35519fe 78/07c9a4d0 79/82cea9e1
+  oracle_root: ae823b681cb44d0531aa736257a31c2319ad610655effad8433fb524a09e894d
+  oracle_survivors: fc8b3286
+  partition: 3/5efdc7dd 128/fc8b3286 128/090b95c3 101/3a1caf87
+=== root-collapse
+  base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  candidate_survivors: 
+  edited_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  length: 400000 / 400000
+  oracle_base_root: d20d75290d4ef1a1dc5f00494749e33fb04de76d7404343fe6d0da988f2d1fe9
+  oracle_partition: 21/00aab7eb
+  oracle_root: ba1ba75742ba31f7dd4a33ffbb804a9c2bbfae19c5aee90b51974398e911520f
+  oracle_survivors: 
+  partition: 21/00aab7eb
+=== batch-normalized
+  base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  candidate_survivors: 
+  edited_root: c4204dadd25e2034f312bc8f2d48e88204c1c0957948ad539f1ad0fb18ae4694
+  length: 1495700 / 1495700
+  oracle_base_root: d3106fca1384cd08cc4d6f73c2e8062fdb4804a0ac0924c96b6020650c8ae366
+  oracle_partition: 51/fd110d5b
+  oracle_root: 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+  oracle_survivors: 
+  partition: 51/3faba35a
+
+thread 'the_candidate_reproduces_the_reference_root_and_partition' panicked at crates/layerfs-content/tests/edit_reference.rs:431:5:
+localized edits do not reproduce the reference tree:
+join-80-100: root 523276d804fb6ec15173607f66476323895e46005d73eb5cb2d697adc49a300e != oracle 333d54974516c788dc731ee2e7c7522d0ff56a6982889b66e3caef5d469c310b
+join-80-100: partition 2/1d1b0508 128/d19eaa75 65/cf0c738a != oracle 2/94f0c9bd 96/8940b161 97/414e45e5
+untouched-sibling: root f122073ccdffac4dcf9cb46a4cfec078a2fd32c86dd749c566ed6862b7428755 != oracle c60cf6588b3662ac6c2ef3ff18a240d6504a7f41270b46d6a8da033f0fd336b7
+untouched-sibling: partition 3/ad38393d 128/2cf3921b 87/ff76120e 87/100e81f4 != oracle 4/b9fbdfcc 73/4878e4e0 74/59ba6c20 69/1b68d681 86/c5a59b6c
+untouched-sibling: retained leaves [] != oracle [c5a59b6c]
+interior-multi-level: root 7a61fffd6f9d9489c2c05b65aaf24f24393a080049c6ffd7bd6740f41a130c4e != oracle 57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0
+interior-multi-level: partition 4/deaf3cbe 128/fc8b3286 128/32e5d8f0 73/94b810f6 73/1a2c31db != oracle 4/809b593d 102/425b01bf 103/eba4dae2 98/bef0eb1d 99/c9f09eab
+interior-multi-level: retained leaves [fc8b3286] != oracle []
+height-growth: root 2f1439fb6a302166ea52b7107087e162d4fb91386e9a9003c3e1a602f2670190 != oracle ae823b681cb44d0531aa736257a31c2319ad610655effad8433fb524a09e894d
+height-growth: partition 3/5efdc7dd 128/fc8b3286 128/090b95c3 101/3a1caf87 != oracle 4/ee7f3b17 128/fc8b3286 72/e35519fe 78/07c9a4d0 79/82cea9e1
+batch-normalized: root c4204dadd25e2034f312bc8f2d48e88204c1c0957948ad539f1ad0fb18ae4694 != oracle 793895c55937b0ae4ab576cef28ccf7da79acce180c122640d5d56d0f127fcb1
+batch-normalized: partition 51/3faba35a != oracle 51/fd110d5b
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_candidate_reproduces_the_reference_root_and_partition ... FAILED
+
+failures:
+
+failures:
+    the_candidate_reproduces_the_reference_root_and_partition
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.27s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_reference`
