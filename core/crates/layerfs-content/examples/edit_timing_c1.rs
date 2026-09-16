@@ -20,8 +20,8 @@ use layerfs_telemetry::timer::Timing;
 
 use layerfs_content::file::mapping::{decode_file_state, decode_node_with_context, ExtentNode};
 use layerfs_content::{
-    apply_edits, construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentResult,
-    Edit, EditRequest, EditStream, FinalizedConsumer, FinalizedObject, ObjectId, Replacements,
+    apply_edits, construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentResult, Edit,
+    EditRequest, EditStream, FinalizedConsumer, FinalizedObject, ObjectId, Replacements,
 };
 
 /// Prepared base objects, served to the edit with demand accounting.
