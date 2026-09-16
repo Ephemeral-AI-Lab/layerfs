@@ -1,0 +1,76 @@
+plan_line,section,planned_path,action,planned_before,range_low,range_high,actual_prod_loc,actual_physical_lines,verdict,planned_responsibility
+91,layerfs-content,src/lib.rs,Update,16,18,35,24,41,within,Public edit and object reexports
+92,layerfs-content,src/error.rs,Update,116,120,190,120,174,within,Edit/input/capacity errors
+93,layerfs-content,src/policy.rs,Update,106,150,250,136,226,below,Validated configurable policy and derived C1 capacities
+94,layerfs-content,src/object/mod.rs,Update,12,14,24,23,29,within,Declarations/reexports
+95,layerfs-content,src/object/id.rs,Retain,89,89,89,89,119,within,Frozen identity
+96,layerfs-content,src/object/codec.rs,Update,107,107,150,107,138,within,Canonical limits independent of routing cutoff
+97,layerfs-content,src/object/access.rs,Update,18,40,90,18,36,below,Bounded shared authenticated owners; ordered demands
+98,layerfs-content,src/object/output.rs,Update,111,100,170,124,192,within,Moved final bytes and bounded advisory predecessors
+99,layerfs-content,src/object/predecessor.rs,New,0,45,85,67,107,within,Bounded candidates and explicit provenance
+100,layerfs-content,src/object/inode_leaf.rs,New,0,160,260,311,397,ABOVE,Checked compact inode-leaf grammar needed for C2 pooling only
+101,layerfs-content,src/file/mod.rs,Update,10,14,24,17,23,within,File operation reexports
+102,layerfs-content,src/file/content.rs,Update,195,150,230,195,249,within,Capacity-aware complete/whole construction
+103,layerfs-content,src/file/read.rs,Update,111,90,160,111,127,within,Read using an operation-local authenticated view
+104,layerfs-content,src/file/view.rs,New,0,90,160,142,171,within,Open/authenticate base once; scoped logical reads
+105,layerfs-content,src/file/cdc/mod.rs,Retain,5,5,5,5,10,within,Frozen CDC exports
+106,layerfs-content,src/file/cdc/gear.rs,Retain,494,494,494,494,538,within,Frozen table and algorithm
+107,layerfs-content,src/file/mapping/mod.rs,Update,15,18,30,15,20,below,Mapping reexports
+108,layerfs-content,src/file/mapping/types.rs,Update,182,180,250,182,248,within,"Checked summaries, extent bounds and roles"
+109,layerfs-content,src/file/mapping/codec.rs,Update,303,280,380,303,334,within,Frozen canonical node grammar; reuse checked decode
+110,layerfs-content,src/file/mapping/build.rs,Update,236,220,330,301,371,within,Final child-first streaming emission
+111,layerfs-content,src/file/mapping/read.rs,Update,210,180,290,210,241,within,Grouped node/payload acquisition and shared repeated demand
+112,layerfs-content,src/file/mapping/predecessor.rs,New,0,100,180,0,0,ABSENT,Bounded reference cursor with original/current coordinate distinction
+113,layerfs-content,src/file/edit/mod.rs,New,0,8,16,15,20,within,Edit declarations/reexports
+114,layerfs-content,src/file/edit/input.rs,New,0,90,160,286,390,ABOVE,Checked ordered edit stream and stable replacement range capability
+115,layerfs-content,src/file/edit/apply.rs,New,0,130,230,391,447,ABOVE,Known final-size dispatch and sequential edit operation
+116,layerfs-content,src/file/edit/compare.rs,New,0,80,140,67,86,below,Bounded applicable no-op comparison and replay
+117,layerfs-content,src/file/edit/frontier.rs,New,0,180,300,0,0,ABSENT,Owned decoded unfinished nodes and charged bounds
+118,layerfs-content,src/file/edit/split.rs,New,0,160,260,23,32,below,Path-local split preserving slices/subtrees
+119,layerfs-content,src/file/edit/concat.rs,New,0,210,350,19,29,below,Join/coalesce/partition/root-collapse rules
+120,layerfs-content,src/file/edit/finish.rs,New,0,110,190,38,54,below,"Proven finality, child-first sealing and final root"
+189,layerfs-storage,src/lib.rs,Update,11,14,28,11,30,below,Storage/encoding public reexports only
+190,layerfs-storage,src/error.rs,Update,105,120,200,105,154,below,Explicit physical/dependency/capacity failures
+191,layerfs-storage,src/policy.rs,Update,148,180,300,210,332,within,"Resolved profile, cutoff/depth/work/frame capacities"
+192,layerfs-storage,src/cas/mod.rs,Update,11,14,24,11,16,below,CAS declarations/reexports
+193,layerfs-storage,src/cas/store.rs,Update,327,260,420,395,530,within,Scoped store/read/save ownership and bounded Store-owned caches
+194,layerfs-storage,src/cas/owner.rs,Update,364,320,520,710,890,ABOVE,"Writer state, physical lanes, publication/cleanup invariants"
+195,layerfs-storage,src/cas/batch.rs,Update,58,90,160,58,87,below,Byte/count admission and planned singleton
+196,layerfs-storage,src/cas/save.rs,Update,49,90,170,52,73,below,Batched membership/bases and moved input; no per-object clone
+197,layerfs-storage,src/cas/membership.rs,Update,42,70,140,32,47,below,Exact reuse/collision under valid ownership
+198,layerfs-storage,src/cas/dependencies.rs,Update,62,90,170,62,88,below,Logical references plus selected physical dependencies
+199,layerfs-storage,src/cas/read.rs,Update,65,120,220,74,101,below,"Grouped acquisition, retained ceiling and shared decoded owners"
+200,layerfs-storage,src/cas/finish.rs,Update,16,20,50,16,25,below,"Final drain, acknowledgement and one terminal disposition"
+201,layerfs-storage,src/encoding/mod.rs,Update,9,12,24,11,17,below,Encoding exports
+202,layerfs-storage,src/encoding/full.rs,Update,112,110,190,177,213,within,Capacity-aware existing FULL alternatives
+203,layerfs-storage,src/encoding/decode.rs,Update,103,100,180,170,192,within,Explicit physical dispatch and canonical authentication
+204,layerfs-storage,src/encoding/codec.rs,Retire,367,0,0,508,632,NOT RETIRED,Move and extend into codec/; count relocation once
+205,layerfs-storage,src/encoding/codec/mod.rs,New,0,8,16,0,0,ABSENT,Codec declarations/reexports
+206,layerfs-storage,src/encoding/codec/profile.rs,New,0,80,140,0,0,ABSENT,Pinned parameters and checked workspace/frame capacities
+207,layerfs-storage,src/encoding/codec/encode.rs,New,0,220,340,0,0,ABSENT,Reused bounded FULL/PREFIX and group compression workspace
+208,layerfs-storage,src/encoding/codec/decode.rs,New,0,260,420,0,0,ABSENT,"Frame checks, prefix lifetimes and bounded decompression"
+209,layerfs-storage,src/encoding/delta/mod.rs,New,0,8,16,4,8,below,Payload delta declarations/reexports
+210,layerfs-storage,src/encoding/delta/record.rs,New,0,100,180,201,240,ABOVE,WHOLE_FILE/CHUNK FULL/PREFIX framing
+211,layerfs-storage,src/encoding/delta/select.rs,New,0,160,280,262,343,within,"One trial, role-aware cost/eligibility/work accounting"
+212,layerfs-storage,src/encoding/delta/read.rs,New,0,170,300,202,261,within,Iterative dependency reconstruction and intermediate checks
+213,layerfs-storage,src/encoding/delta/candidates.rs,New,0,100,180,126,161,within,Admitted-FULL cache/signatures and ordered bounded candidate acquisition
+214,layerfs-storage,src/encoding/pool/mod.rs,New,0,8,16,9,14,within,Physical pooling exports
+215,layerfs-storage,src/encoding/pool/value_group.rs,New,0,140,240,79,103,below,Build/hash/compress exact value-group body once
+216,layerfs-storage,src/encoding/pool/index.rs,New,0,160,280,203,259,within,"Bounded BTreeSet window, sync, equality candidates and invalidation"
+217,layerfs-storage,src/encoding/pool/leaf.rs,New,0,140,240,118,161,below,Canonical rows to pooled ordinals and inverse mapping
+218,layerfs-storage,src/encoding/pool/delta.rs,New,0,160,280,262,289,within,Pooled COPY/INSERT selection/codec with exact cost rules
+219,layerfs-storage,src/encoding/pool/read.rs,New,0,160,280,255,294,within,Bounded value-group authentication and per-chain work accounting
+220,layerfs-storage,src/pack/mod.rs,Update,10,14,24,12,17,below,Pack declarations/reexports
+221,layerfs-storage,src/pack/layout.rs,Update,321,280,440,381,466,within,Checked explicit format/locator grammar including selected capacities
+222,layerfs-storage,src/pack/placement.rs,Update,123,130,230,123,159,below,Fit/base chronology before assembly
+223,layerfs-storage,src/pack/assemble.rs,Update,195,180,300,223,252,within,Borrowed groups; assemble one selected write
+224,layerfs-storage,src/pack/read.rs,New,0,100,190,0,0,ABSENT,Grouped body/record views; avoid repeated group decode
+225,layerfs-storage,src/pack/singleton.rs,New,0,90,160,0,0,ABSENT,Budget-checked consuming singleton assembly
+226,layerfs-storage,src/sqlite/mod.rs,Update,8,10,20,10,15,within,SQLite exports
+227,layerfs-storage,src/sqlite/connection.rs,Update,50,50,80,50,72,within,Selected no-WAL/no-sync/zero-retry profile
+228,layerfs-storage,src/sqlite/schema.rs,Update,223,220,340,232,267,within,Explicit schema/profile compatibility and new valid policy ranges
+229,layerfs-storage,src/sqlite/lookup.rs,Update,118,130,220,141,177,within,Paged locator/base lookups and required indexes
+230,layerfs-storage,src/sqlite/write.rs,Update,83,120,220,83,117,below,Atomic packs/locators/base/catalogue writes
+231,layerfs-storage,src/sqlite/cleanup.rs,Update,58,80,150,58,77,below,Known-owned reverse dependency cleanup and cache invalidation
+232,layerfs-storage,src/sqlite/pool.rs,New,0,120,200,128,160,within,Bounded value-group catalogue queries/writes under one ceiling
+233,layerfs-storage,sql/schema.sql,Update,46,80,130,48,69,below,Exact roles/policy/constraints/indexes; retain publication watermark

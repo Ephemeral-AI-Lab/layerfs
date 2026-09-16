@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use layerfs_content::{
-    construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentError, ContentResult,
-    FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
+    construct_bytes, read_all, AdvisoryPredecessors, AuthenticatedObjects, ConstructionPolicy,
+    ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_storage::{StorageError, StoragePolicy, Store};
 
@@ -58,9 +58,14 @@ impl Drop for TempDir {
 }
 
 /// In-memory consumer that keeps every emitted canonical object.
+///
+/// The advisory predecessor list is retained too: the C1-to-C2 handoff is defined
+/// to carry it, so a collected set can be offered to the Store exactly as the
+/// producer emitted it, hints included.
 #[derive(Clone, Debug, Default)]
 pub struct Collected {
     objects: Vec<(ObjectId, ObjectRole, Vec<u8>, Vec<ObjectId>)>,
+    advisories: Vec<AdvisoryPredecessors>,
 }
 
 impl Collected {
@@ -72,6 +77,11 @@ impl Collected {
     /// Every collected object in emission order as `(id, role, bytes, refs)`.
     pub fn objects(&self) -> &[(ObjectId, ObjectRole, Vec<u8>, Vec<ObjectId>)] {
         &self.objects
+    }
+
+    /// Advisory predecessor list of the object emitted at `index`.
+    pub fn advisories(&self) -> &[AdvisoryPredecessors] {
+        &self.advisories
     }
 
     /// Only the objects with `role`, in emission order.
@@ -87,14 +97,17 @@ impl Collected {
             .collect()
     }
 
-    /// Every collected object as finalized values, references preserved.
+    /// Every collected object as finalized values, references and advisory
+    /// predecessors preserved.
     pub fn finalized(&self) -> Vec<FinalizedObject> {
         self.objects
             .iter()
-            .map(|(_, role, bytes, references)| {
+            .zip(&self.advisories)
+            .map(|((_, role, bytes, references), predecessors)| {
                 FinalizedObject::new(*role, bytes.clone())
                     .expect("canonical object")
                     .with_references(references.clone())
+                    .with_predecessors(predecessors.clone())
             })
             .collect()
     }
@@ -110,8 +123,10 @@ impl Collected {
 
 impl FinalizedConsumer for Collected {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        let predecessors = object.predecessors().clone();
         let (id, role, bytes, references) = object.into_parts();
         self.objects.push((id, role, bytes, references));
+        self.advisories.push(predecessors);
         Ok(())
     }
 }
@@ -132,6 +147,36 @@ impl AuthenticatedObjects for Provider<'_> {
             })
             .collect()
     }
+}
+
+/// Provider that serves canonical bytes from a real Store.
+///
+/// The store read is the production path; a failure there is reported as a missing
+/// object because that is the only way a provider can say "I do not have it".
+pub struct StoreProvider<'a>(pub &'a Store);
+
+impl AuthenticatedObjects for StoreProvider<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        disabled(|scope| self.0.read_batch(ids, scope.child("storage.read")))
+            .map(|(values, _)| values)
+            .map_err(|_| ContentError::MissingObject)
+    }
+}
+
+/// Reads the whole logical file through the real C1 read path, with every
+/// canonical object acquired from the real Store.
+pub fn read_logical(store: &Store, root: ObjectId) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    disabled(|scope| {
+        read_all(
+            &StoreProvider(store),
+            root,
+            &mut bytes,
+            scope.child("content.read"),
+        )
+    })
+    .expect("logical read through the store");
+    bytes
 }
 
 /// A root scope that records nothing.

@@ -1,0 +1,13 @@
+{
+  "case": "interior-multi-level",
+  "reference": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "base_root": "b3b633149de68cfc55cd070fb929a7c44c92bbdb00f5dc574583ff19aac5162f",
+  "base_len": 7746133,
+  "edited_root": "57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0",
+  "edited_len": 7746133,
+  "nodes_created": 5,
+  "nodes_read": 24,
+  "edits": [[3873066, 40000, 40000]],
+  "base_pages": [{"level": 1, "root": true, "entries": 4, "id": "24fd67284145d16ee473cbec0f6ee4d02e023eca0cab5345660d1101205df196"}, {"level": 0, "root": false, "entries": 128, "id": "fc8b328646362143cc67884d05b8be5c8389567cd0146a0d4ec8e71353e3745c"}, {"level": 0, "root": false, "entries": 128, "id": "71672c0c2acb294813cb1a000f02266111036a2b044e164ab104019db661315f"}, {"level": 0, "root": false, "entries": 72, "id": "b090cf823ac3dd100e67a09a383d24dfcc2173c52134446435ec35d49d194cfc"}, {"level": 0, "root": false, "entries": 72, "id": "eece3708aa2bf09bc305c20e1e1d091fd4b8a2f993fb9deead9e821525969efc"}],
+  "edited_pages": [{"level": 1, "root": true, "entries": 4, "id": "809b593d89d37046939966965d9c62d6d1a62c6fc38625da6a128aeb500e0a5f"}, {"level": 0, "root": false, "entries": 102, "id": "425b01bf52b097d1215ba6cc4ebef8a93f45c675a9be0fcb9a58935fe35926f4"}, {"level": 0, "root": false, "entries": 103, "id": "eba4dae2ca522c0303a2eae8d7c19a3cd16ec2062ac952d78ab87b89e9c276d5"}, {"level": 0, "root": false, "entries": 98, "id": "bef0eb1d2f5d3b48b25f74093be1cd79f26687178c346dfc98bc0194c3494fe7"}, {"level": 0, "root": false, "entries": 99, "id": "c9f09eabb4a9c0bfaed163d539cbb6d5944c90676c9b5aaebed961e796d89c57"}]
+}

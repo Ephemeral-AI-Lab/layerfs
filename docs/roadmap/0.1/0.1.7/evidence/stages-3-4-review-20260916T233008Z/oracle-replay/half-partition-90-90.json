@@ -1,0 +1,13 @@
+{
+  "case": "half-partition-90-90",
+  "reference": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "base_root": "5e36f13772d549a49898d61c3304f9d06e2063f9c9f7e42ad092bbcccb438bbe",
+  "base_len": 3432132,
+  "edited_root": "3b39c8676fbc98269be448e482b7598c780f4442fa6e1266fdec7a62cf6a732e",
+  "edited_len": 3432068,
+  "nodes_created": 3,
+  "nodes_read": 9,
+  "edits": [[1708560, 64, 0]],
+  "base_pages": [{"level": 1, "root": true, "entries": 2, "id": "07b4ea6881b03b6eef447df1fd3d4d50d977c0cd4c166185f3926f76906fad4b"}, {"level": 0, "root": false, "entries": 90, "id": "6f8bcba4420d4d431fadf58aed43027a65bca2c8dd055637bfea9e3b748db1f5"}, {"level": 0, "root": false, "entries": 90, "id": "a131fce58d86c3391eff4c33142509e64ec63b9b6b6c7affac74922f16f501bf"}],
+  "edited_pages": [{"level": 1, "root": true, "entries": 2, "id": "93b2713d9a8417889e2236b827de386cd4857846509e93ff4f62d70ba371ee03"}, {"level": 0, "root": false, "entries": 90, "id": "927e853aedce2f62ee467f82747fdfd13f82da2c9245ee23df7a357e6ffd41ea"}, {"level": 0, "root": false, "entries": 90, "id": "0ba1216561a508cdde20659743a133e75aa3a5809bfac1631dd6f89b38f447b4"}]
+}

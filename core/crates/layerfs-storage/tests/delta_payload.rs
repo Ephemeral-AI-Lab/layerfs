@@ -8,12 +8,13 @@ mod support;
 
 use layerfs_content::file::mapping::encode_chunk_object;
 use layerfs_content::{
-    AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance,
+    apply_edits, construct_bytes, AdvisoryPredecessors, ConstructionPolicy, Edit, EditRequest,
+    EditStream, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance, Replacements,
 };
 use layerfs_storage::Store;
 use support::{
     assembled_small_object, construct_file, create_store, disabled, noise, open_store, patterned,
-    read_objects, save_one, save_via_handoff, TempDir,
+    read_objects, save_one, save_via_handoff, Collected, Provider, TempDir,
 };
 
 fn with_predecessor(object: FinalizedObject, base: ObjectId) -> FinalizedObject {
@@ -283,4 +284,147 @@ fn the_c1_handoff_reports_the_same_selection_as_a_direct_save() {
     let outcome = save_via_handoff(&store, &collected).expect("handoff save");
     assert_eq!(outcome.inserted, collected.objects().len() as u64);
     assert!(outcome.acknowledged);
+}
+
+/// A CHUNK candidate that no committed row matches is a policy fallback, not a
+/// failure: exactly one FULL record is stored and no trial is attempted.
+#[test]
+fn an_absent_chunk_candidate_selects_full() {
+    let dir = TempDir::new("delta-chunk-absent");
+    let path = dir.store_path("delta");
+    let store = create_store(&path);
+    let raw = noise(20_000);
+    let expected = chunk(&raw);
+    let expected_canonical = expected.canonical().to_vec();
+    let missing = ObjectId::for_bytes(b"never stored chunk");
+    let absent = with_predecessor(expected, missing);
+    let id = absent.id();
+    let outcome = save_one(&store, absent).expect("an absent candidate is not a failure");
+    assert_eq!(outcome.full_records, 1);
+    assert_eq!(outcome.prefix_records, 0);
+    assert_eq!(
+        outcome.delta.trials, 0,
+        "an absent candidate is never tried"
+    );
+    assert_eq!(outcome.delta.absent_candidates, 1);
+    assert_eq!(outcome.inserted, 1);
+    let (values, counters) = read_objects(&store, &[id]).expect("read back");
+    assert_eq!(counters.edges, 0, "FULL has no dependency");
+    assert_eq!(values[0], expected_canonical);
+}
+
+/// A CHUNK candidate that is present but belongs to another logical role is
+/// ineligible, and ineligible selects FULL.
+#[test]
+fn an_ineligible_chunk_candidate_selects_full() {
+    let dir = TempDir::new("delta-chunk-ineligible");
+    let path = dir.store_path("delta");
+    let store = create_store(&path);
+    let other_role = whole(&noise(60_000));
+    let other_id = other_role.id();
+    save_one(&store, other_role).expect("whole-file save");
+    let raw = noise(20_000);
+    let expected = chunk(&raw);
+    let expected_canonical = expected.canonical().to_vec();
+    let mismatched = with_predecessor(expected, other_id);
+    let id = mismatched.id();
+    let outcome =
+        save_one(&store, mismatched).expect("an ineligible candidate is a policy outcome");
+    assert_eq!(outcome.prefix_records, 0);
+    assert_eq!(
+        outcome.delta.trials, 0,
+        "an ineligible candidate is never tried"
+    );
+    assert!(
+        outcome.delta.ineligible_candidates >= 1,
+        "{:?}",
+        outcome.delta
+    );
+    assert_eq!(outcome.full_records, 1);
+    let (values, _) = read_objects(&store, &[id]).expect("read back");
+    assert_eq!(values[0], expected_canonical);
+}
+
+/// Two adjacent replacements inside one chunked edit operation: the second
+/// replacement's right boundary is the payload the same operation created for the
+/// first, which no commit has published yet. Selection must decide eligibility by
+/// probing that predecessor and store FULL, never fail the save.
+#[test]
+fn a_same_save_unsealed_chunk_predecessor_selects_full() {
+    let dir = TempDir::new("delta-chunk-unsealed");
+    let path = dir.store_path("delta");
+    let store = create_store(&path);
+    let base = noise(400_000);
+    let policy = ConstructionPolicy::frozen_default();
+    let mut base_objects = Collected::new();
+    let constructed = disabled(|scope| {
+        construct_bytes(
+            policy,
+            &policy.capacities(),
+            &base,
+            &mut base_objects,
+            scope.child("content"),
+        )
+    })
+    .expect("base construction");
+    save_via_handoff(&store, &base_objects).expect("base save");
+
+    // Each replacement is exactly one minimum-size chunk, so each edit creates
+    // exactly one payload and the second edit's left boundary lands on the first
+    // edit's payload.
+    let first_at = 60_000_u64;
+    let length = 8_192_u64;
+    // The two replacements must not be identical, or the second is an exact
+    // reuse inside the same wave and never reaches selection at all.
+    let first_bytes = patterned(8_192);
+    let second_bytes = noise(8_192);
+    let mut replacements = Replacements::new();
+    replacements.push(first_bytes.clone());
+    replacements.push(second_bytes.clone());
+    let stream = EditStream::new(
+        base.len() as u64,
+        vec![
+            Edit::overwrite(first_at, first_at + length),
+            Edit::overwrite(first_at + length, first_at + 2 * length),
+        ],
+    )
+    .expect("valid stream");
+    let mut edited = Collected::new();
+    let applied = disabled(|scope| {
+        apply_edits(
+            policy,
+            &policy.capacities(),
+            &Provider(&base_objects),
+            EditRequest {
+                root: constructed.root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut edited,
+            scope.child("edit"),
+        )
+    })
+    .expect("localized edit");
+    let payloads = edited
+        .objects()
+        .iter()
+        .filter(|(_, role, _, _)| *role == ObjectRole::Chunk)
+        .count();
+    assert_eq!(payloads, 2, "each replacement is one payload");
+
+    let outcome = save_via_handoff(&store, &edited)
+        .expect("an unpublished predecessor must not fail the save");
+    assert_eq!(
+        outcome.delta.absent_candidates, 1,
+        "the earlier replacement's payload is probed once and found unpublished"
+    );
+    drop(store);
+
+    let mut expected = Vec::with_capacity(base.len());
+    expected.extend_from_slice(&base[..first_at as usize]);
+    expected.extend_from_slice(&first_bytes);
+    expected.extend_from_slice(&second_bytes);
+    expected.extend_from_slice(&base[(first_at + 2 * length) as usize..]);
+    let reopened = open_store(&path);
+    assert_eq!(support::read_logical(&reopened, applied.root), expected);
 }

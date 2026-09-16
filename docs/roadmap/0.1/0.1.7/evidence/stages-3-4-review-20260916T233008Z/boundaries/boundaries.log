@@ -1,0 +1,81 @@
+snapshot=91c3a0741fff64e8161d5c1b6e759f347ffbf757 start=2026-09-16T23:36:24Z
+===== TRY [existing-output]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/existing
+Error: "--output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/existing already exists"
+----- EXIT [existing-output] rc=1 -----
+===== TRY [cutoff-100000]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 100000 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/bad-100000
+Error: UnsupportedPolicy { field: "small_file_threshold_bytes" }
+----- EXIT [cutoff-100000] rc=1 -----
+===== TRY [cutoff-65536]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 65536 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/bad-65536
+Error: UnsupportedPolicy { field: "small_file_threshold_bytes" }
+----- EXIT [cutoff-65536] rc=1 -----
+===== TRY [cutoff-2097152]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 2097152 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/bad-2097152
+Error: UnsupportedPolicy { field: "small_file_threshold_bytes" }
+----- EXIT [cutoff-2097152] rc=1 -----
+===== TRY [cutoff-262144]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 262144 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/ok-262144
+mode: c1
+case: small
+threshold-bytes: 262144
+timing: on
+fixture: base 131072 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 131072 -> final 131072 bytes
+base root: 66edc030f3ee5738fd197e159bfd275c576a97f6ef119edc812d10115f696b97
+result root: 99c26ece95aa683cd1a30164faeac534d94ddee01516948f5b1708b6776b32ae
+result length: 131072
+emitted: 1 objects, 131095 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  2.614ms
+  edit.op  2.606ms
+    edit.base  30.167us
+      edit.base_read  26.916us
+    edit.compare  10.458us
+      edit.compare.window  1.500us
+    edit.assemble  17.250us
+    content.encode  32.417us
+    content.emit  4.250us
+timings: 9 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/ok-262144/c1-edit.json
+----- EXIT [cutoff-262144] rc=0 -----
+===== TRY [cutoff-524288]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 524288 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/ok-524288
+mode: c1
+case: small
+threshold-bytes: 524288
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 262144 -> final 262144 bytes
+base root: e57ad23aae291dc7baf18749814369cdfcaea56ad83570d45fa974b51ef0ab33
+result root: 5dd67d44e769e80dbab379efe256f71e9a7b1a473a96d1c492267540d1b09f40
+result length: 262144
+emitted: 1 objects, 262167 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  4.967ms
+  edit.op  4.953ms
+    edit.base  64.375us
+      edit.base_read  58.334us
+    edit.compare  12.334us
+      edit.compare.window  2.583us
+    edit.assemble  39.333us
+    content.encode  71.458us
+    content.emit  24.125us
+timings: 9 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/ok-524288/c1-edit.json
+----- EXIT [cutoff-524288] rc=0 -----
+===== TRY [timing-off]: core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 131072 --timing off --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/boundaries/timing-off
+mode: c1
+case: small
+threshold-bytes: 131072
+timing: off
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+base root: 950a13bc1eb6c354370bdf5971770706139f7caf29021e6ee0ffdfb489428603
+result root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+result length: 65536
+emitted: 1 objects, 65559 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+disabled: no timing recorded
+timings: not recorded
+----- EXIT [timing-off] rc=0 -----
+END 2026-09-16T23:36:24Z

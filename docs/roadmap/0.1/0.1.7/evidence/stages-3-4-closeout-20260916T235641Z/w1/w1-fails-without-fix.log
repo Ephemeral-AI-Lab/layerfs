@@ -1,0 +1,54 @@
+=== control run: the W1 CHUNK branch reverted to the reviewed snapshot | 2026-09-16T23:57:49Z
+select.rs:209 restored to `ObjectRole::Chunk => advisory.first().copied(),`
+The other two hunks of the fix (the `probe` helper and the WHOLE_FILE/cache
+call sites) are left in place, so this isolates the CHUNK decision only.
+
+=== delta_payload with the CHUNK branch reverted | 2026-09-16T23:57:49Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test delta_payload
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.08s
+     Running tests/delta_payload.rs (core/target/debug/deps/delta_payload-3a690eab668b7ad1)
+
+running 13 tests
+test an_absent_chunk_candidate_selects_full ... FAILED
+test depth_zero_disables_prospective_delta_entirely ... ok
+test an_absent_or_ineligible_candidate_selects_full ... ok
+test the_c1_handoff_reports_the_same_selection_as_a_direct_save ... ok
+test exact_reuse_is_decided_before_any_trial ... ok
+test an_ineligible_chunk_candidate_selects_full ... FAILED
+test a_corrupt_base_fails_the_save_instead_of_selecting_full ... ok
+test an_unrelated_candidate_loses_the_cost_comparison ... ok
+test native_delta_uses_the_first_supplied_eligible_candidate_only ... ok
+test the_admitted_full_cache_supplies_a_candidate_within_one_save ... ok
+test an_explicit_predecessor_produces_a_readable_prefix_record ... ok
+test a_same_save_unsealed_chunk_predecessor_selects_full ... FAILED
+test a_delta_chain_is_resolved_iteratively_and_reaches_every_step ... ok
+
+failures:
+
+---- an_absent_chunk_candidate_selects_full stdout ----
+
+thread 'an_absent_chunk_candidate_selects_full' panicked at crates/layerfs-storage/tests/delta_payload.rs:302:44:
+an absent candidate is not a failure: ObjectMissing(ObjectId("23e22d284584900638082f226c2907432aac5bdb4c54d5aec29dcf286539bd9f"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- an_ineligible_chunk_candidate_selects_full stdout ----
+
+thread 'an_ineligible_chunk_candidate_selects_full' panicked at crates/layerfs-storage/tests/delta_payload.rs:332:38:
+an ineligible candidate is a policy outcome: Integrity("chunk role with a non-chunk payload")
+
+---- a_same_save_unsealed_chunk_predecessor_selects_full stdout ----
+
+thread 'a_same_save_unsealed_chunk_predecessor_selects_full' panicked at crates/layerfs-storage/tests/delta_payload.rs:416:10:
+an unpublished predecessor must not fail the save: ObjectMissing(ObjectId("7d362394f305803e110d6c5f9b4b0903da423642caff563bac51563bc99594af"))
+
+
+failures:
+    a_same_save_unsealed_chunk_predecessor_selects_full
+    an_absent_chunk_candidate_selects_full
+    an_ineligible_chunk_candidate_selects_full
+
+test result: FAILED. 10 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+error: test failed, to rerun pass `-p layerfs-storage --test delta_payload`
+--- exit 101 | wall 2.926s

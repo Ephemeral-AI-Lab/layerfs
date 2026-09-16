@@ -207,7 +207,17 @@ pub fn select(
     }
     let raw = raw_payload(canonical, role)?;
     let candidate = match role {
-        ObjectRole::Chunk => advisory.first().copied(),
+        // The caller already knows the correspondence, so exactly the first
+        // supplied candidate is considered - but only after the same eligibility
+        // decision the whole-file lane applies. An absent or ineligible one
+        // selects FULL by policy; it is never acquired and never fails the save.
+        ObjectRole::Chunk => match advisory.first().copied() {
+            Some(id) => match probe(input, id, role, depth_cap)? {
+                true => Some(id),
+                false => None,
+            },
+            None => None,
+        },
         _ => match acquisition(input, role, advisory, depth_cap)? {
             Some(id) => Some(id),
             None => {
@@ -215,15 +225,10 @@ pub fn select(
                     .candidates
                     .find(ObjectId::for_bytes(canonical), &signature(raw));
                 match found {
-                    Some(id) => {
-                        if eligible(input, id, role, depth_cap)? {
-                            Some(id)
-                        } else {
-                            input.counters.ineligible_candidates =
-                                input.counters.ineligible_candidates.saturating_add(1);
-                            None
-                        }
-                    }
+                    Some(id) => match probe(input, id, role, depth_cap)? {
+                        true => Some(id),
+                        false => None,
+                    },
                     None => None,
                 }
             }
@@ -292,6 +297,23 @@ pub fn select(
     }
 }
 
+/// Decides one supplied candidate: present, of this role, and under the cap.
+///
+/// Every rejected candidate is counted, whether it was absent or present but
+/// ineligible; neither ever becomes a failure of the operation.
+fn probe(
+    input: &mut SelectInput<'_>,
+    id: ObjectId,
+    role: ObjectRole,
+    depth_cap: u8,
+) -> StorageResult<bool> {
+    if eligible(input, id, role, depth_cap)? {
+        return Ok(true);
+    }
+    input.counters.ineligible_candidates = input.counters.ineligible_candidates.saturating_add(1);
+    Ok(false)
+}
+
 fn acquisition(
     input: &mut SelectInput<'_>,
     role: ObjectRole,
@@ -299,12 +321,8 @@ fn acquisition(
     depth_cap: u8,
 ) -> StorageResult<Option<ObjectId>> {
     for id in advisory {
-        match eligible(input, *id, role, depth_cap)? {
-            true => return Ok(Some(*id)),
-            false => {
-                input.counters.ineligible_candidates =
-                    input.counters.ineligible_candidates.saturating_add(1);
-            }
+        if probe(input, *id, role, depth_cap)? {
+            return Ok(Some(*id));
         }
     }
     Ok(None)

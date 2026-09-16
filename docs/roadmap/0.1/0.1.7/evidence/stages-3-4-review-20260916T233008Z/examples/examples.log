@@ -1,0 +1,290 @@
+snapshot=91c3a0741fff64e8161d5c1b6e759f347ffbf757 start=2026-09-16T23:34:44Z
+===== CMD [c1-small]: cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_edits -- --mode c1 --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c1-small
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running `core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c1-small`
+mode: c1
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+base root: 950a13bc1eb6c354370bdf5971770706139f7caf29021e6ee0ffdfb489428603
+result root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+result length: 65536
+emitted: 1 objects, 65559 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  1.439ms
+  edit.op  1.430ms
+    edit.base  135.708us
+      edit.base_read  117.833us
+    edit.compare  31.875us
+      edit.compare.window  1.375us
+    edit.assemble  24.167us
+    content.encode  15.875us
+    content.emit  7.584us
+timings: 9 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c1-small/c1-edit.json
+----- EXIT [c1-small] rc=0 wall_ms=1014 -----
+===== CMD [c2-small]: cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_edits -- --mode c2 --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c2-small
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `core/target/debug/examples/measure_edits --mode c2 --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c2-small`
+mode: c2
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+save: inserted 2 reused 0 prefix records 1 full records 1 trials 1
+store: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c2-small/store.sqlite
+readback: verified 65559 canonical bytes through an independent read wave
+exclusions: no C1 file construction and no full-file object collection is timed
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+storage.save  26.670ms
+  store.create  3.653ms
+  storage.begin  3.405ms
+  storage.accept  3.500us
+    storage.batch  1.333us
+  storage.accept  417ns
+    storage.batch  125ns
+  storage.finish  11.128ms
+  storage.read  5.669ms
+    storage.decode  804.375us
+    storage.read  4.525ms
+timings: 11 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/c2-small/c2-save.json
+----- EXIT [c2-small] rc=0 wall_ms=657 -----
+===== CMD [pipeline-chunked]: cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_edits -- --mode pipeline --case chunked --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-chunked
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `core/target/debug/examples/measure_edits --mode pipeline --case chunked --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-chunked`
+mode: pipeline
+case: chunked
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 4096 replacement bytes
+stream: 1 edit(s), base 262144 -> final 262144 bytes
+base preparation (untimed): root 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d stored as 18 object(s), 3 pack(s), acknowledged true
+edited root: ca6c30a4355c63c3e3df39a478482cd57f80b5271885e48a573bbe34a031d6b7
+edited length: 262144
+save: acknowledged true inserted 3 reused 0 packs 2 prefix records 0 full records 3
+readback bytes: 262144
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  19.989ms
+  storage.begin  2.855ms
+  file.edit  9.868ms
+    edit.base  1.290ms
+      edit.base_read  1.286ms
+    edit.compare  5.122ms
+      edit.compare.window  5.093ms
+    edit.base_read  1.636ms
+    edit.split  1.544ms
+    edit.split  25.166us
+    edit.split  3.708us
+    content.chunk  139.459us
+    edit.finish  33.750us
+  storage.finish  1.233ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  16.408ms
+  content.read  16.405ms
+    content.acquire  1.216ms
+    content.traverse  15.183ms
+timings: 14 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-chunked/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-chunked/pipeline-readback.json
+----- EXIT [pipeline-chunked] rc=0 wall_ms=709 -----
+===== CMD [pipeline-grow-1m]: cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_edits -- --mode pipeline --case small-to-large --threshold-bytes 1048576 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-grow-1m
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `core/target/debug/examples/measure_edits --mode pipeline --case small-to-large --threshold-bytes 1048576 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-grow-1m`
+mode: pipeline
+case: small-to-large
+threshold-bytes: 1048576
+timing: on
+fixture: base 1048575 bytes, 1 edit(s), 1048576 replacement bytes
+stream: 1 edit(s), base 1048575 -> final 2097151 bytes
+base preparation (untimed): root 4f190bb980adc6f36fd1c61a7e147a55d26d17f8d91e27f39c94cb19919d28ba stored as 1 object(s), 1 pack(s), acknowledged true
+edited root: 4fb197e6bda95fb1f877f41da2750ae2d80c3f6352a618d2a1bd0d318418b8e3
+edited length: 2097151
+save: acknowledged true inserted 65 reused 53 packs 6 prefix records 0 full records 65
+readback bytes: 2097151
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  202.690ms
+  storage.begin  2.810ms
+  file.edit  195.426ms
+    edit.base  46.870ms
+      edit.base_read  46.865ms
+    edit.compare  1.166us
+    content.chunk  148.442ms
+    edit.finish  104.583us
+  storage.finish  3.681ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  107.848ms
+  content.read  107.842ms
+    content.acquire  1.400ms
+    content.traverse  106.436ms
+timings: 9 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-grow-1m/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-grow-1m/pipeline-readback.json
+----- EXIT [pipeline-grow-1m] rc=0 wall_ms=1094 -----
+===== CMD [pipeline-shrink-1m]: cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_edits -- --mode pipeline --case large-to-small --threshold-bytes 1048576 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-shrink-1m
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `core/target/debug/examples/measure_edits --mode pipeline --case large-to-small --threshold-bytes 1048576 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-shrink-1m`
+mode: pipeline
+case: large-to-small
+threshold-bytes: 1048576
+timing: on
+fixture: base 2097152 bytes, 1 edit(s), 0 replacement bytes
+stream: 1 edit(s), base 2097152 -> final 1048576 bytes
+base preparation (untimed): root 920b1cad7eb4b0503715e05198ef85c17f1a78153ad8efd38b48e9acf1b58e27 stored as 114 object(s), 10 pack(s), acknowledged true
+edited root: 5bdb5824866a79c78b79e140230c30eb16a61736a8d4c0df3e066406685c54e0
+edited length: 1048576
+save: acknowledged true inserted 2 reused 0 packs 1 prefix records 0 full records 2
+readback bytes: 1048576
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  8.339ms
+  storage.begin  2.785ms
+  file.edit  4.788ms
+    edit.base  1.679ms
+      edit.base_read  1.675ms
+    edit.compare  1.292us
+    edit.base_read  1.205ms
+    edit.split  1.558ms
+    edit.split  138.666us
+    edit.split  9.291us
+    edit.finish  91.000us
+  storage.finish  627.458us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  56.062ms
+  content.read  56.060ms
+    content.acquire  1.154ms
+    content.traverse  54.897ms
+timings: 12 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-shrink-1m/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pipeline-shrink-1m/pipeline-readback.json
+----- EXIT [pipeline-shrink-1m] rc=0 wall_ms=883 -----
+===== CMD [pooled-24]: cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_pooled -- --leaves 24 --rows 100 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pooled-24
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `core/target/debug/examples/measure_pooled --leaves 24 --rows 100 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pooled-24`
+leaves: 24
+rows-per-leaf: 100
+timing: on
+policy: cutoff 131072 depths whole-file 8 chunk 4 metadata 8
+store: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pooled-24/store.sqlite
+save-to-ack: inserted 24 reused 0 packs 48 commits 24
+pooled lane: leaves 24 new values 123 reused values 2277 groups 24 full 3 delta 21 trials 21 work-exceeded 2
+readback: 2 object(s) verified byte-for-byte
+readback first: 9427ef095d723683b95f4ccb270c75f5284ea1514d6df7c553188375cbc7f070
+readback last: 330bffb79d7b0ae2f78a95670397108addba1badc9460e4ddb8bc98af60e3970
+retained: pool index 123 entries / 2952 bytes
+store-file: 49152 bytes
+catalogue: 24 group(s), 123 ordinal(s)
+exclusions: fixture construction and fixture identity checks are inside pooled.save
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+pooled.save  153.469ms
+  store.create  3.724ms
+  storage.begin  3.239ms
+  storage.accept  2.375us
+    storage.batch  708ns
+  storage.finish  2.248ms
+  storage.begin  2.954ms
+  storage.accept  3.250us
+    storage.batch  959ns
+  storage.finish  2.953ms
+  storage.begin  2.762ms
+  storage.accept  1.166us
+    storage.batch  708ns
+  storage.finish  2.491ms
+  storage.begin  2.798ms
+  storage.accept  5.958us
+    storage.batch  1.917us
+  storage.finish  2.475ms
+  storage.begin  2.856ms
+  storage.accept  1.292us
+    storage.batch  625ns
+  storage.finish  2.650ms
+  storage.begin  2.775ms
+  storage.accept  2.208us
+    storage.batch  1.291us
+  storage.finish  2.620ms
+  storage.begin  2.893ms
+  storage.accept  1.167us
+    storage.batch  459ns
+  storage.finish  2.658ms
+  storage.begin  2.813ms
+  storage.accept  2.458us
+    storage.batch  417ns
+  storage.finish  2.543ms
+  storage.begin  2.730ms
+  storage.accept  875ns
+    storage.batch  417ns
+  storage.finish  2.357ms
+  storage.begin  2.591ms
+  storage.accept  2.542us
+    storage.batch  1.333us
+  storage.finish  2.563ms
+  storage.begin  2.834ms
+  storage.accept  2.334us
+    storage.batch  1.583us
+  storage.finish  3.040ms
+  storage.begin  2.737ms
+  storage.accept  1.375us
+    storage.batch  542ns
+  storage.finish  2.501ms
+  storage.begin  2.675ms
+  storage.accept  875ns
+    storage.batch  459ns
+  storage.finish  2.402ms
+  storage.begin  2.732ms
+  storage.accept  875ns
+    storage.batch  417ns
+  storage.finish  2.440ms
+  storage.begin  2.705ms
+  storage.accept  1.000us
+    storage.batch  333ns
+  storage.finish  2.675ms
+  storage.begin  2.931ms
+  storage.accept  6.333us
+    storage.batch  833ns
+  storage.finish  2.572ms
+  storage.begin  2.841ms
+  storage.accept  875ns
+    storage.batch  250ns
+  storage.finish  2.499ms
+  storage.begin  2.667ms
+  storage.accept  1.500us
+    storage.batch  708ns
+  storage.finish  2.599ms
+  storage.begin  2.724ms
+  storage.accept  792ns
+    storage.batch  292ns
+  storage.finish  2.581ms
+  storage.begin  2.583ms
+  storage.accept  667ns
+    storage.batch  292ns
+  storage.finish  2.346ms
+  storage.begin  2.707ms
+  storage.accept  667ns
+    storage.batch  250ns
+  storage.finish  2.504ms
+  storage.begin  2.646ms
+  storage.accept  666ns
+    storage.batch  375ns
+  storage.finish  2.381ms
+  storage.begin  2.755ms
+  storage.accept  833ns
+    storage.batch  459ns
+  storage.finish  2.594ms
+  storage.begin  2.645ms
+  storage.accept  1.125us
+    storage.batch  583ns
+  storage.finish  2.581ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+pooled.readback  6.686ms
+  storage.read  6.683ms
+    storage.decode  812.333us
+    storage.read  5.593ms
+timings: 98 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pooled-24/pooled-save.json
+timings: 4 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-3-4-review-20260916T233008Z/examples/pooled-24/pooled-readback.json
+----- EXIT [pooled-24] rc=0 wall_ms=861 -----
+END 2026-09-16T23:34:49Z
