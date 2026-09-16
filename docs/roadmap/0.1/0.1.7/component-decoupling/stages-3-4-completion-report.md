@@ -166,17 +166,43 @@ python3 -m unittest discover -s tools -p 'test_production_loc.py'
 | `edit_reference` | 2 | **FAIL: six recorded counterexamples** |
 | every other existing target | unchanged | PASS |
 
-Per-commit production LOC (`python3 tools/production_loc.py`, identical
-classification for both snapshots):
+Per-commit production LOC. Every snapshot below was re-measured from the committed
+tree with `git archive <rev>` and `python3 tools/production_loc.py --root <tree>
+--detail`, so the numbers are the audited classification for the actual commits:
 
 ```text
-E  commit da8ee5769: 77136 -> 78875 (delta +1739)
-   core 8660 -> 10399  (layerfs-content 3572 -> 3949, layerfs-storage 4356 -> 5718)
-D  next commit:      78875 -> 78891 (delta +16)
-   core 10399 -> 10415 (layerfs-content only). The delta is the end-of-file append
-   fix in file/edit/apply.rs; the oracle example, the evidence fixtures and the
-   failing external target are test/oracle/documentation scope and are not counted.
+24ef187d4 -> da8ee5769   E, pooled metadata
+  core       8660 -> 10399   (delta +1739)
+    layerfs-content  3572 -> 3891   (+319)
+    layerfs-storage  4356 -> 5776  (+1420)
+    layerfs-telemetry 732 -> 732
+  reference 68476 -> 68476; combined 77136 -> 78875 (delta +1739)
+
+da8ee5769 -> b49931570   D step 1, oracle and the end-of-file append fix
+  core      10399 -> 10415   (delta +16; layerfs-content 3891 -> 3907 only)
+  reference 68476 -> 68476; combined 78875 -> 78891 (delta +16)
+  The oracle example, the fixtures and the failing external target are test/oracle/
+  documentation scope and are not counted.
+
+b49931570 -> 315a339fa   the required edit_model target
+  core      10415 -> 10415   (delta 0; test-only)
+  combined  78891 -> 78891   (delta 0)
+
+Current committed tree: core 10415 across 75 production files
+  layerfs-content 3907 (29 files), layerfs-storage 5776 (38 files, of which
+  runtime SQL 48 in one file), layerfs-telemetry 732 (7 files).
+  Recursive scopes: content/src/file/edit 913, content/src/file/mapping 1011,
+  content/src/object 739, storage/src/encoding 2560 (pool 926, delta 768),
+  storage/src/cas 1401, storage/src/sqlite 702, storage/src/pack 739.
 ```
+
+**Correction to an earlier commit message.** The commit message of `da8ee5769`
+reported the per-package subtotals as `layerfs-content 3572 -> 3949` and
+`layerfs-storage 4356 -> 5718`. Re-measuring that committed tree gives
+`3891` and `5776`. The core total (`8660 -> 10399`) and the combined total
+(`77136 -> 78875`) in that message are correct; only the two per-package subtotals
+were transcribed from a filtered working-tree listing. The audited values are the
+ones above, and they are what any comparison should use.
 
 ## 5. Continuation
 
