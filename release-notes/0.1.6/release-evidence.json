@@ -1,0 +1,209 @@
+{
+  "schema": "layerfs-v016-release-record-v1",
+  "status": "RELEASE_PREPARED_FROM_IN_TREE_CAMPAIGN",
+  "package_version": "0.1.6",
+  "measured_product": {
+    "source_commit": "823f556ca301e261b71d41b09ef619897b48e5f9",
+    "source_dirty": true,
+    "source_dirty_note": "foreign uncommitted docs/roadmap/0.1.7 study material, outside the source and product seals; recorded on every receipt, not hidden",
+    "LAYERFS_SOURCE_SEAL": "86f14b2d68ece2ae368f8aec29070520505a61c7aa69b445414b64561640e954",
+    "LAYERFS_PRODUCT_SEAL": "970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd",
+    "LAYERFS_COMPILATION_SEAL": "679b17f0e17636ae419144edb7377be03dd1709ac362d72ea0dff61d3b89306b",
+    "LAYERFS_DEPENDENCY_SEAL": "374f4dfa08f98ced734e540f62dd4a8b0edb5a88c090c051ae704fbf7f67faf1",
+    "host_binary_sha256": "fcaa14d8decf96a6247d95a037e83eea7322aeb66a51d418acbee2e21fdd6aa7",
+    "harness_identity": "8a6d76dd2f2e639fb356ac74551a4aae2634df1eaf2b3603ebd458cafd90dff5",
+    "image_tag": "layerfs-bench-infra:86f14b2d68ece2ae",
+    "image": "sha256:2bd697b90894749592cf62e6470a0d0a9cf54a0416cbf3cd903dbbcc3d9954df",
+    "build_identity_probe": {
+      "kind": "storage-format-probe",
+      "schema_version": 10,
+      "storage_policy": "ordinary",
+      "sqlite_version": "3.51.0",
+      "status": "PASS"
+    },
+    "host_load": {
+      "cpu_count": 14,
+      "load_1m_range": [
+        6.73,
+        8.83
+      ],
+      "note": "recorded per driver record; all samples in this set share the busy-host regime and none is pooled with a quiet-host sample"
+    }
+  },
+  "applicability": {
+    "decision": "the campaign is reused, not re-measured: the released product source is byte-identical to the measured product source",
+    "product_seal_recomputed_over_tagged_tree": "970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd (identical to every receipt)",
+    "crates_changed_since_measured_revision": "none; the layerfs-content and layerfs-layerstack-store crates are byte-identical to the v0.1.5 release, so ObjectId domains, chunking, content roots and Commit derivation are untouched",
+    "harness_identity_recomputed_from_tagged_tree": "8a6d76dd2f2e639fb356ac74551a4aae2634df1eaf2b3603ebd458cafd90dff5 (identical to the identity the receipts recorded)",
+    "source_seal_recomputed_over_tagged_tree": "fdbd6273ee1ab63ab996ab977a694c2d59b294b43a481a330ef2b6c31f0782bf",
+    "source_seal_reconstruction": "recomputed with the measured revision's Cargo.toml/Cargo.lock and the three harness route files at their 823f556ca content reproduces the recorded 86f14b2d68ece2ae... byte-for-byte",
+    "tag_tree_delta": [
+      "release documentation, the versioned manual, the changelog and release-notes/0.1.6/ (outside both seals)",
+      "the workspace version bump 0.1.5 -> 0.1.6 in the root Cargo.toml and the 12 project-owned packages in Cargo.lock (imported packages, versions, features and checksums unchanged)",
+      "collector-side harness declarations committed after the host binary was built: the owner-declared 30 s verification exception and its no-widening test (3e6f2dac5) and the verify-only wiring for the six historical_access cases"
+    ],
+    "outside_seals": "docs/** and release-notes/** are covered by neither the source nor the product seal, exactly as the v0.1.5 boundary recorded",
+    "record": "release-notes/0.1.6/verification.md"
+  },
+  "campaign_tallies": {
+    "rows": 36,
+    "regular_rows": 33,
+    "extended_rows": 3,
+    "performance_receipts": 28,
+    "performance_pass": 25,
+    "performance_exception": 3,
+    "verify_only_rows": 8,
+    "verifications": 36,
+    "verification_pass_gate": 33,
+    "verification_exception_gate": 3,
+    "fail_timeout_not_run": 0,
+    "cleanup_failures": 0,
+    "reused_proof_identities": 0,
+    "mode_level_results_over_family_target": 8,
+    "seed": 1,
+    "samples_per_case_per_mode": 1
+  },
+  "allowances": {
+    "family_target_seconds": 15,
+    "regular_performance_invocation_seconds": 60,
+    "regular_verification_seconds": 25,
+    "verification_exceptions": {
+      "v016-branch-mixed-500mb-30000-k100-v1": 30
+    },
+    "extended_watchdogs_seconds": {
+      "v016-workspace-four-100mb-5000-k100-v1": 60,
+      "v016-mixed-exhaustive-100mb-5000-k100-v1": 120,
+      "v016-mixed-exhaustive-500mb-30000-k100-v1": 300
+    },
+    "cleanup_reserve_seconds": 3,
+    "note": "every row is admitted only by the allowance its own receipt declared; the 60 s performance allowance is an execution allowance and the 15 s family target stays reported separately"
+  },
+  "results_over_family_target": [
+    {
+      "case": "v016-branch-mixed-500mb-30000-k100-v1",
+      "mode": "performance",
+      "measured_seconds": 16.492,
+      "gate": "EXCEPTION",
+      "declared_allowance_seconds": 60.0
+    },
+    {
+      "case": "v016-branch-mixed-500mb-30000-k100-v1",
+      "mode": "verification",
+      "measured_seconds": 23.1,
+      "gate": "EXCEPTION",
+      "declared_allowance_seconds": 30.0
+    },
+    {
+      "case": "v016-mixed-development-500mb-30000-k100-v1",
+      "mode": "performance",
+      "measured_seconds": 18.312,
+      "gate": "EXCEPTION",
+      "declared_allowance_seconds": 60.0
+    },
+    {
+      "case": "v016-mixed-development-500mb-30000-k100-v1",
+      "mode": "verification",
+      "measured_seconds": 22.121,
+      "gate": "EXCEPTION",
+      "declared_allowance_seconds": 25.0
+    },
+    {
+      "case": "v016-workspace-mixed-500mb-30000-k100-v1",
+      "mode": "performance",
+      "measured_seconds": 15.76,
+      "gate": "EXCEPTION",
+      "declared_allowance_seconds": 60.0
+    },
+    {
+      "case": "v016-workspace-mixed-500mb-30000-k100-v1",
+      "mode": "verification",
+      "measured_seconds": 20.36,
+      "gate": "EXCEPTION",
+      "declared_allowance_seconds": 25.0
+    },
+    {
+      "case": "v016-mixed-exhaustive-100mb-5000-k100-v1",
+      "mode": "verification",
+      "measured_seconds": 15.014,
+      "gate": "PASS",
+      "declared_allowance_seconds": 120.0
+    },
+    {
+      "case": "v016-mixed-exhaustive-500mb-30000-k100-v1",
+      "mode": "verification",
+      "measured_seconds": 59.326,
+      "gate": "PASS",
+      "declared_allowance_seconds": 300.0
+    }
+  ],
+  "issue152_campaign": {
+    "collected_cells": 196,
+    "pass": 189,
+    "fail_owner_accepted_single_worker": 6,
+    "fail_owner_waived_cold_init": 1,
+    "reused_from_owner_banked": 3,
+    "not_run_optional": 9,
+    "not_run_inherited_historical_access": "11 performance + 11 proofs (sealed v2 Store not recoverable)",
+    "repaired_after_campaign": "6 workspace_reliability fault-injection proofs, now 27/27 PASS on the frozen candidate",
+    "candidate_identities": 4,
+    "report": "docs/roadmap/0.1/0.1.6/evidence/issue152-final-report.md"
+  },
+  "owner_accepted_costs": [
+    {
+      "item": "one construction worker (the rule; init_namespace exempt)",
+      "measured": "six dedup/CDC construction regressions 1.50-1.65x v0.1.5; direct diagnostic 2290.09 ms one-worker vs 1458.89 ms with the variable unset, comparator 1426.04 ms",
+      "decision": "accepted as recorded, not repaired"
+    },
+    {
+      "item": "cold init_namespace/namespace-100000 <= 2.7 s",
+      "measured": "4.986 s on the measured candidate (v0.1.5 control 4.398 s, 1.13x)",
+      "decision": "owner-waived; retains TARGET_MISS"
+    },
+    {
+      "item": "sandbox process memory",
+      "measured": "not measurable on this harness; only container-scoped numbers exist and the B2 control's own sandbox residency is <= 2.6 MiB",
+      "decision": "declared measurement limit, no memory gate claimed"
+    },
+    {
+      "item": "kernel-dirty shared mmap is not captured by a Commit",
+      "measured": "specification-carried open obligation, isolated to exact byte level; no registered selection affected",
+      "decision": "retained limitation"
+    }
+  ],
+  "release_preparation_gates": {
+    "tools/preflight.sh": "PASS - preflight: all steps passed (exit 0)",
+    "cargo +1.96.0 fmt --all --check": "PASS",
+    "tools unit tests": "PASS - 7 tests, 0 failures",
+    "workspace fast suite (RUSTUP_TOOLCHAIN=1.85.1)": "PASS - 72 test binaries, 512 passed, 0 failed, 258 s, exit 0; 138 s above the 120 s warm-suite soft ceiling, warned by preflight and recorded here",
+    "cargo +1.96.0 clippy --workspace --locked -- -D warnings": "PASS",
+    "benchmark harness tests": "PASS - 97 tests, 0 failures, 7.0 s",
+    "release-notes/0.1.6/check_artifact_helper.py": "PASS - artifact helper fixture check: PASS",
+    "release-notes/0.1.6/derive_tables.py": "PASS - 36 rows, every receipt path present",
+    "seal reproduction": "PASS - product seal and harness identity reproduce exactly; the recorded source seal reconstructs byte-for-byte from the measured Cargo files plus the three pre-declaration harness files",
+    "note": "no benchmark, proof or benchmark workload was executed for this release; the audit commands read receipts, files and seal inputs only"
+  },
+  "derived_tables": {
+    "benchmark-performance.csv": "one row per selection: measured complete-command wall, family target, receipt-declared allowance, gate verdict, receipt path and identity",
+    "benchmark-verification.csv": "one row per selection's verification: proof status, wall, declared allowance, omissions, cleanup and receipt path",
+    "benchmark-closeout.md": "every measured selection, generated report-only",
+    "generators": "release-notes/0.1.6/derive_tables.py (CSVs from the two committed matrices) and release-notes/0.1.6/generate_closeout.py (closeout from the CSVs)"
+  },
+  "evidence_roots": {
+    "campaign_matrices": "docs/roadmap/0.1/0.1.6/evidence/issue154/final-complete-matrix.json, final-complete-extended-matrix.json",
+    "campaign_receipts": "benchmark-results/v016/final3-seed1/** and benchmark-results/v016/final3-ext/** (untracked local immutable evidence)",
+    "issue152_report": "docs/roadmap/0.1/0.1.6/evidence/issue152-final-report.md",
+    "rollout_ledger": "docs/roadmap/0.1/0.1.6/evidence/issue154-rollout-ledger.md"
+  },
+  "publication": {
+    "tag": "v0.1.6",
+    "tag_commit": "RECORDED_AFTER_TAG",
+    "github_release": "https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.6",
+    "assets": "layerfs-0.1.6.tar.gz, layerfs-0.1.6.zip, layerfs-0.1.6-benchmark-data.tar.gz, Cargo.lock, LICENSE, SHA256SUMS",
+    "checksums": "recorded in release-notes/0.1.6/artifacts.md after the assets are built from the tag",
+    "no_crates_io_package": true,
+    "no_prebuilt_executable": true,
+    "no_public_runtime_image": true
+  },
+  "publication_authorization": "Owner directed the v0.1.6 closure and release on 2026-09-16: close the v0.1.6 issue set honestly, prepare the release documents, bump the version, tag v0.1.6, publish the source-only GitHub release and push main, using the campaign measured in this tree.",
+  "closeout_report": "benchmark-closeout.md"
+}

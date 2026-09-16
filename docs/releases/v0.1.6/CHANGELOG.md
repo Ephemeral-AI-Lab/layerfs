@@ -1,9 +1,11 @@
 # LayerFS v0.1.6 changelog
 
-> **Status:** draft release changelog, 2026-09-16. The change list below is
-> evidence-backed; the compatibility-boundary wording and the owner
-> acceptance/waiver text are still to be stated in the release contract and
-> `acceptance.md`, and no tag exists yet.
+> **Status:** released changelog for LayerFS 0.1.6, 2026-09-16. Every entry is
+> evidence-backed. The compatibility boundary is stated in the
+> [release contract](../../../release-notes/0.1.6/release-contract.md), the owner
+> dispositions in [acceptance](../../../release-notes/0.1.6/acceptance.md) and
+> [waivers](../../../release-notes/0.1.6/waivers.md), and every measured result in
+> the [benchmark closeout](../../../release-notes/0.1.6/benchmark-closeout.md).
 
 1. **Sandbox-local snapshots replace host authority.** The sandbox owns the live
    mutable state and the host receives only Commit-time mutable-state transfer;
@@ -14,7 +16,7 @@
    `layerfs-workspace/src/remote_commit.rs` (730 lines) and `snapshot_input.rs`
    (395) carry the route; 78 commits and 28 files under `crates/` since `v0.1.5`
    (+4031/−3187). Product seal `276c5970…` (v0.1.5) → `970964e9…`. Evidence:
-   [#152 final report](../roadmap/0.1/0.1.6/evidence/issue152-final-report.md) §5.
+   [#152 final report](../../roadmap/0.1/0.1.6/evidence/issue152-final-report.md) §5.
 
 2. **One construction worker, by rule and by default.** `construction_worker_limit()`
    and the canonical construction it feeds are single-producer in the default
@@ -55,7 +57,7 @@
    invocation each, qualification evidence:
    [#154](https://github.com/Ephemeral-AI-Lab/layerfs/issues/154) /
    [#122](https://github.com/Ephemeral-AI-Lab/layerfs/issues/122) and
-   [the final matrices](../roadmap/0.1/0.1.6/evidence/issue154/README.md).
+   [the final matrices](../../roadmap/0.1/0.1.6/evidence/issue154/README.md).
    * **New families:** `file_size_transition` (7 cases: the 131 071/131 072/131 073
      threshold transitions, the roundtrip, and the alias/inode-replacement
      sequence), `multi_workspace_development` (4 cases: 2 simultaneous workspaces,
@@ -88,7 +90,7 @@
 6. **Store format boundary: no migration in this release.** `SCHEMA_VERSION` is 10
    on both sides and no schema or SQL change landed since `v0.1.5`; the benchmark
    receipts of every family observed schema 10. The canonical-identity promise
-   itself is stated in [the release contract](../../release-notes/0.1.6/release-contract.md),
+   itself is stated in [the release contract](../../../release-notes/0.1.6/release-contract.md),
    not here.
 
 7. **Repository process.** GitHub Actions stays disabled by owner decision; the

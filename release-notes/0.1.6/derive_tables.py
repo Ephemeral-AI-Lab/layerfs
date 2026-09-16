@@ -23,6 +23,62 @@ EXCEPTION_SECONDS = 25.0
 VERIFICATION_EXCEPTIONS = {"v016-branch-mixed-500mb-30000-k100-v1": 30.0}
 
 
+def receipt_field(driver, name):
+    """Read one field from the receipt the driver names.
+
+    A row's allowance is the allowance its own receipt declared and enforced — the
+    three extended cases carry their own frozen watchdog and the regular cases the
+    25-second ceiling — so it is read from the receipt rather than reproduced from
+    a second table that could drift from the one the runner enforced.
+    """
+    path = driver.get("receipt")
+    if not path:
+        return None
+    root = ROOT / path
+    for candidate in ("verification.json", "performance.json"):
+        if (root / candidate).is_file():
+            document = json.loads((root / candidate).read_text())
+            value = document.get("declared_complete_deadline_seconds")
+            if value is None:
+                value = (document.get("verification_policy") or {}).get(
+                    "declared_complete_deadline_seconds"
+                )
+            if value is not None:
+                return value
+    header = root / "perf.jsonl"
+    if header.is_file():
+        for line in header.read_text().splitlines():
+            if not line.strip().startswith("{"):
+                continue
+            record = json.loads(line)
+            if record.get("declared_complete_deadline_seconds") is not None:
+                return record["declared_complete_deadline_seconds"]
+    return None
+
+
+def sample_field(driver, name):
+    path = driver.get("receipt")
+    if not path:
+        return ""
+    header = ROOT / path / "perf.jsonl"
+    if not header.is_file():
+        return ""
+    for line in header.read_text().splitlines():
+        if not line.strip().startswith("{"):
+            continue
+        record = json.loads(line)
+        if record.get("kind") == "sample":
+            return record.get(name) or ""
+    return ""
+
+
+def verification_allowance(row, driver):
+    """The declared complete-command allowance of one verification row."""
+    return receipt_field(driver, "declared_complete_deadline_seconds") or VERIFICATION_EXCEPTIONS.get(
+        row["case"], EXCEPTION_SECONDS
+    )
+
+
 def load(name):
     return json.loads((EVIDENCE / name).read_text())
 
@@ -75,11 +131,13 @@ def identities(row):
 def performance_row(row, tag):
     driver = row["performance"].get("driver", row["performance"])
     source, product = identities(row)
-    declared = (
-        VERIFICATION_EXCEPTIONS.get(row["case"], EXCEPTION_SECONDS)
-        if row["family"] == "historical_access"
-        else EXCEPTION_SECONDS
-    )
+    declared = receipt_field(driver, "declared_complete_deadline_seconds")
+    if declared is None:
+        declared = (
+            VERIFICATION_EXCEPTIONS.get(row["case"], EXCEPTION_SECONDS)
+            if row["family"] == "historical_access"
+            else EXCEPTION_SECONDS
+        )
     if driver.get("status") == "N/A":
         declared = ""
     return {
@@ -90,7 +148,8 @@ def performance_row(row, tag):
         "gate": driver.get("gate") or "",
         "complete_wall_seconds": driver.get("complete_wall_seconds") or "",
         "declared_target_seconds": TARGET_SECONDS,
-        "declared_exception_seconds": declared,
+        "declared_allowance_seconds": declared,
+        "family_target_status": sample_field(driver, "family_target_status"),
         "created_commits": (row["performance"].get("receipt") or {}).get("created_commit_count") or "",
         "phase": (row["performance"].get("receipt") or {}).get("phase") or "",
         "cleanup": ((driver.get("cleanup") or {}).get("status")) or "",
@@ -114,7 +173,8 @@ def verification_row(row, tag):
         "gate": driver.get("gate") or "",
         "proof_wall_seconds": driver.get("complete_wall_seconds") or "",
         "declared_target_seconds": TARGET_SECONDS,
-        "declared_exception_seconds": VERIFICATION_EXCEPTIONS.get(row["case"], EXCEPTION_SECONDS),
+        "declared_allowance_seconds": verification_allowance(row, driver),
+        "family_target_status": sample_field(driver, "family_target_status"),
         "omissions": "; ".join(driver.get("omissions") or []),
         "cleanup": ((driver.get("cleanup") or {}).get("status")) or "",
         "source_seal": source,
