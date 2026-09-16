@@ -1,0 +1,39 @@
+--- encoder (reference) ---
+encode value_len=0                           ok:13
+encode value_len=1                           ok:14
+encode value_len=4096                        ok:4109
+encode value_len=8388608                     ok:8388621
+encode value_len=8388609                     ObjectLimitExceeded
+encode value_len=12582912                    ObjectLimitExceeded
+--- decoder corpus ---
+valid value_len=0                            ok:0
+valid value_len=0, truncated 1               eof
+valid value_len=0, trailing 1                trailing
+value_len=0, wrong magic                     framing
+value_len=0, kind=9                          other:InvalidObjectKind { tag: 9 }
+valid value_len=1                            ok:1
+valid value_len=1, truncated 1               eof
+valid value_len=1, trailing 1                trailing
+value_len=1, wrong magic                     framing
+value_len=1, kind=9                          other:InvalidObjectKind { tag: 9 }
+valid value_len=4096                         ok:4096
+valid value_len=4096, truncated 1            eof
+valid value_len=4096, trailing 1             trailing
+value_len=4096, wrong magic                  framing
+value_len=4096, kind=9                       other:InvalidObjectKind { tag: 9 }
+valid value_len=8388608                      ok:8388608
+valid value_len=8388608, truncated 1         eof
+valid value_len=8388608, trailing 1          trailing
+value_len=8388608, wrong magic               framing
+value_len=8388608, kind=9                    other:InvalidObjectKind { tag: 9 }
+hand: payload=0 value=0 body=0               eof
+hand: payload=3 value=0 body=0               eof
+hand: payload=4 value=0 body=0               ok:0
+hand: payload=4 value=1 body=1               eof
+hand: payload=5 value=1 body=1               ok:1
+hand: value_len=8MiB+1, payload legal        limit
+hand: value_len=envelope max 16777203        limit
+hand: value_len=16777204 (envelope illegal)  limit
+hand: payload=u32::MAX                       limit
+hand: value_len=u32::MAX                     limit
+hand: payload=8 value_len=8 (mismatch)       eof
