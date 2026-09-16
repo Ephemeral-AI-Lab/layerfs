@@ -11,17 +11,20 @@ Specification: [`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](../.
 Implementation: [#161](https://github.com/Ephemeral-AI-Lab/layerfs/issues/161).
 Design workstream: [#160](https://github.com/Ephemeral-AI-Lab/layerfs/issues/160).
 
+**Instrumenting a module?** Start with [How to use the timer](USAGE.md); this
+README is the API reference it links back to.
+
 ## Model
 
 One operation owns one bounded timing tree:
 
-- [`Timing::record`] starts a root before the operation closure runs, injects a
+- `Timing::record` starts a root before the operation closure runs, injects a
   running scope into it and returns the operation's original `Result` together
-  with a completed [`TimingReport`].
-- A component receives a pending [`TimingScope`] and calls
-  [`run`](TimingScope::run) around its real body. `run` starts that scope's timer,
-  passes a running handle to the closure and finalizes duration and outcome
-  before returning.
+  with a completed `TimingReport`.
+- A component receives a pending `TimingScope` and calls `run` (see
+  [How to use the timer](USAGE.md)) around its real body. `run` starts that
+  scope's timer, passes a running handle to the closure and finalizes duration
+  and outcome before returning.
 - Child scopes come only from the running handle, so a child borrows the handle
   it was created from and cannot outlive its parent's measured region. A pending
   scope is consumed by `run`; the running handle has no `run` method.
