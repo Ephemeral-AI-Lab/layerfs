@@ -1,21 +1,24 @@
 # layerfs-content (C1)
 
-> **Status:** Implemented slice; the accepted profile is one explicit frozen set.
+> **Status:** Implemented slice; the accepted profile is a checked supported range.
 
-Canonical objects and complete-file construction. C1 owns canonical identity,
-envelope framing, the frozen GEAR content-defined chunker, the extent-tree
-mapping, and bounded logical reads. It opens no database, pack or file:
-construction hands finalized canonical objects to a caller-supplied bounded
-consumer, and reads ask a caller-supplied authenticated provider for canonical
-bytes.
+Canonical objects, complete-file construction and known-edit construction. C1 owns
+canonical identity, envelope framing, the frozen GEAR content-defined chunker, the
+extent-tree mapping, bounded logical reads and localized edits. It opens no
+database, pack or file: construction emits finalized canonical objects to a
+caller-supplied bounded consumer, an edit consumes an immutable base through a
+caller-supplied authenticated provider, and reads ask the same provider for
+canonical bytes. C1 never calls a delta codec and never imports SQLite.
 
 ## Accepted profile (this slice)
 
 | Item | Accepted value | Notes |
 | --- | --- | --- |
-| Construction cutoff `T` | `131072` bytes, exclusive | Only this value is accepted; a larger cutoff needs a capacity-aware pack/record contract this slice does not ship |
-| Whole-file delta depth | `8` (recorded) | DELTA selection is not implemented; the value is persisted and validated |
-| Chunk delta depth | `4` (recorded) | Same as above |
+| Construction cutoff `T` | a power of two in `131072..=1048576`, exclusive | Default `131072`; 256 KiB and 1 MiB are supported and exercised end to end |
+| Whole-file delta depth | `0..=50`, default `8` | `0` disables whole-file delta selection; a depth never widens a chain or memory budget |
+| Chunk delta depth | `0..=50`, default `4` | Same rule for chunk payloads |
+| Largest whole-file frame | `max(135168, raw + raw/128 + 1024)` | Derived from the accepted cutoff; the default cutoff keeps its frozen value |
+| Advisory predecessors | at most `4` per object | Bounded hints for physical selection; never a logical dependency |
 | Empty file | file state over a defined empty mapping page | No whole-file object is produced |
 | `0 < length < T` | one `WHOLE_FILE` canonical object | Value layout `LFS5SML\0`, version `1`, raw payload |
 | `length >= T` | `FILE_STATE` → extent tree → `CHUNK` objects | Frozen v3 mapping grammar |
@@ -42,6 +45,9 @@ file::construct_bytes     known-length complete-file construction
 file::construct_stream    unknown-length construction with a bounded cutoff probe
 file::read_all(_bounded)  logical read of a whole file
 file::read_range          logical ranged read across extents and pages
+file::FileView            one authenticated base, opened once per operation
+file::EditStream/Edit/EditSource   validated ordered edits and replacement bytes
+file::apply_edits         known-edit construction over an immutable base
 policy::ConstructionPolicy / ConstructionCapacities
 ```
 
@@ -50,8 +56,14 @@ enabled or disabled changes no product work and no result.
 
 ## Scope limits
 
-- Known-edit construction, multi-edit finality, filesystem trees, attributes and
-  metadata ropes are not implemented here.
+- Filesystem trees, attributes and metadata ropes are not implemented here.
+- Known-edit construction is implemented for ordered edit streams. It re-derives
+  the mapping from the retained extent sequence: unchanged chunk payloads are
+  retained and referenced, but unchanged mapping *pages* are re-encoded rather
+  than reused from the stored tree, so a large-to-large edit does not reproduce a
+  reference (v0.1.6) root in general.
+- An edit may not reach back into bytes an earlier edit in the same stream
+  introduced; that range is rejected with `InvalidEdit` rather than reordered.
 - Unsupported older physical representations are explicit scope limits, not
   silently handled fallbacks.
 - The `AuthenticatedObjects` contract requires the provider to authenticate the

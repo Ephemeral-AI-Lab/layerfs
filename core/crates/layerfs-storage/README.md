@@ -1,6 +1,7 @@
 # layerfs-storage (C2)
 
-> **Status:** Implemented slice; one explicit FULL-only physical profile.
+> **Status:** Implemented slice; FULL and PREFIX payload records plus an explicit
+> multi-lane format matrix. Metadata value pooling is not implemented.
 
 Content-addressed physical storage. C2 accepts already-finalized canonical
 objects, performs exact CAS reuse, writes supported FULL records into framed
@@ -13,22 +14,29 @@ needs no Workspace, branch, commit, mount or daemon.
 | Item | Accepted value |
 | --- | --- |
 | Format profile | `1` |
-| Schema identity | `application_id = 1279677261`, `user_version = 2` (v1 is rejected, not migrated) |
-| Persisted policy | one row, `id = 1`, the frozen 128 KiB / 8 / 4 values plus the publication watermark |
-| Encoding | **FULL only**. DELTA, value pooling and pooled metadata are not implemented |
-| Pack framings | v1 ordinary groups, v2 native chunk records, v4 compact whole-file records |
-| Pack size | `<= 256 KiB` for every framing |
-| Group body | `<= 64 KiB`; the compact lane holds one record per group |
-| Records per group | `<= 8191` (`1` in the compact lane) |
-| Groups per pack | `<= 256` |
+| Schema identity | `application_id = 1279677261`, `user_version = 3` (v1/v2 are rejected, not migrated) |
+| Persisted policy | one row, `id = 1`: cutoff, both depths, the publication watermark |
+| Accepted policy | cutoff a power of two in `131072..=1048576`; each depth `0..=50`; default 128 KiB / 8 / 4 |
+| Encoding | **FULL and PREFIX** payload records. One PREFIX trial per object against at most one eligible candidate; the complete framed record cost decides |
+| Pack framings | v1 ordinary groups, v2 native chunk records, v4 compact whole-file records, v6 pooled metadata groups, v7 singleton packs |
+| Rejected framings | v3, v5 and unknown versions fail explicitly; no trial decoding |
+| Pack size | `<= 256 KiB` for v1/v2/v4/v6, `<= 16 MiB + 4096` for the single-group v7 lane |
+| Group body | `<= 64 KiB` (v1/v2/v4), `<= 16 KiB` (v6) |
+| Records per group | `<= 8191`; `1` in the compact, pooled and singleton lanes |
+| Groups per pack | `<= 256`; `1` in the singleton lane |
+| Chain budgets | `512 KiB` canonical and `256 KiB` encoded per chain, independent of the accepted depths |
+| Metadata pooling | **not implemented**: `metadata_value_groups` is shipped and empty |
 | Lookup page | `128` identifiers |
 | Pending batch | `512` objects and `512 KiB` canonical bytes |
 | Write transaction | `8191` rows and `4 MiB - 1` canonical bytes, shared across batches |
 | Stored canonical object | `<= 16 MiB` envelope ceiling, `<= 8 MiB` per field; the binding limits are the lane caps below (`65,527` B ordinary, `135,169` B whole-file) |
 
-Object roles are persisted as `1..=5` (`WHOLE_FILE`, `CHUNK`, `EXTENT_LEAF`,
-`EXTENT_BRANCH`, `FILE_STATE`). `base_object_id` exists, is constrained by a
-direct self-FK and is always `NULL` in this slice because no DELTA is produced.
+Object roles are persisted as `1..=6` (`WHOLE_FILE`, `CHUNK`, `EXTENT_LEAF`,
+`EXTENT_BRANCH`, `FILE_STATE`, `INODE_LEAF`). `INODE_LEAF` is the declared
+physical-pooling input role; nothing produces such an object yet, because the
+pooling lane is not implemented. `base_object_id` records the direct physical base
+of a PREFIX record and is `NULL` for a FULL record; it is constrained by a direct
+self-FK and by the `objects_bases` index.
 
 ## Persistence profile
 
@@ -97,10 +105,16 @@ destructor.
 
 ## Scope limits
 
-- DELTA chains, arbitrary edits, metadata pooling, filesystem trees, runtime
-  adapters and cloud placement are later scope.
+- Metadata value pooling, filesystem trees, runtime adapters and cloud placement
+  are later scope. Payload DELTA chains up to the accepted depth are implemented.
 - Only the four tables above exist; `metadata_value_groups` is shipped and empty,
   which is not a claim that value pooling is implemented.
+- A base that this same save accepted but has not stored yet is not read for a
+  delta trial: the object is stored FULL by policy rather than sealing a group for
+  an optional optimisation.
+- The admitted-FULL winner cache is a bounded min-hash sketch. It can miss a
+  genuinely similar candidate; that is a bounded candidate loss, never a
+  correctness risk, and the selected bytes always decide the outcome.
 - A read captures `retained_pack_ceiling` once; an object stored beyond it fails
   the read rather than being silently visible. This bounds visibility, not
   durability: the persistence profile above still provides none.
@@ -116,5 +130,9 @@ The aggregate `tools/preflight.sh` gate is permanently retired (ledger L32) and 
 no checks; verify this workspace with the core manifest.
 
 External targets: `cas_roundtrip`, `cas_reuse`, `pack_locator`,
-`persistence_failure`, `memory_bounds`, `visibility`, `timing`, `core_pipeline`;
-runnable example: `examples/measure_components.rs`.
+`persistence_failure`, `memory_bounds`, `visibility`, `timing`, `core_pipeline`,
+`delta_payload`, `delta_chains`, `policy_capacity`, `physical_formats`,
+`edit_pipeline`; runnable examples: `examples/measure_components.rs` and
+`examples/measure_edits.rs` (`--mode c1|c2|pipeline --case
+small|chunked|small-to-large|large-to-small|batch --threshold-bytes N --output
+FRESH_DIR`).
