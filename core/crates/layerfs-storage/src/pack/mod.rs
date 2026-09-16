@@ -6,7 +6,9 @@ pub mod assemble;
 pub mod layout;
 pub mod placement;
 
-pub use assemble::{assemble, build_group, frame_group, framed_length, FULL_TAG};
+pub use assemble::{
+    assemble, build_group, frame_group, frame_group_bounded, framed_length, FULL_TAG,
+};
 pub use layout::{
     assembled_length, fits, group_view, parse_header, EncodedGroup, GroupCodec, GroupView,
     PackHeader, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, PACK_MAGIC, VERSION_NATIVE,

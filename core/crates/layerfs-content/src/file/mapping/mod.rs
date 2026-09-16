@@ -7,7 +7,7 @@ mod codec;
 mod read;
 mod types;
 
-pub use build::{build_streaming, emit_empty_leaf, emit_file_state, MappingBuild};
+pub use build::{build_streaming, emit_empty_leaf, emit_file_state, ExtentBuilder, MappingBuild};
 pub use codec::{
     chunk_canonical_len, decode_chunk_payload, decode_file_state, decode_node,
     decode_node_with_context, encode_chunk_object, encode_file_state, encode_node, profile_id,

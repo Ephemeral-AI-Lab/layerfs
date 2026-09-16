@@ -1,14 +1,19 @@
 //! Pack grammars, framing lanes and exact fit arithmetic.
 //!
-//! A pack is a header, a directory and group bodies. Three framings are
-//! implemented: v1 ordinary groups, v2 native chunk records and v4 compact
-//! whole-file records. A lane is a framing, not a worker or a second store, and
-//! existing locators stay stable when a pack's directory grows.
+//! A pack is a header, a directory and group bodies. Five framings are
+//! implemented: v1 ordinary groups, v2 native chunk records, v4 compact
+//! whole-file records, v6 pooled metadata groups and v7 singleton packs. A lane
+//! is a framing, not a worker or a second store, and existing locators stay
+//! stable when a pack's directory grows. Versions 3 and 5 belong to other
+//! profiles and are rejected explicitly; no reader trial-decodes them.
 
 use layerfs_content::ObjectRole;
 
 use crate::error::{StorageError, StorageResult};
-use crate::policy::{GROUP_COUNT_LIMIT, GROUP_LIMIT, PACK_LIMIT, RECORD_COUNT_LIMIT};
+use crate::policy::{
+    GROUP_COUNT_LIMIT, GROUP_LIMIT, METADATA_GROUP_LIMIT, PACK_LIMIT, RECORD_COUNT_LIMIT,
+    SINGLETON_PACK_LIMIT,
+};
 
 /// Pack magic shared by every implemented framing.
 pub const PACK_MAGIC: [u8; 8] = *b"LFPACK\0\0";
@@ -27,6 +32,10 @@ pub const VERSION_ORDINARY: u32 = 1;
 pub const VERSION_NATIVE: u32 = 2;
 /// Compact whole-file framing version.
 pub const VERSION_WHOLE_FILE: u32 = 4;
+/// Pooled physical-metadata framing version.
+pub const VERSION_POOLED_METADATA: u32 = 6;
+/// Singleton framing version: one oversized record in one pack.
+pub const VERSION_SINGLETON: u32 = 7;
 
 /// One physical framing lane.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -37,11 +46,21 @@ pub enum PackLane {
     Native,
     /// Whole-file payload records.
     WholeFile,
+    /// Pooled physical metadata value-group records.
+    PooledMetadata,
+    /// One oversized record alone in its pack.
+    Singleton,
 }
 
 impl PackLane {
     /// Every lane, in deterministic order.
-    pub const ALL: [Self; 3] = [Self::Ordinary, Self::Native, Self::WholeFile];
+    pub const ALL: [Self; 5] = [
+        Self::Ordinary,
+        Self::Native,
+        Self::WholeFile,
+        Self::PooledMetadata,
+        Self::Singleton,
+    ];
 
     /// Framing version written into the pack header.
     pub const fn version(self) -> u32 {
@@ -49,6 +68,8 @@ impl PackLane {
             Self::Ordinary => VERSION_ORDINARY,
             Self::Native => VERSION_NATIVE,
             Self::WholeFile => VERSION_WHOLE_FILE,
+            Self::PooledMetadata => VERSION_POOLED_METADATA,
+            Self::Singleton => VERSION_SINGLETON,
         }
     }
 
@@ -58,6 +79,8 @@ impl PackLane {
             Self::Ordinary => 0,
             Self::Native => 1,
             Self::WholeFile => 2,
+            Self::PooledMetadata => 3,
+            Self::Singleton => 4,
         }
     }
 
@@ -66,17 +89,50 @@ impl PackLane {
         match role {
             ObjectRole::WholeFile => Self::WholeFile,
             ObjectRole::Chunk => Self::Native,
+            ObjectRole::InodeLeaf => Self::PooledMetadata,
             ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch | ObjectRole::FileState => {
                 Self::Ordinary
             }
         }
     }
 
-    /// Records one whole-file group may hold.
+    /// Records one group of this lane may hold.
     pub const fn records_per_group(self) -> usize {
         match self {
-            Self::WholeFile => 1,
+            Self::WholeFile | Self::PooledMetadata | Self::Singleton => 1,
             Self::Ordinary | Self::Native => RECORD_COUNT_LIMIT,
+        }
+    }
+
+    /// Largest assembled pack of this lane.
+    pub const fn pack_limit(self) -> usize {
+        match self {
+            Self::Singleton => SINGLETON_PACK_LIMIT,
+            Self::Ordinary | Self::Native | Self::WholeFile | Self::PooledMetadata => PACK_LIMIT,
+        }
+    }
+
+    /// True when the lane's directory stores only group starts.
+    pub const fn directory_is_starts_only(self) -> bool {
+        matches!(self, Self::WholeFile)
+    }
+
+    /// Largest decoded group body of this lane.
+    pub const fn body_limit(self) -> usize {
+        match self {
+            Self::PooledMetadata => METADATA_GROUP_LIMIT,
+            Self::Singleton => SINGLETON_PACK_LIMIT,
+            Self::Ordinary | Self::Native | Self::WholeFile => GROUP_LIMIT,
+        }
+    }
+
+    /// Largest group count of this lane.
+    pub const fn group_count_limit(self) -> usize {
+        match self {
+            Self::Singleton => 1,
+            Self::Ordinary | Self::Native | Self::WholeFile | Self::PooledMetadata => {
+                GROUP_COUNT_LIMIT
+            }
         }
     }
 }
@@ -116,19 +172,24 @@ impl EncodedGroup {
                 .len()
                 .checked_sub(WHOLE_FILE_COMPACT_DROP)
                 .ok_or(StorageError::Integrity("compact record width")),
-            PackLane::Ordinary | PackLane::Native => Ok(self.bytes.len()),
+            PackLane::Ordinary
+            | PackLane::Native
+            | PackLane::PooledMetadata
+            | PackLane::Singleton => Ok(self.bytes.len()),
         }
     }
 }
 
 /// Exact assembled length of `groups` under `lane`, without allocating the pack.
 pub fn assembled_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<usize> {
-    if groups.is_empty() || groups.len() > GROUP_COUNT_LIMIT {
+    if groups.is_empty() || groups.len() > lane.group_count_limit() {
         return Err(StorageError::Integrity("pack group count"));
     }
     let directory = match lane {
         PackLane::WholeFile => WHOLE_FILE_ENTRY_LEN,
-        PackLane::Ordinary | PackLane::Native => DIRECTORY_ENTRY_LEN,
+        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
+            DIRECTORY_ENTRY_LEN
+        }
     };
     let mut total = HEADER_LEN
         .checked_add(
@@ -147,7 +208,7 @@ pub fn assembled_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResul
 
 /// True when `groups` fit one pack of `lane` exactly.
 pub fn fits(lane: PackLane, groups: &[EncodedGroup]) -> bool {
-    assembled_length(lane, groups).is_ok_and(|length| length <= PACK_LIMIT)
+    assembled_length(lane, groups).is_ok_and(|length| length <= lane.pack_limit())
 }
 
 /// Parsed pack control area.
@@ -176,6 +237,8 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
         VERSION_ORDINARY => PackLane::Ordinary,
         VERSION_NATIVE => PackLane::Native,
         VERSION_WHOLE_FILE => PackLane::WholeFile,
+        VERSION_POOLED_METADATA => PackLane::PooledMetadata,
+        VERSION_SINGLETON => PackLane::Singleton,
         _ => {
             return Err(StorageError::UnsupportedPolicy {
                 field: "pack framing version",
@@ -192,13 +255,18 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     }
     let directory = match lane {
         PackLane::WholeFile => WHOLE_FILE_ENTRY_LEN,
-        PackLane::Ordinary | PackLane::Native => DIRECTORY_ENTRY_LEN,
+        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
+            DIRECTORY_ENTRY_LEN
+        }
     };
     if bytes.len() < HEADER_LEN + directory * group_count {
         return Err(StorageError::Integrity("pack directory width"));
     }
-    if matches!(lane, PackLane::Ordinary | PackLane::Native) && bytes.len() > PACK_LIMIT {
+    if bytes.len() > lane.pack_limit() {
         return Err(StorageError::Integrity("pack length"));
+    }
+    if lane == PackLane::Singleton && group_count != 1 {
+        return Err(StorageError::Integrity("singleton pack group count"));
     }
     if lane == PackLane::Native && version != VERSION_NATIVE {
         return Err(StorageError::Integrity("native framing version"));
@@ -226,7 +294,9 @@ pub fn group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResu
     }
     match header.lane {
         PackLane::WholeFile => whole_file_group_view(bytes, header, group),
-        PackLane::Ordinary | PackLane::Native => ordinary_group_view(bytes, header, group),
+        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
+            ordinary_group_view(bytes, header, group)
+        }
     }
 }
 
@@ -267,14 +337,21 @@ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> Storag
         }
         let codec = match entry[12] {
             0 if encoded == decoded => GroupCodec::Raw,
-            1 if encoded <= decoded && decoded <= GROUP_LIMIT => GroupCodec::Zstandard,
+            1 if encoded <= decoded && decoded <= header.lane.body_limit() => GroupCodec::Zstandard,
             _ => return Err(StorageError::Integrity("group codec")),
         };
-        if header.lane == PackLane::Native && codec != GroupCodec::Raw {
-            return Err(StorageError::Integrity("native group codec"));
+        if matches!(
+            header.lane,
+            PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton
+        ) && codec != GroupCodec::Raw
+        {
+            return Err(StorageError::Integrity("lane group codec"));
         }
-        if decoded > GROUP_LIMIT {
+        if decoded > header.lane.body_limit() {
             return Err(StorageError::Integrity("group decoded length"));
+        }
+        if header.lane == PackLane::Singleton && header.group_count != 1 {
+            return Err(StorageError::Integrity("singleton pack group count"));
         }
         if index == group {
             selected = Some(GroupView {
@@ -298,7 +375,7 @@ fn whole_file_group_view(
     group: usize,
 ) -> StorageResult<GroupView> {
     let directory_end = HEADER_LEN + WHOLE_FILE_ENTRY_LEN * header.group_count;
-    if bytes.len() > PACK_LIMIT {
+    if bytes.len() > header.lane.pack_limit() {
         return Err(StorageError::Integrity("compact pack length"));
     }
     let mut start = directory_end;
@@ -360,7 +437,7 @@ pub fn record_range(
 ) -> StorageResult<(usize, usize)> {
     if !(1..=RECORD_COUNT_LIMIT).contains(&count)
         || ordinal >= count
-        || group_length > GROUP_LIMIT
+        || group_length > SINGLETON_PACK_LIMIT
         || ends.len() != 4 * count
     {
         return Err(StorageError::Integrity("group record directory"));

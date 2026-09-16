@@ -3,19 +3,23 @@
 -- This identifier is deliberately not the reference schema 10 application id and
 -- user_version: the candidate stores a role column, a nullable direct base and a
 -- persisted storage policy, so a file that carries this header must not be
--- mistaken for a schema-10 Store.
+-- mistaken for a schema-10 Store. Version 3 widens the persisted policy CHECK
+-- ranges to the supported configurable profile; a version-2 Store is rejected
+-- rather than migrated.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     format_profile INTEGER NOT NULL CHECK (format_profile = 1),
+    -- Supported cutoffs are powers of two from 128 KiB to 1 MiB; the range is a
+    -- necessary condition and the exact power-of-two check runs in the policy.
     small_file_threshold_bytes INTEGER NOT NULL
-        CHECK (small_file_threshold_bytes BETWEEN 1024 AND 131072),
+        CHECK (small_file_threshold_bytes BETWEEN 131072 AND 1048576),
     whole_file_delta_max_depth INTEGER NOT NULL
-        CHECK (whole_file_delta_max_depth BETWEEN 0 AND 8),
+        CHECK (whole_file_delta_max_depth BETWEEN 0 AND 50),
     chunk_delta_max_depth INTEGER NOT NULL
-        CHECK (chunk_delta_max_depth BETWEEN 0 AND 4),
+        CHECK (chunk_delta_max_depth BETWEEN 0 AND 50),
     -- Publication watermark: the highest pack id belonging to a COMPLETED save.
     -- It advances only inside a save's final transaction, so a pack is visible to
     -- an ordinary reader exactly when the save that created it was acknowledged.
@@ -40,7 +44,7 @@ CREATE TABLE metadata_value_groups (
 
 CREATE TABLE objects (
     object_id BLOB NOT NULL PRIMARY KEY CHECK (length(object_id) = 32),
-    object_role INTEGER NOT NULL CHECK (object_role BETWEEN 1 AND 5),
+    object_role INTEGER NOT NULL CHECK (object_role BETWEEN 1 AND 6),
     canonical_length INTEGER NOT NULL
         CHECK (canonical_length > 0 AND canonical_length <= 16777216),
     base_object_id BLOB

@@ -91,6 +91,11 @@ pub enum ContentError {
         /// The requested or observed size.
         actual: u64,
     },
+    /// A declared edit is not applicable to the base it addresses.
+    InvalidEdit {
+        /// The label names the failed check.
+        what: &'static str,
+    },
     /// The provider returned a batch of the wrong cardinality.
     BatchCardinality {
         /// Number of identifiers requested.
@@ -149,6 +154,7 @@ impl fmt::Display for ContentError {
                     "bounded capacity {what} limit {limit} exceeded by {actual}"
                 )
             }
+            Self::InvalidEdit { what } => write!(formatter, "invalid edit: {what}"),
             Self::BatchCardinality {
                 requested,
                 returned,

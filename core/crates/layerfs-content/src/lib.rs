@@ -23,11 +23,18 @@ pub mod policy;
 
 pub use error::{ContentError, ContentResult};
 pub use file::{
-    construct_bytes, construct_stream, encode_whole_file_payload, read_all, read_all_bounded,
-    read_range, whole_file_payload, ConstructedFile, FileContent,
+    apply_edits, construct_bytes, construct_stream, encode_whole_file_payload, read_all,
+    read_all_bounded, read_range, whole_file_payload, ConstructedFile, Edit, EditRequest,
+    EditSource, EditStream, FileContent, FileView, Replacements, MAXIMUM_EDITS_PER_OPERATION,
 };
 pub use object::{
-    AuthenticatedObjects, DiscardingConsumer, FinalizedConsumer, FinalizedObject, ObjectId,
-    ObjectRole, DIGEST_BYTES, OBJECT_DOMAIN,
+    AdvisoryPredecessor, AdvisoryPredecessors, AuthenticatedObjects, DiscardingConsumer,
+    FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance, DIGEST_BYTES,
+    MAXIMUM_ADVISORY_PREDECESSORS, OBJECT_DOMAIN,
 };
-pub use policy::{ConstructionCapacities, ConstructionPolicy, Representation};
+pub use policy::{
+    ConstructionCapacities, ConstructionPolicy, Representation, DEFAULT_CHUNK_DELTA_MAX_DEPTH,
+    DEFAULT_SMALL_FILE_THRESHOLD_BYTES, DEFAULT_WHOLE_FILE_DELTA_MAX_DEPTH,
+    MAXIMUM_DELTA_MAX_DEPTH, MAXIMUM_SMALL_FILE_THRESHOLD_BYTES,
+    MINIMUM_SMALL_FILE_THRESHOLD_BYTES,
+};

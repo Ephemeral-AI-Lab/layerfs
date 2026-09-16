@@ -7,19 +7,24 @@
 //! caller-owned aligned region, so a codec call cannot grow an allocator-backed
 //! context and every allocation is charged before the call.
 //!
-//! Only FULL (unprefixed) frames are produced and accepted here; prefix/DELTA
-//! encoding is later scope, and a failed call never selects another codec.
+//! Both FULL (unprefixed) and PREFIX frames are produced here. A prefix frame
+//! borrows caller-supplied base bytes as a raw Zstandard prefix for exactly one
+//! call; the reference is cleared on success and on failure, so no prefix
+//! outlives the call that supplied it. A failed call never selects another codec.
+
+use crate::policy::StorageCapacities;
 
 use std::ffi::c_void;
 use std::ptr;
 
 use zstd_sys::{
-    ZSTD_CCtx, ZSTD_CCtx_reset, ZSTD_CCtx_setCParams, ZSTD_CCtx_setFParams, ZSTD_CCtx_setParameter,
-    ZSTD_DCtx, ZSTD_DCtx_reset, ZSTD_DCtx_setParameter, ZSTD_ErrorCode, ZSTD_FrameType_e,
-    ZSTD_ResetDirective, ZSTD_cParameter, ZSTD_compress2, ZSTD_compressBound, ZSTD_dParameter,
-    ZSTD_decompressDCtx, ZSTD_estimateCCtxSize_usingCParams, ZSTD_findFrameCompressedSize,
-    ZSTD_frameParameters, ZSTD_getCParams, ZSTD_getErrorCode, ZSTD_getFrameHeader,
-    ZSTD_initStaticCCtx, ZSTD_initStaticDCtx, ZSTD_isError,
+    ZSTD_CCtx, ZSTD_CCtx_refPrefix, ZSTD_CCtx_reset, ZSTD_CCtx_setCParams, ZSTD_CCtx_setFParams,
+    ZSTD_CCtx_setParameter, ZSTD_DCtx, ZSTD_DCtx_refPrefix, ZSTD_DCtx_reset,
+    ZSTD_DCtx_setParameter, ZSTD_ErrorCode, ZSTD_FrameType_e, ZSTD_ResetDirective, ZSTD_cParameter,
+    ZSTD_compress2, ZSTD_compressBound, ZSTD_dParameter, ZSTD_decompressDCtx,
+    ZSTD_estimateCCtxSize_usingCParams, ZSTD_findFrameCompressedSize, ZSTD_frameParameters,
+    ZSTD_getCParams, ZSTD_getErrorCode, ZSTD_getFrameHeader, ZSTD_initStaticCCtx,
+    ZSTD_initStaticDCtx, ZSTD_isError,
 };
 
 use crate::error::{StorageError, StorageResult};
@@ -30,56 +35,67 @@ pub const ENCODE_WORKSPACE_BYTES: usize = 2 * 1024 * 1024;
 pub const DECODE_WORKSPACE_BYTES: usize = 1024 * 1024;
 /// Largest accepted group body before compression is attempted.
 pub const GROUP_LIMIT: usize = 65_536;
+/// Largest accepted group body frame.
+pub const GROUP_FRAME_LIMIT: usize = GROUP_LIMIT + 1024;
 /// Compression level of the ordinary group body codec.
 const GROUP_LEVEL: i32 = 1;
 /// Largest window log of the ordinary group body codec.
 const GROUP_WINDOW_LOG_MAX: u32 = 16;
 
-/// Role-specific payload codec profile.
+/// Pinned payload codec profile: raw bound, frame bound and window log.
+///
+/// The chunk profile is fixed by the frozen CDC grammar. The whole-file profile
+/// is derived from the accepted Store policy, so a larger construction cutoff
+/// gets the window and frame bound its payload actually needs while the default
+/// cutoff keeps its frozen parameters exactly.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CodecProfile {
-    /// Chunk payloads: 32 KiB raw limit, window log 20.
-    Native,
-    /// Whole-file payloads: 128 KiB raw limit, window log 18.
-    Small,
+pub struct CodecProfile {
+    raw_limit: usize,
+    frame_limit: usize,
+    window_log: i32,
 }
 
 impl CodecProfile {
+    /// Chunk payloads: 32 KiB raw limit, window log 20.
+    pub const fn native() -> Self {
+        Self {
+            raw_limit: CHUNK_RAW_LIMIT,
+            frame_limit: CHUNK_FRAME_LIMIT,
+            window_log: 20,
+        }
+    }
+
+    /// Whole-file payloads under `capacities`.
+    pub const fn whole_file(capacities: &StorageCapacities) -> Self {
+        Self {
+            raw_limit: capacities.whole_file_canonical_limit - OBJECT_ENVELOPE_OVERHEAD,
+            frame_limit: capacities.whole_file_frame_limit,
+            window_log: capacities.whole_file_window_log,
+        }
+    }
+
     /// Largest raw payload accepted.
     pub const fn raw_limit(self) -> usize {
-        match self {
-            Self::Native => 32_768,
-            Self::Small => 131_071,
-        }
+        self.raw_limit
     }
 
     /// Largest accepted frame.
     pub const fn frame_limit(self) -> usize {
-        match self {
-            Self::Native => 33_024,
-            Self::Small => 135_168,
-        }
+        self.frame_limit
     }
 
     /// Fixed window log.
     pub const fn window_log(self) -> i32 {
-        match self {
-            Self::Small => 18,
-            Self::Native => 20,
-        }
-    }
-
-    /// Bytes reserved for the codec's own scratch inside the encode workspace.
-    const fn estimate_limit(self) -> usize {
-        match self {
-            Self::Small => 2 * 1024 * 1024,
-            Self::Native => 1024 * 1024,
-        }
+        self.window_log
     }
 }
 
-const _: () = assert!(CodecProfile::Small.estimate_limit() <= ENCODE_WORKSPACE_BYTES);
-
+/// Frozen chunk payload limits.
+const CHUNK_RAW_LIMIT: usize = 32_768;
+/// Frozen chunk frame limit.
+const CHUNK_FRAME_LIMIT: usize = 33_024;
+/// Canonical envelope overhead of a whole-file object over its raw payload.
+const OBJECT_ENVELOPE_OVERHEAD: usize = 23;
 fn resource() -> StorageError {
     StorageError::Integrity("bounded Zstandard workspace unavailable")
 }
@@ -193,7 +209,7 @@ impl CompressionWorkspace {
                 raw.len(),
             )))?;
             let bound = checked(ZSTD_compressBound(raw.len()))?;
-            if estimate > profile.estimate_limit() || bound > profile.frame_limit() {
+            if estimate > ENCODE_WORKSPACE_BYTES || bound > profile.frame_limit() {
                 return Err(resource());
             }
             let mut frame = output(bound, profile.frame_limit())?;
@@ -213,6 +229,90 @@ impl CompressionWorkspace {
                 ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
             ))?;
             Ok(frame)
+        }
+    }
+
+    /// Compresses `raw` under `profile` against a caller-supplied raw prefix.
+    ///
+    /// The base bytes are borrowed as a raw Zstandard prefix (never parsed as a
+    /// dictionary), for exactly one call. The reference is cleared on success and
+    /// on failure, so the next call cannot observe a stale prefix and the base
+    /// never outlives the borrow.
+    pub fn compress_prefix(
+        &mut self,
+        profile: CodecProfile,
+        raw: &[u8],
+        prefix: &[u8],
+    ) -> StorageResult<Vec<u8>> {
+        if raw.is_empty() || raw.len() > profile.raw_limit() {
+            return Err(StorageError::CapacityExceeded {
+                what: "codec.raw_payload",
+                limit: profile.raw_limit() as u64,
+                actual: raw.len() as u64,
+            });
+        }
+        if prefix.is_empty() || prefix.len() > profile.raw_limit() {
+            return Err(StorageError::CapacityExceeded {
+                what: "codec.prefix_payload",
+                limit: profile.raw_limit() as u64,
+                actual: prefix.len() as u64,
+            });
+        }
+        let context = self.context;
+        // SAFETY: `context` is a live static context inside `self.memory`, which
+        // outlives the call and is exclusively borrowed. Input, prefix and output
+        // are live, non-overlapping Rust allocations.
+        unsafe {
+            checked(ZSTD_CCtx_reset(
+                context,
+                ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+            ))?;
+            for (parameter, value) in [
+                (ZSTD_cParameter::ZSTD_c_compressionLevel, 3),
+                (ZSTD_cParameter::ZSTD_c_windowLog, profile.window_log()),
+                (ZSTD_cParameter::ZSTD_c_contentSizeFlag, 1),
+                (ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+                (ZSTD_cParameter::ZSTD_c_dictIDFlag, 0),
+                (ZSTD_cParameter::ZSTD_c_nbWorkers, 0),
+            ] {
+                checked(ZSTD_CCtx_setParameter(context, parameter, value))?;
+            }
+            let estimate = checked(ZSTD_estimateCCtxSize_usingCParams(ZSTD_getCParams(
+                3,
+                raw.len() as u64,
+                raw.len(),
+            )))?;
+            let bound = checked(ZSTD_compressBound(raw.len()))?;
+            if estimate > ENCODE_WORKSPACE_BYTES || bound > profile.frame_limit() {
+                return Err(resource());
+            }
+            let framed = (|| {
+                checked(ZSTD_CCtx_refPrefix(
+                    context,
+                    prefix.as_ptr().cast::<c_void>(),
+                    prefix.len(),
+                ))?;
+                let mut frame = output(bound, profile.frame_limit())?;
+                let length = encode_checked(ZSTD_compress2(
+                    context,
+                    frame.as_mut_ptr().cast::<c_void>(),
+                    frame.len(),
+                    raw.as_ptr().cast::<c_void>(),
+                    raw.len(),
+                ))?;
+                if length == 0 || length > frame.len() || length > profile.frame_limit() {
+                    return Err(codec_failure());
+                }
+                frame.truncate(length);
+                Ok(frame)
+            })();
+            // The borrowed prefix is released on success and on failure alike.
+            checked(ZSTD_CCtx_refPrefix(context, ptr::null(), 0))?;
+            checked(ZSTD_CCtx_reset(
+                context,
+                ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+            ))?;
+            framed
         }
     }
 
@@ -244,10 +344,10 @@ impl CompressionWorkspace {
                 },
             ))?;
             let bound = checked(ZSTD_compressBound(raw.len()))?;
-            if bound > GROUP_LIMIT + 1024 {
+            if bound > GROUP_FRAME_LIMIT {
                 return Err(resource());
             }
-            let mut frame = output(bound, GROUP_LIMIT + 1024)?;
+            let mut frame = output(bound, GROUP_FRAME_LIMIT)?;
             let length = checked(ZSTD_compress2(
                 context,
                 frame.as_mut_ptr().cast::<c_void>(),
@@ -356,12 +456,83 @@ impl DecompressionWorkspace {
         }
     }
 
+    /// Decompresses one prefix-framed payload against its exact base bytes.
+    ///
+    /// The base is borrowed as a raw prefix for exactly one call and the
+    /// reference is cleared afterwards, on success and on failure. The frame
+    /// header is validated before the call, so the declared size and the window
+    /// are checked against the profile rather than trusted.
+    pub fn decompress_prefix(
+        &mut self,
+        profile: CodecProfile,
+        frame: &[u8],
+        raw_length: usize,
+        prefix: &[u8],
+    ) -> StorageResult<Vec<u8>> {
+        if frame.is_empty()
+            || frame.len() > profile.frame_limit()
+            || raw_length == 0
+            || raw_length > profile.raw_limit()
+            || prefix.is_empty()
+            || prefix.len() > profile.raw_limit()
+        {
+            return Err(StorageError::Integrity("Zstandard frame bounds"));
+        }
+        let context = self.context;
+        // SAFETY: as in `decompress`; `prefix` is borrowed for this call only.
+        unsafe {
+            let header = parse_frame_header(frame)?;
+            if header.frameType != ZSTD_FrameType_e::ZSTD_frame
+                || header.frameContentSize != raw_length as u64
+                || header.windowSize > (1_u64 << profile.window_log())
+                || header.dictID != 0
+                || header.checksumFlag != 1
+            {
+                return Err(StorageError::Integrity("Zstandard prefix frame fields"));
+            }
+            checked(ZSTD_DCtx_reset(
+                context,
+                ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+            ))?;
+            checked(ZSTD_DCtx_setParameter(
+                context,
+                ZSTD_dParameter::ZSTD_d_windowLogMax,
+                profile.window_log(),
+            ))?;
+            let decoded = (|| {
+                checked(ZSTD_DCtx_refPrefix(
+                    context,
+                    prefix.as_ptr().cast::<c_void>(),
+                    prefix.len(),
+                ))?;
+                let mut raw = output(raw_length, profile.raw_limit())?;
+                if checked(ZSTD_decompressDCtx(
+                    context,
+                    raw.as_mut_ptr().cast::<c_void>(),
+                    raw.len(),
+                    frame.as_ptr().cast::<c_void>(),
+                    frame.len(),
+                ))? != raw_length
+                {
+                    return Err(StorageError::Integrity("Zstandard prefix frame length"));
+                }
+                Ok(raw)
+            })();
+            checked(ZSTD_DCtx_refPrefix(context, ptr::null(), 0))?;
+            checked(ZSTD_DCtx_reset(
+                context,
+                ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+            ))?;
+            decoded
+        }
+    }
+
     /// Decompresses one ordinary group body frame.
     pub fn decompress_group(&mut self, frame: &[u8], raw_length: usize) -> StorageResult<Vec<u8>> {
         if frame.is_empty()
             || raw_length == 0
             || raw_length > GROUP_LIMIT
-            || frame.len() > GROUP_LIMIT + 1024
+            || frame.len() > GROUP_FRAME_LIMIT
         {
             return Err(StorageError::Integrity("group body frame bounds"));
         }

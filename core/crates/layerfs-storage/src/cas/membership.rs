@@ -5,30 +5,18 @@
 //! the offered bytes and reuses the row only when they are identical. A mismatch
 //! is a collision and fails the save; it is not repaired, replaced or retried.
 
-use rusqlite::Connection;
-
 use layerfs_content::{FinalizedObject, ObjectId};
 
 use crate::cas::owner::MutationOwner;
-
-use crate::encoding::DecompressionWorkspace;
 use crate::error::{StorageError, StorageResult};
-use crate::sqlite::lookup::{self, ObjectLocation};
+use crate::sqlite::lookup::ObjectLocation;
 
-/// Reads the stored canonical bytes at one locator.
+/// Reads the stored canonical bytes at one locator, reconstructing its chain.
 pub fn stored_canonical(
-    connection: &Connection,
+    owner: &mut MutationOwner,
     location: ObjectLocation,
-    workspace: &mut DecompressionWorkspace,
 ) -> StorageResult<Vec<u8>> {
-    let pack = lookup::pack_bytes(connection, location.pack_id)?;
-    let canonical = crate::encoding::decode_canonical(
-        &pack,
-        location.group_number,
-        location.record_number,
-        location.canonical_length,
-        workspace,
-    )?;
+    let canonical = owner.resolve_location(location)?;
     if ObjectId::for_bytes(&canonical) != location.object_id {
         return Err(StorageError::Integrity("stored object identity"));
     }
@@ -50,7 +38,7 @@ pub fn reuse_or_collide(
     if location.canonical_length != object.canonical_len() {
         return Err(StorageError::Collision(object.id()));
     }
-    let stored = owner.stored_canonical(location)?;
+    let stored = stored_canonical(owner, location)?;
     if stored == object.canonical() {
         Ok(())
     } else {

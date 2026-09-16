@@ -1,22 +1,45 @@
 //! Checked construction profile, capacities and the complete-file selector.
 //!
-//! The frozen profile of this slice accepts exactly one construction cutoff and
-//! the two frozen depth defaults. Every other value is rejected before any work
-//! starts, so a Store never records a policy that the implementation cannot
-//! honor. Capacities are derived from that profile with checked arithmetic; they
-//! are not independently configurable knobs.
+//! The profile is genuinely configurable inside explicitly supported ranges: the
+//! construction cutoff accepts any power of two from 128 KiB to 1 MiB, and each
+//! role's dependency depth accepts `0` (prospective delta disabled) up to the
+//! documented maximum. Everything else is rejected before any work starts, so a
+//! Store never records a policy the implementation cannot honor. Capacities are
+//! derived from the accepted profile with checked arithmetic; raising one field
+//! never raises another, and the chain-work and live-memory budgets stay fixed.
 
 use crate::error::{ContentError, ContentResult};
 
-/// Frozen exclusive construction cutoff: files at or above this length are chunked.
+/// Default exclusive construction cutoff: files at or above this length are chunked.
 pub const DEFAULT_SMALL_FILE_THRESHOLD_BYTES: u64 = 131_072;
-/// Frozen whole-file dependency bound; DELTA selection is not implemented in this slice.
+/// Smallest accepted construction cutoff.
+pub const MINIMUM_SMALL_FILE_THRESHOLD_BYTES: u64 = 131_072;
+/// Largest accepted construction cutoff.
+pub const MAXIMUM_SMALL_FILE_THRESHOLD_BYTES: u64 = 1_048_576;
+/// Default whole-file dependency bound.
 pub const DEFAULT_WHOLE_FILE_DELTA_MAX_DEPTH: u8 = 8;
-/// Frozen chunk dependency bound; DELTA selection is not implemented in this slice.
+/// Default chunk dependency bound.
 pub const DEFAULT_CHUNK_DELTA_MAX_DEPTH: u8 = 4;
+/// Largest accepted dependency depth for either role.
+pub const MAXIMUM_DELTA_MAX_DEPTH: u8 = 50;
 
 /// Smallest nonempty file that is stored as a whole-file object.
 pub const MINIMUM_WHOLE_FILE_BYTES: u64 = 1;
+
+/// Frozen whole-file codec window log below the 256 KiB cutoff.
+const WHOLE_FILE_WINDOW_LOG_SMALL: i32 = 18;
+/// Whole-file codec window log from the 256 KiB cutoff upwards.
+const WHOLE_FILE_WINDOW_LOG_LARGE: i32 = 20;
+/// Largest accepted whole-file codec frame at the default cutoff.
+pub const DEFAULT_WHOLE_FILE_FRAME_LIMIT: usize = 135_168;
+
+/// Conservative upper bound of one uncompressed-size Zstandard frame.
+///
+/// The bound is the codec's own `compressBound` shape (`raw + raw / 128 + 1024`)
+/// rounded up; the default cutoff keeps its frozen, tighter constant.
+pub const fn conservative_frame_bound(raw: usize) -> usize {
+    raw + raw / 128 + 1024
+}
 
 /// Immutable construction policy: one cutoff and two role-specific depth bounds.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,7 +50,7 @@ pub struct ConstructionPolicy {
 }
 
 impl ConstructionPolicy {
-    /// The only accepted policy of this slice.
+    /// The default accepted policy.
     pub const fn frozen_default() -> Self {
         Self {
             small_file_threshold_bytes: DEFAULT_SMALL_FILE_THRESHOLD_BYTES,
@@ -49,24 +72,31 @@ impl ConstructionPolicy {
         }
     }
 
-    /// Accepts the policy only when every field is implemented by this slice.
+    /// Accepts the policy only when every field is inside a supported range.
     ///
-    /// The accepted cutoff range is the single frozen value: larger cutoffs need
-    /// a capacity-aware pack/record contract and a matching reader, which this
-    /// slice does not ship. Delta depths are recorded defaults; the range is
-    /// validated so an unsupported profile is never persisted.
+    /// The cutoff must be a power of two inside
+    /// [`MINIMUM_SMALL_FILE_THRESHOLD_BYTES`]..=[`MAXIMUM_SMALL_FILE_THRESHOLD_BYTES`]:
+    /// a larger whole-file object needs a capacity-aware pack grammar and a
+    /// matching reader, and a non-power-of-two cutoff would make the transition
+    /// probe ambiguous. Each depth accepts `0` (that role's prospective delta is
+    /// disabled) up to [`MAXIMUM_DELTA_MAX_DEPTH`]. A depth never widens the
+    /// chain-work or live-memory budgets, which are separate fixed capacities.
     pub const fn validated(self) -> ContentResult<Self> {
-        if self.small_file_threshold_bytes != DEFAULT_SMALL_FILE_THRESHOLD_BYTES {
+        let threshold = self.small_file_threshold_bytes;
+        if !threshold.is_power_of_two()
+            || threshold < MINIMUM_SMALL_FILE_THRESHOLD_BYTES
+            || threshold > MAXIMUM_SMALL_FILE_THRESHOLD_BYTES
+        {
             return Err(ContentError::UnsupportedPolicy {
                 field: "small_file_threshold_bytes",
             });
         }
-        if self.whole_file_delta_max_depth != DEFAULT_WHOLE_FILE_DELTA_MAX_DEPTH {
+        if self.whole_file_delta_max_depth > MAXIMUM_DELTA_MAX_DEPTH {
             return Err(ContentError::UnsupportedPolicy {
                 field: "whole_file_delta_max_depth",
             });
         }
-        if self.chunk_delta_max_depth != DEFAULT_CHUNK_DELTA_MAX_DEPTH {
+        if self.chunk_delta_max_depth > MAXIMUM_DELTA_MAX_DEPTH {
             return Err(ContentError::UnsupportedPolicy {
                 field: "chunk_delta_max_depth",
             });
@@ -79,12 +109,12 @@ impl ConstructionPolicy {
         self.small_file_threshold_bytes
     }
 
-    /// Recorded whole-file dependency bound.
+    /// Whole-file dependency bound; `0` disables whole-file delta selection.
     pub const fn whole_file_delta_max_depth(self) -> u8 {
         self.whole_file_delta_max_depth
     }
 
-    /// Recorded chunk dependency bound.
+    /// Chunk dependency bound; `0` disables chunk delta selection.
     pub const fn chunk_delta_max_depth(self) -> u8 {
         self.chunk_delta_max_depth
     }
@@ -102,15 +132,32 @@ impl ConstructionPolicy {
 
     /// Capacities derived from this policy by checked arithmetic.
     pub const fn capacities(self) -> ConstructionCapacities {
+        let raw = self.small_file_threshold_bytes as usize - 1;
+        let bound = conservative_frame_bound(raw);
         ConstructionCapacities {
-            whole_file_raw_limit: self.small_file_threshold_bytes as usize - 1,
-            whole_file_frame_limit: 135_168,
-            whole_file_canonical_limit: self.small_file_threshold_bytes as usize + 23,
+            whole_file_raw_limit: raw,
+            whole_file_frame_limit: if bound > DEFAULT_WHOLE_FILE_FRAME_LIMIT {
+                bound
+            } else {
+                DEFAULT_WHOLE_FILE_FRAME_LIMIT
+            },
+            whole_file_canonical_limit: raw + OBJECT_ENVELOPE_BYTES,
             chunk_raw_limit: crate::file::cdc::MAXIMUM_CHUNK_BYTES,
             chunk_minimum_raw: crate::file::cdc::MINIMUM_CHUNK_BYTES,
             mapping_node_limit: 8_192,
             canonical_object_limit: MAX_CANONICAL_OBJECT_BYTES,
             stream_flush_entries: MAX_MAPPING_ENTRIES + STREAM_FLUSH_HEADROOM,
+            whole_file_delta_max_depth: self.whole_file_delta_max_depth,
+            chunk_delta_max_depth: self.chunk_delta_max_depth,
+        }
+    }
+
+    /// Whole-file codec window log this cutoff needs.
+    pub const fn whole_file_window_log(self) -> i32 {
+        if self.small_file_threshold_bytes <= 2 * DEFAULT_SMALL_FILE_THRESHOLD_BYTES {
+            WHOLE_FILE_WINDOW_LOG_SMALL
+        } else {
+            WHOLE_FILE_WINDOW_LOG_LARGE
         }
     }
 }
@@ -158,7 +205,7 @@ const STREAM_FLUSH_HEADROOM: usize = 64;
 pub struct ConstructionCapacities {
     /// Largest whole-file payload: cutoff minus one.
     pub whole_file_raw_limit: usize,
-    /// Largest accepted whole-file codec frame.
+    /// Largest accepted whole-file codec frame for this cutoff.
     pub whole_file_frame_limit: usize,
     /// Largest canonical whole-file object including its envelope.
     pub whole_file_canonical_limit: usize,
@@ -172,4 +219,8 @@ pub struct ConstructionCapacities {
     pub canonical_object_limit: usize,
     /// Entry count that triggers a streaming flush of a full mapping page.
     pub stream_flush_entries: usize,
+    /// Recorded whole-file dependency bound.
+    pub whole_file_delta_max_depth: u8,
+    /// Recorded chunk dependency bound.
+    pub chunk_delta_max_depth: u8,
 }

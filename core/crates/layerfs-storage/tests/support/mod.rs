@@ -286,3 +286,25 @@ pub fn patterned(len: usize) -> Vec<u8> {
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect()
 }
+
+/// Flips one byte of the first stored pack body, simulating damaged storage.
+pub fn corrupt_first_pack(path: &Path) {
+    let connection = rusqlite::Connection::open(path).expect("external connection");
+    let data: Vec<u8> = connection
+        .query_row(
+            "SELECT data FROM object_packs ORDER BY pack_id LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("pack row");
+    let mut damaged = data.clone();
+    let index = damaged.len() - 1;
+    damaged[index] ^= 0xff;
+    let affected = connection
+        .execute(
+            "UPDATE object_packs SET data = ?1 WHERE pack_id = (SELECT MIN(pack_id) FROM object_packs)",
+            rusqlite::params![damaged],
+        )
+        .expect("pack update");
+    assert_eq!(affected, 1);
+}

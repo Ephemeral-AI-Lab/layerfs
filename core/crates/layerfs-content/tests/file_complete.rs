@@ -272,21 +272,29 @@ fn late_input_failure_after_early_output_is_returned_once() {
 
 #[test]
 fn unsupported_policy_values_are_rejected_before_work() {
-    let rejected = ConstructionPolicy::new(1_048_576, 8, 4);
+    // A cutoff outside the supported power-of-two range is rejected, as is a
+    // depth beyond the documented maximum. The supported non-default values are
+    // exercised by `policy_capacity`.
+    for rejected in [
+        ConstructionPolicy::new(1_048_577, 8, 4),
+        ConstructionPolicy::new(65_536, 8, 4),
+        ConstructionPolicy::new(196_608, 8, 4),
+    ] {
+        assert_eq!(
+            rejected.validated(),
+            Err(ContentError::UnsupportedPolicy {
+                field: "small_file_threshold_bytes"
+            })
+        );
+    }
     assert_eq!(
-        rejected.validated(),
-        Err(ContentError::UnsupportedPolicy {
-            field: "small_file_threshold_bytes"
-        })
-    );
-    assert_eq!(
-        ConstructionPolicy::new(CUTOFF as u64, 7, 4).validated(),
+        ConstructionPolicy::new(CUTOFF as u64, 51, 4).validated(),
         Err(ContentError::UnsupportedPolicy {
             field: "whole_file_delta_max_depth"
         })
     );
     assert_eq!(
-        ConstructionPolicy::new(CUTOFF as u64, 8, 5).validated(),
+        ConstructionPolicy::new(CUTOFF as u64, 8, 51).validated(),
         Err(ContentError::UnsupportedPolicy {
             field: "chunk_delta_max_depth"
         })

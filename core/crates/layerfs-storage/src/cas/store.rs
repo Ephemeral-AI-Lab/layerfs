@@ -14,6 +14,8 @@ use layerfs_telemetry::timer::TimingScope;
 use crate::cas::batch::PendingBatch;
 use crate::cas::owner::{MutationOwner, OutcomeCounters};
 use crate::cas::{finish, read, save};
+use crate::encoding::delta::read::ChainCounters;
+use crate::encoding::delta::select::DeltaCounters;
 use crate::encoding::DecompressionWorkspace;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{StorageCapacities, StoragePolicy};
@@ -34,6 +36,14 @@ pub struct SaveOutcome {
     pub commits: u64,
     /// True when the final transaction was acknowledged.
     pub acknowledged: bool,
+    /// Record-level objects newly written as a FULL representation.
+    pub full_records: u64,
+    /// Record-level objects newly written as a PREFIX representation.
+    pub prefix_records: u64,
+    /// Representation selection outcomes.
+    pub delta: DeltaCounters,
+    /// Work spent acquiring delta bases.
+    pub chain: ChainCounters,
 }
 
 impl From<OutcomeCounters> for SaveOutcome {
@@ -45,6 +55,10 @@ impl From<OutcomeCounters> for SaveOutcome {
             pack_appends: counters.pack_appends,
             commits: counters.commits,
             acknowledged: true,
+            full_records: counters.full_records,
+            prefix_records: counters.prefix_records,
+            delta: counters.delta,
+            chain: counters.chain,
         }
     }
 }
@@ -60,6 +74,12 @@ pub struct StoreReadCounters {
     pub pages: u64,
     /// Retained-pack ceiling applied to every acquired location.
     pub ceiling: i64,
+    /// Dependency edges followed.
+    pub edges: u64,
+    /// Longest dependency chain reconstructed.
+    pub max_depth: u64,
+    /// Canonical bytes reconstructed, including dependencies.
+    pub canonical_bytes: u64,
 }
 
 /// A content-addressed Store at one filesystem path.
@@ -109,6 +129,11 @@ impl Store {
         })
     }
 
+    /// The default policy this slice creates and opens.
+    pub const fn default_policy() -> StoragePolicy {
+        StoragePolicy::frozen_default()
+    }
+
     /// Persisted policy of this Store.
     pub fn policy(&self) -> StoragePolicy {
         self.policy
@@ -155,9 +180,9 @@ impl Store {
             let mut workspace = read_scope
                 .child("storage.decode")
                 .run(|_| DecompressionWorkspace::new())?;
-            let (values, counters) = read_scope
-                .child("storage.read")
-                .run(|_| read::read_objects(&connection, ids, ceiling, &mut workspace))?;
+            let (values, counters) = read_scope.child("storage.read").run(|_| {
+                read::read_objects(&connection, ids, ceiling, &self.capacities, &mut workspace)
+            })?;
             Ok((
                 values,
                 StoreReadCounters {
@@ -165,6 +190,9 @@ impl Store {
                     packs_read: counters.packs_read,
                     pages: counters.pages,
                     ceiling,
+                    edges: counters.edges,
+                    max_depth: counters.max_depth,
+                    canonical_bytes: counters.canonical_bytes,
                 },
             ))
         })
@@ -229,13 +257,11 @@ impl SaveOperation {
 
     /// Drains the remaining batch and acknowledges storage completion.
     pub fn finish(mut self, scope: TimingScope<'_>) -> StorageResult<SaveOutcome> {
-        let result = scope.run(|finish_scope| {
+        let result = scope.run(|_finish| {
             let remaining = self.batch.drain();
             self.flush(remaining)?;
             let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
-            let counters = finish_scope
-                .child("storage.finish")
-                .run(|_| owner.finish())?;
+            let counters = owner.finish()?;
             Ok(SaveOutcome::from(counters))
         });
         match result {
@@ -344,6 +370,38 @@ impl SaveOperation {
     /// Objects and canonical bytes currently waiting in the pending batch.
     pub fn pending(&self) -> (usize, u64) {
         (self.batch.len(), self.batch.canonical_bytes())
+    }
+
+    /// Representation selection outcomes so far.
+    pub fn delta_counters(&self) -> DeltaCounters {
+        self.owner
+            .as_ref()
+            .map(MutationOwner::delta_counters)
+            .unwrap_or_default()
+    }
+
+    /// Work spent acquiring delta bases so far.
+    pub fn chain_counters(&self) -> ChainCounters {
+        self.owner
+            .as_ref()
+            .map(MutationOwner::chain_counters)
+            .unwrap_or_default()
+    }
+
+    /// Live bytes held by the bounded admitted-FULL winner cache.
+    pub fn candidate_index_bytes(&self) -> usize {
+        self.owner
+            .as_ref()
+            .map(MutationOwner::candidate_index_bytes)
+            .unwrap_or(0)
+    }
+
+    /// Entries retained by the bounded dependency-depth cache.
+    pub fn depth_cache_entries(&self) -> usize {
+        self.owner
+            .as_ref()
+            .map(MutationOwner::depth_cache_entries)
+            .unwrap_or(0)
     }
 
     /// Ends this operation with an explicit abort and one cleanup attempt.

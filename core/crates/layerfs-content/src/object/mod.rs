@@ -7,6 +7,7 @@ pub mod codec;
 mod access;
 mod id;
 mod output;
+mod predecessor;
 
 pub use crate::policy::{MAX_CANONICAL_OBJECT_BYTES, MAX_OBJECT_FIELD_BYTES};
 pub use access::AuthenticatedObjects;
@@ -16,3 +17,6 @@ pub use codec::{
 };
 pub use id::{authenticate, ObjectId, DIGEST_BYTES, OBJECT_DOMAIN};
 pub use output::{DiscardingConsumer, FinalizedConsumer, FinalizedObject, ObjectRole};
+pub use predecessor::{
+    AdvisoryPredecessor, AdvisoryPredecessors, PredecessorProvenance, MAXIMUM_ADVISORY_PREDECESSORS,
+};

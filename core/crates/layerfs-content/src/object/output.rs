@@ -5,6 +5,7 @@
 //! the allocation moves to the consumer; C1 keeps no payload copy.
 
 use crate::error::{ContentError, ContentResult};
+use crate::object::predecessor::AdvisoryPredecessors;
 use crate::object::{codec, ObjectId};
 
 /// Logical meaning of a canonical object; not a physical FULL/DELTA choice.
@@ -20,6 +21,12 @@ pub enum ObjectRole {
     ExtentBranch,
     /// File state: the logical root of a chunked file.
     FileState,
+    /// One compact inode-value leaf: the checked physical-pooling input grammar.
+    ///
+    /// The role carries logical structure only; C2 owns whether such a leaf is
+    /// stored pooled or whole. Filesystem-tree construction is a later stage and
+    /// is not implied by this role.
+    InodeLeaf,
 }
 
 impl ObjectRole {
@@ -31,6 +38,7 @@ impl ObjectRole {
             Self::ExtentLeaf => 3,
             Self::ExtentBranch => 4,
             Self::FileState => 5,
+            Self::InodeLeaf => 6,
         }
     }
 
@@ -42,6 +50,7 @@ impl ObjectRole {
             3 => Ok(Self::ExtentLeaf),
             4 => Ok(Self::ExtentBranch),
             5 => Ok(Self::FileState),
+            6 => Ok(Self::InodeLeaf),
             _ => Err(ContentError::InvalidRecord("object role code")),
         }
     }
@@ -54,6 +63,7 @@ pub struct FinalizedObject {
     role: ObjectRole,
     canonical: Vec<u8>,
     references: Vec<ObjectId>,
+    predecessors: AdvisoryPredecessors,
 }
 
 impl FinalizedObject {
@@ -67,12 +77,19 @@ impl FinalizedObject {
             role,
             canonical,
             references: Vec::new(),
+            predecessors: AdvisoryPredecessors::new(),
         })
     }
 
     /// Attaches the direct logical references this object was built from.
     pub fn with_references(mut self, references: Vec<ObjectId>) -> Self {
         self.references = references;
+        self
+    }
+
+    /// Attaches bounded advisory predecessors for physical representation.
+    pub fn with_predecessors(mut self, predecessors: AdvisoryPredecessors) -> Self {
+        self.predecessors = predecessors;
         self
     }
 
@@ -104,6 +121,11 @@ impl FinalizedObject {
     /// Direct logical child identities, in canonical order.
     pub fn references(&self) -> &[ObjectId] {
         &self.references
+    }
+
+    /// Bounded advisory predecessors, in preference order.
+    pub fn predecessors(&self) -> &AdvisoryPredecessors {
+        &self.predecessors
     }
 
     /// Moves the owned pieces to a consumer that stores or forwards them.

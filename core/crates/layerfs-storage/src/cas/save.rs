@@ -63,7 +63,10 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
                 membership::reuse_or_collide(owner, &object, location)?;
                 owner.note_reuse();
             }
-            None => owner.offer(object, &mut availability)?,
+            None => {
+                let advisory: Vec<ObjectId> = object.predecessors().ids().collect();
+                owner.offer(object, &advisory, &mut availability)?
+            }
         }
     }
     Ok(())

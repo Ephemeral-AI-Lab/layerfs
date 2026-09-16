@@ -236,7 +236,7 @@ fn collected_bytes(raw: &[u8]) -> Vec<u8> {
 fn a_store_created_with_an_unsupported_policy_is_rejected_before_work() {
     let dir = TempDir::new("policy");
     let path = dir.store_path("policy");
-    let unsupported = layerfs_storage::StoragePolicy::new(1, 1_048_576, 8, 4);
+    let unsupported = layerfs_storage::StoragePolicy::new(1, 1_048_577, 8, 4);
     let error =
         disabled(|scope| Store::create(&path, unsupported, scope.child("store"))).unwrap_err();
     assert!(

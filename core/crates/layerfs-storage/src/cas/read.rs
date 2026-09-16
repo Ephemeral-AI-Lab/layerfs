@@ -1,9 +1,11 @@
 //! Batched object reads and the retained-pack visibility ceiling.
 //!
 //! One read captures its permitted pack ceiling once and applies it to every
-//! acquired location; the ceiling never moves while the read is in progress. Pack
-//! bodies are read once per pack per wave, and every reconstructed object is
-//! authenticated against the identity that was requested.
+//! acquired location, including every dependency read; the ceiling never moves
+//! while the read is in progress. Pack bodies are read once per pack per wave,
+//! dependencies are reconstructed iteratively under fixed work budgets, and every
+//! reconstructed object - base or requested - is authenticated against the
+//! identity it was stored under.
 
 use std::collections::BTreeMap;
 
@@ -11,8 +13,10 @@ use rusqlite::Connection;
 
 use layerfs_content::ObjectId;
 
-use crate::encoding::DecompressionWorkspace;
+use crate::encoding::codec::DecompressionWorkspace;
+use crate::encoding::delta::read::{ChainCounters, Resolver};
 use crate::error::{StorageError, StorageResult};
+use crate::policy::StorageCapacities;
 use crate::sqlite::lookup;
 
 /// Work performed by one bounded read wave.
@@ -26,6 +30,12 @@ pub struct ReadCounters {
     pub pages: u64,
     /// Ceiling applied to every acquired location.
     pub ceiling: i64,
+    /// Dependency edges followed.
+    pub edges: u64,
+    /// Longest dependency chain reconstructed.
+    pub max_depth: u64,
+    /// Canonical bytes reconstructed, including dependencies.
+    pub canonical_bytes: u64,
 }
 
 /// Reads every requested object in demand order under one ceiling.
@@ -33,8 +43,13 @@ pub fn read_objects(
     connection: &Connection,
     ids: &[ObjectId],
     ceiling: i64,
+    capacities: &StorageCapacities,
     workspace: &mut DecompressionWorkspace,
 ) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
+    // Locators are collected above the ceiling on purpose: a record that exists
+    // but is not yet published must be reported as a visibility refusal, never
+    // mistaken for a missing object. Dependency reads inside the resolver do use
+    // the captured ceiling.
     let locations = lookup::locations(connection, ids, i64::MAX)?;
     let mut counters = ReadCounters {
         ceiling,
@@ -52,32 +67,35 @@ pub fn read_objects(
         by_id.insert(location.object_id, location);
     }
     let mut packs: BTreeMap<i64, Vec<u8>> = BTreeMap::new();
+    let mut chain = ChainCounters::default();
+    let mut totals = ChainCounters::default();
     let mut values = Vec::with_capacity(ids.len());
     for id in ids {
         let location = by_id
             .get(id)
             .copied()
             .ok_or(StorageError::ObjectMissing(*id))?;
-        if let std::collections::btree_map::Entry::Vacant(slot) = packs.entry(location.pack_id) {
-            let bytes = lookup::pack_bytes(connection, location.pack_id)?;
-            counters.packs_read += 1;
-            slot.insert(bytes);
-        }
-        let pack = packs
-            .get(&location.pack_id)
-            .ok_or(StorageError::Integrity("pack cache"))?;
-        let canonical = crate::encoding::decode_canonical(
-            pack,
-            location.group_number,
-            location.record_number,
-            location.canonical_length,
-            workspace,
-        )?;
+        let before = packs.len();
+        let canonical = {
+            let mut resolver = Resolver::new(
+                connection, ceiling, capacities, &mut packs, workspace, &mut chain,
+            );
+            resolver.resolve_at(location)?
+        };
+        totals.objects = totals.objects.saturating_add(chain.objects);
+        totals.edges = totals.edges.saturating_add(chain.edges);
+        totals.encoded_bytes = totals.encoded_bytes.saturating_add(chain.encoded_bytes);
+        totals.canonical_bytes = totals.canonical_bytes.saturating_add(chain.canonical_bytes);
+        totals.max_depth = totals.max_depth.max(chain.max_depth);
+        counters.packs_read += (packs.len() - before) as u64;
         if ObjectId::for_bytes(&canonical) != *id {
             return Err(StorageError::Integrity("read identity"));
         }
         counters.objects += 1;
         values.push(canonical);
     }
+    counters.edges = totals.edges;
+    counters.max_depth = totals.max_depth;
+    counters.canonical_bytes = totals.canonical_bytes;
     Ok((values, counters))
 }

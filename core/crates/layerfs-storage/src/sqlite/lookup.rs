@@ -28,6 +28,8 @@ pub struct ObjectLocation {
     pub group_number: usize,
     /// Record ordinal inside the group.
     pub record_number: usize,
+    /// Direct physical base recorded for this object, if its record is a DELTA.
+    pub base_object_id: Option<ObjectId>,
 }
 
 /// Pages `ids` into bounded groups.
@@ -55,7 +57,8 @@ pub fn locations(
     let mut found = Vec::new();
     for page in pages(ids) {
         let sql = format!(
-            "SELECT object_id, object_role, canonical_length, pack_id, group_number, record_number \
+            "SELECT object_id, object_role, canonical_length, pack_id, group_number, record_number, \
+             base_object_id \
              FROM objects WHERE object_id IN ({}) AND pack_id <= ?{}",
             placeholders(page.len(), 1),
             page.len() + 1
@@ -71,6 +74,7 @@ pub fn locations(
                 row.get::<_, i64>(3)?,
                 row.get::<_, i64>(4)?,
                 row.get::<_, i64>(5)?,
+                row.get::<_, Option<Vec<u8>>>(6)?,
             ))
         })?;
         for row in rows {
@@ -80,8 +84,30 @@ pub fn locations(
     Ok(found)
 }
 
-fn decode_location(row: (Vec<u8>, i64, i64, i64, i64, i64)) -> StorageResult<ObjectLocation> {
+/// Reads one stored location under a ceiling.
+pub fn location(
+    connection: &Connection,
+    id: ObjectId,
+    ceiling: i64,
+) -> StorageResult<Option<ObjectLocation>> {
+    let mut found = locations(connection, std::slice::from_ref(&id), ceiling)?;
+    found.pop().map_or(Ok(None), |location| {
+        if location.object_id == id {
+            Ok(Some(location))
+        } else {
+            Err(StorageError::Integrity("locator identity"))
+        }
+    })
+}
+
+type RawRow = (Vec<u8>, i64, i64, i64, i64, i64, Option<Vec<u8>>);
+
+fn decode_location(row: RawRow) -> StorageResult<ObjectLocation> {
     let role = u8::try_from(row.1).map_err(|_| StorageError::Integrity("object role"))?;
+    let base_object_id = match row.6 {
+        Some(bytes) => Some(ObjectId::from_bytes(&bytes)?),
+        None => None,
+    };
     Ok(ObjectLocation {
         object_id: ObjectId::from_bytes(&row.0)?,
         role: ObjectRole::from_code(role)?,
@@ -92,6 +118,7 @@ fn decode_location(row: (Vec<u8>, i64, i64, i64, i64, i64)) -> StorageResult<Obj
             .map_err(|_| StorageError::Integrity("group number"))?,
         record_number: usize::try_from(row.5)
             .map_err(|_| StorageError::Integrity("record number"))?,
+        base_object_id,
     })
 }
 

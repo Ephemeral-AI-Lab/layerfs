@@ -10,30 +10,21 @@ use rusqlite::Connection;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 
 use crate::cas::dependencies::Availability;
-use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace, GROUP_LIMIT};
-use crate::encoding::encode_full;
+use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
+use crate::encoding::delta::candidates::Candidates;
+use crate::encoding::delta::read::ChainCounters;
+use crate::encoding::delta::select::{select, DeltaCounters, DepthCache, SelectInput};
 use crate::error::{StorageError, StorageResult};
-use crate::pack::assemble::framed_length;
 use crate::pack::layout::PackLane;
 use crate::pack::placement::LanePlacement;
 use crate::pack::{build_group, SelectedWrite};
 use crate::policy::{StorageCapacities, StoragePolicy};
 use crate::sqlite::lookup;
 use crate::sqlite::write::{self, ObjectRow, TransactionState};
+use std::collections::BTreeMap;
 
 /// Soft group target: a group is sealed once the next record would pass it.
 const GROUP_TARGET: usize = 48 * 1024;
-
-/// Largest framed body one record may occupy in `lane`.
-///
-/// The compact whole-file lane stores a single record per group and is bounded by
-/// its own frame limit, not by the multi-record ordinary group ceiling.
-fn lane_body_limit(capacities: &StorageCapacities, lane: PackLane) -> usize {
-    match lane {
-        PackLane::WholeFile => capacities.whole_file_frame_limit + 1,
-        PackLane::Ordinary | PackLane::Native => GROUP_LIMIT,
-    }
-}
 
 /// One record waiting for its group to be framed and placed.
 ///
@@ -47,6 +38,7 @@ struct PendingMember {
     object_id: ObjectId,
     role: ObjectRole,
     canonical_length: usize,
+    base_object_id: Option<ObjectId>,
 }
 
 #[derive(Default)]
@@ -79,6 +71,14 @@ pub struct OutcomeCounters {
     pub transactions: u64,
     /// Write transactions acknowledged with `COMMIT`.
     pub commits: u64,
+    /// Record-level objects newly written as a FULL representation.
+    pub full_records: u64,
+    /// Record-level objects newly written as a PREFIX representation.
+    pub prefix_records: u64,
+    /// Representation selection outcomes.
+    pub delta: DeltaCounters,
+    /// Work spent acquiring delta bases.
+    pub chain: ChainCounters,
 }
 
 /// Exclusive writer state for one save operation.
@@ -90,8 +90,8 @@ pub struct MutationOwner {
     /// Highest pack id this save created; becomes the publication watermark on
     /// acknowledgement and is left untouched on any failure.
     ceiling: i64,
-    placement: [LanePlacement; 3],
-    groups: [PendingGroup; 3],
+    placement: [LanePlacement; 5],
+    groups: [PendingGroup; 5],
     transaction: TransactionState,
     transaction_open: bool,
     compression: CompressionWorkspace,
@@ -100,6 +100,17 @@ pub struct MutationOwner {
     cleanup_attempted: bool,
     quarantined: bool,
     counters: OutcomeCounters,
+    /// Admitted-FULL winner cache: owned by this operation, bounded and dropped
+    /// with it, so a failed save can never leave a partly advanced cache usable.
+    candidates: Candidates,
+    /// Bounded per-save dependency-depth cache.
+    depths: DepthCache,
+    /// Pack bodies already read while acquiring delta bases in this operation.
+    pack_cache: BTreeMap<i64, Vec<u8>>,
+    /// Work spent acquiring and reading delta bases.
+    chain: ChainCounters,
+    /// Representation selection outcomes.
+    delta: DeltaCounters,
 }
 
 impl MutationOwner {
@@ -138,8 +149,12 @@ impl MutationOwner {
                 LanePlacement::new(),
                 LanePlacement::new(),
                 LanePlacement::new(),
+                LanePlacement::new(),
+                LanePlacement::new(),
             ],
             groups: [
+                PendingGroup::default(),
+                PendingGroup::default(),
                 PendingGroup::default(),
                 PendingGroup::default(),
                 PendingGroup::default(),
@@ -155,6 +170,11 @@ impl MutationOwner {
                 transactions: 1,
                 ..OutcomeCounters::default()
             },
+            candidates: Candidates::new()?,
+            depths: DepthCache::new(),
+            pack_cache: BTreeMap::new(),
+            chain: ChainCounters::default(),
+            delta: DeltaCounters::default(),
         })
     }
 
@@ -233,24 +253,36 @@ impl MutationOwner {
             &self.connection,
             ids,
             i64::MAX,
+            &self.capacities,
             &mut self.decompression,
         )?;
         Ok(values)
     }
 
-    /// Reads the stored canonical bytes at one location inside this owner.
-    pub fn stored_canonical(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
-        crate::cas::membership::stored_canonical(
+    /// Reconstructs one stored object, following and authenticating its chain.
+    pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
+        let mut resolver = crate::encoding::delta::read::Resolver::new(
             &self.connection,
-            location,
+            i64::MAX,
+            &self.capacities,
+            &mut self.pack_cache,
             &mut self.decompression,
-        )
+            &mut self.chain,
+        );
+        resolver.resolve_at(location)
     }
 
     /// Prepares and places one missing object.
+    ///
+    /// `advisory` is the caller's bounded, explicitly declared candidate list in
+    /// preference order. Selection may store FULL by policy when no candidate is
+    /// acquired, but a failed acquisition, codec call or allocation fails the
+    /// operation: a stored FULL alternative is a policy outcome, never error
+    /// recovery.
     pub fn offer(
         &mut self,
         object: FinalizedObject,
+        advisory: &[ObjectId],
         availability: &mut Availability,
     ) -> StorageResult<()> {
         if self.terminal {
@@ -259,12 +291,12 @@ impl MutationOwner {
         availability.validate(&self.connection, &object, i64::MAX, |id| {
             self.pending_member(id)
         })?;
-        let record = encode_full(object.canonical(), object.role(), &mut self.compression)?;
+        let record = self.select_record(&object, advisory)?;
         let lane = record.lane;
         let index = lane.index();
-        let body = framed_length(std::slice::from_ref(&record.record))?;
-        let body_limit = lane_body_limit(&self.capacities, lane);
-        if body > body_limit {
+        let body = crate::pack::assemble::framed_length(std::slice::from_ref(&record.record))?;
+        let body_limit = crate::encoding::lane_body_limit(lane, &self.capacities);
+        if body > body_limit && lane != PackLane::Singleton {
             return Err(StorageError::CapacityExceeded {
                 what: "owner.record_body",
                 limit: body_limit as u64,
@@ -273,7 +305,7 @@ impl MutationOwner {
         }
         let occupied = !self.groups[index].records.is_empty();
         let must_seal = match lane {
-            PackLane::WholeFile => occupied,
+            PackLane::WholeFile | PackLane::PooledMetadata | PackLane::Singleton => occupied,
             PackLane::Ordinary | PackLane::Native => {
                 occupied && self.groups[index].framed_len.saturating_add(body) > GROUP_TARGET
             }
@@ -291,12 +323,60 @@ impl MutationOwner {
             object_id: object.id(),
             role: object.role(),
             canonical_length: object.canonical_len(),
+            base_object_id: record.base,
         });
         availability.inserted(object.id());
-        if lane == PackLane::WholeFile {
+        if matches!(
+            lane,
+            PackLane::WholeFile | PackLane::PooledMetadata | PackLane::Singleton
+        ) {
             self.seal_group(lane, availability)?;
         }
         Ok(())
+    }
+
+    fn select_record(
+        &mut self,
+        object: &FinalizedObject,
+        advisory: &[ObjectId],
+    ) -> StorageResult<crate::encoding::EncodedRecord> {
+        let mut input = SelectInput {
+            connection: &self.connection,
+            capacities: &self.capacities,
+            candidates: &mut self.candidates,
+            depths: &mut self.depths,
+            packs: &mut self.pack_cache,
+            decode: &mut self.decompression,
+            chain: &mut self.chain,
+            counters: &mut self.delta,
+        };
+        select(
+            &mut input,
+            object.canonical(),
+            object.role(),
+            advisory,
+            &mut self.compression,
+        )
+    }
+
+    /// Representation selection outcomes of this operation.
+    pub fn delta_counters(&self) -> DeltaCounters {
+        self.delta
+    }
+
+    /// Work spent acquiring delta bases in this operation.
+    pub fn chain_counters(&self) -> ChainCounters {
+        self.chain
+    }
+
+    /// Live bytes held by the bounded admitted-FULL winner cache.
+    pub fn candidate_index_bytes(&self) -> usize {
+        self.candidates.live_bytes()
+    }
+
+    /// Entries currently retained by the dependency-depth cache.
+    pub fn depth_cache_entries(&self) -> usize {
+        self.depths.len()
     }
 
     /// Frames and places the lane's pending group, then records its locators.
@@ -332,13 +412,18 @@ impl MutationOwner {
         }
         self.write_pack(write)?;
         for (record_number, member) in pending.members.iter().enumerate() {
+            if member.base_object_id.is_some() {
+                self.counters.prefix_records += 1;
+            } else {
+                self.counters.full_records += 1;
+            }
             write::insert_object(
                 &self.connection,
                 &ObjectRow {
                     object_id: member.object_id,
                     role: member.role.code(),
                     canonical_length: member.canonical_length,
-                    base_object_id: None,
+                    base_object_id: member.base_object_id,
                     pack_id: write.pack_id,
                     group_number: placed.group_number,
                     record_number,
@@ -396,7 +481,13 @@ impl MutationOwner {
             return Err(StorageError::Aborted);
         }
         match self.finish_inner() {
-            Ok(counters) => Ok(counters),
+            Ok(mut counters) => {
+                // Selection and chain counters live beside the resolver while the
+                // operation runs; the outcome reports the totals once.
+                counters.delta = self.delta;
+                counters.chain = self.chain;
+                Ok(counters)
+            }
             Err(error) => {
                 self.terminal = true;
                 Err(error)

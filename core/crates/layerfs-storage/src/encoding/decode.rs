@@ -1,35 +1,43 @@
-//! FULL reconstruction: one stored record to its canonical object.
+//! Record reconstruction: one stored record to its canonical object.
 //!
 //! Every intermediate is authenticated. The pack header and group directory are
 //! validated before a body is touched, a compressed body is checked against its
 //! declared decoded length, the record grammar is validated before use, and the
 //! rebuilt canonical object must match the length recorded for its locator. A
-//! corrupt record is an error and never selects another decoder.
+//! corrupt record is an error and never selects another decoder. A PREFIX record
+//! is decoded only against the exact base payload the resolver reconstructed and
+//! authenticated; there is no trial decode and no fallback.
 
 use layerfs_content::encode_whole_file_payload;
 use layerfs_content::file::mapping::encode_chunk_object;
+use layerfs_content::ObjectRole;
 
 use crate::encoding::codec::{CodecProfile, DecompressionWorkspace};
+use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
-use crate::pack::assemble::FULL_TAG;
-use crate::pack::layout::{
-    group_view, parse_header, record_range, GroupCodec, PackLane, WHOLE_FILE_COMPACT_DROP,
-};
-use crate::policy::{CANONICAL_LIMIT, OBJECT_ENVELOPE_OVERHEAD};
+use crate::pack::assemble::FULL_TAG as ORDINARY_FULL_TAG;
+use crate::pack::layout::{group_view, parse_header, record_range, GroupCodec, PackLane};
+use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
+use crate::sqlite::lookup::ObjectLocation;
 
 /// Rebuilds the canonical object stored at one locator.
+///
+/// `base` is the exact raw payload of the recorded direct base, already read and
+/// authenticated by the caller, or `None` when the locator records no base. The
+/// presence of the base must agree with the record's own tag.
 pub fn decode_canonical(
     pack: &[u8],
-    group_number: usize,
-    record_number: usize,
-    canonical_length: usize,
+    location: &ObjectLocation,
+    capacities: &StorageCapacities,
+    base: Option<&[u8]>,
     workspace: &mut DecompressionWorkspace,
 ) -> StorageResult<Vec<u8>> {
+    let canonical_length = location.canonical_length;
     if canonical_length == 0 || canonical_length > CANONICAL_LIMIT {
         return Err(StorageError::Integrity("canonical length"));
     }
     let header = parse_header(pack)?;
-    let view = group_view(pack, header, group_number)?;
+    let view = group_view(pack, header, location.group_number)?;
     let selected = pack
         .get(view.start..view.end)
         .ok_or(StorageError::Integrity("group body range"))?;
@@ -44,11 +52,11 @@ pub fn decode_canonical(
             if body.len() != view.decoded_length {
                 return Err(StorageError::Integrity("group body length"));
             }
-            let record = framed_record(&body, record_number)?;
-            if record.first() != Some(&FULL_TAG) {
+            let bytes = framed_record(&body, location.record_number)?;
+            if bytes.first() != Some(&ORDINARY_FULL_TAG) {
                 return Err(StorageError::Integrity("record tag is not FULL"));
             }
-            let canonical = record[1..].to_vec();
+            let canonical = bytes[1..].to_vec();
             if canonical.len() != canonical_length {
                 return Err(StorageError::Integrity("ordinary record length"));
             }
@@ -58,17 +66,17 @@ pub fn decode_canonical(
             if view.codec != GroupCodec::Raw {
                 return Err(StorageError::Integrity("native group codec"));
             }
-            let record = framed_record(selected, record_number)?;
-            if record.first() != Some(&FULL_TAG) || record.len() < 5 {
-                return Err(StorageError::Integrity("native record framing"));
-            }
-            let raw_length = u32::from_le_bytes(
-                record[1..5]
-                    .try_into()
-                    .map_err(|_| StorageError::Integrity("native raw length"))?,
-            ) as usize;
-            let frame = &record[5..];
-            let raw = workspace.decompress(CodecProfile::Native, frame, raw_length)?;
+            let bytes = framed_record(selected, location.record_number)?;
+            let parsed = record::parse_native(bytes)?;
+            let raw = decode_payload(
+                PackLane::Native,
+                parsed.raw_length,
+                parsed.base.is_some(),
+                parsed.frame,
+                base,
+                capacities,
+                workspace,
+            )?;
             let canonical = encode_chunk_object(&raw)?;
             if canonical.len() != canonical_length {
                 return Err(StorageError::Integrity("native record length"));
@@ -76,27 +84,79 @@ pub fn decode_canonical(
             Ok(canonical)
         }
         PackLane::WholeFile => {
-            if record_number != 0 {
+            if location.record_number != 0 {
                 return Err(StorageError::Integrity("compact record ordinal"));
             }
-            if selected.len() <= WHOLE_FILE_COMPACT_DROP || selected[0] != FULL_TAG {
-                return Err(StorageError::Integrity("compact record framing"));
-            }
-            let raw_length = canonical_length
-                .checked_sub(OBJECT_ENVELOPE_OVERHEAD)
-                .ok_or(StorageError::Integrity("compact canonical length"))?;
-            let frame = &selected[1..];
-            let raw = workspace.decompress(CodecProfile::Small, frame, raw_length)?;
+            let parsed = record::parse(PackLane::WholeFile, selected, canonical_length)?;
+            let raw = decode_payload(
+                PackLane::WholeFile,
+                parsed.raw_length,
+                parsed.base.is_some(),
+                parsed.frame,
+                base,
+                capacities,
+                workspace,
+            )?;
             let canonical = encode_whole_file_payload(&raw)?;
             if canonical.len() != canonical_length {
                 return Err(StorageError::Integrity("whole-file record length"));
             }
             Ok(canonical)
         }
+        PackLane::Singleton => {
+            if view.codec != GroupCodec::Raw || location.record_number != 0 {
+                return Err(StorageError::Integrity("singleton record framing"));
+            }
+            let bytes = framed_record(selected, 0)?;
+            let parsed = record::parse(PackLane::Singleton, bytes, canonical_length)?;
+            let raw = decode_payload(
+                PackLane::Singleton,
+                parsed.raw_length,
+                parsed.base.is_some(),
+                parsed.frame,
+                base,
+                capacities,
+                workspace,
+            )?;
+            let canonical = match location.role {
+                ObjectRole::WholeFile => encode_whole_file_payload(&raw)?,
+                ObjectRole::Chunk => encode_chunk_object(&raw)?,
+                _ => return Err(StorageError::Integrity("singleton record role")),
+            };
+            if canonical.len() != canonical_length {
+                return Err(StorageError::Integrity("singleton record length"));
+            }
+            Ok(canonical)
+        }
+        PackLane::PooledMetadata => Err(StorageError::Integrity(
+            "pooled metadata record requires value groups",
+        )),
     }
 }
 
-fn framed_record(group: &[u8], ordinal: usize) -> StorageResult<&[u8]> {
+fn decode_payload(
+    lane: PackLane,
+    raw_length: usize,
+    has_base: bool,
+    frame: &[u8],
+    base: Option<&[u8]>,
+    capacities: &StorageCapacities,
+    workspace: &mut DecompressionWorkspace,
+) -> StorageResult<Vec<u8>> {
+    let profile = match lane {
+        PackLane::Native => CodecProfile::native(),
+        _ => CodecProfile::whole_file(capacities),
+    };
+    match (has_base, base) {
+        (true, Some(base)) => workspace.decompress_prefix(profile, frame, raw_length, base),
+        (false, None) => workspace.decompress(profile, frame, raw_length),
+        (true, None) => Err(StorageError::Integrity("prefix record without base bytes")),
+        (false, Some(_)) => Err(StorageError::Integrity("FULL record with base bytes")),
+    }
+}
+
+/// Extracts one framed record from a group body.
+pub fn framed_record(group: &[u8], ordinal: usize) -> StorageResult<&[u8]> {
     if group.len() < 4 {
         return Err(StorageError::Integrity("group framing"));
     }

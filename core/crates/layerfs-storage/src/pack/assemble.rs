@@ -3,7 +3,8 @@
 //! Groups are framed exactly as their lane's grammar requires, and a pack is
 //! assembled from the groups it will contain in one pass. Placement decides what
 //! goes into the write before any bytes are assembled, so no candidate pack is
-//! built and then discarded.
+//! built and then discarded. The singleton lane shares the ordinary directory
+//! grammar but holds exactly one raw group and is bounded by its own pack limit.
 
 use crate::encoding::codec::{CompressionWorkspace, GROUP_LIMIT};
 use crate::error::{StorageError, StorageResult};
@@ -11,13 +12,21 @@ use crate::pack::layout::{
     assembled_length, EncodedGroup, GroupCodec, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN,
     PACK_MAGIC, WHOLE_FILE_COMPACT_DROP,
 };
-use crate::policy::{GROUP_COUNT_LIMIT, PACK_LIMIT, RECORD_COUNT_LIMIT};
+use crate::policy::RECORD_COUNT_LIMIT;
 
 /// Read tag of a record stored without a delta base.
 pub const FULL_TAG: u8 = 0;
 
 /// Frames `records` into one group body for the ordinary or native lane.
 pub fn frame_group(records: &[Vec<u8>]) -> StorageResult<Vec<u8>> {
+    frame_group_bounded(records, GROUP_LIMIT)
+}
+
+/// Frames `records` into one group body bounded by `limit`.
+///
+/// The singleton lane needs the same grammar with its own, larger body bound; the
+/// ordinary and native lanes keep the group ceiling.
+pub fn frame_group_bounded(records: &[Vec<u8>], limit: usize) -> StorageResult<Vec<u8>> {
     if records.is_empty() || records.len() > RECORD_COUNT_LIMIT {
         return Err(StorageError::Integrity("group record count"));
     }
@@ -37,10 +46,10 @@ pub fn frame_group(records: &[Vec<u8>]) -> StorageResult<Vec<u8>> {
             .checked_add(record.len())
             .ok_or(StorageError::Integrity("group length"))?;
     }
-    if length > GROUP_LIMIT {
+    if length > limit {
         return Err(StorageError::CapacityExceeded {
             what: "pack.group_body",
-            limit: GROUP_LIMIT as u64,
+            limit: limit as u64,
             actual: length as u64,
         });
     }
@@ -112,6 +121,31 @@ pub fn build_group(
             records: records.len(),
             codec: GroupCodec::Raw,
         }),
+        PackLane::Singleton => Ok(EncodedGroup {
+            decoded_length: framed_length(records)?,
+            bytes: frame_group_bounded(records, crate::policy::SINGLETON_PACK_LIMIT)?,
+            records: records.len(),
+            codec: GroupCodec::Raw,
+        }),
+        PackLane::PooledMetadata => {
+            if records.len() != 1 {
+                return Err(StorageError::Integrity("pooled group record count"));
+            }
+            let bytes = frame_group(records)?;
+            if bytes.len() > crate::policy::METADATA_GROUP_LIMIT {
+                return Err(StorageError::CapacityExceeded {
+                    what: "pack.pooled_group_body",
+                    limit: crate::policy::METADATA_GROUP_LIMIT as u64,
+                    actual: bytes.len() as u64,
+                });
+            }
+            Ok(EncodedGroup {
+                decoded_length: bytes.len(),
+                bytes,
+                records: 1,
+                codec: GroupCodec::Raw,
+            })
+        }
         PackLane::Ordinary => {
             let raw = frame_group(records)?;
             let decoded_length = raw.len();
@@ -139,14 +173,14 @@ pub fn build_group(
 
 /// Assembles the selected groups into the exact pack bytes to write.
 pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8>> {
-    if groups.is_empty() || groups.len() > GROUP_COUNT_LIMIT {
+    if groups.is_empty() || groups.len() > lane.group_count_limit() {
         return Err(StorageError::Integrity("pack group count"));
     }
     let length = assembled_length(lane, groups)?;
-    if length > PACK_LIMIT {
+    if length > lane.pack_limit() {
         return Err(StorageError::CapacityExceeded {
             what: "pack.assembled_length",
-            limit: PACK_LIMIT as u64,
+            limit: lane.pack_limit() as u64,
             actual: length as u64,
         });
     }
@@ -177,7 +211,7 @@ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8
                 bytes.extend_from_slice(&group.bytes[1 + WHOLE_FILE_COMPACT_DROP..]);
             }
         }
-        PackLane::Ordinary | PackLane::Native => {
+        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
             let mut offset = HEADER_LEN + DIRECTORY_ENTRY_LEN * groups.len();
             for group in groups {
                 bytes.extend_from_slice(

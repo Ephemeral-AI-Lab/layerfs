@@ -3,7 +3,9 @@
 //! One persisted policy row describes the profile this Store was created with.
 //! Open validates the row before any work and refuses conflicting overrides; a
 //! Store is never silently migrated, and objects are never re-interpreted against
-//! another construction cutoff.
+//! another construction cutoff. Threshold selection, maximum stored-object
+//! validity, chain-work budgets and live-memory budgets are separate: raising the
+//! cutoff or a depth never raises the others.
 
 use layerfs_content::{ConstructionPolicy, ContentError, ContentResult};
 
@@ -18,8 +20,10 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 ///
 /// Version 2 added `store_policy.retained_pack_ceiling`, the publication
 /// watermark that keeps an unfinished save's early-committed output invisible to
-/// ordinary readers. A version-1 Store is rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 2;
+/// ordinary readers. Version 3 widens the persisted policy ranges to the
+/// supported configurable profile. Older Stores are rejected rather than
+/// migrated.
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// Declared storage schema identifier.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,9 +62,9 @@ pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
 pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
 /// Rows removed by one bounded cleanup page.
 pub const CLEANUP_PAGE_ROWS: usize = 128;
-/// Largest whole-file payload accepted by the profile.
+/// Largest whole-file payload accepted at the default cutoff.
 pub const WHOLE_FILE_RAW_LIMIT: usize = 131_071;
-/// Largest accepted whole-file codec frame.
+/// Largest accepted whole-file codec frame at the default cutoff.
 pub const WHOLE_FILE_FRAME_LIMIT: usize = 135_168;
 /// Largest chunk payload accepted by the frozen CDC profile.
 pub const CHUNK_RAW_LIMIT: usize = 32_768;
@@ -69,7 +73,38 @@ pub const CHUNK_FRAME_LIMIT: usize = 33_024;
 /// Canonical envelope overhead of a whole-file object over its raw payload.
 pub const OBJECT_ENVELOPE_OVERHEAD: usize = 23;
 
-/// Persisted storage policy: one profile plus the frozen construction values.
+/// Framing bytes a singleton pack adds around its single record.
+pub const SINGLETON_FRAMING_SLACK: usize = 4_096;
+/// Largest assembled singleton pack: one maximum canonical record plus framing.
+pub const SINGLETON_PACK_LIMIT: usize = CANONICAL_LIMIT + SINGLETON_FRAMING_SLACK;
+
+/// Values in one pooled physical metadata group.
+pub const VALUES_PER_GROUP: usize = 165;
+/// Largest accepted pooled metadata group body.
+pub const METADATA_GROUP_LIMIT: usize = 16 * 1024;
+/// Rows in one pooled metadata leaf.
+pub const POOLED_LEAF_ROWS_LIMIT: usize = 100;
+/// Canonical prefix of a pooled metadata leaf: envelope plus node header.
+pub const POOLED_LEAF_PREFIX: usize = 44;
+/// Canonical bytes of one pooled value row.
+pub const POOLED_VALUE_BYTES: usize = 81;
+/// Physical bytes of one pooled value row.
+pub const POOLED_PHYSICAL_ROW: usize = 12;
+
+/// Chain-work budgets. These are separate from the cutoff and the depths: a
+/// deeper chain is still bounded by the bytes it may decode and encode.
+/// Canonical bytes one dependency chain may reconstruct.
+pub const CHAIN_CANONICAL_LIMIT: u64 = 512 * 1024;
+/// Encoded bytes one dependency chain may read.
+pub const CHAIN_ENCODED_LIMIT: u64 = 256 * 1024;
+/// Decoded value-group work one pooled metadata chain may spend.
+pub const METADATA_DECODED_WORK_LIMIT: u64 = 32 * 1024 * 1024;
+/// Retained entries of the bounded metadata value index.
+pub const METADATA_INDEX_VALUES: usize = 131_072;
+/// Live bytes the bounded metadata value index may hold.
+pub const METADATA_INDEX_BYTES: usize = 32 * 1024 * 1024;
+
+/// Persisted storage policy: one profile plus the configurable construction values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StoragePolicy {
     format_profile: u8,
@@ -79,7 +114,7 @@ pub struct StoragePolicy {
 }
 
 impl StoragePolicy {
-    /// The only policy this slice creates and opens.
+    /// The default policy this slice creates and opens.
     pub const fn frozen_default() -> Self {
         let construction = ConstructionPolicy::frozen_default();
         Self {
@@ -164,18 +199,36 @@ impl Default for StoragePolicy {
 /// Capacities derived from the policy by checked arithmetic.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StorageCapacities {
-    /// Largest canonical whole-file object.
+    /// Construction cutoff the profile selects representations with.
+    pub small_file_threshold_bytes: u64,
+    /// Largest canonical whole-file object under this cutoff.
     pub whole_file_canonical_limit: usize,
-    /// Largest accepted whole-file codec frame.
+    /// Largest accepted whole-file codec frame under this cutoff.
     pub whole_file_frame_limit: usize,
+    /// Canonical envelope overhead of a whole-file object.
+    pub whole_file_envelope: usize,
+    /// Whole-file codec window log.
+    pub whole_file_window_log: i32,
     /// Largest canonical chunk object.
     pub chunk_canonical_limit: usize,
     /// Largest accepted chunk codec frame.
     pub chunk_frame_limit: usize,
-    /// Largest assembled ordinary or native pack.
+    /// Largest assembled ordinary, native, compact or pooled pack.
     pub pack_limit: usize,
+    /// Largest assembled singleton pack.
+    pub singleton_pack_limit: usize,
     /// Largest group payload.
     pub group_limit: usize,
+    /// Largest pooled metadata group body.
+    pub metadata_group_limit: usize,
+    /// Whole-file dependency bound.
+    pub whole_file_delta_max_depth: u8,
+    /// Chunk dependency bound.
+    pub chunk_delta_max_depth: u8,
+    /// Canonical bytes one dependency chain may reconstruct.
+    pub chain_canonical_limit: u64,
+    /// Encoded bytes one dependency chain may read.
+    pub chain_encoded_limit: u64,
     /// Objects held by one pending batch.
     pub batch_objects: usize,
     /// Canonical bytes held by one pending batch.
@@ -190,24 +243,39 @@ impl StorageCapacities {
     /// Derives the capacities of an accepted policy.
     pub fn from_policy(policy: StoragePolicy) -> StorageResult<Self> {
         let policy = policy.validated()?;
-        let whole_file_raw = policy.small_file_threshold_bytes() as usize - 1;
+        let construction = policy.construction().capacities();
         let chunk_raw = CHUNK_RAW_LIMIT;
         Ok(Self {
-            whole_file_canonical_limit: whole_file_raw
-                .checked_add(23)
-                .ok_or(StorageError::Integrity("whole-file capacity"))?,
-            whole_file_frame_limit: WHOLE_FILE_FRAME_LIMIT,
+            small_file_threshold_bytes: policy.small_file_threshold_bytes(),
+            whole_file_canonical_limit: construction.whole_file_canonical_limit,
+            whole_file_frame_limit: construction.whole_file_frame_limit,
+            whole_file_envelope: OBJECT_ENVELOPE_OVERHEAD,
+            whole_file_window_log: policy.construction().whole_file_window_log(),
             chunk_canonical_limit: chunk_raw
                 .checked_add(21)
                 .ok_or(StorageError::Integrity("chunk capacity"))?,
             chunk_frame_limit: CHUNK_FRAME_LIMIT,
             pack_limit: PACK_LIMIT,
+            singleton_pack_limit: SINGLETON_PACK_LIMIT,
             group_limit: GROUP_LIMIT,
+            metadata_group_limit: METADATA_GROUP_LIMIT,
+            whole_file_delta_max_depth: policy.whole_file_delta_max_depth(),
+            chunk_delta_max_depth: policy.chunk_delta_max_depth(),
+            chain_canonical_limit: CHAIN_CANONICAL_LIMIT,
+            chain_encoded_limit: CHAIN_ENCODED_LIMIT,
             batch_objects: BATCH_OBJECT_LIMIT,
             batch_bytes: BATCH_CANONICAL_BYTES_LIMIT,
             transaction_rows: TRANSACTION_ROW_LIMIT,
             transaction_bytes: TRANSACTION_CANONICAL_BYTES_LIMIT,
         })
+    }
+
+    /// Dependency bound for one role's prospective delta selection.
+    pub const fn delta_depth_for_role(self, role: layerfs_content::ObjectRole) -> u8 {
+        match role {
+            layerfs_content::ObjectRole::Chunk => self.chunk_delta_max_depth,
+            _ => self.whole_file_delta_max_depth,
+        }
     }
 }
 

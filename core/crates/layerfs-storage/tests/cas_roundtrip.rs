@@ -19,7 +19,7 @@ fn fresh_store_writes_the_declared_schema_identity() {
         SCHEMA_IDENTITY,
         SchemaIdentity {
             application_id: 1_279_677_261,
-            user_version: 2,
+            user_version: 3,
         }
     );
     drop(store);
