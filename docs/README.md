@@ -1,14 +1,21 @@
 # LayerFS documentation
 
-> **Status:** Current documentation entry point; v0.1.5 release documentation.
+> **Status:** Current documentation entry point; v0.1.6 release documentation.
 
-## Use LayerFS v0.1.5
+## Use LayerFS v0.1.6
+
+- [Manual](versioned/0.1.6/README.md)
+- [Release record and accepted limitations](../release-notes/0.1.6/README.md)
+- [Owner acceptance, waivers and issue disposition](../release-notes/0.1.6/acceptance.md)
+- [Sandbox-local state and unchanged Store format](versioned/0.1.6/storage-format.md)
+- [Honest limitations](versioned/0.1.6/limitations.md)
+- [Every measured v0.1.6 selection](../release-notes/0.1.6/benchmark-closeout.md)
+
+## Historical LayerFS 0.1.5
 
 - [Manual](versioned/0.1.5/README.md)
-- [Release record and accepted limitations](../release-notes/0.1.5/README.md)
-- [Owner acceptance, waivers and issue disposition](../release-notes/0.1.5/acceptance.md)
-- [Schema-10 compatibility and no-promotion boundary](versioned/0.1.5/storage-format.md)
-- [Honest limitations](versioned/0.1.5/limitations.md)
+- [Release record](../release-notes/0.1.5/README.md)
+- [Every v0.1.5 benchmark family and case](../release-notes/0.1.5/benchmark-closeout.md)
 
 ## Historical LayerFS 0.1.4
 
@@ -27,8 +34,6 @@
 - [Storage format](versioned/0.1.3/storage-format.md)
 - [Limitations](versioned/0.1.3/limitations.md)
 - [Release record](../release-notes/0.1.3/README.md)
-
-- [Every v0.1.5 benchmark family and case](../release-notes/0.1.5/benchmark-closeout.md)
 
 ## Plan and build
 

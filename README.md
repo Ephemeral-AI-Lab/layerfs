@@ -7,20 +7,20 @@
 <p align="center"><strong>Ephemeral Workspaces. Durable Shared History.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/Ephemeral-AI-Lab/layerfs/actions/workflows/ci.yml"><img src="https://github.com/Ephemeral-AI-Lab/layerfs/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
-  <a href="release-notes/0.1.3/README.md"><img src="https://img.shields.io/badge/status-developer%20preview-orange.svg" alt="Developer preview"></a>
+  <a href="release-notes/0.1.6/README.md"><img src="https://img.shields.io/badge/status-developer%20preview-orange.svg" alt="Developer preview"></a>
   <a href="docs/assets/community/wechat-ephemeral-ai-lab.jpg"><img src="https://img.shields.io/badge/WeChat-Scan%20QR-07C160?logo=wechat&amp;logoColor=white" alt="WeChat QR invite"></a>
   <a href="https://discord.gg/DrgJ4DX9E"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&amp;logoColor=white" alt="Join Discord"></a>
   <a href="https://x.com/yifanxu_ephai"><img src="https://img.shields.io/badge/X-%40yifanxu_ephai-000000?logo=x&amp;logoColor=white" alt="Follow @yifanxu_ephai on X"></a>
 </p>
 
 
-> **v0.1.5 Developer Preview:** [release and downloads](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.5),
-> [every benchmark family and case](release-notes/0.1.5/benchmark-closeout.md), and
-> [schema-10 compatibility boundary](docs/versioned/0.1.5/storage-format.md).
-> Ordinary storage, pending-edit capacity and packed metadata are qualified;
-> known performance regressions, one waived Tier-1 miss and every WARN stay explicit.
+> **v0.1.6 Developer Preview:** [release and downloads](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.6),
+> [every measured selection](release-notes/0.1.6/benchmark-closeout.md), and
+> [compatibility boundary](docs/versioned/0.1.6/storage-format.md).
+> Live Workspace state now lives in the sandbox and the Store format is
+> unchanged; one construction worker, a bounded sandbox spool and every measured
+> regression, waiver and declared allowance stay explicit.
 
 
 ## 🚀 What is LayerFS?
@@ -38,7 +38,7 @@ The filesystem remains load-bearing for recursive multi-agent exploration
 without multiplying storage.
 
 > [!WARNING]
-> LayerFS 0.1.5 is a Developer Preview. It is intended
+> LayerFS 0.1.6 is a Developer Preview. It is intended
 > for local evaluation, agent-runtime integration, and performance research—not
 > production storage. It does not provide crash- or power-loss-durability
 > guarantees. Keep an independent copy of important data.
@@ -103,7 +103,7 @@ allocation, equations, source identity, and raw evidence.
 ### 🧩 LayerFS components
 
 The storage engine, SDK, CLI, and filesystem projection are implemented in the
-0.1.5 Developer Preview. They remain separate public boundaries so callers do
+0.1.6 Developer Preview. They remain separate public boundaries so callers do
 not depend on private CAS handles or storage formats.
 
 | **Status** | **Component** | **Role** |
@@ -139,7 +139,7 @@ mkdir -p "$PWD/.layerfs"
 "$LAYERFS_BIN" query layerstacks
 ```
 
-This creates a SQLite Store and an empty LayerStack with a genesis Layer. Continue with the [complete quickstart](docs/versioned/0.1.5/quickstart.md) for Branch creation, Workspace execution, commits, cleanup, directory imports, managed containers, and real FUSE.
+This creates a SQLite Store and an empty LayerStack with a genesis Layer. Continue with the [complete quickstart](docs/versioned/0.1.6/quickstart.md) for Branch creation, Workspace execution, commits, cleanup, directory imports, managed containers, and real FUSE.
 
 When importing an existing directory, keep the Store file **outside** the directory being imported or projected:
 
@@ -168,8 +168,8 @@ benchmark/                     filesystem and end-to-end benchmarks
 containers/layerfs-fuse        managed Linux FUSE runtime image
 docs/versioned/0.1.2          previous versioned product manual
 release-notes/0.1.2            previous release record
-docs/versioned/0.1.5          v0.1.5 manual
-release-notes/0.1.4            previous release record
+docs/versioned/0.1.6          v0.1.6 manual
+release-notes/0.1.5            previous release record
 release-notes/0.1.3            release contract, evidence, and limitations
 ```
 
@@ -177,20 +177,30 @@ release-notes/0.1.3            release contract, evidence, and limitations
 
 LayerFS is suitable for evaluation and integration work, but the preview boundary matters:
 
-- 0.1.5 operates against one Store per Client; there is no cross-host synchronization;
-- live-process transaction visibility does not imply crash or power-loss durability;
-- the SDK is consumed from this repository; there is no published crates.io package or default runtime image;
-- managed FUSE requires Docker, `/dev/fuse`, and `CAP_SYS_ADMIN`;
-- the managed container is not a complete hostile-code security boundary;
-- owner-side range-edit batches must target one Workspace and one regular file;
-- explicit compaction is removed in v0.1.5; compacted Stores from earlier builds
-  remain readable, and ordinary storage gains are the only supported route;
-- one registered Tier-1 target misses and is owner-waived
-  (`unrelated-history500` 16.107 s vs `< 15 s`), the cold-Init 2.7 s target is
-  owner-waived, 125 cells WARN, and 139/198 cells are ≥15 % slower than
-  published v0.1.3 (median 1.34×); endurance is not qualified. Read the
-  [release record](release-notes/0.1.5/README.md) and
-  [waivers](release-notes/0.1.5/waivers.md);
+- 0.1.6 operates against one Store per Client; there is no cross-host synchronization;
+- live-process transaction visibility does not imply crash or power-loss durability,
+  and Workspace backing is not fsynced;
+- a v0.1.6 sandbox owner and a v0.1.5 host do not share a live Workspace; match
+  SDK, CLI, daemon and runtime components across a session;
+- the sandbox owns live mutable state and a private payload backing for its mount;
+  the host learns it only when a Commit transfers it, and that transfer pays a
+  storage read (bounded sandbox spool residency ≤ 2.6 MiB) instead of page-cache
+  service. Kernel-dirty shared `mmap` is still not captured by a Commit;
+- canonical construction runs **one worker** (namespace init is the only
+  exception), so six dedup/CDC construction cells are 1.50–1.65× slower than
+  v0.1.5 and are owner-accepted, and the cold `namespace-100000` Init target is
+  owner-waived (4.986 s against 2.7 s). Read the
+  [release record](release-notes/0.1.6/README.md),
+  [acceptance](release-notes/0.1.6/acceptance.md) and
+  [waivers](release-notes/0.1.6/waivers.md);
+- explicit compaction stays removed; compacted Stores from earlier builds remain
+  readable through the retained authenticated read path, and ordinary storage is
+  the only supported route;
+- the measured v0.1.6 set is 36 selections: 28 performance receipts and 36
+  independent verifications, three performance rows above the 15 s family target
+  under declared allowances, one verification row under a declared 30 s ceiling
+  and two verify-only rows under frozen 120 s / 300 s watchdogs. Endurance is not
+  qualified;
 - the retained SQLite Store still misses the 600 MB primary-control goal;
   storage-efficiency tradeoffs are accepted for
   [v0.1.4](docs/roadmap/0.1/0.1.4/README.md)
@@ -198,7 +208,7 @@ LayerFS is suitable for evaluation and integration work, but the preview boundar
 - the detached CLI context owner does not forward an interactive PTY; and
 - CLI JSON output is a preview text envelope, not a stable machine API.
 
-Read the full [limitations](docs/versioned/0.1.5/limitations.md) before using LayerFS with important data.
+Read the full [limitations](docs/versioned/0.1.6/limitations.md) before using LayerFS with important data.
 
 ## 📚 Documentation
 
@@ -207,13 +217,13 @@ Start with the [documentation index](docs/README.md), or jump directly to a focu
 | Goal | Guide |
 | --- | --- |
 | Learn the concepts | [Core concepts](docs/general/concepts.md) |
-| Run the CLI and SDK | [Quickstart](docs/versioned/0.1.5/quickstart.md) |
-| Find a CLI command | [CLI reference](docs/versioned/0.1.5/cli.md) |
-| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.5/sdk.md) |
-| Configure container FUSE | [Container runtime](docs/versioned/0.1.5/container-runtime.md) |
-| Understand storage | [Storage format](docs/versioned/0.1.5/storage-format.md) |
-| Review v0.1.5 changes | [Numbered changelog](docs/releases/v0.1.5/CHANGELOG.md) |
-| Review released evidence | [0.1.5 release record](release-notes/0.1.5/README.md) |
+| Run the CLI and SDK | [Quickstart](docs/versioned/0.1.6/quickstart.md) |
+| Find a CLI command | [CLI reference](docs/versioned/0.1.6/cli.md) |
+| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.6/sdk.md) |
+| Configure container FUSE | [Container runtime](docs/versioned/0.1.6/container-runtime.md) |
+| Understand storage | [Storage format](docs/versioned/0.1.6/storage-format.md) |
+| Review v0.1.6 changes | [Numbered changelog](docs/releases/v0.1.6/CHANGELOG.md) |
+| Review released evidence | [0.1.6 release record](release-notes/0.1.6/README.md) |
 | Review completed 0.1.2 work | [0.1.2 checklist](docs/roadmap/0.1/0.1.2/README.md) |
 | Contribute changes | [0.1.x development guide](docs/roadmap/0.1/development.md) |
 
@@ -229,12 +239,13 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | **0.1.3** | Shared live Workspaces, optimized Commit and reads, and the 198-case/226-proof checkpoint. | **Released** as source under `v0.1.3`; see the [release record](release-notes/0.1.3/README.md). |
 | **0.1.4** | Packed storage and bounded Init/Commit improvements; measured tradeoffs accepted. | **Closed; release qualified**; [release record and limitations](release-notes/0.1.4/README.md). |
 | **0.1.5** | Ordinary schema-10 storage, bounded pending edits, coalesced pack rows and the removal of explicit compaction; full campaign qualification with published regressions. | **Released** as source under `v0.1.5`; see the [release record](release-notes/0.1.5/README.md), [acceptance](release-notes/0.1.5/acceptance.md) and [limitations](docs/versioned/0.1.5/limitations.md). |
+| **0.1.6** | Sandbox-local Workspace state: the sandbox owner holds the live namespace and file data, the host keeps canonical construction and publication, and Commit transfers mutable state with no pause fence and one construction worker. | **Released** as source under `v0.1.6`; see the [release record](release-notes/0.1.6/README.md), [acceptance](release-notes/0.1.6/acceptance.md) and [limitations](docs/versioned/0.1.6/limitations.md). |
 | **0.2.0** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |
 | **Later** | Add platform/runtime expansion and verified Store export, import, and synchronization. | **Research**; no cross-host synchronization is part of 0.1.0. |
 
 See the [roadmap checklist](docs/roadmap/README.md) and
 [roadmap architecture notes](docs/roadmap/architecture.md) for acceptance gates,
-ownership boundaries, and sequencing. Use the [Rust SDK reference](docs/versioned/0.1.5/sdk.md)
+ownership boundaries, and sequencing. Use the [Rust SDK reference](docs/versioned/0.1.6/sdk.md)
 to integrate the current public SDK.
 
 ## 🤝 Contributing
