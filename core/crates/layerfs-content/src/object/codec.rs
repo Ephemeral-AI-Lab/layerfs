@@ -8,7 +8,7 @@
 use std::io::Write;
 
 use crate::error::{ContentError, ContentResult};
-use crate::policy::MAX_CANONICAL_OBJECT_BYTES;
+use crate::policy::{MAX_CANONICAL_OBJECT_BYTES, MAX_OBJECT_FIELD_BYTES};
 
 /// Canonical envelope magic.
 pub const OBJECT_MAGIC: [u8; 4] = *b"LFSO";
@@ -24,6 +24,12 @@ const VALUE_LEN_BYTES: usize = 4;
 
 /// Canonical object width for a value of `value_len` bytes.
 pub const fn canonical_len(value_len: usize) -> ContentResult<usize> {
+    if value_len > MAX_OBJECT_FIELD_BYTES {
+        return Err(ContentError::ObjectLimitExceeded {
+            limit: MAX_OBJECT_FIELD_BYTES,
+            actual: value_len,
+        });
+    }
     let payload = match value_len.checked_add(VALUE_LEN_BYTES) {
         Some(payload) => payload,
         None => return Err(ContentError::LengthOverflow),
@@ -96,6 +102,12 @@ pub fn decode_bytes_object(canonical: &[u8]) -> ContentResult<&[u8]> {
         });
     }
     let value_len = read_u32(canonical, HEADER_LEN)?;
+    if value_len > MAX_OBJECT_FIELD_BYTES {
+        return Err(ContentError::ObjectLimitExceeded {
+            limit: MAX_OBJECT_FIELD_BYTES,
+            actual: value_len,
+        });
+    }
     let encoded_value_len = value_len
         .checked_add(VALUE_LEN_BYTES)
         .ok_or(ContentError::LengthOverflow)?;

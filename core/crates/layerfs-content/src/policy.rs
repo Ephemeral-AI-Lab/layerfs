@@ -136,7 +136,17 @@ pub enum Representation {
 pub const OBJECT_ENVELOPE_BYTES: usize = 23;
 
 /// Largest canonical object accepted by this profile (16 MiB).
+///
+/// This is the role-independent envelope ceiling. The envelope decoder cannot
+/// know an object's role - the role tag lives inside the value - so it needs one
+/// bound that no role could legitimately need to exceed.
 pub const MAX_CANONICAL_OBJECT_BYTES: usize = 16 * 1024 * 1024;
+
+/// Largest single value a canonical bytes-role object may carry (8 MiB).
+///
+/// The frozen format bounds a field *and* the envelope separately; the envelope
+/// ceiling sits above this one so a maximum-size field still fits its framing.
+pub const MAX_OBJECT_FIELD_BYTES: usize = 8 * 1024 * 1024;
 
 /// Largest number of entries a non-root mapping page may hold.
 pub const MAX_MAPPING_ENTRIES: usize = 128;

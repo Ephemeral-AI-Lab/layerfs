@@ -12,6 +12,7 @@ use layerfs_content::object::codec::{
     decode_bytes_object, encode_bytes_object, encode_bytes_object_to, HEADER_LEN,
     MAX_PAYLOAD_BYTES, OBJECT_MAGIC,
 };
+use layerfs_content::policy::{MAX_CANONICAL_OBJECT_BYTES, MAX_OBJECT_FIELD_BYTES};
 use layerfs_content::{
     construct_bytes, ConstructionPolicy, ContentError, DiscardingConsumer, ObjectId, OBJECT_DOMAIN,
 };
@@ -233,4 +234,64 @@ fn identity_of_a_damaged_canonical_object_changes() {
     let last = damaged.len() - 1;
     damaged[last] ^= 0x01;
     assert_ne!(ObjectId::for_bytes(&damaged), original);
+}
+
+#[test]
+fn the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope() {
+    // The frozen format bounds a single field and the envelope separately. The
+    // envelope ceiling must sit above the field ceiling, and the field ceiling is
+    // what actually limits a bytes-role value.
+    assert_eq!(MAX_OBJECT_FIELD_BYTES, 8 * 1024 * 1024);
+    assert_eq!(MAX_CANONICAL_OBJECT_BYTES, 16 * 1024 * 1024);
+    // The envelope must be able to frame a maximum-size field.
+    const { assert!(MAX_OBJECT_FIELD_BYTES < MAX_CANONICAL_OBJECT_BYTES) };
+
+    // Exactly at the ceiling: accepted, and the envelope still has room for framing.
+    let at_limit = vec![0x5a_u8; MAX_OBJECT_FIELD_BYTES];
+    let canonical = encode_bytes_object(&at_limit).expect("a maximum-size field is accepted");
+    assert_eq!(canonical.len(), MAX_OBJECT_FIELD_BYTES + HEADER_LEN + 4);
+    assert_eq!(
+        decode_bytes_object(&canonical).unwrap(),
+        at_limit.as_slice()
+    );
+
+    // One byte over: refused on the encode side, before any allocation of the
+    // envelope, with the field ceiling named rather than the envelope ceiling.
+    let over = vec![0x5a_u8; MAX_OBJECT_FIELD_BYTES + 1];
+    assert_eq!(
+        encode_bytes_object(&over),
+        Err(ContentError::ObjectLimitExceeded {
+            limit: MAX_OBJECT_FIELD_BYTES,
+            actual: MAX_OBJECT_FIELD_BYTES + 1,
+        })
+    );
+
+    // The same divergence must be refused on the decode side, for bytes that were
+    // not produced by this encoder: a hand-built envelope whose declared value lies
+    // between the field ceiling and the envelope ceiling.
+    let framed_len = MAX_OBJECT_FIELD_BYTES + 1;
+    let mut hand_built = Vec::with_capacity(HEADER_LEN + 4 + framed_len);
+    hand_built.extend_from_slice(&OBJECT_MAGIC);
+    hand_built.push(1);
+    hand_built.extend_from_slice(&((framed_len + 4) as u32).to_be_bytes());
+    hand_built.extend_from_slice(&(framed_len as u32).to_be_bytes());
+    hand_built.extend(std::iter::repeat_n(0x5a_u8, framed_len));
+    assert_eq!(
+        decode_bytes_object(&hand_built),
+        Err(ContentError::ObjectLimitExceeded {
+            limit: MAX_OBJECT_FIELD_BYTES,
+            actual: framed_len,
+        })
+    );
+
+    // The envelope ceiling is still reported for a genuinely oversized total.
+    let mut too_large = Vec::new();
+    too_large.extend_from_slice(&OBJECT_MAGIC);
+    too_large.push(1);
+    too_large.extend_from_slice(&(MAX_PAYLOAD_BYTES as u32 + 1).to_be_bytes());
+    too_large.extend_from_slice(&0_u32.to_be_bytes());
+    assert!(matches!(
+        decode_bytes_object(&too_large),
+        Err(ContentError::ObjectLimitExceeded { .. })
+    ));
 }
