@@ -8,6 +8,15 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
+- [Current Stages 3–4 continuation prompts](stages-3-4-continuation-prompt.md):
+  D oracle/tree implementation and independent pooling coverage/qualification,
+  then combined acceptance. Pooling is implemented; D remains incomplete.
+- [D implementation prompt](stages-3-4-continue-d.md): fix compared edit coordinates,
+  then complete stored-node split/concat, exact-root/finality and localization proof.
+- [Pooling coverage prompt](stages-3-4-continue-pooling.md): real index boundary,
+  persisted replay, actual chain depth and independent resource/performance evidence.
+- [Final acceptance prompt](stages-3-4-continue-acceptance.md): combine completed paths,
+  qualify the final source and report criteria, LOC, simplifications, metrics and limits.
 - [Implementation issues](implementation-issues.md): parent #165 and seven native
   sub-issues #166–#172, with stage mapping and dependencies.
 - [Stages 0–2 handoff](stages-0-2-handoff.md): executable agent assignment for
@@ -20,6 +29,18 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 - [Stages 1–2 reviewer handoff](stages-1-2-reviewer-handoff.md): independent review
   of actual structure/LOC, every acceptance criterion, further simplifications,
   timing/efficiency evidence, bounded memory and memory safety.
+- [Stages 3–4 handoff](stages-3-4-handoff.md): complete #168/#169 together through
+  physical encoding, localized edits, transitions and independently timed proof;
+  includes verification cases and the qualified v0.1.6 optimization comparison.
+- [Stages 3–4 file plan](stages-3-4-file-plan.md): exact starting source/test paths,
+  current versus recommended final LOC per file and directory, and honest deviation
+  reporting. Existing C1/C2 packages are extended; no new crate is planned.
+- [Stages 3–4 reviewer handoff](stages-3-4-reviewer-handoff.md): independent criteria,
+  structure/LOC, simplification, performance/memory evidence and explicit limits
+  audit for revisions, files, directory dimensions, workspace and underlying storage.
+- [Stages 3–4 completion handoff](stages-3-4-completion-handoff.md): focused recovery
+  assignments for missing physical pooling, stored-node split/concat and finality,
+  followed by the required comparison and memory evidence.
 - [Implementation plan and full review](implementation-plan.md): proposed folder
   structure, 999/200-line rules, before/after component diagrams, bidirectional I/O,
   memory/disk ownership, FUSE/process/cloud integration and ordered implementation

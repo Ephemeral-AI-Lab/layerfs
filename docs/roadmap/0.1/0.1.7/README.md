@@ -154,6 +154,19 @@ frozen profile, expected-versus-actual production LOC, the run commands, the
 observed roots and every declared gap (DELTA, larger cutoffs, pooling, RSS
 evidence and the un-induced unknown-outcome case). Stages 3–7 remain open, and no
 part of v0.1.7 is claimed complete.
+
+The initial [Stages 3–4 report](component-decoupling/stages-3-4-report.md) records
+payload delta/configuration and partial edits, with missing physical metadata
+pooling, stored-node split/concat reuse, exact reference-root/finality proof and
+comparison evidence. The [current continuation prompt](component-decoupling/stages-3-4-continuation-prompt.md)
+now separates D's corrected oracle/stored-tree algorithm from independent pooling
+coverage and qualification, after pooling was implemented in the
+[completion report](component-decoupling/stages-3-4-completion-report.md).
+Combined edit qualification waits for D; pooling checks do not.
+[#168](https://github.com/Ephemeral-AI-Lab/layerfs/issues/168) and
+[#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169) remain incomplete;
+the acceptance criteria are unchanged. No optimization claim follows from the
+passing subset or smoke timings, and no required work is moved to Stage 5/6.
 The [agreed cluster 1/2 overview](component-decoupling/cluster-1-2-components.md)
 contains three canonical-content components and four physical-storage components,
 with shared telemetry and external runtime/workflow ownership. Detailed contracts

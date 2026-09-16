@@ -468,6 +468,28 @@ does not satisfy the requirement.
 | 6. Full C1/C2 qualification | Broaden schema/profile, capacity, receipt, failure/cleanup and memory proofs across all completed paths | Matched successful v0.1.6 operations, no missing cases, no retry/fallback, all required product checks |
 | 7. Runtime integration later | One concrete host/FUSE/workspace shape, then real process transport/provider if selected | Same core contracts, bounded full-system I/O/memory and correct acknowledgement; cloud remains unqualified until policy/provider fit |
 
+### Current Stage 3–4 adjustment
+
+The initial [implementation report](stages-3-4-report.md) records partial work;
+the later [completion report](stages-3-4-completion-report.md) adds pooling and a
+reference oracle. D still re-derives the mapping, and the multi-edit harness first
+needs aligned coordinates. Use the [current prompts](stages-3-4-continuation-prompt.md)
+for D's algorithm/proof and independent pooling coverage/qualification, then combined
+acceptance. The [completion handoff](stages-3-4-completion-handoff.md) retains details.
+
+```text
+existing foundation -> D: corrected oracle + stored-tree edits ----+
+                    -> pooling: coverage + component evidence ----+-> final acceptance
+```
+
+D and pooling coverage have separate ownership and proof gates. Independent pooling
+measurements need not wait for D; combined edit qualification requires D's exactness.
+Passing tests for the implemented subset cannot close missing criteria. Qualification
+required by #168/#169 stays in this batch; Stage 6 broadens full-core coverage. The
+global stage dependencies remain unchanged; Stage 5 absorbs none of this work.
+
+### Earlier slice and boundary cases
+
 Step 2 covers exact reuse and new-object FULL operations; it does not pretend that delta, arbitrary
 edits or filesystem operations are already implemented. Unsupported unfinished
 operations fail explicitly. Do not route missing behavior through the reference

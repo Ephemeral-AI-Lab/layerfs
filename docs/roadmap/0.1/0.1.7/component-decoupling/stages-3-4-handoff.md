@@ -9,6 +9,12 @@ Exact source paths, supporting tests and recommended per-file/directory LOC:
 [stages-3-4-file-plan.md](stages-3-4-file-plan.md).
 These two documents form the handoff; neither is a measured optimization claim.
 
+**Current continuation:** the implementation remains partial, but pooling now exists.
+Use the [three continuation prompts](stages-3-4-continuation-prompt.md): D's corrected
+oracle and stored-tree algorithm, independent pooling coverage/qualification, then
+final combined acceptance. The [completion details](stages-3-4-completion-handoff.md)
+retain the proof obligations. The full criteria below remain unchanged.
+
 ## Copy/paste assignment
 
 You are the implementation agent for Stages 3–4 in:
@@ -504,4 +510,3 @@ edit does not complete the multi-edit frontier or transitions. Keep #165 and
 Stages 5–7 open. No reference retirement, release/tag/deployment or cloud support
 claim. Report a genuine unresolved gate honestly rather than declaring partial
 implementation complete.
-

@@ -134,8 +134,9 @@ Run the commands and three real smoke modes in handoff section 8 against the pin
 state, or reuse only identity-matched evidence where policy permits. Record command,
 exit status, test count and raw output. Verify test targets actually exist and run;
 Python discovery can return success with zero tests. The explicit core checks are
-mandatory; root preflight alone does not verify this workspace. Report preflight's
-publication status without creating a push. Do not repeatedly rerun unchanged passes.
+mandatory. The later owner rule permanently retires tools/preflight.sh: do not run
+or restore it or add an aggregate replacement. Report the individual applicable
+workspace checks without creating a push. Do not repeatedly rerun unchanged passes.
 
 ## 3. Find concrete simplifications
 

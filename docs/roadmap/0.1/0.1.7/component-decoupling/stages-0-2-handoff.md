@@ -260,13 +260,14 @@ Modify existing files only as needed:
 
 - `core/Cargo.toml`, `core/Cargo.lock`: two real members and existing dependency pins.
 - `core/README.md`: actual package/API/command inventory.
-- `tools/preflight.sh`: register the new real example/checks without dropping current checks.
+- Do not modify or run `tools/preflight.sh`: the aggregate gate is permanently
+  retired by the later owner rule. Run affected-workspace checks directly.
 - `tools/production_loc.py`: include candidate runtime SQL and per-file reporting as
   needed. Its current scope only explicitly includes reference SQL; fix classification
   before committing new candidate SQL. Audit comment/test handling rather than
   assuming the current counter proves every rule.
-- Add focused counter tests in `tools/test_production_loc.py` and wire the check into
-  preflight. Recommended tooling-only change: roughly 40–120 implementation lines
+- Add focused counter tests in `tools/test_production_loc.py` and run them directly.
+  Recommended tooling-only change: roughly 40–120 implementation lines
   plus 60–160 test lines; excluded from production totals.
 - `core/tools/check_product_boundary.py` / its tests: extend only for real new source
   paths/formats or a discovered guard gap; the 999/200 Rust/SQL guard already exists.
@@ -443,10 +444,11 @@ cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --
 git diff --check
 ```
 
-Before an implementation push, run `tools/preflight.sh` with its new example/counter
-checks wired in and record the result. No CI exists; do not claim CI green. A failing
-or unrun required check remains visible. Never expand a timeout, warm input or remove
-a test merely to get a green result.
+The later owner rule permanently retires `tools/preflight.sh`; do not run or restore
+it or add an equivalent aggregate gate. Run the required affected-workspace commands
+directly and record results. No CI exists; do not claim CI green. A failing or unrun
+required check remains visible. Never expand a timeout, warm input or remove a test
+merely to get a green result.
 
 For performance evidence, first create the required committed case specification
 and source/harness/cache identities under the benchmark policy, linked to these

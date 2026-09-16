@@ -19,6 +19,12 @@ This file adds the owner's product-source and module-structure requirements.
   and [repository layout](../docs/roadmap/0.1/0.1.7/component-decoupling/repository-layout.md).
   For Stages 0–2, use the [handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-0-2-handoff.md)
   and the detailed C1/C2 contracts it lists.
+  For Stages 3–4, use the [combined handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-handoff.md)
+  and its [file/LOC plan](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-file-plan.md).
+  The partial implementation continues through the [current prompts](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-continuation-prompt.md):
+  correct the oracle and finish stored-tree reuse/finality; independently finish
+  pooling coverage/qualification; then integrate and review final acceptance.
+  Pooling is implemented, so its remaining coverage does not block D.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 

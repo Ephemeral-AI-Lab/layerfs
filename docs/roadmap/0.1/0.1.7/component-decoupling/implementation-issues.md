@@ -33,11 +33,53 @@ simplification opportunities, speed/efficiency statistics and separate bounded-m
 and memory-safety conclusions. The review reports readiness without closing issues.
 
 Selected package homes are core/crates/layerfs-content and
-core/crates/layerfs-storage; only layerfs-telemetry is currently implemented.
-The recommendation is 4,241–7,479 new production LOC across 46 source files:
+core/crates/layerfs-storage. The [implementation report](stages-0-2-report.md)
+records the completed foundation and subsequent fixes; read its limitations and
+amendments with the exact source under review. The original recommendation was
+4,241–7,479 new production LOC across 46 source files:
 1,408–2,479 for C1 and 2,833–5,000 for C2 including runtime SQL. These estimates
 exclude tests/docs/examples/manifests/tooling and are not physical file ceilings.
 Actual results and misses must be reported, never hidden by weakening correctness.
+
+## Current continuation: Stages 3–4
+
+Use the [continuation prompts](stages-3-4-continuation-prompt.md) for #168/#169:
+correct D's oracle and complete stored-tree split/concat/finality; independently
+finish pooling coverage and component qualification; then final combined acceptance.
+The [original handoff](stages-3-4-handoff.md) and
+[exact file/LOC plan](stages-3-4-file-plan.md) retain the full acceptance scope.
+The first [report](stages-3-4-report.md) recorded missing pooling and stored-node
+reuse. The later [completion report](stages-3-4-completion-report.md) records E's
+implementation and D's oracle. Pooling boundary/chain/resource evidence, stored-node
+reuse and exact-root/finality proof remain outstanding. The batch-normalized oracle
+comparison must first align current-result coordinates on both sides; source
+inspection found the candidate harness adds the insertion offset a second time.
+Stage 3 includes physical inode-value pooling; Stage 4 includes both transitions
+and bounded multi-edit finality. Filesystem algorithms, full-core qualification
+and runtime integration stay with #170, #171 and #172 respectively.
+
+The planning baseline has 5,420 C1+C2 production LOC; the recommended final range
+is 8,720–14,230, including existing source and runtime SQL. This is capability
+growth, not an asserted code-size or performance win. Actual v0.1.6 improvement
+requires the handoff's matching successful operation, storage and resource evidence.
+No aggregate preflight or replacement wrapper is allowed; verify the affected
+workspace with explicit commands under current repository rules.
+
+Use the [Stages 3–4 reviewer handoff](stages-3-4-reviewer-handoff.md) for independent
+acceptance: actual structure/LOC, complete criteria, simplification, measured
+efficiency/memory and a limits audit distinguishing enforced bounds, tested ranges
+and deferred filesystem/Workspace ownership. It reports readiness without changing
+issue state.
+
+The [completion handoff](stages-3-4-completion-handoff.md) retains detailed proof
+requirements. Current scheduling comes from the three continuation prompts; it
+does not require all pooling evidence before D, or D before independent pooling
+measurements. Combined edit qualification waits for the corrected algorithm.
+
+The owner-closed Stage 0–2 scopes remain closed; their separate carried inventory is
+[#174](https://github.com/Ephemeral-AI-Lab/layerfs/issues/174). Do not treat those
+residuals as passed or reopen unrelated work. Any residual that affects a new
+Stage 3–4 claim must be accounted for in its own acceptance evidence.
 
 ## Publication and status
 
