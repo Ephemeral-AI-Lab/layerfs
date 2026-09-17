@@ -38,6 +38,13 @@ pub const MAXIMUM_ATTRIBUTE_KEY_BYTES: usize = 255;
 pub const PORTABLE_ATTRIBUTE_DOMAIN: &str = "portable";
 /// Largest bytes of one attribute value.
 pub const MAXIMUM_ATTRIBUTE_VALUE_BYTES: usize = 1024 * 1024;
+/// Largest keys one attribute-key listing may return.
+///
+/// A declared operation bound, not a format bound: the attribute grammar bounds a
+/// page, not a tree, so without this a single `attribute_keys` call would own an
+/// unbounded name set built from the whole tree. The figure matches the read-wave
+/// ceiling, so one listing cannot outgrow one read wave.
+pub const MAXIMUM_ATTRIBUTE_KEYS: usize = 4_096;
 /// Rows one directory leaf may hold at the page ceiling.
 ///
 /// A page is a fixed header plus one row per entry, and a row is never shorter

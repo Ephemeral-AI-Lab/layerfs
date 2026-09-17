@@ -239,6 +239,11 @@ impl Store {
         scope: TimingScope<'_>,
     ) -> StorageResult<Vec<ObjectId>> {
         scope.run(|_contains| {
+            // A batch lookup is a read wave like any other: its size is the
+            // caller's declared resource and it is refused before a connection is
+            // opened, so a caller cannot turn one question into unbounded query
+            // work by passing a longer slice.
+            check_read_demand(ids, self.capacities.read_objects)?;
             let connection = connection::open(&self.path, false)?;
             let ceiling = schema::retained_pack_ceiling(&connection)?;
             lookup::present(&connection, ids, ceiling)

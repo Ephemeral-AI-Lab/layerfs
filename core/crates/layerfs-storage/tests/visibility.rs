@@ -523,3 +523,90 @@ fn the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site() {
         );
     }
 }
+
+/// R40: an interrupted save leaves a readable Store and a named operator path.
+///
+/// A death between a mid-save `COMMIT` and the watermark transaction leaves packs
+/// above `retained_pack_ceiling`. Every later save is refused with
+/// `UninspectedState`, by design: writing would have to guess the ownership of
+/// packs whose save never published. The contract supplies no recovery service, so
+/// what this case pins is the half that must keep working - **reads** - and the two
+/// explicit operator choices, both taken outside the product, that end the refusal.
+#[test]
+fn an_interrupted_save_leaves_the_store_readable_until_an_operator_decides() {
+    let dir = TempDir::new("visibility_interrupted");
+    let path = dir.store_path("visibility_interrupted");
+    let (objects, root, _) = construct_file(&noise(600_000));
+    {
+        let store = create_store(&path);
+        save_all(&store, &objects).unwrap();
+    }
+    let (ceiling, highest) = pack_state(&path);
+    let interrupted = highest + 1;
+    {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute(
+                "INSERT INTO object_packs (pack_id, data) VALUES (?1, ?2)",
+                rusqlite::params![interrupted, vec![0u8; 32]],
+            )
+            .unwrap();
+    }
+
+    // The Store reopens, the published tree still reads, and the watermark is
+    // unchanged: the interrupted save published nothing.
+    let reopened = open_store(&path);
+    let (values, counters) =
+        disabled(|scope| reopened.read_batch(&[root], scope.child("read"))).unwrap();
+    assert_eq!(values.len(), 1);
+    assert_eq!(
+        counters.ceiling, ceiling,
+        "reads still run under the watermark"
+    );
+    assert_eq!(pack_state(&path), (ceiling, interrupted));
+    // A save is refused, and the refusal names both numbers the operator needs.
+    match disabled(|scope| reopened.begin_save(scope.child("storage.begin"))) {
+        Err(StorageError::UninspectedState {
+            ceiling: reported,
+            highest_pack_id,
+        }) => {
+            assert_eq!(reported, ceiling);
+            assert_eq!(highest_pack_id, interrupted);
+        }
+        Err(other) => panic!("expected an uninspected-state refusal, got {other}"),
+        Ok(_) => panic!("an uninspected Store must not accept a new save"),
+    }
+    drop(reopened);
+
+    // Operator choice (a): discard the unpublished packs. The two statements below
+    // are the whole path - they delete only rows above the watermark, which is what
+    // the product's own cleanup does - and the next save is accepted.
+    {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection
+            .execute(
+                "DELETE FROM objects WHERE pack_id > (SELECT retained_pack_ceiling FROM store_policy WHERE id = 1)",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "DELETE FROM object_packs WHERE pack_id > (SELECT retained_pack_ceiling FROM store_policy WHERE id = 1)",
+                [],
+            )
+            .unwrap();
+    }
+    assert_eq!(pack_state(&path), (ceiling, ceiling));
+    let recovered = open_store(&path);
+    let (again, _) = disabled(|scope| recovered.read_batch(&[root], scope.child("read"))).unwrap();
+    assert_eq!(again.len(), 1);
+    let mut operation =
+        disabled(|scope| recovered.begin_save(scope.child("storage.begin"))).unwrap();
+    let (more, _, _) = construct_file(&noise(400_000));
+    for object in more.finalized() {
+        operation.accept(object).unwrap();
+    }
+    let outcome = disabled(|scope| operation.finish(scope.child("storage.finish"))).unwrap();
+    assert!(outcome.inserted > 0, "the Store accepts saves again");
+    assert_eq!(pack_state(&path).0, pack_state(&path).1);
+}

@@ -10,12 +10,13 @@ use crate::filesystem::attributes::keys::AttributeKey;
 use crate::filesystem::attributes::portable::PortableMetadata;
 use crate::filesystem::attributes::read::{read_portable, AttributeReadWork};
 use crate::filesystem::directory::read::{
-    list_after, lookup as directory_lookup, lookup_many as directory_lookup_many,
+    list_after, lookup_counted as directory_lookup_counted, lookup_many as directory_lookup_many,
     DirectoryReadWork, ListingPage,
 };
 use crate::filesystem::inode::read::{
     lookup as inode_lookup, lookup_many, InodeReadWork, InodeTable,
 };
+use crate::filesystem::limits::MAXIMUM_ATTRIBUTE_KEYS;
 use crate::filesystem::path::{LogicalPath, PathName};
 use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
 use crate::filesystem::symlink::SymlinkTarget;
@@ -112,11 +113,17 @@ impl<'a> FilesystemRead<'a> {
                 ));
             }
             let name = PathName::from_bytes(component)?;
-            serial = directory_lookup(
+            // The walk charges the directory pages it reads. Resolving a path is
+            // directory work, and the uncounted `lookup` wrapper used to throw its
+            // `DirectoryReadWork` away, so a reader could stat a whole path and
+            // report `directory.pages_read = 0`.
+            serial = directory_lookup_counted(
                 self.reader,
                 crate::filesystem::sorted::finish::DirectoryRoot(value.content_root),
                 &name,
+                &mut self.work.directory,
             )?
+            .map(|(_, serial)| serial)
             .ok_or(ContentError::MissingObject)?;
             value = self.inode(table, serial)?;
         }
@@ -215,18 +222,42 @@ impl<'a> FilesystemRead<'a> {
         )
     }
 
-    /// Lists the attribute keys of one inode in order.
+    /// Lists the attribute keys of one inode in order, within a declared bound.
+    ///
+    /// The listing is bounded twice: a key beyond
+    /// [`MAXIMUM_ATTRIBUTE_KEYS`](crate::filesystem::limits::MAXIMUM_ATTRIBUTE_KEYS)
+    /// is refused rather than collected, so one inode cannot make this call own an
+    /// unbounded name set, and the pages it walks are charged to the reader's own
+    /// work.
     pub fn attribute_keys(&mut self, path: &LogicalPath) -> ContentResult<Vec<AttributeKey>> {
         let resolved = self.resolve(path)?;
         let mut keys = Vec::new();
-        crate::filesystem::attributes::patch::visit_keys(
+        let mut work = crate::filesystem::attributes::patch::AttributePatchWork::default();
+        crate::filesystem::attributes::patch::visit_keys_counted(
             self.reader,
             resolved.value.metadata_root,
+            &mut work,
             |key, _| {
+                if keys.len() == MAXIMUM_ATTRIBUTE_KEYS {
+                    return Err(ContentError::ObjectLimitExceeded {
+                        limit: MAXIMUM_ATTRIBUTE_KEYS,
+                        actual: keys.len() + 1,
+                    });
+                }
                 keys.push(key.clone());
                 Ok(())
             },
         )?;
+        self.work.attributes.pages_read = self
+            .work
+            .attributes
+            .pages_read
+            .saturating_add(work.base_pages);
+        self.work.attributes.read_waves = self
+            .work
+            .attributes
+            .read_waves
+            .saturating_add(work.base_pages);
         Ok(keys)
     }
 

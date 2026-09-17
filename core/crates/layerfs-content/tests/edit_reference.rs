@@ -213,6 +213,12 @@ fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
             // 90 + 90 with the second leaf surviving by identity. The coordinates are
             // computed from the candidate's own probe here; the test asserts the base
             // root matches the oracle's, and identical roots imply the same layout.
+            //
+            // The name describes the *input*, never the sealed base pages: the
+            // canonical construction of this join repartitions it, and the sealed
+            // base pages are 89 and 90 (`base_pages` in the fixture). `compare`
+            // asserts that partition against the sealed one, so the label and the
+            // fixture cannot drift apart unnoticed.
             let left = file_with_extents(80);
             let right = file_with_extents(100);
             let mut joined = left.clone();
@@ -503,6 +509,29 @@ fn compare(case: &str) -> BTreeMap<String, String> {
         oracle.base_root,
         "{case}: the candidate base differs from the reference base"
     );
+    // The *base* partition is asserted too, not only the edited one. R43 recorded
+    // that this case's sealed base pages are 89 and 90 even though its input is the
+    // literal 80-extent-plus-100-extent join: the canonical construction rebuilds
+    // the join and repartitions it, so the label describes the input, never the
+    // sealed pages. Without this check the two could drift apart silently.
+    let base_pages = candidate_pages(&base_store, constructed.root);
+    report.insert(
+        "base_partition".to_string(),
+        base_pages
+            .iter()
+            .map(|page| format!("{}/{}", page.entries, &page.id[..8]))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    report.insert(
+        "oracle_base_partition".to_string(),
+        oracle
+            .base_pages
+            .iter()
+            .map(|page| format!("{}/{}", page.entries, &page.id[..8]))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
     report.insert("edited_root".to_string(), format!("{}", edited.root));
     report.insert("oracle_root".to_string(), oracle.edited_root.clone());
     report.insert(
@@ -583,6 +612,12 @@ fn the_candidate_reproduces_the_reference_root_and_partition() {
             failures.push(format!(
                 "{case}: root {} != oracle {}",
                 report["edited_root"], report["oracle_root"]
+            ));
+        }
+        if report["base_partition"] != report["oracle_base_partition"] {
+            failures.push(format!(
+                "{case}: base partition {} != oracle {}",
+                report["base_partition"], report["oracle_base_partition"]
             ));
         }
         if report["partition"] != report["oracle_partition"] {

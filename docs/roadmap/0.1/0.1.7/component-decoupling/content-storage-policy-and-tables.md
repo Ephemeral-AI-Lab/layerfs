@@ -300,14 +300,23 @@ Ordinary SQL over objects cannot currently enumerate the four payload cases.
 
 Proposed content-storage tables:
 
-The [save/persistence design](admission-and-persistence.md) selects four tables and
-19 columns. It owns writer authority, bounded transactions, required indexes and
-cleanup order; this document owns their meanings and configuration compatibility.
-**As implemented, the schema has 20 columns and `user_version = 2`:** the review of
-Stages 1–2 showed that bounded transactions release the write lock between
-commits, so a failed save's early-committed packs stayed readable. The
-`store_policy` row therefore also carries `retained_pack_ceiling`, the publication
-watermark described below. `user_version = 1` is rejected, not migrated.
+The [save/persistence design](admission-and-persistence.md) selects four tables. It
+owns writer authority, bounded transactions, required indexes and cleanup order;
+this document owns their meanings and configuration compatibility.
+**As implemented, the schema has 21 columns and `user_version = 4`** (corrected
+2026-09-17; this paragraph said "19 columns" and "20 columns and `user_version = 2`"
+and had been stale since version 3). The version history is:
+
+| version | what it changed |
+| --- | --- |
+| 1 | rejected, not migrated: it predates `retained_pack_ceiling` |
+| 2 | the review of Stages 1–2 showed that bounded transactions release the write lock between commits, so a failed save's early-committed packs stayed readable; `store_policy` gained `retained_pack_ceiling`, the publication watermark described below |
+| 3 | the persisted policy CHECK ranges were widened to the supported configurable profile (`small_file_threshold_bytes`, `whole_file_delta_max_depth`, `chunk_delta_max_depth`) |
+| 4 | the pooled-metadata dependency bound `store_policy.metadata_delta_max_depth` |
+
+Rejected versions are refused at open, never migrated or silently rewritten. The
+declared column shape is pinned by `sqlite/schema.rs`, which names every column of
+every table in declaration order and is what `Store::open` checks a file against.
 
 ```text
 store_policy                      one persisted policy per Store

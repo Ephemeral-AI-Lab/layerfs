@@ -453,6 +453,43 @@ under exclusive authority. This identifies the failed save's committed packs
 without retaining an ID for every object. If exclusivity or outcome is uncertain,
 the range is not deletion authority. A successful save ends this cleanup ownership.
 
+### An interrupted save: what stays readable and the operator path
+
+A save's output becomes visible only in its final transaction, where
+`store_policy.retained_pack_ceiling` advances to name the packs the save created
+(`cas/owner.rs`). Every earlier commit in that save is private to it. If the
+process dies between a mid-save `COMMIT` and that watermark transaction, the packs
+above the watermark belong to a save that never published, and the next
+`begin_save` is refused with `UninspectedState { ceiling, highest_pack_id }`
+rather than guessing their ownership (`cas/owner.rs`, acquisition).
+
+This is contract-consistent, and **no recovery service is added.** What the
+contract does state is what an operator is entitled to do, and what must keep
+working until they do it:
+
+- **Reads keep working.** Opening the Store and reading every root at or below the
+  watermark is unaffected: the watermark is the read-visible boundary, and the
+  unpublished packs are above it. A Store in this state is readable, not corrupt.
+  `visibility::an_interrupted_save_leaves_the_store_readable_until_an_operator_decides`
+  pins the read, the refusal, and the exit from it.
+- **The refusal names both numbers**, so an operator never has to guess which packs
+  are unpublished: `ceil(pack_id)` above `retained_pack_ceiling` is exactly the
+  set. Nothing else is inferred, and nothing is repaired automatically.
+- **The operator path is one of two explicit choices, taken outside the product.**
+  (a) *Discard*: delete the object and pack rows above the watermark, which is
+  precisely the range the product's own definite-failure cleanup deletes, and
+  which is safe because no published row can reference a pack above the ceiling.
+  (b) *Publish after inspection*: if the operator has independently established
+  that the interrupted save's output is complete and its dependencies satisfied,
+  advance the watermark to the highest inspected pack - the "explicit authoritative
+  inspection" this contract already permits. Either way the decision is the
+  operator's and is recorded as such; the product neither performs it nor
+  influences it.
+
+Do not add an automatic repair, a retry, a resend, a WAL, a checkpoint or a lease
+for this state. A writer that finds it is unsupported until a human decides, and
+that is deliberate.
+
 ### New-writer ordering removes the need for a cleanup graph
 
 For every new direct delta, require the selected base locator to precede the
@@ -567,6 +604,45 @@ acknowledgement, once detected, returns failure with unknown outcome and preserv
 potentially committed data. Detection/timeout latency remains measured. A separate
 caller-requested inspection can determine what persisted;
 it cannot silently replay the original operation.
+
+### 8.1 Accepted placement constraints (recorded 2026-09-17)
+
+Two structural properties of this implementation are **accepted as adapter
+constraints**, not left implicit and not treated as defects to fix later. Both were
+re-measured against the tree rather than read from a report.
+
+**The persistence seam is local-path only.** `Store` holds a `PathBuf`
+(`cas/store.rs`), `Store::create` and `Store::open` take `impl AsRef<Path>`, and the
+connection is opened with `Connection::open_with_flags` on that path
+(`sqlite/connection.rs`). There is no byte-range read and no transport trait, so an
+engine reached over a network would transfer whole packs per acquisition - the
+review measured the pack granularity this implies.
+
+*Accepted, with the consequence stated:* a remote placement is a **different C2
+owner behind this same operation contract**, not a second backend selected inside
+this one. The adapter that owns that placement is responsible for bounded batch
+queries, grouped physical reads, atomic pack/locator/catalogue writes, provider size
+limits, same-operation read visibility, acknowledged read-after-write behaviour,
+zero automatic retries, and for declaring the pack transfer it causes. This section
+grants no transport trait, no connection string, no provider registry and no
+error-driven fallback; a provider that cannot satisfy the operation contract is
+unsupported for that operation.
+
+**The core is `!Send` as written.** `CompressionWorkspace` holds raw
+`*mut ZSTD_CCtx` / `*mut ZSTD_DCtx` handles with no `unsafe impl Send`
+(`encoding/codec.rs`), `FileBacking` and `FileRun` share `Rc<Account>` with
+`Cell`/`RefCell` accounting (`filesystem/references/backing.rs`), and
+`TimingScope` is `!Send` and `!Sync` by construction
+(`layerfs-telemetry/src/timer/scope.rs`, `PhantomData<*const ()>`).
+
+*Accepted:* one attempted operation is one thread's work end to end. An adapter that
+must move work across an executor owns a **session**, not a live `SaveOperation`:
+it completes or abandons the operation on the thread that started it and reopens the
+Store elsewhere. No `unsafe impl Send` is added, because the zstd context's thread
+affinity is the library's rule and asserting otherwise here would be a claim this
+crate cannot verify. Nothing in this decision licenses a retry or a second attempt:
+a `SaveOperation` that is abandoned is abandoned, and the caller's next action is a
+new operation over the same Store, subject to the ordinary visibility rules.
 
 ## 9. Cut list and measurement
 

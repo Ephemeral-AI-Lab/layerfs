@@ -58,40 +58,42 @@ scope for before and after (`core/crates`, excluding tests/examples/tooling):
 
 | Scope | Before | After | Delta |
 | --- | ---: | ---: | ---: |
-| C1 `layerfs-content` | 4,487 | 11,001 | +6,514 |
-| C2 `layerfs-storage` | 5,941 | 5,964 | +23 |
-| C1 + C2 | 10,428 | 16,965 | +6,537 |
+| C1 `layerfs-content` | 4,487 | 11,772 | +7,285 |
+| C2 `layerfs-storage` | 5,941 | 6,042 | +101 |
+| C1 + C2 | 10,428 | 17,814 | +7,386 |
 | Existing telemetry | 732 | 732 | 0 |
-| Core total | 11,160 | 17,697 | +6,537 |
+| Core total | 11,160 | 18,546 | +7,386 |
 
-New files under `core/crates/layerfs-content/src/filesystem/` (24 production
-files; the plan's 39-file map is reached with fewer, larger files, reported
-below). Every file is under the 999-physical-line ceiling and every `mod.rs` is
-under 200 lines.
+New files under `core/crates/layerfs-content/src/filesystem/` — **40 production
+files**: the plan's 39-file map plus the justified `objects.rs`. Every file is
+under the 999-physical-line ceiling and every `mod.rs` is under 200 lines. The
+per-file table below is re-derived at this round's commit; see "Correction
+2026-09-17 (R16)" at the end of this section for what was stale in the reviewed
+version and for the plan-wide counts.
 
 | File | LOC | Plan range | Inside? |
 | --- | ---: | ---: | --- |
 | `mod.rs` | 28 | 10–24 | above |
-| `limits.rs` | 20 | 40–80 | below |
-| `identity.rs` | 41 | 80–150 | below |
+| `limits.rs` | 22 | 40–80 | below |
+| `identity.rs` | 32 | 80–150 | below |
 | `path.rs` | 147 | 180–280 | below |
-| `objects.rs` | 95 | — (justified addition) | — |
+| `objects.rs` | 102 | — (justified addition) | — |
 | `root.rs` | 119 | 100–180 | inside |
 | `symlink.rs` | 70 | 50–100 | inside |
-| `input.rs` | 128 | 140–240 | below |
-| `validate.rs` | 299 | 220–380 | inside |
-| `update.rs` | 333 | 200–350 | inside |
-| `read.rs` | 196 | 180–300 | inside |
+| `input.rs` | 158 | 140–240 | inside |
+| `validate.rs` | 576 | 220–380 | above |
+| `update.rs` | 405 | 200–350 | above |
+| `read.rs` | 191 | 180–300 | inside |
 | `sorted/mod.rs` | 9 | 6–14 | inside |
 | `sorted/budget.rs` | 87 | 90–150 | below |
-| `sorted/format.rs` | 603 | 90–160 | **above** |
-| `sorted/page.rs` | 447 | 150–260 | **above** |
-| `sorted/merge.rs` | 278 | 260–440 | inside |
-| `sorted/finish.rs` | 154 | 140–240 | inside |
+| `sorted/format.rs` | 592 | 90–160 | above |
+| `sorted/page.rs` | 449 | 150–260 | above |
+| `sorted/merge.rs` | 282 | 260–440 | inside |
+| `sorted/finish.rs` | 156 | 140–240 | inside |
 | `directory/mod.rs` | 6 | 6–14 | inside |
 | `directory/codec.rs` | 156 | 220–360 | below |
 | `directory/update.rs` | 39 | 140–240 | below |
-| `directory/read.rs` | 260 | 160–280 | inside |
+| `directory/read.rs` | 272 | 160–280 | inside |
 | `inode/mod.rs` | 6 | 6–14 | inside |
 | `inode/codec.rs` | 145 | 120–220 | inside |
 | `inode/update.rs` | 72 | 100–180 | below |
@@ -99,22 +101,24 @@ under 200 lines.
 | `attributes/mod.rs` | 16 | 8–18 | inside |
 | `attributes/keys.rs` | 77 | 60–100 | inside |
 | `attributes/portable.rs` | 70 | 70–130 | inside |
-| `attributes/codec.rs` | 322 | 130–220 | **above** |
-| `attributes/build.rs` | 386 | 180–320 | **above** |
+| `attributes/codec.rs` | 322 | 130–220 | above |
+| `attributes/build.rs` | 386 | 180–320 | above |
 | `attributes/patch.rs` | 181 | 130–230 | inside |
 | `attributes/read.rs` | 167 | 120–210 | inside |
-| `attributes/value.rs` | 61 | 70–130 | below |
+| `attributes/value.rs` | 70 | 70–130 | inside |
 | `references/mod.rs` | 15 | 8–18 | inside |
-| `references/record.rs` | 117 | 100–170 | inside |
-| `references/backing.rs` | 116 | 120–220 | below |
-| `references/runs.rs` | 247 | 160–280 | inside |
-| `references/merge.rs` | 121 | 200–340 | below |
-| `references/reduce.rs` | 465 | 240–400 | **above** |
+| `references/record.rs` | 120 | 100–170 | inside |
+| `references/backing.rs` | 208 | 120–220 | inside |
+| `references/runs.rs` | 417 | 160–280 | above |
+| `references/merge.rs` | 154 | 200–340 | below |
+| `references/reduce.rs` | 469 | 240–400 | above |
 | `references/release.rs` | 132 | 160–280 | below |
 
-Four files exceed their recommended maximum and six fall below their minimum;
-correctness and one-responsibility-per-file drove the split. Deviations are
-reported, not hidden: `sorted/format.rs` carries both real page formats plus the
+
+Across the 53 rows the Stage 5 plan names, **9 sit above their recommended range,
+13 below and 31 within**; inside `filesystem/` alone it is 9 above and 9 below of
+the 39 plan-named rows. Correctness and one-responsibility-per-file drove the
+split. Deviations are reported, not hidden: `sorted/format.rs` carries both real page formats plus the
 exact-size arithmetic the encoder shares; `sorted/page.rs` carries the read paths
 and the decoded-page lifecycle; `attributes/build.rs` and `references/reduce.rs`
 carry the streaming partitioner and the reducer's bounded waves.
@@ -123,6 +127,39 @@ Edited existing files: `src/lib.rs` (+7), `src/error.rs` (+33),
 `src/object/inode_leaf.rs` (+28), `src/object/output.rs` (+52). C2:
 `src/pack/layout.rs`, `src/encoding/full.rs`, `src/encoding/delta/select.rs`,
 `sql/schema.sql`, plus `src/policy.rs`'s existing default arm.
+
+### Correction 2026-09-17 (R16): this section re-derived at the remediation commit
+
+The tables and prose above were measured at an earlier commit and are corrected
+here rather than rewritten silently. Every figure in this section was re-derived
+at `b3df5461c` with the same counter, scope and exclusions
+(`python3 tools/production_loc.py`), and the pre-Stage-5 column at its own
+boundary `4f1b7d847`.
+
+What was wrong in the reviewed version of this section:
+
+- **the file count**: it said "24 production files" where the tree has **40**
+  (the plan's 39 plus the justified `objects.rs`) - and its own table already
+  printed 40 rows;
+- **the above/below prose**: it said "four files exceed their recommended maximum
+  and six fall below their minimum". At the reviewed commit the true counts across
+  the 53 plan-named rows were **8 above, 17 below, 28 within**; at this round's
+  commit they are **9 above, 13 below, 31 within**;
+- **ten per-file LOC values** were stale at the reviewed commit (`update.rs`,
+  `input.rs`, `read.rs`, `sorted/page.rs`, `sorted/finish.rs`,
+  `references/record.rs`, `references/backing.rs`, `references/runs.rs`,
+  `references/merge.rs`, `references/reduce.rs`), and this round's WP1-WP4 moved eleven more
+  files (`validate.rs` 299 -> 576, `runs.rs` 323 -> 417, `update.rs` 359 -> 405,
+  `input.rs` 135 -> 158, `directory/read.rs` 260 -> 272, `attributes/value.rs`
+  61 -> 70, `identity.rs` 41 -> 32, `sorted/format.rs` 603 -> 592,
+  `reduce.rs` 472 -> 469, `limits.rs` 20 -> 22, `objects.rs` 95 -> 102);
+- **the totals table**: its "After" column read 11,001 / 5,964 / 16,965 / 17,697.
+  Re-derived at `b3df5461c` the column is 11,772 / 6,042 / 17,814 / **18,546**.
+
+Cross-check method: re-running the same counter against the reviewer's own
+`loc-tables.md` at the reviewed commit `c99a8d9f9` reproduces all 53 of its
+per-file LOC values exactly and its 8/17/28 split, so the re-derivation here is
+the same measurement on a later tree, not a different one.
 
 ## 3. Criteria and checkpoints
 

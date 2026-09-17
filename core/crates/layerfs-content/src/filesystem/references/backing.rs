@@ -14,7 +14,7 @@
 //! the next one.
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -83,7 +83,13 @@ struct Account {
     capacity: u64,
     runs: Cell<u64>,
     cleanup_failed: Cell<bool>,
-    paths: RefCell<BTreeSet<PathBuf>>,
+    /// Every run path this backing still owns, with the bytes that path holds.
+    ///
+    /// A path leaves this map only when its file is gone. A removal that fails
+    /// therefore keeps both the path and its bytes in the account, so
+    /// `held_bytes` and `owns_storage` describe what is still on disk rather than
+    /// what the operation wished it had removed.
+    paths: RefCell<BTreeMap<PathBuf, u64>>,
 }
 
 impl Account {
@@ -109,6 +115,54 @@ impl Account {
     fn release_bytes(&self, bytes: u64) {
         self.held.set(self.held.get().saturating_sub(bytes));
     }
+
+    /// Gives one removed path's bytes back and forgets the path.
+    fn released(&self, path: &Path, bytes: u64) {
+        self.paths.borrow_mut().remove(path);
+        self.release_bytes(bytes);
+    }
+
+    /// Adds `bytes` to the bytes one still-owned path holds.
+    fn record(&self, path: &Path, bytes: u64) {
+        if let Some(entry) = self.paths.borrow_mut().get_mut(path) {
+            *entry = entry.saturating_add(bytes);
+        }
+    }
+}
+
+/// Highest run token already present in `directory`, or zero when there is none.
+///
+/// Run names are fixed-width so a plain byte comparison orders them, and the
+/// starting token is derived from the directory instead of from process state:
+/// a run file left behind by an earlier, crashed backing no longer collides with
+/// the first run of every later backing in that directory and no longer makes
+/// each of them fail. The scan is bounded; a directory holding more entries than
+/// the bound contributes the tokens it showed, and a name that does not parse is
+/// ignored rather than guessed at.
+fn highest_run_token(directory: &Path) -> u64 {
+    const RUN_NAME_PREFIX: &str = "layerfs-ordering-";
+    const RUN_NAME_SUFFIX: &str = ".run";
+    const SCAN_LIMIT: usize = 4_096;
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        // No directory to read: naming starts at the first token and `create_run`
+        // reports the real failure when it cannot create the file.
+        return 0;
+    };
+    let mut highest = 0_u64;
+    for entry in entries.take(SCAN_LIMIT).flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let Some(digits) = name
+            .strip_prefix(RUN_NAME_PREFIX)
+            .and_then(|rest| rest.strip_suffix(RUN_NAME_SUFFIX))
+        else {
+            continue;
+        };
+        if let Ok(token) = digits.parse::<u64>() {
+            highest = highest.max(token);
+        }
+    }
+    highest
 }
 
 /// File-backed runs in one caller-supplied directory.
@@ -127,16 +181,18 @@ impl FileBacking {
 
     /// A backing that may own at most `capacity_bytes` at once.
     pub fn with_capacity(directory: impl AsRef<Path>, capacity_bytes: u64) -> Self {
+        let directory = directory.as_ref().to_path_buf();
+        let next = highest_run_token(&directory);
         Self {
-            directory: directory.as_ref().to_path_buf(),
-            next: 0,
+            directory,
+            next,
             account: Rc::new(Account {
                 held: Cell::new(0),
                 peak: Cell::new(0),
                 capacity: capacity_bytes,
                 runs: Cell::new(0),
                 cleanup_failed: Cell::new(false),
-                paths: RefCell::new(BTreeSet::new()),
+                paths: RefCell::new(BTreeMap::new()),
             }),
             released: false,
         }
@@ -153,13 +209,22 @@ impl FileBacking {
     }
 
     /// Removes every path the account still lists, reporting the first failure.
+    ///
+    /// A path whose file is gone leaves the account and gives its bytes back. A
+    /// path that could not be removed stays listed and stays counted, so the
+    /// accessors keep describing the storage this backing still owns.
     fn discard_paths(&self) -> ContentResult<()> {
         let paths = std::mem::take(&mut *self.account.paths.borrow_mut());
         let mut failure = None;
-        for path in paths {
-            if let Err(error) = std::fs::remove_file(&path) {
-                if error.kind() != std::io::ErrorKind::NotFound {
+        for (path, bytes) in paths {
+            match std::fs::remove_file(&path) {
+                Ok(()) => self.account.released(&path, bytes),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    self.account.released(&path, bytes);
+                }
+                Err(_) => {
                     failure = Some(());
+                    self.account.paths.borrow_mut().insert(path, bytes);
                 }
             }
         }
@@ -189,7 +254,7 @@ impl OrderingBacking for FileBacking {
             .map_err(|_| ContentError::ResourceUnavailable {
                 what: "ordering run file",
             })?;
-        self.account.paths.borrow_mut().insert(path.clone());
+        self.account.paths.borrow_mut().insert(path.clone(), 0);
         self.account
             .runs
             .set(self.account.runs.get().saturating_add(1));
@@ -225,7 +290,6 @@ impl OrderingBacking for FileBacking {
         if outcome.is_ok() {
             self.released = true;
         }
-        self.account.held.set(0);
         outcome
     }
 }
@@ -236,7 +300,6 @@ impl Drop for FileBacking {
         // removed, and a failure is recorded instead of being thrown away. The
         // operation's own result is decided before this runs.
         let _ = self.discard_paths();
-        self.account.held.set(0);
     }
 }
 
@@ -258,6 +321,7 @@ impl OrderingRun for FileRun {
             return Err(ContentError::Io);
         }
         self.written = self.written.saturating_add(length);
+        self.account.record(&self.path, length);
         Ok(())
     }
 
@@ -286,10 +350,11 @@ impl Drop for FileRun {
             Ok(()) => true,
             Err(error) => error.kind() == std::io::ErrorKind::NotFound,
         };
-        if !removed {
+        if removed {
+            self.account.released(&self.path, self.written);
+        } else {
+            // The file is still there, so it stays owned and stays counted.
             self.account.cleanup_failed.set(true);
         }
-        self.account.paths.borrow_mut().remove(&self.path);
-        self.account.release_bytes(self.written);
     }
 }

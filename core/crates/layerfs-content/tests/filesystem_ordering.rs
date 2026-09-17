@@ -844,3 +844,98 @@ fn run_lookup_answers_every_serial_in_every_order() {
     }
     store.release().expect("release");
 }
+
+/// R19: the accessors describe what is still on disk, not what removal intended.
+///
+/// `release` used to zero the held-bytes account whatever `remove_file` returned,
+/// so a backing that failed to delete a run reported clean while the run file
+/// remained, and `owns_storage` answered `false`. The same held for a run's own
+/// drop. Here the run's path is replaced by a directory between the write and the
+/// cleanup, so `remove_file` fails with a real error and the only honest answer is
+/// "still owned".
+#[test]
+fn a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account() {
+    use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking};
+
+    let dir = TempDir::new("backing-honest");
+    let mut backing = FileBacking::new(dir.path());
+    let mut run = backing.create_run().expect("run");
+    run.append(&[0x5a; 96]).expect("append");
+    run.flush().expect("flush");
+    assert_eq!(backing.held_bytes(), 96);
+    assert!(backing.owns_storage());
+
+    // The written file becomes a directory: `remove_file` now fails with
+    // `IsADirectory`, which is not "already gone".
+    let path = dir.path().join("layerfs-ordering-00000001.run");
+    std::fs::remove_file(&path).expect("the run file is there");
+    std::fs::create_dir(&path).expect("a directory takes its place");
+
+    let error = backing.release().expect_err("removal fails");
+    assert!(matches!(
+        error,
+        ContentError::ResourceUnavailable {
+            what: "ordering run cleanup"
+        }
+    ));
+    assert!(backing.cleanup_failed());
+    assert!(
+        backing.owns_storage(),
+        "a path this backing could not remove is still owned"
+    );
+    assert_eq!(
+        backing.held_bytes(),
+        96,
+        "the bytes of a file that is still there are still held"
+    );
+    assert!(path.exists(), "the failed removal left the path alone");
+
+    // The run's own destructor cannot remove it either, and says so the same way.
+    drop(run);
+    assert!(backing.cleanup_failed());
+    assert!(backing.owns_storage());
+    assert_eq!(backing.held_bytes(), 96);
+}
+
+/// R20: a stale run file does not make every later backing in that directory fatal.
+///
+/// Run names used to start at one for every backing, and `create_new` refused a
+/// name that existed, so one file left behind by an earlier backing made every
+/// later backing in that directory fail for good. The starting token is now taken
+/// from the directory, so the stale file is left alone and the new backing works.
+#[test]
+fn a_stale_run_file_does_not_block_a_later_backing() {
+    use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking};
+
+    let dir = TempDir::new("backing-stale");
+    let stale = dir.path().join("layerfs-ordering-00000001.run");
+    std::fs::write(&stale, b"from an earlier attempt").expect("stale run file");
+    // Names that are not runs are ignored rather than parsed.
+    std::fs::write(dir.path().join("layerfs-ordering-not-a-token.run"), b"x").expect("noise");
+    std::fs::write(dir.path().join("unrelated"), b"y").expect("noise");
+
+    let mut backing = FileBacking::new(dir.path());
+    let mut run = backing
+        .create_run()
+        .expect("a stale run file must not block a later backing");
+    run.append(&[7_u8; 64]).expect("append");
+    run.flush().expect("flush");
+    assert_eq!(backing.held_bytes(), 64);
+    let live = dir.path().join("layerfs-ordering-00000002.run");
+    assert!(live.exists(), "the new run takes the next free token");
+
+    drop(run);
+    backing.release().expect("cleanup succeeds");
+    assert_eq!(backing.held_bytes(), 0);
+    assert!(!backing.owns_storage());
+    assert!(!backing.cleanup_failed());
+    assert!(
+        stale.exists(),
+        "the pre-existing run file is left alone, never adopted or truncated"
+    );
+    assert_eq!(
+        std::fs::read(&stale).expect("stale bytes"),
+        b"from an earlier attempt"
+    );
+    assert!(!live.exists());
+}

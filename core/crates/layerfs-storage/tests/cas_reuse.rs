@@ -2,7 +2,7 @@
 
 mod support;
 
-use layerfs_content::ObjectRole;
+use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{StorageError, Store};
 use support::{
     construct_file, create_store, disabled, noise, open_store, patterned, read_objects, repeat,
@@ -263,4 +263,67 @@ fn a_directory_is_never_treated_as_a_store() {
     let dir = TempDir::new("directory");
     let error = disabled(|scope| Store::open(dir.path(), scope.child("store"))).unwrap_err();
     assert!(matches!(error, StorageError::Engine(_)), "got {error}");
+}
+
+/// R33: a batch lookup is bounded by the declared read ceiling, not by the slice.
+///
+/// `Store::contains` took the caller's whole slice and paged it into queries, so
+/// its size was the caller's choice rather than a declared resource. It now
+/// refuses a demand above `READ_OBJECT_LIMIT` before a connection is opened - the
+/// same ceiling `read_batch` already applies - and this case pins both sides of
+/// the boundary plus the read-side behaviour below it.
+#[test]
+fn a_batch_lookup_is_bounded_by_the_declared_read_ceiling() {
+    use layerfs_storage::policy::READ_OBJECT_LIMIT;
+
+    let dir = TempDir::new("contains-bound");
+    let path = dir.store_path("contains-bound");
+    let store = create_store(&path);
+    let (objects, root, _) = construct_file(&noise(200_000));
+    save_all(&store, &objects).expect("save");
+
+    let demand = |count: usize, first: ObjectId| {
+        (0..count)
+            .map(|index| {
+                let mut bytes = first.to_bytes();
+                bytes[0] ^= (index & 0xff) as u8;
+                bytes[1] ^= (index >> 8) as u8;
+                ObjectId::from_bytes(&bytes).expect("identity")
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // At the ceiling the query runs.
+    let at_limit = demand(READ_OBJECT_LIMIT, root);
+    let found = disabled(|scope| store.contains(&at_limit, scope.child("contains")))
+        .expect("a demand at the declared ceiling is accepted");
+    assert!(
+        found.len() <= 1,
+        "the synthetic identifiers are not stored: {found:?}"
+    );
+    // The real identity is reported present when it is in the demand.
+    let present = disabled(|scope| store.contains(&[root], scope.child("contains")))
+        .expect("one identifier is accepted");
+    assert_eq!(present, vec![root]);
+
+    // One past the ceiling is refused, before any connection is opened.
+    let over = disabled(|scope| {
+        store.contains(
+            &demand(READ_OBJECT_LIMIT + 1, root),
+            scope.child("contains"),
+        )
+    })
+    .unwrap_err();
+    match over {
+        StorageError::CapacityExceeded {
+            what,
+            limit,
+            actual,
+        } => {
+            assert_eq!(what, "storage.read_objects");
+            assert_eq!(limit, READ_OBJECT_LIMIT as u64);
+            assert_eq!(actual, READ_OBJECT_LIMIT as u64 + 1);
+        }
+        other => panic!("expected a capacity refusal, got {other}"),
+    }
 }

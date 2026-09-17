@@ -564,3 +564,175 @@ fn an_attribute_value_over_the_declared_bound_is_refused_on_write() {
     let outcome = with_objects(&mut store, |objects| emit_value(objects, &at_limit));
     assert!(outcome.is_ok(), "a small value is emitted: {outcome:?}");
 }
+
+/// R26/R33: a branch that misstates its summary is refused by the tree engine.
+///
+/// The role and flag negatives are codec-level and live in `filesystem_codec`.
+/// These two are structural and live in the update engine: the parent's declared
+/// `(subtree_count, subtree_bytes)` against the sum of the children it actually
+/// read, and its own level and separator key against each child. Neither had any
+/// case at all.
+///
+/// Reaching them needs a tree whose **identities are consistent**: the provider
+/// contract requires a page served under an id whose bytes do not hash to it to be
+/// refused as `IdentityMismatch`, so a damaged page cannot simply be written over
+/// the old one. The damaged page is therefore re-encoded with the product's own
+/// encoder, inserted under its own new identity, and the chain above it is moved
+/// in two public steps: the inode leaf's value for the directory is re-encoded to
+/// name the new page, and the filesystem root is rebuilt with
+/// `FilesystemRoot::with_inode_table`. The directory holds 900 hard links to one
+/// file inode so the inode table stays a single leaf and the chain has exactly
+/// those two steps.
+#[test]
+fn a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine() {
+    use layerfs_content::filesystem::directory::codec::{
+        decode_directory_page, encode_directory_page, DirectoryPage,
+    };
+    use layerfs_content::filesystem::inode::codec::{
+        decode_inode_page, encode_inode_page, InodePage,
+    };
+    use layerfs_content::filesystem::root::FilesystemRoot;
+
+    for (damage, expected) in [
+        ("subtree count", "tree subtree summary"),
+        ("level", "tree child summary"),
+    ] {
+        let mut session = Session::new(1).expect("empty");
+        let directory = session.allocate();
+        let file = session.allocate();
+        let names = (0..900)
+            .map(|index| name(&format!("f{index:04}")))
+            .collect::<Vec<_>>();
+        let directories = [
+            DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("d"), Some(directory))],
+            },
+            DirectoryUpdate {
+                parent: directory,
+                changes: names.iter().map(|n| (n.clone(), Some(file))).collect(),
+            },
+        ];
+        let inodes = [
+            InodeUpdate {
+                serial: directory,
+                value: dir_value(),
+            },
+            InodeUpdate {
+                serial: file,
+                value: regular("failure/shared-content"),
+            },
+        ];
+        let new = vec![directory, file];
+        session
+            .apply(&directories, &inodes, &new)
+            .expect("base tree of 900 hard links");
+
+        // The directory's inode value names its content root, which must be a
+        // branch page for this directory to have one at all.
+        let table_id = session.value.inode_table();
+        let InodePage::Leaf { entries } =
+            decode_inode_page(session.store.canonical(table_id).expect("inode table"))
+                .expect("inode table leaf")
+        else {
+            panic!("a three-inode table is one leaf");
+        };
+        let content_root = entries
+            .iter()
+            .find(|(serial, _)| *serial == directory)
+            .map(|(_, value)| value.content_root)
+            .expect("the directory's inode value");
+        let DirectoryPage::Branch {
+            level,
+            subtree_count,
+            subtree_bytes,
+            children,
+        } = decode_directory_page(session.store.canonical(content_root).expect("content root"))
+            .expect("a 900-entry directory has a branch")
+        else {
+            panic!("a 900-entry directory has a branch");
+        };
+        let damaged = match damage {
+            "subtree count" => DirectoryPage::Branch {
+                level,
+                // One entry more than the children hold. The encoder accepts it
+                // (it only requires the total to cover the row count); the engine
+                // compares it with the children it read.
+                subtree_count: subtree_count + 1,
+                subtree_bytes,
+                children,
+            },
+            _ => DirectoryPage::Branch {
+                // A level its children cannot be one below.
+                level: level + 1,
+                subtree_count,
+                subtree_bytes,
+                children,
+            },
+        };
+        let damaged_id = session.store.insert(
+            ObjectRole::DirectoryBranch,
+            encode_directory_page(&damaged).expect("re-encode the damaged branch"),
+        );
+        assert_ne!(damaged_id, content_root, "{damage}: a new identity");
+
+        let moved_table = InodePage::Leaf {
+            entries: entries
+                .into_iter()
+                .map(|(serial, mut value)| {
+                    if serial == directory {
+                        value.content_root = damaged_id;
+                    }
+                    (serial, value)
+                })
+                .collect(),
+        };
+        let moved_table_id = session.store.insert(
+            ObjectRole::InodeLeaf,
+            encode_inode_page(&moved_table).expect("re-encode the inode leaf"),
+        );
+        let moved_root =
+            FilesystemRoot::decode(session.store.canonical(session.root).expect("root bytes"))
+                .expect("root")
+                .with_inode_table(moved_table_id);
+        let moved_root_id = session.store.insert(
+            ObjectRole::FilesystemRoot,
+            moved_root.encode().expect("root"),
+        );
+
+        let updates = [DirectoryUpdate {
+            parent: directory,
+            changes: vec![(name("f0000"), Some(file))],
+        }];
+        let input = FilesystemInput {
+            base: Some(FilesystemRootId(moved_root_id)),
+            scope: session.scope,
+            root_serial: 1,
+            directories: &updates,
+            inodes: &[],
+            new_inodes: &[],
+            resources: resources(),
+        };
+        let mut sink = TreeStore::new();
+        let outcome = {
+            let mut objects = FilesystemObjects::new(&session.store, &mut sink);
+            update_filesystem(&mut objects, &input, None)
+        };
+        assert!(
+            matches!(&outcome, Err(ContentError::InvalidRecord(what)) if *what == expected),
+            "{damage}: expected InvalidRecord({expected:?}), got {outcome:?}"
+        );
+        assert_eq!(
+            count_role(&sink, ObjectRole::FilesystemRoot),
+            0,
+            "{damage}: a refused operation publishes no root"
+        );
+
+        let mut read =
+            FilesystemRead::new(&session.store, FilesystemRootId(session.root)).expect("old root");
+        assert!(
+            read.stat(&LogicalPath::new("d").expect("path")).is_ok(),
+            "{damage}: the earlier root is untouched"
+        );
+    }
+}

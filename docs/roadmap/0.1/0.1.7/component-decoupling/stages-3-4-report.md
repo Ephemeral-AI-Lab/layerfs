@@ -281,7 +281,17 @@ correct for its own snapshot.
 Retained evidence: `evidence/stages-3-4-oracle-20260916T222738Z-corrected/` (eight
 reference edit cases) and `evidence/stages-3-4-oracle-20260917T034500Z/` (the ninth,
 `repartition-80-100`, in its own generation directory so the earlier receipts stay
-untouched), `evidence/stages-3-4-fingerprint-collision-20260917T021500Z/`
+untouched),
+
+**Correction (2026-09-17, R43).** The case `repartition-80-100` is named for its
+*input* - a file of 80 extents concatenated with a file of 100 - and not for the
+sealed base pages, which are **89 and 90** (`base_pages` in its fixture): the
+canonical construction rebuilds the join and repartitions it, so an 80/100 base
+partition is not reachable through the product at all. The edited 90 + 90 partition
+and the surviving right leaf *are* asserted against the sealed fixture, and
+`edit_reference::the_candidate_reproduces_the_reference_root_and_partition` now
+asserts the **base** partition against the sealed one as well, so the label and the
+fixture cannot drift apart unnoticed. The fixture itself is retained unchanged. `evidence/stages-3-4-fingerprint-collision-20260917T021500Z/`
 (the searched collision pair and the search log),
 `evidence/stages-3-4-timing-20260917T031000Z/` (the declared measurement round with
 its ledger and `tool-identities.txt`), and the earlier

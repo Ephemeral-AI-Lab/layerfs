@@ -373,3 +373,134 @@ fn a_directory_leaf_never_exceeds_the_page_ceiling() {
     let short = encode(200, 6).expect("200 short rows fit");
     assert!(short.len() <= page_bytes);
 }
+
+fn decode_directory(bytes: &[u8]) -> Result<(), ContentError> {
+    decode_directory_page(bytes).map(|_| ())
+}
+
+fn decode_inode(bytes: &[u8]) -> Result<(), ContentError> {
+    decode_inode_page(bytes).map(|_| ())
+}
+
+fn decode_attribute(bytes: &[u8]) -> Result<(), ContentError> {
+    decode_attribute_page(bytes).map(|_| ())
+}
+
+fn decode_root(bytes: &[u8]) -> Result<(), ContentError> {
+    FilesystemRoot::decode(bytes).map(|_| ())
+}
+
+fn decode_symlink(bytes: &[u8]) -> Result<(), ContentError> {
+    SymlinkTarget::decode(bytes).map(|_| ())
+}
+
+/// R26/R33: every tree role checks its own role byte and its own flag byte.
+///
+/// The negative cases used to exist only for the inode leaf, so a directory or
+/// inode branch, a filesystem root and a symlink could in principle accept a
+/// foreign role byte or a set flag byte without a covering case. Each row below
+/// asserts three things against the **sealed** fixture: it decodes as itself, it
+/// refuses a valid *other* role's byte, and it refuses a set flag byte. The flag
+/// sits at value offset 12 for the node grammars (after role and level) and at 11
+/// for the root and symlink grammars, which have no level.
+#[test]
+fn every_tree_role_checks_its_role_byte_and_its_flags() {
+    type Decode = fn(&[u8]) -> Result<(), ContentError>;
+    type RoleCase = (
+        &'static str,
+        (&'static str, u8, u8, u64, &'static [u8]),
+        u8,
+        u8,
+        usize,
+        Decode,
+    );
+    let cases: [RoleCase; 7] = [
+        (
+            "directory leaf",
+            manifest::CODEC_DIRECTORY_LEAF,
+            1,
+            2,
+            12,
+            decode_directory,
+        ),
+        (
+            "directory branch",
+            manifest::CODEC_DIRECTORY_BRANCH,
+            2,
+            1,
+            12,
+            decode_directory,
+        ),
+        (
+            "inode leaf",
+            manifest::CODEC_INODE_LEAF,
+            7,
+            8,
+            12,
+            decode_inode,
+        ),
+        (
+            "inode branch",
+            manifest::CODEC_INODE_BRANCH,
+            8,
+            7,
+            12,
+            decode_inode,
+        ),
+        (
+            "attribute leaf",
+            manifest::CODEC_METADATA_LEAF,
+            9,
+            1,
+            12,
+            decode_attribute,
+        ),
+        (
+            "filesystem root",
+            manifest::CODEC_ROOT,
+            30,
+            31,
+            11,
+            decode_root,
+        ),
+        (
+            "symlink",
+            manifest::CODEC_SYMLINK,
+            31,
+            30,
+            11,
+            decode_symlink,
+        ),
+    ];
+    for (label, fixture, declared, foreign, flag_offset, decode) in cases {
+        let (_, _, role, _, _, bytes) = codec_case(fixture);
+        assert_eq!(role, declared, "{label}: the fixture's declared role");
+        decode(&bytes)
+            .unwrap_or_else(|error| panic!("{label}: the sealed fixture must decode: {error}"));
+
+        let mut foreign_role = bytes.clone();
+        foreign_role[13 + 10] = foreign;
+        assert!(
+            decode(&foreign_role).is_err(),
+            "{label}: role byte {foreign} was accepted by the {declared} grammar"
+        );
+
+        let mut flagged = bytes.clone();
+        flagged[13 + flag_offset] = 1;
+        assert!(
+            decode(&flagged).is_err(),
+            "{label}: a set flag byte at value offset {flag_offset} was accepted"
+        );
+
+        // A truncated object of the same grammar never decodes either, at any
+        // length: the framing check runs before any field is trusted.
+        for length in [0, 8, 12, 13 + 10] {
+            if length < bytes.len() {
+                assert!(
+                    decode(&bytes[..length]).is_err(),
+                    "{label}: a {length}-byte prefix was accepted"
+                );
+            }
+        }
+    }
+}

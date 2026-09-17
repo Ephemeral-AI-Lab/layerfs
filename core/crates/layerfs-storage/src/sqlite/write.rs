@@ -31,7 +31,13 @@ pub struct ObjectRow {
     pub role: u8,
     /// Canonical object length.
     pub canonical_length: usize,
-    /// Direct delta base, always absent in this slice.
+    /// Direct delta base this record was selected against, when it has one.
+    ///
+    /// Absent for a FULL record and for a pooled leaf stored as FULL; present for
+    /// a PREFIX/DELTA record, whose base the owner records here so the dependency
+    /// edge is visible to readers and to cleanup. The earlier doc comment said
+    /// "always absent in this slice", which stopped being true when delta
+    /// selection landed.
     pub base_object_id: Option<ObjectId>,
     /// Pack holding the record.
     pub pack_id: i64,

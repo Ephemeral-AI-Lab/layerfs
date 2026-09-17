@@ -454,3 +454,192 @@ fn a_reader_boundary_is_not_a_store_and_writes_are_rejected_once() {
     };
     assert!(matches!(outcome, Err(ContentError::OutputRejected)));
 }
+
+/// R32/R34: an inode's real attribute tree, read through a path.
+///
+/// `read_portable`, `read_attribute` and `attribute_keys` had no caller anywhere -
+/// no case bound a real attribute tree to an inode and read it through a path, so
+/// the whole path-level attribute surface was unexercised. Resolving a path also
+/// charged nothing: the walk used the uncounted directory lookup and threw its work
+/// away, so a reader could stat twice and still report `directory.pages_read = 0`.
+/// This case binds a three-key tree to a file inode, reads it three ways through
+/// the path, and asserts the work each call charges.
+#[test]
+fn an_inode_attribute_tree_is_read_through_a_path() {
+    use layerfs_content::filesystem::limits::MAXIMUM_ATTRIBUTE_KEYS;
+    use layerfs_content::filesystem::{
+        build_filesystem, scope_for_seed, DirectoryUpdate, FilesystemInput, FilesystemRead,
+        FilesystemResources, FilesystemRootId, InodeUpdate, LogicalPath, PathName,
+    };
+    use layerfs_content::object::inode_leaf::InodeValue;
+
+    let metadata = PortableMetadata {
+        mode: 0o644,
+        mtime_seconds: 1_700_000_000,
+        mtime_nanoseconds: 7,
+    };
+    let mut store = TreeStore::new();
+    let attribute_root = with_objects(&mut store, |objects| {
+        let mode = emit_value(objects, &metadata.mode_bytes(InodeKind::RegularFile)?)?;
+        let mtime = emit_value(objects, &metadata.mtime_bytes()?)?;
+        let note = emit_value(objects, b"opaque")?;
+        let rows = vec![
+            AttributeEntry {
+                key: key("portable", b"mode"),
+                value_root: mode,
+            },
+            AttributeEntry {
+                key: key("portable", b"mtime"),
+                value_root: mtime,
+            },
+            AttributeEntry {
+                key: key("user", b"note"),
+                value_root: note,
+            },
+        ];
+        build_attribute_tree(objects, rows.into_iter().map(Ok)).map(|(root, _)| root)
+    })
+    .expect("attribute tree");
+
+    let scope = scope_for_seed([0x33; 32]);
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![(PathName::new("f").expect("name"), Some(2))],
+    }];
+    let inodes = [
+        InodeUpdate {
+            serial: 1,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: synthetic("root-content"),
+                metadata_root: synthetic("root-meta"),
+            },
+        },
+        InodeUpdate {
+            serial: 2,
+            value: InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 0,
+                content_root: synthetic("file-content"),
+                metadata_root: attribute_root,
+            },
+        },
+    ];
+    let new_inodes = [1_u64, 2];
+    let input = FilesystemInput {
+        base: None,
+        scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources: FilesystemResources::default(),
+    };
+    let built = with_objects(&mut store, |objects| {
+        build_filesystem(objects, &input, None)
+    })
+    .expect("filesystem build");
+    let mut read = FilesystemRead::new(&store, FilesystemRootId(built.root.0)).expect("reader");
+    let path = LogicalPath::new("f").expect("path");
+
+    // A path resolve charges the directory pages it walks, once per stat.
+    assert_eq!(read.work().directory.pages_read, 0);
+    let stat = read.stat(&path).expect("first stat");
+    let after_first = read.work().directory.pages_read;
+    assert!(
+        after_first > 0,
+        "resolving a path must charge the directory pages it read"
+    );
+    assert_eq!(stat.kind, InodeKind::RegularFile);
+    assert_eq!(stat.metadata_root, attribute_root);
+    let _ = read.stat(&path).expect("second stat");
+    assert!(
+        read.work().directory.pages_read > after_first,
+        "a second stat charges its own read"
+    );
+
+    // The typed portable fields, read through the path.
+    assert_eq!(
+        read.read_portable(&path).expect("portable"),
+        metadata,
+        "portable mode and mtime come back through the inode's own tree"
+    );
+    assert!(read.work().attributes.values_read >= 2);
+
+    // One generic value, bounded, present and absent.
+    assert_eq!(
+        read.read_attribute(&path, &key("user", b"note"), 64)
+            .expect("attribute"),
+        Some(b"opaque".to_vec())
+    );
+    assert_eq!(
+        read.read_attribute(&path, &key("user", b"absent"), 64)
+            .expect("absent attribute"),
+        None
+    );
+    // The bound is the caller's: a value longer than it is refused, not truncated.
+    assert!(read
+        .read_attribute(&path, &key("user", b"note"), 3)
+        .is_err());
+
+    // Every key, in key order, with the pages charged.
+    let before_keys = read.work().attributes.pages_read;
+    assert_eq!(
+        read.attribute_keys(&path).expect("keys"),
+        vec![
+            key("portable", b"mode"),
+            key("portable", b"mtime"),
+            key("user", b"note")
+        ]
+    );
+    assert!(
+        read.work().attributes.pages_read > before_keys,
+        "listing keys charges the pages it walked"
+    );
+
+    // R32: the listing is bounded, and a tree past the bound is refused instead of
+    // collected. The keys are short so one tree holds them in a bounded page set.
+    const OVER: usize = MAXIMUM_ATTRIBUTE_KEYS + 1;
+    let mut wide = TreeStore::new();
+    let wide_root = with_objects(&mut wide, |objects| {
+        let mut rows = Vec::with_capacity(OVER);
+        for index in 0..OVER {
+            let value_root = emit_value(objects, b"v")?;
+            rows.push(AttributeEntry {
+                key: AttributeKey::new("user".to_owned(), format!("k{index:05}").into_bytes())
+                    .expect("key"),
+                value_root,
+            });
+        }
+        build_attribute_tree(objects, rows.into_iter().map(Ok)).map(|(root, _)| root)
+    })
+    .expect("wide attribute tree");
+    let wide_inodes = [
+        inodes[0],
+        InodeUpdate {
+            serial: 2,
+            value: InodeValue {
+                metadata_root: wide_root,
+                ..inodes[1].value
+            },
+        },
+    ];
+    let wide_input = FilesystemInput {
+        inodes: &wide_inodes,
+        ..input
+    };
+    let wide_built = with_objects(&mut wide, |objects| {
+        build_filesystem(objects, &wide_input, None)
+    })
+    .expect("wide filesystem build");
+    let mut wide_read =
+        FilesystemRead::new(&wide, FilesystemRootId(wide_built.root.0)).expect("reader");
+    match wide_read.attribute_keys(&path) {
+        Err(ContentError::ObjectLimitExceeded { limit, actual }) => {
+            assert_eq!(limit, MAXIMUM_ATTRIBUTE_KEYS);
+            assert_eq!(actual, OVER);
+        }
+        other => panic!("expected the key bound to refuse, got {other:?}"),
+    }
+}

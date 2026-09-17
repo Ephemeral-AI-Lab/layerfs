@@ -131,11 +131,24 @@ pub fn apply_patches(
 pub fn visit_keys(
     reader: &dyn AuthenticatedObjects,
     root: ObjectId,
-    mut visitor: impl FnMut(&AttributeKey, &ObjectId) -> ContentResult<()>,
+    visitor: impl FnMut(&AttributeKey, &ObjectId) -> ContentResult<()>,
 ) -> ContentResult<()> {
     let mut work = AttributePatchWork::default();
-    let mut cursor = PageCursor::new(reader, root, &mut work)?;
-    while let Some(entry) = cursor.next(reader, &mut work)? {
+    visit_keys_counted(reader, root, &mut work, visitor)
+}
+
+/// Visits every key of one attribute tree, reporting the work it cost.
+///
+/// The visitor is called in key order and may stop the walk by returning an
+/// error, which is how a caller enforces its own bound on the set it collects.
+pub fn visit_keys_counted(
+    reader: &dyn AuthenticatedObjects,
+    root: ObjectId,
+    work: &mut AttributePatchWork,
+    mut visitor: impl FnMut(&AttributeKey, &ObjectId) -> ContentResult<()>,
+) -> ContentResult<()> {
+    let mut cursor = PageCursor::new(reader, root, work)?;
+    while let Some(entry) = cursor.next(reader, work)? {
         visitor(&entry.key, &entry.value_root)?;
     }
     Ok(())
