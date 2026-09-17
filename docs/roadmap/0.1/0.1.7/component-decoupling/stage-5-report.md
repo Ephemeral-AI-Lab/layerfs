@@ -720,6 +720,19 @@ test instead: the per-lookup 16 KiB allocation and buffer re-read are gone (the
 counting-allocator test asserts a zero-allocation lookup wave and a one-pass
 ascending sweep).
 
+**Dated correction (2026-09-17, research):** the attribution two paragraphs
+above — "the reason is the tiered merge itself" — is incomplete. Decomposing the
+same receipt shows the write term (rows written by merges/copies/spills) indeed
+tracks the tiered-merge floor (×2.72/2.52/2.36 per doubling ≈ Θ(r·log₂(r/P))),
+but the **larger read residual** (rows read minus rows written: ×3.86/3.84/3.67
+per doubling ≈ n^1.9) comes from the lookup path: `spill()` resets every tier's
+scan even for tiers whose runs the spill did not touch, so a passed cursor
+restarts its tier from the front. The receipt's numbers are unchanged; the
+mechanism is now correctly attributed, and removing it is a documented
+optimization opportunity — see
+[`complexity-and-roundtrip-research-20260917.md`](complexity-and-roundtrip-research-20260917.md)
+(entry 4 of its Tier 0 register).
+
 ### What this round does **not** close
 
 - Nothing else. Every row in the terminal handoff's ledger is now either
