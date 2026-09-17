@@ -1,0 +1,41 @@
+=== control run: the W2 ceiling threading and the pool-read cache order reverted | 2026-09-17T00:04:13Z
+owner.rs: the four pooled read sites pass i64::MAX again (the reviewed snapshot).
+pool/read.rs: group_values consults the decoded-value cache before the ceiling.
+
+=== visibility with both W2 halves reverted | 2026-09-17T00:04:13Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test visibility
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running tests/visibility.rs (core/target/debug/deps/visibility-4510e3f48dbad30c)
+
+running 7 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... FAILED
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... FAILED
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+failures:
+
+---- the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site stdout ----
+
+thread 'the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site' panicked at crates/layerfs-storage/tests/visibility.rs:513:9:
+the pooled lane's selection region passes an unbounded read ceiling
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_pooled_read_refuses_a_value_group_above_the_captured_ceiling stdout ----
+
+thread 'a_pooled_read_refuses_a_value_group_above_the_captured_ceiling' panicked at crates/layerfs-storage/tests/visibility.rs:405:10:
+called `Result::unwrap_err()` on an `Ok` value: [[1, 0, 0, 0, 0, 0, 0, 0, 1, 132, 215, 89, 242, 66, 235, 205, 233, 254, 128, 192, 152, 2, 113, 52, 253, 176, 230, 250, 144, 151, 153, 190, 205, 61, 198, 205, 132, 135, 75, 159, 3, 27, 117, 85, 179, 131, 111, 229, 183, 160, 159, 194, 176, 90, 117, 231, 70, 44, 194, 57, 225, 66, 15, 1, 105, 195, 86, 1, 32, 136, 42, 15, 141], [1, 0, 0, 0, 0, 0, 0, 0, 1, 173, 49, 99, 24, 20, 207, 118, 125, 255, 177, 82, 228, 241, 146, 245, 173, 51, 69, 192, 115, 216, 217, 82, 74, 246, 204, 80, 91, 237, 15, 3, 138, 137, 139, 85, 59, 66, 106, 149, 169, 27, 183, 254, 211, 67, 4, 153, 168, 119, 143, 202, 232, 166, 233, 70, 182, 205, 138, 87, 70, 65, 179, 30, 163], [1, 0, 0, 0, 0, 0, 0, 0, 1, 194, 228, 3, 230, 147, 73, 30, 138, 12, 63, 116, 166, 194, 123, 85, 159, 174, 152, 53, 118, 46, 136, 216, 67, 47, 167, 193, 69, 28, 253, 12, 93, 198, 166, 81, 41, 91, 188, 38, 213, 181, 83, 151, 45, 34, 65, 5, 61, 47, 150, 228, 119, 53, 47, 79, 12, 242, 35, 122, 173, 129, 191, 8, 169], [1, 0, 0, 0, 0, 0, 0, 0, 1, 229, 240, 220, 237, 36, 91, 94, 203, 15, 159, 231, 65, 175, 119, 31, 82, 191, 99, 143, 150, 94, 234, 198, 87, 81, 205, 64, 30, 141, 155, 165, 19, 49, 233, 237, 99, 108, 225, 107, 15, 99, 73, 245, 227, 204, 44, 200, 4, 2, 131, 66, 170, 186, 122, 111, 5, 116, 43, 108, 229, 15, 0, 31, 232], [1, 0, 0, 0, 0, 0, 0, 0, 1, 128, 158, 105, 183, 66, 126, 137, 172, 134, 145, 61, 127, 65, 131, 160, 79, 186, 183, 209, 188, 159, 240, 49, 255, 196, 241, 200, 144, 31, 21, 43, 237, 102, 50, 179, 108, 80, 46, 216, 96, 125, 28, 18, 186, 165, 168, 177, 148, 102, 126, 192, 115, 94, 10, 214, 86, 130, 242, 44, 123, 192, 3, 107, 67], [1, 0, 0, 0, 0, 0, 0, 0, 1, 90, 11, 246, 19, 2, 30, 20, 212, 189, 104, 239, 7, 195, 79, 95, 212, 120, 68, 183, 252, 218, 16, 217, 2, 143, 188, 212, 36, 2, 131, 128, 245, 190, 17, 47, 245, 73, 117, 173, 207, 20, 82, 85, 100, 22, 100, 133, 20, 172, 197, 29, 156, 32, 168, 44, 72, 102, 75, 81, 12, 12, 57, 44, 174], [1, 0, 0, 0, 0, 0, 0, 0, 1, 73, 75, 106, 174, 157, 128, 157, 60, 166, 162, 215, 5, 207, 183, 42, 130, 36, 212, 208, 162, 135, 253, 32, 36, 190, 83, 26, 147, 106, 101, 80, 53, 230, 164, 133, 214, 239, 32, 237, 172, 99, 45, 19, 16, 67, 175, 109, 200, 162, 85, 19, 125, 19, 49, 57, 239, 174, 99, 123, 174, 239, 226, 96, 171], [1, 0, 0, 0, 0, 0, 0, 0, 1, 127, 21, 118, 56, 76, 187, 59, 116, 99, 10, 247, 19, 11, 62, 18, 95, 221, 181, 35, 214, 109, 195, 40, 69, 251, 25, 49, 54, 191, 203, 21, 236, 74, 32, 29, 15, 228, 42, 144, 191, 147, 247, 20, 73, 95, 165, 172, 238, 71, 94, 123, 142, 22, 230, 146, 59, 35, 183, 249, 20, 11, 88, 240, 88]]
+
+
+failures:
+    a_pooled_read_refuses_a_value_group_above_the_captured_ceiling
+    the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site
+
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+error: test failed, to rerun pass `-p layerfs-storage --test visibility`
+--- exit 101 | wall 2.362s

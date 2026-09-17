@@ -453,10 +453,14 @@ impl MutationOwner {
                             .pool_index
                             .lock()
                             .map_err(|_| StorageError::Integrity("pool index lock"))?;
+                        // The owner's own ceiling, not an unbounded one: a
+                        // catalogue row belonging to a pack this save has not
+                        // published (and did not create) is refused here rather
+                        // than resolved.
                         index.find(
                             &self.connection,
                             &self.capacities,
-                            i64::MAX,
+                            self.ceiling,
                             &mut self.pool_reader,
                             &mut self.decompression,
                             std::slice::from_ref(&row.value),
@@ -538,10 +542,13 @@ impl MutationOwner {
             .pool_index
             .lock()
             .map_err(|_| StorageError::Integrity("pool index lock"))?;
+        // `self.ceiling` already includes every pack this save created, so the
+        // recurrence reads this operation's own groups and refuses any row from a
+        // pack that is not published to it.
         index.sync(
             &self.connection,
             &self.capacities,
-            i64::MAX,
+            self.ceiling,
             &mut self.pool_reader,
             &mut self.decompression,
         )?;
@@ -655,7 +662,7 @@ impl MutationOwner {
             return Ok(None);
         }
         for id in advisory {
-            let Some(location) = lookup::location(&self.connection, *id, i64::MAX)? else {
+            let Some(location) = lookup::location(&self.connection, *id, self.ceiling)? else {
                 continue;
             };
             if location.role != ObjectRole::InodeLeaf {
@@ -682,7 +689,7 @@ impl MutationOwner {
             let body = reader.leaf_body(
                 &self.connection,
                 &self.capacities,
-                i64::MAX,
+                self.ceiling,
                 &mut self.decompression,
                 location,
             )?;

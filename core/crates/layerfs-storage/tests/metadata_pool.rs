@@ -343,3 +343,49 @@ fn a_pooled_depth_of_zero_stores_every_leaf_in_full() {
     assert_eq!(store.policy().metadata_delta_max_depth(), 0);
     let _ = noise(8);
 }
+
+/// Two leaves accepted by **one** save: the second reuses values the first pooled
+/// moments earlier, in a group pack this save created but has not published.
+///
+/// This pins the ceiling the pooled lane must supply while selecting: the owner's
+/// own ceiling includes every pack the operation created, so a value the save just
+/// pooled is resolvable to its ordinal inside the same save. A ceiling of the
+/// published watermark - or of the pack the save started from - refuses that group
+/// and the save fails, which is the regression this case exists to catch.
+#[test]
+fn one_save_reuses_a_value_group_it_created_itself() {
+    let dir = TempDir::new("pool-same-save-reuse");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    let shared: Vec<[u8; INODE_VALUE_BYTES]> = (0..8)
+        .map(|index| value(InodeKind::RegularFile, 1, index))
+        .collect();
+    let first = leaf(1, &shared);
+    let first_id = first.id();
+    let mut second_values = shared.clone();
+    second_values.extend((20..22).map(|index| value(InodeKind::RegularFile, 1, index)));
+    let second = with_predecessor(leaf(1_000, &second_values), first_id);
+    let second_id = second.id();
+    let second_canonical = canonical_of(&second);
+
+    let outcome = disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        operation.accept(first, scope.child("storage.accept"))?;
+        operation.accept(second, scope.child("storage.accept"))?;
+        operation.finish(scope.child("storage.finish"))
+    })
+    .expect("one save carrying both leaves");
+    assert_eq!(outcome.pool.leaves, 2);
+    assert_eq!(
+        outcome.pool.reused_values, 8,
+        "the second leaf resolves the group this same save wrote"
+    );
+    assert_eq!(
+        outcome.pool.new_values, 10,
+        "eight values from the first leaf and two new ones from the second"
+    );
+
+    let (read, _) = read_objects(&store, &[second_id]).expect("read back");
+    assert_eq!(ObjectId::for_bytes(&read[0]), second_id);
+    assert_eq!(read[0], second_canonical);
+}

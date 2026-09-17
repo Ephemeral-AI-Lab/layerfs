@@ -7,9 +7,67 @@
 
 mod support;
 
-use layerfs_content::ObjectId;
+use layerfs_content::inode_leaf::{
+    encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, INODE_VALUE_BYTES,
+};
+use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
+use layerfs_storage::encoding::codec::DecompressionWorkspace;
+use layerfs_storage::encoding::pool::{PoolIndex, PoolReader};
+use layerfs_storage::sqlite::pool::ValueGroupRow;
 use layerfs_storage::{SaveHandoff, StorageError, StoragePolicy, Store};
 use support::{construct_file, create_store, disabled, noise, open_store, save_all, TempDir};
+
+/// One pooled value, distinct per `seed`.
+fn pooled_value(seed: u64) -> [u8; INODE_VALUE_BYTES] {
+    let mut bytes = [0_u8; 32];
+    bytes[..8].copy_from_slice(&seed.to_be_bytes());
+    encode_inode_value(InodeValue {
+        kind: InodeKind::RegularFile,
+        namespace_ref_count: 1,
+        content_root: ObjectId::for_bytes(&bytes),
+        metadata_root: ObjectId::for_bytes(&[seed as u8; 8]),
+    })
+}
+
+/// A canonical pooled inode leaf carrying `values`.
+fn pooled_leaf(first_serial: u64, values: &[[u8; INODE_VALUE_BYTES]]) -> FinalizedObject {
+    let rows = values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| InodeLeafRow {
+            serial: first_serial + index as u64,
+            value: *value,
+        })
+        .collect::<Vec<_>>();
+    let canonical = InodeLeaf {
+        subtree_bytes: rows.len() as u64 * INODE_VALUE_BYTES as u64,
+        rows,
+    }
+    .encode()
+    .expect("canonical pooled leaf");
+    FinalizedObject::new(ObjectRole::InodeLeaf, canonical).expect("finalized pooled leaf")
+}
+
+/// The first catalogue row whose value-group pack is above `ceiling`.
+fn value_group_above(path: &std::path::Path, ceiling: i64) -> Option<ValueGroupRow> {
+    let connection = rusqlite::Connection::open(path).unwrap();
+    connection
+        .query_row(
+            "SELECT first_ordinal, count, pack_id, group_number, digest \
+             FROM metadata_value_groups WHERE pack_id > ?1 ORDER BY first_ordinal LIMIT 1",
+            [ceiling],
+            |row| {
+                Ok(ValueGroupRow {
+                    first_ordinal: row.get(0)?,
+                    count: row.get::<_, i64>(1)? as usize,
+                    pack_id: row.get(2)?,
+                    group_number: row.get::<_, i64>(3)? as usize,
+                    digest: ObjectId::from_bytes(&row.get::<_, Vec<u8>>(4)?).unwrap(),
+                })
+            },
+        )
+        .ok()
+}
 
 /// Highest pack id present, and the published watermark, read out of band.
 fn pack_state(path: &std::path::Path) -> (i64, i64) {
@@ -291,4 +349,174 @@ fn the_watermark_survives_reopen_and_still_hides_a_later_open_save() {
     assert_eq!(StoragePolicy::frozen_default().format_profile(), 1);
 
     let _ = SaveHandoff::new;
+}
+
+#[test]
+fn a_pooled_read_refuses_a_value_group_above_the_captured_ceiling() {
+    let dir = TempDir::new("visibility_pool");
+    let path = dir.store_path("visibility_pool");
+    let store = create_store(&path);
+
+    // One pooled leaf, then a body large enough to force the save's bounded early
+    // commits. The leaf's value-group pack is then committed while the publication
+    // watermark still names the previous completed save.
+    let values: Vec<[u8; INODE_VALUE_BYTES]> = (0..8).map(pooled_value).collect();
+    let pooled = pooled_leaf(1, &values);
+    let body = noise(5 * 1024 * 1024);
+    let (collected, _, _) = construct_file(&body);
+
+    let mut operation = disabled(|scope| store.begin_save(scope.child("storage.begin"))).unwrap();
+    disabled(|scope| operation.accept(pooled, scope.child("storage.accept"))).unwrap();
+    for (_, role, bytes, references) in collected.objects() {
+        let object = FinalizedObject::new(*role, bytes.clone())
+            .unwrap()
+            .with_references(references.clone());
+        disabled(|scope| operation.accept(object, scope.child("storage.accept"))).unwrap();
+    }
+
+    let (ceiling, highest) = pack_state(&path);
+    assert!(
+        highest > ceiling,
+        "the save must have committed packs early: ceiling={ceiling} highest={highest}"
+    );
+    let row = value_group_above(&path, ceiling).expect("a catalogue row above the watermark");
+    let capacities = store.capacities();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let mut workspace = DecompressionWorkspace::new().expect("decode workspace");
+
+    // The group read itself: refused at the watermark, served at the real ceiling.
+    let mut reader = PoolReader::new();
+    let error = reader
+        .group_values(&connection, &capacities, ceiling, &mut workspace, &row)
+        .unwrap_err();
+    assert!(
+        matches!(error, StorageError::VisibilityCeiling { .. }),
+        "expected a visibility refusal, got {error}"
+    );
+    let served = reader
+        .group_values(&connection, &capacities, highest, &mut workspace, &row)
+        .expect("the published ceiling serves the same group");
+    assert_eq!(served.len(), row.count);
+    // The group is now retained by this reader's decoded-value cache. The ceiling
+    // is decided before the cache is consulted, so the refusal does not depend on
+    // the cache being cold.
+    let error = reader
+        .group_values(&connection, &capacities, ceiling, &mut workspace, &row)
+        .unwrap_err();
+    assert!(
+        matches!(error, StorageError::VisibilityCeiling { .. }),
+        "a cached group must not bypass the ceiling, got {error}"
+    );
+
+    // The index recurrence reads the catalogue, so it must refuse the same row.
+    let mut index = PoolIndex::new();
+    let error = index
+        .sync(
+            &connection,
+            &capacities,
+            ceiling,
+            &mut reader,
+            &mut workspace,
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, StorageError::VisibilityCeiling { .. }),
+        "expected a visibility refusal from the recurrence, got {error}"
+    );
+
+    // The candidate probe resolves values through their group and refuses too.
+    let mut index = PoolIndex::new();
+    index
+        .sync(
+            &connection,
+            &capacities,
+            highest,
+            &mut reader,
+            &mut workspace,
+        )
+        .expect("the published ceiling synchronizes the index");
+    let error = index
+        .find(
+            &connection,
+            &capacities,
+            ceiling,
+            &mut reader,
+            &mut workspace,
+            std::slice::from_ref(&served[0]),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, StorageError::VisibilityCeiling { .. }),
+        "expected a visibility refusal from the probe, got {error}"
+    );
+    let found = index
+        .find(
+            &connection,
+            &capacities,
+            highest,
+            &mut reader,
+            &mut workspace,
+            std::slice::from_ref(&served[0]),
+        )
+        .expect("the published ceiling resolves the value");
+    assert_eq!(found.get(&served[0]).copied(), Some(row.first_ordinal));
+
+    // Acknowledgement publishes the save, and the ordinary read path then serves
+    // the pooled leaf through the same ceiling.
+    let outcome = disabled(|scope| operation.finish(scope.child("storage.finish"))).unwrap();
+    assert!(outcome.pool.leaves >= 1);
+    let (ceiling_after, highest_after) = pack_state(&path);
+    assert_eq!(ceiling_after, highest_after);
+    let mut reader = PoolReader::new();
+    let served = reader
+        .group_values(
+            &connection,
+            &capacities,
+            ceiling_after,
+            &mut workspace,
+            &row,
+        )
+        .expect("the group is published with the save");
+    assert_eq!(served.len(), row.count);
+}
+
+/// The pooled lane supplies the owner's own ceiling at every read site.
+///
+/// `MutationOwner::acquire` refuses to start whenever the publication watermark
+/// lags the highest stored pack, so no state reachable through the public API
+/// today hands the pooled lane a catalogue row above its ceiling. This case is
+/// therefore the fail-closed half of the invariant: it reads the pooled read
+/// sites out of the product source and rejects an unbounded ceiling there, so a
+/// later change that relaxes `acquire` cannot silently re-open the hole. The
+/// behavioural half - that the pooled read API refuses such a row - is
+/// `a_pooled_read_refuses_a_value_group_above_the_captured_ceiling`.
+#[test]
+fn the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cas/owner.rs"),
+    )
+    .expect("owner source");
+    let selection = source.find("fn select_pooled(").expect("pooled selection");
+    let synchronization = source
+        .find("fn sync_pool_index(")
+        .expect("index synchronization");
+    let outcomes = source
+        .find("/// Pooled lane outcomes of this operation.")
+        .expect("pooled outcomes");
+    for (label, region) in [
+        ("selection", &source[selection..synchronization]),
+        (
+            "synchronization and base acquisition",
+            &source[synchronization..outcomes],
+        ),
+    ] {
+        assert!(
+            !region.contains("i64::MAX"),
+            "the pooled lane's {label} region passes an unbounded read ceiling"
+        );
+        assert!(
+            region.contains("self.ceiling"),
+            "the pooled lane's {label} region does not supply the owner's ceiling"
+        );
+    }
 }

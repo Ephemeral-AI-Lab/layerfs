@@ -69,14 +69,17 @@ impl PoolReader {
         row: &pool::ValueGroupRow,
     ) -> StorageResult<Vec<[u8; INODE_VALUE_BYTES]>> {
         let _ = capacities;
-        if let Some(values) = self.groups.get(&row.first_ordinal) {
-            return Ok(values.clone());
-        }
+        // The ceiling is decided before the cache is consulted: a group retained
+        // by an earlier read of the same wave is still only readable when its own
+        // pack is at or below the wave's captured ceiling.
         if row.pack_id > ceiling {
             return Err(StorageError::VisibilityCeiling {
                 pack_id: row.pack_id,
                 ceiling,
             });
+        }
+        if let Some(values) = self.groups.get(&row.first_ordinal) {
+            return Ok(values.clone());
         }
         let body = self.group_body(connection, workspace, row)?;
         self.decoded_work = self

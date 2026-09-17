@@ -1,0 +1,157 @@
+=== identity
+start commit: 97414bac473f0bcaf5a41156c05a13adaca9f939
+start tree:   54c4750de956faf74b8a7006829c575abd6312b6
+cargo: cargo 1.85.1 (d73d2caf9 2024-12-31)
+rustc: rustc 1.85.1 (4eb161250 2025-03-15)
+
+=== visibility suite (pooled ceiling refusal + watermark) | 2026-09-17T00:03:48Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test visibility
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.92s
+     Running tests/visibility.rs (core/target/debug/deps/visibility-4510e3f48dbad30c)
+
+running 7 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+--- exit 0 | wall 2.211s
+=== metadata_pool | 2026-09-17T00:03:50Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 10 tests
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test values_cross_a_group_boundary_at_one_hundred_sixty_five ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+--- exit 0 | wall 1.017s
+=== metadata_chain | 2026-09-17T00:03:51Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_chain
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running tests/metadata_chain.rs (core/target/debug/deps/metadata_chain-52d8e83b759a9ee7)
+
+running 2 tests
+test small_records_reach_the_depth_cap_and_the_next_edge_is_stored_in_full ... ok
+test maximal_records_hit_the_canonical_budget_before_the_depth_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+--- exit 0 | wall 1.111s
+=== metadata_window | 2026-09-17T00:03:52Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_window
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-9afe5b60552d1c24)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.53s
+
+--- exit 0 | wall 8.527s
+=== metadata_pool_index | 2026-09-17T00:04:01Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool_index
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 5 tests
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_failed_save_invalidates_the_set_instead_of_reusing_phantom_ordinals ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+--- exit 0 | wall 1.207s
+=== edit_pipeline | 2026-09-17T00:04:02Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test edit_pipeline
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-64a9908979aab1ab)
+
+running 4 tests
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_transition_round_trips_through_the_store ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+--- exit 0 | wall 1.137s
+=== pooled lane source receipt | 2026-09-17T00:04:03Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ grep -n i64::MAX\|self.ceiling core/crates/layerfs-storage/src/cas/owner.rs
+297:            i64::MAX,
+308:            i64::MAX,
+333:        availability.validate(&self.connection, &object, i64::MAX, |id| {
+463:                            self.ceiling,
+545:        // `self.ceiling` already includes every pack this save created, so the
+551:            self.ceiling,
+665:            let Some(location) = lookup::location(&self.connection, *id, self.ceiling)? else {
+692:                self.ceiling,
+773:        self.ceiling = self.ceiling.max(write.pack_id);
+832:        let publishes = self.ceiling > self.baseline_pack_id;
+855:        crate::sqlite::schema::advance_retained_pack_ceiling(&self.connection, self.ceiling)?;
+--- exit 0 | wall 0.042s
+=== cliipy | 2026-09-17T00:04:04Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.95s
+--- exit 0 | wall 1.068s
+=== production LOC pair (first parent vs staged tree) | 2026-09-17T00:04:24Z
+$ git archive HEAD | tar -x -C /tmp/locpair/before ; python3 tools/production_loc.py --root /tmp/locpair/before --detail
+core        10938 production lines in   75 files
+          layerfs-content                                     4385
+          layerfs-storage                                     5821
+          layerfs-telemetry                                    732
+reference   68476 production lines in  206 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10684
+          layerfs-layerstack-store                           22215
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          944
+          layerfs-workspace                                  11333
+          layerfs-workspace-core                              2452
+combined    79414 production lines
+$ python3 tools/production_loc.py --detail
+core        10938 production lines in   75 files
+          layerfs-content                                     4385
+          layerfs-storage                                     5821
+          layerfs-telemetry                                    732
+reference   68476 production lines in  206 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10684
+          layerfs-layerstack-store                           22215
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          944
+          layerfs-workspace                                  11333
+          layerfs-workspace-core                              2452
+combined    79414 production lines
+--- exit 0

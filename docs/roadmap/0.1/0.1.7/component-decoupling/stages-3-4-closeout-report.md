@@ -73,7 +73,7 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | # | Gate | Source | Status | Evidence |
 | --- | --- | --- | --- | --- |
 | G1 | CHUNK absent/ineligible candidate selects FULL; save never fails for an advisory candidate | W1 | **PASS** | `w1/README.md`; `delta_payload` +3 cases, all three fail with `ObjectMissing` without the fix |
-| G2 | Every pooled read applies the owner's captured pack ceiling | W2 | OPEN | |
+| G2 | Every pooled read applies the owner's captured pack ceiling | W2 | **PASS** | `w2/README.md`; four sites supply `self.ceiling`, structural + behavioural oracles both fail without it |
 | G3 | Emitted edit pages are encoded and hashed once, at final emission; superseded drafts released | W3 | OPEN | |
 | G4 | Frontier memory is a function of height/fanout, asserted by a real oracle | W3, W4.1 | OPEN | |
 | G5 | Finality argument committed; children-before-parents asserted for edits | W3, W4.6 | OPEN | |
@@ -99,6 +99,28 @@ G13-G15, G17-G19. Neither is complete yet.
 ---
 
 ## 3. Per-packet log
+
+### W2 — the pooled lane honours the publication watermark (G2) — PASS
+
+* **Defect.** `cas/owner.rs:459,544,658,685` passed `i64::MAX` as the read
+  ceiling, so the pooled lane's stated watermark invariant rested only on the
+  `retained_pack_ceiling != highest_pack_id` precondition in
+  `MutationOwner::acquire` (`owner.rs:162-171`).
+* **Change.** The four pooled read sites now supply the owner's own
+  `self.ceiling` (which already includes the packs this save created);
+  `encoding/pool/read.rs:70-84` decides the ceiling before consulting its
+  decoded-value cache. `VisibilityCeiling` remains the refusal.
+* **Proof.** `visibility.rs` gains two oracles: a behavioural refusal driven by a
+  real save whose bounded early commit leaves a value-group pack above the
+  watermark (`group_values` cold and cached, `PoolIndex::sync`, `PoolIndex::find`
+  all refuse; all succeed at the published ceiling), and a structural one that
+  reads the pooled lane's source regions and rejects an unbounded ceiling there.
+  Both fail in `w2-fails-without-fix.log`. Re-ran `visibility` (7), `metadata_pool`
+  (10), `metadata_chain` (2), `metadata_window` (2), `metadata_pool_index` (5),
+  `edit_pipeline` (4) and clippy, all exit 0.
+* **Reachability.** Unreachable through the public API today; the change is
+  fail-closed, and `w2/README.md` states that plainly.
+* **Production LOC.** core `10938 -> 10938` (delta 0).
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 
