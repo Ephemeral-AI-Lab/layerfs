@@ -13,7 +13,7 @@
 //! inode-leaf grammar derives, so both components agree on one byte layout.
 
 use layerfs_content::inode_leaf::{
-    decode_pooled_body, pooled_physical_length, PooledRow, POOLED_PREFIX_BYTES, POOLED_ROW_BYTES,
+    decode_pooled_body, pooled_physical_length, PooledRow, POOLED_PREFIX_BYTES,
 };
 use layerfs_content::ObjectId;
 
@@ -41,14 +41,6 @@ pub enum PooledRecord<'a> {
         /// Instruction program.
         instructions: &'a [u8],
     },
-}
-
-/// True when `record` is a pooled leaf record rather than a plain canonical object.
-pub fn is_pooled(record: &[u8]) -> bool {
-    matches!(
-        record.first(),
-        Some(&POOLED_FULL_TAG) | Some(&POOLED_DELTA_TAG)
-    )
 }
 
 /// Encodes the full pooled record of one physical body.
@@ -114,19 +106,6 @@ pub fn canonical_length(rows: usize) -> StorageResult<usize> {
                 .ok_or(StorageError::Integrity("pooled leaf length"))?,
         )
         .ok_or(StorageError::Integrity("pooled leaf length"))
-}
-
-/// Physical width of a body with `rows` rows.
-pub fn body_width(rows: usize) -> StorageResult<usize> {
-    if rows == 0 || rows > layerfs_content::inode_leaf::MAXIMUM_LEAF_ROWS {
-        return Err(StorageError::Integrity("pooled row count"));
-    }
-    POOLED_PREFIX_BYTES
-        .checked_add(
-            rows.checked_mul(POOLED_ROW_BYTES)
-                .ok_or(StorageError::Integrity("pooled body length"))?,
-        )
-        .ok_or(StorageError::Integrity("pooled body length"))
 }
 
 /// Distinct ordinals a body refers to, in first-encounter order.

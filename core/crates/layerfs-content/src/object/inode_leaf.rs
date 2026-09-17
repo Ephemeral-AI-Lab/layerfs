@@ -279,11 +279,6 @@ impl InodeLeaf {
     }
 }
 
-/// Row count and serials of a leaf, without copying its values.
-pub fn leaf_layout(canonical: &[u8]) -> ContentResult<usize> {
-    Ok(InodeLeaf::decode(canonical)?.rows.len())
-}
-
 /// Physical width of a pooled leaf for a canonical leaf of `canonical_length`.
 pub fn pooled_physical_length(canonical_length: usize) -> ContentResult<usize> {
     let payload = canonical_length
@@ -387,10 +382,10 @@ pub fn rebuild_leaf(
     if prefix.len() != POOLED_PREFIX_BYTES {
         return Err(ContentError::InvalidRecord("pooled prefix width"));
     }
-    // The prefix is carried so a caller can detect a grammar change; the canonical
-    // form is rebuilt from the header constant, never from attacker-supplied bytes.
+    // The canonical form is rebuilt from the header constant and the decoded rows,
+    // never from the supplied bytes: the prefix was validated above for width and
+    // grammar, and its contents are deliberately not carried into the result.
     leaf.subtree_bytes = rows.len() as u64 * INODE_VALUE_BYTES as u64;
-    let _ = prefix;
     leaf.encode()
 }
 

@@ -6,7 +6,7 @@
 //! and, only for the remainder, one bounded presence query. Nothing here queries
 //! the engine for a child that this operation has only accepted into memory.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use rusqlite::Connection;
 
@@ -18,27 +18,25 @@ use crate::sqlite::lookup;
 /// Availability facts established for one preparation wave.
 #[derive(Debug, Default)]
 pub struct Availability {
-    present: BTreeMap<ObjectId, ()>,
-    inserted: BTreeSet<ObjectId>,
+    known: BTreeSet<ObjectId>,
 }
 
 impl Availability {
     /// Seeds the wave with the membership result of its offered identities.
     pub fn new(present: impl IntoIterator<Item = ObjectId>) -> Self {
         Self {
-            present: present.into_iter().map(|id| (id, ())).collect(),
-            inserted: BTreeSet::new(),
+            known: present.into_iter().collect(),
         }
     }
 
     /// Records that this operation has already inserted `id` in this wave.
     pub fn inserted(&mut self, id: ObjectId) {
-        self.inserted.insert(id);
+        self.known.insert(id);
     }
 
     /// True when `id` is known to be available without another query.
     pub fn known(&self, id: ObjectId) -> bool {
-        self.inserted.contains(&id) || self.present.contains_key(&id)
+        self.known.contains(&id)
     }
 
     /// Verifies every direct reference of `object`.
@@ -58,7 +56,7 @@ impl Availability {
             return Ok(());
         }
         for found in lookup::present(connection, &missing, ceiling)? {
-            self.present.insert(found, ());
+            self.known.insert(found);
         }
         for reference in self.unresolved(object, &pending) {
             if !self.known(reference) {

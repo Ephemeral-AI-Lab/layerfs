@@ -51,11 +51,6 @@ impl LanePlacement {
         Self { open: None }
     }
 
-    /// Pack the lane is currently appending to, if any.
-    pub fn open_pack_id(&self) -> Option<i64> {
-        self.open.as_ref().map(|open| open.pack_id)
-    }
-
     /// Bytes retained by the open tail for this lane.
     pub fn retained_bytes(&self, lane: PackLane) -> StorageResult<usize> {
         match &self.open {

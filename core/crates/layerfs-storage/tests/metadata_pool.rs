@@ -648,3 +648,94 @@ fn a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides() {
     let (read, _) = read_objects(&reopened, &[deepest]).expect("accepted chain after tampering");
     assert_eq!(ObjectId::for_bytes(&read[0]), deepest);
 }
+
+/// A deep pooled-metadata depth is usable, not merely accepted.
+///
+/// The writer used to charge every record its worst-case bound, which made any
+/// accepted depth above fifteen unable to admit a chain: the policy accepted a
+/// value the store could never honour. Both budgets are now charged what a read
+/// actually pays - the chain's canonical sum and the reader's own encoded bytes
+/// plus the dependent's record - so a depth the policy accepts is a depth a chain
+/// can reach. This case builds a chain of fifty small leaves, one per save, reads
+/// the deepest one back and checks the depth the policy reports is the depth the
+/// chain used.
+#[test]
+fn a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain() {
+    let dir = TempDir::new("pool-deep-depth");
+    let path = dir.store_path("pool");
+    let store = disabled(|scope| {
+        Store::create(
+            &path,
+            StoragePolicy::frozen_default().with_metadata_depth(50),
+            scope.child("store"),
+        )
+    })
+    .expect("store");
+    assert_eq!(store.policy().metadata_delta_max_depth(), 50);
+
+    // One row per leaf keeps the canonical budget small enough that depth, not the
+    // budget, is what the chain can use.
+    let mut ids = Vec::new();
+    let mut previous = None;
+    for round in 0..50_u64 {
+        let values = [value(InodeKind::RegularFile, 1, 100_000 + round)];
+        let object = match previous {
+            Some(base) => with_predecessor(leaf(1, &values), base),
+            None => leaf(1, &values),
+        };
+        let id = object.id();
+        let outcome = save_one(&store, object).expect("leaf save");
+        if round == 0 {
+            assert_eq!(outcome.pool.full_leaves, 1);
+        } else {
+            assert_eq!(
+                outcome.pool.delta_leaves, 1,
+                "round {round} must extend the chain: {:?}",
+                outcome.pool
+            );
+            assert_eq!(outcome.pool.work_exceeded, 0, "round {round}");
+        }
+        ids.push(id);
+        previous = Some(id);
+    }
+    assert_eq!(store.pool_index_entries(), 50);
+
+    // The deepest leaf reconstructs its whole fifty-link chain, and every leaf in
+    // it stays readable on its own.
+    let deepest = *ids.last().expect("deepest leaf");
+    let (read, _) = read_objects(&store, &[deepest]).expect("deepest chain read");
+    assert_eq!(ObjectId::for_bytes(&read[0]), deepest);
+    assert_eq!(read[0].len(), 44 + 81);
+    let (all, _) = read_objects(&store, &ids).expect("every leaf read");
+    assert_eq!(all.len(), 50);
+    for (id, bytes) in ids.iter().zip(all) {
+        assert_eq!(ObjectId::for_bytes(&bytes), *id);
+    }
+
+    // Depth fifty is the configured cap and it is usable: the fifty-first record
+    // is admitted. One level deeper is not, and that is a depth decision rather
+    // than a budget refusal, so the leaf is stored in full with no trial and no
+    // work charge.
+    let at_cap = with_predecessor(
+        leaf(1, &[value(InodeKind::RegularFile, 1, 200_000)]),
+        deepest,
+    );
+    let at_cap_id = at_cap.id();
+    let outcome = save_one(&store, at_cap).expect("leaf at the depth cap");
+    assert_eq!(outcome.pool.trials, 1, "the configured cap is usable");
+    assert_eq!(outcome.pool.delta_leaves, 1);
+    assert_eq!(outcome.pool.work_exceeded, 0);
+
+    let past = with_predecessor(
+        leaf(1, &[value(InodeKind::RegularFile, 1, 300_000)]),
+        at_cap_id,
+    );
+    let outcome = save_one(&store, past).expect("leaf past the depth cap");
+    assert_eq!(outcome.pool.trials, 0, "an over-depth base is not acquired");
+    assert_eq!(outcome.pool.work_exceeded, 0, "depth is not a work budget");
+    assert_eq!(outcome.pool.full_leaves, 1);
+    assert_eq!(outcome.pool.delta_leaves, 0);
+
+    let (read, _) = read_objects(&store, &[at_cap_id]).expect("chain at the cap");
+    assert_eq!(ObjectId::for_bytes(&read[0]), at_cap_id);
+}

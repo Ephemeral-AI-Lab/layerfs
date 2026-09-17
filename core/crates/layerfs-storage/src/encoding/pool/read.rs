@@ -13,7 +13,6 @@ use rusqlite::Connection;
 use layerfs_content::inode_leaf::{
     decode_pooled_body, rebuild_leaf, INODE_VALUE_BYTES, MAXIMUM_LEAF_ROWS,
 };
-use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::pool::{delta, leaf, value_group};
@@ -33,6 +32,8 @@ pub struct PoolReader {
     groups: BTreeMap<u32, Vec<[u8; INODE_VALUE_BYTES]>>,
     retained_bytes: usize,
     decoded_work: u64,
+    chain_encoded: u64,
+    chain_canonical: u64,
 }
 
 impl PoolReader {
@@ -57,6 +58,15 @@ impl PoolReader {
     /// Work charged by the current chain.
     pub fn decoded_work(&self) -> u64 {
         self.decoded_work
+    }
+
+    /// Encoded bytes of the chain the last reconstruction read.
+    ///
+    /// This is the reader's own charge, so a producer that has to decide whether a
+    /// dependent still fits the chain budget can use the same number the read of
+    /// that dependent will charge instead of a worst-case per-record estimate.
+    pub fn chain_encoded_bytes(&self) -> u64 {
+        self.chain_encoded
     }
 
     /// Every value of one authenticated group, in ordinal order.
@@ -203,6 +213,8 @@ impl PoolReader {
         if root.role != layerfs_content::ObjectRole::InodeLeaf {
             return Err(StorageError::Integrity("pooled record role"));
         }
+        self.chain_encoded = 0;
+        self.chain_canonical = 0;
         let mut chain: Vec<ObjectLocation> =
             Vec::with_capacity(usize::from(capacities.metadata_delta_max_depth) + 1);
         let mut current = root;
@@ -241,6 +253,8 @@ impl PoolReader {
             {
                 return Err(StorageError::Integrity("pooled chain work"));
             }
+            self.chain_canonical = canonical_work;
+            self.chain_encoded = encoded_work;
             body = Some(match leaf::parse(&record)? {
                 leaf::PooledRecord::Full(stored) => stored.to_vec(),
                 leaf::PooledRecord::Delta {
@@ -352,17 +366,4 @@ impl PoolReader {
         }
         Ok(canonical)
     }
-}
-
-/// Identity of a value group body, used by callers that authenticate directly.
-pub fn group_identity(body: &[u8]) -> ObjectId {
-    ObjectId::for_bytes(body)
-}
-
-/// Convenience wrapper for a caller that holds only a canonical value.
-pub fn value_ordinal(value: &[u8; INODE_VALUE_BYTES]) -> i64 {
-    let canonical = ObjectId::for_bytes(value);
-    let mut bytes = [0_u8; 8];
-    bytes.copy_from_slice(&canonical.as_bytes()[..8]);
-    i64::from_le_bytes(bytes)
 }

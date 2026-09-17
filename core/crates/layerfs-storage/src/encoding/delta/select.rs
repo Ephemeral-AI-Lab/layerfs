@@ -106,7 +106,11 @@ impl DepthCache {
                 return Ok(None);
             };
             path.push((current, location.canonical_length as u64));
-            if path.len() > usize::from(MAXIMUM_DELTA_MAX_DEPTH) {
+            // A chain of depth `d` has `d + 1` records, and the deepest supported
+            // chain is exactly `MAXIMUM_DELTA_MAX_DEPTH` deep: the walk bound has to
+            // admit that record, or the deepest chain a policy accepts could not be
+            // used as a base at all.
+            if path.len() > usize::from(MAXIMUM_DELTA_MAX_DEPTH) + 1 {
                 return Err(StorageError::Integrity("stored dependency chain depth"));
             }
             match location.base_object_id {
@@ -193,12 +197,15 @@ pub fn select(
 ) -> StorageResult<EncodedRecord> {
     if matches!(
         role,
-        ObjectRole::ExtentLeaf
-            | ObjectRole::ExtentBranch
-            | ObjectRole::FileState
-            | ObjectRole::InodeLeaf
+        ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch | ObjectRole::FileState
     ) {
         return encode_full(canonical, role, input.capacities, encode);
+    }
+    if role == ObjectRole::InodeLeaf {
+        // A pooled leaf has its own grammar, its own lane and its own reader; the
+        // owner admits it through `select_pooled` before this function is reached.
+        // Reaching here is a caller error, not a representation to choose.
+        return Err(StorageError::Integrity("pooled metadata leaf selection"));
     }
     let full = encode_full(canonical, role, input.capacities, encode)?;
     input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);

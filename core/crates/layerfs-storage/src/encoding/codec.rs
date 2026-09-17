@@ -68,7 +68,7 @@ impl CodecProfile {
     /// Whole-file payloads under `capacities`.
     pub const fn whole_file(capacities: &StorageCapacities) -> Self {
         Self {
-            raw_limit: capacities.whole_file_canonical_limit - OBJECT_ENVELOPE_OVERHEAD,
+            raw_limit: capacities.whole_file_canonical_limit - WHOLE_FILE_CANONICAL_OVERHEAD,
             frame_limit: capacities.whole_file_frame_limit,
             window_log: capacities.whole_file_window_log,
         }
@@ -94,8 +94,9 @@ impl CodecProfile {
 const CHUNK_RAW_LIMIT: usize = 32_768;
 /// Frozen chunk frame limit.
 const CHUNK_FRAME_LIMIT: usize = 33_024;
-/// Canonical envelope overhead of a whole-file object over its raw payload.
-const OBJECT_ENVELOPE_OVERHEAD: usize = 23;
+/// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
+/// bytes-role envelope and the 10-byte whole-file value header.
+const WHOLE_FILE_CANONICAL_OVERHEAD: usize = 23;
 fn resource() -> StorageError {
     StorageError::Integrity("bounded Zstandard workspace unavailable")
 }

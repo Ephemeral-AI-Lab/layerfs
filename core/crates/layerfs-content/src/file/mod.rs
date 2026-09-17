@@ -12,7 +12,7 @@ mod view;
 
 pub use content::{
     classify, construct_bytes, construct_stream, encode_whole_file, encode_whole_file_payload,
-    inspect, whole_file_payload, ConstructedFile, FileContent, WHOLE_CANONICAL_OVERHEAD,
+    inspect, whole_file_payload, ConstructedFile, FileContent,
 };
 pub use edit::{
     apply_edits, Edit, EditCounters, EditObjects, EditRequest, EditSource, EditStream,

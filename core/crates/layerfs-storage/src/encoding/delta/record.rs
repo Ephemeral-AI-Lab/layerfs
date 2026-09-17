@@ -123,7 +123,7 @@ fn parse_ordinary(record: &[u8]) -> StorageResult<ParsedRecord<'_>> {
 /// Parses a compact whole-file record after its framing bytes were dropped.
 fn parse_compact(record: &[u8], canonical_length: usize) -> StorageResult<ParsedRecord<'_>> {
     let raw_length = canonical_length
-        .checked_sub(crate::policy::OBJECT_ENVELOPE_OVERHEAD)
+        .checked_sub(crate::policy::WHOLE_FILE_CANONICAL_OVERHEAD)
         .ok_or(StorageError::Integrity("compact canonical length"))?;
     if raw_length == 0 {
         return Err(StorageError::Integrity("compact raw length"));

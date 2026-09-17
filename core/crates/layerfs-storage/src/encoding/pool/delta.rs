@@ -11,8 +11,6 @@ use layerfs_content::ObjectId;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{GROUP_LIMIT, RECORD_COUNT_LIMIT};
 
-/// Bytes charged to the match budget of one trial.
-pub const MATCH_BUDGET_BYTES: usize = 128 * 1024;
 const TABLE_BUCKETS: usize = 4_096;
 const TABLE_SLOTS: usize = 4;
 const SEED_BYTES: usize = 16;

@@ -16,8 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::{
-    decode_file_state, decode_node_with_context, encode_file_state, encode_node, ChildDescriptor,
-    ExtentNode, ExtentSlice, FileState, NodeSummary, MAX_ENTRIES, MAX_LEVEL,
+    decode_file_state, decode_node_with_context, encode_node, ChildDescriptor, ExtentNode,
+    ExtentSlice, FileState, NodeSummary, MAX_ENTRIES, MAX_LEVEL,
 };
 use crate::object::{
     AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
@@ -259,7 +259,7 @@ impl<'a> EditObjects<'a> {
     pub fn finish(&mut self, mapping: NodeSummary) -> ContentResult<ObjectId> {
         let mut published = BTreeSet::new();
         let root_id = self.commit_node(mapping, true, &mut published)?;
-        let root = emit_file_state(
+        let root = crate::file::mapping::emit_file_state(
             self.consumer,
             NodeSummary {
                 id: root_id,
@@ -409,28 +409,19 @@ pub fn child_summaries(children: &[ChildDescriptor], level: u8) -> ContentResult
 
 /// Merges adjoining slices of one payload, which the canonical partition forbids
 /// from staying separate.
+///
+/// The pairwise rule lives in [`crate::file::edit::coalesce_adjacent`] and is used
+/// here rather than repeated: a payload's logical length is bounded by the chunk
+/// grammar, so a refused merge is a pair that is not contiguous, never an overflow.
 pub fn coalesce(extents: &mut Vec<ExtentSlice>) -> ContentResult<()> {
     let mut index = 1;
     while index < extents.len() {
-        let previous = extents[index - 1];
-        let current = extents[index];
-        if previous.payload_object_id() == current.payload_object_id()
-            && previous
-                .source_offset()
-                .checked_add(previous.logical_length())
-                == Some(current.source_offset())
-        {
-            extents[index - 1] = ExtentSlice::new(
-                previous.payload_object_id(),
-                previous.source_offset(),
-                previous
-                    .logical_length()
-                    .checked_add(current.logical_length())
-                    .ok_or(ContentError::LengthOverflow)?,
-            )?;
-            extents.remove(index);
-        } else {
-            index += 1;
+        match crate::file::edit::coalesce_adjacent(extents[index - 1], extents[index]) {
+            Some(merged) => {
+                extents[index - 1] = merged;
+                extents.remove(index);
+            }
+            None => index += 1,
         }
     }
     Ok(())
@@ -811,23 +802,4 @@ pub fn read_state(
             level: state.tree_level,
         },
     ))
-}
-
-/// Encodes and publishes the file state of a finished edit.
-pub fn emit_file_state(
-    consumer: &mut dyn FinalizedConsumer,
-    mapping: NodeSummary,
-) -> ContentResult<ObjectId> {
-    let state = FileState {
-        logical_len: mapping.bytes,
-        extent_count: mapping.extents,
-        tree_level: mapping.level,
-        profile_id: crate::file::mapping::profile_id(),
-        mapping_root: mapping.id,
-    };
-    let object = FinalizedObject::new(ObjectRole::FileState, encode_file_state(state)?)?
-        .with_references(vec![mapping.id]);
-    let id = object.id();
-    consumer.accept(object)?;
-    Ok(id)
 }

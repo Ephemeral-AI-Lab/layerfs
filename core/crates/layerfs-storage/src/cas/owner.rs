@@ -18,7 +18,7 @@ use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::pack::placement::LanePlacement;
 use crate::pack::{build_group, SelectedWrite};
-use crate::policy::{StorageCapacities, StoragePolicy, METADATA_RECORD_LIMIT};
+use crate::policy::StorageCapacities;
 use crate::sqlite::lookup;
 use crate::sqlite::write::{self, ObjectRow, TransactionState};
 use std::collections::BTreeMap;
@@ -154,7 +154,6 @@ impl MutationOwner {
     /// Acquires ownership once and establishes the operation's cursors.
     pub fn acquire(
         connection: Connection,
-        policy: StoragePolicy,
         capacities: StorageCapacities,
         pool_index: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
     ) -> StorageResult<Self> {
@@ -176,7 +175,6 @@ impl MutationOwner {
             .ok_or(StorageError::Integrity("pack identifier overflow"))?;
         let compression = CompressionWorkspace::new()?;
         let decompression = DecompressionWorkspace::new()?;
-        let _ = policy;
         Ok(Self {
             connection,
             capacities,
@@ -429,11 +427,6 @@ impl MutationOwner {
         self.candidates.live_bytes()
     }
 
-    /// Entries currently retained by the dependency-depth cache.
-    pub fn depth_cache_entries(&self) -> usize {
-        self.depths.len()
-    }
-
     /// Admits one canonical inode leaf through the pooled metadata lane.
     ///
     /// Ordinals are assigned in first-encounter order, new values are grouped and
@@ -499,39 +492,18 @@ impl MutationOwner {
         let full = crate::encoding::pool::leaf::encode_full(&body)?;
         // One base acquisition, then one instruction trial. A missing or
         // ineligible base, or a losing comparison, stores the leaf in full.
-        let base = self.pool_base(advisory, object.canonical_len() as u64)?;
+        let base = self.pool_base(advisory, object.canonical_len() as u64, full.len() as u64)?;
         let Some((base_id, base_body)) = base else {
-            self.pool.full_leaves += 1;
-            return Ok(crate::encoding::EncodedRecord {
-                lane: PackLane::Ordinary,
-                record: full,
-                canonical_length: object.canonical_len(),
-                raw_length: body.len(),
-                base: None,
-            });
+            return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
         };
         self.pool.trials += 1;
         let mut budget = crate::policy::METADATA_MATCH_BUDGET_BYTES;
         let program = crate::encoding::pool::delta::build(base_id, &base_body, &body, &mut budget)?;
         let Some(program) = program else {
-            self.pool.full_leaves += 1;
-            return Ok(crate::encoding::EncodedRecord {
-                lane: PackLane::Ordinary,
-                record: full,
-                canonical_length: object.canonical_len(),
-                raw_length: body.len(),
-                base: None,
-            });
+            return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
         };
         if program.len() >= full.len() {
-            self.pool.full_leaves += 1;
-            return Ok(crate::encoding::EncodedRecord {
-                lane: PackLane::Ordinary,
-                record: full,
-                canonical_length: object.canonical_len(),
-                raw_length: body.len(),
-                base: None,
-            });
+            return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
         }
         self.pool.delta_leaves += 1;
         Ok(crate::encoding::EncodedRecord {
@@ -541,6 +513,27 @@ impl MutationOwner {
             raw_length: body.len(),
             base: Some(base_id),
         })
+    }
+
+    /// The pooled lane's FULL alternative, counted once.
+    ///
+    /// Every path that declines a COPY/INSERT program - no base, no program, a
+    /// program that is not smaller, or a refused chain - stores the same FULL
+    /// record, so the fallback exists once.
+    fn pooled_full(
+        &mut self,
+        full: Vec<u8>,
+        canonical_length: usize,
+        raw_length: usize,
+    ) -> crate::encoding::EncodedRecord {
+        self.pool.full_leaves += 1;
+        crate::encoding::EncodedRecord {
+            lane: PackLane::Ordinary,
+            record: full,
+            canonical_length,
+            raw_length,
+            base: None,
+        }
     }
 
     /// Synchronizes the Store-owned index with the catalogue once per save.
@@ -640,16 +633,21 @@ impl MutationOwner {
                 .pool_index
                 .lock()
                 .map_err(|_| StorageError::Integrity("pool index lock"))?;
-            let mut cursor = first;
-            for (_, group) in &built {
+            // The groups were built from `fresh` in order, so the values are handed
+            // over as one cursor over that slice rather than re-derived per group.
+            let mut offset = 0_usize;
+            for (first_ordinal, group) in &built {
+                let end = offset
+                    .checked_add(group.count)
+                    .ok_or(StorageError::Integrity("metadata group values"))?;
                 let values = fresh
-                    .iter()
-                    .skip((cursor - first) as usize)
-                    .take(group.count)
-                    .copied()
-                    .collect::<Vec<_>>();
-                index.note_group(cursor, &values)?;
-                cursor += group.count as u32;
+                    .get(offset..end)
+                    .ok_or(StorageError::Integrity("metadata group values"))?;
+                index.note_group(*first_ordinal, values)?;
+                offset = end;
+            }
+            if offset != fresh.len() {
+                return Err(StorageError::Integrity("metadata group coverage"));
             }
         }
         self.maybe_commit()
@@ -666,6 +664,7 @@ impl MutationOwner {
         &mut self,
         advisory: &[ObjectId],
         target_canonical: u64,
+        target_encoded: u64,
     ) -> StorageResult<Option<(ObjectId, Vec<u8>)>> {
         let depth_cap = self.capacities.metadata_delta_max_depth;
         if depth_cap == 0 {
@@ -684,14 +683,14 @@ impl MutationOwner {
             if cost.depth >= depth_cap {
                 continue;
             }
-            // The dependent leaf is charged to both budgets exactly as a read of it
-            // would be; the encoded side uses the reader's own per-record bound.
+            // Both budgets are charged with what a read of the dependent would
+            // actually pay: the chain's canonical sum from the depth walk, and -
+            // because a record's width is what the reader charges - the base
+            // chain's encoded bytes as the reader measured them plus this leaf's
+            // own record width. Charging a worst-case per-record bound instead made
+            // every accepted depth above fifteen unusable.
             let canonical = cost.canonical.saturating_add(target_canonical);
-            let records = u64::from(cost.depth).saturating_add(2);
-            let encoded = records.saturating_mul(METADATA_RECORD_LIMIT as u64);
-            if canonical > self.capacities.metadata_chain_canonical_limit
-                || encoded > self.capacities.metadata_chain_encoded_limit
-            {
+            if canonical > self.capacities.metadata_chain_canonical_limit {
                 self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
                 continue;
             }
@@ -703,6 +702,11 @@ impl MutationOwner {
                 &mut self.decompression,
                 location,
             )?;
+            let encoded = reader.chain_encoded_bytes().saturating_add(target_encoded);
+            if encoded > self.capacities.metadata_chain_encoded_limit {
+                self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
+                continue;
+            }
             return Ok(Some((*id, body)));
         }
         Ok(None)

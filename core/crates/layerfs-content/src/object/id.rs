@@ -28,20 +28,6 @@ impl ObjectId {
         Self(*hasher.finalize().as_bytes())
     }
 
-    /// Streams `canonical` through the same domain-separated hash.
-    pub fn for_reader<R: std::io::Read>(mut reader: R) -> std::io::Result<Self> {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(OBJECT_DOMAIN);
-        let mut buffer = [0_u8; 8_192];
-        loop {
-            let read = reader.read(&mut buffer)?;
-            if read == 0 {
-                return Ok(Self(*hasher.finalize().as_bytes()));
-            }
-            hasher.update(&buffer[..read]);
-        }
-    }
-
     /// Rebuilds an identity from its fixed-width representation.
     pub fn from_bytes(bytes: &[u8]) -> ContentResult<Self> {
         let digest: [u8; DIGEST_BYTES] =

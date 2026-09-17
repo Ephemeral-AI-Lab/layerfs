@@ -125,7 +125,7 @@ fn assemble_final(
     source: &dyn EditSource,
     scope: TimingScope<'_, layerfs_telemetry::timer::Pending>,
 ) -> ContentResult<Vec<u8>> {
-    scope.run(|assemble| assemble_inner(view, reader, stream, source, assemble))
+    scope.run(|_assemble| assemble_inner(view, reader, stream, source))
 }
 
 fn assemble_inner(
@@ -133,9 +133,7 @@ fn assemble_inner(
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
-    assemble: &TimingScope<'_, Active>,
 ) -> ContentResult<Vec<u8>> {
-    let _ = assemble;
     let final_len = stream.final_len();
     let mut out: Vec<u8> = Vec::new();
     out.try_reserve_exact(final_len as usize).map_err(|_| {
@@ -153,10 +151,9 @@ fn assemble_inner(
                     view.read_range(reader, base.0..base.1, &mut out)?;
                 }
             }
-            Segment::Replace { index, base, len } => {
-                if base.1 > base.0 {
-                    // The replaced base range is deliberately not read.
-                }
+            Segment::Replace { index, len, .. } => {
+                // The replaced base range is deliberately not read: only the
+                // replacement bytes enter the assembled result.
                 append_replacement(source, index, len, &mut out)?;
             }
         }
@@ -215,9 +212,13 @@ fn replace_chunked(
     consumer: &mut dyn FinalizedConsumer,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
-    let (mut state, mut summary) = edit
+    let (state, mut summary) = edit
         .child("edit.base_read")
         .run(|_| crate::file::edit::tree::read_state(reader, view.root()))?;
+    // The only fact the loop carries forward about the result is its length: the
+    // mapping root lives in `summary` and every other field of the file state is
+    // derived once, at emission.
+    let mut result_len = state.logical_len;
     let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer);
     for (index, declared) in request.edits.edits().iter().enumerate() {
         let replacement_len = declared.replacement_len();
@@ -287,18 +288,12 @@ fn replace_chunked(
             None => crate::file::edit::tree::emit_leaf(&mut objects, Vec::new())?,
         };
         summary = mapping;
-        state = crate::file::mapping::FileState {
-            logical_len: mapping.bytes,
-            extent_count: mapping.extents,
-            tree_level: mapping.level,
-            profile_id: crate::file::mapping::profile_id(),
-            mapping_root: mapping.id,
-        };
+        result_len = mapping.bytes;
     }
-    if state.logical_len != request.edits.final_len() {
+    if result_len != request.edits.final_len() {
         return Err(ContentError::LengthMismatch {
             expected: request.edits.final_len(),
-            actual: state.logical_len,
+            actual: result_len,
         });
     }
     // The unfinished nodes the final mapping reaches are published children first,
@@ -306,7 +301,7 @@ fn replace_chunked(
     let root = edit.child("edit.finish").run(|_| objects.finish(summary))?;
     Ok(ConstructedFile {
         root,
-        logical_len: state.logical_len,
+        logical_len: result_len,
         counters: objects.counters(),
     })
 }
@@ -329,14 +324,13 @@ fn rightmost_payload(
             crate::file::mapping::ExtentNode::Branch {
                 level, children, ..
             } => {
-                let last = children
-                    .last()
-                    .ok_or(ContentError::InvalidRecord("empty branch"))?;
+                if children.is_empty() {
+                    return Err(ContentError::InvalidRecord("empty branch"));
+                }
                 let summaries = crate::file::edit::tree::child_summaries(&children, level - 1)?;
                 current = *summaries
                     .last()
                     .ok_or(ContentError::InvalidRecord("empty branch"))?;
-                let _ = last;
                 root = false;
             }
         }

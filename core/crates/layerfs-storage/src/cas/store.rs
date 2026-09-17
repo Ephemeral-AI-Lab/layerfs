@@ -182,12 +182,8 @@ impl Store {
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
             let connection = connection::open(&self.path, false)?;
-            let owner = MutationOwner::acquire(
-                connection,
-                self.policy,
-                self.capacities,
-                Arc::clone(&self.pool_index),
-            )?;
+            let owner =
+                MutationOwner::acquire(connection, self.capacities, Arc::clone(&self.pool_index))?;
             Ok(SaveOperation {
                 owner: Some(owner),
                 batch: PendingBatch::new(self.capacities),
@@ -435,14 +431,6 @@ impl SaveOperation {
         self.owner
             .as_ref()
             .map(MutationOwner::candidate_index_bytes)
-            .unwrap_or(0)
-    }
-
-    /// Entries retained by the bounded dependency-depth cache.
-    pub fn depth_cache_entries(&self) -> usize {
-        self.owner
-            .as_ref()
-            .map(MutationOwner::depth_cache_entries)
             .unwrap_or(0)
     }
 

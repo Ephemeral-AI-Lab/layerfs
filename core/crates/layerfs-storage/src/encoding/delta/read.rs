@@ -222,12 +222,6 @@ impl<'a> Resolver<'a> {
         }
         decode_canonical(pack, location, self.capacities, base, self.workspace)
     }
-
-    /// Records that one dependency edge was taken.
-    pub fn note_edge(&mut self, depth: u64) {
-        self.counters.edges = self.counters.edges.saturating_add(1);
-        self.counters.max_depth = self.counters.max_depth.max(depth);
-    }
 }
 
 /// Adds one resolved chain's work to an operation's totals.

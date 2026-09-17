@@ -134,3 +134,100 @@ fn a_recipe_frame_larger_than_its_profile_is_refused() {
     assert!(large_profile.raw_limit() > profile.raw_limit());
     assert!(large_profile.frame_limit() > profile.frame_limit());
 }
+
+/// The two recorded lane/scope deviations, asserted so they cannot drift silently.
+///
+/// `physical-encoding-and-packing.md` names v6 as the active pooled metadata lane.
+/// The shipped candidate writes pooled **value groups** in v6 and pooled **leaf**
+/// records in the v1 Ordinary lane, distinguished by the `objects.object_role`
+/// column, and it refuses v5 by design because its schema identity is deliberately
+/// not the reference's. Both are recorded in that document as open owner
+/// decisions; this case pins the shipped behaviour they describe.
+#[test]
+fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
+    use layerfs_content::inode_leaf::{
+        encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, INODE_VALUE_BYTES,
+    };
+    use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
+    use support::{create_store, save_one, TempDir};
+
+    let dir = TempDir::new("formats-pooled");
+    let path = dir.store_path("formats");
+    let store = create_store(&path);
+    let mut seed = [0_u8; 32];
+    seed[..8].copy_from_slice(&7_u64.to_be_bytes());
+    let value: [u8; INODE_VALUE_BYTES] = encode_inode_value(InodeValue {
+        kind: InodeKind::RegularFile,
+        namespace_ref_count: 1,
+        content_root: ObjectId::for_bytes(&seed),
+        metadata_root: ObjectId::for_bytes(&[7_u8; 8]),
+    });
+    let canonical = InodeLeaf {
+        subtree_bytes: INODE_VALUE_BYTES as u64,
+        rows: vec![InodeLeafRow { serial: 1, value }],
+    }
+    .encode()
+    .expect("canonical leaf");
+    let leaf = FinalizedObject::new(ObjectRole::InodeLeaf, canonical).expect("finalized");
+    let leaf_id = leaf.id();
+    save_one(&store, leaf).expect("pooled save");
+    drop(store);
+
+    // The persisted lanes: the value group is in the v6 pooled lane, the leaf
+    // record in the v1 ordinary lane, and the role column says which row is which.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let leaf_pack: Vec<u8> = connection
+        .query_row(
+            "SELECT p.data FROM objects o JOIN object_packs p ON p.pack_id = o.pack_id \
+             WHERE o.object_id = ?1",
+            [leaf_id.to_bytes().to_vec()],
+            |row| row.get(0),
+        )
+        .expect("leaf pack");
+    let group_pack: Vec<u8> = connection
+        .query_row(
+            "SELECT p.data FROM metadata_value_groups g JOIN object_packs p \
+             ON p.pack_id = g.pack_id ORDER BY g.first_ordinal LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("group pack");
+    let leaf_role: i64 = connection
+        .query_row(
+            "SELECT object_role FROM objects WHERE object_id = ?1",
+            [leaf_id.to_bytes().to_vec()],
+            |row| row.get(0),
+        )
+        .expect("role column");
+    drop(connection);
+    assert_eq!(
+        parse_header(&leaf_pack).expect("leaf header").lane,
+        PackLane::Ordinary,
+        "a pooled leaf record is stored in the v1 ordinary lane"
+    );
+    assert_eq!(
+        VERSION_ORDINARY,
+        PackLane::Ordinary.version(),
+        "v1 is the ordinary lane"
+    );
+    assert_eq!(
+        parse_header(&group_pack).expect("group header").lane,
+        PackLane::PooledMetadata,
+        "a pooled value group is stored in the v6 pooled lane"
+    );
+    assert_eq!(VERSION_POOLED_METADATA, 6, "the pooled lane is v6");
+    assert_eq!(
+        leaf_role,
+        i64::from(ObjectRole::InodeLeaf.code()),
+        "the object_role column is what distinguishes a pooled leaf from a mapping node"
+    );
+
+    // v5 is refused by name, and the refusal is the unknown-version one rather than
+    // a decode attempt.
+    let v5 = header(5, 1, 16 + 16 + 32);
+    let error = parse_header(&v5).unwrap_err();
+    assert!(
+        matches!(error, StorageError::UnsupportedPolicy { field } if field == "pack framing version"),
+        "v5 must be refused as an unsupported framing: {error}"
+    );
+}

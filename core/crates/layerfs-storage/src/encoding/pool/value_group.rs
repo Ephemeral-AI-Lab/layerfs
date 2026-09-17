@@ -45,12 +45,12 @@ pub fn build(
     }
     let body = frame_group_bounded(&records, METADATA_GROUP_LIMIT)?;
     let digest = ObjectId::for_bytes(&body);
-    let mut encoded = body.clone();
-    let mut codec = GroupCodec::Raw;
-    if let Some(frame) = crate::encoding::codec::compress_group_body(workspace, &body)? {
-        encoded = frame;
-        codec = GroupCodec::Zstandard;
-    }
+    // The body is copied only when the frame is not smaller than it: the stored
+    // bytes are the frame when there is one, and the body itself otherwise.
+    let (encoded, codec) = match crate::encoding::codec::compress_group_body(workspace, &body)? {
+        Some(frame) => (frame, GroupCodec::Zstandard),
+        None => (body.clone(), GroupCodec::Raw),
+    };
     Ok(BuiltGroup {
         group: EncodedGroup {
             decoded_length: framed_length(&records)?,

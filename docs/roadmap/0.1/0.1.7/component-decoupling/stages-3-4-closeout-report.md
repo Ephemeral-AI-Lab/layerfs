@@ -199,6 +199,28 @@ G13-G15, G17-G19. Neither is complete yet.
   `w5/README.md`; W7.3 extends it with the allocations reported live.
 * **Production LOC.** core `11053 -> 11166` (delta +113); C1 +8, C2 +105.
 
+### W6 — latent traps, dead code and design deviations — PASS (E2 open)
+
+* **W6.1** `pool_base` charges both chain budgets what a read actually pays, so an
+  accepted metadata depth is usable, including 50; `DepthCache::cost_of`'s walk
+  bound was one record short of the deepest supported chain. Oracle:
+  `metadata_pool::a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain`, with
+  two controls in `w6-fails-without-fix.log`.
+* **W6.2** the dead `InodeLeaf` dispatch is an explicit refusal,
+  `delta_depth_for_role` maps a pooled leaf to the pooled depth, the 23-byte
+  constants are renamed for what they measure, and 16 dead items are deleted
+  (including `FileView::walk_extents`, 59 lines).
+* **W6.3 / W6.4** both deviations are recorded in
+  `physical-encoding-and-packing.md` and pinned by
+  `physical_formats::the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones`;
+  the owner decision is escalation E2.
+* **W6.5** the ranked simplification list is worked; the one item kept (the
+  bounded demand scan in `mapping/read.rs`) is kept with its reason stated.
+* **Evidence.** `w6/w6-verify.log` — 26 targets, workspace 43/263, clippy, fmt,
+  boundary, both tool suites and `git diff --check`, all exit 0; controls in
+  `w6/w6-fails-without-fix.log`.
+* **Production LOC.** core `11166 -> 10983` (delta -183); C1 -120, C2 -63.
+
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 
 * **Defect.** `core/crates/layerfs-storage/src/encoding/delta/select.rs:209-210`

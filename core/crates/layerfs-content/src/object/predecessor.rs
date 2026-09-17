@@ -88,11 +88,6 @@ impl AdvisoryPredecessors {
         self.entries.iter().map(|entry| entry.id)
     }
 
-    /// Proposed identities as a slice-compatible vector.
-    pub fn to_ids(&self) -> Vec<ObjectId> {
-        self.ids().collect()
-    }
-
     /// Entries with their provenance, in preference order.
     pub fn entries(&self) -> &[AdvisoryPredecessor] {
         &self.entries

@@ -113,11 +113,6 @@ impl FinalizedObject {
         self.canonical.len()
     }
 
-    /// Capacity charged to the owner, not just the used length.
-    pub fn canonical_capacity(&self) -> usize {
-        self.canonical.capacity()
-    }
-
     /// Direct logical child identities, in canonical order.
     pub fn references(&self) -> &[ObjectId] {
         &self.references

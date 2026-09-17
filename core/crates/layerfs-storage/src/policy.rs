@@ -7,7 +7,7 @@
 //! validity, chain-work budgets and live-memory budgets are separate: raising the
 //! cutoff or a depth never raises the others.
 
-use layerfs_content::{ConstructionPolicy, ContentError, ContentResult};
+use layerfs_content::{ConstructionPolicy, ContentError};
 
 use crate::error::{StorageError, StorageResult};
 
@@ -71,8 +71,11 @@ pub const WHOLE_FILE_FRAME_LIMIT: usize = 135_168;
 pub const CHUNK_RAW_LIMIT: usize = 32_768;
 /// Largest accepted chunk codec frame.
 pub const CHUNK_FRAME_LIMIT: usize = 33_024;
-/// Canonical envelope overhead of a whole-file object over its raw payload.
-pub const OBJECT_ENVELOPE_OVERHEAD: usize = 23;
+/// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
+/// bytes-role envelope and the 10-byte whole-file value header. The chunk lane's
+/// equivalent is 21 bytes, because a chunk value carries only its eight-byte
+/// magic, and the frozen codec profile holds both limits.
+pub const WHOLE_FILE_CANONICAL_OVERHEAD: usize = 23;
 
 /// Framing bytes a singleton pack adds around its single record.
 pub const SINGLETON_FRAMING_SLACK: usize = 4_096;
@@ -248,14 +251,8 @@ pub struct StorageCapacities {
     pub whole_file_canonical_limit: usize,
     /// Largest accepted whole-file codec frame under this cutoff.
     pub whole_file_frame_limit: usize,
-    /// Canonical envelope overhead of a whole-file object.
-    pub whole_file_envelope: usize,
     /// Whole-file codec window log.
     pub whole_file_window_log: i32,
-    /// Largest canonical chunk object.
-    pub chunk_canonical_limit: usize,
-    /// Largest accepted chunk codec frame.
-    pub chunk_frame_limit: usize,
     /// Largest assembled ordinary, native, compact or pooled pack.
     pub pack_limit: usize,
     /// Largest assembled singleton pack.
@@ -293,17 +290,11 @@ impl StorageCapacities {
     pub fn from_policy(policy: StoragePolicy) -> StorageResult<Self> {
         let policy = policy.validated()?;
         let construction = policy.construction().capacities();
-        let chunk_raw = CHUNK_RAW_LIMIT;
         Ok(Self {
             small_file_threshold_bytes: policy.small_file_threshold_bytes(),
             whole_file_canonical_limit: construction.whole_file_canonical_limit,
             whole_file_frame_limit: construction.whole_file_frame_limit,
-            whole_file_envelope: OBJECT_ENVELOPE_OVERHEAD,
             whole_file_window_log: policy.construction().whole_file_window_log(),
-            chunk_canonical_limit: chunk_raw
-                .checked_add(21)
-                .ok_or(StorageError::Integrity("chunk capacity"))?,
-            chunk_frame_limit: CHUNK_FRAME_LIMIT,
             pack_limit: PACK_LIMIT,
             singleton_pack_limit: SINGLETON_PACK_LIMIT,
             group_limit: GROUP_LIMIT,
@@ -323,21 +314,15 @@ impl StorageCapacities {
     }
 
     /// Dependency bound for one role's prospective delta selection.
+    ///
+    /// Every payload role uses its own configured bound, and a pooled metadata
+    /// leaf uses the pooled bound it is persisted with: mapping a role to another
+    /// role's depth would silently select against the wrong policy.
     pub const fn delta_depth_for_role(self, role: layerfs_content::ObjectRole) -> u8 {
         match role {
             layerfs_content::ObjectRole::Chunk => self.chunk_delta_max_depth,
+            layerfs_content::ObjectRole::InodeLeaf => self.metadata_delta_max_depth,
             _ => self.whole_file_delta_max_depth,
         }
     }
-}
-
-/// Rejects a canonical object larger than the profile allows.
-pub fn check_canonical_limit(length: usize) -> ContentResult<()> {
-    if length > CANONICAL_LIMIT {
-        return Err(ContentError::ObjectLimitExceeded {
-            limit: CANONICAL_LIMIT,
-            actual: length,
-        });
-    }
-    Ok(())
 }

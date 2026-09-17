@@ -23,9 +23,6 @@ pub const DEFAULT_CHUNK_DELTA_MAX_DEPTH: u8 = 4;
 /// Largest accepted dependency depth for either role.
 pub const MAXIMUM_DELTA_MAX_DEPTH: u8 = 50;
 
-/// Smallest nonempty file that is stored as a whole-file object.
-pub const MINIMUM_WHOLE_FILE_BYTES: u64 = 1;
-
 /// Frozen whole-file codec window log below the 256 KiB cutoff.
 const WHOLE_FILE_WINDOW_LOG_SMALL: i32 = 18;
 /// Whole-file codec window log from the 256 KiB cutoff upwards.
@@ -141,7 +138,7 @@ impl ConstructionPolicy {
             } else {
                 DEFAULT_WHOLE_FILE_FRAME_LIMIT
             },
-            whole_file_canonical_limit: raw + OBJECT_ENVELOPE_BYTES,
+            whole_file_canonical_limit: raw + WHOLE_FILE_CANONICAL_OVERHEAD,
             chunk_raw_limit: crate::file::cdc::MAXIMUM_CHUNK_BYTES,
             chunk_minimum_raw: crate::file::cdc::MINIMUM_CHUNK_BYTES,
             mapping_node_limit: 8_192,
@@ -179,8 +176,11 @@ pub enum Representation {
     Chunked,
 }
 
-/// Canonical object envelope overhead of a bytes-role value.
-pub const OBJECT_ENVELOPE_BYTES: usize = 23;
+/// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
+/// bytes-role envelope (`HEADER_LEN` plus the value length) and the 10-byte
+/// whole-file value header (`WHOLE_MAGIC` plus the version). It is deliberately
+/// not named for the envelope alone, which is 13 bytes and lives in `object::codec`.
+pub const WHOLE_FILE_CANONICAL_OVERHEAD: usize = 23;
 
 /// Largest canonical object accepted by this profile (16 MiB).
 ///

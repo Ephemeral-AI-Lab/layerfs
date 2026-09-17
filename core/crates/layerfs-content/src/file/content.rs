@@ -24,9 +24,6 @@ use crate::policy::{ConstructionCapacities, ConstructionPolicy, Representation};
 const WHOLE_MAGIC: &[u8; 8] = b"LFS5SML\0";
 const WHOLE_VERSION: u16 = 1;
 const WHOLE_VALUE_HEADER: usize = 10;
-/// Overhead of a canonical whole-file object over its raw payload.
-pub const WHOLE_CANONICAL_OVERHEAD: usize = 23;
-
 /// Root of a constructed file plus the logical length it opens.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConstructedFile {

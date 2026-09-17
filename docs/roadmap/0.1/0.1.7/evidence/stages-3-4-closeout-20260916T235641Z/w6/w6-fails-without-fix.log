@@ -1,0 +1,79 @@
+=== control A (first attempt): the patch did not apply, so the run proves nothing | 2026-09-17T01:01:30Z
+The source pattern had been reformatted, so the edit was a no-op and the run
+exercised the unmodified tree. Kept on disk as required; not cited as a control.
+=== worst-case record charge restored | 2026-09-17T01:01:30Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool a_deep_metadata
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 1 test
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.22s
+
+--- exit 0 | wall 0.356s
+=== control B: the depth-walk bound is one record short | 2026-09-17T01:01:30Z
+select.rs: the CostCache walk bound goes back to MAXIMUM_DELTA_MAX_DEPTH records.
+Expected: a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain fails.
+
+=== depth-walk bound reverted | 2026-09-17T01:01:30Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool a_deep_metadata
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.43s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 1 test
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... FAILED
+
+failures:
+
+---- a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain stdout ----
+
+thread 'a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain' panicked at crates/layerfs-storage/tests/metadata_pool.rs:733:42:
+leaf past the depth cap: Integrity("stored dependency chain depth")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.24s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool`
+--- exit 101 | wall 2.464s
+=== worst-case record charge restored | 2026-09-17T01:01:45Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool a_deep_metadata
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+warning: unused variable: `target_encoded`
+   --> crates/layerfs-storage/src/cas/owner.rs:667:9
+    |
+667 |         target_encoded: u64,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_target_encoded`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: `layerfs-storage` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 1 test
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... FAILED
+
+failures:
+
+---- a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain stdout ----
+
+thread 'a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain' panicked at crates/layerfs-storage/tests/metadata_pool.rs:691:13:
+assertion `left == right` failed: round 17 must extend the chain: PoolCounters { leaves: 1, reused_values: 0, new_values: 1, groups: 1, delta_leaves: 0, full_leaves: 1, trials: 0, work_exceeded: 1 }
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.08s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool`
+--- exit 101 | wall 1.678s

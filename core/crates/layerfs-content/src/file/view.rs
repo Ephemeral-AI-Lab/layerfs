@@ -13,7 +13,7 @@ use layerfs_telemetry::timer::TimingScope;
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::content::{self, FileContent};
-use crate::file::mapping::{self, ExtentSlice, FileState};
+use crate::file::mapping::{self, FileState};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 /// Immutable, already-authenticated base of one operation.
@@ -107,65 +107,6 @@ impl FileView {
             FileContent::Chunked(state) => {
                 mapping::read_range(reader, state, range, sink).map(|_| ())
             }
-        }
-    }
-
-    /// Visits every extent of a chunked base in logical order, one leaf at a time.
-    pub fn walk_extents(
-        &self,
-        reader: &dyn AuthenticatedObjects,
-        sink: &mut dyn FnMut(ExtentSlice) -> ContentResult<()>,
-    ) -> ContentResult<u64> {
-        let Some(state) = self.file_state()? else {
-            return Err(ContentError::WrongLogicalRole);
-        };
-        let mut visited = 0_u64;
-        descend(
-            reader,
-            state.mapping_root,
-            true,
-            state.tree_level,
-            &mut |extent| {
-                visited = visited
-                    .checked_add(u64::from(extent.logical_length()))
-                    .ok_or(ContentError::LengthOverflow)?;
-                sink(extent)
-            },
-        )?;
-        if visited != state.logical_len {
-            return Err(ContentError::LengthMismatch {
-                expected: state.logical_len,
-                actual: visited,
-            });
-        }
-        Ok(visited)
-    }
-}
-
-fn descend(
-    reader: &dyn AuthenticatedObjects,
-    id: ObjectId,
-    root: bool,
-    level: u8,
-    sink: &mut dyn FnMut(ExtentSlice) -> ContentResult<()>,
-) -> ContentResult<()> {
-    let canonical = reader.read_canonical(id)?;
-    let node = mapping::decode_node_with_context(&canonical, root)?;
-    if node.level() != level {
-        return Err(ContentError::InvalidRecord("mapping level"));
-    }
-    match node {
-        mapping::ExtentNode::Leaf { extents, .. } => {
-            for extent in extents {
-                sink(extent)?;
-            }
-            Ok(())
-        }
-        mapping::ExtentNode::Branch { children, .. } => {
-            for child in children {
-                descend(reader, child.child_object_id, false, level - 1, sink)?;
-            }
-            Ok(())
         }
     }
 }
