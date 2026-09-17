@@ -9,9 +9,15 @@
 > **Terminal condition (the only definition of done in this document):**
 > every Stage 5 criterion and every cumulative Stages 0-5 criterion reports
 > **PASS**, with **no FAIL, no INCOMPLETE and no unowned row**; every `NOT_RUN` row
-> is either resolved or carries a written owner disposition; a **fresh independent
-> review** on the final tree reports **zero open findings**; the documents record
-> the final state; and **#170 is closed**. Work iteratively until that holds.
+> is either resolved or carries a written owner disposition; a **fresh
+> verification-subagent pass** on the final tree reports **zero open findings**; the
+> documents record the final state; and **#170 is closed**. Work iteratively until
+> that holds.
+>
+> **How you work:** you are a single main agent that launches subagents. There is no
+> second reviewer tool, no separate reviewer agent and no human in the loop. You
+> write, you launch read-only verification subagents with fresh context, and you
+> adjudicate what they return (section 2, section 7).
 
 ---
 
@@ -44,26 +50,73 @@ PARTIAL-INCOMPLETE / 1 NOT_RUN / 1 NOT_APPLICABLE of 83**; **cumulative — 30 P
 (`S3-6`, `S4-5`) are the Stages 3-4 performance waivers: they stay waived, they are
 not yours to re-open, and they must not be promoted into evidence.
 
-## 2. The loop (repeat until the terminal condition holds)
+## 2. How you work: one main agent, many subagents
+
+You are the **main agent**, and you are the only thing that persists across the
+whole job. Everything else is a subagent you launch for one bounded purpose and
+then discard. There is **no external reviewer** — not another coding agent, not
+another tool, not a person — and you must not write the routing as if one exists.
+
+Three roles, all filled by you at different moments:
+
+| role | who | rules |
+| --- | --- | --- |
+| **writer** | you, or one subagent you give an exclusive file slice | exactly **one writer at a time** on the repository. A writing subagent never commits, never pushes, never changes issue state, and reports every file it touched |
+| **verifier** | a subagent you launch with fresh context (section 7) | **read-only on all product, test, fixture and harness source.** It writes exactly one evidence file in the round's evidence directory and returns a bounded summary. A verifier must never be the writer of the code it verifies |
+| **adjudicator** | you | you re-read every finding at its `path:line` and reproduce it yourself where you can, **before** acting on it. Subagents are wrong in both directions; an unreproduced finding is not a finding |
+
+**What a subagent prompt must contain.** A subagent does not see your conversation,
+so every launch is self-contained: the repository path and the frozen commit; the
+exact ledger row it is verifying; the artifact that decides that row; the command
+to run; the single output path it may write; the read-only constraint; the rule that
+a report, a passing suite or an attractive interface is not evidence; and the
+instruction to return a short summary with `path:line` citations plus anything it
+could not verify. Launch independent verifications **together** in one message so
+they run concurrently, and keep working on the next row while they run.
+
+**Serialization rules that matter more than parallelism.**
+
+- **One writer.** Never let two agents edit the repository at once. If you delegate
+  implementation, give the subagent a disjoint file set, keep the commit and the
+  push for yourself, and start no second writer until the first has stopped.
+- **One measurement at a time.** Resource-sensitive work — any timed sample, any
+  build-then-measure pair — never overlaps another agent's measurement or a build
+  that would warm a cache a timed phase reads. Declare the cache state, run it
+  alone, record the wall time.
+- **Disjoint outputs.** Every subagent writes its own file; two agents never write
+  the same evidence path.
+- **Preserve concurrent work.** Never interrupt another owner's run, never rewrite
+  someone else's receipt, never commit work you did not author without being told to.
+
+### The loop (repeat until the terminal condition holds)
 
 ```text
 ROUND N
   1  pick the highest-severity open row from the ledger in section 4
-  2  implement it, in the product or the harness or the document it actually lives in
-  3  run the checks that cover YOUR change (section 6), plus the whole-core set
+  2  implement it yourself, or hand one subagent a disjoint slice of it
+  3  run the checks that cover the change (section 6), plus the whole-core set
   4  write the round's evidence into an append-only dated directory under
      docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-<stamp>/
-  5  post one comment on #170: what changed, the evidence path, the row deltas,
-     and every command that failed or did not run
-  6  request a fresh independent review of the delta (section 7)
-  7  for every finding it returns: remedy it and go to 2
-  8  when the ledger is green and a review returns zero findings, go to section 8
+  5  launch verification subagents (section 7): one per claimed row, read-only,
+     fresh context, launched together, each writing its own evidence file
+  6  adjudicate: re-read every finding at its path:line, reproduce it yourself
+     where you can, remedy what is real, and go to 2
+  7  post one comment on #170: what changed, the evidence path, the row deltas,
+     the verifier outcomes, and every command that failed or did not run
+  8  when the ledger is green and the verifiers return zero open findings on the
+     final tree, go to section 8
 ```
 
 Rules that make the loop honest:
 
-- **Never mark a row PASS yourself.** A row flips only when its required evidence
-  exists and an independent reviewer, or a reader of the receipt, can reproduce it.
+- **Never mark a row PASS on your own word.** A row flips only when its required
+  evidence exists and a subagent that did not write the code — or any reader of the
+  receipt — can reproduce it.
+- **Never count an assertion as evidence.** "The suite passes", "the code obviously
+  does it", "the reviewer said so" are not receipts. A receipt is a command, its
+  output, and the identity of the tree it ran on.
+- **Never accept a finding without reading it.** A verifier's claim is a lead. Open
+  the file, read the line, run the command, then decide.
 - **Never silently drop a row.** A row you cannot close is reported as FAIL or
   INCOMPLETE with its measured state, like every other row.
 - **Never weaken an artifact to make a row pass** — no relaxed gate, no inflated
@@ -268,19 +321,66 @@ Measurement rounds additionally require: a declared cache state enforced equally
 both arms, a fresh `--output` path, one sample per case per arm, the measurement
 lock respected, and the complete command inside the ordinary budget.
 
-## 7. Independent review per round
+## 7. Verification subagents per round
 
-Do not review your own fix. For each round, hand the delta to a **fresh** reviewer
-with this instruction:
+You do not review your own fix, and you do not wait for anyone else. You **launch
+verification subagents** and adjudicate what they return.
 
-> Review the change at `<commit>` against the round-2 ledger row(s) it claims to
-> close. Reproduce the row's required evidence yourself through public entry points.
-> Report PASS/FAIL/INCOMPLETE per row with `path:line` and the command you ran. Do
-> not trust the implementation report. Write your review beside the others and
-> retain your evidence under an append-only dated directory. Do not fix anything,
-> do not commit, do not change issue state.
+**Shape of a round.** One subagent per claimed row, or one per small group of rows
+that share an artifact. Launch them together so they run concurrently, each with a
+distinct output path under the round's evidence directory:
 
-A round is closed only when the reviewer returns zero open findings for that row.
+```text
+docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-<stamp>/
+  verify-<row-id>.md          one per subagent, its only write
+  <the commands' own logs>    produced by the subagent or by you
+README.md                     your round manifest: rows claimed, verifier outcome,
+                              every command, every failure, every NOT_RUN
+```
+
+**The prompt to give each verification subagent** (fill every bracket; the subagent
+sees nothing else):
+
+> You are verifying one claim on the LayerFS repository at
+> `/Users/yifanxu/Ephemeral-AI-Lab/layerfs`, frozen at `<commit>`.
+>
+> **HARD CONSTRAINTS.** Read-only: never modify, create or delete any product, test,
+> fixture or harness source, and never run a command that writes inside `core/`.
+> You may write exactly **one** file: `<evidence path>`. Never commit, push,
+> checkout, reset or change issue state. Do not run resource-heavy commands
+> concurrently with anything else; if the check is a measurement, say so in your
+> summary before running it.
+>
+> **THE CLAIM.** Ledger row `<row id>`: `<the row text>`. It is claimed closed by
+> `<commit or artifact>`.
+>
+> **WHAT TO DO.** Reproduce the row's required evidence yourself, through public
+> entry points, with your own command. `<the exact command to start from>`. Then
+> try to falsify it: the boundary on both sides, the malformed input, the error
+> path, and the case the claim does not mention.
+>
+> **WHAT TO REPORT.** Write `<evidence path>` containing: the verdict
+> `PASS`/`FAIL`/`INCOMPLETE`; every command you ran with its exit code; every
+> finding with `path:line` and the line quoted; and an explicit list of anything
+> you could **not** verify, marked UNVERIFIED. A roadmap report, a passing suite, a
+> commit message and an attractive interface are **not** evidence.
+>
+> Then reply with at most 40 lines: verdict, the strongest evidence for it, the
+> strongest evidence against it, and what you could not check.
+
+**Adjudication, which is your job and not theirs.** For every finding: open the
+file, read the line, run the command, decide. Accept it, refute it with your own
+evidence, or record it as UNVERIFIED. Then act. A round is closed only when every
+verifier returns zero open findings for its row and you have adjudicated all of them.
+
+**When a verifier disagrees with you,** the default is that the verifier is right
+until you have reproduced the opposite. Do not argue with a subagent; re-run the
+check and let the output decide.
+
+**Closing pass.** The final round runs the same mechanism across the whole ledger at
+once — several subagents, one per matrix section, plus one that only tries to
+falsify the terminal checklist itself. The terminal condition is met when that pass
+returns zero open findings.
 
 ## 8. Terminal checklist and closure
 
@@ -299,17 +399,18 @@ Close #170 only when **all** of the following hold on one identified tree:
    counter reproduces on the committed tree.
 7. The comparison governance is decided, and the governing document cites the
    receipt that is actually eligible.
-8. A **closing independent review** on the final tree reports zero open findings.
+8. A **closing verification-subagent pass** on the final tree reports zero open
+   findings, and you have adjudicated every one of them.
 9. The completion report states the final totals, the closed rows, and every row
    that remains unmeasured with its reason.
-10. `#170` is closed with a final comment naming the closing review, its evidence
+10. `#170` is closed with a final comment naming the closing verification pass, its evidence
     directory, the final HEAD and the exact matrices. `#165` gets a one-line
     pointer. Nothing is tagged or released by this handoff.
 
 Then, and only then, is Stage 5 done. Stage 6 (#171) owns whole-core qualification
 and Stage 7 (#172) owns runtime integration; do not start either.
 
-## 9. Anti-patterns that will fail the review
+## 9. Anti-patterns that will fail verification
 
 - Closing a row because the code "obviously" does it, without a receipt.
 - Marking a row PASS from a smoke run, a passing suite, or an attractive interface.
