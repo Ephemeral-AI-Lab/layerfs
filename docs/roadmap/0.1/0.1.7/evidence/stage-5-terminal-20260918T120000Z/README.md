@@ -91,6 +91,14 @@ round's own audit found `de648507b`'s disclosed LOC levels were stale
 (`per-commit-loc-reread-2.log`). The tasking prompts contained a mistranscribed
 full commit hash (the tree is `99743b2cff2470e6634874d7ee14b9d37d0ba16e`; every
 verifier identified the 9-character prefix match and verified the actual tree).
+The two measurement verifiers reproduced their receipts (`verify-R2-F8-scaling.md`:
+every deterministic counter identical across the receipt, two independent runs and
+the review's pre-fix grid, with a bit-identical rebuild across the remedy commits;
+`verify-TR5.md`: three runs, all deterministic counters identical, every row's
+semantics verified in code) and their findings were adopted: the §15 elapsed
+statement now carries the measured ±15% same-binary spread, and the §5
+coexistence table now lists the merge-reader buffers, the `FinalRows` stream
+state and the pre-phase touched-serials collection the first table omitted.
 
 No row is marked PASS by this directory. A row flips only when a verification
 subagent reproduces it from these receipts or through the public entry points.

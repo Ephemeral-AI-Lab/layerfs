@@ -128,21 +128,31 @@ remain mandatory. No runtime setting or performance result is claimed here.
 
 ## Plan status
 
-**Current implementation handoff:** the
+**Stage 5 is closed at its implemented scope (2026-09-18).** The
 [Stage 5 terminal handoff](component-decoupling/stage-5-terminal-handoff-20260917.md)
-drives #170 to a terminal pass. The
-[round-2 independent review](component-decoupling/stages-1-5-review-20260917T230700Z.md)
-found Stage 5 **not accepted** (five blocking items) and the cumulative C1/C2 core
-feature-complete at its implemented scope but unqualified; #170 remains open. The
+drove [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) to its
+terminal condition: every remediation round landed its rows with receipts, each
+row was verified by a read-only verification subagent, every finding was
+adjudicated and remediated, and the final matrices report **81 PASS / 0 FAIL /
+0 PARTIAL-INCOMPLETE / 1 NOT_RUN with a written owner disposition (the
+complete-operation comparison, deferred to Stage 6) / 1 NOT_APPLICABLE of 83**
+for Stage 5 and **34 PASS / 2 owner-WAIVED of 36** cumulative - see
+[stage-5-report.md §16](component-decoupling/stage-5-report.md#16-final-matrices-and-the-verification-pass-round-4-2026-09-18)
+and the
+[round-4 evidence](evidence/stage-5-terminal-20260918T120000Z/README.md).
+The [round-2 independent review](component-decoupling/stages-1-5-review-20260917T230700Z.md)
+found Stage 5 not accepted (five blocking items); all of them and the follow-up
+findings are remediated and verified. The
 [Stage 5 handoff](component-decoupling/stage-5-handoff.md),
 with its [exact source/test/LOC plan](component-decoupling/stage-5-file-plan.md),
 remains the implementation contract for filesystem trees, inodes, attributes and
 reference ordering.
 The [Stages 3–4 closure record](component-decoupling/stages-3-4-completion-round-20260917.md)
 records completed scopes and explicit unmeasured owner waivers; it is not a
-performance baseline claim. Stage 6 qualifies the whole core and Stage 7 integrates
-the later Workspace/runtime shape. No new Stage 5 implementation or measurements
-are claimed by these handoff documents.
+performance baseline claim. Stage 6 (#171) qualifies the whole core and owns the
+deferred complete-operation comparison; Stage 7 (#172) integrates the later
+Workspace/runtime shape. No complete-operation performance claim is made by
+Stage 5, and nothing is tagged or released by this closure.
 
 Design planning (owner direction, 2026-09-16). The
 [component-decoupling discussion index](component-decoupling/README.md) organizes

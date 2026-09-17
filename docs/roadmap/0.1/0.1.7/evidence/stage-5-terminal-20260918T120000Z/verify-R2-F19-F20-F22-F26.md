@@ -377,3 +377,162 @@ its scenario noted as whole-file-route), R2-F22 (source + test run + pre-fix
 drop shown), R2-F26 (source + exhaustive grep + pre-fix two-constant state
 shown). One repo-identity discrepancy (§0) and two coverage caveats (§2.4,
 §3.4) are recorded above; neither flips a verdict.
+
+## 9. RE-VERIFICATION (post-remedy), 2026-09-18, at HEAD `3ecb952c8`
+
+The round-4 remedy commit `3ecb952c8ed530706700e09647f42ee51bf09f98`
+("fix(stage5): remedy every round-4 verification finding, with receipts",
+parent of the previously verified `99743b2cf`) landed two remedies answering
+this reviewer's caveats. Both were re-verified from source and by running the
+tests; the shipped test was additionally run against the pre-fix parent tree to
+prove it discriminates.
+
+### 9.1 Workspace state
+
+- HEAD at re-verification: `3ecb952c8ed530706700e09647f42ee51bf09f98`
+  (`git rev-parse HEAD`, exit 0); the previously verified tree is its parent.
+- The working tree is **not** clean: the sibling verifier's comment-only
+  modification of `core/crates/layerfs-storage/src/encoding/codec.rs`
+  (FFI-inventory doc comment; identical diff to the one recorded in §0) is
+  still present. It is comment-only, touches none of the files cited below or
+  above, and the targeted `layerfs-content` runs (commands 14-15) do not build
+  `layerfs-storage`; the full-suite run (command 16) compiles it. No other
+  dirt.
+
+### 9.2 R2-F20 re-verified — coverage caveat REMEDIATED; verdict PASS (clean)
+
+New shipped test
+`an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once`
+(`core/crates/layerfs-content/tests/edit_single.rs:363-428`, added by
+`3ecb952c8`): base `repeat(262_144, 0x51)` (:389) — 262,144 bytes, above the
+unchanged cutoff `DEFAULT_SMALL_FILE_THRESHOLD_BYTES = 131_072`
+(`policy.rs:14`; `representation()` at policy.rs:120-128 unchanged) — so both
+base and result are chunked and the edit runs `replace_chunked`. Its doc
+comment states the discrimination duty explicitly: "The whole-file case above
+cannot catch a second read on this route - a wrong implementation was verified
+to pass it - so this case is the one that discriminates here." Assertion at
+:423-426:
+
+> assert_eq!(
+>     root_demands, 1,
+>     "the chunked route demands the base root exactly once per edit: {demands:?}"
+> );
+
+Reproduced by this reviewer:
+
+1. `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p
+   layerfs-content --test edit_single` → exit 0, **11 passed / 0 failed**,
+   including the new case.
+2. **Discrimination proof.** Re-extracted the pre-fix parent `5e2a20a0c` with
+   `git archive` into a fresh `/tmp/prefix-tree`, overlaid the shipped HEAD
+   `tests/edit_single.rs` (keeping the pre-fix tree's own `tests/support`,
+   which matches the pre-fix `into_parts` tuple API), and ran only the new
+   case: **FAILED** exactly as the fix requires —
+   `assertion 'left == right' failed: the chunked route demands the base root
+   exactly once per edit: […root demanded 1st and 4th…]  left: 2  right: 1`.
+   The pre-fix chunked route demanded the base root twice (the
+   `read_state(reader, view.root())` call the fix deleted), so the shipped test
+   now fails on the unfixed tree and passes on HEAD. This is the same
+   double-demand this reviewer's external `/tmp/f20repro` measured in §3.3;
+   the shipped test now covers it.
+3. Route unchanged from §3.1: `apply.rs:111-117` still hands the view's decoded
+   state to `replace_chunked` (chunked arm, comment :112-114; summary derived
+   from the state at :221-228); `view.rs:28-44/:62-67` still acquires, decodes
+   and reuses without a second provider call.
+
+Notes (not caveats against the row): the new case deliberately omits the
+whole-file case's stronger "no identity is demanded twice" assertion — on the
+chunked route a non-root `ExtentLeaf` mapping page is legitimately demanded
+twice (recorded in §3.3), and F20's claim is only about the base root. The
+case's own chunkedness guard (`constructed.root != ObjectId::for_bytes(&[])`)
+is weak in isolation, but the 262,144-byte length fixes the representation
+through `policy.rs:120-128`, and the pre-fix failure's demand log (five
+demands, mapping pages present) is consistent only with the chunked route.
+
+**R2-F20 verdict: PASS, no remaining caveat.** The claim's every clause —
+route reads/decodes the base root once, view supplies the decoded state,
+counting-provider test asserts exactly once per edit — is now covered by a
+shipped, discriminating test that this reviewer ran on both trees.
+
+### 9.3 R2-F26 re-verified — follow-up confirmed; verdict PASS (stronger)
+
+The remedy deleted the dead `4 MiB − 1` twin and its accessor:
+
+- `git show 3ecb952c8 -- …/filesystem/limits.rs` removes
+  `pub const DEFAULT_OPERATION_SCRATCH_BYTES: usize =
+  MAXIMUM_OPERATION_SCRATCH_BYTES - 1;`; `…/sorted/budget.rs` removes
+  `use crate::filesystem::limits::DEFAULT_OPERATION_SCRATCH_BYTES;` and
+  `pub fn default_limit() -> usize { DEFAULT_OPERATION_SCRATCH_BYTES }`.
+- `grep -rn "DEFAULT_OPERATION_SCRATCH_BYTES|default_limit"` over
+  `core/crates/**/src` (+ all `.rs` under `core/`, excluding `core/target`) →
+  **no matches**; the only remaining mentions are historical evidence/review
+  documents (the round-2 delegated audit snapshot and sibling verifier files),
+  which are records, not code.
+- The twin was dead before deletion: in the pre-fix tree the constant was
+  referenced only by its own import and the `default_limit()` accessor, and
+  `default_limit` had no callers (grep over the extracted `5e2a20a0c` tree →
+  only the definition). The live default already named the 4 MiB constant, so
+  no enforced behavior changed.
+- Current state, one constant, one name:
+  - `limits.rs:41` — `pub const MAXIMUM_OPERATION_SCRATCH_BYTES: usize =
+    4 * 1024 * 1024;` (sole owner; doc at :36-40 records the deletion:
+    "One name, one figure. Two constants used to encode this same nominal
+    ceiling - one as `4 MiB` and one as `4 MiB - 1` - and the `4 MiB - 1` twin
+    had no caller once the default named this figure, so the twin and its dead
+    accessor were deleted rather than kept as a second spelling of one
+    ceiling.")
+  - `sorted/page.rs:26` — `pub const MAXIMUM_SCRATCH_BYTES: usize =
+    crate::filesystem::limits::MAXIMUM_OPERATION_SCRATCH_BYTES;` (names it;
+    unchanged by the remedy).
+  - Defaults/enforcement all name it: `input.rs:73`
+    (`scratch_bytes: crate::filesystem::sorted::MAXIMUM_SCRATCH_BYTES`),
+    `directory/update.rs:41`, `inode/update.rs:71` and `:84`;
+    `Budget::new(scratch_limit)` at `page.rs:157` receives the named figure.
+- Exhaustive figure grep at HEAD over `core/crates/*/src`
+  (`4 * 1024 * 1024 | 4_194_303 | 4_194_304`): only `limits.rs:41` (the owner)
+  plus three **different quantities** — storage
+  `TRANSACTION_CANONICAL_BYTES_LIMIT` (`policy.rs:71`, transaction canonical
+  bytes), `DEPENDENCY_PACK_CACHE_BYTES` (`policy.rs:113`, pack cache),
+  `DEFAULT_ORDERING_BYTES = 64 MiB` (`runs.rs:39`). No second spelling of the
+  scratch ceiling exists anywhere in core production source.
+
+**R2-F26 verdict: PASS.** The claim now holds in its strongest form: one
+constant owns the figure, one constant names it, and the former −1 twin is
+gone from the tree entirely.
+
+### 9.4 R2-F19 — unchanged, as instructed
+
+No action was taken on the §2.4 caveat (the ~3n whole-file-edit figure lives in
+the round-2 review's own ledger row and finding text, not in code comments);
+per the coordinating agent this is the review's own record and the row stands
+as verified in §2. Verdict unchanged: **PASS** (with the recorded wording
+caveat).
+
+### 9.5 Commands run for this re-verification
+
+| # | Command | Exit | Result |
+| --- | --- | --- | --- |
+| 14 | `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --test edit_single` | 0 | 11 passed / 0 failed (incl. the new chunked-base counting case) |
+| 15 | `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content` | 0 | all suites ok (e.g. edit_single 11/11, others 2/6/9/7 passed, 0 failed) |
+| 16 | `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked` (full workspace, twice for the count and the exit check) | 0 | 65 `test result: ok` blocks, no FAILED/error lines (compiled the sibling's comment-only codec.rs edit, §9.1) |
+| 17 | `rm -rf /tmp/prefix-tree && mkdir … && git archive 5e2a20a0c \| tar -x -C …` then `cp core/…/tests/edit_single.rs /tmp/prefix-tree/…/tests/` then `cargo +1.85.1 test --manifest-path /tmp/prefix-tree/core/Cargo.toml --locked -p layerfs-content --test edit_single an_edit_over_a_chunked` | 1 (test FAILED, as required) | `left: 2 right: 1` — "the chunked route demands the base root exactly once per edit"; root demanded 1st and 4th of five demands |
+| 18 | `git show 3ecb952c8 -- <limits.rs, budget.rs, page.rs, edit_single.rs>`; `git show 3ecb952c8 --stat`; greps (`DEFAULT_OPERATION_SCRATCH_BYTES`, `default_limit`, `4 * 1024 * 1024` family, `an_edit_over_a_chunked`) over HEAD and the pre-fix tree | 0 | quotes in §9.2-9.3 |
+
+### 9.6 Re-verification result
+
+- **R2-F20: PASS — coverage caveat remediated.** The shipped suite now contains
+  a chunked-base counting-provider case that this reviewer ran at HEAD
+  (passes, root demanded exactly once) and against the pre-fix parent
+  `5e2a20a0c` (fails with the root demanded twice), so the round's receipt no
+  longer rests on a scenario that cannot reach the fixed route.
+- **R2-F26: PASS — follow-up confirmed.** One constant
+  (`limits::MAXIMUM_OPERATION_SCRATCH_BYTES`) owns the figure; the sorted-page
+  constant names it; the dead `4 MiB − 1` twin and its accessor are deleted
+  with no reference remaining in any production source file.
+- R2-F19 and R2-F22: unchanged from §2 and §4 (both PASS; the F19 wording
+  caveat stands as the review's own record).
+- Remaining from §7: measured allocation peaks still not instrumented (source
+  structure only); the non-root `ExtentLeaf` double demand on the chunked route
+  still stands (outside all four claims); the repo-identity discrepancy of §0
+  still applies to the originally requested hash (verified trees: `99743b2cf`
+  then `3ecb952c8`).

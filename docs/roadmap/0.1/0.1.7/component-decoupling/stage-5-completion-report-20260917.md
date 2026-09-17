@@ -314,3 +314,21 @@ are stated at the scope the evidence covers; nothing here promotes a `NOT_RUN` r
    read-only verification subagent on the final tree. See
    [`stage-5-report.md`](stage-5-report.md) §15-§16 and the round-4 evidence
    directory.
+
+## 12. Final state (2026-09-18, round 4)
+
+The terminal condition of
+[`stage-5-terminal-handoff-20260917.md`](stage-5-terminal-handoff-20260917.md)
+is met on the round-4 tree: the Stage 5 matrix reports **81 PASS / 0 FAIL / 0
+PARTIAL-INCOMPLETE / 1 NOT_RUN with a written owner disposition (VF-6, deferred
+to Stage 6) / 1 NOT_APPLICABLE of 83**, the cumulative matrix reports **34 PASS /
+0 FAIL / 0 PARTIAL / 2 owner-WAIVED of 36**, every remediated row was verified by
+a read-only verification subagent and every finding they raised was adjudicated
+and remediated, the eight handoff §6 checks exit 0 (65 result blocks, 434 tests
+passed, 0 failed), and the comparison governance cites the eligible receipt. The
+final matrices, the verification-outcome table and the unmeasured rows with
+their reasons are [`stage-5-report.md`](stage-5-report.md) §16; the evidence is
+[`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/).
+Nothing here retracts this report's own scope statements: Stage 5 makes no
+complete-operation performance claim, and Stages 6-7 own what this stage
+deferred.

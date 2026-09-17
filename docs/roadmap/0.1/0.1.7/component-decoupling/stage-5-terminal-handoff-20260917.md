@@ -1,5 +1,15 @@
 # Stage 5 terminal handoff: drive #170 to a clean pass and close it
 
+> **Closure record (2026-09-18):** the terminal condition was met on the round-4
+> tree; [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) is closed.
+> The final matrices, the verification-subagent outcomes and the unmeasured rows
+> with their reasons are
+> [`stage-5-report.md` §16](stage-5-report.md#16-final-matrices-and-the-verification-pass-round-4-2026-09-18);
+> the evidence is
+> [`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/).
+> This document is now the historical record of the loop, the ledger and the
+> terminal checklist; it is not changed by the closure beyond this pointer.
+
 > **Status:** Active implementation routing, 2026-09-17. This document is the
 > executable assignment for the next agent. It supersedes
 > [`stage-5-continuation-handoff.md`](stage-5-continuation-handoff.md) and

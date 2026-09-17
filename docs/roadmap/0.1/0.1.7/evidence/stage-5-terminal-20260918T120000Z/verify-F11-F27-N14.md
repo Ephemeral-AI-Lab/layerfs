@@ -279,3 +279,75 @@ both passed.
 5. **Older docs** (0.1.1-0.1.6, `docs/versioned/`, `docs/releases/`) containing
    the 8,191 / 4 MiB wording were not individually classified; they are
    reference-era historical records outside the task's grep scope.
+
+## RE-VERIFICATION (post-remedy, HEAD `3ecb952c8`)
+
+> The round-4 verification findings above were remediated in commit `3ecb952c8`
+> ("fix(stage5): remedy every round-4 verification finding, with receipts"),
+> which became HEAD. This section re-verifies the two corrected notes against
+> that commit. Commands and exit codes for this section: `git rev-parse HEAD`
+> [0]; `git status --porcelain` [0 — one modified file, see the caveat below];
+> `git show 3ecb952c8 --stat` [0]; `git diff 99743b2cf 3ecb952c8 --stat` over
+> `owner.rs`, `batch.rs`, `policy.rs`, `store.rs`, `input.rs`, `validate.rs`
+> [0, empty — every code file this verification cites is byte-identical across
+> the two commits, so all path:line citations above carry over verbatim];
+> re-run of the `/tmp/walk-probe` public-API probe [0]; re-run of
+> `--test policy_capacity` [0, 9 passed] and `--test filesystem_bounds` [0,
+> 10 passed] with `cargo +1.85.1 … --locked`.
+
+### Final verdicts
+
+| Row | Verdict at `3ecb952c8` |
+| --- | --- |
+| R2-F11 / N-8 — SQL transaction row stated as a commit trigger | **PASS** |
+| F27 — preparation-batch row stated as a flush trigger | **PASS** |
+| N-14 — caller-owned input bound declared as an explicit adapter obligation | **PASS** |
+
+### Correction 1 checked — the N-14 declaration (filesystem-tree.md §9)
+
+The declaration (now :457-472) no longer attributes the walk ceiling to
+`FilesystemResources::check`. It now reads: "`FilesystemResources::check`
+enforces every ceiling the operation declares as a resource - scratch, ordering
+bytes, pending records, merge buffers, read batches - and the whole-tree walk
+ceiling (`MAXIMUM_WALK_ENTRIES`, enforced in the validator, not a resource
+field) bounds each validation walk" (:458-462). This matches the code exactly:
+the five resource fields are checked at `input.rs:97-125` (the fifth is
+`base_read_batch` — "read batches"), and `MAXIMUM_WALK_ENTRIES = 4_096`
+(`limits.rs:86`) is enforced in the validator (`validate.rs:302, 319, 603-604,
+663`), not as a resource field. The off-by-one is fixed: ":465 … one build is
+still refused above **4,096** bindings by the whole-tree walk ceiling", matching
+this verification's probe (4,096 accepted / 4,097 refused) and the independent
+probe in `verify-R2-F7.md` (flat build 4,096 → Ok / 4,097 → Err; nested build
+4,096 total → Ok). `limits.rs:67-69` now states the tight figures ("a build that
+states exactly 4,096 is accepted, 4,097 is the first refusal") and explains the
+round-2 review's original counting. The remaining declaration statements
+(borrowed/unbounded slices, adapter obligation, verbatim seam wording, no C1
+bound on caller input) are unchanged and remain verified as above.
+
+### Correction 2 checked — the F11/F27 note (admission-and-persistence.md)
+
+The note (now :358-373) names all three accumulation sites — "(`cas/
+owner.rs::maybe_commit` runs after each member, write and value-group body is
+accumulated)" (:361-362) — matching `owner.rs:672-673` (value-group body),
+`:823-824` (member) and `:839-840` (write). The overshoot is now characterized
+with the caveat this verification recorded: "an open transaction can hold
+**roughly** one maximal object or singleton pack above the figure before the
+next `COMMIT` - a singleton seal charges the pack BLOB beside the canonical
+length, so the overshoot can approach twice a maximal object" (:363-366) —
+exactly the ~2×16 MiB worst case at `owner.rs:839-840` + `:823-824`. Every other
+statement of the note is unchanged and remains verified as above (trigger order,
+16 MiB object still accepted, commit-trigger rewording, F27 empty-batch
+admission, "no bound was weakened" — `3ecb952c8` touches no storage source).
+
+### Caveat — the working tree is not clean
+
+The delegator stated the working tree is clean; it is not: at re-verification
+time `core/crates/layerfs-storage/src/encoding/codec.rs` carries an uncommitted
+working-tree edit (an FFI-inventory addition, `ZSTD_compressBound` /
+`ZSTD_estimateCCtxSize_usingCParams`) that is **not** part of `3ecb952c8`. It
+does not affect this re-verification: every file cited in this section
+(`filesystem-tree.md`, `admission-and-persistence.md`, `limits.rs`, and all six
+code files) is byte-identical to HEAD (`git diff --quiet` verified for the docs
+and `limits.rs`; the empty `99743b2cf..3ecb952c8` diff covers the code). The
+edit belongs to another row's verifier and should be committed or reverted
+before the tree is sealed.

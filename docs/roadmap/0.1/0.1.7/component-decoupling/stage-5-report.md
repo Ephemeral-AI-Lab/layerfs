@@ -397,7 +397,15 @@ rename pairs:
 | pending rows | the reducer's pending map | 64 rows = 6,144 B | `references.peak_pending` × 96 B/row |
 | ordering bytes | live runs + spilled-but-unmerged inputs + pending + reserved outputs | 568,320 B | `references.runs.peak_run_bytes` |
 | live-tier scan buffers | one retained reader buffer per live tier, ≤ 32 × 16 KiB | 5 tiers = 81,920 B | `references.runs.peak_live_runs` × `merge_buffer_bytes` |
+| merge-reader buffers | two fresh reader buffers per live merge, coexisting with the tier scans during the phase's final consolidate (which merges before the scans are dropped) | 2 × 16,320 B; with the scans, ≈ 7 × 16,320 = 114,240 B in this fixture; ≤ (32 + 2) buffers in general | derived from `merge.rs` (`merge_runs` holds two readers); `verify-TR5.md` finding F1 |
+| `FinalRows` stream | the reducer's output stream, allocated in the references phase and persisting into the inodes phase (run buffer 32 × 96 × 4 = 12,288 B plus the re-collected pending rows and the ≤ 32-row lookahead/wave/serials/bases state, ≈ 15 KB class) | ≈ 15 KB class | `reduce.rs`; `verify-TR5.md` finding F2 |
 | caller backing | the physical owner of the run files | 568,320 B peak | `FileBacking::peak_bytes` |
+
+Pre-phase owners disclosed beside the table (found by the verification pass,
+`verify-TR5.md` finding F3): the touched-serials collection (`Vec<u64>`, one per
+touched inode, counter `references.serials_scanned`, bytes counted nowhere) and
+the release cursors (depth-bounded, empty in this fixture) coexist with the
+pending map and the runs between the directories and references phases.
 
 The scratch leases are held in their own sequential phases, not during the
 references phase: directories `peak_scratch_bytes` 376,110 B, inodes
@@ -693,7 +701,10 @@ three doublings, ≈ n^1.58): **the read amplification is still superlinear, and
 the reason is the tiered merge itself, which is O(n log n) in the change count
 at a fixed pending ceiling.** No O(changes) claim is made. Elapsed times are
 16.3 / 32.7 / 79.6 / 157.6 ms against the review's 15.8 / 35.6 / 87.6 / 154.5 ms
-- single samples on the same machine, within sample noise, no faster claim. What
+single samples on the same machine, within sample noise (the verification pass
+measured a ±15% elapsed spread between identical binaries on this machine, and
+the receipt's figures sit within ±9% of the review's; `verify-R2-F8-scaling.md`),
+no faster claim. What
 the hoist removes is not visible in these counters and is pinned by the product
 test instead: the per-lookup 16 KiB allocation and buffer re-read are gone (the
 counting-allocator test asserts a zero-allocation lookup wave and a one-pass
@@ -706,3 +717,137 @@ ascending sweep).
   dated record. The remaining work is verification: the round-3 rows have never
   been independently verified, and §16 records the verification-subagent pass
   over the whole ledger on the final tree.
+
+## 16. Final matrices and the verification pass (round 4, 2026-09-18)
+
+> **Status: the terminal state.** Every row below carries the evidence that
+> decides it. The round-4 verification pass ran one read-only verification
+> subagent per row group on the round tree, adjudicated every finding, remedied
+> what was real (commit `3ecb952c8`), and re-verified each remedy; the two
+> measurement receipts were reproduced by their own verifiers. The verifier
+> reports are the `verify-*.md` files in
+> [`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/).
+
+### Verification outcomes, row group by row group
+
+| Verifier report | Rows | Outcome |
+| --- | --- | --- |
+| `verify-R2-F1-F2-F3-F14.md` | TR-1, TR-2 (F14 half), N-1 | PASS; F14's clipped-run receipt established as impossible with legal inputs (statement in the round README); the round-3 commit message's "2 read / 6 emitted" phrasing recorded as a loose aggregate of the printed lines |
+| `verify-R2-F6-AT4-F25.md` | AT-4, VF-3 (named case), N-4, R2-F25 | PASS |
+| `verify-R2-F7.md` | N-5, VF-4 (walk row), N-15 | PASS, with the boundary erratum (4,096 accepted / 4,097 refused) corrected in the remedy commit |
+| `verify-R2-F12-F13.md` | N-9, N-10, TEL-4 | PASS |
+| `verify-R2-F17-F18.md` | R2-F17, R2-F18 | PASS |
+| `verify-R2-F19-F20-F22-F26.md` | R2-F19, R2-F20, R2-F22, R2-F26 | PASS; F20's chunked-route coverage gap remediated with a new case and re-verified |
+| `verify-N11-F21.md` | N-11, R2-F21 | PASS, with the qualification recorded: the byte ceiling lives at C1's payload wave (where the bytes flow); C2's own wave and `FilesystemObjects::read_batch` remain count-only, documented as counts, with the review's seam arithmetic for a future adapter |
+| `verify-N16-VF4.md` | N-16, VF-4 | PASS after remedy (the `MAXIMUM_LEVELS` derived note and pin, the `MAXIMUM_READ_DEMANDS` boundary case, the group-count row, the scratch figure correction, the dead twin deleted, the stale references fixed) |
+| `verify-R2-F10-F23-F24.md` | N-7, N-17, R2-F10, R2-F23, R2-F24 | PASS, with three recorded caveats (the dependency-read collapse to absence on a tampered store is unreachable in product-written stores; locator-byte errors pass through as content errors; the public low-level sqlite helpers accept any connection) |
+| `verify-N13.md` | N-13 | PASS after remedy (the FFI inventory completed to all nineteen entry points, re-verified) |
+| `verify-F11-F27-N14.md` | N-8, N-14, S2-4 (F27), R2-F11 | PASS; the N-14 walk-ceiling attribution and the F11 overshoot characterization corrected in the remedy commit |
+| `verify-R2-F4-F15.md` | N-2, VF-7, R2-F4, R2-F15 | PASS; the scope-switch boundary and the drift column's nature recorded; the round's own audit found and recorded `de648507b`'s stale disclosed levels |
+| `verify-VF5-VF6-F5.md` | N-3, VF-5, VF-6, R2-F5 | PASS; two superseded "10% slower" echoes in the completion report corrected by its §11 |
+| `verify-VF3.md` | VF-3 | PASS after remedy (the two named-vs-asserted gaps strengthened and re-verified) |
+| `verify-R2-F8-N6.md` | N-6, R2-F8, R2-F9 | PASS (code, docs, dead states, allocation test) |
+| `verify-R2-F8-scaling.md` | N-6 (scaling receipt) | the receipt reproduced: work counters identical to the review's pre-fix grid, amplification still superlinear with the O(n log n) reason stated |
+| `verify-TR5.md` | TR-5 | the coexistence receipt reproduced with the operation's own counters; scope/unit/counter per row; no process-level claim |
+
+### Stage 5 matrix - final (denominator 83)
+
+Rows whose round-2 status was PASS and whose artifacts are unchanged carry
+"PASS (round 2)" with the round-2 review's citation; the round-4 suite on the
+final tree is green (65 result blocks, 434 tests passed, 0 failed). Remediated
+rows cite the round that remediated them and the verifier that confirmed it.
+
+| id | criterion | status | final evidence |
+| --- | --- | --- | --- |
+| CI-1..CI-6 | shared inode value codec, one grammar, golden bytes, framing/role identity, page ordering, gated oracle | PASS (round 2) | round-2 review §4.1; suites green on the final tree |
+| PS-1..PS-4 | schema/profile checks, refusal without migration, pool expansion, non-compact refusal | PASS (round 2) | round-2 review §4.1 |
+| SI-1..SI-4 | scoped identity, range, no fake ids, derived counts | PASS (round 2) | round-2 review §4.1 |
+| SC-1..SC-6 | optional base, exact partitions, tail rebalance, height collapse, changed-path work, grouped reads | PASS (round 2) | round-2 review §4.1 |
+| WT-1..WT-6 | effective topology, cycles, duplicates, single parent, root ops, disconnected inputs | PASS (round 2) | round-2 review §4.1 |
+| RA-1..RA-7 | additions before removals, counts derived once, aliases, precedence, survival, bounded release, old roots | PASS (round 2) | round-2 review §4.1 |
+| OR-1..OR-8 | record grammar, thresholds, tombstones, overflow, backing, cleanup, no alternate route, honest counters | PASS | OR-8's F8 caveat resolved: the counters describe the work and §15 states the amplification honestly; `verify-R2-F8-N6.md`, `verify-R2-F8-scaling.md` |
+| RD-1..RD-6 | public reads, duplicate demands, shared ancestors, bounded pagination, rejection, no hidden collection | PASS | RD-6's F7 caveat resolved: the walk ceiling is declared; `verify-R2-F7.md` |
+| AT-1..AT-3 | portable grammar, key bounds, opaque preservation | PASS (round 2) | round-2 review §4.1 |
+| AT-4 | bounded extent-only values | PASS | 32,768 enforced and documented; boundary case; `verify-R2-F6-AT4-F25.md` |
+| AT-5..AT-7 | exact sizing, no platform dispatch, scoped parity | PASS (round 2) | round-2 review §4.1 |
+| C2-1..C2-4 | roles through real save, references, pooling, no per-object flush | PASS (round 2) | round-2 review §4.1 |
+| TR-1 | real bodies, the case selects the operation | PASS | round-3 remedy; `verify-R2-F1-F2-F3-F14.md` |
+| TR-2 | bounded reports, honest clipping | PASS | the pair (round 2) plus `measure_components` (round 3); the clipped-run receipt's impossibility stated in the round README |
+| TR-3, TR-4 | same body on/off, attributed waits | PASS (round 2) | round-2 review §4.1 |
+| TR-5 | simultaneous memory and backing costs | PASS | measured coexistence row with scope/unit/counter; `verify-TR5.md`, `simultaneous-memory.log` |
+| VF-1, VF-2 | targets exist, seals recorded | PASS (round 2) | round-2 review §4.1 |
+| VF-3 | meaningful assertions | PASS | the named case discriminates at the real bound; the hunt found two weak bodies, both strengthened; `verify-VF3.md` |
+| VF-4 | limits evidence | PASS | complete table, every row with a boundary case or a derived note with arithmetic; `verify-N16-VF4.md` |
+| VF-5 | required comparison against the pinned reference | PASS | owner decision 2026-09-17: the eligible collection at `eb42c1347` governs; `verify-VF5-VF6-F5.md` |
+| VF-6 | complete-operation comparison | **NOT_RUN - owner disposition** | deferred to Stage 6 (#171) by owner decision, recorded in addendum §6; not a waiver, not promoted; Stage 5 makes no complete-operation claim |
+| VF-7 | LOC census and plan accounting | PASS | §2 corrections; `verify-R2-F4-F15.md` |
+| VF-8 | oracle reproduced independently | PASS (round 2) | round-2 review §4.1 |
+| N-1 | every `--case`/`--mode` selects the claimed operation | PASS | `verify-R2-F1-F2-F3-F14.md` |
+| N-2 | per-commit LOC disclosure reproducible | PASS | correction record + re-audit receipts; `verify-R2-F4-F15.md` |
+| N-3 | addendum cites the eligible receipt | PASS | `verify-VF5-VF6-F5.md` |
+| N-4 | attribute value bound documented as enforced | PASS | `verify-R2-F6-AT4-F25.md` |
+| N-5 | whole-tree operation ceiling declared | PASS | declared with both consequences; tight figures; `verify-R2-F7.md` |
+| N-6 | ordering work measured, state honest | PASS | one reader per tier, dead states gone, zero-allocation lookups, scaling receipt with the amplification stated; `verify-R2-F8-N6.md`, `verify-R2-F8-scaling.md` |
+| N-7 | C2 failures reach C1 with distinguishable classes | PASS | `verify-R2-F10-F23-F24.md` |
+| N-8 | declared transaction bound is a bound | PASS | stated as a commit trigger with the code's semantics; `verify-F11-F27-N14.md` |
+| N-9 | disabled and clipped distinguishable | PASS | `verify-R2-F12-F13.md` |
+| N-10 | a failed child reports a failed outcome | PASS | `verify-R2-F12-F13.md` |
+| N-11 | read wave has a declared byte ceiling | PASS | enforced at the payload wave with a refusal test; qualification recorded; `verify-N11-F21.md` |
+| N-12 | revision and payload reclamation | NOT_APPLICABLE | unchanged (no DELETE exists except failed-save cleanup; retention is a later owner's) |
+| **N-13** | `layerfs-storage` unsafe boundary | PASS | audited module boundary, deny elsewhere, guard-enforced, design note with the complete inventory; `verify-N13.md` |
+
+**Stage 5 totals: 81 PASS, 0 FAIL, 0 PARTIAL/INCOMPLETE, 1 NOT_RUN with a
+written owner disposition (VF-6, deferred to Stage 6), 1 NOT_APPLICABLE (N-12),
+0 unowned - of 83.** The two Stages 3-4 owner-WAIVED rows are not in this
+denominator and remain waived, unmeasured and unpromoted.
+
+### Cumulative Stages 0-5 matrix - final (denominator 36)
+
+| id | criterion | status | final evidence |
+| --- | --- | --- | --- |
+| S01-1..S01-6 | Stages 0-1 contracts and construction | PASS (round 2) | round-2 review §4.2; suites green on the final tree |
+| S2-1..S2-9 | Stages 2 CAS, batches, profile, visibility, cleanup | PASS | S2-4's batch byte bound now stated as a flush trigger (F27 note); `verify-F11-F27-N14.md` |
+| S3-1..S3-5 | cutoffs, deltas, reconstruction, pooling | PASS (round 2) | round-2 review §4.2 |
+| S3-6 | Stage 3 performance/resource claims | **owner-WAIVED** | unchanged; not counted as PASS |
+| S4-1..S4-4 | edits, splits, convergence, transitions | PASS (round 2) | round-2 review §4.2 |
+| S4-5 | Stage 4 performance claims | **owner-WAIVED** | unchanged; not counted as PASS |
+| TEL-1..TEL-4 | one hierarchy, disabled path, bounded retention, one monitor | PASS | TEL-4's F12/F13 caveats resolved; `verify-R2-F12-F13.md` |
+| X-1 | no retry/fallback/fsync/WAL | PASS (round 2) | round-2 review §4.2; the round-4 changes add no such path |
+| N-13 | unsafe boundary | PASS | `verify-N13.md` |
+| N-14 | operation ceiling covers the whole operation | PASS | the caller-owned input bound declared as an adapter obligation; `verify-F11-F27-N14.md` |
+| N-15 | a build's own operation is bounded | PASS | ceiling enforced and declared with tight figures; `verify-R2-F7.md` |
+| N-16 | every public limit has boundary evidence | PASS | two boundary suites plus derived notes with arithmetic; `verify-N16-VF4.md` |
+| N-17 | no caller string interpolated into SQL | PASS | closed `Pragma` enum; `verify-R2-F10-F23-F24.md` |
+
+**Cumulative totals: 34 PASS, 0 FAIL, 0 PARTIAL/INCOMPLETE, 2 owner-WAIVED
+(excluded from the PASS count), 0 unowned - of 36.**
+
+### Cumulative integration routes - final
+
+The five routes the round-2 review verified PASS remain PASS on the final tree
+(suites green). The sixth, "measured route with real payloads", was INCOMPLETE:
+it is the complete-operation measurement row and follows `VF-6`'s owner
+disposition - deferred to Stage 6 (#171). The real-payload correctness proof on
+the composed routes is unchanged and is carried by the tests (`core_pipeline`
+6 MiB + 1 end to end, `filesystem_pipeline`'s save/reopen cases), not by the
+measurement harness, exactly as the round-2 review recorded.
+
+### Rows that remain unmeasured, with their reasons
+
+- **Complete-operation comparison (`VF-6`)**: deferred to Stage 6 by owner
+  decision; Stage 5 makes no complete-operation performance claim.
+- **Cold-cache, pack-footprint and process-level memory rows**: warm
+  in-process fixtures only; the operation's own counters are the Stage 5
+  evidence; a process-level figure is Stage 6's to take.
+- **`MAXIMUM_LEVELS`, the 256-group pack ceiling, a level-31 tree**: derived
+  arithmetic recorded, unverified at scale, for the reasons in the limits
+  suites' notes.
+- **The storage side's fixed work budgets** (`ENCODE_WORKSPACE_BYTES`,
+  `DECODE_WORKSPACE_BYTES`, the pooled index/cache windows, the comparison
+  window): sized allocations rather than refusal boundaries - a caller cannot
+  exceed them, the codec charges them before use, and they are declared in the
+  Stages 3-4 record. They are not Stage 5 limit rows and carry no boundary case,
+  by scope rather than by omission (`verify-N16-VF4.md` records the same
+  reading).
+- **The two Stages 3-4 performance rows**: owner-waived, unmeasured,
+  unpromoted.

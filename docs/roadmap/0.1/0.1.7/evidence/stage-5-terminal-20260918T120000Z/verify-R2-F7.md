@@ -160,3 +160,62 @@ the re-charging alternative as hoisting the walk counter to the operation).
 - Rename boundary in shapes where the base tree holds directories *besides* the renamed one: the rule (base-tree walk charges the whole base once; refusal when total base edges + batch restatements exceed 4,096) is established by code reading (validate.rs:279-348) plus the minimal-shape probe, not by an exhaustive shape sweep.
 - Whether the parent's stated full hash resolves: it does not (exit 128); verification ran on HEAD `99743b2cff...`, matching the stated 9-character prefix.
 - No fix for the §6 erratum was applied (read-only constraint; this file is the only repository write I made).
+
+## 10. RE-VERIFICATION (post-erratum), 2026-09-18, tree `3ecb952c8`
+
+The §6 erratum was remediated in commit `3ecb952c8ed530706700e09647f42ee51bf09f98`
+("fix(stage5): remedy every round-4 verification finding, with receipts"), which
+names this verification. Re-verified read-only at HEAD; every correction checked
+against the enforced behavior re-reproduced below.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `git log -1 --format='%H %s'` | 0 | `3ecb952c8ed530706700e09647f42ee51bf09f98 fix(stage5): remedy every round-4 verification finding, with receipts` |
+| `git status --porcelain` | 0 | one entry: ` M core/crates/layerfs-storage/src/encoding/codec.rs` — another row's pre-existing modification, not this row's files; this evidence file is committed and unmodified |
+| `git diff --stat 99743b2cf..3ecb952c8 -- validate.rs limits.rs filesystem_bounds.rs filesystem_topology.rs` | 0 | **only `limits.rs` changed** (26 insertions / 12 deletions) — enforcement (`validate.rs`) and both reproducer tests are byte-identical to the tree first verified |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test filesystem_bounds --locked` | 0 | **10 passed / 0 failed** (unchanged, both reproducers included) |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test filesystem_topology --locked` | 0 | **17 passed / 0 failed** (unchanged) |
+| `/tmp/walk-boundary` probe re-run against HEAD (`cargo +1.85.1 run --quiet --offline`) | 0 | identical tight figures: flat 4,096 → Ok(4096), 4,097 → Err `cycle check work limit`; nested 4,096 total bindings → Ok, 4,097 → Err; rename subtree 4,095 → Ok (8,191), **4,096 → REFUSED**, 4,120 → REFUSED |
+
+Corrections checked, each against the reproduced behavior:
+
+1. **`limits.rs:59-86`** ✓ — the build consequence now reads "one `build_filesystem`
+   call is refused above 4,096 bindings: a build that states exactly 4,096 is
+   accepted, 4,097 is the first refusal" (L68-69) — matches the probe exactly.
+   The rebind consequence now reads "an existing directory whose effective
+   subtree **reaches** the ceiling can never be renamed or relocated … because
+   the walk of the base tree charges the rest of the tree beside the rebound
+   directory first" (L73-78) — matches: subtree 4,096 (= the ceiling) is the
+   first refused rename, and the refusing walk is the base-tree walk
+   (`check_parent_aliases`), as reproduced. The counting-difference paragraph
+   (L80-85) explains the review's file-count vs stated-bindings figures and
+   credits the round-4 verification probe.
+2. **`stage-5-report.md` §6 row (L425)** ✓ — "a build stating 4,096 bindings is
+   accepted and 4,097 is the first refused, and a directory whose effective
+   subtree reaches the ceiling can never be rebound, because the base-tree walk
+   charges the rest of the tree beside it first", with the correction pointer
+   "(figures corrected 2026-09-18 from the review's file-count phrasing - see
+   §13.2)" and the per-walk charging statement retained.
+3. **`stage-5-report.md` §13, corrections item 2 (the §13.2 the row points to)** ✓ —
+   dated "*Erratum corrected 2026-09-18:*" note: identifies the original figures
+   as "the round-2 review's own probe outputs, counted in files inside the built
+   directory, which excludes the directory's own binding edge", states the tight
+   figures in the bindings the walk charges, attributes the rebind boundary to
+   the base-tree walk charging the rest of the tree first, cites
+   `verify-R2-F7.md`, and notes the ceiling and both consequences are unchanged.
+4. **`filesystem-tree.md` §9 declaration (L463-466)** ✓ — "one build is still
+   refused above 4,096 bindings by the whole-tree walk ceiling".
+5. **Reproducers unchanged and passing** ✓ — `git diff` shows both test files
+   untouched; suites re-run 10/10 and 17/17 (exit 0).
+
+**FINAL VERDICT for R2-F7: PASS** — the ceiling is declared once
+(`limits::MAXIMUM_WALK_ENTRIES = 4_096`, aliased by `validate.rs`) with both
+consequences now stating the enforced tight figures, the per-walk charging is
+enforced in `validate.rs` and stated honestly in the §6 row, both reproducers
+exist and pass, and the declare-not-recharge option was chosen. The boundary
+erratum recorded in §6 of this file is fully remediated; every declared figure
+now matches behavior reproduced through the public API.
+
+Remaining unverified (unchanged in scope): the full `--workspace` suite, clippy,
+fmt and the boundary guard were not run; the `codec.rs` working-tree modification
+belongs to another row and was not examined.

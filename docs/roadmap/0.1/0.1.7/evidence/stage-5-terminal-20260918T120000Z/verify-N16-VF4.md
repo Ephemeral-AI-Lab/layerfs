@@ -190,3 +190,65 @@ or derived record for `MAXIMUM_LEVELS` — the one constant the round-2 N-16 fin
 named that is not a cheap fixture bound — plus two orphan/misreferenced items in the
 note and table (`MAXIMUM_READ_DEMANDS`; the scratch default figure; the phantom test
 and suite names). N-16 and VF-4 as claimed are therefore INCOMPLETE, not PASS.
+
+---
+
+## RE-VERIFICATION (post-remedy)
+
+Remedy commit: `3ecb952c8` ("fix(stage5): remedy every round-4 verification finding,
+with receipts"), verified 2026-09-18. Re-ran both suites and the §6 backing suites
+at the new HEAD; each original finding re-checked item by item.
+
+### Commands (exit codes)
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test filesystem_limits --locked` | 0 | **7 passed** / 0 failed (was 6; new read-wave-demands case) |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-storage --test storage_limits --locked` | 0 | **5 passed** / 0 failed (was 4; new group-count case) |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test filesystem_bounds --test filesystem_codec --test inode_leaf --locked` | 0 | 25 passed / 0 failed (10/9/6) |
+| `grep -rn "DEFAULT_OPERATION_SCRATCH_BYTES" core/` | 1 (no matches) | deleted constant has zero live references |
+| `grep -rn "default_limit" core/crates/` | 1 (no matches) | dead accessor deleted |
+
+### Finding-by-finding verdicts
+
+| Original finding | Remedy at `3ecb952c8` | Verdict |
+| --- | --- | --- |
+| F1 `MAXIMUM_LEVELS` orphan | Derived note with the binary-counter arithmetic — "tier k holds the rows of 2^k spilled batches — so all 32 tiers are occupied only after 2^32 − 1 spills" — labelled **"Derived, unverified at scale."** (filesystem_limits.rs:161-167); figure pinned `assert_eq!(MAXIMUM_LEVELS, 32)` (:185) plus a checked-arithmetic assertion (:189-193); §6 row "Ordering tiers \| derived, unverified at scale" with the same arithmetic (stage-5-report.md §6). The arithmetic is sound: the smallest spill count with tiers 0..31 all occupied is 2^32 − 1 ≈ 4.3×10^9 spills (× 4,096 rows each), beyond any fixture | **VERIFIED** |
+| F4 `MAXIMUM_READ_DEMANDS` orphan | New both-sides case `a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097` (filesystem_limits.rs:221-260): 4,096 demands pass the count check and reach the provider (empty store answers `MissingObject`, proving the count check did not refuse), 4,097 refused `ObjectLimitExceeded{limit: 4,096, actual: 4,097}` before the provider is asked; §6 row "Read-wave demands \| enforced" citing the case | **VERIFIED** |
+| Minor: `GROUP_COUNT_LIMIT` not both-side probed | New test `the_group_count_ceiling_is_named_with_its_derivation` (storage_limits.rs:148-167): value 256 pinned, per-lane `PackLane::group_count_limit()` pins (Ordinary/Native/WholeFile/PooledMetadata = 256, Singleton = 1), derived note stating why no fixture fills a pack to the ceiling through a real save; §6 row "Pack group count \| enforced at placement and parse" with the derived/unverified note. Enforcement is real: `layout.rs:129-133` (placement limit) and `layout.rs:275` (parser refuses outside `1..=GROUP_COUNT_LIMIT`) | **VERIFIED** |
+| F3 scratch default figure wrong; dead −1 twin | `DEFAULT_OPERATION_SCRATCH_BYTES` and `Budget::default_limit` deleted — zero references remain under `core/` (remaining hits are append-only historical evidence/review records, which is correct); §6 scratch row now reads "≥ 1,024 bytes, default 4 MiB (`MAXIMUM_OPERATION_SCRATCH_BYTES`, one constant; the unused `4 MiB − 1` twin and its dead accessor were deleted 2026-09-18)" — matching the code (`input.rs:73` → `MAXIMUM_OPERATION_SCRATCH_BYTES` = 4 MiB). Compiles and passes, so no dangling references | **VERIFIED** |
+| F2(a) phantom test name in the note | filesystem_limits.rs:156-158 now names the real coverage: `inode_leaf::malformed_leaves_are_rejected` (inode_leaf.rs:134, passing) and `filesystem_codec`'s role/level cases (filesystem_codec.rs:241, passing) | **VERIFIED** |
+| F2(b) phantom `storage_bounds` suite name | filesystem_limits.rs:172-174 now says `storage_limits` — the actual suite | **VERIFIED** |
+| F2(c) mapping tree's `MAX_LEVEL` unnamed | `MAXIMUM_TREE_LEVEL` is now defined as `crate::file::mapping::MAX_LEVEL` (limits.rs:24) — one owner, `mapping/types.rs:17` = 31; the test pins 31 and passes, so the unified figure compiles identical; the note (:154-160) still carries the deep-tree arithmetic (`MINIMUM_ROOT_ENTRIES^31`; the test body :194-218 asserts the 64^30 fan-out overflow) | **VERIFIED** |
+
+### Additional observations (not blockers)
+
+- The §6 walk-entries row was also reworded with a corrected boundary erratum
+  ("a build stating 4,096 bindings is accepted and 4,097 is the first refused",
+  replacing the round-2 file-count phrasing), citing §13.2 and its own receipt
+  (`verify-R2-F7.md`); the product test still passes (filesystem_bounds 10/10).
+- **The working tree is not clean as stated**: `core/crates/layerfs-storage/src/
+  encoding/codec.rs` carries an uncommitted doc-comment-only change (FFI inventory
+  adds `ZSTD_compressBound`/`ZSTD_estimateCCtxSize_usingCParams`). It touches none
+  of the limits items re-verified here (comment-only; the suites pass identically),
+  but the tested working tree differs from HEAD for that one file.
+- The storage work/cache budgets (original F5: `ENCODE/DECODE_WORKSPACE_BYTES`,
+  `INDEX_BYTES`, `PROGRAM_LIMIT`, `DEPENDENCY_PACK_CACHE_BYTES`,
+  `METADATA_DECODED_WORK_LIMIT`, `COMPARE_WINDOW_BYTES`, …) still have no boundary
+  cases. They were outside N-16's named list and outside §6's Stage-5 scope,
+  documented as work budgets in the Stages 3-4 record; recorded as still open under
+  the broadest "every public limit" reading, by design.
+- The `checked_shl` assertion at filesystem_limits.rs:189-193 is a weak pin on its
+  own (it fails only if `MAXIMUM_LEVELS` ≥ 65); the value pin at :185 is what fails
+  when the figure changes. Noted for honesty, not a defect.
+
+### Final verdicts (post-remedy)
+
+| Claim | Verdict | Basis |
+| --- | --- | --- |
+| N-16 — every public limit has boundary evidence | **PASS** | every gap named by the round-2 finding now has a passing both-sides boundary case or a labelled derived note with pinned arithmetic (`MAXIMUM_LEVELS`, `MAXIMUM_TREE_LEVEL`/`MAX_LEVEL`); the two new cases and both suites pass at `3ecb952c8` |
+| VF-4 — §6 table complete and correct; no false "enforced" | **PASS** | the previously missing rows exist with accurate kinds ("Read-wave demands: enforced" with a case; "Ordering tiers: derived, unverified at scale"; "Pack group count: enforced at placement and parse" with a derived note); the scratch figure is corrected with a deletion note; all eight original "enforced" rows re-confirmed against real checks; no row claims enforcement without a check |
+
+Caveats carried forward, none blocking: the uncommitted `codec.rs` doc diff (tree
+≠ HEAD for that file), the still-open storage work-budget footnote (F5), and the
+weak `checked_shl` pin noted above.

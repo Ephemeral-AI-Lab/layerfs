@@ -258,3 +258,84 @@ build artifacts stayed under `core/target`; this file is the only file written.
 - The full-hash identity discrepancy in §"Tree" could not be resolved further from inside
   this checkout: no object matches `99743b2cf3a8...`; verification is anchored on short
   prefix `99743b2cf` = HEAD with a clean tree.
+
+---
+
+## RE-VERIFICATION (post-remedy)
+
+- **Request**: the two named-vs-asserted gaps (§3 items 1 and 2) were remediated in commit
+  `3ecb952c8` ("fix(stage5): remedy every round-4 verification finding, with receipts");
+  re-verify only the two strengthened tests and record a final verdict.
+- **Tree**: `git rev-parse HEAD` → `3ecb952c8ed530706700e09647f42ee51bf09f98`, parent
+  `99743b2cff` (the tree this file's original verification ran on). **The working tree is
+  not clean**: `core/crates/layerfs-storage/src/encoding/codec.rs` carries an uncommitted
+  change (+11/−10 lines, every changed line a `//!` module-doc comment, 0 code lines —
+  verified doc-only), so the runs below compiled the working tree, not exactly the commit.
+  It cannot affect behavior and neither re-verified target is in `layerfs-storage`.
+  Both remediated test files are themselves clean at HEAD.
+
+### Remedy 1 — `core/crates/layerfs-content/tests/filesystem_ordering.rs:721-808`
+
+`a_spilled_lookup_agrees_with_a_full_scan_of_every_tier` now carries the agreement its name
+promises, in its own body, beside the original liveness assertions:
+
+- `:772-780` — a second run of the **same input** (same session, scope, directory changes,
+  inodes, new_inodes) with `FilesystemResources::default()`, guarded by
+  `unspilled_resources.maximum_pending_records > entries` — the comparison arm is asserted
+  capable of holding every row, so a shrunk default fails loudly here instead of silently
+  making the comparison vacuous.
+- `:800-803` — `unspilled.counters.references.rows_spilled == 0`: the comparison arm is
+  asserted to really not spill.
+- `:804-807` — `result.root == unspilled.root`: the spilled run and the in-memory run must
+  produce the **same root identity**.
+
+Discrimination (wrong implementations that now fail): a spilled lookup returning wrong
+rows yields a different root in the spilled arm while the in-memory arm is the answer key
+→ `:804-807` fails; an implementation whose "no-spill" arm also spills → `:800-803` fails;
+a default pending map shrunk to ≤ 200 → `:777-780` fails. The original spill/charge
+assertions (`:763-771`) are retained. Both halves of the name are now asserted in-body.
+
+Run: `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test
+filesystem_ordering --locked` → **12 passed, 0 failed, exit 0**.
+
+### Remedy 2 — `core/crates/layerfs-content/tests/filesystem_sorted.rs:237-267`
+
+`a_late_source_error_propagates_and_publishes_nothing` was rewritten to construct the
+objects directly over a local sink (`FilesystemObjects::new(&base, &mut sink)` with
+`base`/`sink` both local `TreeStore`s) and now asserts both halves of its name:
+
+- the propagation half: `matches!(outcome, Err(ContentError::Io))`;
+- the publication half: `sink.is_empty()` with the message "a failed merge publishes
+  nothing, but {} objects were emitted".
+
+The dead `Failing` consumer and `name("unused")` statements from the reviewed version are
+gone (verified in the `3ecb952c8` diff); a single `let _ = lookup;` remains to keep the
+import used — cosmetic.
+
+Discrimination (wrong implementations that now fail): one that propagates the error but
+still emits objects (e.g. streaming rows as it goes, emitting ~49 rows' worth before the
+failed 50th) → `sink.is_empty()` fails; one that swallows the error → the `Err(Io)` match
+fails. All-or-nothing publication is now pinned for the bindings path.
+
+Run: `cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test
+filesystem_sorted --locked` → **6 passed, 0 failed, exit 0**.
+
+### Final verdict for VF-3
+
+**PASS.** The round-2 named case discriminates exactly at 32,768/32,769 with the bound's
+figure pinned by independent literal assertions and the frozen profile identity (§1);
+every other case inspected in the original pass carries at least one discriminating
+assertion (§2); and the two named-vs-asserted gaps that qualified the original verdict are
+now remediated and re-verified to assert, in their own bodies, exactly what their names
+promise, with wrong-implementation scenarios that fail each new assertion. The two
+precision notes from §3 stand as observations, not findings: the walk-ceiling figures were
+reportedly tightened by the same commit's R2-F7 erratum (a build stating exactly 4,096
+bindings accepted, 4,097 the first refusal) — **not re-verified by me**, out of the
+requested scope; the page-ceiling count-check isolation note (§3 item 4) is unchanged and
+was never a vacuous case. No vacuous Stage 5 case remains in everything inspected.
+
+Post-remedy commands and exit codes: `git rev-parse HEAD` (exit 0), `git status --short`
+(exit 0, shows the doc-only codec.rs modification), `git show 3ecb952c8 --stat/-- <files>`
+(exit 0), `git diff` on codec.rs (exit 0, doc-only verified), both test targets above
+(exit 0). No repository file modified by me except this evidence file (the append the
+parent requested); build artifacts under `core/target` only.

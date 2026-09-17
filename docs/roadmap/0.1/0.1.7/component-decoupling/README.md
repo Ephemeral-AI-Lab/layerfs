@@ -8,12 +8,20 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
-- [**Stage 5 terminal handoff**](stage-5-terminal-handoff-20260917.md): the active
-  routing. Work iteratively until every Stage 5 and cumulative criterion passes with
-  no FAIL, INCOMPLETE or unowned row, then close #170 through a clean closing review.
+- [**Stage 5 closure (2026-09-18)**](stage-5-report.md#16-final-matrices-and-the-verification-pass-round-4-2026-09-18):
+  the terminal handoff reached its terminal condition - 81 PASS / 0 FAIL /
+  0 PARTIAL-INCOMPLETE / 1 NOT_RUN with a written owner disposition / 1
+  NOT_APPLICABLE of 83 for Stage 5, 34 PASS / 2 owner-WAIVED of 36 cumulative,
+  every remediated row verified by a read-only verification subagent and every
+  finding adjudicated. Evidence:
+  [`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/).
+- [Stage 5 terminal handoff](stage-5-terminal-handoff-20260917.md): the routing
+  that drove the closure; now a historical record of the loop, the ledger and
+  the terminal checklist.
 - [Round-2 independent acceptance review](stages-1-5-review-20260917T230700Z.md):
   Stage 5 **not accepted** (64 PASS / 9 FAIL / 8 PARTIAL of 83) and the cumulative
-  core feature-complete but unqualified. Its evidence is
+  core feature-complete but unqualified - the verdict the terminal rounds
+  remediated. Its evidence is
   [`../evidence/stages-1-5-review-20260917T230700Z/`](../evidence/stages-1-5-review-20260917T230700Z/).
 - [Round-1 review and remediation](stages-1-5-review-20260917T160000Z.md) with
   [`stage-5-remediation-handoff-20260917.md`](stage-5-remediation-handoff-20260917.md):
@@ -140,7 +148,15 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   Actual transport integration requires compatibility and overhead qualification;
   broader monitoring, detached tracing and collectors stay separate.
 - [Architecture overview](../architecture-overview.md): the source-linked
-  starting inventory; recheck source when deciding a boundary.
+  starting inventory for the **reference** tree under `crates/`; recheck source
+  when deciding a boundary. It does not describe the replacement under `core/`.
+- [Replacement-core architecture](../../../../../core/docs/architecture/):
+  source-backed description of the `core/` packages (C1 `layerfs-content`,
+  C2 `layerfs-storage`, telemetry) — boundaries, algorithms, on-disk formats and
+  declared limits. It lives with the product it describes; see
+  [`core/docs/architecture/`](../../../../../core/docs/architecture/README.md) —
+  six papers covering the boundary, objects, files, filesystem, storage and
+  limits.
 
 The proposal has been saved here for discussion before implementation. Owner
 direction: group related components into clusters, design the boundaries
