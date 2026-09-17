@@ -51,7 +51,7 @@ struct Cursor {
 pub fn release_zero_count(
     reader: &dyn AuthenticatedObjects,
     table: InodeTable,
-    reducer: &mut ReferenceReducer<'_>,
+    reducer: &mut ReferenceReducer<'_, '_>,
     starting: &[u64],
     base_batch: usize,
     page_entries: usize,

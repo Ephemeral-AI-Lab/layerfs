@@ -111,10 +111,57 @@ pub fn update_filesystem_timed(
     run(objects, input, backing, phases)
 }
 
-fn run(
+fn run<'b>(
     objects: &mut FilesystemObjects<'_>,
     input: &FilesystemInput<'_>,
-    backing: Option<&mut dyn OrderingBacking>,
+    backing: Option<&'b mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    let mut backing = backing;
+    let (outcome, cleanup_attempted) = {
+        let borrowed: Option<&mut (dyn OrderingBacking + 'b)> = backing.as_deref_mut();
+        run_inner(objects, input, borrowed, phases)
+    };
+    match outcome {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            // One attempted operation: the known-owned ordering resources are
+            // released here, once, and the original failure is what the caller
+            // sees. A cleanup that also fails is visible through the backing,
+            // never by replacing the operation's own error.
+            if !cleanup_attempted {
+                if let Some(backing) = backing {
+                    let _ = backing.release();
+                }
+            }
+            Err(error)
+        }
+    }
+}
+
+/// One attempted operation.
+///
+/// The flag reports whether the checked completion already ran, so the failure
+/// path never releases the same backing twice.
+fn run_inner<'b>(
+    objects: &mut FilesystemObjects<'_>,
+    input: &FilesystemInput<'_>,
+    backing: Option<&mut (dyn OrderingBacking + 'b)>,
+    phases: &FilesystemPhases<'_>,
+) -> (ContentResult<FilesystemResult>, bool) {
+    match run_body(objects, input, backing, phases) {
+        Ok(result) => (Ok(result), true),
+        Err(error) => {
+            let attempted = matches!(error, ContentError::ResourceUnavailable { what } if what == "ordering run cleanup");
+            (Err(error), attempted)
+        }
+    }
+}
+
+fn run_body<'b>(
+    objects: &mut FilesystemObjects<'_>,
+    input: &FilesystemInput<'_>,
+    backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
     let checked = phases.phase("validate", || validate::check(objects.reader(), input))?;
@@ -126,6 +173,7 @@ fn run(
         input.resources.maximum_pending_records,
         backing,
         input.resources.merge_buffer_bytes,
+        input.resources.ordering_bytes,
     );
     register_values(&mut reducer, input)?;
     let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
@@ -306,11 +354,13 @@ fn run(
     }
     let (inode_table, inode_work) = built?;
     counters.inodes = inode_work;
-    let references = rows.work();
-    counters.references = ReferenceWork {
-        runs: references.runs,
-        ..references
-    };
+    // The final stream is done with: its counters are snapshotted, its reader
+    // handle is closed, and only then is the backing's completion checked. A
+    // cleanup failure fails the operation before any root object exists, so a
+    // successful result always means the ordering resources were released.
+    counters.references = rows.work();
+    drop(rows);
+    phases.phase("cleanup", || reducer.release())?;
     let root = match checked.topology.base {
         Some(root) => root.with_inode_table(inode_table),
         None => FilesystemRoot::new(profile_id(), input.scope, input.root_serial, inode_table)?,
@@ -329,7 +379,7 @@ fn run(
 }
 
 fn register_values(
-    reducer: &mut ReferenceReducer<'_>,
+    reducer: &mut ReferenceReducer<'_, '_>,
     input: &FilesystemInput<'_>,
 ) -> ContentResult<()> {
     for serial in input.new_inodes {
@@ -358,7 +408,7 @@ fn lookup_base(
 fn zero_count_serials(
     reader: &dyn AuthenticatedObjects,
     table: InodeTable,
-    reducer: &mut ReferenceReducer<'_>,
+    reducer: &mut ReferenceReducer<'_, '_>,
     base_batch: usize,
     root_serial: u64,
 ) -> ContentResult<(Vec<u64>, u64)> {

@@ -338,3 +338,235 @@ impl Session {
         )
     }
 }
+
+/// Disposable directory removed when it is dropped.
+pub struct TempDir {
+    path: std::path::PathBuf,
+}
+
+impl TempDir {
+    /// Creates a fresh unique directory under the system temporary directory.
+    pub fn new(label: &str) -> Self {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let unique = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "layerfs-stage5-ordering-{label}-{}-{unique}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).expect("temporary directory");
+        Self { path }
+    }
+
+    /// Path of the directory.
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Counters one recording backing keeps for external assertions.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct BackingCounters {
+    /// Runs the operation asked for.
+    pub creates: u64,
+    /// Appends issued.
+    pub appends: u64,
+    /// Bytes appended.
+    pub append_bytes: u64,
+    /// Random reads issued.
+    pub reads: u64,
+    /// Flushes issued.
+    pub flushes: u64,
+    /// Runs currently owned.
+    pub live_runs: u64,
+    /// Largest number of runs owned at once.
+    pub peak_live_runs: u64,
+    /// Release calls the operation made.
+    pub releases: u64,
+}
+
+/// Caller-supplied ordering backing that records what the operation asked of it.
+///
+/// Failures are injected per capability so a test can hold one exact step at a
+/// time; nothing here is product code and the product has no test hooks.
+pub struct RecordingBacking {
+    inner: layerfs_content::filesystem::references::backing::FileBacking,
+    shared: std::rc::Rc<std::cell::RefCell<BackingCounters>>,
+    /// Fail the append whose one-based ordinal is this value.
+    pub fail_append_at: Option<u64>,
+    /// Fail the read whose one-based ordinal is this value.
+    pub fail_read_at: Option<u64>,
+    /// Fail the flush whose one-based ordinal is this value.
+    pub fail_flush_at: Option<u64>,
+    /// Refuse the finishing release.
+    pub refuse_release: bool,
+}
+
+impl RecordingBacking {
+    /// A recording backing over a fresh local directory.
+    pub fn new(directory: impl AsRef<std::path::Path>) -> Self {
+        Self {
+            inner: layerfs_content::filesystem::references::backing::FileBacking::new(directory),
+            shared: std::rc::Rc::new(std::cell::RefCell::new(BackingCounters::default())),
+            fail_append_at: None,
+            fail_read_at: None,
+            fail_flush_at: None,
+            refuse_release: false,
+        }
+    }
+
+    /// A recording backing with a fixed physical ceiling.
+    pub fn with_capacity(directory: impl AsRef<std::path::Path>, bytes: u64) -> Self {
+        Self {
+            inner: layerfs_content::filesystem::references::backing::FileBacking::with_capacity(
+                directory, bytes,
+            ),
+            shared: std::rc::Rc::new(std::cell::RefCell::new(BackingCounters::default())),
+            fail_append_at: None,
+            fail_read_at: None,
+            fail_flush_at: None,
+            refuse_release: false,
+        }
+    }
+
+    /// Counters observed so far.
+    pub fn counters(&self) -> BackingCounters {
+        *self.shared.borrow()
+    }
+
+    /// True when the backing still owns storage.
+    pub fn owns_storage(&self) -> bool {
+        self.inner.owns_storage()
+    }
+
+    /// Runs the backing created, as the backing itself counted them.
+    pub fn runs_created(&self) -> u64 {
+        self.inner.runs()
+    }
+}
+
+impl layerfs_content::filesystem::references::backing::OrderingBacking for RecordingBacking {
+    fn create_run(
+        &mut self,
+    ) -> layerfs_content::ContentResult<
+        Box<dyn layerfs_content::filesystem::references::backing::OrderingRun>,
+    > {
+        let inner = self.inner.create_run()?;
+        let counters = self.shared.borrow_mut();
+        let mut counters = counters;
+        counters.creates = counters.creates.saturating_add(1);
+        counters.live_runs = counters.live_runs.saturating_add(1);
+        counters.peak_live_runs = counters.peak_live_runs.max(counters.live_runs);
+        drop(counters);
+        Ok(Box::new(RecordingRun {
+            inner,
+            shared: self.shared.clone(),
+            fail_append_at: self.fail_append_at,
+            fail_read_at: self.fail_read_at,
+            fail_flush_at: self.fail_flush_at,
+        }))
+    }
+
+    fn held_bytes(&self) -> u64 {
+        self.inner.held_bytes()
+    }
+
+    fn peak_bytes(&self) -> u64 {
+        self.inner.peak_bytes()
+    }
+
+    fn capacity_bytes(&self) -> Option<u64> {
+        self.inner.capacity_bytes()
+    }
+
+    fn cleanup_failed(&self) -> bool {
+        self.inner.cleanup_failed()
+    }
+
+    fn release(&mut self) -> layerfs_content::ContentResult<()> {
+        {
+            let mut counters = self.shared.borrow_mut();
+            counters.releases = counters.releases.saturating_add(1);
+        }
+        if self.refuse_release {
+            return Err(ContentError::ResourceUnavailable {
+                what: "ordering run cleanup",
+            });
+        }
+        self.inner.release()
+    }
+}
+
+/// One recorded run.
+struct RecordingRun {
+    inner: Box<dyn layerfs_content::filesystem::references::backing::OrderingRun>,
+    shared: std::rc::Rc<std::cell::RefCell<BackingCounters>>,
+    fail_append_at: Option<u64>,
+    fail_read_at: Option<u64>,
+    fail_flush_at: Option<u64>,
+}
+
+impl layerfs_content::filesystem::references::backing::OrderingRun for RecordingRun {
+    fn append(&mut self, bytes: &[u8]) -> ContentResult<()> {
+        let ordinal = {
+            let mut counters = self.shared.borrow_mut();
+            counters.appends = counters.appends.saturating_add(1);
+            counters.append_bytes = counters.append_bytes.saturating_add(bytes.len() as u64);
+            counters.appends
+        };
+        if self.fail_append_at == Some(ordinal) {
+            return Err(ContentError::Io);
+        }
+        self.inner.append(bytes)
+    }
+
+    fn read_at(&self, offset: u64, buffer: &mut [u8]) -> ContentResult<()> {
+        let ordinal = {
+            let mut counters = self.shared.borrow_mut();
+            counters.reads = counters.reads.saturating_add(1);
+            counters.reads
+        };
+        if self.fail_read_at == Some(ordinal) {
+            return Err(ContentError::Io);
+        }
+        self.inner.read_at(offset, buffer)
+    }
+
+    fn flush(&mut self) -> ContentResult<()> {
+        let ordinal = {
+            let mut counters = self.shared.borrow_mut();
+            counters.flushes = counters.flushes.saturating_add(1);
+            counters.flushes
+        };
+        if self.fail_flush_at == Some(ordinal) {
+            return Err(ContentError::Io);
+        }
+        self.inner.flush()
+    }
+
+    fn len(&self) -> u64 {
+        self.inner.len()
+    }
+}
+
+impl Drop for RecordingRun {
+    fn drop(&mut self) {
+        let mut counters = self.shared.borrow_mut();
+        counters.live_runs = counters.live_runs.saturating_sub(1);
+    }
+}
+
+/// Number of objects the sink emitted with `role`.
+pub fn count_role(store: &TreeStore, role: ObjectRole) -> usize {
+    store
+        .order()
+        .iter()
+        .filter(|(_, seen)| *seen == role)
+        .count()
+}

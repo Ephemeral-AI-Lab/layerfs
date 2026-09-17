@@ -1,28 +1,41 @@
-//! Caller-supplied ordering backing: seekable run handles and owned cleanup.
+//! Caller-supplied ordering backing: owned run storage and checked cleanup.
 //!
 //! The reducer's runs live wherever the caller puts them. This module defines the
 //! capability it needs (create a run, append, read at an offset) and one concrete
 //! local implementation over ordinary files. Nothing here is free memory or free
-//! disk: the caller's choice is charged as its real cost, its capacity is
-//! explicit, and its cleanup is checked. A caller without backing can still run
-//! any operation whose pending state stays inside the declared record bound; one
-//! that crosses the bound fails explicitly instead of silently growing.
+//! disk: one explicit account owns the bytes, growth is reserved before it
+//! happens, obsolete runs give their bytes back when they are dropped, and the
+//! finishing cleanup is checked rather than hidden in a destructor.
+//!
+//! **Completion contract.** An operation calls [`OrderingBacking::release`] exactly
+//! once, after every row consumer has closed its handles and before it reports
+//! success. A release that fails fails the operation. A caller that needs the
+//! resources kept past one operation owns them itself and passes a fresh backing to
+//! the next one.
 
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use crate::error::{ContentError, ContentResult};
+
+/// Default bytes one local file backing may own at once.
+pub const DEFAULT_BACKING_CAPACITY_BYTES: u64 = 256 * 1024 * 1024;
 
 /// One append-only, randomly readable run of ordering rows.
 ///
 /// A run owns the storage it hands out: a file descriptor, a buffer, or a handle
 /// into a resource the backing itself owns. It therefore never borrows from the
 /// caller that created it, which is what lets the reducer keep run handles alive
-/// after the backing has been released.
+/// while the rows are still being consumed.
 pub trait OrderingRun {
     /// Appends bytes at the end of the run.
+    ///
+    /// The bytes are reserved against the owner's declared capacity before they
+    /// are written, so a run that would exceed it fails before growing.
     fn append(&mut self, bytes: &[u8]) -> ContentResult<()>;
     /// Reads exactly `buffer.len()` bytes at `offset`.
     fn read_at(&self, offset: u64, buffer: &mut [u8]) -> ContentResult<()>;
@@ -45,36 +58,120 @@ pub trait OrderingBacking {
     fn held_bytes(&self) -> u64;
     /// Largest simultaneous bytes this backing held.
     fn peak_bytes(&self) -> u64;
+    /// Bytes this backing may own at once, when it declares a fixed ceiling.
+    fn capacity_bytes(&self) -> Option<u64> {
+        None
+    }
+    /// True when a cleanup this backing attempted did not complete.
+    ///
+    /// The operation reports its own failure; this accessor lets a caller see that
+    /// the known-owned resources were not fully released on that path.
+    fn cleanup_failed(&self) -> bool {
+        false
+    }
     /// Releases every run this backing created, reporting any failure.
+    ///
+    /// Called once, after the operation's row consumers have finished. A failure
+    /// here is an operation failure: released bytes are no longer owned.
     fn release(&mut self) -> ContentResult<()>;
+}
+
+/// Shared byte account of one backing: held, peak, ceiling and cleanup state.
+struct Account {
+    held: Cell<u64>,
+    peak: Cell<u64>,
+    capacity: u64,
+    runs: Cell<u64>,
+    cleanup_failed: Cell<bool>,
+    paths: RefCell<BTreeSet<PathBuf>>,
+}
+
+impl Account {
+    /// Reserves `bytes` before they are written.
+    fn reserve(&self, bytes: u64) -> ContentResult<()> {
+        let next = self
+            .held
+            .get()
+            .checked_add(bytes)
+            .ok_or(ContentError::LengthOverflow)?;
+        if next > self.capacity {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit: usize::try_from(self.capacity).unwrap_or(usize::MAX),
+                actual: usize::try_from(next).unwrap_or(usize::MAX),
+            });
+        }
+        self.held.set(next);
+        self.peak.set(self.peak.get().max(next));
+        Ok(())
+    }
+
+    /// Gives `bytes` back when a run no longer owns them.
+    fn release_bytes(&self, bytes: u64) {
+        self.held.set(self.held.get().saturating_sub(bytes));
+    }
 }
 
 /// File-backed runs in one caller-supplied directory.
 pub struct FileBacking {
     directory: PathBuf,
-    created: BTreeSet<PathBuf>,
     next: u64,
-    held: u64,
-    peak: u64,
+    account: Rc<Account>,
     released: bool,
 }
 
 impl FileBacking {
-    /// A backing that will create its runs inside `directory`.
+    /// A backing with the default capacity that creates its runs in `directory`.
     pub fn new(directory: impl AsRef<Path>) -> Self {
+        Self::with_capacity(directory, DEFAULT_BACKING_CAPACITY_BYTES)
+    }
+
+    /// A backing that may own at most `capacity_bytes` at once.
+    pub fn with_capacity(directory: impl AsRef<Path>, capacity_bytes: u64) -> Self {
         Self {
             directory: directory.as_ref().to_path_buf(),
-            created: BTreeSet::new(),
             next: 0,
-            held: 0,
-            peak: 0,
+            account: Rc::new(Account {
+                held: Cell::new(0),
+                peak: Cell::new(0),
+                capacity: capacity_bytes,
+                runs: Cell::new(0),
+                cleanup_failed: Cell::new(false),
+                paths: RefCell::new(BTreeSet::new()),
+            }),
             released: false,
         }
     }
 
-    /// Number of runs this backing created.
-    pub fn runs(&self) -> usize {
-        self.created.len()
+    /// Runs this backing created.
+    pub fn runs(&self) -> u64 {
+        self.account.runs.get()
+    }
+
+    /// True when this backing still owns storage.
+    pub fn owns_storage(&self) -> bool {
+        !self.account.paths.borrow().is_empty()
+    }
+
+    /// Removes every path the account still lists, reporting the first failure.
+    fn discard_paths(&self) -> ContentResult<()> {
+        let paths = std::mem::take(&mut *self.account.paths.borrow_mut());
+        let mut failure = None;
+        for path in paths {
+            if let Err(error) = std::fs::remove_file(&path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    failure = Some(());
+                }
+            }
+        }
+        match failure {
+            Some(()) => {
+                self.account.cleanup_failed.set(true);
+                Err(ContentError::ResourceUnavailable {
+                    what: "ordering run cleanup",
+                })
+            }
+            None => Ok(()),
+        }
     }
 }
 
@@ -92,62 +189,75 @@ impl OrderingBacking for FileBacking {
             .map_err(|_| ContentError::ResourceUnavailable {
                 what: "ordering run file",
             })?;
-        self.created.insert(path);
-        Ok(Box::new(FileRun { file, written: 0 }))
+        self.account.paths.borrow_mut().insert(path.clone());
+        self.account
+            .runs
+            .set(self.account.runs.get().saturating_add(1));
+        Ok(Box::new(FileRun {
+            file,
+            path,
+            written: 0,
+            account: self.account.clone(),
+        }))
     }
 
     fn held_bytes(&self) -> u64 {
-        self.held
+        self.account.held.get()
     }
 
     fn peak_bytes(&self) -> u64 {
-        self.peak
+        self.account.peak.get()
+    }
+
+    fn capacity_bytes(&self) -> Option<u64> {
+        Some(self.account.capacity)
+    }
+
+    fn cleanup_failed(&self) -> bool {
+        self.account.cleanup_failed.get()
     }
 
     fn release(&mut self) -> ContentResult<()> {
         if self.released {
             return Ok(());
         }
-        let mut failure = None;
-        for path in std::mem::take(&mut self.created) {
-            if let Err(error) = std::fs::remove_file(&path) {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    failure = Some(());
-                }
-            }
+        let outcome = self.discard_paths();
+        if outcome.is_ok() {
+            self.released = true;
         }
-        self.released = failure.is_none();
-        self.held = 0;
-        match failure {
-            Some(()) => Err(ContentError::ResourceUnavailable {
-                what: "ordering run cleanup",
-            }),
-            None => Ok(()),
-        }
+        self.account.held.set(0);
+        outcome
     }
 }
 
 impl Drop for FileBacking {
     fn drop(&mut self) {
-        // Ordinary cancellation path: remove whatever is left without hiding an
-        // explicit `release` result. The operation's own completion result is
-        // decided before this runs.
-        for path in std::mem::take(&mut self.created) {
-            let _ = std::fs::remove_file(path);
-        }
-        self.held = 0;
+        // Ordinary cancellation path: every run this backing still owns is
+        // removed, and a failure is recorded instead of being thrown away. The
+        // operation's own result is decided before this runs.
+        let _ = self.discard_paths();
+        self.account.held.set(0);
     }
 }
 
 struct FileRun {
     file: std::fs::File,
+    path: PathBuf,
     written: u64,
+    account: Rc<Account>,
 }
 
 impl OrderingRun for FileRun {
     fn append(&mut self, bytes: &[u8]) -> ContentResult<()> {
-        self.file.write_all(bytes).map_err(|_| ContentError::Io)?;
-        self.written = self.written.saturating_add(bytes.len() as u64);
+        let length = bytes.len() as u64;
+        self.account.reserve(length)?;
+        if self.file.write_all(bytes).is_err() {
+            // The write did not happen: the reservation is returned rather than
+            // counted as owned storage.
+            self.account.release_bytes(length);
+            return Err(ContentError::Io);
+        }
+        self.written = self.written.saturating_add(length);
         Ok(())
     }
 
@@ -164,5 +274,22 @@ impl OrderingRun for FileRun {
 
     fn len(&self) -> u64 {
         self.written
+    }
+}
+
+impl Drop for FileRun {
+    fn drop(&mut self) {
+        // A run stops being needed when the merge that consumed it finishes, so
+        // dropping it is what returns its bytes: the file goes away and the
+        // account stops counting it.
+        let removed = match std::fs::remove_file(&self.path) {
+            Ok(()) => true,
+            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
+        };
+        if !removed {
+            self.account.cleanup_failed.set(true);
+        }
+        self.account.paths.borrow_mut().remove(&self.path);
+        self.account.release_bytes(self.written);
     }
 }

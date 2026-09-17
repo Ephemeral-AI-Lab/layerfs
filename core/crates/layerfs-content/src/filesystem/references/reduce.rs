@@ -48,26 +48,27 @@ pub struct ReferenceWork {
 }
 
 /// Bounded pending state plus the tiered runs that back it.
-pub struct ReferenceReducer<'a> {
+pub struct ReferenceReducer<'r, 'b> {
     maximum_pending: usize,
     pending: BTreeMap<u64, Row>,
     declared_new: BTreeSet<u64>,
-    runs: RunStore<'a>,
+    runs: RunStore<'r, 'b>,
     work: ReferenceWork,
 }
 
-impl<'a> ReferenceReducer<'a> {
+impl<'r, 'b> ReferenceReducer<'r, 'b> {
     /// A reducer bounded by `maximum_pending` in-memory rows.
     pub fn new(
         maximum_pending: usize,
-        backing: Option<&'a mut dyn OrderingBacking>,
+        backing: Option<&'r mut (dyn OrderingBacking + 'b)>,
         merge_buffer: usize,
+        ordering_bytes: u64,
     ) -> Self {
         Self {
             maximum_pending: maximum_pending.max(1),
             pending: BTreeMap::new(),
             declared_new: BTreeSet::new(),
-            runs: RunStore::new(backing, merge_buffer.max(ROW_BYTES)),
+            runs: RunStore::new(backing, merge_buffer.max(ROW_BYTES), ordering_bytes),
             work: ReferenceWork::default(),
         }
     }
@@ -242,14 +243,15 @@ impl<'a> ReferenceReducer<'a> {
     /// The pending map is merged with the spilled runs (pending is newest) and
     /// each effect row's base record is read in a bounded wave. The returned
     /// stream owns the final run and must be consumed before the operation ends.
-    pub fn finish(
-        mut self,
-        reader: &dyn AuthenticatedObjects,
+    pub fn finish<'a>(
+        &mut self,
+        reader: &'a dyn AuthenticatedObjects,
         table: InodeTable,
         base_batch: usize,
         root_serial: u64,
-    ) -> ContentResult<FinalRows<'_>> {
+    ) -> ContentResult<FinalRows<'a>> {
         self.runs.consolidate()?;
+        let work = self.work();
         let pending = std::mem::take(&mut self.pending);
         let run_count = self.runs.single_run().map_or(0, |run| run.count);
         let handle = self.runs.take_single_handle();
@@ -261,7 +263,7 @@ impl<'a> ReferenceReducer<'a> {
             run_count,
             base_batch.max(1),
             root_serial,
-            self.work,
+            work,
         )
     }
 }

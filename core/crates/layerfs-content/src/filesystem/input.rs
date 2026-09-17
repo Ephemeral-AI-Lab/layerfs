@@ -62,6 +62,9 @@ pub struct FilesystemResources {
     pub merge_buffer_bytes: usize,
     /// Base inode records one read wave may request.
     pub base_read_batch: usize,
+    /// Bytes of ordering rows this operation may own across its bounded pending
+    /// map, its live runs and the output a merge is about to create.
+    pub ordering_bytes: u64,
 }
 
 impl Default for FilesystemResources {
@@ -71,6 +74,7 @@ impl Default for FilesystemResources {
             maximum_pending_records: crate::filesystem::references::reduce::DEFAULT_MAXIMUM_PENDING,
             merge_buffer_bytes: crate::filesystem::references::runs::DEFAULT_MERGE_BUFFER_BYTES,
             base_read_batch: crate::filesystem::references::reduce::DEFAULT_BASE_BATCH,
+            ordering_bytes: crate::filesystem::references::runs::DEFAULT_ORDERING_BYTES,
         }
     }
 }
@@ -96,6 +100,11 @@ impl FilesystemResources {
         if self.base_read_batch == 0 {
             return Err(ContentError::ResourceUnavailable {
                 what: "base read batch",
+            });
+        }
+        if self.ordering_bytes < crate::filesystem::references::record::ROW_BYTES as u64 {
+            return Err(ContentError::ResourceUnavailable {
+                what: "ordering bytes",
             });
         }
         Ok(())

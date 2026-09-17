@@ -10,6 +10,14 @@
 //! The store never rewrites the accumulated prefix: a spill writes its own batch
 //! and merges it into the first free tier, so each batch participates in at most
 //! `log2(batches)` merges.
+//!
+//! **One byte owner.** This store is the operation's ordering owner: the pending
+//! rows it is about to spill, every live run and the output a merge is about to
+//! create are all reserved against one declared ceiling before that storage is
+//! created. Obsolete runs are dropped as soon as their rows are merged, which is
+//! what returns their bytes; nothing counts only the final run while older files
+//! are still owned. The physical owner is the backing, whose own ceiling is
+//! enforced when a run appends.
 
 use std::collections::BTreeMap;
 
@@ -20,29 +28,86 @@ use crate::filesystem::references::record::{Row, ROW_BYTES};
 
 /// Default bytes of one merge buffer.
 pub const DEFAULT_MERGE_BUFFER_BYTES: usize = 16 * 1024;
+/// Default ordering bytes one operation may own across pending rows and runs.
+pub const DEFAULT_ORDERING_BYTES: u64 = 64 * 1024 * 1024;
 /// Largest tier index the store can address.
 pub const MAXIMUM_LEVELS: usize = 32;
 
 /// Tiered runs over one caller-supplied backing.
-pub struct RunStore<'a> {
-    backing: Option<&'a mut dyn OrderingBacking>,
+pub struct RunStore<'r, 'b> {
+    backing: Option<&'r mut (dyn OrderingBacking + 'b)>,
     levels: Vec<Option<Run>>,
     merge_buffer: usize,
+    limit: u64,
+    /// Bytes of the pending rows the reducer is about to spill.
+    pending_bytes: u64,
     work: MergeWork,
 }
 
-impl<'a> RunStore<'a> {
+impl<'r, 'b> RunStore<'r, 'b> {
     /// A store over optional `backing` with a bounded merge buffer.
     ///
     /// Without backing the store can still answer lookups and merges for state a
     /// caller holds in memory; the first spill fails explicitly, because growing
     /// without a declared owner is not a fallback.
-    pub fn new(backing: Option<&'a mut dyn OrderingBacking>, merge_buffer: usize) -> Self {
+    pub fn new(
+        backing: Option<&'r mut (dyn OrderingBacking + 'b)>,
+        merge_buffer: usize,
+        limit: u64,
+    ) -> Self {
         Self {
             backing,
             levels: Vec::new(),
             merge_buffer: merge_buffer.max(ROW_BYTES),
+            limit: limit.max(ROW_BYTES as u64),
+            pending_bytes: 0,
             work: MergeWork::default(),
+        }
+    }
+
+    /// The declared ordering ceiling.
+    pub const fn limit_bytes(&self) -> u64 {
+        self.limit
+    }
+
+    /// Bytes of the pending rows currently charged to this operation.
+    pub const fn pending_bytes(&self) -> u64 {
+        self.pending_bytes
+    }
+
+    /// Charges the pending map the reducer is about to spill.
+    pub fn charge_pending(&mut self, rows: u64) -> ContentResult<()> {
+        let bytes = rows
+            .checked_mul(ROW_BYTES as u64)
+            .ok_or(ContentError::LengthOverflow)?;
+        // The pending rows are part of the same owned set: a spill is only allowed
+        // when the pending bytes and the run they become both fit.
+        self.reserve(bytes.saturating_mul(2))?;
+        self.pending_bytes = bytes;
+        Ok(())
+    }
+
+    /// Reserves `bytes` of storage this operation is about to create.
+    pub fn reserve(&mut self, bytes: u64) -> ContentResult<()> {
+        let owned = self.run_bytes().saturating_add(self.pending_bytes);
+        let next = owned
+            .checked_add(bytes)
+            .ok_or(ContentError::LengthOverflow)?;
+        if next > self.limit {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit: usize::try_from(self.limit).unwrap_or(usize::MAX),
+                actual: usize::try_from(next).unwrap_or(usize::MAX),
+            });
+        }
+        self.work.peak_run_bytes = self.work.peak_run_bytes.max(next);
+        self.note_physical_peak();
+        Ok(())
+    }
+
+    /// Folds the physical owner's reported peak into this store's own observation.
+    fn note_physical_peak(&mut self) {
+        if let Some(backing) = self.backing.as_deref() {
+            self.work.peak_run_bytes = self.work.peak_run_bytes.max(backing.peak_bytes());
         }
     }
 
@@ -62,7 +127,7 @@ impl<'a> RunStore<'a> {
     }
 
     /// The declared backing, when the caller supplied one.
-    fn backing(&mut self) -> ContentResult<&mut (dyn OrderingBacking + 'a)> {
+    fn backing(&mut self) -> ContentResult<&mut (dyn OrderingBacking + 'b)> {
         match self.backing.as_deref_mut() {
             Some(backing) => Ok(backing),
             None => Err(ContentError::ResourceUnavailable {
@@ -88,6 +153,9 @@ impl<'a> RunStore<'a> {
         if pending.is_empty() {
             return Ok(());
         }
+        // Reserve the batch this spill is about to write before creating it.
+        self.charge_pending(pending.len() as u64)?;
+        self.reserve(self.pending_bytes)?;
         let level = self
             .levels
             .iter()
@@ -119,21 +187,48 @@ impl<'a> RunStore<'a> {
             first: first.ok_or(ContentError::InvalidOrderingRecord("spill rows"))?,
             last,
         };
-        for older in self.levels[..level].iter().flatten() {
+        // The tiers this batch merges into are taken out of the store first, so
+        // each obsolete run is dropped (its bytes and its file returned) as soon
+        // as its rows have been merged into the surviving run.
+        let mut older_runs = Vec::new();
+        for slot in &mut self.levels[..level] {
+            if let Some(older) = slot.take() {
+                older_runs.push(older);
+            }
+        }
+        for older in older_runs {
+            // The merge output coexists with both inputs, so it is reserved
+            // before it is written.
+            let output_rows = older
+                .count
+                .checked_add(run.count)
+                .ok_or(ContentError::LengthOverflow)?;
+            self.reserve(
+                output_rows
+                    .checked_mul(ROW_BYTES as u64)
+                    .ok_or(ContentError::LengthOverflow)?,
+            )?;
             let backing = self
                 .backing
                 .as_deref_mut()
                 .ok_or(ContentError::ResourceUnavailable {
                     what: "ordering backing",
                 })?;
-            run = merge_runs(backing, older, &run, self.merge_buffer, &mut self.work)?;
+            run = merge_runs(backing, &older, &run, self.merge_buffer, &mut self.work)?;
         }
+        // Obsolete tiers were dropped above, which returned their bytes and
+        // removed their files; only the surviving run stays owned.
         for slot in &mut self.levels[..level] {
             *slot = None;
         }
         self.levels[level] = Some(run);
+        self.pending_bytes = 0;
         self.work.peak_live_runs = self.work.peak_live_runs.max(self.live_runs());
-        self.work.peak_run_bytes = self.work.peak_run_bytes.max(self.run_bytes());
+        self.work.peak_run_bytes = self
+            .work
+            .peak_run_bytes
+            .max(self.run_bytes() + self.pending_bytes);
+        self.note_physical_peak();
         Ok(())
     }
 
@@ -164,17 +259,31 @@ impl<'a> RunStore<'a> {
     /// is a no-op and no bytes are rewritten.
     pub fn consolidate(&mut self) -> ContentResult<()> {
         if self.levels.iter().flatten().count() <= 1 {
+            self.note_physical_peak();
             return Ok(());
         }
-        let mut sources = self
-            .levels
-            .iter()
-            .enumerate()
-            .filter_map(|(index, run)| run.as_ref().map(|run| (index, run)))
-            .collect::<Vec<_>>();
-        sources.sort_by_key(|(index, _)| std::cmp::Reverse(*index));
+        // Every live run is moved out of the store, newest tier first, so each
+        // input is dropped (its bytes and file returned) once the combined run has
+        // consumed it. Iterating newest first is what keeps the merge honest: each
+        // step merges one older tier *under* the rows the newer tiers already
+        // contributed, so a newer row always wins a shared key.
+        let mut sources = Vec::new();
+        for index in 0..self.levels.len() {
+            if let Some(run) = self.levels[index].take() {
+                sources.push(run);
+            }
+        }
         let mut combined: Option<Run> = None;
-        for (_, run) in sources {
+        for run in sources {
+            let output_rows = run
+                .count
+                .checked_add(combined.as_ref().map_or(0, |run| run.count))
+                .ok_or(ContentError::LengthOverflow)?;
+            self.reserve(
+                output_rows
+                    .checked_mul(ROW_BYTES as u64)
+                    .ok_or(ContentError::LengthOverflow)?,
+            )?;
             let backing = self
                 .backing
                 .as_deref_mut()
@@ -183,26 +292,29 @@ impl<'a> RunStore<'a> {
                 })?;
             combined = match combined {
                 None => Some(Run {
-                    handle: copy_run(backing, run, self.merge_buffer, &mut self.work)?,
+                    handle: copy_run(backing, &run, self.merge_buffer, &mut self.work)?,
                     count: run.count,
                     first: run.first,
                     last: run.last,
                 }),
                 Some(newer) => Some(merge_runs(
                     backing,
-                    run,
+                    &run,
                     &newer,
                     self.merge_buffer,
                     &mut self.work,
                 )?),
             };
         }
+        // Dropping the input tiers here returns their bytes; the consolidated run
+        // is the only one left owned.
         self.levels.clear();
         if let Some(run) = combined {
             self.levels.push(Some(run));
         }
         self.work.peak_live_runs = self.work.peak_live_runs.max(self.live_runs());
         self.work.peak_run_bytes = self.work.peak_run_bytes.max(self.run_bytes());
+        self.note_physical_peak();
         Ok(())
     }
 
