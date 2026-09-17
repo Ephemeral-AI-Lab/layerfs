@@ -26,6 +26,11 @@ use layerfs_content::{
 };
 use std::time::Instant;
 
+/// The strictly sorted directory bindings the comparison arms receive.
+type PreparedDirectory = Vec<(PathName, Option<u64>)>;
+/// The strictly sorted typed inode rows the comparison arms receive.
+type PreparedInodes = Vec<(u64, Option<InodeValue>)>;
+
 /// In-memory provider and consumer for one arm.
 #[derive(Clone, Debug, Default)]
 struct Bag {
@@ -139,12 +144,9 @@ fn build_base(files: usize) -> (Bag, DirectoryRoot, ObjectId, InodeScope) {
 }
 
 /// The prepared, strictly sorted change batches both arms receive.
-fn prepared_changes(
-    files: usize,
-    changes: usize,
-) -> (Vec<(PathName, Option<u64>)>, Vec<(u64, Option<InodeValue>)>) {
-    let mut directory = Vec::new();
-    let mut inodes = Vec::new();
+fn prepared_changes(files: usize, changes: usize) -> (PreparedDirectory, PreparedInodes) {
+    let mut directory: PreparedDirectory = Vec::new();
+    let mut inodes: PreparedInodes = Vec::new();
     for index in 0..changes {
         let serial = (index as u64 % files as u64) + 1;
         directory.push((name_of(&format!("e{serial:05}")), None));

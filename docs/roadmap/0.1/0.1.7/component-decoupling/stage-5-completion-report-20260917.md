@@ -131,6 +131,29 @@ third case; that row is reported as measured.
 | reference fixture generator (`-p layerfs-content --test stage5_reference_fixtures`) | PASS; re-running leaves the tree clean |
 | Stages 1–5 review checklist | self-review performed, see §8 |
 
+### 7a. Re-run on the final tree (self-review finding)
+
+Every command in §7 was re-run against the final source rather than carried
+forward, and one row did not hold.
+
+- **The clippy row was false for the tree this report describes.** The exact
+  command reported `clippy::type_complexity` for the prepared-batch return type at
+  `core/crates/layerfs-content/examples/filesystem_primitives_candidate.rs:145` —
+  an example the component-comparison commit rewrote after the last clippy run, so
+  the earlier PASS was never true of that commit. The two prepared batches now have
+  named types (`PreparedDirectory`, `PreparedInodes`); the row passes on the
+  corrected tree. An example is an excluded target, so no counted production line
+  changed and the §9 totals are unaffected.
+- **The test row was re-run with its exact command**: `363 passed; 0 failed` across
+  every workspace target.
+- **The format row only holds with `--all`.** On the virtual `core/Cargo.toml`
+  manifest, `cargo fmt --check` without `--all` exits 1 with "Failed to find
+  targets"; `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` is
+  clean. The row is written that way for that reason.
+- The remaining rows were re-run as written: boundary PASS (115 production files),
+  both unittest discoveries PASS, `git diff --check` PASS, the fixture generator
+  PASS with a clean tree afterwards.
+
 ## 8. Independent review status
 
 The acceptance pass recorded here is the **implementation agent's own review**
