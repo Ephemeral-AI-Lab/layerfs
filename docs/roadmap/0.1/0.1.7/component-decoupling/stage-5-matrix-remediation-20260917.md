@@ -129,7 +129,8 @@ On `f1f6cee36`: **29 PASS, 2 owner-WAIVED**, zero FAIL and zero INCOMPLETE.
 A row the review recorded `PASS` and this round did not touch is **not** re-argued
 here; it stands on the review's own evidence plus this round's full run
 (`cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked`:
-**406 passed / 0 failed / 0 ignored**, 53 of 59 targets carrying at least one test),
+**406 passed / 0 failed / 0 ignored**, 54 of 60 discovered targets carrying at least
+one test and 6 carrying none),
 the product-boundary guard and `clippy -D warnings`. Where this round's changes
 touched a row's subject, the row says so in its own line. No row was promoted
 without a change, and the one `NOT_RUN` row keeps its pre-declared reason rather
