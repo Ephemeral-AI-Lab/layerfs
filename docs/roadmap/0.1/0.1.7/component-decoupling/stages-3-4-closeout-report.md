@@ -405,3 +405,95 @@ until the owner answers; and two S3 documentation findings (F5, F9) closed.
 * **Does not prove.** That a CHUNK candidate is ever *chosen* as a PREFIX record
   by a real edit pipeline: the correctness of the eligibility decision is proven,
   the delta win rate of the edit path is not.
+
+---
+
+## 4. Issue-ready summaries (#168, #169)
+
+Both issues are **not** closed: their own gate rows must be PASS first, and two rows
+are open on the owner decision E1. The text below is the summary to post, stating
+exactly which rows are PASS, which are addressed by an owner decision, and which are
+unrun.
+
+### #168 — Stage 3: bounded delta, compression, pooling and pack policy
+
+```text
+Stage 3 closeout against the independent review of 91c3a0741fff64e8161d5c1b6e759f347ffbf757.
+
+PASS (10 of the 11 Stage 3 rows):
+  G1  CHUNK candidates obey the eligibility rule - fixed in 97414bac4, three new
+      cases, all three fail without the fix (ObjectMissing on the real save).
+  G2  Every pooled read applies the owner's captured ceiling - fixed in 42f9364c8,
+      structural and behavioural oracles, both fail without it.
+  G9  Every significant allocation has owner, bound, multiplicity, lifetime and
+      release event - fifteen owners, no unowned owner (w5, w7).
+  G10 No size-proportional hidden collector remains - catalogue streamed, placement
+      measured not copied, both pack caches bounded, cleanup transactions bounded.
+  G11 Phase-local heap ledger and a labelled RSS scope exist - six measured phases.
+  G12 The simultaneous index/codec/SQL memory gate has an input and a result - the
+      pooled save at the E1b shape peaks at 3.45 MiB of phase-local heap with the
+      ordered set, both codec workspaces and SQLite work live.
+  G14 Every declared verification case is RUN or NOT_RUN with a reason - eleven
+      cases mapped to the product case that runs them, two NOT_RUN with reasons,
+      plus a new real store-bytes row.
+  G17/G18/G19 Acceptance documents, the LOC counter and the limits boundary list -
+      corrected, audited and run (twelve boundaries; the 8 MiB - 1 deferred ceiling
+      is UNRUN with its source proof, which needs a ~408 MiB base fixture).
+
+OPEN - owner decision (E1): G13, the matched reference campaign under a
+pre-committed addendum with aligned byte accounting. The verification contract
+allows one sample per case per arm unless the owner approves a campaign, so no
+addendum was committed and no matched arm was collected. Nothing is claimed from a
+single sample, and no speedup, storage-saving or memory-superiority claim is made.
+
+ADDRESSED BY AN OWNER DECISION (E2, no code change until answered): the pooled lane
+assignment against the design table - pooled leaf records stay in the v1 ordinary
+lane with objects.object_role distinguishing them, and v5 stays refused by scope,
+both recorded in physical-encoding-and-packing.md as deviations.
+
+Production LOC for the Stage 3 packets: see each commit's first-parent line; core
+10929 (start identity) -> 10938 (W1) -> 11166 (W5) -> 11058 (W10), reference 65417
+by the corrected counter, combined 76475 at 8fb05b465.
+```
+
+### #169 — Stage 4: localized edits, decoded COW boundaries, size transitions
+
+```text
+Stage 4 closeout against the independent review of 91c3a0741fff64e8161d5c1b6e759f347ffbf757.
+
+PASS (10 of the 12 Stage 4 rows):
+  G3  Emitted edit pages are encoded and hashed once, at final emission, and
+      superseded drafts are released - Draft::Page/Draft::Node, encode and hash
+      only in commit_node, release on supersession, plus the refcounted cascade
+      W10.1 added after the 4 096-edit ceiling case found pages left unreachable
+      inside concat_inner's split recursion.
+  G4  Frontier memory is a function of height and fanout, asserted by a real
+      oracle - peaks 2208/2288/2448/2768/3408 bytes at 1/2/4/8/16 edits; the
+      control without release runs 6308 ... 129728.
+  G5  Finality argument committed; children precede parents - rules R1-R3 plus an
+      assert_children_precede_parents call from an edit target.
+  G6  All nine sealed reference cases still match root, partition and survivors -
+      edit_reference, 2 tests, exit 0, 56.9 s, re-run after the W10.1 fix.
+  G7  Overclaiming or vacuous oracles replaced - per-case table, two measured
+      controls, each new case fails without its fix.
+  G8  Integrated multi-edit chunked pipeline case exists and passes.
+  G14/G17/G18/G19 as in #168.
+
+OPEN - owner decision (E1): G13 (the matched campaign) and G15
+("existing-or-better" for latency, storage and memory resolved or waived in
+writing). The products share no comparable public surface for a core edit, so the
+only matched C1 pair is retained as a non-comparative diagnostic and no speedup is
+claimed.
+
+UNRUN, stated in the report rather than estimated: read amplification on the
+representation transition (no case exists), and the 8 MiB - 1 deferred-state
+refusal (its derived floor is a 408 MiB base fixture; the premise is measured at
+3 148 B per live draft against the 8 320 B bound).
+
+Production LOC for the Stage 4 packets: see each commit's first-parent line; core
+10929 (start) -> 11058 at 8fb05b465, C1 4385 -> 4463, C2 5812 -> 5863,
+reference 65417 by the corrected counter, combined 76475.
+```
+
+Neither issue may be closed until G13 (and, for #169, G15) is PASS or waived in
+writing by the owner.
