@@ -37,6 +37,8 @@ pub const MAXIMUM_LEVELS: usize = 32;
 pub struct RunStore<'r, 'b> {
     backing: Option<&'r mut (dyn OrderingBacking + 'b)>,
     levels: Vec<Option<Run>>,
+    /// One resumable lookup scan per tier, parallel to `levels`.
+    scans: Vec<LookupScan>,
     merge_buffer: usize,
     limit: u64,
     /// Bytes of the pending rows the reducer is about to spill.
@@ -58,6 +60,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
         Self {
             backing,
             levels: Vec::new(),
+            scans: Vec::new(),
             merge_buffer: merge_buffer.max(ROW_BYTES),
             limit: limit.max(ROW_BYTES as u64),
             pending_bytes: 0,
@@ -68,6 +71,14 @@ impl<'r, 'b> RunStore<'r, 'b> {
     /// The declared ordering ceiling.
     pub const fn limit_bytes(&self) -> u64 {
         self.limit
+    }
+
+    /// Drops every tier's scan position, keeping the tiers themselves.
+    ///
+    /// Called whenever a tier's run is replaced: the position belongs to the run
+    /// that was scanned, not to the tier.
+    fn reset_scans(&mut self) {
+        self.scans.clear();
     }
 
     /// Bytes of the pending rows currently charged to this operation.
@@ -169,6 +180,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
         if level == self.levels.len() {
             self.levels.push(None);
         }
+        self.reset_scans();
         self.work.peak_level = self.work.peak_level.max(level);
         let mut handle = self.backing()?.create_run()?;
         self.work.runs_created = self.work.runs_created.saturating_add(1);
@@ -222,6 +234,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
             *slot = None;
         }
         self.levels[level] = Some(run);
+        self.reset_scans();
         self.pending_bytes = 0;
         self.work.peak_live_runs = self.work.peak_live_runs.max(self.live_runs());
         self.work.peak_run_bytes = self
@@ -233,19 +246,71 @@ impl<'r, 'b> RunStore<'r, 'b> {
     }
 
     /// Finds the newest run row for `serial`, if any tier holds one.
-    pub fn find(&self, serial: u64) -> ContentResult<Option<Row>> {
-        for run in self.levels.iter().flatten() {
+    ///
+    /// Each tier keeps the position its scan reached, so an ascending sweep reads
+    /// a run once instead of re-reading it per serial. A request at or above the
+    /// position continues the scan; a request below it starts the run again,
+    /// because a scan that resumed past a row never compared it. Rows read here
+    /// are charged to `rows_read`, which is what makes the reported work describe
+    /// the operation instead of only its spills.
+    pub fn find(&mut self, serial: u64) -> ContentResult<Option<Row>> {
+        for index in 0..self.levels.len() {
+            let Some(run) = self.levels[index].as_ref() else {
+                continue;
+            };
             if serial < run.first || serial > run.last {
                 continue;
             }
-            let mut reader = RunReader::new(run, self.merge_buffer);
-            while let Some(row) = reader.next()? {
-                if row.serial() == serial {
-                    return Ok(Some(row));
+            while self.scans.len() <= index {
+                self.scans.push(LookupScan::default());
+            }
+            let scan = self.scans[index];
+            let mut scan = if scan.total == 0 {
+                LookupScan {
+                    total: run.count,
+                    ..scan
                 }
-                if row.serial() > serial {
+            } else {
+                scan
+            };
+            // A request the cursor has already passed needs this run from the
+            // front: the rows in between were never compared with it.
+            let from = match scan.resume {
+                Some(resume) if serial >= resume => scan.offset,
+                Some(_) => 0,
+                // The cursor's row serial is unknown, so the scan has to start
+                // where it can compare rows in order.
+                None if scan.offset == 0 => 0,
+                None => 0,
+            };
+            let mut reader = RunReader::seek_from(run, self.merge_buffer, from)?;
+            let mut found = None;
+            let mut resume = None;
+            while let Some(row) = reader.next()? {
+                self.work.rows_read = self.work.rows_read.saturating_add(1);
+                if row.serial() == serial {
+                    found = Some(row);
                     break;
                 }
+                if row.serial() > serial {
+                    // This row was not compared with the request: leave it at the
+                    // cursor so a later request still sees it.
+                    reader.rewind();
+                    resume = Some(row.serial());
+                    break;
+                }
+                resume = Some(row.serial().saturating_add(1));
+            }
+            if found.is_some() {
+                // The run is sorted and holds one row per serial, so the row after
+                // the one that matched is above this serial.
+                resume = Some(serial.saturating_add(1));
+            }
+            scan.offset = reader.run_offset();
+            scan.resume = resume;
+            self.scans[index] = scan;
+            if let Some(row) = found {
+                return Ok(Some(row));
             }
         }
         Ok(None)
@@ -309,6 +374,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
         // Dropping the input tiers here returns their bytes; the consolidated run
         // is the only one left owned.
         self.levels.clear();
+        self.reset_scans();
         if let Some(run) = combined {
             self.levels.push(Some(run));
         }
@@ -381,7 +447,9 @@ impl<'r, 'b> RunStore<'r, 'b> {
         &mut self,
     ) -> Option<Box<dyn crate::filesystem::references::backing::OrderingRun>> {
         let slot = self.levels.iter_mut().find(|slot| slot.is_some())?;
-        slot.take().map(|run| run.handle)
+        let handle = slot.take().map(|run| run.handle);
+        self.reset_scans();
+        handle
     }
 
     /// Releases every run this store created.
@@ -389,11 +457,39 @@ impl<'r, 'b> RunStore<'r, 'b> {
         for slot in &mut self.levels {
             *slot = None;
         }
+        self.reset_scans();
         match self.backing.as_deref_mut() {
             Some(backing) => backing.release(),
             None => Ok(()),
         }
     }
+}
+
+/// One tier's resumable lookup scan.
+///
+/// `find` is called once per touched serial, once per released child and again
+/// for every row state the reducer samples. Each run is sorted and the reducer's
+/// demands ascend, so the scan keeps its position: a request the tier already
+/// settled is answered without a read, one beyond the position continues the
+/// scan, and one behind it starts the scan again. That makes an ascending sweep
+/// cost one pass over a run's rows instead of one pass per serial.
+///
+/// `settled` is the largest serial this tier examined without finding. It only
+/// grows, and every serial up to it was compared with the row that would hold it,
+/// so a request below it needs no read at all. `offset` is where the scan stopped,
+/// which is always a row boundary; the reader that follows the run handle is built
+/// per call from it, so the state is two integers plus the tier's cached window.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct LookupScan {
+    /// File offset of the next row to examine.
+    offset: u64,
+    /// Largest serial this tier compared with its row without finding.
+    settled: u64,
+    /// Smallest serial the cursor at `offset` may still answer. `None` means the
+    /// row at the cursor was not read, so nothing below the cursor is safe.
+    resume: Option<u64>,
+    /// Rows in the run.
+    total: u64,
 }
 
 /// Copies one run into a fresh handle so a merge never aliases its own input.

@@ -19,7 +19,8 @@ use layerfs_content::filesystem::{
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{ContentError, ObjectRole};
 use support::filesystem::{
-    count_role, resources, synthetic, value, RecordingBacking, Session, TempDir, TreeStore,
+    count_role, resources, synthetic, value, CountingProvider, RecordingBacking, Session, TempDir,
+    TreeStore,
 };
 
 fn name(value: &str) -> PathName {
@@ -714,4 +715,132 @@ fn a_successful_operation_releases_its_ordering_resources_once() {
     let decoded = FilesystemRoot::decode(sink.canonical(updated.root.0).expect("root bytes"))
         .expect("decode");
     assert_eq!(decoded, updated.value);
+}
+
+#[test]
+fn a_spilled_lookup_agrees_with_a_full_scan_of_every_tier() {
+    // A lookup that keeps its position must answer exactly what a scan from the
+    // front answers, for every serial, in every order. This drives the same
+    // rename-every-entry shape the external growth probe uses, with the pending
+    // map small enough that the operation really spills.
+    let entries = 200_usize;
+    let session = Session::new(1).expect("empty");
+    let mut changes = Vec::new();
+    let mut inodes = Vec::new();
+    let mut new_inodes = Vec::new();
+    for index in 0..entries {
+        let serial = entries as u64 + index as u64 + 2;
+        changes.push((name(&format!("f{index:05}")), Some(serial)));
+        inodes.push(InodeUpdate {
+            serial,
+            value: regular(&format!("renamed-{index}")),
+        });
+        new_inodes.push(serial);
+    }
+    new_inodes.sort_unstable();
+    let directory = DirectoryUpdate { parent: 1, changes };
+    let resources = FilesystemResources {
+        maximum_pending_records: 64,
+        ..resources()
+    };
+    let input = FilesystemInput {
+        base: Some(layerfs_content::filesystem::FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: std::slice::from_ref(&directory),
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources,
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let backing_directory = TempDir::new("ordering-lookup-scan");
+    let mut backing = RecordingBacking::with_capacity(backing_directory.path(), 64 << 20);
+    let result = {
+        let mut objects = layerfs_content::filesystem::FilesystemObjects::new(&provider, &mut sink);
+        update_filesystem(&mut objects, &input, Some(&mut backing)).expect("spilling update")
+    };
+    assert!(
+        result.counters.references.rows_spilled > 0,
+        "the operation must really spill: {}",
+        result.counters.references.rows_spilled
+    );
+    assert!(
+        result.counters.references.runs.rows_read > 0,
+        "lookups into spilled runs must be charged"
+    );
+}
+
+#[test]
+fn run_lookup_answers_every_serial_in_every_order() {
+    // The lookup path keeps a position per tier. This compares it with the
+    // replay the store already provides: the same spilled rows, walked in
+    // ascending, descending and interleaved order, must give the same answer for
+    // every serial that runs hold and for serials between them.
+    let temp = TempDir::new("ordering-run-lookup");
+    let mut backing = RecordingBacking::with_capacity(temp.path(), 64 << 20);
+    let mut store = RunStore::new(Some(&mut backing), 4096, 64 << 20);
+    // Three spilling batches over overlapping serial ranges, newest last, so a
+    // serial can be held by more than one tier and precedence matters.
+    for batch in 0..6_u64 {
+        let mut pending = BTreeMap::new();
+        for index in 0..40_u64 {
+            let serial = 1 + (index * 3 + batch) % 90;
+            pending.insert(
+                serial,
+                Row::Effect {
+                    serial,
+                    value: None,
+                    delta: i64::try_from(batch + 1).expect("batch"),
+                },
+            );
+        }
+        store.spill(&pending).expect("spill");
+    }
+    // The truth: what a fresh walk of every live tier reports.
+    let mut truth: BTreeMap<u64, i64> = BTreeMap::new();
+    store
+        .visit_newest_first(|row| {
+            if let Row::Effect { serial, delta, .. } = row {
+                truth.insert(serial, delta);
+            }
+            Ok(true)
+        })
+        .expect("visit");
+    assert!(!truth.is_empty(), "the runs must hold rows");
+    let keys = truth.keys().copied().collect::<Vec<_>>();
+    let mut orders = vec![keys.clone()];
+    let mut descending = keys.clone();
+    descending.reverse();
+    orders.push(descending);
+    let mut interleaved = Vec::new();
+    for index in 0..keys.len() {
+        interleaved.push(keys[index]);
+        interleaved.push(keys[keys.len() - 1 - index]);
+    }
+    orders.push(interleaved);
+    orders.push(vec![keys[0]; 8]);
+    orders.push(keys.iter().cycle().take(keys.len() * 3).copied().collect());
+    for order in orders {
+        for serial in order {
+            let found = store.find(serial).expect("find");
+            let row = found.unwrap_or_else(|| panic!("serial {serial} must be found"));
+            assert_eq!(row.serial(), serial);
+            match row {
+                Row::Effect { delta, .. } => assert_eq!(
+                    delta, truth[&serial],
+                    "serial {serial} must carry the newest accumulated effect"
+                ),
+                Row::Count { .. } => panic!("serial {serial} was stored as an effect"),
+            }
+        }
+        // A serial no tier holds is reported absent, never as some other row.
+        for serial in [0_u64, 1_000, 5_000] {
+            assert!(
+                store.find(serial).expect("find").is_none(),
+                "serial {serial} is not held by any tier"
+            );
+        }
+    }
+    store.release().expect("release");
 }

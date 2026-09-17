@@ -67,6 +67,51 @@ impl<'a> RunReader<'a> {
         }
     }
 
+    /// Rows this reader has returned.
+    pub const fn rows(&self) -> u64 {
+        self.offset / ROW_BYTES as u64
+    }
+
+    /// File offset of the next row.
+    pub const fn run_offset(&self) -> u64 {
+        self.offset
+    }
+
+    /// A reader that starts `offset` bytes into `run`.
+    ///
+    /// `offset` is a whole number of rows, so the first row this reader returns
+    /// is the one at that position.
+    pub fn seek_from(run: &'a Run, buffer_bytes: usize, offset: u64) -> ContentResult<Self> {
+        if offset % ROW_BYTES as u64 != 0 {
+            return Err(ContentError::InvalidOrderingRecord("run seek offset"));
+        }
+        let skipped = offset / ROW_BYTES as u64;
+        if skipped > run.count {
+            return Err(ContentError::InvalidOrderingRecord("run seek past end"));
+        }
+        let rows = (buffer_bytes / ROW_BYTES).max(1);
+        Ok(Self {
+            handle: run.handle.as_ref(),
+            offset,
+            remaining: run.count - skipped,
+            buffer: vec![0; rows * ROW_BYTES],
+            filled: 0,
+            consumed: 0,
+        })
+    }
+
+    /// Puts the last returned row back, so the next call returns it again.
+    ///
+    /// A scan that stops on a row it did not compare with its request leaves that
+    /// row pending instead of consuming it.
+    pub fn rewind(&mut self) {
+        if self.consumed >= ROW_BYTES {
+            self.consumed -= ROW_BYTES;
+            self.offset -= ROW_BYTES as u64;
+            self.remaining += 1;
+        }
+    }
+
     /// Next row in serial order, if any remains.
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> ContentResult<Option<Row>> {
