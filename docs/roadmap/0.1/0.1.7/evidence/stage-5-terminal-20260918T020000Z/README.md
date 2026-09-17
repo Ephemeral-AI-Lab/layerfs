@@ -30,6 +30,36 @@
 | `R2-F22` | `into-parts.log` | the moved pieces carry the advisory predecessor and its provenance |
 | `N-16`, `VF-4` | `filesystem-limits.log`, `storage-limits.log` | one boundary case per reachable limit on both sides, plus the limits no fixture can reach with their arithmetic |
 
+## The external client
+
+`diagnostics/s5check/` is a dependency-free client that depends on
+`core/crates/layerfs-content` and `core/crates/layerfs-telemetry` by path and
+reaches every claim below through **public entry points only**. It is not part of
+the product workspace and nothing in the repository imports it.
+
+```sh
+cd docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T020000Z/diagnostics/s5check
+cargo run --quiet          # writes the probes below to stdout
+```
+
+Its output is retained as `diagnostics/public-api-probe.log`. What it establishes,
+and what it does **not**:
+
+- `A1-A5`: the declared attribute-value bound is the chunk maximum, 32,768 bytes
+  are emitted and read back whole with the bytes written, and 32,769 is refused by
+  the declared bound. This is an author-run reproduction, not an independent one.
+- `B2-B3`: a single build of 4,088 files is accepted and one of 4,104 files is
+  refused with `cycle check work limit`.
+- **`B5` is a pointer, not a probe.** The rebind consequence (a directory over the
+  ceiling cannot be renamed) is asserted by the product test
+  `a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound`; this
+  client does not reproduce it independently, because rebuilding a base tree above
+  the ceiling needs a second operation and the client does not carry that setup.
+  Read `walk-ceiling.log` as the receipt and treat that row as author-verified.
+- `C1-C7`, `D1-D8`, `E1-E2`: name, path and symlink boundaries, the three
+  telemetry states with a panicked child reporting `Unknown`, and one read of the
+  base root per edit measured by a counting provider.
+
 ## Reproduce
 
 ```sh

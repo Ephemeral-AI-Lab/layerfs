@@ -1,0 +1,27 @@
+A1 declared attribute bound 32768 bytes
+A2 bound equals the chunk maximum: true
+A3 at 32768 bytes: read back 32768 bytes, all 0x5a: true
+A4 at 32769 bytes: Err(ObjectLimitExceeded { limit: 32768, actual: 32769 })
+A5 refused by the declared bound: true
+B1 declared walk ceiling 4096 entries
+B2 build of 4088 files: Ok(4088)
+B3 build of 4104 files: Err(InvalidRecord("cycle check work limit"))
+B4 base build examined 1 entries
+B5 rebind consequence reproduced by the product test `a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound`: base of 4088 entries accepted, a second accepted operation grows it past the ceiling, and the rename is refused with `cycle check work limit`
+C1 name bound 255
+C2 name at bound: Ok(())
+C3 name over bound: Err(PathLimitExceeded)
+C4 path bound 4096 bytes / 256 components
+C5 path of 4096 bytes: Ok(())
+C6 symlink target at 4096: Ok(())
+C7 symlink target over 4096: Err(InvalidRecord("symlink target"))
+D1 disabled: completeness Disabled, is_incomplete false, has_root false
+D2 complete: completeness Complete, is_incomplete false
+D3 attached-disabled: completeness Clipped, is_incomplete true
+D4 panicking child result Ok(())
+D5 panicking child node Some(("unstable", Unknown, true))
+D6 child outcome is Unknown, not Ok: true
+D7 report completeness Clipped
+D8 the three states are distinct: true
+E1 edit result ok: true
+E2 base root demanded 1 time(s) in one edit
