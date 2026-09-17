@@ -18,6 +18,7 @@
 
 pub mod error;
 pub mod file;
+pub mod filesystem;
 pub mod object;
 pub mod policy;
 
@@ -26,6 +27,12 @@ pub use file::{
     apply_edits, construct_bytes, construct_stream, encode_whole_file_payload, read_all,
     read_all_bounded, read_range, whole_file_payload, ConstructedFile, Edit, EditRequest,
     EditSource, EditStream, FileContent, FileView, Replacements, MAXIMUM_EDITS_PER_OPERATION,
+};
+pub use filesystem::inode::InodeChange;
+pub use filesystem::{
+    build_filesystem, update_filesystem, DirectoryRoot, DirectoryUpdate, FilesystemInput,
+    FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemResult, FilesystemRoot,
+    InodeIdentity, InodeScope, InodeUpdate, LogicalPath, ObjectWork, PathName, Stat,
 };
 pub use object::inode_leaf;
 pub use object::{

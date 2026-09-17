@@ -5,6 +5,8 @@
 
 #![allow(dead_code)]
 
+pub mod filesystem;
+
 use std::collections::BTreeMap;
 use std::io::{self, Read};
 
@@ -214,6 +216,37 @@ pub fn references_of(canonical: &[u8], role: ObjectRole) -> Vec<ObjectId> {
         ObjectRole::FileState => decode_file_state(canonical)
             .map(|state| vec![state.mapping_root])
             .unwrap_or_default(),
+        ObjectRole::DirectoryLeaf | ObjectRole::Symlink => Vec::new(),
+        ObjectRole::DirectoryBranch => {
+            layerfs_content::filesystem::directory::codec::decode_directory_page(canonical)
+                .map(|page| match page {
+                    layerfs_content::filesystem::directory::codec::DirectoryPage::Leaf {
+                        ..
+                    } => Vec::new(),
+                    layerfs_content::filesystem::directory::codec::DirectoryPage::Branch {
+                        children,
+                        ..
+                    } => children.into_iter().map(|(_, id)| id).collect(),
+                })
+                .unwrap_or_default()
+        }
+        ObjectRole::InodeBranch => {
+            layerfs_content::filesystem::inode::codec::decode_inode_page(canonical)
+                .map(|page| match page {
+                    layerfs_content::filesystem::inode::codec::InodePage::Leaf { .. } => Vec::new(),
+                    layerfs_content::filesystem::inode::codec::InodePage::Branch {
+                        children,
+                        ..
+                    } => children.into_iter().map(|(_, id)| id).collect(),
+                })
+                .unwrap_or_default()
+        }
+        ObjectRole::FilesystemRoot => {
+            layerfs_content::filesystem::FilesystemRoot::decode(canonical)
+                .map(|root| vec![root.inode_table()])
+                .unwrap_or_default()
+        }
+        ObjectRole::AttributeLeaf | ObjectRole::AttributeBranch => Vec::new(),
     }
 }
 

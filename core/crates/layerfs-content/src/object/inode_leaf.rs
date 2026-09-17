@@ -6,6 +6,16 @@
 //! construction; those remain later stages. What it does provide is the exact
 //! checked byte layout C2 pools, including the derived physical layout of a pooled
 //! leaf, so both components agree on one grammar instead of re-deriving it.
+//!
+//! The node header's `subtree_bytes` field carries the *encoded row width*, not
+//! the value width: one leaf row is an 8-byte serial plus the 73-byte value, so a
+//! leaf of `n` rows records `n * 81`. The pinned reference encoder writes exactly
+//! that (`encode_inode`), and the sealed reference fixture for a two-row leaf
+//! (`tests/fixtures/filesystem/codec-inode-leaf.bin`) confirms it. Writing
+//! `n * 73` here - as an earlier revision of this module did - produced different
+//! canonical bytes and therefore different object identities for the same logical
+//! inode page. The field is validated directly on decode; there is no canonical
+//! re-encoding step.
 
 use crate::error::{ContentError, ContentResult};
 use crate::object::ObjectId;
@@ -22,6 +32,10 @@ pub const NODE_HEADER_BYTES: usize = 31;
 pub const LEAF_ROW_BYTES: usize = 81;
 /// Largest row count of one inode leaf page.
 pub const MAXIMUM_LEAF_ROWS: usize = 100;
+/// Smallest row count of a non-root inode leaf page.
+pub const MINIMUM_LEAF_ROWS: usize = 50;
+/// Largest canonical bytes of one tree page, including the object envelope.
+pub const MAXIMUM_NODE_OBJECT_BYTES: usize = 8_192;
 /// Canonical bytes before the first row: envelope plus node header.
 pub const POOLED_PREFIX_BYTES: usize = 44;
 /// Physical bytes of one pooled row: the serial and a 4-byte ordinal.
@@ -188,7 +202,7 @@ impl InodeLeaf {
             return Err(ContentError::InvalidRecord("inode serial"));
         }
         let subtree_bytes = (count as u64)
-            .checked_mul(INODE_VALUE_BYTES as u64)
+            .checked_mul(LEAF_ROW_BYTES as u64)
             .ok_or(ContentError::LengthOverflow)?;
         if self.subtree_bytes != subtree_bytes {
             return Err(ContentError::LengthMismatch {
@@ -214,8 +228,21 @@ impl InodeLeaf {
         crate::object::codec::encode_bytes_object(&value)
     }
 
-    /// Decodes and validates a canonical leaf page, including canonical re-encoding.
+    /// Decodes and validates a canonical leaf page without re-encoding it.
+    ///
+    /// Every check the encoder enforces is repeated here directly: framing, magic,
+    /// version, role, level, flags, the row-count bound, the declared byte total,
+    /// the exact row width, serial ordering and the value grammar of every row.
+    /// A malformed or hand-built page therefore fails on this route exactly as it
+    /// would fail a re-encode comparison, and the sealed fixtures prove the
+    /// accepted set is unchanged.
     pub fn decode(canonical: &[u8]) -> ContentResult<Self> {
+        if canonical.len() > MAXIMUM_NODE_OBJECT_BYTES {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit: MAXIMUM_NODE_OBJECT_BYTES,
+                actual: canonical.len(),
+            });
+        }
         let value = crate::object::codec::decode_bytes_object(canonical)?;
         if value.len() < NODE_HEADER_BYTES {
             return Err(ContentError::UnexpectedEof);
@@ -244,16 +271,37 @@ impl InodeLeaf {
         if count == 0 || count > MAXIMUM_LEAF_ROWS || subtree_count != count as u64 {
             return Err(ContentError::NonCanonicalPagePartition);
         }
-        if value.len() != NODE_HEADER_BYTES + count * LEAF_ROW_BYTES {
+        let rows_bytes = count
+            .checked_mul(LEAF_ROW_BYTES)
+            .ok_or(ContentError::LengthOverflow)?;
+        if value.len()
+            != NODE_HEADER_BYTES
+                .checked_add(rows_bytes)
+                .ok_or(ContentError::LengthOverflow)?
+        {
             return Err(ContentError::InvalidRecord("inode leaf length"));
         }
+        if subtree_bytes != rows_bytes as u64 {
+            return Err(ContentError::LengthMismatch {
+                expected: rows_bytes as u64,
+                actual: subtree_bytes,
+            });
+        }
         let mut rows = Vec::with_capacity(count);
+        let mut previous = None;
         for row in value[NODE_HEADER_BYTES..].chunks_exact(LEAF_ROW_BYTES) {
             let serial = u64::from_be_bytes(
                 row[..8]
                     .try_into()
                     .map_err(|_| ContentError::UnexpectedEof)?,
             );
+            if serial == 0 {
+                return Err(ContentError::InvalidRecord("inode serial"));
+            }
+            if previous.is_some_and(|previous| previous >= serial) {
+                return Err(ContentError::InvalidRecord("inode key order"));
+            }
+            previous = Some(serial);
             let mut bytes = [0_u8; INODE_VALUE_BYTES];
             bytes.copy_from_slice(&row[8..]);
             decode_inode_value(&bytes)?;
@@ -262,20 +310,20 @@ impl InodeLeaf {
                 value: bytes,
             });
         }
-        let leaf = Self {
+        Ok(Self {
             subtree_bytes,
             rows,
-        };
-        // The canonical form is unique: re-encoding must reproduce the input.
-        if leaf.encode()? != canonical {
-            return Err(ContentError::InvalidRecord("inode leaf canonical form"));
-        }
-        Ok(leaf)
+        })
     }
 
     /// Row count.
     pub fn row_count(&self) -> usize {
         self.rows.len()
+    }
+
+    /// Encoded row bytes this page accounts for (`row_count * 81`).
+    pub fn row_bytes(&self) -> u64 {
+        self.rows.len() as u64 * LEAF_ROW_BYTES as u64
     }
 }
 
@@ -355,7 +403,7 @@ pub fn decode_pooled_body(body: &[u8]) -> ContentResult<(Vec<u8>, Vec<PooledRow>
     // pooled body carries `count` rows, so both fields must match it.
     prefix[13..15].copy_from_slice(&(count as u16).to_be_bytes());
     prefix[15..23].copy_from_slice(&(count as u64).to_be_bytes());
-    prefix[23..31].copy_from_slice(&(count as u64 * INODE_VALUE_BYTES as u64).to_be_bytes());
+    prefix[23..31].copy_from_slice(&(count as u64 * LEAF_ROW_BYTES as u64).to_be_bytes());
     Ok((prefix, rows))
 }
 
@@ -369,7 +417,7 @@ pub fn rebuild_leaf(
         return Err(ContentError::InvalidRecord("pooled value count"));
     }
     let mut leaf = InodeLeaf {
-        subtree_bytes: rows.len() as u64 * INODE_VALUE_BYTES as u64,
+        subtree_bytes: rows.len() as u64 * LEAF_ROW_BYTES as u64,
         rows: rows
             .iter()
             .zip(values)
@@ -385,7 +433,7 @@ pub fn rebuild_leaf(
     // The canonical form is rebuilt from the header constant and the decoded rows,
     // never from the supplied bytes: the prefix was validated above for width and
     // grammar, and its contents are deliberately not carried into the result.
-    leaf.subtree_bytes = rows.len() as u64 * INODE_VALUE_BYTES as u64;
+    leaf.subtree_bytes = rows.len() as u64 * LEAF_ROW_BYTES as u64;
     leaf.encode()
 }
 

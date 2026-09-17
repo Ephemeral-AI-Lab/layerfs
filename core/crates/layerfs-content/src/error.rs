@@ -103,6 +103,33 @@ pub enum ContentError {
         /// Number of values returned.
         returned: usize,
     },
+    /// A logical path or name is not a canonical one.
+    InvalidPath,
+    /// A logical path or name exceeds a declared byte or component bound.
+    PathLimitExceeded,
+    /// A logical name or path is not valid UTF-8.
+    InvalidUtf8,
+    /// The operation tried to mutate the filesystem root itself.
+    RootMutation,
+    /// The stored profile is not one this implementation is required to support.
+    UnsupportedProfile {
+        /// The profile field or grammar that was rejected.
+        what: &'static str,
+    },
+    /// The supplied identity is outside the operation's allocation scope.
+    ScopeMismatch {
+        /// The scope field that disagreed.
+        what: &'static str,
+    },
+    /// The operation's declared ordering or scratch resource is unavailable.
+    ResourceUnavailable {
+        /// The resource that could not be provided.
+        what: &'static str,
+    },
+    /// A caller-supplied ordering record, run or cursor was malformed.
+    InvalidOrderingRecord(&'static str),
+    /// The operation was cancelled or its final completion did not run.
+    IncompleteOperation,
 }
 
 impl fmt::Display for ContentError {
@@ -164,6 +191,24 @@ impl fmt::Display for ContentError {
                     "batch returned {returned} of {requested} objects"
                 )
             }
+            Self::InvalidPath => formatter.write_str("invalid canonical path"),
+            Self::PathLimitExceeded => formatter.write_str("path or name limit exceeded"),
+            Self::InvalidUtf8 => formatter.write_str("invalid UTF-8"),
+            Self::RootMutation => formatter.write_str("root mutation"),
+            Self::UnsupportedProfile { what } => {
+                write!(formatter, "unsupported profile: {what}")
+            }
+            Self::ScopeMismatch { what } => write!(formatter, "scope mismatch: {what}"),
+            Self::ResourceUnavailable { what } => {
+                write!(
+                    formatter,
+                    "ordering or scratch resource unavailable: {what}"
+                )
+            }
+            Self::InvalidOrderingRecord(what) => {
+                write!(formatter, "invalid ordering record: {what}")
+            }
+            Self::IncompleteOperation => formatter.write_str("incomplete operation"),
         }
     }
 }

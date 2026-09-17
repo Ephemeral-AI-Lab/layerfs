@@ -24,7 +24,10 @@ fn value(kind: InodeKind, refs: u64, seed: u8) -> InodeValue {
 
 fn leaf(rows: usize) -> InodeLeaf {
     InodeLeaf {
-        subtree_bytes: rows as u64 * 73,
+        // The recorded subtree byte total is the encoded row width: one 8-byte
+        // serial plus the 73-byte value, exactly as the reference encoder writes
+        // it and as the sealed reference fixture records it.
+        subtree_bytes: rows as u64 * LEAF_ROW_BYTES as u64,
         rows: (0..rows)
             .map(|index| InodeLeafRow {
                 serial: index as u64 + 1,
@@ -195,7 +198,7 @@ fn malformed_leaves_are_rejected() {
 
     // The subtree byte total must match the row count.
     let mut wrong_total = original.clone();
-    wrong_total.subtree_bytes += 73;
+    wrong_total.subtree_bytes += LEAF_ROW_BYTES as u64;
     assert!(matches!(
         wrong_total.encode(),
         Err(ContentError::LengthMismatch { .. })

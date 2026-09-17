@@ -24,9 +24,22 @@ pub enum ObjectRole {
     /// One compact inode-value leaf: the checked physical-pooling input grammar.
     ///
     /// The role carries logical structure only; C2 owns whether such a leaf is
-    /// stored pooled or whole. Filesystem-tree construction is a later stage and
-    /// is not implied by this role.
+    /// stored pooled or whole.
     InodeLeaf,
+    /// One compact directory leaf: rows of `name -> inode serial`.
+    DirectoryLeaf,
+    /// One compact directory branch: child summaries of the directory tree.
+    DirectoryBranch,
+    /// One compact inode-table branch: child summaries of the inline inode table.
+    InodeBranch,
+    /// Scoped filesystem root: profile, allocation scope, root serial, table root.
+    FilesystemRoot,
+    /// One attribute-tree leaf: generic `domain + key -> value root` entries.
+    AttributeLeaf,
+    /// One attribute-tree branch: child summaries of the attribute tree.
+    AttributeBranch,
+    /// One symbolic-link target object.
+    Symlink,
 }
 
 impl ObjectRole {
@@ -39,6 +52,13 @@ impl ObjectRole {
             Self::ExtentBranch => 4,
             Self::FileState => 5,
             Self::InodeLeaf => 6,
+            Self::DirectoryLeaf => 7,
+            Self::DirectoryBranch => 8,
+            Self::InodeBranch => 9,
+            Self::FilesystemRoot => 10,
+            Self::AttributeLeaf => 11,
+            Self::AttributeBranch => 12,
+            Self::Symlink => 13,
         }
     }
 
@@ -51,6 +71,13 @@ impl ObjectRole {
             4 => Ok(Self::ExtentBranch),
             5 => Ok(Self::FileState),
             6 => Ok(Self::InodeLeaf),
+            7 => Ok(Self::DirectoryLeaf),
+            8 => Ok(Self::DirectoryBranch),
+            9 => Ok(Self::InodeBranch),
+            10 => Ok(Self::FilesystemRoot),
+            11 => Ok(Self::AttributeLeaf),
+            12 => Ok(Self::AttributeBranch),
+            13 => Ok(Self::Symlink),
             _ => Err(ContentError::InvalidRecord("object role code")),
         }
     }
