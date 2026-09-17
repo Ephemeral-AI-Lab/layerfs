@@ -190,8 +190,8 @@ fn a_failed_save_leaves_no_usable_state_in_the_set() {
     .expect("finalized");
     let error = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("begin"))?;
-        operation.accept(leaf(&private), scope.child("accept"))?;
-        operation.accept(bad, scope.child("accept"))?;
+        operation.accept(leaf(&private))?;
+        operation.accept(bad)?;
         operation.finish(scope.child("finish"))
     })
     .unwrap_err();
@@ -249,8 +249,8 @@ fn a_failed_save_removes_its_private_value_groups() {
     .expect("finalized");
     let error = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("begin"))?;
-        operation.accept(leaf(&private), scope.child("accept"))?;
-        operation.accept(bad, scope.child("accept"))?;
+        operation.accept(leaf(&private))?;
+        operation.accept(bad)?;
         operation.finish(scope.child("finish"))
     })
     .unwrap_err();

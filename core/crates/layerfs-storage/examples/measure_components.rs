@@ -229,7 +229,7 @@ fn run_c2(options: &Options, bytes: &[u8]) -> Result<(), Failure> {
         )?;
         let mut operation = store.begin_save(root.child("storage.begin"))?;
         for object in consumer.iter() {
-            operation.accept(object.clone(), root.child("storage.accept"))?;
+            operation.accept(object.clone())?;
         }
         let outcome = operation.finish(root.child("storage.finish"))?;
         Ok((store, outcome))

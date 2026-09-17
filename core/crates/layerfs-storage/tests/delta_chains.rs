@@ -311,14 +311,8 @@ fn the_save_reports_every_chain_it_acquired_not_only_the_last() {
     second_bytes[100] ^= 0xff;
     let outcome = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(
-            with_predecessor(whole(&first_bytes), first_base_id),
-            scope.child("storage.accept"),
-        )?;
-        operation.accept(
-            with_predecessor(whole(&second_bytes), second_base_id),
-            scope.child("storage.accept"),
-        )?;
+        operation.accept(with_predecessor(whole(&first_bytes), first_base_id))?;
+        operation.accept(with_predecessor(whole(&second_bytes), second_base_id))?;
         operation.finish(scope.child("storage.finish"))
     })
     .expect("two-base save");

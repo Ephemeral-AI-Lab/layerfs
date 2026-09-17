@@ -81,7 +81,11 @@ readback                  labelled separately, never inside the operation timer
   final save acknowledgement in one region; read-back is reported separately.
 - A `--mode c2` row receives objects prepared outside the timed region and
   measures admission only; it includes no filesystem construction.
-- A `--mode c1` row opens no database.
+- A `--mode c1` row opens no database: `measure_filesystem` creates its Store
+  only inside the C2 and integrated modes, and `filesystem_timing_c1` has no
+  storage crate in its dependency graph at all. (Corrected 2026-09-17: the harness
+  used to create the Store before its mode dispatch, so a C1 row opened a database
+  it never used.)
 - Scope names come from the run's own report. A report that clips marks itself
   incomplete; clipped rows are `INCOMPLETE`, never `PASS`.
 - Cache state is `warm-process-in-memory-fixtures`: every case's fixture objects

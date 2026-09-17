@@ -87,9 +87,9 @@ fn the_admitted_full_cache_supplies_a_candidate_within_one_save() {
     let second = whole(&changed);
     let outcome = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(first, scope.child("storage.accept"))?;
+        operation.accept(first)?;
         // No explicit predecessor: the admitted-FULL winner cache must supply one.
-        operation.accept(second, scope.child("storage.accept"))?;
+        operation.accept(second)?;
         operation.finish(scope.child("storage.finish"))
     })
     .expect("save");
@@ -283,7 +283,6 @@ fn the_c1_handoff_reports_the_same_selection_as_a_direct_save() {
     let store = create_store(&path);
     let outcome = save_via_handoff(&store, &collected).expect("handoff save");
     assert_eq!(outcome.inserted, collected.objects().len() as u64);
-    assert!(outcome.acknowledged);
 }
 
 /// A CHUNK candidate that no committed row matches is a policy fallback, not a

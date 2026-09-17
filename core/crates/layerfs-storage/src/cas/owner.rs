@@ -18,13 +18,10 @@ use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::pack::placement::LanePlacement;
 use crate::pack::{build_group, SelectedWrite};
-use crate::policy::StorageCapacities;
+use crate::policy::{StorageCapacities, GROUP_TARGET};
 use crate::sqlite::lookup;
 use crate::sqlite::write::{self, ObjectRow, TransactionState};
 use std::collections::BTreeMap;
-
-/// Soft group target: a group is sealed once the next record would pass it.
-const GROUP_TARGET: usize = 48 * 1024;
 
 /// Distinct values the pooled lane's per-save ordinal memo may hold at once.
 ///
@@ -57,14 +54,17 @@ struct PendingMember {
 struct PendingGroup {
     records: Vec<Vec<u8>>,
     members: Vec<PendingMember>,
-    framed_len: usize,
+    /// Record payload bytes only. The group's shared framing - one count and one
+    /// end offset per record - is projected through `framed_group_length` when the
+    /// seal decision is made, so nothing here counts it once per record.
+    payload_len: usize,
 }
 
 impl PendingGroup {
     fn clear(&mut self) {
         self.records.clear();
         self.members.clear();
-        self.framed_len = 0;
+        self.payload_len = 0;
     }
 }
 
@@ -368,16 +368,24 @@ impl MutationOwner {
         let must_seal = match lane {
             PackLane::WholeFile | PackLane::PooledMetadata | PackLane::Singleton => occupied,
             PackLane::Ordinary | PackLane::Native => {
-                occupied && self.groups[index].framed_len.saturating_add(body) > GROUP_TARGET
+                // The seal decision is the framed length the group *would* have,
+                // projected through the same identity that frames it: the count,
+                // its end offsets and the payload, not a per-record framed length
+                // summed once per record.
+                occupied
+                    && crate::pack::assemble::framed_group_length(
+                        self.groups[index].records.len() + 1,
+                        self.groups[index].payload_len + record.record.len(),
+                    )? > GROUP_TARGET
             }
         };
         if must_seal {
             self.seal_group(lane, availability)?;
         }
         let group = &mut self.groups[index];
-        group.framed_len = group
-            .framed_len
-            .checked_add(body)
+        group.payload_len = group
+            .payload_len
+            .checked_add(record.record.len())
             .ok_or(StorageError::Integrity("group framing"))?;
         group.records.push(record.record);
         group.members.push(PendingMember {

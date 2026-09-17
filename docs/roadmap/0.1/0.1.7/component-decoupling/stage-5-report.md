@@ -227,7 +227,7 @@ Edited existing files: `src/lib.rs` (+7), `src/error.rs` (+33),
 
 | Command | Result |
 | --- | --- |
-| `cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked` | PASS (all targets, including the eight new Stage 5 targets) |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked` | PASS (see the coverage correction in §13: the count is tests that exist, not targets that were built) |
 | `cargo +1.85.1 test --locked -p layerfs-content --test stage5_reference_fixtures` (reference workspace) | PASS — fixtures regenerated identically |
 | `python3 core/tools/check_product_boundary.py` | PASS — 115 production files |
 | `python3 -m unittest discover -s core/tools -p 'test_*.py'` | PASS |
@@ -366,3 +366,18 @@ This section corrects claims in the sections above; it does not rewrite them.
 6. **The verification document's "frozen" banner was wrong** about performance
    gates; it is corrected in place and superseded for new rows by the dated
    addendum.
+## 12. Coverage correction, 2026-09-17 (WP5, R42)
+
+The verification row above used to read "PASS (all targets, including the eight new
+Stage 5 targets)". **Targets are not coverage.** On the remediation tree the suite
+discovers **59 targets**, of which **53 carry at least one test** and **6 carry
+none** - three `unittests src/lib.rs` binaries (`layerfs-content`,
+`layerfs-storage`, `layerfs-telemetry`) and three doc-test targets. A
+test-bearing target count of 53 and a zero-test target count of 6 is the honest
+statement; the six contribute nothing to any criterion row, and the recorded
+result is **393 passing tests, 0 failed, 0 ignored**.
+
+The Stage 5 report's original "363 passed" figure was taken from a run that
+included the same six empty targets in its target count. Nothing was wrong with
+any individual test; the summary simply counted binaries. Later rows in this
+document state tests, not targets.

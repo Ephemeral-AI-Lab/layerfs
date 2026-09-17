@@ -74,20 +74,34 @@ pub fn frame_group_bounded(records: &[Vec<u8>], limit: usize) -> StorageResult<V
     Ok(bytes)
 }
 
-/// Framed length `records` would occupy as one group body.
-pub fn framed_length(records: &[Vec<u8>]) -> StorageResult<usize> {
+/// Framed length of one group body holding `records` records of `payload` bytes.
+///
+/// A group body is one 4-byte record count, one 4-byte end offset per record and
+/// the records themselves. This is the shared framing identity: a caller that
+/// accumulates a group record by record must project through it, because adding a
+/// per-record framed length instead counts the shared framing once per record and
+/// over-counts it by `4n - 4`.
+pub fn framed_group_length(records: usize, payload: usize) -> StorageResult<usize> {
     let framing = 4_usize
         .checked_add(
             4_usize
-                .checked_mul(records.len())
+                .checked_mul(records)
                 .ok_or(StorageError::Integrity("group framing"))?,
         )
         .ok_or(StorageError::Integrity("group framing"))?;
-    records.iter().try_fold(framing, |total, record| {
+    framing
+        .checked_add(payload)
+        .ok_or(StorageError::Integrity("group length"))
+}
+
+/// Framed length `records` would occupy as one group body.
+pub fn framed_length(records: &[Vec<u8>]) -> StorageResult<usize> {
+    let payload = records.iter().try_fold(0_usize, |total, record| {
         total
             .checked_add(record.len())
             .ok_or(StorageError::Integrity("group length"))
-    })
+    })?;
+    framed_group_length(records.len(), payload)
 }
 
 /// Builds the placement-ready group for `lane` from already-framed records.

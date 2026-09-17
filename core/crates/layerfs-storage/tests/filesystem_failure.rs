@@ -34,7 +34,6 @@ fn retained_tree(label: &str, entries: usize) -> (TempDir, Built, u64) {
     let store = create_store(&temp.store_path(label));
     let built = build_tree(entries);
     let outcome = save_bag(&store, &built.bag).expect("retained save");
-    assert!(outcome.acknowledged, "the retained tree is acknowledged");
     assert!(
         outcome.pool.leaves > 0,
         "the retained tree used the pooled lane"
@@ -247,12 +246,11 @@ fn a_private_attempt_is_invisible_until_acknowledgement_and_absent_after_failure
     {
         let mut operation =
             disabled(|scope| store.begin_save(scope.child("storage.begin"))).expect("begin");
-        disabled(|scope| {
+        disabled(|_scope| {
             for (_, (role, bytes)) in second.bag.objects.iter() {
                 operation.accept(
                     layerfs_content::FinalizedObject::new(*role, bytes.clone())
                         .expect("finalized object"),
-                    scope.child("storage.accept"),
                 )?;
             }
             Ok::<(), StorageError>(())

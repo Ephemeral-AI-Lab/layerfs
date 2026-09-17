@@ -347,7 +347,7 @@ pub fn save_bag(store: &Store, bag: &Bag) -> Result<SaveOutcome, StorageError> {
     layerfs_telemetry::timer::Timing::disabled("fixture.save", |scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in objects {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })

@@ -155,7 +155,11 @@ forward, and one row did not hold.
   corrected tree. An example is an excluded target, so no counted production line
   changed and the §9 totals are unaffected.
 - **The test row was re-run with its exact command**: `363 passed; 0 failed` across
-  every workspace target.
+  every workspace target. **Corrected 2026-09-17 (R42):** that figure counted
+  targets, six of which carry no test at all (three `unittests src/lib.rs`
+  binaries and three doc-targets). On the remediation tree the honest statement is
+  **53 test-bearing targets out of 59 discovered, 393 passing tests, 0 failed,
+  0 ignored**; see `stage-5-report.md` §12.
 - **The format row only holds with `--all`.** On the virtual `core/Cargo.toml`
   manifest, `cargo fmt --check` without `--all` exits 1 with "Failed to find
   targets"; `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` is

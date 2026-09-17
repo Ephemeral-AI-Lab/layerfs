@@ -35,9 +35,13 @@ pub struct SaveOutcome {
     /// Appends to packs this operation created.
     pub pack_appends: u64,
     /// Write transactions acknowledged with `COMMIT`.
+    ///
+    /// Holding a `SaveOutcome` at all *is* the acknowledgement: `finish` returns
+    /// one only after the watermark transaction committed, and every other outcome
+    /// is a typed error. There is deliberately no boolean field for it - a field
+    /// that can only ever hold one value cannot fail an assertion, and one used to
+    /// sit here doing exactly that.
     pub commits: u64,
-    /// True when the final transaction was acknowledged.
-    pub acknowledged: bool,
     /// Record-level objects newly written as a FULL representation.
     pub full_records: u64,
     /// Record-level objects newly written as a PREFIX representation.
@@ -58,7 +62,6 @@ impl From<OutcomeCounters> for SaveOutcome {
             packs_created: counters.packs_created,
             pack_appends: counters.pack_appends,
             commits: counters.commits,
-            acknowledged: true,
             full_records: counters.full_records,
             prefix_records: counters.prefix_records,
             delta: counters.delta,
@@ -271,16 +274,16 @@ pub struct SaveOperation {
 
 impl SaveOperation {
     /// Accepts one finalized object, flushing the wave when a bound is reached.
-    pub fn accept(&mut self, object: FinalizedObject, scope: TimingScope<'_>) -> StorageResult<()> {
-        scope.run(|accept| {
-            accept
-                .child("storage.batch")
-                .run(|_| self.accept_inner(object))
-        })
-    }
-
-    /// Accepts one object without a caller scope; used by the C1 handoff adapter.
-    pub fn accept_inner(&mut self, object: FinalizedObject) -> StorageResult<()> {
+    ///
+    /// This call creates no timing node. The caller owns the tree: a caller
+    /// accepting a wave plans one region for the wave and accepts every object of
+    /// it inside that region, which is what keeps a save's report bounded by its
+    /// waves instead of by its object count. The earlier form started a node and
+    /// added a `storage.batch` child on every single accept, so a save of a few
+    /// hundred objects spent the recorder's node budget on one row per object and
+    /// clipped its own detail - the telemetry contract forbids exactly that ("Do
+    /// not add a node per object, syscall or delta edge").
+    pub fn accept(&mut self, object: FinalizedObject) -> StorageResult<()> {
         if self.finished || self.terminal {
             return Err(StorageError::Aborted);
         }
@@ -336,7 +339,10 @@ impl SaveOperation {
         scope: TimingScope<'_>,
     ) -> StorageResult<Vec<Vec<u8>>> {
         check_read_demand(ids, self.capacities.read_objects)?;
-        scope.run(|read_scope| {
+        // The caller's planned node is this read's one region: sealing the group
+        // that holds a demanded identity and the query which follows it both happen
+        // inside it. There is no inner child named after the caller's own node.
+        scope.run(|_read| {
             let pending: Vec<(ObjectId, Vec<u8>)> = ids
                 .iter()
                 .filter_map(|id| {
@@ -356,13 +362,8 @@ impl SaveOperation {
             // The query that follows it is a query, and a missing object is a caller
             // error rather than a broken save, so it does not terminate anything.
             if !remaining.is_empty() {
-                let sealed = {
-                    let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
-                    read_scope
-                        .child("storage.read")
-                        .run(|_| owner.seal_pending(&remaining))
-                };
-                if let Err(error) = sealed {
+                let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
+                if let Err(error) = owner.seal_pending(&remaining) {
                     return Err(self.terminate(error));
                 }
             }
@@ -370,19 +371,26 @@ impl SaveOperation {
                 Vec::new()
             } else {
                 let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
-                read_scope
-                    .child("storage.read")
-                    .run(|_| owner.read_batch(&remaining))?
+                owner.read_batch(&remaining)?
             };
+            // Both sources are already in demand order - the pending batch is a
+            // filtered copy of `ids` and so is the stored batch - so one pass over
+            // `ids` with a cursor on each moves every value out exactly once. The
+            // earlier form searched the pending vector per demand and cloned the
+            // bytes it found, so a pending value was copied twice: once out of the
+            // batch and once into the answer.
+            let mut pending = pending.into_iter().peekable();
             let mut stored = stored.into_iter();
             let mut values = Vec::with_capacity(ids.len());
             for id in ids {
-                match pending.iter().find(|(candidate, _)| candidate == id) {
-                    Some((_, bytes)) => values.push(bytes.clone()),
-                    None => values.push(stored.next().ok_or(StorageError::ObjectMissing(*id))?),
+                if pending.peek().is_some_and(|(candidate, _)| candidate == id) {
+                    let (_, bytes) = pending.next().ok_or(StorageError::Aborted)?;
+                    values.push(bytes);
+                } else {
+                    values.push(stored.next().ok_or(StorageError::ObjectMissing(*id))?);
                 }
             }
-            if stored.next().is_some() {
+            if pending.next().is_some() || stored.next().is_some() {
                 return Err(StorageError::Integrity("same-save read cardinality"));
             }
             Ok(values)
@@ -525,7 +533,7 @@ impl<'a> SaveHandoff<'a> {
 
 impl FinalizedConsumer for SaveHandoff<'_> {
     fn accept(&mut self, object: FinalizedObject) -> Result<(), ContentError> {
-        match self.operation.accept_inner(object) {
+        match self.operation.accept(object) {
             Ok(()) => Ok(()),
             Err(error) => {
                 self.failure = Some(error);

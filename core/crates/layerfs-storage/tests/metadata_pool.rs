@@ -301,7 +301,7 @@ fn an_unfinished_private_value_group_is_not_visible_to_a_reader() {
     );
     let id = leaf.id();
     let mut operation = disabled(|scope| store.begin_save(scope.child("begin"))).expect("begin");
-    disabled(|scope| operation.accept(leaf, scope.child("accept"))).expect("accept");
+    disabled(|_scope| operation.accept(leaf)).expect("accept");
     // Nothing is acknowledged yet: an unrelated reader must observe neither the
     // private value groups nor a range that can address them.
     let error = read_objects(&store, &[id]).unwrap_err();
@@ -401,8 +401,8 @@ fn one_save_reuses_a_value_group_it_created_itself() {
 
     let outcome = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(first, scope.child("storage.accept"))?;
-        operation.accept(second, scope.child("storage.accept"))?;
+        operation.accept(first)?;
+        operation.accept(second)?;
         operation.finish(scope.child("storage.finish"))
     })
     .expect("one save carrying both leaves");

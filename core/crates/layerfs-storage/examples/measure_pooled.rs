@@ -249,7 +249,7 @@ fn run() -> Result<(), Failure> {
                     return Err(StorageError::Integrity("fixture identity"));
                 }
                 let mut operation = store.begin_save(scope.child("storage.begin"))?;
-                operation.accept(object, scope.child("storage.accept"))?;
+                operation.accept(object)?;
                 let outcome = operation.finish(scope.child("storage.finish"))?;
                 totals.inserted += outcome.inserted;
                 totals.reused += outcome.reused;

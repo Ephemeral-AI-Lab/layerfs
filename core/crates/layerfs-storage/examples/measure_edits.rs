@@ -461,8 +461,8 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
         .with_predecessors(predecessors);
         let dependent_id = dependent.id();
         let mut operation = store.begin_save(save.child("storage.begin"))?;
-        operation.accept(base, save.child("storage.accept"))?;
-        operation.accept(dependent, save.child("storage.accept"))?;
+        operation.accept(base)?;
+        operation.accept(dependent)?;
         let outcome = operation.finish(save.child("storage.finish"))?;
         println!(
             "save: inserted {} reused {} prefix records {} full records {} trials {}",
@@ -507,7 +507,7 @@ fn run_pipeline(
             let store = Store::create(&store_path, policy_row, scope.child("store.create"))?;
             let mut operation = store.begin_save(scope.child("storage.begin"))?;
             for object in provider.objects {
-                operation.accept(object, scope.child("storage.accept"))?;
+                operation.accept(object)?;
             }
             let outcome = operation.finish(scope.child("storage.finish"))?;
             Ok((store, root, outcome))
@@ -515,8 +515,8 @@ fn run_pipeline(
         .0;
     let (store, root, base_outcome) = base_result?;
     println!(
-        "base preparation (untimed): root {} stored as {} object(s), {} pack(s), acknowledged {}",
-        root, base_outcome.inserted, base_outcome.packs_created, base_outcome.acknowledged
+        "base preparation (untimed): root {} stored as {} object(s), {} pack(s)",
+        root, base_outcome.inserted, base_outcome.packs_created
     );
     let (result, report): (
         Result<(ObjectId, layerfs_storage::SaveOutcome), StorageError>,
@@ -550,8 +550,7 @@ fn run_pipeline(
     println!("edited root: {edited_root}");
     println!("edited length: {}", stream.final_len());
     println!(
-        "save: acknowledged {} inserted {} reused {} packs {} prefix records {} full records {}",
-        outcome.acknowledged,
+        "save: inserted {} reused {} packs {} prefix records {} full records {}",
         outcome.inserted,
         outcome.reused,
         outcome.packs_created,

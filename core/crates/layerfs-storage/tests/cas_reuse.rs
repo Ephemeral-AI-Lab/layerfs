@@ -165,7 +165,6 @@ fn repeated_identity_across_batches_reuses_without_rewriting() {
                 .into_iter()
                 .find(|object| object.id() == chunk)
                 .unwrap(),
-            scope.child("storage.accept"),
         )?;
         operation.finish(scope.child("storage.finish"))
     })
@@ -245,7 +244,7 @@ fn one_operation_can_save_two_files_into_shared_packs() {
             .into_iter()
             .chain(second_objects.finalized())
         {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })

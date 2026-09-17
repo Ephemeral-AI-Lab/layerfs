@@ -7,8 +7,8 @@ pub mod layout;
 pub mod placement;
 
 pub use assemble::{
-    assemble, assemble_consuming, build_group, frame_group, frame_group_bounded, framed_length,
-    FULL_TAG,
+    assemble, assemble_consuming, build_group, frame_group, frame_group_bounded,
+    framed_group_length, framed_length, FULL_TAG,
 };
 pub use layout::{
     append_fits, assembled_length, directory_entry_len, group_view, parse_header, EncodedGroup,

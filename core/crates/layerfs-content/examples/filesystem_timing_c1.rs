@@ -374,6 +374,15 @@ fn main() {
     }
     text.push_str(&format!("report_nodes {}\n", report.node_count()));
     print!("{text}");
+    // A clipped tree is a hard failure for a measured row, not a note: the node
+    // budget dropped detail this run cannot describe, so the process exits
+    // non-zero and says so instead of leaving a partial tree to be quoted.
+    if report.is_incomplete() {
+        eprintln!(
+            "timings: INCOMPLETE - the node budget clipped this tree; the run is not a measured row"
+        );
+        std::process::exit(2);
+    }
 
     // One attribute patch, timed separately and labelled as its own operation.
     if config.case == "attributes" {
@@ -382,28 +391,37 @@ fn main() {
             mtime_seconds: 1_700_000_000,
             mtime_nanoseconds: 3,
         };
-        let reader = bag.clone();
+        // The patch route reads the tree it edits, so the provider for this step
+        // is the base plus the tree just built - never the base alone. The earlier
+        // form handed `apply_patches` a provider that could not serve the root it
+        // had just been given, so the row panicked with MissingObject instead of
+        // measuring the patch.
         let mut sink = Bag::default();
-        let (root, patch_work) = {
-            let mut objects = FilesystemObjects::new(&reader, &mut sink);
+        let attribute_root = {
+            let mut objects = FilesystemObjects::new(&bag, &mut sink);
             let mode = emit_value(
                 &mut objects,
                 &metadata.mode_bytes(InodeKind::RegularFile).unwrap(),
             )
             .expect("mode value");
-            let attribute_root =
-                layerfs_content::filesystem::attributes::build::build_attribute_tree(
-                    &mut objects,
-                    vec![Ok(AttributeEntry {
-                        key: AttributeKey::new("portable".to_owned(), b"mode".to_vec()).unwrap(),
-                        value_root: mode,
-                    })]
-                    .into_iter(),
-                )
-                .expect("attribute tree")
-                .0;
+            layerfs_content::filesystem::attributes::build::build_attribute_tree(
+                &mut objects,
+                vec![Ok(AttributeEntry {
+                    key: AttributeKey::new("portable".to_owned(), b"mode".to_vec()).unwrap(),
+                    value_root: mode,
+                })]
+                .into_iter(),
+            )
+            .expect("attribute tree")
+            .0
+        };
+        let mut staged = bag.clone();
+        staged.objects.extend(sink.objects.clone());
+        let mut patched = Bag::default();
+        let (root, patch_work) = {
+            let mut objects = FilesystemObjects::new(&staged, &mut patched);
             apply_patches(
-                &reader,
+                &staged,
                 &mut objects,
                 attribute_root,
                 &[AttributePatch::Set {
@@ -413,6 +431,7 @@ fn main() {
             )
             .expect("patch")
         };
+        bag.objects.extend(patched.objects);
         println!("attribute_root {root}");
         println!(
             "attribute_patch: set {} preserved {} base pages {} values emitted {}",

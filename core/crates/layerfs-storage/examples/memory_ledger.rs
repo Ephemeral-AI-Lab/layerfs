@@ -299,15 +299,14 @@ fn run() -> Result<(), Failure> {
             scope.child("store"),
         )
     })?;
-    let chunked_outcome = disabled(|scope| {
+    disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in chunked_objects {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })?;
     phases.push(end("c2.save.chunked-1mib", started, rss));
-    assert!(chunked_outcome.acknowledged);
     let rooted =
         disabled(|scope| store.read_batch(&[constructed.root], scope.child("storage.read")))?;
     let chunked_read_bytes = rooted.0.iter().map(Vec::len).sum::<usize>();
@@ -349,7 +348,7 @@ fn run() -> Result<(), Failure> {
         let id = object.id();
         let saved = disabled(|scope| {
             let mut operation = pooled.begin_save(scope.child("storage.begin"))?;
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
             operation.finish(scope.child("storage.finish"))
         })?;
         inserted += saved.inserted;
@@ -376,12 +375,7 @@ fn run() -> Result<(), Failure> {
     let candidate_bytes;
     {
         let mut operation = disabled(|scope| pooled.begin_save(scope.child("storage.begin")))?;
-        disabled(|scope| {
-            operation.accept(
-                pooled_leaf(900_000, &pooled_values[..rows]),
-                scope.child("storage.accept"),
-            )
-        })?;
+        disabled(|_scope| operation.accept(pooled_leaf(900_000, &pooled_values[..rows])))?;
         candidate_bytes = operation.candidate_index_bytes();
         disabled(|scope| operation.abort(scope.child("storage.abort")))?;
     }

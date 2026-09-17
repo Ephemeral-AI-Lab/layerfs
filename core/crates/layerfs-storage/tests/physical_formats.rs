@@ -278,3 +278,142 @@ fn closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes() {
         assert_eq!(borrowed, consumed, "{lane:?}");
     }
 }
+
+/// One ordinary-lane canonical object of exactly `canonical` bytes.
+fn file_state_object(index: usize, canonical: usize) -> layerfs_content::FinalizedObject {
+    let raw = support::noise(canonical - 23).as_slice().to_vec();
+    let value_len = raw.len() + 10;
+    let mut value = Vec::with_capacity(value_len);
+    value.extend_from_slice(b"LFS5SML\0");
+    value.extend_from_slice(&1_u16.to_be_bytes());
+    value.extend_from_slice(&(index as u32).to_be_bytes());
+    value.extend_from_slice(&raw[4..]);
+    let bytes = layerfs_content::object::codec::encode_bytes_object(&value).expect("envelope");
+    assert_eq!(bytes.len(), canonical, "canonical length");
+    layerfs_content::FinalizedObject::new(layerfs_content::ObjectRole::FileState, bytes)
+        .expect("finalized")
+}
+
+/// The partition the declared target predicts under the framing identity.
+fn predicted_partition(records: usize, record_len: usize) -> Vec<usize> {
+    let mut sizes = Vec::new();
+    let mut current = 0_usize;
+    for _ in 0..records {
+        let projected =
+            layerfs_storage::pack::framed_group_length(current + 1, (current + 1) * record_len)
+                .expect("framing");
+        if current > 0 && projected > layerfs_storage::policy::GROUP_TARGET {
+            sizes.push(current);
+            current = 1;
+        } else {
+            current += 1;
+        }
+    }
+    if current > 0 {
+        sizes.push(current);
+    }
+    sizes
+}
+
+/// R38: an ordinary group seals on the framed length it will actually write.
+///
+/// The owner used to accumulate a *per-record* framed length and add one more for
+/// the arriving record, which counts a group's shared framing - one record count
+/// and one end offset per record - once per record, over-counting it by `4n - 4`.
+/// Groups therefore sealed early and the physical layout disagreed with the
+/// declared target. This case derives the expected partition from the published
+/// framing identity and the declared target, compares it with the partition the
+/// store actually recorded, and checks every group's decoded body length against
+/// the same identity. The over-counting form produces `[11, 11, 2]` here where the
+/// identity predicts `[12, 12]`.
+#[test]
+fn an_ordinary_group_seals_on_the_framed_length_it_writes() {
+    const RECORDS: usize = 24;
+    const CANONICAL: usize = 4_090;
+    // The ordinary lane stores a FULL record: one tag byte plus the canonical bytes.
+    let record_len = CANONICAL + 1;
+
+    let dir = support::TempDir::new("group-seal");
+    let path = dir.store_path("group-seal");
+    let store = support::create_store(&path);
+    let objects = (0..RECORDS)
+        .map(|index| file_state_object(index, CANONICAL))
+        .collect::<Vec<_>>();
+    let outcome = support::disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        for object in objects {
+            operation.accept(object)?;
+        }
+        operation.finish(scope.child("storage.finish"))
+    })
+    .expect("save");
+    assert_eq!(outcome.inserted, RECORDS as u64);
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let stores = {
+        let mut statement = connection
+            .prepare("SELECT pack_id, group_number, COUNT(*) FROM objects GROUP BY pack_id, group_number ORDER BY pack_id, group_number")
+            .expect("location query");
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })
+            .expect("rows")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect")
+    };
+    let sizes = stores
+        .iter()
+        .map(|(_, _, count)| *count as usize)
+        .collect::<Vec<_>>();
+    let expected = predicted_partition(RECORDS, record_len);
+    assert_eq!(
+        sizes, expected,
+        "the recorded partition is not the one the framing identity and the declared target predict"
+    );
+    assert_eq!(
+        expected,
+        vec![12, 12],
+        "the discriminating partition changed"
+    );
+
+    // The identity is not just arithmetic: every group's decoded body length, read
+    // from the pack the store wrote, is exactly the projected framed length.
+    let mut checked = 0;
+    let mut bodies: std::collections::BTreeMap<i64, Vec<u8>> = std::collections::BTreeMap::new();
+    for (pack_id, group_number, count) in &stores {
+        let data = bodies.entry(*pack_id).or_insert_with(|| {
+            connection
+                .query_row(
+                    "SELECT data FROM object_packs WHERE pack_id = ?1",
+                    rusqlite::params![pack_id],
+                    |row| row.get(0),
+                )
+                .expect("pack body")
+        });
+        let header = parse_header(data).expect("pack header");
+        let view = layerfs_storage::pack::group_view(data, header, *group_number as usize)
+            .expect("group view");
+        let projected = layerfs_storage::pack::framed_group_length(
+            *count as usize,
+            *count as usize * record_len,
+        )
+        .expect("framing");
+        assert_eq!(
+            view.decoded_length, projected,
+            "pack {pack_id} group {group_number} framed length"
+        );
+        assert!(view.decoded_length <= layerfs_storage::policy::GROUP_TARGET);
+        checked += 1;
+    }
+    assert_eq!(
+        checked,
+        expected.len(),
+        "every group was inspected exactly once"
+    );
+}

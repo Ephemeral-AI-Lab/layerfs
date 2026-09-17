@@ -74,8 +74,7 @@ fn a_small_edit_round_trips_through_a_reopened_store() {
         &mut collected,
     );
     assert_eq!(len, final_bytes.len() as u64);
-    let outcome = save_via_handoff(&store, &collected).expect("save");
-    assert!(outcome.acknowledged);
+    save_via_handoff(&store, &collected).expect("save");
     drop(store);
 
     let reopened = open_store(&path);
@@ -125,7 +124,6 @@ fn a_chunked_edit_round_trips_and_reuses_retained_payloads() {
     );
     assert_eq!(len, final_bytes.len() as u64);
     let outcome = save_via_handoff(&store, &collected).expect("edit save");
-    assert!(outcome.acknowledged);
     drop(store);
     let base_objects = base_collected.objects().len();
 
@@ -281,8 +279,7 @@ fn a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates() {
         collected.objects().len(),
         base_collected.objects().len()
     );
-    let outcome = save_via_handoff(&store, &collected).expect("edit save");
-    assert!(outcome.acknowledged);
+    save_via_handoff(&store, &collected).expect("edit save");
     drop(store);
 
     let reopened = open_store(&path);
@@ -667,8 +664,7 @@ fn a_transition_charges_only_the_retained_base_at_the_store() {
     );
 
     // The result is stored and reads back through the Store exactly.
-    let outcome = save_via_handoff(&store, &edited).expect("edit save");
-    assert!(outcome.acknowledged);
+    save_via_handoff(&store, &edited).expect("edit save");
     drop(store);
     let reopened = open_store(&path);
     assert_eq!(read_logical(&reopened, constructed.root), expected);

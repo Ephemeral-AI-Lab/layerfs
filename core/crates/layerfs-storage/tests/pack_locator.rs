@@ -51,7 +51,7 @@ fn save_objects(
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in objects {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })
@@ -137,7 +137,7 @@ fn same_save_reads_see_accepted_objects_before_the_finish_barrier() {
 
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(object, scope.child("storage.accept"))?;
+        operation.accept(object)?;
         let values = operation.read_batch(&[id], scope.child("storage.read"))?;
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].len(), 4000 + 23 + 10 - 10);
@@ -174,7 +174,7 @@ fn same_save_reads_resolve_objects_waiting_in_an_unfinished_group() {
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in collected.finalized() {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         // Every identity `accept` acknowledged reads back its exact canonical bytes,
         // whether it is in the pending batch, in an unfinished group or already

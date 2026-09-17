@@ -59,7 +59,7 @@ fn an_oversized_whole_file_record_is_rejected_against_its_declared_limit() {
     let object = whole_file_object(&vec![0x11; 131_072]);
     let error = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(object, scope.child("storage.accept"))?;
+        operation.accept(object)?;
         operation.finish(scope.child("storage.finish"))
     })
     .unwrap_err();
@@ -85,7 +85,7 @@ fn an_oversized_chunk_record_is_rejected_against_its_declared_limit() {
     let object = chunk_object(&vec![0x22; 32_769]);
     let error = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(object, scope.child("storage.accept"))?;
+        operation.accept(object)?;
         operation.finish(scope.child("storage.finish"))
     })
     .unwrap_err();
@@ -115,7 +115,7 @@ fn pending_ownership_stays_inside_the_declared_batch_bounds() {
         payload[0] = index as u8;
         payload[1] = (index >> 8) as u8;
         let object = whole_file_object(&payload);
-        if disabled(|scope| operation.accept(object, scope.child("storage.accept"))).is_err() {
+        if disabled(|_scope| operation.accept(object)).is_err() {
             break;
         }
         let (objects, bytes) = operation.pending();
@@ -154,8 +154,8 @@ fn the_supported_incompressible_singletons_are_stored_and_read_back() {
 
     let outcome = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(whole, scope.child("storage.accept"))?;
-        operation.accept(chunk, scope.child("storage.accept"))?;
+        operation.accept(whole)?;
+        operation.accept(chunk)?;
         operation.finish(scope.child("storage.finish"))
     })
     .expect("supported singletons must store");
@@ -215,7 +215,7 @@ fn a_large_input_is_reachable_only_through_its_own_singleton_path() {
         let id = object.id();
         disabled(|scope| {
             let mut operation = store.begin_save(scope.child("storage.begin"))?;
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
             operation.finish(scope.child("storage.finish"))
         })
         .unwrap();

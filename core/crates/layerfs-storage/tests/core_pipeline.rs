@@ -133,7 +133,7 @@ fn integrated_and_independent_runs_produce_the_same_roots() {
     let outcome = disabled(|scope| {
         let mut operation = independent_store.begin_save(scope.child("storage.begin"))?;
         for object in consumer.finalized() {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })

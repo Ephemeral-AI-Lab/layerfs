@@ -217,7 +217,7 @@ pub fn save_all(
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in objects {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })
@@ -230,7 +230,7 @@ pub fn save_one(
 ) -> Result<layerfs_storage::SaveOutcome, StorageError> {
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(object, scope.child("storage.accept"))?;
+        operation.accept(object)?;
         operation.finish(scope.child("storage.finish"))
     })
 }
@@ -244,7 +244,7 @@ pub fn save_via_handoff(
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in objects {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })

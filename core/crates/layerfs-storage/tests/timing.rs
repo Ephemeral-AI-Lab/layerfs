@@ -33,11 +33,64 @@ fn save_recorded(
 ) {
     Timing::record(name, |root| {
         let mut operation = store.begin_save(root.child("storage.begin"))?;
-        for object in objects {
-            operation.accept(object, root.child("storage.accept"))?;
-        }
+        // One accept region for the whole wave: the telemetry contract forbids a
+        // node per object, and a save of several hundred objects would otherwise
+        // spend the recorder's node budget on rows that carry no separate work.
+        root.child("storage.accept")
+            .run(|_accept| -> Result<(), StorageError> {
+                for object in objects {
+                    operation.accept(object)?;
+                }
+                Ok(())
+            })?;
         operation.finish(root.child("storage.finish"))
     })
+}
+
+/// R18: a save's report is bounded by its regions, not by its object count.
+///
+/// The recorder holds 1,024 nodes. Starting an accept node per supplied object
+/// spent that budget at roughly five hundred objects and clipped the very tree
+/// that was supposed to describe the save. This save supplies more objects than
+/// that budget could have carried, and its report is neither clipped nor
+/// proportional to the object count.
+#[test]
+fn a_save_of_many_objects_records_regions_not_objects() {
+    let dir = TempDir::new("timing_many");
+    let path = dir.store_path("timing_many");
+    let store = create_store(&path);
+    let objects: Vec<FinalizedObject> = (0..600_u32)
+        .map(|index| {
+            FinalizedObject::new(
+                ObjectRole::WholeFile,
+                support::assembled_small_object(&index.to_be_bytes()),
+            )
+            .expect("canonical object")
+        })
+        .collect();
+    let count = objects.len() as u64;
+    let (result, report) = save_recorded(&store, objects, "c2.save");
+    let outcome = result.expect("save succeeds");
+    assert_eq!(outcome.inserted, count);
+    assert!(
+        !report.is_incomplete(),
+        "a {count}-object save clipped its own report: {} nodes",
+        report.node_count()
+    );
+    assert!(
+        report.node_count() < 16,
+        "the tree is proportional to the object count: {} nodes",
+        report.node_count()
+    );
+    let tree = report.root().expect("a recorded root");
+    assert_eq!(
+        child_names(tree),
+        vec![
+            "storage.begin".to_string(),
+            "storage.accept".to_string(),
+            "storage.finish".to_string()
+        ]
+    );
 }
 
 /// R39: a provider's work is a named child of the caller's span, not its duration.
@@ -110,21 +163,22 @@ fn an_independent_save_reports_its_real_scopes() {
     assert_eq!(tree.name(), "c2.save");
     assert!(!tree.outcome().is_error());
     let scopes = child_names(tree);
-    assert_eq!(scopes.first().map(String::as_str), Some("storage.begin"));
-    assert_eq!(scopes.last().map(String::as_str), Some("storage.finish"));
     assert_eq!(
-        scopes
-            .iter()
-            .filter(|name| *name == "storage.accept")
-            .count(),
-        collected.objects().len(),
-        "one accept per supplied object"
+        scopes,
+        vec![
+            "storage.begin".to_string(),
+            "storage.accept".to_string(),
+            "storage.finish".to_string()
+        ],
+        "the operation records its regions, not one row per supplied object"
     );
-    assert!(scopes[1..scopes.len() - 1]
-        .iter()
-        .all(|name| name == "storage.accept"));
-    let inner = child_names(&tree.children()[1]);
-    assert!(inner.contains(&"storage.batch".to_string()), "{inner:?}");
+    // The accept region and the layer beneath it add no node of their own: the
+    // wave's work happens inside the region the caller planned.
+    assert!(
+        tree.children()[1].children().is_empty(),
+        "{:?}",
+        child_names(&tree.children()[1])
+    );
 
     let (read_result, read_report) = Timing::record("c2.read", |read| {
         store.read_batch(&[root], read.child("storage.read"))
@@ -156,7 +210,7 @@ fn recording_and_disabled_storage_execution_agree_exactly() {
     let (disabled_result, disabled_report) = Timing::disabled("c2.save", |root_scope| {
         let mut operation = disabled_store.begin_save(root_scope.child("storage.begin"))?;
         for object in objects {
-            operation.accept(object, root_scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(root_scope.child("storage.finish"))
     });
@@ -193,7 +247,7 @@ fn a_failed_save_returns_the_original_error_with_a_recorded_tree() {
 
     let (result, report) = Timing::record("c2.save", |root| {
         let mut operation = store.begin_save(root.child("storage.begin"))?;
-        operation.accept(leaf, root.child("storage.accept"))?;
+        operation.accept(leaf)?;
         operation.finish(root.child("storage.finish"))
     });
     let error = result.unwrap_err();
@@ -204,13 +258,11 @@ fn a_failed_save_returns_the_original_error_with_a_recorded_tree() {
     let tree = report.root().expect("a recorded root");
     assert_eq!(tree.name(), "c2.save");
     assert_eq!(tree.outcome(), layerfs_telemetry::timer::NodeOutcome::Error);
+    // The refused accept contributes no node of its own: this call creates none,
+    // and the caller planned none for a single supplied object.
     assert_eq!(
         child_names(tree),
-        vec![
-            "storage.begin".to_string(),
-            "storage.accept".to_string(),
-            "storage.finish".to_string()
-        ]
+        vec!["storage.begin".to_string(), "storage.finish".to_string()]
     );
 }
 

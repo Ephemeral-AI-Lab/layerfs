@@ -125,7 +125,7 @@ fn an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement
         let object = layerfs_content::FinalizedObject::new(*role, bytes.clone())
             .unwrap()
             .with_references(references.clone());
-        disabled(|scope| operation.accept(object, scope.child("storage.accept"))).unwrap();
+        disabled(|_scope| operation.accept(object)).unwrap();
     }
 
     let (ceiling, highest) = pack_state(&path);
@@ -332,7 +332,7 @@ fn the_watermark_survives_reopen_and_still_hides_a_later_open_save() {
         let object = layerfs_content::FinalizedObject::new(*role, bytes.clone())
             .unwrap()
             .with_references(references.clone());
-        disabled(|scope| operation.accept(object, scope.child("storage.accept"))).unwrap();
+        disabled(|_scope| operation.accept(object)).unwrap();
     }
     let (mid_ceiling, mid_highest) = pack_state(&path);
     assert!(mid_highest > mid_ceiling);
@@ -369,12 +369,12 @@ fn a_pooled_read_refuses_a_value_group_above_the_captured_ceiling() {
     let (collected, _, _) = construct_file(&body);
 
     let mut operation = disabled(|scope| store.begin_save(scope.child("storage.begin"))).unwrap();
-    disabled(|scope| operation.accept(pooled, scope.child("storage.accept"))).unwrap();
+    disabled(|_scope| operation.accept(pooled)).unwrap();
     for (_, role, bytes, references) in collected.objects() {
         let object = FinalizedObject::new(*role, bytes.clone())
             .unwrap()
             .with_references(references.clone());
-        disabled(|scope| operation.accept(object, scope.child("storage.accept"))).unwrap();
+        disabled(|_scope| operation.accept(object)).unwrap();
     }
 
     let (ceiling, highest) = pack_state(&path);

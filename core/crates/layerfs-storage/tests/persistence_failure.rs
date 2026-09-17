@@ -59,7 +59,7 @@ fn a_missing_direct_dependency_fails_without_writing_a_parent() {
 
     let error = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        operation.accept(leaf, scope.child("storage.accept"))?;
+        operation.accept(leaf)?;
         operation.finish(scope.child("storage.finish"))
     })
     .unwrap_err();
@@ -146,7 +146,7 @@ fn a_terminal_operation_refuses_further_work() {
         .expect("a chunked file has an extent leaf");
 
     let mut operation = disabled(|scope| store.begin_save(scope.child("storage.begin"))).unwrap();
-    disabled(|scope| operation.accept(leaf, scope.child("storage.accept"))).unwrap();
+    disabled(|_scope| operation.accept(leaf)).unwrap();
 
     // Fill the bounded batch so its preparation wave runs; the leaf's unresolved
     // dependency is then reported by the operation.
@@ -158,7 +158,7 @@ fn a_terminal_operation_refuses_further_work() {
             assembled_small(&payload[..64 * 1024 - 1]),
         )
         .unwrap();
-        match disabled(|scope| operation.accept(object, scope.child("storage.accept"))) {
+        match disabled(|_scope| operation.accept(object)) {
             Ok(()) => {}
             Err(failure) => {
                 error = Some(failure);
@@ -172,11 +172,9 @@ fn a_terminal_operation_refuses_further_work() {
         "got {error}"
     );
 
-    let second = disabled(|scope| {
-        operation.accept(
-            FinalizedObject::new(ObjectRole::WholeFile, assembled_small(b"x")).unwrap(),
-            scope.child("storage.accept"),
-        )
+    let second = disabled(|_scope| {
+        operation
+            .accept(FinalizedObject::new(ObjectRole::WholeFile, assembled_small(b"x")).unwrap())
     });
     assert!(
         matches!(second, Err(StorageError::Aborted)),

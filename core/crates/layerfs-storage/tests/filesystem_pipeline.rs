@@ -301,7 +301,7 @@ fn save_in_dependency_order(
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in ordered {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })
@@ -318,7 +318,7 @@ fn save_fixture(store: &layerfs_storage::Store, fixture: &Fixture) -> u64 {
     let outcome = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for object in objects {
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
         }
         operation.finish(scope.child("storage.finish"))
     })
@@ -426,7 +426,7 @@ fn a_patch_saved_to_the_store_keeps_untouched_attribute_roots() {
         let object = FinalizedObject::new(*role, bytes.clone()).expect("finalized");
         disabled(|scope| {
             let mut operation = store.begin_save(scope.child("storage.begin"))?;
-            operation.accept(object, scope.child("storage.accept"))?;
+            operation.accept(object)?;
             operation.finish(scope.child("storage.finish"))
         })
         .expect("save patch");
@@ -493,7 +493,6 @@ fn the_saved_tree_reports_its_physical_footprint_and_reuses_it_unchanged() {
     let store = create_store(&path);
     let built = build_shared_tree(1_200);
     let first = save_bag(&store, &built.bag).expect("first save");
-    assert!(first.acknowledged, "the save is acknowledged");
     assert!(
         first.pool.leaves > 0,
         "the inode leaves went through the pooled lane"
@@ -646,10 +645,6 @@ fn a_caller_authorized_value_root_is_not_an_object_dependency() {
         serials: vec![1, 2],
     };
     let outcome = save_in_dependency_order(&store, &fixture).expect("save");
-    assert!(
-        outcome.acknowledged,
-        "the save is acknowledged even though the value root is absent"
-    );
     assert!(outcome.inserted >= 3, "the tree reached the store");
     drop(store);
 
