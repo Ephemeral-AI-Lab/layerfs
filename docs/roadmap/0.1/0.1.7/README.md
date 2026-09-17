@@ -154,6 +154,15 @@ deferred complete-operation comparison; Stage 7 (#172) integrates the later
 Workspace/runtime shape. No complete-operation performance claim is made by
 Stage 5, and nothing is tagged or released by this closure.
 
+Two source-read studies now bound what Stage 6 should measure first: the
+[parallelism and batching study](component-decoupling/parallelism-and-batching-study-20260918.md)
+(worker pools, SQLite tuning, statement batching) and the
+[complexity and round-trip research](component-decoupling/complexity-and-roundtrip-research-20260917.md)
+(per-area complexity vs the reference, a risk-tiered optimization register, and
+§1a's net answer: the core's architecture is ahead of v0.1.6 while its
+configuration layer is behind, and the end-to-end balance is unmeasured).
+Neither takes a measurement or makes a performance claim.
+
 Design planning (owner direction, 2026-09-16). The
 [component-decoupling discussion index](component-decoupling/README.md) organizes
 the proposed clusters and their future design documents. The

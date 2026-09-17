@@ -33,6 +33,49 @@
 | Read path | fresh connection + 5-pragma profile + 1 MiB workspace **per wave** (`store.rs:209`, confirmed), pack materialized whole per read, ordinary resolver decodes a group body once per record (`decode.rs:48-50`) | opens a read-only blob per record (worse); 32 MiB page cache (core leaves SQLite's 2 MiB default — the owner's F2, the strongest config gap) | mixed: core better on pack reuse (`F9`), worse on connection-per-wave (T0-1) and group-decode caching (T0-9) |
 | Cleanup / connection | newest-first 128-row pages, one attempt, zero busy timeout | ascending 512-row pages from `Drop`, quarantine, 5 s busy timeout, EXCLUSIVE lock | core simpler and single-attempt by contract; `locking_mode`/`cache_size` are the owner's O1/O2 |
 
+## 1a. Where the core stands vs v0.1.6 — the net answer
+
+The question every reader asks of §1, answered directly and honestly.
+
+**Verified improvements, three classes:**
+
+1. **Architectural trips the reference still pays and the core eliminated**
+   (verified from the reference side by `report-F`/`report-G`, not from the
+   core's own claims): the inode encode→store→ID-rewrite→reread cycle; the
+   frontier spill triple I/O (encode → in-place ID rewrite into spill rows →
+   sequential re-read) and its one-tree-apply-per-inode fallback; the
+   O(total-namespace) reconcile walk with a from-root resolve per entry; the
+   uncached namespace-root decodes at four call sites; the spool write+read-back
+   per file and the twice-visited checkpoint journal; provisional empty-seed
+   objects; caller metadata readback; root/profile rereads.
+2. **Structural batching advantages**: pack bodies read once per wave and reused
+   where the reference opens a read-only blob per record (the companion study's
+   F9); mapping navigation grouped per level (`ab17a6958`); one shared
+   inode-value codec and one fixed-width ordering row grammar with a single byte
+   owner — where this research shows the batching **has not yet reached**
+   filesystem-tree navigation (§2, entry 1).
+3. **One measured comparison**: the governing component collection at
+   `eb42c1347` (identity-matched, one sample per case per arm, warm in-process
+   fixtures) has the candidate faster than the reference on all three primitive
+   cases — 0.653 / 0.272 / 0.480 — under the owner's standing caveats: single
+   samples, component primitives only (not complete operations), and the two
+   collections disagree by up to 2.3×, so no ratio is a stable absolute.
+
+**Where the core is behind:** the configuration layer — SQLite's 2 MiB default
+page cache with spilling on vs the reference's 32 MiB with spilling off (the
+companion study's F2, its strongest gap), one INSERT statement per row vs the
+reference's 128-row batches (F8), `locking_mode`/`threads` unset (F3) — and the
+read path's fresh connection + pragma profile per wave, compounded by the
+unbatched filesystem-tree navigation (this research's entries 1 and RT-05).
+Complete operations are unmeasured: the complete-operation comparison was
+deferred to Stage 6 by owner decision, so the net end-to-end effect is unknown.
+
+**Net:** the core's architecture is ahead of v0.1.6 — fewer passes, fewer round
+trips, batched where the reference is per-item — while its configuration layer
+is behind, and no complete-operation receipt exists to say what the balance is.
+Tier 0 of the register below plus the companion study's O1/O5 are where "ahead
+on paper" first becomes "ahead on a receipt", under Stage 6's measured contract.
+
 ## 2. Optimization opportunity register
 
 Tiered by risk. **Every entry is a hypothesis until Stage 6 measures it** — the

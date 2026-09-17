@@ -162,6 +162,15 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   instead, and which differences are real. Source reads only, no measurement, no
   recommendation; it exists to tell [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171)
   what to measure first and what not to assume.
+- [Complexity and round-trip research (2026-09-17)](complexity-and-roundtrip-research-20260917.md):
+  the algorithm-by-algorithm complexity inventory of `core/` against the v0.1.6
+  reference, a 24-entry optimization register tiered by canonical risk, a
+  16-row architectural round-trip register, and §1a's direct answer to where the
+  core stands ahead (architecture) and behind (configuration). Companion to the
+  study above; evidence in
+  [`../evidence/stage5-complexity-research-20260917T211600Z/`](../evidence/stage5-complexity-research-20260917T211600Z/),
+  tracked by [#176](https://github.com/Ephemeral-AI-Lab/layerfs/issues/176).
+  Same rule: source reads only, no measurement — Stage 6 decides what to act on.
 
 
 The proposal has been saved here for discussion before implementation. Owner
