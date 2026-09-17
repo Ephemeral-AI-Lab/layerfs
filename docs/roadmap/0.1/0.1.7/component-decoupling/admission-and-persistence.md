@@ -165,6 +165,32 @@ Validate unresolved references in bounded pages. Same-batch children can be
 resolved from bounded pending state; do not query SQL for bytes only accepted
 into memory or retain every earlier object to avoid later required lookups.
 
+### Caller-authorized value roots
+
+A declared reference is a direct edge of the object being saved. A value root
+inside a 73-byte inode value is not: the compact leaf carries `child: None` per
+row, so the page declares no edge for the content root or the metadata root its
+values name. The dependency check therefore covers the objects a save actually
+declares, and a root persisted by this Store holds, for every inode, a value whose
+roots are the ones the operation was given.
+
+Those roots are the caller's authorization, not this layer's membership proof. An
+operation is free to name a content or metadata root it did not emit - a caller
+may address bytes that already exist elsewhere under an identity this save does
+not insert - and `Store` accepts that save. The consequence is explicit: an
+acknowledged save can publish a root whose file inode names an object this Store
+does not hold, and the first read of that root fails with `MissingObject`. No
+earlier check refuses it, and there is no repair pass, retry or fallback.
+
+Two routes keep the guarantee total when a caller needs it. Pass the same value
+roots as `FinalizedObject::references()` on the pages that name them, which makes
+them declared dependencies of that save and gets them the ordinary missing
+dependency refusal; or emit the value objects inside the same operation, which is
+what the filesystem builder does for every root it constructs. A later adapter
+that reads a persisted root must therefore treat a `MissingObject` from a value
+root as an authorized-root failure of its own composition, not as a defect of the
+save that acknowledged it.
+
 With one mutation coordinator, the established absence result remains valid until
 its selected insertion. Remove the [late epoch refresh and winner-list rebuild](../../../../../crates/layerfs-layerstack-store/src/objects/admission.rs#L1295).
 Unexpected authority/state invalidation fails; no reread/reprepare. A known own

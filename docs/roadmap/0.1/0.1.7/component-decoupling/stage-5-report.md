@@ -182,7 +182,7 @@ Edited existing files: `src/lib.rs` (+7), `src/error.rs` (+33),
 - Refusals: unsorted/duplicate changes, reused identities, multiple parents for a
   directory or symlink, effective-tree cycles formed by several changes at once,
   disconnected new records, forged caller counts, foreign scope or profile.
-- Ordering: one fixed 88-byte record grammar (version, tag, length, optional
+- Ordering: one fixed 96-byte record grammar (version, tag, length, optional
   typed value, tally), a bounded pending map, caller-supplied run backing with a
   checked cleanup, tiered merges with newest-row precedence and one reader per
   live tier. Records carry no Workspace node, checkpoint receipt or temporary
@@ -196,6 +196,16 @@ Edited existing files: `src/lib.rs` (+7), `src/error.rs` (+33),
 - C2 changes are deliberately small: lane mapping, framed-payload arm, delta
   eligibility (tree roles never choose a payload delta) and the persisted role
   range.
+- **Corrected 2026-09-17 (remediation).** An earlier revision of this section
+  implied that an acknowledged save necessarily holds every object a persisted
+  root names. It does not, and the contract now says so explicitly
+  (`admission-and-persistence.md`, "Caller-authorized value roots"): a value root
+  inside a 73-byte inode value is a logical pointer, not a declared reference, so
+  the dependency check covers the page edges a save declares and not the roots its
+  inode values name. Accepted, stored and readable as metadata; the first read of a
+  root the Store does not hold fails with `MissingObject`. Pinned by
+  `a_caller_authorized_value_root_is_not_an_object_dependency`
+  (`layerfs-storage/tests/filesystem_pipeline.rs`).
 - Coarse phases (`validate`, `directories`, `references`, `inodes`,
   `root.encode`) are recorded through the real telemetry scopes; disabled timing
   runs the identical body and emits the identical objects and counters

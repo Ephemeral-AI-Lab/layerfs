@@ -21,6 +21,8 @@ use layerfs_content::filesystem::attributes::patch::{apply_patches, AttributePat
 use layerfs_content::filesystem::attributes::portable::PortableMetadata;
 use layerfs_content::filesystem::attributes::read::read_portable;
 use layerfs_content::filesystem::attributes::value::emit_value;
+use layerfs_content::filesystem::directory::codec::{decode_directory_page, DirectoryPage};
+use layerfs_content::filesystem::inode::codec::{decode_inode_page, InodePage};
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::{
     build_filesystem, update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects,
@@ -44,22 +46,22 @@ fn synthetic(label: &str) -> ObjectId {
 /// Consumer and provider for objects a test builds in memory.
 #[derive(Clone, Debug, Default)]
 struct Bag {
-    objects: BTreeMap<ObjectId, (ObjectRole, Vec<u8>)>,
+    objects: BTreeMap<ObjectId, (ObjectRole, Vec<u8>, Vec<ObjectId>)>,
 }
 
 impl Bag {
     fn get(&self, id: ObjectId) -> ContentResult<Vec<u8>> {
         self.objects
             .get(&id)
-            .map(|(_, bytes)| bytes.clone())
+            .map(|(_, bytes, _)| bytes.clone())
             .ok_or(ContentError::MissingObject)
     }
 }
 
 impl FinalizedConsumer for Bag {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        let (id, role, bytes, _) = object.into_parts();
-        self.objects.insert(id, (role, bytes));
+        let (id, role, bytes, references) = object.into_parts();
+        self.objects.insert(id, (role, bytes, references));
         Ok(())
     }
 }
@@ -240,18 +242,88 @@ fn build_tree() -> ContentResult<Fixture> {
     })
 }
 
+/// The direct references the global object-id order does not carry.
+///
+/// Only a branch page declares its children; a directory or inode leaf carries
+/// `child: None` per row, and an inode value's content and metadata roots are
+/// logical pointers the caller authorizes rather than declared references. This
+/// helper therefore returns exactly what the product's own `references()` does.
+fn references_of(canonical: &[u8]) -> Vec<ObjectId> {
+    match decode_directory_page(canonical) {
+        Ok(DirectoryPage::Branch { children, .. }) => {
+            return children.into_iter().map(|(_, child)| child).collect();
+        }
+        Ok(DirectoryPage::Leaf { .. }) => return Vec::new(),
+        Err(_) => {}
+    }
+    match decode_inode_page(canonical) {
+        Ok(InodePage::Branch { children, .. }) => {
+            children.into_iter().map(|(_, child)| child).collect()
+        }
+        Ok(InodePage::Leaf { .. }) | Err(_) => Vec::new(),
+    }
+}
+
+/// Inserts objects in dependency order: every object is accepted after the ones
+/// it directly references that this bag also holds.
+///
+/// The admission path validates each accepted object's direct references against
+/// the objects already inserted by the same save, so a batch that mentions a
+/// child after its parent fails with `MissingDependency` for a reason that has
+/// nothing to do with the object graph: it is an ordering property of the batch.
+fn save_in_dependency_order(
+    store: &layerfs_storage::Store,
+    fixture: &Fixture,
+) -> Result<layerfs_storage::SaveOutcome, layerfs_storage::StorageError> {
+    let mut remaining = fixture
+        .bag
+        .objects
+        .iter()
+        .map(|(id, value)| (*id, value.clone()))
+        .collect::<Vec<_>>();
+    let mut inserted: Vec<ObjectId> = Vec::new();
+    let mut ordered = Vec::new();
+    while !remaining.is_empty() {
+        let mut progressed = false;
+        let mut next = Vec::new();
+        for (id, (role, bytes, references)) in remaining {
+            let ready = references.iter().all(|reference| {
+                inserted.contains(reference) || !fixture.bag.objects.contains_key(reference)
+            });
+            if ready {
+                ordered.push(
+                    FinalizedObject::new(role, bytes.clone())
+                        .expect("finalized")
+                        .with_references(references.clone()),
+                );
+                inserted.push(id);
+                progressed = true;
+            } else {
+                next.push((id, (role, bytes, references)));
+            }
+        }
+        assert!(
+            progressed,
+            "the dependency graph must be acyclic for this helper"
+        );
+        remaining = next;
+    }
+    disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        for object in ordered {
+            operation.accept(object, scope.child("storage.accept"))?;
+        }
+        operation.finish(scope.child("storage.finish"))
+    })
+}
+
 /// Saves every object a fixture holds through the real admission path.
 fn save_fixture(store: &layerfs_storage::Store, fixture: &Fixture) -> u64 {
     let objects = fixture
         .bag
         .objects
         .iter()
-        .map(|(id, (role, bytes))| {
-            let _ = id;
-            FinalizedObject::new(*role, bytes.clone())
-                .expect("finalized")
-                .with_references(Vec::new())
-        })
+        .map(|(_, (role, bytes, _))| FinalizedObject::new(*role, bytes.clone()).expect("finalized"))
         .collect::<Vec<_>>();
     let outcome = disabled(|scope| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
@@ -359,7 +431,7 @@ fn a_patch_saved_to_the_store_keeps_untouched_attribute_roots() {
     assert_eq!(work.set, 1);
     assert_eq!(work.preserved, 2);
     assert_ne!(patch_root, fixture.attribute_root);
-    for (id, (role, bytes)) in &sink.objects {
+    for (id, (role, bytes, _)) in &sink.objects {
         let _ = id;
         let object = FinalizedObject::new(*role, bytes.clone()).expect("finalized");
         disabled(|scope| {
@@ -508,4 +580,120 @@ fn the_saved_tree_reports_its_physical_footprint_and_reuses_it_unchanged() {
         after_first.2,
         "the reuse save leaves the watermark where it was"
     );
+}
+
+#[test]
+fn a_caller_authorized_value_root_is_not_an_object_dependency() {
+    // `admission-and-persistence.md` states the exclusion this test pins: a value
+    // root inside a 73-byte inode value is a logical pointer the caller
+    // authorizes, not a declared reference, so the Store accepts a tree whose
+    // file inode names an object it does not hold. The save is acknowledged, the
+    // value is stored, and reading that content root fails. Both outcomes are
+    // asserted, so the documented behaviour cannot drift silently either way.
+    let temp = TempDir::new("stage5-filesystem-authorized-root");
+    let store = create_store(&temp.store_path("filesystem"));
+    // The tree itself is real: a root directory with one binding, emitted and
+    // saved through the real admission path. Only the file inode's value roots
+    // are caller-supplied identities that no operation emitted.
+    let scope = layerfs_content::filesystem::scope_for_seed([0x5c; 32]);
+    let authorized_content = synthetic("pipeline-authorized/content");
+    let authorized_metadata = synthetic("pipeline-authorized/metadata");
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![(name("f"), Some(2))],
+    }];
+    let inodes = [
+        InodeUpdate {
+            serial: 1,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: synthetic("pipeline-authorized/unused"),
+                metadata_root: authorized_metadata,
+            },
+        },
+        InodeUpdate {
+            serial: 2,
+            value: InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 0,
+                content_root: authorized_content,
+                metadata_root: authorized_metadata,
+            },
+        },
+    ];
+    let input = FilesystemInput {
+        base: None,
+        scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &[1, 2],
+        resources: FilesystemResources::default(),
+    };
+    let mut bag = Bag::default();
+    let reader = Bag::default();
+    let mut sink = Bag::default();
+    let result = {
+        let mut objects = FilesystemObjects::new(&reader, &mut sink);
+        build_filesystem(&mut objects, &input, None).expect("build")
+    };
+    for (id, (role, bytes, _)) in &sink.objects {
+        bag.objects
+            .insert(*id, (*role, bytes.clone(), references_of(bytes)));
+    }
+    assert!(
+        !bag.objects.contains_key(&authorized_content),
+        "no emitted object holds the authorized content root"
+    );
+    let fixture = Fixture {
+        root: result.root.0,
+        scope,
+        bag,
+        file_root: authorized_content,
+        symlink_root: authorized_metadata,
+        attribute_root: authorized_metadata,
+        serials: vec![1, 2],
+    };
+    let outcome = save_in_dependency_order(&store, &fixture).expect("save");
+    assert!(
+        outcome.acknowledged,
+        "the save is acknowledged even though the value root is absent"
+    );
+    assert!(outcome.inserted >= 3, "the tree reached the store");
+    drop(store);
+
+    let store = open_store(&temp.store_path("filesystem"));
+    let reader = StoreReader { store: &store };
+    let root_bytes = reader
+        .read_canonical(fixture.root)
+        .expect("the root object is stored");
+    let root = FilesystemRoot::decode(&root_bytes).expect("decode");
+    let stored_table = reader
+        .read_canonical(root.inode_table())
+        .expect("the inode table is stored");
+    let InodePage::Leaf { entries } = decode_inode_page(&stored_table).expect("inode table") else {
+        panic!("the inode table is a leaf at this size");
+    };
+    let stored = entries
+        .into_iter()
+        .find(|(serial, _)| *serial == 2)
+        .expect("the file inode is stored");
+    assert_eq!(
+        stored.1.content_root, authorized_content,
+        "the stored value names the caller-authorized root"
+    );
+    assert!(
+        matches!(
+            reader.read_canonical(authorized_content),
+            Err(ContentError::MissingObject)
+        ),
+        "the Store does not hold the object the value root names"
+    );
+    let mut read = FilesystemRead::new(&reader, FilesystemRootId(fixture.root)).expect("reader");
+    let stat = read
+        .stat(&LogicalPath::new("f").unwrap())
+        .expect("the inode value is readable through a path");
+    assert_eq!(stat.content_root, authorized_content);
+    assert_eq!(stat.namespace_ref_count, 1);
 }
