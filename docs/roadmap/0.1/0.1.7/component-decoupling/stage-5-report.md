@@ -484,3 +484,53 @@ The five blocking actions and the non-blocking follow-ups are routed by
 whose terminal condition is every Stage 5 and cumulative criterion passing with no
 FAIL, INCOMPLETE or unowned row, followed by a clean closing review and the closure
 of #170.
+
+## 14. Round-3 implementation progress, 2026-09-18 (R3)
+
+> **Status: implementation progress, not acceptance.** This section records what
+> the round changed and what it did not. It marks **no** row PASS: a row flips
+> only when an independent reviewer reproduces its evidence from the receipts.
+
+| | |
+| --- | --- |
+| Tree | `afcb76c0e8b6e1b11e225d67a9b53efcd2e7850a` (branch `main`, pushed) |
+| Commits | `5e2a20a0c` harness case selection + §6 corrections, `2fe2a4642` product bounds/telemetry/C1 contracts, `afcb76c0e` receipts |
+| Evidence | [`../evidence/stage-5-terminal-20260918T020000Z/`](../evidence/stage-5-terminal-20260918T020000Z/) |
+| Production LOC | core 18,650 → **18,708** (+58); C1 11,875 → 11,902 (+27), C2 6,043 → 6,043 (0), telemetry 732 → 763 (+31); reference 65,417 unchanged |
+| Checks | all eight handoff §6 checks exit 0; 62 result blocks, **422 passed / 0 failed** |
+
+### Rows this round implemented, with the receipt that decides them
+
+| Row | Change | Receipt |
+| --- | --- | --- |
+| `R2-F1` | `filesystem_timing_c1 --case attributes` now applies a real attribute patch inside the timed region and charges its object boundary to the row | `case-selection/c1-attribute-case/*.log` |
+| `R2-F2` | `measure_filesystem --mode c2` applies the case's own change set outside the timed region and admits those objects | `case-selection/c2-*.log` |
+| `R2-F3` | `measure_edits --mode c2` builds its two C1 objects in a labelled untimed step and reads back in its own labelled region | `case-selection/edits-c2/small.log` |
+| `R2-F6`, `AT-4`, `R2-F25` | the value bound is the chunk maximum (32,768), derived rather than restated; boundary case writes 32,768 and refuses 32,769 | `attribute-boundary.log` |
+| `R2-F7`, `VF-4` | `limits::MAXIMUM_WALK_ENTRIES` declared with both consequences; a case grows a directory past it and shows the rename refused | `walk-ceiling.log` |
+| `R2-F9` | the dead `LookupScan::settled` state and its false doc are deleted; the duplicated `from` arm is collapsed | source; `check-cargo-test.log` |
+| `R2-F12`, `R2-F13` | `Completeness::{Disabled,Complete,Clipped}` and `NodeOutcome::Unknown` | `telemetry.log` |
+| `R2-F14` | `measure_components` fails a clipped run with a non-zero exit | source; `check-clippy.log` |
+| `R2-F17` | `encode_node(node, root)` validates the page in its own context; the builder, edit tree and attribute value pass theirs | `encoder-context.log` |
+| `R2-F18` | `construct_bytes`, `construct_stream`, `apply_edits` call `validated()` before any work | `policy-validation.log` |
+| `R2-F19` | the whole-file encoder's comment states the two allocations the memory ledger records | source |
+| `R2-F20` | the chunked edit route uses the view's decoded state; a counting provider asserts one read of the base root | `edit-single-read.log` |
+| `R2-F21`, `N-11` | the payload wave enforces the chunk maximum on every decoded payload and the wave byte ceiling; the largest legal wave equals the declared figure | `read-wave.log` |
+| `R2-F22` | `into_parts` returns `ObjectParts`, which carries the advisory predecessors | `into-parts.log` |
+| `R2-F26` | one scratch ceiling, one name (`MAXIMUM_OPERATION_SCRATCH_BYTES`) | source |
+| `N-16`, `VF-4` | `filesystem_limits` and `storage_limits` boundary suites, plus the named limits no fixture can reach with their arithmetic | `filesystem-limits.log`, `storage-limits.log` |
+
+### Rows this round did **not** close
+
+- **`R2-F8` / `N-6`** — `RunStore::find` still builds a `RunReader` per lookup. The
+  reader borrows the tier's run, so one reader per tier needs the store to own
+  each reader beside its run; that ownership change was not made, and **no scaling
+  receipt** is claimed.
+- **`R2-F4` / `VF-7`** — §2's totals are corrected in §13 but the six per-commit
+  LOC disclosures are not yet recomputed row by row.
+- **`R2-F5` / `VF-5`** — comparison governance is not decided; the addendum still
+  cites the superseded collection.
+- **`VF-6`** — the complete-operation comparison remains `NOT_RUN` and still needs
+  an owner disposition.
+- **`TR-5`**, **`VF-3`**, **`N-13`** — the simultaneous-memory row, the
+  non-discriminating cases and the `forbid(unsafe_code)` decision are unchanged.
