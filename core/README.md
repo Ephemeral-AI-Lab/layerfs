@@ -25,6 +25,19 @@ production LOC comparison for every commit.
 Required capabilities fail explicitly; no retries/fallbacks, WAL or added durability
 work, and no third-party patches are part of the current replacement design.
 
+## Architecture
+
+[`docs/architecture/`](docs/architecture/) describes what this workspace's
+packages actually do: the C1/C2 boundary and its two traits, the canonical object
+model, the construction/edit/filesystem algorithms, the storage schema and
+physical formats, and every declared limit with the check that enforces it. It is
+a source-backed description pinned to a commit — descriptive, not a contract, and
+carrying no performance or qualification claim.
+
+Start with the [index](docs/architecture/README.md), which maps the six papers.
+It describes **this** workspace; the reference tree under the repository-root
+`crates/` is a different product with different identifiers and formats.
+
 ## Commands
 
 ```sh

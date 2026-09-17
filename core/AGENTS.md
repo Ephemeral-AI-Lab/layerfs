@@ -36,6 +36,22 @@ This file adds the owner's product-source and module-structure requirements.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 
+## Architecture documents follow the code
+
+`docs/architecture/` describes this workspace's product source. It is a
+description, not a contract, and it carries no performance or qualification claim.
+
+- A change under `crates/*/src/` or `crates/*/sql/` that alters a component
+  boundary, a canonical or physical format, an algorithm, or a named bound
+  **updates the affected architecture document in the same commit**. Treat the
+  document and the source as one change.
+- Each document records the source commit it was written against. When a later
+  change invalidates that pin without touching any of the above, advance the pin
+  and say so; never silently re-date a document.
+- Architecture documents are documentation, not product source: they are outside
+  `src/`, they do not count toward production LOC, and the boundary guard does not
+  scan them. Keep them out of `crates/`.
+
 ## Product source contains product code only
 
 For every package in `core/crates/`, `src/` is exclusively production code.
