@@ -100,6 +100,12 @@ Thirteen papers. Chapter numbers are global to the set, so a reference such as
 | [`12-attributes.md`](12-attributes.md) | 17 | Attribute trees: key grammar, `LFS4MET` pages, the streaming builder, extent-only values, portable mode/mtime, patching and multi-key reads |
 | [`13-physical-writing.md`](13-physical-writing.md) | 18 | Codec profiles and static contexts, group framing, placement by exact fit, and assembly — with the locator-stability argument |
 
+**Proposals** live one level down, in [`proposal/`](proposal/), and are a different
+kind of document — they state what should be built rather than what exists. The
+first is [`proposal/init-commit-and-concurrency.md`](proposal/init-commit-and-concurrency.md):
+the init/commit pipelines against the Store, every DB operation by phase, and the
+three concurrency cases with their prerequisite races.
+
 This paper adds the module map ([§8](#8-module-map)), what the set does not claim
 ([§10](#10-what-this-set-does-not-claim)) and the source index.
 
