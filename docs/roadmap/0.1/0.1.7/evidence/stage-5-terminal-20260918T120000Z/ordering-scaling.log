@@ -1,0 +1,10 @@
+s5term: round-4 terminal-handoff probes (public API only)
+== grid: ordering scaling, maximum_pending_records = 64, base 4000 files ==
+ pairs  spilled    elapsed_ns  rows_read  rows_writ   runs  peak_owned    held_now   peak_back   emitted    pend dir_scr ino_scr     tiers
+   250      448      16316625       2198       1588     14       66432           0       66432         7      64  280036  328156         3
+   500      960      32709000       6684       4328     30      139008           0      139008         8      64  344652  328156         4
+     doubling 250 -> 500: rows_read x3.04, elapsed x2.00
+  1000     1984      79641750      19960      10896     62      284160           0      284160        10      64  375990  328156         5
+     doubling 500 -> 1000: rows_read x2.99, elapsed x2.43
+  2000     3968     157575875      59007      25760    124      568320           0      568320        14      64  376110  349820         5
+     doubling 1000 -> 2000: rows_read x2.96, elapsed x1.98

@@ -355,6 +355,21 @@ SQLite journal/cache memory or adapter copies. Account those separately. Reconci
 accepted singleton/profile capacities under the existing [capacity proposal](content-storage-policy-and-tables.md#making-the-whole-file-cutoff-genuinely-configurable),
 without shrinking supported input or silently enlarging memory limits.
 
+> **Correction 2026-09-18 (round-2 findings F11 and F27): two of these rows are
+> triggers, not caps, in the replacement core.** The replacement observes the
+> SQL transaction figure *after* the write that crosses it
+> (`cas/owner.rs::maybe_commit` runs after each member/write is accumulated),
+> so one open transaction can hold up to one maximal object or singleton pack
+> above the figure before the next `COMMIT`; a maximal 16 MiB canonical object
+> exceeds 4 MiB minus 1 by itself and is still accepted, because an object is
+> atomic and cannot be split across transactions. Read the row as **commit
+> trigger: up to 8,191 submitted rows and 4 MiB minus 1 canonical bytes, after
+> the write that crosses it**. The physical preparation batch is the same
+> shape: the byte bound is a **flush trigger**, and one oversized object is
+> deliberately admitted into an empty batch before the flush
+> (`cas/batch.rs`, F27). Both statements match the round-2 review's reading of
+> the code; no bound was weakened to write them.
+
 ## 6. Four tables and the necessary indexes
 
 ```text

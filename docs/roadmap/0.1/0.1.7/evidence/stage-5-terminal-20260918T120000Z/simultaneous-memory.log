@@ -1,0 +1,14 @@
+s5term: round-4 terminal-handoff probes (public API only)
+== coexist: simultaneous memory and backing during one update ==
+phases are sequential: validate, directories, references, inodes, cleanup, root.encode
+the references phase holds all four rows below at once; the scratch rows belong to their own phases
+  2000     3968     139433375      59007      25760    124      568320           0      568320        14      64  376110  349820         5
+  references phase, simultaneous owners (pairs = 2000):
+    pending rows:                   64 rows =      6144 B  (counter references.peak_pending x 96 B/row)
+    ordering bytes:             568320 B              (counter references.runs.peak_run_bytes: live runs + spilled-but-unmerged inputs + pending + reserved outputs)
+    live-tier scan buffers:          5 tiers x 16384 B =     81920 B  (counter references.runs.peak_live_runs; derived bound MAXIMUM_LEVELS x merge buffer)
+    caller backing peak:     the peak_back column of the grid row above (counter FileBacking::peak_bytes, the caller-owned physical owner)
+  sequential-phase scratch leases:
+    directories scratch peak:    376110 B           (counter directories.peak_scratch_bytes)
+    inodes scratch peak:         349820 B           (counter inodes.peak_scratch_bytes)
+  no process-level RSS, cgroup or page-cache figure is claimed: every number above is the operation's own counter

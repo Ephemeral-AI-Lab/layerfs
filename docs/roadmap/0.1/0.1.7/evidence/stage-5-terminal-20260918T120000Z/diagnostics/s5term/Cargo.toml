@@ -1,0 +1,10 @@
+[package]
+name = "s5term"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+layerfs-content = { path = "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content" }
+layerfs-telemetry = { path = "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry" }
+
+[workspace]

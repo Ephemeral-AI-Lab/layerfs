@@ -161,6 +161,54 @@ Cross-check method: re-running the same counter against the reviewer's own
 per-file LOC values exactly and its 8/17/28 split, so the re-derivation here is
 the same measurement on a later tree, not a different one.
 
+### Correction 2026-09-18 (R2-F4): six per-commit LOC disclosures do not reproduce
+
+The round-2 review found that six Stage-5 commits disclose a Production LOC the
+committed tree does not have, that the disclosure chain switches scope without a
+stated convention change, and that one merge carries no disclosure at all. History
+is not rewritten; the recomputed rows are published here beside the disclosed
+ones. The re-audit receipt is
+[`../evidence/stage-5-terminal-20260918T120000Z/per-commit-loc-reread.log`](../evidence/stage-5-terminal-20260918T120000Z/per-commit-loc-reread.log)
+(`tools/production_loc.py` on each commit's exact first parent and committed
+tree, via `git archive`; run 2026-09-18) and it reproduces the review's own
+`per-commit-loc-stage5.log` column for column.
+
+| commit | disclosed | recomputed | drift |
+| --- | --- | --- | --- |
+| `07f0fe8eb` | 11160 -> 17497 (+6337) | 11160 -> 17523 (+6363) | +26 |
+| `5d08d9e83` | 17497 -> 17525 (+28) | 17523 -> 17563 (+40) | +12 |
+| `bfd7abf2c` | 17525 -> 17730 (+205) | 17563 -> 17698 (+135) | -32/-38 |
+| `c17f59bef` | 17730 -> 17730 (0) | 17698 -> 17697 (-1) | -32 |
+| `821ddbe30` | 17909 -> 17913 (+4) | 17909 -> 17898 (-11) | -15 |
+| `f723663a5` | 17913 -> 17905 (-8) | 17898 -> 17905 (+7) | -15 |
+
+The other fourteen Stage-5 production commits reproduce exactly, as the review
+also found. The disclosed chain is internally self-consistent
+(17497 -> 17525 -> 17730) and diverges from the committed trees by at most 38
+lines: the numbers were prepared from a pre-commit tree and never re-confirmed
+after the commit, which is what the repository rule forbids.
+
+Two further disclosure defects, both stated here rather than repaired in history:
+
+- **Scope switch at `01d9f70f3`.** Commits up to `64e3f9d6a` disclose **combined**
+  core+reference totals (e.g. `74628 -> 77136`); commits from `01d9f70f3` disclose
+  **core-only** totals (e.g. `10415 -> 10893`). Each commit states its own scope in
+  its Method line, so no single commit lies, but the chain cannot be read across
+  the switch without knowing this. From the remediation rounds onward every
+  disclosure names its scope explicitly (core subtotals, reference subtotal,
+  combined total).
+- **Merge `a8a1ba848` (PR #163) carries no `Production LOC:` line.** Its
+  first-parent comparison, recomputed now: `732 -> 732` (delta 0, first parent
+  `e6ecb70d1`; the change was documentation).
+
+### Totals of the tree that carries this correction (R2-F15)
+
+This section is stated at the round-4 tree, not at `b3df5461c`: C1 **11,922**,
+C2 **6,112**, telemetry **763**, core total **18,797**, reference unchanged at
+**65,417**, combined **84,214** (`tools/production_loc.py`, same counter and
+scope; the round-4 commits after `9327f6695` are documentation and evidence only,
+so the production totals do not move again in this round).
+
 ## 3. Criteria and checkpoints
 
 ### A. Executable contract, canonical oracles, one tiny real root — **complete**
@@ -313,12 +361,36 @@ not a latency or comparative claim.
 | Decoded page + batch | charged inside the same budget | one group of ≤ 32 children | lease drop after the chunk |
 | Reference pending map | `maximum_pending_records`, default 4,096 rows | one map | cleared on spill and consumed by the final stream |
 | Ordering runs | caller backing; `FileBacking` reports `held_bytes`/`peak_bytes` | one run per tier, ≤ 32 tiers | explicit `release()`; `Drop` is the cancellation net |
-| Merge buffers | `merge_buffer_bytes`, default 16 KiB | one per live tier reader plus one output | dropped with the run |
+| Merge buffers | `merge_buffer_bytes`, default 16 KiB | one per live tier - a merge reader or a retained lookup scan - plus one output | dropped with the run; lookup scans are dropped when their tier's run is replaced |
 | Release cursors | one per released directory level | depth-bounded stack, 64-entry pages | popped when the page ends |
 | Object boundary | none: reads are borrowed from the provider | one outstanding page group | per call |
 
 Measured peaks are reported by the runs (`peak_scratch_bytes`, `rows_spilled`,
 `released`, `report_nodes`). No cgroup or lifetime figure is claimed.
+
+### Simultaneous memory and backing during one update (TR-5, measured 2026-09-18)
+
+What one update operation holds **at once**, with scope, unit and the counter
+that produced it. Receipt:
+[`../evidence/stage-5-terminal-20260918T120000Z/simultaneous-memory.log`](../evidence/stage-5-terminal-20260918T120000Z/simultaneous-memory.log)
+and the scaling grid beside it, one sample per case, release profile, public
+entry points only, `maximum_pending_records = 64`, a 4,000-file base and 2,000
+rename pairs:
+
+| Simultaneous owner (references phase) | Scope | Unit and value | Counter |
+| --- | --- | --- | --- |
+| pending rows | the reducer's pending map | 64 rows = 6,144 B | `references.peak_pending` × 96 B/row |
+| ordering bytes | live runs + spilled-but-unmerged inputs + pending + reserved outputs | 568,320 B | `references.runs.peak_run_bytes` |
+| live-tier scan buffers | one retained reader buffer per live tier, ≤ 32 × 16 KiB | 5 tiers = 81,920 B | `references.runs.peak_live_runs` × `merge_buffer_bytes` |
+| caller backing | the physical owner of the run files | 568,320 B peak | `FileBacking::peak_bytes` |
+
+The scratch leases are held in their own sequential phases, not during the
+references phase: directories `peak_scratch_bytes` 376,110 B, inodes
+`peak_scratch_bytes` 349,820 B. The phases are sequential by construction
+(`validate`, `directories`, `references`, `inodes`, `cleanup`, `root.encode`).
+**No process-level RSS, cgroup or page-cache figure is claimed**: every number
+above is one of the operation's own counters, and a process-level measurement
+remains Stage 6's to take.
 
 ## 6. Limits
 
@@ -551,3 +623,58 @@ fails with *"OAuth access token has been revoked"*). The
 **author-run** reproduction of the public-API rows and is labelled as such; it is
 not a substitute for the review, and no row in §14 is marked PASS on its
 strength.
+
+## 15. Round-4 implementation progress, 2026-09-18 (R4)
+
+> **Status: implementation progress; the verification-subagent pass is run
+> > separately and its outcome is recorded in §16.** This section marks no row
+> > PASS on its own strength.
+
+| | |
+| --- | --- |
+| Commits | `6c00e0f53` provider failures / pragma set / profile verification / unsafe boundary, `9327f6695` one reader per ordering tier |
+| Evidence | [`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/) |
+| Production LOC | core 18,708 → **18,797** (+89); C1 11,902 → 11,922 (+20), C2 6,043 → 6,112 (+69), telemetry 763 → 763 (0); reference 65,417 unchanged |
+| Diagnostics client | `diagnostics/s5term/` in the evidence directory, public entry points only, one sample per case, release profile |
+
+### Rows this round implemented, with the receipt that decides them
+
+| Row | Change | Receipt |
+| --- | --- | --- |
+| `R2-F10` / `N-7` | `StoreProvider` maps `ObjectMissing` to `MissingObject` (the value-root absence contract) and every corrupt/refused class to the new `ContentError::ProviderFailure`; the provider trait contract states the distinction | `tests/provider_errors.rs` (3 cases: corrupted pack, absent object, unpublished record) |
+| `R2-F23` / `N-17` | the integer-pragma helper takes a closed `Pragma` enum; `format!("PRAGMA {name}")` is gone | source; `tests/policy_capacity.rs` re-pointed at the enum |
+| `R2-F24` | `MutationOwner::acquire` re-verifies the connection profile (journal/synchronous/foreign-keys/busy-timeout) before its first write | `tests/connection_profile.rs` (4 cases) |
+| `N-13` | `unsafe` denied crate-wide, allowed on exactly the audited `encoding/codec.rs` with its FFI inventory; the boundary guard enforces it; the `forbid` deviation is an accepted design note with the inventory | `physical-encoding-and-packing.md` note; guard self-tests; `check-boundary.log` |
+| `R2-F8` / `N-6` | one reader and buffer per tier, kept across lookups; a continuing lookup is served from the retained buffer, a restart keeps it; the dead `LookupScan::total` is gone; the module docs match the code | `tests/filesystem_ordering_scan.rs` (counting allocator: the lookup wave allocates zero times); `ordering-scaling.log` |
+| `R2-F11` / `N-8` (+ `F27`) | the SQL transaction and preparation-batch rows are stated as commit/flush triggers with the code's own semantics; nothing was weakened | `admission-and-persistence.md` correction note |
+| `N-14` | the caller-owned input bound is declared as an explicit adapter obligation (protocol-level request ceiling, enforced by refusal) | `filesystem-tree.md` §9 declaration |
+| `TR-5` | what one update holds at once, measured with the operation's own counters, with scope/unit/counter per row and no process-level claim | `simultaneous-memory.log` |
+| `R2-F4` / `VF-7` | the six per-commit LOC rows recomputed beside the disclosed ones, the scope switch stated, the merge's missing line supplied; the audit re-runs and reproduces both columns | `per-commit-loc-reread.log`; §2 correction above |
+| `R2-F15` / `VF-7` | §2 states the totals of the tree that carries it | §2 totals block above |
+
+### The ordering scaling receipt, stated honestly
+
+`ordering-scaling.log` repeats the round-2 review's P1 grid on the fixed tree
+(4,000-file base, `maximum_pending_records = 64`, release profile, one sample
+per case). The work counters are **identical** to the review's pre-fix grid —
+rows spilled 448/960/1,984/3,968, `rows_read` 2,198/6,684/19,960/59,007,
+`rows_written` 1,588/4,328/10,896/25,760, runs 14/30/62/124, peak owned bytes
+66,432/139,008/284,160/568,320 — so the reader-per-tier hoist changes no
+observable work. The per-doubling read ratio remains ~×3.0 (2,198 → 59,007 over
+three doublings, ≈ n^1.58): **the read amplification is still superlinear, and
+the reason is the tiered merge itself, which is O(n log n) in the change count
+at a fixed pending ceiling.** No O(changes) claim is made. Elapsed times are
+16.3 / 32.7 / 79.6 / 157.6 ms against the review's 15.8 / 35.6 / 87.6 / 154.5 ms
+- single samples on the same machine, within sample noise, no faster claim. What
+the hoist removes is not visible in these counters and is pinned by the product
+test instead: the per-lookup 16 KiB allocation and buffer re-read are gone (the
+counting-allocator test asserts a zero-allocation lookup wave and a one-pass
+ascending sweep).
+
+### What this round does **not** close
+
+- Nothing else. Every row in the terminal handoff's ledger is now either
+  implemented with a receipt (rounds 3-4), owner-decided (`VF-5`, `VF-6`), or a
+  dated record. The remaining work is verification: the round-3 rows have never
+  been independently verified, and §16 records the verification-subagent pass
+  over the whole ledger on the final tree.

@@ -1,0 +1,15 @@
+# F4 re-audit: per-commit production LOC, tools/production_loc.py, run 2026-09-17T18:38:32Z
+# columns: commit parent before after delta | the commit message's own disclosure line
+07f0fe8eb parent=4f1b7d847 before=11160 after=17523 delta=+6363 | Production LOC: 11160 -> 17497 (delta +6337)
+5d08d9e83 parent=07f0fe8eb before=17523 after=17563 delta=+40 | Production LOC: 17497 -> 17525 (delta +28)
+bfd7abf2c parent=5d08d9e83 before=17563 after=17698 delta=+135 | Production LOC: 17525 -> 17730 (delta +205)
+c17f59bef parent=bfd7abf2c before=17698 after=17697 delta=-1 | Production LOC: 17730 -> 17730 (delta 0)
+821ddbe30 parent=42e21677a before=17909 after=17898 delta=-11 | Production LOC: 17909 -> 17913 (delta +4)
+f723663a5 parent=821ddbe30 before=17898 after=17905 delta=+7 | Production LOC: 17913 -> 17905 (delta -8)
+a8a1ba848 parent=e6ecb70d1 before=732 after=732 delta=+0 | NO DISCLOSURE LINE
+
+== scope switch ==
+64e3f9d6a discloses COMBINED core+reference totals:
+Production LOC: 74628 -> 77136 (delta +2508)
+01d9f70f3 discloses CORE-ONLY totals:
+Production LOC: 10415 -> 10893 (delta +478)
