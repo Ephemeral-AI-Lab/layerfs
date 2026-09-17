@@ -161,10 +161,28 @@ fn run_body<'b>(
         input.resources.merge_buffer_bytes,
         input.resources.ordering_bytes,
     );
-    register_values(&mut reducer, input)?;
+    // A directory this batch leaves with no binding at all is dead on arrival:
+    // its parent already accounted the binding it lost, so there is no final
+    // count to hold it and no page worth building.
+    let unreachable = unreachable_parents(input);
+    register_values(&mut reducer, input, &unreachable)?;
     let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
     phases.phase("directories", || -> ContentResult<()> {
         for update in input.directories {
+            if unreachable.contains_key(&update.parent) {
+                // Nothing binds this directory in the result, so no page of it
+                // is worth building. Its bindings are still this operation's
+                // edges and stay accounted: every final binding of a directory
+                // this operation allocates is an addition.
+                for (_, binding) in &update.changes {
+                    let Some(child) = binding else {
+                        continue;
+                    };
+                    reducer.note_retained_binding(*child)?;
+                    counters.bindings_added = counters.bindings_added.saturating_add(1);
+                }
+                continue;
+            }
             if update.changes.is_empty() {
                 // A directory with no changed name keeps the content root it already
                 // has; a directory in a new filesystem is a real empty page.
@@ -194,9 +212,6 @@ fn run_body<'b>(
                 None
             };
             let mut observe = |before: Option<u64>, after: Option<u64>| -> ContentResult<()> {
-                if std::env::var("LAYERFS_TRACE").is_ok() {
-                    eprintln!("edge {:?} -> {:?}", before, after);
-                }
                 if before == after {
                     return Ok(());
                 }
@@ -212,9 +227,6 @@ fn run_body<'b>(
                 }
                 Ok(())
             };
-            if std::env::var("LAYERFS_TRACE").is_ok() {
-                eprintln!("stage: directory merge parent {}", update.parent);
-            }
             let (root, work) = apply_bindings(
                 objects,
                 base_directory,
@@ -276,7 +288,9 @@ fn run_body<'b>(
     // this operation rebuilt that inode's own directory.
     let mut updates = Vec::with_capacity(input.inodes.len());
     for update in input.inodes {
-        if contents.contains_key(&update.serial) {
+        if contents.contains_key(&update.serial) || unreachable.contains_key(&update.serial) {
+            // A directory this batch drops is not part of the result at all: its
+            // value is never a final row, so it must not enter the reduction.
             continue;
         }
         updates.push((update.serial, update.value));
@@ -293,6 +307,7 @@ fn run_body<'b>(
             &mut reducer,
             input.resources.base_read_batch,
             input.root_serial,
+            &unreachable,
         )?;
         counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
         counters.release = release_zero_count(
@@ -308,9 +323,6 @@ fn run_body<'b>(
                     .ok_or(ContentError::InvalidRecord("released inode record"))
             },
         )?;
-    }
-    if std::env::var("LAYERFS_TRACE").is_ok() {
-        eprintln!("stage: reducer finish");
     }
     let mut rows = phases.phase("references", || {
         reducer.finish(
@@ -329,9 +341,6 @@ fn run_body<'b>(
             None
         }
     });
-    if std::env::var("LAYERFS_TRACE").is_ok() {
-        eprintln!("stage: inode values");
-    }
     let built = phases.phase("inodes", || {
         apply_inode_values(objects, base_table, changes, input.resources.scratch_bytes)
     });
@@ -365,14 +374,55 @@ fn run_body<'b>(
     })
 }
 
+/// Directory parents this operation leaves with no binding at all.
+///
+/// A serial this operation allocates and this operation never binds cannot end
+/// with a final count, so there is neither a parent to hold it nor a page worth
+/// building: its bindings are accounted by the walk that dropped it. Only a
+/// declared-new parent can be in that state - an existing directory that is not
+/// rebound keeps the record it already has.
+fn unreachable_parents(input: &FilesystemInput<'_>) -> BTreeMap<u64, ()> {
+    let mut bound: BTreeMap<u64, ()> = BTreeMap::new();
+    for update in input.directories {
+        for (_, binding) in &update.changes {
+            if let Some(child) = binding {
+                bound.insert(*child, ());
+            }
+        }
+    }
+    let mut dead = BTreeMap::new();
+    for update in input.directories {
+        let parent = update.parent;
+        if parent == input.root_serial || bound.contains_key(&parent) {
+            continue;
+        }
+        if !input.new_inodes.contains(&parent) {
+            continue;
+        }
+        // An empty binding list is the "keep the bindings you have" form, and a
+        // directory this operation allocates has none to keep.
+        dead.insert(parent, ());
+    }
+    dead
+}
+
 fn register_values(
     reducer: &mut ReferenceReducer<'_, '_>,
     input: &FilesystemInput<'_>,
+    unreachable: &BTreeMap<u64, ()>,
 ) -> ContentResult<()> {
     for serial in input.new_inodes {
+        if unreachable.contains_key(serial) {
+            // The serial is not part of the result, so it is not a final row:
+            // registering it would ask the stream for a value it cannot have.
+            continue;
+        }
         reducer.declare_new(*serial)?;
     }
     for update in input.inodes {
+        if unreachable.contains_key(&update.serial) {
+            continue;
+        }
         reducer.note_value(update.serial, update.value)?;
     }
     Ok(())
@@ -398,6 +448,7 @@ fn zero_count_serials(
     reducer: &mut ReferenceReducer<'_, '_>,
     base_batch: usize,
     root_serial: u64,
+    unreachable: &BTreeMap<u64, ()>,
 ) -> ContentResult<(Vec<u64>, u64)> {
     let touched = reducer.touched_serials(base_batch)?;
     reducer.note_serials_scanned(touched.len() as u64);
@@ -416,7 +467,9 @@ fn zero_count_serials(
                 }
                 None => base.map_or(0, |value| value.namespace_ref_count),
             };
-            if count == 0 && *serial != root_serial {
+            // A directory this batch drops is not a released inode: it was never
+            // part of the result, so there is nothing to traverse.
+            if count == 0 && *serial != root_serial && !unreachable.contains_key(serial) {
                 zero.push(*serial);
             }
         }

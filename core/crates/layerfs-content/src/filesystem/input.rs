@@ -166,6 +166,12 @@ impl FilesystemInput<'_> {
         {
             return Err(ContentError::InvalidRecord("new inode serial"));
         }
+        // A build allocates its root like any other inode: without that
+        // declaration the operation would reach the absent base with a
+        // placeholder identity and fail later for the wrong reason.
+        if self.base.is_none() && !self.new_inodes.contains(&self.root_serial) {
+            return Err(ContentError::InvalidRecord("root inode allocation"));
+        }
         Ok(())
     }
 

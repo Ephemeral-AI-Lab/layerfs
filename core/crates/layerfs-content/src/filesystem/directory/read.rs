@@ -216,7 +216,22 @@ pub fn list_after(
                 }
                 let width =
                     NAME_LENGTH_BYTES + DIRECTORY_LEAF_SERIAL_BYTES + entry.key.as_bytes().len();
-                if entries.len() == max_entries || bytes + width > max_bytes {
+                if bytes + width > max_bytes {
+                    // One row must fit: an empty page with no continuation is
+                    // what an exhausted directory looks like, and reporting it
+                    // for a bound the caller set too low would be a lie.
+                    if entries.is_empty() {
+                        return Err(ContentError::ObjectLimitExceeded {
+                            limit: max_bytes,
+                            actual: width,
+                        });
+                    }
+                    return Ok(ListingPage {
+                        continuation: entries.last().map(|(name, _)| name.clone()),
+                        entries,
+                    });
+                }
+                if entries.len() == max_entries {
                     return Ok(ListingPage {
                         continuation: entries.last().map(|(name, _)| name.clone()),
                         entries,

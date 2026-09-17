@@ -141,11 +141,23 @@ fn listing_is_bounded_by_bytes_as_well_as_count() {
     // Each name is `e0000` (5 bytes) plus a 2-byte prefix and an 8-byte serial.
     let by_bytes = read.list(&path, None, 64, 15).expect("byte bound");
     assert_eq!(by_bytes.entries.len(), 1, "one 15-byte row fits exactly");
-    let too_small = read.list(&path, None, 64, 1);
+    // A byte bound that cannot fit one row is a refusal, not an exhausted
+    // directory: an empty page with no continuation is what the end of a
+    // listing looks like, and returning it here would be indistinguishable
+    // from it. The 15-byte case above fits exactly and must keep working.
     assert!(matches!(
-        too_small,
-        Err(ContentError::InvalidRecord("listing limit")) | Ok(_)
+        read.list(&path, None, 64, 1),
+        Err(ContentError::ObjectLimitExceeded { limit: 1, .. })
     ));
+    for bound in 1..15_usize {
+        assert!(
+            matches!(
+                read.list(&path, None, 64, bound),
+                Err(ContentError::ObjectLimitExceeded { limit, .. }) if limit == bound
+            ),
+            "a {bound}-byte bound cannot fit one row and must be refused"
+        );
+    }
     assert!(matches!(
         read.list(&path, None, 0, 8192),
         Err(ContentError::InvalidRecord("listing limit"))

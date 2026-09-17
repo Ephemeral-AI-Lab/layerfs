@@ -8,7 +8,7 @@
 //! identities are rechecked against the base they claim to be absent from, and
 //! every final count is derived from checked retained bindings.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
@@ -99,6 +99,10 @@ pub fn check<'a>(
     let topology = FilesystemTopology::load(reader, input.base, input.scope, input.root_serial)?;
     let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
     let removals: BTreeMap<u64, u64> = BTreeMap::new();
+    // Children with a stored record that this batch binds exactly once, by the
+    // parent that binds them: the final pass decides whether that binding is the
+    // one the base already has or a second parent.
+    let mut by_parent: BTreeMap<u64, Vec<Vec<u8>>> = BTreeMap::new();
     // The allocator precondition is checked before anything else: a serial the
     // caller calls new must not already exist in the base it addresses.
     check_new_identities(reader, input, topology)?;
@@ -139,26 +143,40 @@ pub fn check<'a>(
             }
             // The kind comes from the stored record for an existing inode and
             // from the caller's typed value for one this operation allocates.
-            let kind = match topology.table {
-                Some(table) => match lookup_optional(reader, table, *child)? {
-                    Some(previous) => Some(previous.kind),
-                    None => input.value_for(*child).map(|value| value.kind),
-                },
-                None => input.value_for(*child).map(|value| value.kind),
+            let stored = match topology.table {
+                Some(table) => lookup_optional(reader, table, *child)?,
+                None => None,
             };
-            let kind = kind.ok_or(ContentError::InvalidRecord("binding kind"))?;
+            let previous = stored.or_else(|| input.value_for(*child));
+            let previous = previous.ok_or(ContentError::InvalidRecord("binding kind"))?;
+            // Only a regular file may carry several bindings, so a file that
+            // already has one keeps gaining them.
+            let kind = stored.map_or(previous.kind, |record| record.kind);
             if kind == InodeKind::RegularFile {
                 continue;
             }
-            // A directory or a symlink has exactly one binding outside the root;
-            // only a regular file may carry several.
+            // A same-batch duplicate is refused here, before any base record is
+            // consulted: a directory or a symlink has one binding outside the
+            // root and the batch already names it twice.
             let added = additions.entry(*child).or_insert(0);
             *added = added.checked_add(1).ok_or(ContentError::LengthOverflow)?;
             if *added > 1 {
                 return Err(ContentError::InvalidRecord("multiple parents"));
             }
+            // The batch names it once; a stored record may already own that one
+            // binding, and the base name decides whether this is the same
+            // binding or a second parent. The decision needs a base listing, so
+            // it is deferred to one final pass over the children that have a
+            // stored record.
+            if stored.is_some() {
+                by_parent
+                    .entry(update.parent)
+                    .or_default()
+                    .push(name.as_bytes().to_vec());
+            }
         }
     }
+    check_parent_aliases(reader, input, &topology, &additions, &by_parent)?;
     for update in input.directories {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
@@ -186,6 +204,101 @@ pub fn check<'a>(
     };
     check_effective_cycles(reader, &checked)?;
     Ok(checked)
+}
+
+/// Refuses a stored non-file inode that keeps its base binding and gains another.
+///
+/// A directory or a symlink has exactly one parent. A batch that names one
+/// again may only restate the binding the base already has, or move it after
+/// unbinding the old name in the same final-state batch. One listing per
+/// candidate parent answers "which name does the base bind it under", bounded by
+/// the same page ceiling as every other directory read.
+fn check_parent_aliases(
+    reader: &dyn AuthenticatedObjects,
+    input: &FilesystemInput<'_>,
+    topology: &FilesystemTopology,
+    additions: &BTreeMap<u64, u64>,
+    by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
+) -> ContentResult<()> {
+    if by_parent.is_empty() {
+        return Ok(());
+    }
+    let Some(table) = topology.table else {
+        return Ok(());
+    };
+    let mut bound: BTreeMap<u64, (Vec<u8>, u64)> = BTreeMap::new();
+    for (parent, names) in by_parent {
+        let record = lookup_one(reader, table, *parent)?;
+        let mut after = None;
+        loop {
+            let page = list_after(
+                reader,
+                DirectoryRoot(record.content_root),
+                after.as_ref(),
+                64,
+                crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
+                &mut DirectoryReadWork::default(),
+            )?;
+            for (key, serial) in page.entries {
+                let duplicated = additions.get(&serial).copied().unwrap_or(0) > 1;
+                if !duplicated && names.iter().any(|name| name.as_slice() == key.as_bytes()) {
+                    bound.insert(serial, (key.as_bytes().to_vec(), *parent));
+                }
+            }
+            match page.continuation {
+                Some(next) => after = Some(next),
+                None => break,
+            }
+        }
+    }
+    for (parent, names) in by_parent {
+        for name in names {
+            let Some(child) = single_binding(input, parent, name) else {
+                continue;
+            };
+            let Some((base_name, base_parent)) = bound.get(&child) else {
+                continue;
+            };
+            // The batch restates the binding the base has, or it unbinds the
+            // base name first, which is the one legal way to move the inode.
+            let restated = base_parent == parent && base_name.as_slice() == name.as_slice();
+            if !restated && base_binding_survives(input, *base_parent, base_name, child) {
+                return Err(ContentError::InvalidRecord("multiple parents"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The child one `(parent, name)` pair in this batch binds.
+fn single_binding(input: &FilesystemInput<'_>, parent: &u64, name: &[u8]) -> Option<u64> {
+    input.update_for(*parent).and_then(|update| {
+        update
+            .changes
+            .iter()
+            .find(|(changed, _)| changed.as_bytes() == name)
+            .and_then(|(_, binding)| *binding)
+    })
+}
+
+/// True when the base still binds `child` under `base_name` in `base_parent`.
+fn base_binding_survives(
+    input: &FilesystemInput<'_>,
+    base_parent: u64,
+    base_name: &[u8],
+    child: u64,
+) -> bool {
+    match input.update_for(base_parent) {
+        Some(update) => match update
+            .changes
+            .iter()
+            .find(|(changed, _)| changed.as_bytes() == base_name)
+        {
+            Some((_, binding)) => *binding == Some(child),
+            None => true,
+        },
+        None => true,
+    }
 }
 
 fn check_new_identities(
@@ -230,50 +343,79 @@ fn check_root_invariants(input: &FilesystemInput<'_>) -> ContentResult<()> {
     Ok(())
 }
 
-/// Walks a moved directory's effective subtree looking for its new parent.
+/// Walks a rebound directory's effective subtree looking for its new parent.
 ///
 /// A cycle can only be formed by binding a directory below itself, so only the
 /// directories this operation rebinds need the walk. The work is bounded by
 /// [`MAXIMUM_CYCLE_CHECK_ENTRIES`]; exceeding it is an explicit refusal, never a
-/// claim that the tree was proven acyclic.
+/// claim that the tree was proven acyclic. A directory this operation allocates
+/// has no stored page yet, so the walk of it follows this operation's own
+/// bindings instead.
 fn check_effective_cycles(
     reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
 ) -> ContentResult<()> {
-    let Some(table) = checked.topology.table else {
+    // A build has no stored page to list and therefore no subtree to walk: every
+    // directory it names is one it allocates, and its bindings are the ones this
+    // operation states. An update is where a rebinding can close a cycle.
+    if checked.input.base.is_none() {
         return Ok(());
-    };
+    }
+    let table = checked.topology.table;
     for update in checked.input.directories {
         for (_, binding) in &update.changes {
             let Some(child) = binding else {
                 continue;
             };
-            let Some(record) = lookup_optional(reader, table, *child)? else {
-                continue;
+            let stored = match table {
+                Some(table) => lookup_optional(reader, table, *child)?,
+                None => None,
             };
-            if record.kind != InodeKind::Directory {
+            let kind = match stored {
+                Some(record) => record.kind,
+                None => match checked.input.value_for(*child) {
+                    Some(value) => value.kind,
+                    None => continue,
+                },
+            };
+            if kind != InodeKind::Directory {
                 continue;
             }
+            // A serial with no stored record has no base page to list: the walk
+            // of it follows this operation's own bindings alone.
+            let seed = stored.map(|record| record.content_root);
             // The walk follows the *effective* bindings: a directory this
             // operation rebinds still holds every name it already had plus the
             // changes, so a cycle formed by two changes is visible here.
-            let mut pending = vec![(record.content_root, *child)];
+            let mut pending = vec![(seed, *child)];
             let mut visited = 0_usize;
-            while let Some((content_root, serial)) = pending.pop() {
+            let mut seen: BTreeSet<u64> = BTreeSet::new();
+            while let Some((base_root, serial)) = pending.pop() {
+                if !seen.insert(serial) {
+                    continue;
+                }
                 let changes = checked
                     .input
                     .update_for(serial)
                     .map(|update| update.changes.as_slice())
                     .unwrap_or(&[]);
-                for (_, entry_serial) in
-                    effective_entries(reader, content_root, changes, &mut visited)?
-                {
-                    if entry_serial == update.parent {
+                let entries = match base_root {
+                    Some(content_root) => {
+                        effective_entries(reader, content_root, changes, &mut visited)?
+                    }
+                    None => effective_entries_without_base(changes),
+                };
+                for (_, entry_serial) in entries {
+                    if entry_serial == update.parent || entry_serial == *child {
                         return Err(ContentError::InvalidRecord("effective tree cycle"));
                     }
-                    if let Some(entry) = lookup_optional(reader, table, entry_serial)? {
+                    let entering = match table {
+                        Some(table) => lookup_optional(reader, table, entry_serial)?,
+                        None => None,
+                    };
+                    if let Some(entry) = entering {
                         if entry.kind == InodeKind::Directory {
-                            pending.push((entry.content_root, entry_serial));
+                            pending.push((Some(entry.content_root), entry_serial));
                         }
                     }
                 }
@@ -281,6 +423,16 @@ fn check_effective_cycles(
         }
     }
     Ok(())
+}
+
+/// This operation's own bindings for a directory that has no stored page yet.
+fn effective_entries_without_base(
+    changes: &[(crate::filesystem::path::PathName, Option<u64>)],
+) -> Vec<(crate::filesystem::path::PathName, u64)> {
+    changes
+        .iter()
+        .filter_map(|(name, binding)| binding.map(|serial| (name.clone(), serial)))
+        .collect()
 }
 
 /// Base entries of one directory with this operation's changes applied.

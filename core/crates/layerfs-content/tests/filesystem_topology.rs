@@ -315,3 +315,335 @@ fn a_foreign_scope_or_profile_is_refused() {
     });
     assert!(matches!(outcome, Err(ContentError::ScopeMismatch { .. })));
 }
+
+#[test]
+fn a_base_resident_directory_cannot_gain_a_second_parent() {
+    // `d/e` already has one parent. Binding the same directory inode under a
+    // second name is exactly the case a same-batch duplicate is already refused
+    // for, and it must not be reachable through the base either: the stored
+    // record already owns the one binding a directory may have.
+    let (mut session, d, e, _f) = nested();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("second"), Some(e))],
+            },
+            DirectoryUpdate {
+                parent: d,
+                changes: vec![(name("e"), Some(e))],
+            },
+        ],
+        &[],
+        &[],
+    );
+    assert!(matches!(
+        outcome,
+        Err(ContentError::InvalidRecord("multiple parents"))
+    ));
+}
+
+#[test]
+fn a_base_resident_directory_can_be_renamed_by_unbinding_first() {
+    // The legal form of the same edit: the old name is dropped in the same
+    // final-state batch, so the directory keeps exactly one parent.
+    let (mut session, d, e, _f) = nested();
+    session
+        .apply(
+            &[DirectoryUpdate {
+                parent: d,
+                changes: vec![(name("e"), None), (name("moved"), Some(e))],
+            }],
+            &[],
+            &[],
+        )
+        .expect("rename within one parent");
+    let mut read = session.read().expect("reader");
+    assert_eq!(
+        read.resolve(&LogicalPath::new("d/moved").unwrap())
+            .expect("resolve")
+            .serial,
+        e
+    );
+}
+
+#[test]
+fn a_base_resident_symlink_cannot_gain_a_second_parent() {
+    let mut session = Session::new(1).expect("empty");
+    let link = session.allocate();
+    let holder = session.allocate();
+    let mut link_value = value(
+        InodeKind::Symlink,
+        synthetic("topology/symlink-target"),
+        synthetic("topology/meta"),
+    );
+    link_value.namespace_ref_count = 0;
+    session
+        .apply(
+            &[
+                DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![(name("link"), Some(link))],
+                },
+                DirectoryUpdate {
+                    parent: holder,
+                    changes: Vec::new(),
+                },
+            ],
+            &[
+                InodeUpdate {
+                    serial: link,
+                    value: link_value,
+                },
+                InodeUpdate {
+                    serial: holder,
+                    value: directory("unused"),
+                },
+            ],
+            &[link, holder],
+        )
+        .expect("symlink tree");
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("link"), Some(link)), (name("second"), Some(link))],
+            },
+            DirectoryUpdate {
+                parent: holder,
+                changes: vec![(name("third"), Some(link))],
+            },
+        ],
+        &[],
+        &[],
+    );
+    assert!(matches!(
+        outcome,
+        Err(ContentError::InvalidRecord("multiple parents"))
+    ));
+}
+
+#[test]
+fn a_build_with_a_disconnected_directory_cycle_is_refused() {
+    // `a` holds `b` and `b` holds `a`: both are declared new, both are bound, so
+    // the disconnected-record rule does not catch it and only an effective walk
+    // can. The root binds nothing, which is what makes the cycle disconnected.
+    let mut session = Session::new(1).expect("empty");
+    let a = session.allocate();
+    let b = session.allocate();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: Vec::new(),
+            },
+            DirectoryUpdate {
+                parent: a,
+                changes: vec![(name("b"), Some(b))],
+            },
+            DirectoryUpdate {
+                parent: b,
+                changes: vec![(name("a"), Some(a))],
+            },
+        ],
+        &[
+            InodeUpdate {
+                serial: a,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: b,
+                value: directory("unused"),
+            },
+        ],
+        &[a, b],
+    );
+    assert!(matches!(
+        outcome,
+        Err(ContentError::InvalidRecord("effective tree cycle"))
+            | Err(ContentError::InvalidRecord("new inode removal"))
+            | Err(ContentError::InvalidRecord("new inode without binding"))
+    ));
+}
+
+#[test]
+fn a_build_whose_root_is_not_declared_new_is_refused_up_front() {
+    // The root is allocated like any other inode. Without the declaration the
+    // operation would reach an absent base with a placeholder identity and fail
+    // later with a provider error instead of a precondition failure.
+    let mut store = TreeStore::new();
+    let input = FilesystemInput {
+        base: None,
+        scope: layerfs_content::filesystem::scope_for_seed([0x33; 32]),
+        root_serial: 1,
+        directories: &[DirectoryUpdate {
+            parent: 1,
+            changes: Vec::new(),
+        }],
+        inodes: &[InodeUpdate {
+            serial: 1,
+            value: directory("unused"),
+        }],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let outcome = with_objects(&mut store, |objects| {
+        build_filesystem(objects, &input, None)
+    });
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("root inode allocation"))
+                | Err(ContentError::InvalidRecord("root inode value"))
+        ),
+        "an undeclared root must be refused before any object is read: {outcome:?}"
+    );
+}
+
+#[test]
+fn a_dropped_directory_emits_no_page_of_its_own() {
+    // The root binds `dead` and drops it again in the same final-state batch,
+    // and binds a surviving regular file beside it. The dropped directory ends
+    // with no parent, so nothing can hold it: no page is built for it, and it
+    // never enters the reduction at all.
+    let mut session = Session::new(1).expect("empty");
+    let dead = session.allocate();
+    let file = session.allocate();
+    let before = session.store.len();
+    let result = session
+        .apply(
+            &[
+                DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![(name("dead"), None), (name("f"), Some(file))],
+                },
+                DirectoryUpdate {
+                    parent: dead,
+                    changes: Vec::new(),
+                },
+            ],
+            &[
+                InodeUpdate {
+                    serial: dead,
+                    value: directory("unused"),
+                },
+                InodeUpdate {
+                    serial: file,
+                    value: regular("content/f"),
+                },
+            ],
+            &[dead, file],
+        )
+        .expect("a dropped empty directory is not an error");
+    assert_eq!(
+        result.counters.directory_updates, 1,
+        "only the root's own update is merged"
+    );
+    assert_eq!(
+        result.counters.references.rows_touched, 2,
+        "two rows: the root directory and the file beside the dropped directory"
+    );
+    let emitted = session.store.len() - before;
+    // Three objects: the rebuilt root directory, the inode table and the root.
+    assert_eq!(
+        emitted, 3,
+        "a directory the batch drops contributes no page: {emitted} objects emitted"
+    );
+    let mut read = session.read().expect("reader");
+    assert!(read.stat(&LogicalPath::new("f").unwrap()).is_ok());
+    assert!(matches!(
+        read.stat(&LogicalPath::new("dead").unwrap()),
+        Err(ContentError::MissingObject)
+    ));
+}
+
+#[test]
+fn a_cycle_formed_inside_a_build_is_refused() {
+    // A build with no base can still state a cycle: `a` holds `b` and `b` holds
+    // `a`, both declared new. Nothing is left unbound, so only an effective walk
+    // over the operation's own bindings can see it.
+    let mut session = Session::new(1).expect("empty");
+    let a = session.allocate();
+    let b = session.allocate();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: Vec::new(),
+            },
+            DirectoryUpdate {
+                parent: a,
+                changes: vec![(name("b"), Some(b))],
+            },
+            DirectoryUpdate {
+                parent: b,
+                changes: vec![(name("a"), Some(a))],
+            },
+        ],
+        &[
+            InodeUpdate {
+                serial: a,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: b,
+                value: directory("unused"),
+            },
+        ],
+        &[a, b],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a cycle stated entirely inside one build must be refused: {outcome:?}"
+    );
+}
+
+#[test]
+fn an_update_cycling_two_declared_new_directories_is_refused() {
+    // `a` is bound under an existing directory and then holds `b`, which holds
+    // `a` again. Both are declared new, so no stored record exists for either
+    // and only the effective walk over this operation's own bindings sees it.
+    let (mut session, d, _e, _f) = nested();
+    let a = session.allocate();
+    let b = session.allocate();
+    // `a` is bound under `d` first, then the third update makes `a` hold `b`
+    // which holds `a`: the cycle is created entirely by this batch.
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: d,
+                changes: vec![(name("a"), Some(a))],
+            },
+            DirectoryUpdate {
+                parent: a,
+                changes: vec![(name("b"), Some(b))],
+            },
+            DirectoryUpdate {
+                parent: b,
+                changes: vec![(name("a"), Some(a))],
+            },
+        ],
+        &[
+            InodeUpdate {
+                serial: a,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: b,
+                value: directory("unused"),
+            },
+        ],
+        &[a, b],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+                | Err(ContentError::InvalidRecord("multiple parents"))
+        ),
+        "a cycle between two declared-new directories must be refused: {outcome:?}"
+    );
+}
