@@ -171,6 +171,11 @@ impl MutationOwner {
         capacities: StorageCapacities,
         pool_index: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
     ) -> StorageResult<Self> {
+        // The connection is caller-supplied at this seam, so its profile is
+        // re-verified rather than trusted: a write must never run on a
+        // connection with another journal mode, synchronous setting,
+        // foreign-key enforcement or busy timeout than the declared one.
+        crate::sqlite::connection::verify_profile(&connection)?;
         // Ownership first: the baseline and cursor are only meaningful when no
         // other writer can publish a pack between reading them and using them.
         write::begin_immediate(&connection)?;

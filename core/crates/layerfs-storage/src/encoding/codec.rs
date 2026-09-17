@@ -1,5 +1,20 @@
 //! Pinned Zstandard codec with caller-owned bounded workspaces.
 //!
+//! **This module is the crate's audited `unsafe` boundary.** `unsafe` is denied
+//! everywhere else in `layerfs-storage` (and rejected again by the product
+//! boundary guard); it is allowed here and only here, because the pinned codec
+//! is the zstd C API. The complete FFI inventory: `ZSTD_isError` and
+//! `ZSTD_getErrorCode` (numeric return interpretation), `ZSTD_initStaticCCtx`
+//! and `ZSTD_initStaticDCtx` (static contexts in caller-owned aligned
+//! workspaces), `ZSTD_CCtx_reset`/`ZSTD_CCtx_setParameter`/`ZSTD_CCtx_setCParams`
+//! /`ZSTD_CCtx_setFParams`/`ZSTD_CCtx_refPrefix`/`ZSTD_compress2` (encoding),
+//! `ZSTD_DCtx_reset`/`ZSTD_DCtx_setParameter`/`ZSTD_DCtx_refPrefix`/
+//! `ZSTD_decompressDCtx` (decoding), `ZSTD_getCParams` (group parameters),
+//! `ZSTD_getFrameHeader` and `ZSTD_findFrameCompressedSize` (frame validation).
+//! Every block carries its own SAFETY argument; sizes are read from the frame
+//! header and checked against declared limits before any decompression, and
+//! decompression is exact-size into a validated destination.
+//!
 //! The parameter sequences, workspace sizes and frame policy are the frozen ones
 //! of the reference profile: payload frames use level 3, a role-specific window
 //! log, a content-size field, a checksum, no dictionary id and no workers; group

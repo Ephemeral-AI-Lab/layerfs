@@ -11,6 +11,46 @@ TEST_CFG = re.compile(r'\btest\b|"[^"\n]*(?:test|bench|mock|fixture|fault)[^"\n]
 CFG_MACRO = re.compile(r"\bcfg\s*!\s*\(([^;]*)\)", re.DOTALL)
 IMPL = re.compile(r"\b(?:struct|enum|trait|impl|union|static|const|let|if|else|match|loop|while|for)\b|\bmacro_rules\s*!")
 DOC_CODE = re.compile(r"^\s*(?:///|//!)\s*```", re.MULTILINE)
+UNSAFE = re.compile(r"\bunsafe\b")
+
+# Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
+# FFI module (encoding/codec.rs); its siblings must stay unsafe-free. The
+# comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
+# never trip the scan once comments are stripped.
+UNSAFE_AUDITED_MODULE = {
+    "layerfs-storage": "src/encoding/codec.rs",
+}
+UNSAFE_FREE_CRATES = ("layerfs-content", "layerfs-telemetry")
+UNSAFE_ROOT_ATTR = {
+    "layerfs-storage": "#![deny(unsafe_code)]",
+    "layerfs-content": "#![forbid(unsafe_code)]",
+    "layerfs-telemetry": "#![forbid(unsafe_code)]",
+}
+
+
+def crate_name(path):
+    """The core workspace crate a path belongs to, when it belongs to one."""
+    parts = path.parts
+    for index, part in enumerate(parts):
+        if part == "crates" and index + 1 < len(parts):
+            return parts[index + 1]
+    return None
+
+
+def unsafe_violations(path, source):
+    """Enforce each crate's documented unsafe boundary."""
+    found = []
+    crate = crate_name(path)
+    if crate is None or crate not in UNSAFE_ROOT_ATTR or path.suffix != ".rs":
+        return found
+    relative = Path(*path.parts[path.parts.index(crate) + 1:])
+    code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
+    if UNSAFE.search(code):
+        if crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]:
+            found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
+    if relative == Path("src/lib.rs") and UNSAFE_ROOT_ATTR[crate] not in source:
+        found.append((1, f"crate root must declare {UNSAFE_ROOT_ATTR[crate]}"))
+    return found
 
 
 def violations(path, source):
@@ -40,6 +80,7 @@ def violations(path, source):
             code = line.split("//", 1)[0].strip()
             if IMPL.search(code):
                 found.append((number, "implementation construct in declaration/delegation entry file"))
+    found.extend(unsafe_violations(path, source))
     return found
 
 

@@ -25,7 +25,11 @@ use crate::object::ObjectId;
 /// Implementations must return the canonical object bytes whose identity is
 /// `ids[index]`, in that order. Returning bytes that do not belong to the
 /// requested identity is a contract violation; a provider that cannot establish
-/// identity must return [`ContentError::IdentityMismatch`] instead.
+/// identity must return [`ContentError::IdentityMismatch`] instead. Absence is
+/// reported as [`ContentError::MissingObject`] and nothing else: a provider
+/// that holds state for the request but cannot serve it - corrupt storage, a
+/// record outside this reader's visibility, a capacity refusal - reports
+/// [`ContentError::ProviderFailure`] so the two classes stay distinguishable.
 pub trait AuthenticatedObjects {
     /// Reads every requested object as one bounded grouped demand.
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>>;

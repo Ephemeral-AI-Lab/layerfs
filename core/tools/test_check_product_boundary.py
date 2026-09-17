@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from check_product_boundary import production_files, violations
+from check_product_boundary import production_files, unsafe_violations, violations
 
 
 class ProductBoundaryTests(unittest.TestCase):
@@ -39,6 +39,42 @@ class ProductBoundaryTests(unittest.TestCase):
                 source = "\n" * 998 + "final line without newline"
                 self.assertFalse(violations(Path(name), source))
                 self.assertEqual(violations(Path(name), source + "\nextra")[0][0], 1000)
+
+    def test_unsafe_boundary(self):
+        storage = Path("core/crates/layerfs-storage/src")
+        audited = storage / "encoding" / "codec.rs"
+        elsewhere = storage / "cas" / "store.rs"
+        content = Path("core/crates/layerfs-content/src/file/content.rs")
+        telemetry = Path("core/crates/layerfs-telemetry/src/timer/recording.rs")
+        # The audited module and the lint attribute names never trip the scan.
+        self.assertFalse(unsafe_violations(audited, "fn f() { unsafe { call(); } }"))
+        self.assertFalse(unsafe_violations(elsewhere, "#![deny(unsafe_code)]\n// the word `unsafe` in a comment\nfn f() {}"))
+        self.assertFalse(unsafe_violations(audited, "unsafe fn parse() {}\nfn code() { let _ = unsafe {}; }"))
+        # Unsafe code outside the audited module is rejected, comment or not.
+        for path in (elsewhere, content, telemetry):
+            for source in (
+                "fn f() { unsafe { call(); } }",
+                "unsafe fn parse() {}",
+                "let value = unsafe { std::ptr::read(&x) };",
+                "// `unsafe` spelled in a code-like comment does not matter\nfn f() { let _ = 1; }",
+            ):
+                with self.subTest(path=path, source=source):
+                    if "does not matter" in source:
+                        self.assertFalse(unsafe_violations(path, source))
+                    else:
+                        self.assertTrue(unsafe_violations(path, source))
+        # The crate roots must declare their documented lint level.
+        for path, attr in (
+            (storage / "lib.rs", "#![deny(unsafe_code)]"),
+            (content.parents[1] / "lib.rs", "#![forbid(unsafe_code)]"),
+            (telemetry.parents[1] / "lib.rs", "#![forbid(unsafe_code)]"),
+        ):
+            with self.subTest(path=path, attr=attr):
+                self.assertTrue(unsafe_violations(path, "pub mod run;\n"))
+                self.assertFalse(unsafe_violations(path, attr + "\npub mod run;\n"))
+        # Paths outside the three known crates are not judged by this rule.
+        self.assertFalse(unsafe_violations(Path("crates/other/src/lib.rs"), "fn f() { unsafe {} }"))
+        self.assertFalse(unsafe_violations(Path("scope.rs"), "unsafe fn parse() {}"))
 
     def test_shipped_sql_and_external_tests_scope(self):
         with TemporaryDirectory() as directory:

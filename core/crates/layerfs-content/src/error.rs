@@ -47,6 +47,18 @@ pub enum ContentError {
     IdentityMismatch,
     /// The provider does not hold the requested object.
     MissingObject,
+    /// The provider holds state for the request but cannot serve it.
+    ///
+    /// This is the corrupt-or-refused class: stored bytes failed an integrity
+    /// check, the record lies beyond this reader's visibility ceiling, or a
+    /// declared capacity refused the read. It is never the answer for an object
+    /// the provider simply does not hold - that absence is
+    /// [`ContentError::MissingObject`] - so a caller that must distinguish "this
+    /// root is not in this Store" from "this Store is broken" can.
+    ProviderFailure {
+        /// The refusing class, named by the provider that raised it.
+        what: &'static str,
+    },
     /// A raw identity had the wrong width.
     InvalidIdentityLength {
         /// Required width in bytes.
@@ -153,6 +165,9 @@ impl fmt::Display for ContentError {
             }
             Self::IdentityMismatch => formatter.write_str("object identity mismatch"),
             Self::MissingObject => formatter.write_str("object not available"),
+            Self::ProviderFailure { what } => {
+                write!(formatter, "provider failure: {what}")
+            }
             Self::InvalidIdentityLength { expected, actual } => {
                 write!(formatter, "identity width {actual}, expected {expected}")
             }

@@ -246,6 +246,43 @@ reuse. Do not add per-object trace retention. A low delta percentage can be heal
 when CAS already avoids new objects; full retained storage and read/write cost
 decide optimization quality.
 
+### Accepted design note (2026-09-18): the zstd FFI boundary and the `forbid` deviation
+
+`layerfs-content` and `layerfs-telemetry` are `#![forbid(unsafe_code)]`, so every
+index, cast, slice and lifetime in them is compiler-checked.
+`layerfs-storage` is **not**, and that is a recorded deviation, not an oversight:
+the pinned Zstandard codec is the C FFI, and Rust cannot combine a crate-level
+`forbid(unsafe_code)` with even one module of FFI (`allow` cannot override
+`forbid`; rustc rejects the combination with E0453 - verified on `+1.85.1`).
+
+What the crate does instead, and why it is at least as auditable:
+
+- `unsafe` is **denied crate-wide** (`lib.rs`) and **allowed on exactly one
+  audited module**, `encoding/codec.rs`, whose module documentation carries the
+  complete FFI inventory (every `zstd_sys` entry point the product calls).
+- The product boundary guard (`core/tools/check_product_boundary.py`) rejects
+  `unsafe` anywhere else in the crate and rejects a storage `lib.rs` that drops
+  the `deny`, so the boundary is machine-enforced on every future tree, not just
+  this one.
+- Every `unsafe` block in the audited module carries its own `SAFETY` argument;
+  frame sizes are read from the frame header and checked against declared limits
+  before any decompression, and decompression is exact-size into a validated
+  destination. Correctness of the C side is `zstd-sys 2.0.16`'s, not this
+  product's.
+
+The audited surface at this round's commit is twelve `unsafe` items in
+`encoding/codec.rs`: two numeric-return checks (`ZSTD_isError`,
+`ZSTD_getErrorCode`), two static-context constructors (`ZSTD_initStaticCCtx`,
+`ZSTD_initStaticDCtx`), the encode call sites (`ZSTD_CCtx_reset`,
+`ZSTD_CCtx_setParameter`, `ZSTD_CCtx_setCParams`, `ZSTD_CCtx_setFParams`,
+`ZSTD_CCtx_refPrefix`, `ZSTD_compress2`, `ZSTD_getCParams`), the decode call
+sites (`ZSTD_DCtx_reset`, `ZSTD_DCtx_setParameter`, `ZSTD_DCtx_refPrefix`,
+`ZSTD_decompressDCtx`), the frame validators (`ZSTD_getFrameHeader`,
+`ZSTD_findFrameCompressedSize`) and one `unsafe fn` (`parse_frame_header`) that
+wraps them. No `unsafe` exists in any other module, and the guard keeps it that
+way. No memory-safety proof is claimed: this is an audited boundary, not a
+proof.
+
 ## 5. Capacities and stored formats
 
 Keep defaults T=128 KiB, whole-file depth 8 and chunk depth 4. Depth is independent

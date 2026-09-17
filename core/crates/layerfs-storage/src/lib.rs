@@ -17,6 +17,15 @@
 
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
+// `layerfs-content` and `layerfs-telemetry` are `forbid(unsafe_code)`. This
+// crate cannot be: the pinned zstd codec needs the C FFI, and a lint that is
+// `forbid`ed cannot be allowed back on for one module (E0453). `unsafe` is
+// therefore denied crate-wide and allowed on exactly one audited module,
+// `encoding::codec` (see its documentation for the FFI inventory), and the
+// product boundary guard rejects `unsafe` anywhere else in this crate. The
+// deviation from the siblings' literal `forbid` is recorded as a design note
+// in `physical-encoding-and-packing.md`.
+#![deny(unsafe_code)]
 
 pub mod cas;
 pub mod encoding;

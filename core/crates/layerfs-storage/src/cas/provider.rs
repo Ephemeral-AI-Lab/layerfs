@@ -13,7 +13,42 @@ use layerfs_content::{ContentError, ContentResult};
 use layerfs_telemetry::timer::{Timing, TimingScope};
 
 use crate::cas::store::{Store, StoreReadCounters};
-use crate::error::StorageResult;
+use crate::error::{StorageError, StorageResult};
+
+/// Maps one Store read failure onto the provider contract's error classes.
+///
+/// `MissingObject` is the answer for absence and for nothing else, because a
+/// caller-authorized value root is allowed to name an object this Store does
+/// not hold (`admission-and-persistence.md`). Every other failure - a corrupt
+/// locator or pack, a record above the publication watermark, a capacity
+/// refusal, an engine failure - reaches C1 as a distinguishable
+/// [`ContentError::ProviderFailure`] instead of masquerading as absence, which
+/// is the distinction a later adapter needs between "this root is not in this
+/// Store" and "this Store is corrupt".
+fn provider_error(error: StorageError) -> ContentError {
+    match error {
+        StorageError::ObjectMissing(_) => ContentError::MissingObject,
+        StorageError::Content(content) => content,
+        StorageError::Integrity(what) => ContentError::ProviderFailure { what },
+        StorageError::CapacityExceeded { what, .. } => ContentError::ProviderFailure { what },
+        StorageError::UnsupportedPolicy { field } => ContentError::ProviderFailure { what: field },
+        StorageError::VisibilityCeiling { .. } => ContentError::ProviderFailure {
+            what: "record above the visibility ceiling",
+        },
+        StorageError::Collision(_) => ContentError::ProviderFailure {
+            what: "identity collision",
+        },
+        StorageError::MissingDependency { .. } => ContentError::ProviderFailure {
+            what: "missing dependency",
+        },
+        StorageError::Engine(_) => ContentError::ProviderFailure {
+            what: "engine failure",
+        },
+        _ => ContentError::ProviderFailure {
+            what: "store read failure",
+        },
+    }
+}
 
 /// A Store presented as C1's authenticated canonical-object provider.
 pub struct StoreProvider<'a> {
@@ -53,7 +88,7 @@ impl AuthenticatedObjects for StoreProvider<'_> {
         })
         .0
         .map(|(values, _)| values)
-        .map_err(|_| ContentError::MissingObject)
+        .map_err(provider_error)
     }
 
     /// Reads a wave as a child of the caller's span.
@@ -64,6 +99,6 @@ impl AuthenticatedObjects for StoreProvider<'_> {
     ) -> ContentResult<Vec<Vec<u8>>> {
         self.read_wave(ids, scope)
             .map(|(values, _)| values)
-            .map_err(|_| ContentError::MissingObject)
+            .map_err(provider_error)
     }
 }

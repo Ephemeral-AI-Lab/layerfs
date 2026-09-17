@@ -327,7 +327,7 @@ fn a_deeper_configured_depth_never_widens_a_work_or_live_budget() {
 /// one.
 #[test]
 fn the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts() {
-    use layerfs_storage::sqlite::connection::{open as open_connection, pragma_i64};
+    use layerfs_storage::sqlite::connection::{open as open_connection, pragma_i64, Pragma};
 
     let dir = TempDir::new("policy-profile");
     let path = dir.store_path("policy");
@@ -339,14 +339,14 @@ fn the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts() {
         .query_row("PRAGMA journal_mode", [], |row| row.get(0))
         .expect("journal mode");
     assert_eq!(journal.to_ascii_lowercase(), "memory");
-    assert_eq!(pragma_i64(&connection, "synchronous").unwrap(), 0);
-    assert_eq!(pragma_i64(&connection, "temp_store").unwrap(), 2);
-    assert_eq!(pragma_i64(&connection, "foreign_keys").unwrap(), 1);
-    assert_eq!(pragma_i64(&connection, "busy_timeout").unwrap(), 0);
+    assert_eq!(pragma_i64(&connection, Pragma::Synchronous).unwrap(), 0);
+    assert_eq!(pragma_i64(&connection, Pragma::TempStore).unwrap(), 2);
+    assert_eq!(pragma_i64(&connection, Pragma::ForeignKeys).unwrap(), 1);
+    assert_eq!(pragma_i64(&connection, Pragma::BusyTimeout).unwrap(), 0);
     // The profile sets neither of these; they are the host library's defaults.
-    let page_size = pragma_i64(&connection, "page_size").unwrap();
-    let cache_size = pragma_i64(&connection, "cache_size").unwrap();
-    let mmap_size = pragma_i64(&connection, "mmap_size").unwrap();
+    let page_size = pragma_i64(&connection, Pragma::PageSize).unwrap();
+    let cache_size = pragma_i64(&connection, Pragma::CacheSize).unwrap();
+    let mmap_size = pragma_i64(&connection, Pragma::MmapSize).unwrap();
     assert!(page_size > 0, "the engine reports a page size");
     assert!(
         cache_size != 0,

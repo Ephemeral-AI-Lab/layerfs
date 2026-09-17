@@ -9,7 +9,7 @@ use rusqlite::Connection;
 
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{SchemaIdentity, StoragePolicy, SCHEMA_IDENTITY};
-use crate::sqlite::connection::pragma_i64;
+use crate::sqlite::connection::{pragma_i64, Pragma};
 
 /// Shipped schema text of this crate.
 pub const SCHEMA_SQL: &str = include_str!("../../sql/schema.sql");
@@ -136,8 +136,8 @@ pub fn validate(
 
 /// Checks the persisted schema identity exactly.
 pub fn identity(connection: &Connection, expected: SchemaIdentity) -> StorageResult<()> {
-    let application_id = pragma_i64(connection, "application_id")?;
-    let user_version = pragma_i64(connection, "user_version")?;
+    let application_id = pragma_i64(connection, Pragma::ApplicationId)?;
+    let user_version = pragma_i64(connection, Pragma::UserVersion)?;
     if application_id != expected.application_id || user_version != expected.user_version {
         return Err(StorageError::UnsupportedPolicy {
             field: "schema identity",
