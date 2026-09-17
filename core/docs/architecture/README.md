@@ -81,9 +81,8 @@ Two cautions on these numbers, because both have already caused drift:
 
 ## Contents
 
-Six papers, each self-contained. Chapter numbers are global to the set, so a
-reference such as "§6.8" resolves to one place no matter which paper it appears
-in.
+Seven papers. Chapter numbers are global to the set, so a reference such as
+"§6.8" resolves to one place no matter which paper it appears in.
 
 | Paper | Chapters | Covers |
 | --- | --- | --- |
@@ -93,6 +92,7 @@ in.
 | [`04-filesystem.md`](04-filesystem.md) | 5 | Scoped root, inode identity, the two page formats, the B+tree engine, the reference reducer |
 | [`05-storage.md`](05-storage.md) | 6 | Schema, publication watermark, pack framings, representation selection, pooling, reconstruction |
 | [`06-limits.md`](06-limits.md) | 7, 9 | End-to-end flows, then every declared bound with the check that enforces it |
+| [`07-importing.md`](07-importing.md) | 11 | **Proposal — draft, not finalized:** the four-phase plan for importing a directory tree, with the master pipeline diagram and what binds where. No importer exists; nothing in it has been executed. |
 
 This paper adds the module map ([§8](#8-module-map)), what the set does not claim
 ([§10](#10-what-this-set-does-not-claim)) and the source index.
@@ -108,6 +108,10 @@ This paper adds the module map ([§8](#8-module-map)), what the set does not cla
 - The set carries **no performance numbers and no qualification claim**. Stage 6
   ([#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171)) owns measured
   acceptance.
+- Most papers are **descriptive** — they state what the code does. A paper that
+  contains guidance rather than description says so in its own status section and
+  labels which parts are prescriptive. `07-importing.md` is the first such paper:
+  no importer exists in this tree, and its phase plan is a proposal.
 
 ## Keeping this current
 
