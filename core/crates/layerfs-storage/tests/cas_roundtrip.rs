@@ -2,7 +2,7 @@
 
 mod support;
 
-use layerfs_content::ObjectRole;
+use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{SchemaIdentity, StorageError, StoragePolicy, Store, SCHEMA_IDENTITY};
 use support::{
     construct_file, create_store, disabled, noise, open_store, patterned, read_objects, repeat,
@@ -138,4 +138,40 @@ fn missing_object_is_a_definite_failure() {
     let error = disabled(|scope| store.read_batch(&[absent], scope.child("read"))).unwrap_err();
     assert!(matches!(error, StorageError::ObjectMissing(_)));
     assert_ne!(absent, root);
+}
+
+#[test]
+fn a_read_wave_is_bounded_by_the_declared_ceiling() {
+    // A read wave is one grouped query plus one decode workspace. Its size is a
+    // declared capacity, so a caller cannot turn one call into unbounded decode
+    // work by handing over a longer slice: the demand is refused before a
+    // connection is opened.
+    let dir = TempDir::new("read-bound");
+    let path = dir.store_path("read-bound");
+    let store = create_store(&path);
+    let limit = store.capacities().read_objects;
+    assert!(limit > 0, "the ceiling is declared: {limit}");
+    let within = vec![ObjectId::for_bytes(b"not-stored"); limit];
+    // A demand at the ceiling is answered as far as it goes: the objects are not
+    // there, and that is a read result, not a capacity refusal.
+    assert!(
+        !matches!(
+            disabled(|scope| store.read_batch(&within, scope.child("storage.read"))),
+            Err(StorageError::CapacityExceeded { .. })
+        ),
+        "a demand at the declared ceiling is not refused as oversized"
+    );
+    let over = vec![ObjectId::for_bytes(b"not-stored"); limit + 1];
+    match disabled(|scope| store.read_batch(&over, scope.child("storage.read"))) {
+        Err(StorageError::CapacityExceeded {
+            what,
+            limit: refused,
+            actual,
+        }) => {
+            assert_eq!(what, "storage.read_objects");
+            assert_eq!(refused, limit as u64);
+            assert_eq!(actual, (limit + 1) as u64);
+        }
+        other => panic!("one object over the ceiling must be refused: {other:?}"),
+    }
 }

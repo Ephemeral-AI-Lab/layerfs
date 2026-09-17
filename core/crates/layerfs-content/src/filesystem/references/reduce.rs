@@ -77,6 +77,11 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
         }
     }
 
+    /// Checks once that the backing can hold the declared ordering ceiling.
+    pub fn check_backing_capacity(&self) -> ContentResult<()> {
+        self.runs.check_capacity()
+    }
+
     /// Work performed so far.
     pub fn work(&self) -> ReferenceWork {
         let mut work = self.work;

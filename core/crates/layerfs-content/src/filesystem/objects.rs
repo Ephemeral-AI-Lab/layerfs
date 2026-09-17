@@ -12,6 +12,13 @@
 use crate::error::ContentResult;
 use crate::object::{AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId};
 
+/// Objects one authenticated read wave may demand through a filesystem operation.
+///
+/// The storage side declares the same figure, and the pool that feeds both is
+/// bounded by it, so a wave is always a bounded amount of provider and decode
+/// work rather than an unchecked slice length.
+pub const MAXIMUM_READ_DEMANDS: usize = 4_096;
+
 /// Work one filesystem operation performed on canonical objects.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ObjectWork {
@@ -73,7 +80,19 @@ impl<'a> FilesystemObjects<'a> {
     }
 
     /// Reads one bounded group as a single authenticated demand wave.
+    ///
+    /// The group is bounded by [`MAXIMUM_READ_DEMANDS`]: one wave is one grouped
+    /// provider call and one decode workspace, so its size is a declared resource
+    /// rather than whatever slice a caller happens to pass. The provider's own
+    /// ceiling is the same figure, so a wave this boundary accepts is one the
+    /// storage side accepts too.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        if ids.len() > MAXIMUM_READ_DEMANDS {
+            return Err(crate::error::ContentError::ObjectLimitExceeded {
+                limit: MAXIMUM_READ_DEMANDS,
+                actual: ids.len(),
+            });
+        }
         let values = self.reader.read_canonical_batch(ids)?;
         if values.len() != ids.len() {
             return Err(crate::error::ContentError::BatchCardinality {

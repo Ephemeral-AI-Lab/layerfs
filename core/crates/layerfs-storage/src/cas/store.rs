@@ -201,6 +201,7 @@ impl Store {
         ids: &[ObjectId],
         scope: TimingScope<'_>,
     ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
+        check_read_demand(ids, self.capacities.read_objects)?;
         scope.run(|read_scope| {
             let connection = connection::open(&self.path, false)?;
             // The ceiling is the publication watermark: the last pack belonging to
@@ -240,6 +241,22 @@ impl Store {
             lookup::present(&connection, ids, ceiling)
         })
     }
+}
+
+/// Refuses a demand larger than the declared read ceiling.
+///
+/// The ceiling is a caller-declared resource, not a trigger: a wave that exceeds
+/// it fails before a connection is opened, so a caller cannot turn one query into
+/// unbounded decode work by passing a longer slice.
+fn check_read_demand(ids: &[ObjectId], limit: usize) -> StorageResult<()> {
+    if ids.len() > limit {
+        return Err(StorageError::CapacityExceeded {
+            what: "storage.read_objects",
+            limit: limit as u64,
+            actual: ids.len() as u64,
+        });
+    }
+    Ok(())
 }
 
 /// One exclusive save operation with bounded acceptance.
@@ -318,6 +335,7 @@ impl SaveOperation {
         ids: &[ObjectId],
         scope: TimingScope<'_>,
     ) -> StorageResult<Vec<Vec<u8>>> {
+        check_read_demand(ids, self.capacities.read_objects)?;
         scope.run(|read_scope| {
             let pending: Vec<(ObjectId, Vec<u8>)> = ids
                 .iter()

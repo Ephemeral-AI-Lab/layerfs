@@ -63,6 +63,13 @@ pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
 pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
 /// Rows removed by one bounded cleanup page.
 pub const CLEANUP_PAGE_ROWS: usize = 128;
+/// Objects one authenticated read wave may demand.
+///
+/// One wave is one grouped SQL lookup plus one shared decode workspace, so the
+/// reference's lookup page (128) is the wrong figure to copy here: a tree walk
+/// demands a page's children at once. This is the declared ceiling for that
+/// demand, and the C1 provider inherits it.
+pub const READ_OBJECT_LIMIT: usize = 4_096;
 /// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
 /// bytes-role envelope and the 10-byte whole-file value header. The chunk lane's
 /// equivalent is 21 bytes, because a chunk value carries only its eight-byte
@@ -277,6 +284,12 @@ pub struct StorageCapacities {
     pub transaction_rows: u64,
     /// Canonical bytes per open transaction.
     pub transaction_bytes: u64,
+    /// Objects one authenticated read wave may demand.
+    ///
+    /// A read wave is one grouped query with one decode workspace, so its size is
+    /// a declared resource rather than an unbounded caller choice. The same
+    /// figure bounds a save's own in-transaction read.
+    pub read_objects: usize,
 }
 
 impl StorageCapacities {
@@ -304,6 +317,7 @@ impl StorageCapacities {
             batch_bytes: BATCH_CANONICAL_BYTES_LIMIT,
             transaction_rows: TRANSACTION_ROW_LIMIT,
             transaction_bytes: TRANSACTION_CANONICAL_BYTES_LIMIT,
+            read_objects: READ_OBJECT_LIMIT,
         })
     }
 

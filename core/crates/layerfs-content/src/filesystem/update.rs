@@ -23,7 +23,7 @@ use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
 use crate::filesystem::root::{profile_id, FilesystemRoot, FilesystemRootId};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::filesystem::sorted::SortedWork;
-use crate::filesystem::validate;
+use crate::filesystem::validate::{self, ValidationWork};
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectId, ObjectRole};
 
@@ -48,6 +48,8 @@ pub struct FilesystemUpdateCounters {
     pub directory_updates: u64,
     /// Base inode records read while deriving final counts.
     pub base_records_read: u64,
+    /// Validation work: the reads, pages and entries the checks performed.
+    pub validation: ValidationWork,
 }
 
 /// One completed filesystem operation.
@@ -150,9 +152,15 @@ fn run_body<'b>(
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
 ) -> ContentResult<FilesystemResult> {
-    let checked = phases.phase("validate", || validate::check(objects.reader(), input))?;
+    let mut validation = ValidationWork::default();
+    let checked = phases.phase("validate", || {
+        validate::check(objects.reader(), input, &mut validation)
+    })?;
     let reader = objects.reader();
-    let mut counters = FilesystemUpdateCounters::default();
+    let mut counters = FilesystemUpdateCounters {
+        validation,
+        ..FilesystemUpdateCounters::default()
+    };
     let table = checked.topology.table();
     let base_table = checked.topology.base.map(|root| root.inode_table());
     let mut reducer = ReferenceReducer::new(
@@ -165,6 +173,7 @@ fn run_body<'b>(
     // its parent already accounted the binding it lost, so there is no final
     // count to hold it and no page worth building.
     let unreachable = unreachable_parents(input);
+    reducer.check_backing_capacity()?;
     register_values(&mut reducer, input, &unreachable)?;
     let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
     phases.phase("directories", || -> ContentResult<()> {
@@ -308,6 +317,7 @@ fn run_body<'b>(
             input.resources.base_read_batch,
             input.root_serial,
             &unreachable,
+            input.resources.maximum_touched_serials(),
         )?;
         counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
         counters.release = release_zero_count(
@@ -449,8 +459,18 @@ fn zero_count_serials(
     base_batch: usize,
     root_serial: u64,
     unreachable: &BTreeMap<u64, ()>,
+    maximum_serials: usize,
 ) -> ContentResult<(Vec<u64>, u64)> {
     let touched = reducer.touched_serials(base_batch)?;
+    if touched.len() > maximum_serials {
+        // The collection is one `u64` per touched inode and belongs to the same
+        // declared ordering budget as the rows themselves, so it is refused
+        // rather than allocated past the caller's ceiling.
+        return Err(ContentError::ObjectLimitExceeded {
+            limit: maximum_serials,
+            actual: touched.len(),
+        });
+    }
     reducer.note_serials_scanned(touched.len() as u64);
     let mut zero = Vec::new();
     let mut reads = 0_u64;

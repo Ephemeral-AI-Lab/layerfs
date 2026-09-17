@@ -43,6 +43,13 @@ pub struct RunStore<'r, 'b> {
     limit: u64,
     /// Bytes of the pending rows the reducer is about to spill.
     pending_bytes: u64,
+    /// Bytes of the run inputs a merge holds while its output is written.
+    ///
+    /// A merge reads two runs and writes a third, and all three exist at once.
+    /// Taking the inputs out of `levels` before merging used to drop them from
+    /// the declared set, so the ceiling never covered the bytes the operation
+    /// really owned at that moment.
+    merge_input_bytes: u64,
     work: MergeWork,
 }
 
@@ -62,10 +69,32 @@ impl<'r, 'b> RunStore<'r, 'b> {
             levels: Vec::new(),
             scans: Vec::new(),
             merge_buffer: merge_buffer.max(ROW_BYTES),
-            limit: limit.max(ROW_BYTES as u64),
+            limit,
             pending_bytes: 0,
+            merge_input_bytes: 0,
             work: MergeWork::default(),
         }
+    }
+
+    /// Checks that the backing can hold the declared ordering ceiling.
+    ///
+    /// The ceiling is this operation's promise to itself. If the physical owner's
+    /// own ceiling is smaller, the promise is unenforceable and the operation
+    /// fails before it starts rather than discovering it at the first spill.
+    pub fn check_capacity(&self) -> ContentResult<()> {
+        let Some(capacity) = self
+            .backing
+            .as_deref()
+            .and_then(|backing| backing.capacity_bytes())
+        else {
+            return Ok(());
+        };
+        if capacity < self.limit {
+            return Err(ContentError::ResourceUnavailable {
+                what: "ordering backing capacity",
+            });
+        }
+        Ok(())
     }
 
     /// The declared ordering ceiling.
@@ -98,9 +127,17 @@ impl<'r, 'b> RunStore<'r, 'b> {
         Ok(())
     }
 
+    /// Bytes the operation owns right now: live runs, spilled-but-unmerged
+    /// inputs, the pending rows about to be spilled and any reserved output.
+    pub fn owned_bytes(&self) -> u64 {
+        self.run_bytes()
+            .saturating_add(self.pending_bytes)
+            .saturating_add(self.merge_input_bytes)
+    }
+
     /// Reserves `bytes` of storage this operation is about to create.
     pub fn reserve(&mut self, bytes: u64) -> ContentResult<()> {
-        let owned = self.run_bytes().saturating_add(self.pending_bytes);
+        let owned = self.owned_bytes();
         let next = owned
             .checked_add(bytes)
             .ok_or(ContentError::LengthOverflow)?;
@@ -205,9 +242,15 @@ impl<'r, 'b> RunStore<'r, 'b> {
         let mut older_runs = Vec::new();
         for slot in &mut self.levels[..level] {
             if let Some(older) = slot.take() {
+                self.merge_input_bytes = self
+                    .merge_input_bytes
+                    .saturating_add(older.count * ROW_BYTES as u64);
                 older_runs.push(older);
             }
         }
+        self.merge_input_bytes = self
+            .merge_input_bytes
+            .saturating_add(run.count * ROW_BYTES as u64);
         for older in older_runs {
             // The merge output coexists with both inputs, so it is reserved
             // before it is written.
@@ -227,7 +270,15 @@ impl<'r, 'b> RunStore<'r, 'b> {
                     what: "ordering backing",
                 })?;
             run = merge_runs(backing, &older, &run, self.merge_buffer, &mut self.work)?;
+            // The older input is dropped here: its bytes leave the owned set
+            // with it, and the surviving run still counts the newer input.
+            self.merge_input_bytes = self
+                .merge_input_bytes
+                .saturating_sub(older.count * ROW_BYTES as u64);
         }
+        self.merge_input_bytes = self
+            .merge_input_bytes
+            .saturating_sub(run.count * ROW_BYTES as u64);
         // Obsolete tiers were dropped above, which returned their bytes and
         // removed their files; only the surviving run stays owned.
         for slot in &mut self.levels[..level] {
@@ -335,11 +386,15 @@ impl<'r, 'b> RunStore<'r, 'b> {
         let mut sources = Vec::new();
         for index in 0..self.levels.len() {
             if let Some(run) = self.levels[index].take() {
+                self.merge_input_bytes = self
+                    .merge_input_bytes
+                    .saturating_add(run.count * ROW_BYTES as u64);
                 sources.push(run);
             }
         }
         let mut combined: Option<Run> = None;
         for run in sources {
+            let consumed = run.count * ROW_BYTES as u64;
             let output_rows = run
                 .count
                 .checked_add(combined.as_ref().map_or(0, |run| run.count))
@@ -370,6 +425,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
                     &mut self.work,
                 )?),
             };
+            self.merge_input_bytes = self.merge_input_bytes.saturating_sub(consumed);
         }
         // Dropping the input tiers here returns their bytes; the consolidated run
         // is the only one left owned.

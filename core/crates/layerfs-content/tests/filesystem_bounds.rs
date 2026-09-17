@@ -540,3 +540,201 @@ fn every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not
 
 /// Smallest plausible simultaneous ordering bytes for a run-backed update.
 const ROW_FLOOR: u64 = 96;
+
+#[test]
+fn validation_reads_are_charged_to_the_operation() {
+    // The checks read the base they are about to change. Those reads belong to
+    // the operation, so its counters must show them instead of reporting zero
+    // while the checks work through pages.
+    let (mut session, d, _e, _f) = nested();
+    let extra = session.allocate();
+    let result = session
+        .apply(
+            &[
+                DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![(name("n"), Some(extra))],
+                },
+                DirectoryUpdate {
+                    parent: d,
+                    changes: vec![(name("m"), Some(extra))],
+                },
+            ],
+            &[InodeUpdate {
+                serial: extra,
+                value: regular("bounds/validation"),
+            }],
+            &[extra],
+        )
+        .expect("a second name for a regular file is legal");
+    let validation = result.counters.validation;
+    assert!(
+        validation.objects_read > 0,
+        "the checks read base records: {validation:?}"
+    );
+    assert!(
+        validation.inode_demands > 0,
+        "the checks demanded inode records: {validation:?}"
+    );
+    assert!(
+        validation.read_waves > 0,
+        "the checks issued read waves: {validation:?}"
+    );
+}
+
+/// Builds `/d/e` and `/d/f` as a fresh tree and returns the session with the
+/// directory serial, the child directory serial and the file serial.
+fn nested() -> (Session, u64, u64, u64) {
+    let mut session = Session::new(1).expect("empty");
+    let d = session.allocate();
+    let e = session.allocate();
+    let f = session.allocate();
+    session
+        .apply(
+            &[
+                DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![(name("d"), Some(d))],
+                },
+                DirectoryUpdate {
+                    parent: d,
+                    changes: vec![(name("e"), Some(e)), (name("f"), Some(f))],
+                },
+                DirectoryUpdate {
+                    parent: e,
+                    changes: Vec::new(),
+                },
+            ],
+            &[
+                InodeUpdate {
+                    serial: d,
+                    value: dir_value(),
+                },
+                InodeUpdate {
+                    serial: e,
+                    value: dir_value(),
+                },
+                InodeUpdate {
+                    serial: f,
+                    value: regular("bounds/f"),
+                },
+            ],
+            &[d, e, f],
+        )
+        .expect("nested tree");
+    (session, d, e, f)
+}
+
+#[test]
+fn a_backing_too_small_for_the_declared_ceiling_is_refused_up_front() {
+    // The declared ordering ceiling is the operation's own promise. A backing
+    // whose own ceiling is smaller cannot hold it, so the operation fails before
+    // any spill discovers it halfway through.
+    let mut session = Session::new(1).expect("empty");
+    let extra = session.allocate();
+    let temp = TempDir::new("bounds-ordering-capacity");
+    let mut backing = RecordingBacking::with_capacity(temp.path(), 4 * 1024);
+    let resources = FilesystemResources {
+        ordering_bytes: 32 * 1024 * 1024,
+        ..resources()
+    };
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &[DirectoryUpdate {
+            parent: 1,
+            changes: vec![(name("x"), Some(extra))],
+        }],
+        inodes: &[InodeUpdate {
+            serial: extra,
+            value: regular("bounds/capacity"),
+        }],
+        new_inodes: &[extra],
+        resources,
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let outcome = {
+        let mut objects = FilesystemObjects::new(&provider, &mut sink);
+        update_filesystem(&mut objects, &input, Some(&mut backing))
+    };
+    assert!(
+        matches!(
+            outcome,
+            Err(layerfs_content::ContentError::ResourceUnavailable {
+                what: "ordering backing capacity"
+            })
+        ),
+        "a backing that cannot hold the declared ceiling must be refused: {outcome:?}"
+    );
+    assert!(
+        !backing.owns_storage(),
+        "a refused operation owns no ordering storage"
+    );
+}
+
+#[test]
+fn merge_inputs_and_output_are_covered_by_the_declared_ceiling() {
+    // A spill merges older tiers into the new batch. Every input, the output and
+    // the batch exist at once, and the operation's own accounting has to cover
+    // all of them: it may not count only the surviving run.
+    let mut session = Session::new(1).expect("empty");
+    let mut changes = Vec::new();
+    let mut inodes = Vec::new();
+    let mut new_inodes = Vec::new();
+    for index in 0..64_u64 {
+        let serial = session.allocate();
+        changes.push((name(&format!("f{index:04}")), Some(serial)));
+        inodes.push(InodeUpdate {
+            serial,
+            value: regular(&format!("bounds/content-{index}")),
+        });
+        new_inodes.push(serial);
+    }
+    new_inodes.sort_unstable();
+    let temp = TempDir::new("bounds-ordering-owned");
+    let mut backing = RecordingBacking::with_capacity(temp.path(), 8 * 1024 * 1024);
+    let resources = FilesystemResources {
+        // Small enough that the pending map really spills, large enough to hold
+        // the rows of every tier plus the merge output.
+        maximum_pending_records: 8,
+        ordering_bytes: 4 * 1024 * 1024,
+        ..resources()
+    };
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &[DirectoryUpdate { parent: 1, changes }],
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources,
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let result = {
+        let mut objects = FilesystemObjects::new(&provider, &mut sink);
+        update_filesystem(&mut objects, &input, Some(&mut backing))
+    }
+    .expect("a declared ceiling large enough for the work");
+    let references = result.counters.references;
+    assert!(
+        references.rows_spilled > 0,
+        "the operation must really spill: {references:?}"
+    );
+    assert!(
+        references.runs.peak_run_bytes > 0,
+        "the reported peak must cover the runs: {references:?}"
+    );
+    assert!(
+        references.runs.peak_run_bytes <= resources.ordering_bytes,
+        "the reported peak may not exceed the declared ceiling: {references:?}"
+    );
+    assert!(
+        backing.peak_bytes() <= resources.ordering_bytes,
+        "the physical owner stayed inside the declared ceiling: {} > {}",
+        backing.peak_bytes(),
+        resources.ordering_bytes
+    );
+}

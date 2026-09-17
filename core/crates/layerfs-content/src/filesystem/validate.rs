@@ -20,6 +20,28 @@ use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
+/// Work one operation's validation performed.
+///
+/// Validation reads the base it is about to change: the parent records, the
+/// bindings of the directories it walks and the entries of every directory it
+/// inspects for a cycle. Those reads are part of the operation's work and are
+/// reported with it, exactly like the merge's own reads.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ValidationWork {
+    /// Canonical objects read by the checks.
+    pub objects_read: u64,
+    /// Canonical read waves the checks issued.
+    pub read_waves: u64,
+    /// Inode records the checks demanded.
+    pub inode_demands: u64,
+    /// Inode pages the checks read.
+    pub inode_pages_read: u64,
+    /// Directory pages the checks read.
+    pub directory_pages_read: u64,
+    /// Directory entries the checks examined.
+    pub entries_examined: u64,
+}
+
 /// Entries the effective-tree cycle check may inspect before it refuses.
 pub const MAXIMUM_CYCLE_CHECK_ENTRIES: usize = 4_096;
 /// Serial demands one allocator-precondition wave may make.
@@ -94,6 +116,7 @@ pub struct CheckedInput<'a> {
 pub fn check<'a>(
     reader: &dyn AuthenticatedObjects,
     input: &'a FilesystemInput<'a>,
+    work: &mut ValidationWork,
 ) -> ContentResult<CheckedInput<'a>> {
     input.check()?;
     let topology = FilesystemTopology::load(reader, input.base, input.scope, input.root_serial)?;
@@ -105,7 +128,7 @@ pub fn check<'a>(
     let mut by_parent: BTreeMap<u64, Vec<Vec<u8>>> = BTreeMap::new();
     // The allocator precondition is checked before anything else: a serial the
     // caller calls new must not already exist in the base it addresses.
-    check_new_identities(reader, input, topology)?;
+    check_new_identities(reader, input, topology, work)?;
     for update in input.directories {
         if update.parent == input.root_serial && input.base.is_none() {
             // The root directory of a new filesystem is built by this operation.
@@ -121,7 +144,7 @@ pub fn check<'a>(
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
         } else if let Some(table) = topology.table {
-            let record = lookup_one(reader, table, update.parent)?;
+            let record = lookup_one(reader, table, update.parent, work)?;
             if record.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
@@ -144,7 +167,7 @@ pub fn check<'a>(
             // The kind comes from the stored record for an existing inode and
             // from the caller's typed value for one this operation allocates.
             let stored = match topology.table {
-                Some(table) => lookup_optional(reader, table, *child)?,
+                Some(table) => lookup_optional(reader, table, *child, work)?,
                 None => None,
             };
             let previous = stored.or_else(|| input.value_for(*child));
@@ -176,7 +199,7 @@ pub fn check<'a>(
             }
         }
     }
-    check_parent_aliases(reader, input, &topology, &by_parent)?;
+    check_parent_aliases(reader, input, &topology, &by_parent, work)?;
     for update in input.directories {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
@@ -202,7 +225,7 @@ pub fn check<'a>(
         removals,
         declared_new,
     };
-    check_effective_cycles(reader, &checked)?;
+    check_effective_cycles(reader, &checked, work)?;
     Ok(checked)
 }
 
@@ -218,6 +241,7 @@ fn check_parent_aliases(
     input: &FilesystemInput<'_>,
     topology: &FilesystemTopology,
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
+    work: &mut ValidationWork,
 ) -> ContentResult<()> {
     if by_parent.is_empty() {
         return Ok(());
@@ -248,18 +272,23 @@ fn check_parent_aliases(
         if !seen.insert(parent) {
             continue;
         }
-        let record = lookup_one(reader, table, parent)?;
+        let record = lookup_one(reader, table, parent, work)?;
         let mut after = None;
         loop {
+            let mut directory = DirectoryReadWork::default();
             let page = list_after(
                 reader,
                 DirectoryRoot(record.content_root),
                 after.as_ref(),
                 64,
                 crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
-                &mut DirectoryReadWork::default(),
+                &mut directory,
             )?;
+            charge_directory(work, directory);
             visited = visited.saturating_add(page.entries.len());
+            work.entries_examined = work
+                .entries_examined
+                .saturating_add(page.entries.len() as u64);
             if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
                 return Err(ContentError::InvalidRecord("cycle check work limit"));
             }
@@ -272,7 +301,7 @@ fn check_parent_aliases(
                 if restated {
                     continue;
                 }
-                if lookup_optional(reader, table, serial)?
+                if lookup_optional(reader, table, serial, work)?
                     .is_some_and(|value| value.kind == InodeKind::Directory)
                 {
                     pending.push(serial);
@@ -342,10 +371,28 @@ fn base_binding_survives(
     }
 }
 
+/// Charges one inode lookup's work.
+fn charge_inode(work: &mut ValidationWork, inode: InodeReadWork) {
+    work.objects_read = work.objects_read.saturating_add(inode.demands);
+    work.read_waves = work.read_waves.saturating_add(inode.read_waves);
+    work.inode_demands = work.inode_demands.saturating_add(inode.demands);
+    work.inode_pages_read = work.inode_pages_read.saturating_add(inode.pages_read);
+}
+
+/// Charges one directory listing's work.
+fn charge_directory(work: &mut ValidationWork, directory: DirectoryReadWork) {
+    work.objects_read = work.objects_read.saturating_add(directory.pages_read);
+    work.read_waves = work.read_waves.saturating_add(directory.read_waves);
+    work.directory_pages_read = work
+        .directory_pages_read
+        .saturating_add(directory.pages_read);
+}
+
 fn check_new_identities(
-    _reader: &dyn AuthenticatedObjects,
+    reader: &dyn AuthenticatedObjects,
     input: &FilesystemInput<'_>,
     topology: FilesystemTopology,
+    work: &mut ValidationWork,
 ) -> ContentResult<()> {
     if input.new_inodes.is_empty() {
         return Ok(());
@@ -354,7 +401,9 @@ fn check_new_identities(
         return Ok(());
     };
     for wave in input.new_inodes.chunks(ALLOCATION_CHECK_BATCH) {
-        let found = lookup_many(_reader, table, wave, &mut InodeReadWork::default())?;
+        let mut inode = InodeReadWork::default();
+        let found = lookup_many(reader, table, wave, &mut inode)?;
+        charge_inode(work, inode);
         if found.iter().any(Option::is_some) {
             return Err(ContentError::InvalidRecord("reused inode serial"));
         }
@@ -395,9 +444,10 @@ fn check_root_invariants(input: &FilesystemInput<'_>) -> ContentResult<()> {
 fn check_effective_cycles(
     reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
+    work: &mut ValidationWork,
 ) -> ContentResult<()> {
     if checked.input.base.is_none() {
-        return check_build_reachability(reader, checked);
+        return check_build_reachability(reader, checked, work);
     }
     let table = checked.topology.table;
     for update in checked.input.directories {
@@ -406,7 +456,7 @@ fn check_effective_cycles(
                 continue;
             };
             let stored = match table {
-                Some(table) => lookup_optional(reader, table, *child)?,
+                Some(table) => lookup_optional(reader, table, *child, work)?,
                 None => None,
             };
             let kind = match stored {
@@ -439,7 +489,7 @@ fn check_effective_cycles(
                     .unwrap_or(&[]);
                 let entries = match base_root {
                     Some(content_root) => {
-                        effective_entries(reader, content_root, changes, &mut visited)?
+                        effective_entries(reader, content_root, changes, &mut visited, work)?
                     }
                     None => effective_entries_without_base(changes),
                 };
@@ -448,7 +498,7 @@ fn check_effective_cycles(
                         return Err(ContentError::InvalidRecord("effective tree cycle"));
                     }
                     let entering = match table {
-                        Some(table) => lookup_optional(reader, table, entry_serial)?,
+                        Some(table) => lookup_optional(reader, table, entry_serial, work)?,
                         None => None,
                     };
                     if let Some(entry) = entering {
@@ -473,7 +523,11 @@ fn check_effective_cycles(
 fn check_build_reachability(
     _reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
+    work: &mut ValidationWork,
 ) -> ContentResult<()> {
+    // A build states its own bindings: the walk reads no base object, and the
+    // entries it counts are the ones the caller supplied.
+    let _ = &work;
     // Every directory binding this operation states, as `(parent, child)` pairs.
     // `update_for` answers by parent serial, so the pairs come from the updates
     // themselves rather than from a serial-keyed lookup.
@@ -550,20 +604,26 @@ fn effective_entries(
     content_root: ObjectId,
     changes: &[(crate::filesystem::path::PathName, Option<u64>)],
     visited: &mut usize,
+    work: &mut ValidationWork,
 ) -> ContentResult<Vec<(crate::filesystem::path::PathName, u64)>> {
     let mut base = Vec::new();
     let mut after = None;
     loop {
+        let mut directory = DirectoryReadWork::default();
         let page = list_after(
             reader,
             DirectoryRoot(content_root),
             after.as_ref(),
             64,
             crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
-            &mut DirectoryReadWork::default(),
+            &mut directory,
         )?;
+        charge_directory(work, directory);
         base.extend(page.entries.iter().cloned());
         *visited = visited.saturating_add(page.entries.len());
+        work.entries_examined = work
+            .entries_examined
+            .saturating_add(page.entries.len() as u64);
         if *visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
             return Err(ContentError::InvalidRecord("cycle check work limit"));
         }
@@ -603,15 +663,20 @@ fn lookup_one(
     reader: &dyn AuthenticatedObjects,
     table: InodeTable,
     serial: u64,
+    work: &mut ValidationWork,
 ) -> ContentResult<InodeValue> {
-    lookup_optional(reader, table, serial)?.ok_or(ContentError::InvalidRecord("missing base inode"))
+    lookup_optional(reader, table, serial, work)?
+        .ok_or(ContentError::InvalidRecord("missing base inode"))
 }
 
 fn lookup_optional(
     reader: &dyn AuthenticatedObjects,
     table: InodeTable,
     serial: u64,
+    work: &mut ValidationWork,
 ) -> ContentResult<Option<InodeValue>> {
-    let found = lookup_many(reader, table, &[serial], &mut InodeReadWork::default())?;
+    let mut inode = InodeReadWork::default();
+    let found = lookup_many(reader, table, &[serial], &mut inode)?;
+    charge_inode(work, inode);
     Ok(found.into_iter().next().flatten())
 }
