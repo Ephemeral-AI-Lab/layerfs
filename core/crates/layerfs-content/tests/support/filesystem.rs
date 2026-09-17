@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 
+use layerfs_content::filesystem::references::backing::OrderingBacking;
 use layerfs_content::filesystem::{FilesystemObjects, FilesystemResources, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{
@@ -34,6 +35,15 @@ impl TreeStore {
         self.objects.insert(id, canonical);
         self.roles.insert(id, role);
         id
+    }
+
+    /// Replaces the bytes stored under an existing identity.
+    ///
+    /// The identity no longer matches the bytes, which is exactly the "the
+    /// provider served an object that is not the one demanded" case: a provider
+    /// that authenticates its reads must reject it.
+    pub fn overwrite(&mut self, id: ObjectId, canonical: Vec<u8>) {
+        self.objects.insert(id, canonical);
     }
 
     /// Number of distinct objects.
@@ -449,6 +459,21 @@ impl RecordingBacking {
     pub fn runs_created(&self) -> u64 {
         self.inner.runs()
     }
+
+    /// Bytes the backing currently owns.
+    pub fn held_bytes(&self) -> u64 {
+        self.inner.held_bytes()
+    }
+
+    /// Largest simultaneous bytes the backing owned.
+    pub fn peak_bytes(&self) -> u64 {
+        self.inner.peak_bytes()
+    }
+
+    /// True when a removal this backing attempted failed.
+    pub fn cleanup_failed(&self) -> bool {
+        self.inner.cleanup_failed()
+    }
 }
 
 impl layerfs_content::filesystem::references::backing::OrderingBacking for RecordingBacking {
@@ -569,4 +594,54 @@ pub fn count_role(store: &TreeStore, role: ObjectRole) -> usize {
         .iter()
         .filter(|(_, seen)| *seen == role)
         .count()
+}
+
+/// Provider that records every demanded identity and the size of each wave.
+pub struct CountingProvider<'a> {
+    inner: &'a TreeStore,
+    demanded: std::cell::RefCell<std::collections::BTreeSet<ObjectId>>,
+    waves: std::cell::RefCell<Vec<usize>>,
+}
+
+impl<'a> CountingProvider<'a> {
+    /// Wraps one store.
+    pub fn new(inner: &'a TreeStore) -> Self {
+        Self {
+            inner,
+            demanded: std::cell::RefCell::new(std::collections::BTreeSet::new()),
+            waves: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Every identity this provider was asked for.
+    pub fn demanded(&self) -> std::collections::BTreeSet<ObjectId> {
+        self.demanded.borrow().clone()
+    }
+
+    /// Sizes of the demand waves, in order.
+    pub fn waves(&self) -> Vec<usize> {
+        self.waves.borrow().clone()
+    }
+
+    /// Largest single wave.
+    pub fn peak_wave(&self) -> usize {
+        self.waves.borrow().iter().copied().max().unwrap_or(0)
+    }
+
+    /// Total objects demanded.
+    pub fn demands(&self) -> usize {
+        self.waves.borrow().iter().sum()
+    }
+}
+
+impl AuthenticatedObjects for CountingProvider<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        self.waves.borrow_mut().push(ids.len());
+        let mut demanded = self.demanded.borrow_mut();
+        for id in ids {
+            demanded.insert(*id);
+        }
+        drop(demanded);
+        self.inner.read_canonical_batch(ids)
+    }
 }

@@ -406,6 +406,7 @@ fn copy_run(
     let mut handle = backing.create_run()?;
     work.runs_created = work.runs_created.saturating_add(1);
     let mut reader = RunReader::new(run, buffer_bytes);
+    work.rows_read = work.rows_read.saturating_add(run.count);
     while let Some(row) = reader.next()? {
         handle.append(&row.encode()?)?;
         work.rows_written = work.rows_written.saturating_add(1);

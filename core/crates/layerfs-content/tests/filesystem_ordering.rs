@@ -359,6 +359,36 @@ fn growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes() {
 }
 
 #[test]
+fn a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop() {
+    let temp = TempDir::new("ordering-cleanup-visibility");
+    let mut backing = RecordingBacking::new(temp.path());
+    let run = backing.create_run().expect("run");
+    // Make the run's own path unremovable, then drop the run: the removal fails
+    // and the owner must record that rather than reporting a clean finish.
+    let path = std::fs::read_dir(temp.path())
+        .expect("listing")
+        .next()
+        .expect("one run file")
+        .expect("entry")
+        .path();
+    std::fs::remove_file(&path).expect("remove the file");
+    std::fs::create_dir(&path).expect("occupied directory");
+    std::fs::write(path.join("occupied"), b"x").expect("content");
+    drop(run);
+    let failure = layerfs_content::filesystem::references::backing::FileBacking::with_capacity(
+        temp.path(),
+        1024,
+    );
+    assert_eq!(backing.held_bytes(), 0, "a dropped run stops being owned");
+    let _ = failure;
+    assert!(
+        backing.cleanup_failed(),
+        "a removal failure must be recorded, not swallowed"
+    );
+    assert!(std::fs::remove_dir_all(&path).is_ok());
+}
+
+#[test]
 fn the_operation_ceiling_is_enforced_before_the_rows_are_written() {
     let temp = TempDir::new("ordering-operation-quota");
     let mut backing = RecordingBacking::new(temp.path());

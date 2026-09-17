@@ -366,3 +366,5 @@ pub fn corrupt_value_group_digest(path: &Path) {
         .expect("digest damage");
     assert_eq!(affected, 1);
 }
+
+pub mod filesystem;

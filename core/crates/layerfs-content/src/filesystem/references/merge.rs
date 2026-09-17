@@ -113,6 +113,7 @@ pub fn merge_runs(
     let mut newer_reader = RunReader::new(newer, buffer_bytes);
     let mut old = older_reader.next()?;
     let mut new = newer_reader.next()?;
+    work.rows_read = work.rows_read.saturating_add(older.count + newer.count);
     let mut count = 0_u64;
     let mut first = None;
     let mut last = 0_u64;

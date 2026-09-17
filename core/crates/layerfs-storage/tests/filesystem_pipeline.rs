@@ -9,6 +9,9 @@ mod support;
 
 use std::collections::BTreeMap;
 
+use support::filesystem::{
+    build_tree as build_shared_tree, database_state, save_bag, StoreReader as SharedStoreReader,
+};
 use support::{create_store, disabled, open_store, TempDir};
 
 use layerfs_content::filesystem::attributes::build::build_attribute_tree;
@@ -419,4 +422,90 @@ fn a_reopened_store_serves_an_update_of_the_saved_tree() {
         read.stat(&LogicalPath::new("alias").unwrap()),
         Err(ContentError::MissingObject)
     ));
+}
+
+#[test]
+fn the_saved_tree_reports_its_physical_footprint_and_reuses_it_unchanged() {
+    let temp = TempDir::new("stage5-filesystem-footprint");
+    let path = temp.store_path("filesystem");
+    let store = create_store(&path);
+    let built = build_shared_tree(1_200);
+    let first = save_bag(&store, &built.bag).expect("first save");
+    assert!(first.acknowledged, "the save is acknowledged");
+    assert!(
+        first.pool.leaves > 0,
+        "the inode leaves went through the pooled lane"
+    );
+    assert!(first.packs_created >= 1, "the tree created packs");
+    let after_first = database_state(&path);
+    assert!(after_first.0 > 0 && after_first.1 >= 1);
+    assert_eq!(
+        after_first.2, after_first.1,
+        "the watermark names the packs created"
+    );
+    let bytes_on_disk = std::fs::metadata(&path).expect("db metadata").len();
+    assert!(bytes_on_disk > 0, "the Store has a real on-disk footprint");
+
+    // The same objects save again as a pure reuse: no new rows, no new packs.
+    let again = save_bag(&store, &built.bag).expect("reuse save");
+    assert_eq!(again.inserted, 0, "every object is still catalogued");
+    assert!(again.reused > 0);
+    assert_eq!(again.packs_created, 0);
+    assert_eq!(
+        database_state(&path).0,
+        after_first.0,
+        "a reuse save adds no locator rows"
+    );
+    assert_eq!(database_state(&path).1, after_first.1);
+
+    // Every role the tree used is readable back through a fresh connection.
+    drop(store);
+    let store = open_store(&path);
+    let reader = SharedStoreReader::new(&store);
+    let mut roles = std::collections::HashMap::new();
+    for role in [
+        ObjectRole::DirectoryLeaf,
+        ObjectRole::InodeLeaf,
+        ObjectRole::FilesystemRoot,
+        ObjectRole::Symlink,
+        ObjectRole::AttributeLeaf,
+        ObjectRole::Chunk,
+        ObjectRole::ExtentLeaf,
+        ObjectRole::FileState,
+    ] {
+        roles.insert(role, built.bag.role_count(role));
+    }
+    for (role, count) in &roles {
+        if *count == 0 {
+            continue;
+        }
+        let id = built
+            .bag
+            .objects
+            .iter()
+            .find(|(_, (seen, _))| seen == role)
+            .map(|(id, _)| *id)
+            .expect("an object of this role");
+        let bytes = reader
+            .read_canonical(id)
+            .unwrap_or_else(|error| panic!("role {role:?} did not read back: {error}"));
+        assert_eq!(
+            ObjectId::for_bytes(&bytes),
+            id,
+            "role {role:?} read back under its stored identity"
+        );
+    }
+    // The pooled lane stores one leaf per 50-100 inodes, the profile's declared
+    // occupancy: 1,205 inodes cannot need fewer than 13 or more than 25 leaves.
+    let inodes = built.entries.len() + 5;
+    let leaves = roles.get(&ObjectRole::InodeLeaf).copied().unwrap_or(0);
+    assert!(
+        leaves >= inodes.div_ceil(100) && leaves <= inodes.div_ceil(50),
+        "{leaves} pooled leaves for {inodes} inodes is outside the declared occupancy"
+    );
+    assert_eq!(
+        database_state(&path).2,
+        after_first.2,
+        "the reuse save leaves the watermark where it was"
+    );
 }

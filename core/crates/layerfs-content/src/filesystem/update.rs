@@ -400,6 +400,7 @@ fn zero_count_serials(
     root_serial: u64,
 ) -> ContentResult<(Vec<u64>, u64)> {
     let touched = reducer.touched_serials(base_batch)?;
+    reducer.note_serials_scanned(touched.len() as u64);
     let mut zero = Vec::new();
     let mut reads = 0_u64;
     for wave in touched.chunks(base_batch.max(1)) {

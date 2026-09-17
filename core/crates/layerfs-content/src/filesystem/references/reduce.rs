@@ -29,7 +29,8 @@ pub const DEFAULT_BASE_BATCH: usize = 32;
 /// Work the reducer performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ReferenceWork {
-    /// Reference-effect rows created or updated in memory.
+    /// Reference-row insertions and updates. This is work, not cardinality: a
+    /// serial registered by the caller and then observed once counts twice.
     pub rows_touched: u64,
     /// Rows spilled to runs.
     pub rows_spilled: u64,
@@ -41,6 +42,9 @@ pub struct ReferenceWork {
     pub final_values: u64,
     /// Final removals emitted.
     pub final_removals: u64,
+    /// Serials collected once, in order, for the zero-count scan. This is the
+    /// operation's only touched-serial collection: one `u64` per touched inode.
+    pub serials_scanned: u64,
     /// Largest simultaneous pending rows.
     pub peak_pending: usize,
     /// Merge and spill work.
@@ -194,6 +198,11 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
             }
         }
         Ok(serials)
+    }
+
+    /// Charges the one collection the operation performs over touched serials.
+    pub fn note_serials_scanned(&mut self, serials: u64) {
+        self.work.serials_scanned = self.work.serials_scanned.saturating_add(serials);
     }
 
     /// Rows currently held in memory.
