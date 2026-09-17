@@ -225,3 +225,8 @@ They are recorded or linked here before implementation begins.
 
 Tracking issue:
 [#155](https://github.com/Ephemeral-AI-Lab/layerfs/issues/155).
+
+Stages 3-4 closeout: the component-decoupling batch under
+[#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165) has a completion
+gate table with per-packet evidence, controls and the memory ledger in
+[`component-decoupling/stages-3-4-closeout-report.md`](component-decoupling/stages-3-4-closeout-report.md).

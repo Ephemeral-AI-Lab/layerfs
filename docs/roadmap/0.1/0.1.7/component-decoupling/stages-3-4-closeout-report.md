@@ -88,8 +88,8 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G14 | Every declared verification case is RUN or NOT_RUN with a reason | W8.4 | OPEN | |
 | G15 | "Existing-or-better" for latency/storage/memory is resolved, or waived in writing | W8.6 | OPEN (B1) | |
 | G16 | The clipped `e1c` receipt is re-collected or annotated wherever quoted | W8.7 | OPEN | |
-| G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | OPEN | |
-| G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | OPEN | |
+| G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | **PASS** | `w9/README.md`; report §1/§7 corrected in place, §8 carries the plan's table, oracle paperwork fixed |
+| G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | **PASS** | `w9/README.md`: 956 over-removed lines and 4 083 test-module lines measured; combined 76 400; both snapshots counted by the corrected counter |
 | G19 | Limits boundary list run or explicitly unrun with reasons | W10 | OPEN | |
 | G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | IN PROGRESS | see §3; every commit so far carries the line |
 
@@ -250,6 +250,27 @@ G13-G15, G17-G19. Neither is complete yet.
   `/usr/bin/time -l` with its sha256, 14 focused targets, the workspace suite
   (43/263), clippy, fmt, boundary, tools and `git diff --check` — all exit 0.
 * **Production LOC.** core `10983 -> 10983` (delta 0; example and docs only).
+
+### W9 — documents, counter and the plan's actual-size table (G17, G18) — PASS
+
+* **W9.1** The report's §1 no longer says pooling is unimplemented or the frontier
+  partial; its LOC block and per-target table (including `timing` C1 = 7) match the
+  code at the closeout commit, and each correction is dated and names what it
+  replaced.
+* **W9.2** The transition paragraph states the real residual gap (read
+  amplification unmeasured) instead of presenting the handoff-prescribed dispatch
+  as a rebuild defect.
+* **W9.3** `edit_reference.rs`'s header and the oracle README's `git diff` claim are
+  corrected, with the date and the reason.
+* **W9.4** The file plan's required per-file table now lives in the report §8, with
+  directory totals, disjoint package totals and the files that are not plan rows.
+* **W9.5** Both counter defects fixed with a focused tool test each; the same
+  corrected counter is applied to `c38961f2f` (core 6 152) and to the current tree
+  (core 10 983, reference 65 417, combined **76 400**). The over-removal is 956
+  lines and the test-module inflation 4 083 lines, both measured.
+* **W9.6** `core/README.md`, the roadmap index, `implementation-plan.md`,
+  `implementation-issues.md` and the experiment ledger (L33) carry the closeout.
+* **Evidence.** `w9/w9-verify.log` — 11 commands, all exit 0.
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 

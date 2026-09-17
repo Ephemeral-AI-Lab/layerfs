@@ -1,8 +1,11 @@
 //! Reference-equivalence oracle for localized edits (Stage 4 checkpoint D).
 //!
-//! **Status: this target fails today, on purpose.** It is the executable
-//! counterexample the stored-node split/concat work must satisfy, not a claim that
-//! the work is done.
+//! **Status: this target passes.** It was written as the executable counterexample
+//! the stored-node split/concat work had to satisfy, and the work it describes is
+//! implemented: every one of the nine sealed cases matches the reference root, page
+//! partition and surviving leaf identities. The header said "this target fails
+//! today, on purpose" until 2026-09-17, when the independent review recorded that
+//! the target passes and that the sentence was stale.
 //!
 //! The fixtures under
 //! `docs/roadmap/0.1/0.1.7/evidence/stages-3-4-oracle-<UTC>/` were produced by the

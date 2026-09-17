@@ -1853,3 +1853,59 @@ stays `NOT_RUN` until its sealed v2 Store reappears. No merge, tag or release fo
   (`git show 30f5d0633:tools/preflight.sh`), and revert the `AGENTS.md` §4 paragraph
   in the same commit so policy and tooling cannot disagree. Do not do this while the
   architecture shift is in progress.
+
+### L33 — 2026-09-17: Stages 3-4 closeout after the independent review
+
+- Scope: the component-decoupling batch (#168 / #169 under #165), reviewed at the
+  pinned snapshot `91c3a0741fff64e8161d5c1b6e759f347ffbf757`. The review found the
+  implementation substantially complete but not complete; this entry records what
+  the closeout changed and every number it produced. Full gate table, per-packet
+  changes and controls: `docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-closeout-report.md`;
+  raw evidence: `docs/roadmap/0.1/0.1.7/evidence/stages-3-4-closeout-20260916T235641Z/`.
+- Fixed, with a control that fails without the fix: CHUNK advisory candidates now
+  take the eligibility decision instead of failing the save (`ObjectMissing` in the
+  control); the owner's publication ceiling reaches all four pooled read sites
+  (structural control + cached-group control); checkpoint D holds one decoded
+  representation per unfinished node, encodes and hashes once at final emission and
+  releases superseded drafts (frontier peak `[2208, 2288, 2448, 2768, 3408]` bytes at
+  1/2/4/8/16 edits versus `[6308, 12856, 26672, 57184, 129728]` with the release
+  removed); an accepted metadata depth is usable to its cap of 50 (control fails at
+  round 17 with the old charge and at the cap with the old walk bound); the pooled
+  index invalidation, the value-group compression branch, the placement fit probe,
+  the save-wide chain total and the pooled-role depth each have an oracle that fails
+  without its fix.
+- Counter: `tools/production_loc.py` removed 956 shipped reference lines through a
+  `#[cfg(...)]`-contains-"test" test and counted 4 083 lines of test-only modules
+  living under reference `src/`; both are fixed, each has a focused tool test, and
+  the same corrected counter is applied to the pre-Stage-3 base `c38961f2f`
+  (core 6 152) and to every commit since. Certified totals at the closeout commit:
+  core **10 983** (C1 4 388, C2 5 863, telemetry 732) in 75 files; reference
+  **65 417** in 193 files; combined **76 400**. The core subtotal is unchanged by
+  the correction because `core/crates/*/src` has no `cfg` attribute.
+- Memory: a new external instrumentation target
+  (`core/crates/layerfs-storage/examples/memory_ledger.rs`) reports phase-local heap
+  for six real product phases. At the E1b shape (24 leaves × 100 rows = 2 400 values)
+  the pooled save peaks at 3 450 007 bytes of phase-local heap while the ordered set
+  (57 600 bytes live), both codec workspaces (3 MiB) and SQLite work are live, and
+  charges 81 482 710 bytes over 9 977 allocations; the cold first leaf charges
+  3 472 168 over 464. Lifetime RSS for the example process is 16 777 216 bytes
+  (`/usr/bin/time -l`), which is a lifetime number and not a phase number.
+  `ru_maxrss` is reported `null` with its reason. Nulls and coverage are tabulated
+  in the W7 evidence README.
+- Verification actually run (each command individually, `--locked`,
+  `LAYERFS_CONSTRUCTION_WORKERS=1`): the workspace suite at the closeout commit —
+  43 targets, 263 tests, 0 failed, 93.4 s; `clippy --all-targets -D warnings`,
+  `fmt --all --check`, `core/tools/check_product_boundary.py`, both tool test
+  suites and `git diff --check` — exit 0. `tools/preflight.sh` was not run and no
+  aggregate gate was added. Two commands exceed the 15 s performance-selection
+  budget and are declared as verification runs in the evidence: `edit_reference`
+  (55.5 s, nine sealed reference cases) and the workspace suite (93.4 s). No
+  performance or memory gate is claimed from them.
+- Open, with the owner: escalation E1 (a repeated-sample matched campaign; the
+  verification contract allows one sample per case unless an owner-approved campaign
+  says otherwise) and E2 (the pooled lane assignment against the design table —
+  value groups in v6 with pooled leaf records in the v1 ordinary lane, and v5
+  refused by scope). Both are recorded in the closeout report; neither blocks the
+  packets that do not depend on them.
+- No durability, release, tag or issue-state claim follows from this entry; both
+  issues close only when their own gate rows are PASS or owner-waived.

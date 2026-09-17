@@ -1,0 +1,904 @@
+=== identity
+start commit: 09c1246a560b7c90e49e4a24eefcb39753ab97f3
+start tree:   125c3c21eb013b0ae475ef5f89b28471068b04a7
+cargo: cargo 1.85.1 (d73d2caf9 2024-12-31)
+rustc: rustc 1.85.1 (4eb161250 2025-03-15)
+
+=== counter tool tests (17) | 2026-09-17T01:19:43Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 -m unittest discover -s tools -p test_production_loc.py
+.................
+----------------------------------------------------------------------
+Ran 17 tests in 0.042s
+
+OK
+--- exit 0 | wall 0.209s
+=== counter over the current tree | 2026-09-17T01:19:44Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 tools/production_loc.py --detail
+core        10983 production lines in   75 files
+          layerfs-content                                     4388
+          layerfs-storage                                     5863
+          layerfs-telemetry                                    732
+reference   65417 production lines in  193 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10986
+          layerfs-layerstack-store                           18376
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          979
+          layerfs-workspace                                  11776
+          layerfs-workspace-core                              2452
+combined    76400 production lines
+--- exit 0 | wall 5.735s
+=== counter over the pre-Stage-3 base c38961f2f | 2026-09-17T01:19:49Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 tools/production_loc.py --root /tmp/locbase --detail
+core         6152 production lines in   52 files
+          layerfs-content                                     2336
+          layerfs-storage                                     3084
+          layerfs-telemetry                                    732
+reference   65417 production lines in  193 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10986
+          layerfs-layerstack-store                           18376
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          979
+          layerfs-workspace                                  11776
+          layerfs-workspace-core                              2452
+combined    71569 production lines
+--- exit 0 | wall 5.493s
+=== counter per file | 2026-09-17T01:19:55Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 tools/production_loc.py --files
+path                                                                           scope        prod  physical
+core/crates/layerfs-content/src/error.rs                                       core          120       174
+core/crates/layerfs-content/src/file/cdc/gear.rs                               core          494       538
+core/crates/layerfs-content/src/file/cdc/mod.rs                                core            5        10
+core/crates/layerfs-content/src/file/content.rs                                core          197       254
+core/crates/layerfs-content/src/file/edit/apply.rs                             core          388       450
+core/crates/layerfs-content/src/file/edit/compare.rs                           core           67        86
+core/crates/layerfs-content/src/file/edit/concat.rs                            core           19        29
+core/crates/layerfs-content/src/file/edit/finish.rs                            core           38        54
+core/crates/layerfs-content/src/file/edit/input.rs                             core          286       390
+core/crates/layerfs-content/src/file/edit/mod.rs                               core           15        20
+core/crates/layerfs-content/src/file/edit/split.rs                             core           23        32
+core/crates/layerfs-content/src/file/edit/tree.rs                              core          627       805
+core/crates/layerfs-content/src/file/mapping/build.rs                          core          309       391
+core/crates/layerfs-content/src/file/mapping/codec.rs                          core          303       334
+core/crates/layerfs-content/src/file/mapping/mod.rs                            core           15        20
+core/crates/layerfs-content/src/file/mapping/read.rs                           core          210       241
+core/crates/layerfs-content/src/file/mapping/types.rs                          core          182       248
+core/crates/layerfs-content/src/file/mod.rs                                    core           17        23
+core/crates/layerfs-content/src/file/read.rs                                   core          111       127
+core/crates/layerfs-content/src/file/view.rs                                   core           86       112
+core/crates/layerfs-content/src/lib.rs                                         core           24        41
+core/crates/layerfs-content/src/object/access.rs                               core           18        36
+core/crates/layerfs-content/src/object/codec.rs                                core          107       138
+core/crates/layerfs-content/src/object/id.rs                                   core           77       105
+core/crates/layerfs-content/src/object/inode_leaf.rs                           core          307       392
+core/crates/layerfs-content/src/object/mod.rs                                  core           23        29
+core/crates/layerfs-content/src/object/output.rs                               core          121       187
+core/crates/layerfs-content/src/object/predecessor.rs                          core           64       102
+core/crates/layerfs-content/src/policy.rs                                      core          135       226
+core/crates/layerfs-storage/sql/schema.sql                                     core           48        69
+core/crates/layerfs-storage/src/cas/batch.rs                                   core           58        87
+core/crates/layerfs-storage/src/cas/dependencies.rs                            core           60        86
+core/crates/layerfs-storage/src/cas/finish.rs                                  core           16        25
+core/crates/layerfs-storage/src/cas/membership.rs                              core           32        47
+core/crates/layerfs-storage/src/cas/mod.rs                                     core           11        16
+core/crates/layerfs-storage/src/cas/owner.rs                                   core          711       911
+core/crates/layerfs-storage/src/cas/read.rs                                    core           74       101
+core/crates/layerfs-storage/src/cas/save.rs                                    core           52        76
+core/crates/layerfs-storage/src/cas/store.rs                                   core          385       518
+core/crates/layerfs-storage/src/encoding/codec.rs                              core          508       633
+core/crates/layerfs-storage/src/encoding/decode.rs                             core          170       192
+core/crates/layerfs-storage/src/encoding/delta/candidates.rs                   core          126       166
+core/crates/layerfs-storage/src/encoding/delta/mod.rs                          core            4         8
+core/crates/layerfs-storage/src/encoding/delta/read.rs                         core          224       298
+core/crates/layerfs-storage/src/encoding/delta/record.rs                       core          201       240
+core/crates/layerfs-storage/src/encoding/delta/select.rs                       core          276       380
+core/crates/layerfs-storage/src/encoding/full.rs                               core          177       213
+core/crates/layerfs-storage/src/encoding/mod.rs                                core           11        17
+core/crates/layerfs-storage/src/encoding/pool/delta.rs                         core          261       287
+core/crates/layerfs-storage/src/encoding/pool/index.rs                         core          203       261
+core/crates/layerfs-storage/src/encoding/pool/leaf.rs                          core          101       140
+core/crates/layerfs-storage/src/encoding/pool/mod.rs                           core            9        14
+core/crates/layerfs-storage/src/encoding/pool/read.rs                          core          310       369
+core/crates/layerfs-storage/src/encoding/pool/value_group.rs                   core           77       103
+core/crates/layerfs-storage/src/error.rs                                       core          105       154
+core/crates/layerfs-storage/src/lib.rs                                         core           11        30
+core/crates/layerfs-storage/src/pack/assemble.rs                               core          223       252
+core/crates/layerfs-storage/src/pack/layout.rs                                 core          396       489
+core/crates/layerfs-storage/src/pack/mod.rs                                    core           13        18
+core/crates/layerfs-storage/src/pack/placement.rs                              core          113       150
+core/crates/layerfs-storage/src/policy.rs                                      core          193       328
+core/crates/layerfs-storage/src/sqlite/cleanup.rs                              core           70       100
+core/crates/layerfs-storage/src/sqlite/connection.rs                           core           50        72
+core/crates/layerfs-storage/src/sqlite/lookup.rs                               core          141       177
+core/crates/layerfs-storage/src/sqlite/mod.rs                                  core           10        15
+core/crates/layerfs-storage/src/sqlite/pool.rs                                 core          118       162
+core/crates/layerfs-storage/src/sqlite/schema.rs                               core          232       267
+core/crates/layerfs-storage/src/sqlite/write.rs                                core           83       117
+core/crates/layerfs-telemetry/src/lib.rs                                       core            3        16
+core/crates/layerfs-telemetry/src/timer/format.rs                              core           69        82
+core/crates/layerfs-telemetry/src/timer/json.rs                                core          115       136
+core/crates/layerfs-telemetry/src/timer/mod.rs                                 core            8        25
+core/crates/layerfs-telemetry/src/timer/recording.rs                           core          232       291
+core/crates/layerfs-telemetry/src/timer/report.rs                              core          170       249
+core/crates/layerfs-telemetry/src/timer/scope.rs                               core          135       206
+crates/layerfs-cli/src/bin/layerfs.rs                                          reference      43        43
+crates/layerfs-cli/src/lib.rs                                                  reference     791       834
+crates/layerfs-cli/src/runtime.rs                                              reference     308       342
+crates/layerfs-content/src/error.rs                                            reference     160       165
+crates/layerfs-content/src/file/cdc/gear.rs                                    reference     494       519
+crates/layerfs-content/src/file/cdc/mod.rs                                     reference       5       133
+crates/layerfs-content/src/file/content.rs                                     reference     277       300
+crates/layerfs-content/src/file/extent.rs                                      reference     153       161
+crates/layerfs-content/src/file/extent_codec.rs                                reference     235       267
+crates/layerfs-content/src/file/mod.rs                                         reference       5         5
+crates/layerfs-content/src/file/rope/build.rs                                  reference     300       367
+crates/layerfs-content/src/file/rope/diff.rs                                   reference     386       403
+crates/layerfs-content/src/file/rope/edit.rs                                   reference     749       904
+crates/layerfs-content/src/file/rope/mod.rs                                    reference      15        16
+crates/layerfs-content/src/file/rope/read.rs                                   reference     493       515
+crates/layerfs-content/src/file/rope/state.rs                                  reference     225       245
+crates/layerfs-content/src/file/rope/validate.rs                               reference     127       132
+crates/layerfs-content/src/filesystem/apply.rs                                 reference     870      1411
+crates/layerfs-content/src/filesystem/change.rs                                reference     409       571
+crates/layerfs-content/src/filesystem/diff.rs                                  reference     433       452
+crates/layerfs-content/src/filesystem/mod.rs                                   reference      27        28
+crates/layerfs-content/src/filesystem/read.rs                                  reference     121       129
+crates/layerfs-content/src/filesystem/reconcile.rs                             reference     911       962
+crates/layerfs-content/src/filesystem/resolve.rs                               reference      82        88
+crates/layerfs-content/src/filesystem/root.rs                                  reference      46        47
+crates/layerfs-content/src/lib.rs                                              reference      17        22
+crates/layerfs-content/src/limits.rs                                           reference       8         8
+crates/layerfs-content/src/object/access.rs                                    reference     139       167
+crates/layerfs-content/src/object/canonical.rs                                 reference      81        97
+crates/layerfs-content/src/object/codec.rs                                     reference     428       779
+crates/layerfs-content/src/object/digest.rs                                    reference      87       162
+crates/layerfs-content/src/object/id.rs                                        reference      66       106
+crates/layerfs-content/src/object/mod.rs                                       reference      17        19
+crates/layerfs-content/src/object/references.rs                                reference      93       173
+crates/layerfs-content/src/tree/batch.rs                                       reference    1387      2863
+crates/layerfs-content/src/tree/compact.rs                                     reference     477       612
+crates/layerfs-content/src/tree/directory/codec.rs                             reference     495       519
+crates/layerfs-content/src/tree/directory/diff.rs                              reference     345       358
+crates/layerfs-content/src/tree/directory/edit.rs                              reference     759       791
+crates/layerfs-content/src/tree/directory/mod.rs                               reference      19        22
+crates/layerfs-content/src/tree/directory/node.rs                              reference      47        55
+crates/layerfs-content/src/tree/directory/read.rs                              reference     771       891
+crates/layerfs-content/src/tree/directory/validate.rs                          reference     211       343
+crates/layerfs-content/src/tree/inode/codec.rs                                 reference     121       126
+crates/layerfs-content/src/tree/inode/cursor.rs                                reference     310       325
+crates/layerfs-content/src/tree/inode/mod.rs                                   reference       6         7
+crates/layerfs-content/src/tree/inode/record.rs                                reference      87       102
+crates/layerfs-content/src/tree/inode/table.rs                                 reference    1886      2015
+crates/layerfs-content/src/tree/metadata/apple_acl.rs                          reference      83        88
+crates/layerfs-content/src/tree/metadata/codec.rs                              reference     158       162
+crates/layerfs-content/src/tree/metadata/mod.rs                                reference       8         9
+crates/layerfs-content/src/tree/metadata/portable.rs                           reference      77        85
+crates/layerfs-content/src/tree/metadata/tree.rs                               reference     788       822
+crates/layerfs-content/src/tree/mod.rs                                         reference       9        10
+crates/layerfs-content/src/tree/path.rs                                        reference     189       314
+crates/layerfs-content/src/tree/root.rs                                        reference       9        11
+crates/layerfs-daemon/src/lib.rs                                               reference     597       799
+crates/layerfs-daemon/src/main.rs                                              reference    1809      2253
+crates/layerfs-daemon/src/protocol.rs                                          reference     827      1127
+crates/layerfs-fuse/src/adapter.rs                                             reference     148       162
+crates/layerfs-fuse/src/bin/layerfs-fuse.rs                                    reference     161       174
+crates/layerfs-fuse/src/filesystem.rs                                          reference    1366      1438
+crates/layerfs-fuse/src/handles.rs                                             reference      37        43
+crates/layerfs-fuse/src/host_mount.rs                                          reference     103       112
+crates/layerfs-fuse/src/immutable_read_cache.rs                                reference     194       322
+crates/layerfs-fuse/src/inode_table.rs                                         reference      15        18
+crates/layerfs-fuse/src/lib.rs                                                 reference      47        58
+crates/layerfs-fuse/src/live_owner.rs                                          reference    2939      4279
+crates/layerfs-fuse/src/live_runtime.rs                                        reference     316       529
+crates/layerfs-fuse/src/live_transport.rs                                      reference     672       870
+crates/layerfs-fuse/src/live_wire.rs                                           reference     653       896
+crates/layerfs-fuse/src/local_spool.rs                                         reference     268       509
+crates/layerfs-fuse/src/port.rs                                                reference     455       482
+crates/layerfs-fuse/src/protocol.rs                                            reference     986      1357
+crates/layerfs-fuse/src/proxy_client.rs                                        reference    1457      2118
+crates/layerfs-fuse/src/proxy_host.rs                                          reference     403       433
+crates/layerfs-fuse/src/write_metrics.rs                                       reference     766       869
+crates/layerfs-layerstack-store/sql/branch/contains_commit.sql                 reference      10        14
+crates/layerfs-layerstack-store/sql/branch/get.sql                             reference       3         7
+crates/layerfs-layerstack-store/sql/branch/get_by_name.sql                     reference       3         7
+crates/layerfs-layerstack-store/sql/branch/get_commit.sql                      reference       3         7
+crates/layerfs-layerstack-store/sql/branch/history_page.sql                    reference      11        15
+crates/layerfs-layerstack-store/sql/branch/insert.sql                          reference       2         6
+crates/layerfs-layerstack-store/sql/branch/list.sql                            reference       9        13
+crates/layerfs-layerstack-store/sql/branch/list_commits.sql                    reference       5         9
+crates/layerfs-layerstack-store/sql/layerstack/advance_head.sql                reference       3         7
+crates/layerfs-layerstack-store/sql/layerstack/current_head.sql                reference       1         5
+crates/layerfs-layerstack-store/sql/layerstack/find_layer_by_source.sql        reference       3         7
+crates/layerfs-layerstack-store/sql/layerstack/get.sql                         reference       3         7
+crates/layerfs-layerstack-store/sql/layerstack/get_by_name.sql                 reference       3         7
+crates/layerfs-layerstack-store/sql/layerstack/get_layer.sql                   reference       3         7
+crates/layerfs-layerstack-store/sql/layerstack/history_page.sql                reference      11        15
+crates/layerfs-layerstack-store/sql/layerstack/insert.sql                      reference       2         6
+crates/layerfs-layerstack-store/sql/layerstack/insert_layer.sql                reference       2         6
+crates/layerfs-layerstack-store/sql/layerstack/list.sql                        reference       5         9
+crates/layerfs-layerstack-store/sql/layerstack/list_layers.sql                 reference       9        13
+crates/layerfs-layerstack-store/sql/layerstack/load_add_snapshot.sql           reference       9        13
+crates/layerfs-layerstack-store/sql/objects/get.sql                            reference       1         5
+crates/layerfs-layerstack-store/sql/objects/get_many_128.sql                   reference      13        17
+crates/layerfs-layerstack-store/sql/objects/insert.sql                         reference       2         6
+crates/layerfs-layerstack-store/sql/objects/membership_128.sql                 reference      13        17
+crates/layerfs-layerstack-store/sql/objects/page.sql                           reference       5         9
+crates/layerfs-layerstack-store/sql/query/branch_roots_page.sql                reference       7        11
+crates/layerfs-layerstack-store/sql/query/canonical_storage.sql                reference       1         5
+crates/layerfs-layerstack-store/sql/query/commit_roots_page.sql                reference       5         9
+crates/layerfs-layerstack-store/sql/query/layer_roots_page.sql                 reference       5         9
+crates/layerfs-layerstack-store/sql/query/store_counts.sql                     reference       6        10
+crates/layerfs-layerstack-store/sql/schema/foreign_key_check.sql               reference       2         6
+crates/layerfs-layerstack-store/sql/schema/migrate_to_v9.sql                   reference       1         1
+crates/layerfs-layerstack-store/sql/schema/migrate_v4_to_v5.sql                reference       8         9
+crates/layerfs-layerstack-store/sql/schema/migrate_v7_to_v8.sql                reference       1         1
+crates/layerfs-layerstack-store/sql/schema/reserve_inode_serials.sql           reference       4         7
+crates/layerfs-layerstack-store/sql/schema/schema_objects.sql                  reference       4         8
+crates/layerfs-layerstack-store/sql/schema/table_columns.sql                   reference       3         7
+crates/layerfs-layerstack-store/sql/schema/v10.sql                             reference     151       167
+crates/layerfs-layerstack-store/sql/schema/v4.sql                              reference     124       136
+crates/layerfs-layerstack-store/sql/schema/v5.sql                              reference     131       144
+crates/layerfs-layerstack-store/sql/schema/v6.sql                              reference     138       152
+crates/layerfs-layerstack-store/sql/schema/v7.sql                              reference     138       152
+crates/layerfs-layerstack-store/sql/schema/v8.sql                              reference     138       152
+crates/layerfs-layerstack-store/sql/schema/v9.sql                              reference     138       152
+crates/layerfs-layerstack-store/sql/workspace/advance_branch.sql               reference       5         9
+crates/layerfs-layerstack-store/sql/workspace/current_branch.sql               reference       3         7
+crates/layerfs-layerstack-store/sql/workspace/delete_stage.sql                 reference       4         8
+crates/layerfs-layerstack-store/sql/workspace/get_stage.sql                    reference       3         7
+crates/layerfs-layerstack-store/sql/workspace/insert_commit.sql                reference       3         7
+crates/layerfs-layerstack-store/sql/workspace/insert_stage.sql                 reference       3         7
+crates/layerfs-layerstack-store/sql/workspace/load_snapshot.sql                reference       8        12
+crates/layerfs-layerstack-store/src/branch.rs                                  reference      97       100
+crates/layerfs-layerstack-store/src/error.rs                                   reference      84        93
+crates/layerfs-layerstack-store/src/ids.rs                                     reference     182       225
+crates/layerfs-layerstack-store/src/layerstack.rs                              reference    2059      4284
+crates/layerfs-layerstack-store/src/lib.rs                                     reference      60        65
+crates/layerfs-layerstack-store/src/objects/admission/metadata_values.rs       reference     131       143
+crates/layerfs-layerstack-store/src/objects/admission.rs                       reference    1742      1940
+crates/layerfs-layerstack-store/src/objects/delta.rs                           reference     110       116
+crates/layerfs-layerstack-store/src/objects/diagnostic.rs                      reference     311       662
+crates/layerfs-layerstack-store/src/objects/metadata.rs                        reference     374       548
+crates/layerfs-layerstack-store/src/objects/pack.rs                            reference    1399      1953
+crates/layerfs-layerstack-store/src/objects/read.rs                            reference    1958      2078
+crates/layerfs-layerstack-store/src/objects/small_candidates.rs                reference     112       125
+crates/layerfs-layerstack-store/src/objects/spill.rs                           reference     783       935
+crates/layerfs-layerstack-store/src/objects/whole.rs                           reference     338       424
+crates/layerfs-layerstack-store/src/objects.rs                                 reference    3819      7099
+crates/layerfs-layerstack-store/src/query.rs                                   reference     477       506
+crates/layerfs-layerstack-store/src/records.rs                                 reference     383       422
+crates/layerfs-layerstack-store/src/schema.rs                                  reference     685      1021
+crates/layerfs-layerstack-store/src/staging.rs                                 reference      79        84
+crates/layerfs-layerstack-store/src/statements.rs                              reference     126       384
+crates/layerfs-layerstack-store/src/store.rs                                   reference      55        67
+crates/layerfs-layerstack-store/src/telemetry.rs                               reference     906      1049
+crates/layerfs-layerstack-store/src/workspace.rs                               reference     938      1206
+crates/layerfs-materialization/src/capture.rs                                  reference      84        87
+crates/layerfs-materialization/src/lib.rs                                      reference       9        11
+crates/layerfs-materialization/src/materialize.rs                              reference     186       197
+crates/layerfs-materialization/src/port.rs                                     reference      79        91
+crates/layerfs-monitor/src/collector.rs                                        reference      75        81
+crates/layerfs-monitor/src/dedup.rs                                            reference     116       120
+crates/layerfs-monitor/src/lib.rs                                              reference      13        15
+crates/layerfs-monitor/src/operation.rs                                        reference     164       179
+crates/layerfs-monitor/src/snapshot.rs                                         reference      46        55
+crates/layerfs-sdk/src/client.rs                                               reference     565       617
+crates/layerfs-sdk/src/lib.rs                                                  reference      37        40
+crates/layerfs-sdk/src/query.rs                                                reference      75        89
+crates/layerfs-sdk/src/request.rs                                              reference     268       287
+crates/layerfs-sdk/src/result.rs                                               reference      34        41
+crates/layerfs-workspace/src/capture.rs                                        reference     202       214
+crates/layerfs-workspace/src/changes.rs                                        reference    3002      5890
+crates/layerfs-workspace/src/container.rs                                      reference     354       410
+crates/layerfs-workspace/src/cow_tree.rs                                       reference     558      1027
+crates/layerfs-workspace/src/daemon.rs                                         reference     236       294
+crates/layerfs-workspace/src/docker.rs                                         reference     594       624
+crates/layerfs-workspace/src/docker_engine.rs                                  reference     280       300
+crates/layerfs-workspace/src/execution.rs                                      reference     812       877
+crates/layerfs-workspace/src/file_io.rs                                        reference     712      1859
+crates/layerfs-workspace/src/lib.rs                                            reference      75        82
+crates/layerfs-workspace/src/lifecycle.rs                                      reference    1273      1980
+crates/layerfs-workspace/src/live_backing.rs                                   reference     509      1225
+crates/layerfs-workspace/src/output.rs                                         reference     221       271
+crates/layerfs-workspace/src/projection.rs                                     reference     965      1149
+crates/layerfs-workspace/src/reconcile.rs                                      reference     381       443
+crates/layerfs-workspace/src/registry.rs                                       reference     295       368
+crates/layerfs-workspace/src/remote_commit.rs                                  reference     472       730
+crates/layerfs-workspace/src/session.rs                                        reference     357       406
+crates/layerfs-workspace/src/snapshot_input.rs                                 reference     320       395
+crates/layerfs-workspace/src/worker.rs                                         reference     158       218
+crates/layerfs-workspace-core/src/backing.rs                                   reference      41       113
+crates/layerfs-workspace-core/src/checkpoint.rs                                reference      97       102
+crates/layerfs-workspace-core/src/file_edit.rs                                 reference    1210      1810
+crates/layerfs-workspace-core/src/frozen.rs                                    reference     173       462
+crates/layerfs-workspace-core/src/lib.rs                                       reference     271       538
+crates/layerfs-workspace-core/src/limits.rs                                    reference      30        52
+crates/layerfs-workspace-core/src/namespace.rs                                 reference     630       809
+--- exit 0 | wall 3.369s
+=== core tool tests | 2026-09-17T01:19:58Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 -m unittest discover -s core/tools -p test_*.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.010s
+
+OK
+--- exit 0 | wall 0.112s
+=== product boundary | 2026-09-17T01:19:59Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 core/tools/check_product_boundary.py
+PASS: scanned 75 production Rust/SQL files; semantic review still required
+--- exit 0 | wall 0.088s
+=== workspace suite | 2026-09-17T01:19:59Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked --no-fail-fast
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.35s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_content-e7711c3a6c56da6c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_batch.rs (core/target/debug/deps/edit_batch-242f78b2ce0726f3)
+
+running 7 tests
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test repeated_length_changes_accumulate ... ok
+test adjacent_edits_stay_separate_segments ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test several_separated_edits_apply_in_order ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-dd6eea6df3feca78)
+
+running 9 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.17s
+
+     Running tests/edit_localized.rs (core/target/debug/deps/edit_localized-748286c03ed6a3f8)
+
+running 5 tests
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.59s
+
+     Running tests/edit_model.rs (core/target/debug/deps/edit_model-2639bf39cae29b1c)
+
+running 6 tests
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+test a_chunked_update_matches_the_model ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/edit_noop.rs (core/target/debug/deps/edit_noop-8bd80d27c9c55da7)
+
+running 7 tests
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test an_out_of_range_replacement_length_is_an_error ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test several_equal_replacements_are_all_recognised ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/edit_reference.rs (core/target/debug/deps/edit_reference-f38ba3eae1451849)
+
+running 2 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.60s
+
+     Running tests/edit_single.rs (core/target/debug/deps/edit_single-b987ceb21bfefc32)
+
+running 9 tests
+test an_inapplicable_range_is_rejected_before_any_work ... ok
+test a_declared_length_that_does_not_match_its_bytes_fails ... ok
+test complete_deletion_returns_the_empty_representation ... ok
+test append_at_end_of_file ... ok
+test overwrite_in_the_middle ... ok
+test the_base_objects_are_never_rewritten ... ok
+test insert_and_delete_change_the_length_exactly ... ok
+test overwrite_at_the_head_and_the_tail ... ok
+test a_chunked_base_reads_and_edits_without_a_full_pass ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/edit_timing.rs (core/target/debug/deps/edit_timing-7965e787631671aa)
+
+running 4 tests
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-c47a00f97272e149)
+
+running 5 tests
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+test known_and_streamed_complete_lengths_agree ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running tests/file_complete.rs (core/target/debug/deps/file_complete-d361d4d3486c44c5)
+
+running 14 tests
+test representation_boundaries_are_exact_and_exclusive ... ok
+test unsupported_policy_values_are_rejected_before_work ... ok
+test one_byte_file_is_a_whole_file_object ... ok
+test whole_file_payload_is_classified_without_a_db ... ok
+test empty_file_uses_the_defined_file_state_form ... ok
+test chunk_partition_is_frozen_for_the_reference_input ... ok
+test below_cutoff_uses_one_whole_file_object_and_reads_back_exactly ... ok
+test late_input_failure_after_early_output_is_returned_once ... ok
+test streamed_source_requests_stay_bounded ... ok
+test construction_is_deterministic_for_the_same_input ... ok
+test chunks_respect_the_frozen_size_window ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test at_and_above_cutoff_uses_a_chunked_tree ... ok
+test known_length_and_streaming_inputs_agree_exactly ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/file_read.rs (core/target/debug/deps/file_read-349677dd17761237)
+
+running 8 tests
+test whole_file_root_rejects_a_range_beyond_its_payload ... ok
+test out_of_bounds_and_inverted_ranges_fail ... ok
+test repeated_demands_of_one_payload_read_it_once_and_emit_it_every_time ... ok
+test full_read_returns_exact_bytes_for_every_representation ... ok
+test empty_range_at_end_of_file_is_empty_and_at_eof_bound_is_allowed ... ok
+test a_provider_failure_is_returned_once_and_stops_the_read ... ok
+test ranges_cross_extents_and_page_boundaries ... ok
+test a_wave_is_released_before_the_next_one_is_read ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/inode_leaf.rs (core/target/debug/deps/inode_leaf-d078093e6ac8cc84)
+
+running 6 tests
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test malformed_leaves_are_rejected ... ok
+test a_leaf_round_trips_with_its_exact_layout ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/object_identity.rs (core/target/debug/deps/object_identity-ed02be24e612d861)
+
+running 10 tests
+test writing_to_a_sink_matches_the_single_allocation_encoder ... ok
+test malformed_envelopes_are_rejected_exactly ... ok
+test identity_of_a_damaged_canonical_object_changes ... ok
+test identity_has_no_variable_width_or_text_shortcuts ... ok
+test identity_is_domain_separated_and_not_a_raw_digest ... ok
+test small_fixture_bytes_and_identity_are_frozen ... ok
+test mapping_profile_and_empty_form_identities_are_frozen ... ok
+test chunk_fixture_bytes_and_identity_are_frozen ... ok
+test the_envelope_ceiling_is_enforced_at_plus_or_minus_one ... ok
+test the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/streaming.rs (core/target/debug/deps/streaming-ccd1c33401fd2dae)
+
+running 9 tests
+test a_short_source_is_a_definitive_whole_file_result ... ok
+test a_late_input_failure_is_returned_once_after_early_output ... ok
+test a_discarding_consumer_never_allocates_a_payload_copy ... ok
+test root_identity_is_stable_across_repeated_streaming_runs ... ok
+test children_are_emitted_before_their_parents ... ok
+test input_requests_stay_bounded_by_the_declared_windows ... ok
+test unknown_length_and_known_length_agree_object_by_object ... ok
+test many_files_do_not_retain_the_whole_workload ... ok
+test the_builder_retains_a_bounded_number_of_entries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.08s
+
+     Running tests/timing.rs (core/target/debug/deps/timing-2a89629f025853ed)
+
+running 7 tests
+test small_construction_reports_its_real_scopes ... ok
+test a_discarding_consumer_still_runs_the_real_constructor ... ok
+test a_construction_failure_keeps_its_completed_timing ... ok
+test repeated_labels_stay_distinct_and_ordered ... ok
+test chunked_construction_reports_the_chunk_scope ... ok
+test a_read_reports_its_own_scopes_without_storage ... ok
+test recording_and_disabled_execution_produce_identical_results ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_storage-cb1fdfca4fcb51a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cas_reuse.rs (core/target/debug/deps/cas_reuse-29574ef8e1a592cb)
+
+running 8 tests
+test a_directory_is_never_treated_as_a_store ... ok
+test resaving_the_same_object_reuses_its_row_without_a_new_pack ... ok
+test a_stored_row_with_a_short_length_is_rejected_without_reading_it ... ok
+test a_corrupted_stored_record_is_rejected_as_a_collision ... ok
+test repeated_identity_across_batches_reuses_without_rewriting ... ok
+test repeated_identities_inside_one_batch_insert_once_and_reuse_the_rest ... ok
+test one_operation_can_save_two_files_into_shared_packs ... ok
+test a_repetitive_file_spanning_waves_inserts_once_per_distinct_identity ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/cas_roundtrip.rs (core/target/debug/deps/cas_roundtrip-05ccd2b48100dfe3)
+
+running 6 tests
+test fresh_store_writes_the_declared_schema_identity ... ok
+test malformed_store_identity_is_rejected ... ok
+test missing_object_is_a_definite_failure ... ok
+test whole_file_object_survives_close_and_reopen ... ok
+test every_initial_role_round_trips ... ok
+test compressible_and_incompressible_payloads_round_trip ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/core_pipeline.rs (core/target/debug/deps/core_pipeline-43683d4cc4d6612b)
+
+running 5 tests
+test a_pipeline_input_failure_keeps_the_original_error_and_cleans_up ... ok
+test integrated_and_independent_runs_produce_the_same_roots ... ok
+test a_streamed_file_survives_construction_storage_and_readback ... ok
+test many_files_stream_through_one_save_with_bounded_batches ... ok
+test many_distinct_compressible_records_share_groups_and_read_back_identically ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests/delta_chains.rs (core/target/debug/deps/delta_chains-f35fbf213b29e438)
+
+running 9 tests
+test an_unsupported_depth_is_rejected_before_any_store_exists ... ok
+test the_default_depths_are_the_documented_ones ... ok
+test a_cyclic_dependency_is_refused_by_chronology ... ok
+test a_wrong_role_dependency_is_rejected ... ok
+test the_save_reports_every_chain_it_acquired_not_only_the_last ... ok
+test a_corrupt_intermediate_is_rejected_during_reconstruction ... ok
+test a_reduced_depth_stops_at_its_own_boundary ... ok
+test an_increased_depth_is_honoured_up_to_its_boundary ... ok
+test a_chain_that_would_exceed_its_work_budget_is_never_stored ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/delta_payload.rs (core/target/debug/deps/delta_payload-3a690eab668b7ad1)
+
+running 13 tests
+test an_absent_chunk_candidate_selects_full ... ok
+test the_c1_handoff_reports_the_same_selection_as_a_direct_save ... ok
+test depth_zero_disables_prospective_delta_entirely ... ok
+test exact_reuse_is_decided_before_any_trial ... ok
+test an_ineligible_chunk_candidate_selects_full ... ok
+test native_delta_uses_the_first_supplied_eligible_candidate_only ... ok
+test a_corrupt_base_fails_the_save_instead_of_selecting_full ... ok
+test an_absent_or_ineligible_candidate_selects_full ... ok
+test an_unrelated_candidate_loses_the_cost_comparison ... ok
+test the_admitted_full_cache_supplies_a_candidate_within_one_save ... ok
+test an_explicit_predecessor_produces_a_readable_prefix_record ... ok
+test a_same_save_unsealed_chunk_predecessor_selects_full ... ok
+test a_delta_chain_is_resolved_iteratively_and_reaches_every_step ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-64a9908979aab1ab)
+
+running 5 tests
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/memory_bounds.rs (core/target/debug/deps/memory_bounds-3d38d7437a97e163)
+
+running 7 tests
+test a_store_created_with_an_unsupported_policy_is_rejected_before_work ... ok
+test an_oversized_chunk_record_is_rejected_against_its_declared_limit ... ok
+test an_oversized_whole_file_record_is_rejected_against_its_declared_limit ... ok
+test a_complete_file_singleton_never_creates_a_payload_file ... ok
+test the_supported_incompressible_singletons_are_stored_and_read_back ... ok
+test a_large_input_is_reachable_only_through_its_own_singleton_path ... ok
+test pending_ownership_stays_inside_the_declared_batch_bounds ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/metadata_chain.rs (core/target/debug/deps/metadata_chain-52d8e83b759a9ee7)
+
+running 2 tests
+test small_records_reach_the_depth_cap_and_the_next_edge_is_stored_in_full ... ok
+test maximal_records_hit_the_canonical_budget_before_the_depth_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/metadata_fingerprint_collision.rs (core/target/debug/deps/metadata_fingerprint_collision-38734eed3122edf0)
+
+running 2 tests
+test the_searched_pair_is_a_real_collision_of_valid_values ... ok
+test colliding_values_are_never_confused_through_the_store ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 14 tests
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 5 tests
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_failed_save_leaves_no_usable_state_in_the_set ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-9afe5b60552d1c24)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.60s
+
+     Running tests/pack_locator.rs (core/target/debug/deps/pack_locator-8fee9b2b5e6ab6f1)
+
+running 8 tests
+test append_reuses_a_pack_without_changing_record_ordinals ... ok
+test same_save_reads_see_accepted_objects_before_the_finish_barrier ... ok
+test a_corrupt_pack_body_is_rejected_on_read ... ok
+test a_locator_outside_the_group_directory_is_rejected ... ok
+test a_whole_file_record_is_stored_in_its_own_compact_pack ... ok
+test a_full_lane_starts_a_new_pack_and_keeps_existing_locators ... ok
+test the_placement_fit_probe_agrees_with_the_canonical_assembled_length ... ok
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-2500f92d7c396546)
+
+running 7 tests
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test a_second_save_cannot_acquire_ownership_while_the_first_holds_it ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/physical_formats.rs (core/target/debug/deps/physical_formats-dce48c851f47630a)
+
+running 6 tests
+test the_lane_table_names_one_limit_per_lane ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/policy_capacity.rs (core/target/debug/deps/policy_capacity-0c494ceb3d49140b)
+
+running 8 tests
+test the_minimum_supported_cutoff_is_the_published_minimum ... ok
+test a_larger_cutoff_keeps_the_chain_and_live_budgets_unchanged ... ok
+test a_deeper_configured_depth_never_widens_a_work_or_live_budget ... ok
+test the_pooled_metadata_depth_is_persisted_and_checked_separately ... ok
+test an_unsupported_or_conflicting_policy_is_rejected_before_mutation ... ok
+test every_supported_cutoff_is_persisted_and_reopened_unchanged ... ok
+test a_larger_incompressible_whole_file_record_uses_the_singleton_lane ... ok
+test boundaries_follow_the_configured_cutoff_not_a_frozen_one ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/timing.rs (core/target/debug/deps/timing-ababb24fa3a1b65c)
+
+running 4 tests
+test a_failed_save_returns_the_original_error_with_a_recorded_tree ... ok
+test an_independent_save_reports_its_real_scopes ... ok
+test recording_and_disabled_storage_execution_agree_exactly ... ok
+test a_bounded_report_stays_inside_the_recorder_limits ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/visibility.rs (core/target/debug/deps/visibility-4510e3f48dbad30c)
+
+running 7 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_telemetry-af032707017e7435)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer.rs (core/target/debug/deps/timer-1aafdebec1672a19)
+
+running 20 tests
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test attached_reports_become_owned_children ... ok
+test a_parent_can_recover_from_a_child_error ... ok
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test uncalled_operations_have_no_node ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_compile_fail.rs (core/target/debug/deps/timer_compile_fail-937a041ba6c966da)
+
+running 1 test
+test external_compile_fail_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+
+     Running tests/timer_format.rs (core/target/debug/deps/timer_format-adb4938a162b0ca2)
+
+running 6 tests
+test disabled_report_is_explicit ... ok
+test markers_show_error_and_missing_detail ... ok
+test labels_are_escaped_for_display ... ok
+test writer_failures_propagate ... ok
+test text_renders_a_readable_tree ... ok
+test a_real_recording_renders_its_structure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_json.rs (core/target/debug/deps/timer_json-35e15913ffce77df)
+
+running 10 tests
+test writer_failures_propagate ... ok
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test a_flush_failure_is_surfaced ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test json_matches_the_documented_shape ... ok
+test a_real_recording_round_trips_through_json ... ok
+test a_disabled_report_serializes_to_null ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+   Doc-tests layerfs_content
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_telemetry
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+--- exit 0 | wall 95.189s
+=== clippy | 2026-09-17T01:21:34Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.41s
+--- exit 0 | wall 0.553s
+=== rustfmt check | 2026-09-17T01:21:35Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check
+--- exit 0 | wall 0.478s
+=== whitespace check | 2026-09-17T01:21:35Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ git diff --check
+docs/roadmap/0.1/0.1.7/component-decoupling/implementation-issues.md:106: new blank line at EOF.
+docs/roadmap/0.1/0.1.7/component-decoupling/implementation-plan.md:555: new blank line at EOF.
+--- exit 2 | wall 0.179s
+=== the corrected counter measured against the reviewed rules | 2026-09-17T01:21:35Z
+reference with the corrected counter:       65417
+reference with the reviewed cfg rule:       64461  (956 lines over-removed)
+reference counting test-only files:         69500  (4083 test-module lines)
+reference as quoted by the review:          68476
+combined now (core 10983 + reference 65417): 76400
+combined as quoted by the review:            79405
+method: monkey-patched copies of the reviewed stripping rule and of the file
+exclusion, run against the same tree with the same scanner; see w9/README.md
+
+=== counter over a freshly exported base | 2026-09-17T01:21:38Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ python3 tools/production_loc.py --root /tmp/locbase2 --detail
+core         6152 production lines in   52 files
+          layerfs-content                                     2336
+          layerfs-storage                                     3084
+          layerfs-telemetry                                    732
+reference   65417 production lines in  193 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10986
+          layerfs-layerstack-store                           18376
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          979
+          layerfs-workspace                                  11776
+          layerfs-workspace-core                              2452
+combined    71569 production lines
+--- exit 0 | wall 5.598s

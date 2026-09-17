@@ -69,3 +69,11 @@ cargo test --manifest-path Cargo.toml --workspace --locked
 ```
 
 Design and migration: [`docs/roadmap/0.1/0.1.7/component-decoupling/`](../docs/roadmap/0.1/0.1.7/component-decoupling/README.md).
+
+Stages 3-4 status: the batch (#168 / #169 under #165) is closed out against the
+independent review of the pinned snapshot; the completion gate table, the evidence
+round and the two open owner decisions are in
+[`stages-3-4-closeout-report.md`](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-closeout-report.md).
+The three packages are C1 `layerfs-content`, C2 `layerfs-storage` and
+`layerfs-telemetry`; the closeout commit reports 10 983 production LOC across them
+with the corrected counter described in that report.

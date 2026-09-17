@@ -62,6 +62,78 @@ class CounterTests(unittest.TestCase):
         )
         self.assertEqual(production_loc.counted_lines(path), 3)
 
+    def test_a_predicate_that_merely_mentions_test_is_production_code(self):
+        """`cfg(not(test))`, `cfg(any(test, ...))` and a debug-assertion cfg ship."""
+        path = write(
+            self.root,
+            "crates/example/src/lib.rs",
+            "#[cfg(not(test))]\npub fn production_only() -> u8 {\n    1\n}\n\n"
+            '#[cfg(any(test, feature = "test-instrumentation"))]\n'
+            "pub fn instrumented() -> u8 {\n    2\n}\n\n"
+            "#[cfg(any(debug_assertions, feature = \"test-instrumentation\"))]\n"
+            "pub fn counted() -> u8 {\n    3\n}\n",
+        )
+        self.assertEqual(production_loc.counted_lines(path), 12)
+
+    def test_only_a_predicate_a_test_build_satisfies_is_removed(self):
+        """`cfg(test)` and `cfg(all(test, ...))` are tests; `cfg(any(test))` too."""
+        path = write(
+            self.root,
+            "crates/example/src/lib.rs",
+            "#[cfg(test)]\nfn a() {}\n\n"
+            "#[cfg(all(test, unix))]\nfn b() {}\n\n"
+            "#[cfg(any(test))]\nfn c() {}\n\n"
+            "pub fn value() -> u8 {\n    1\n}\n",
+        )
+        self.assertEqual(production_loc.counted_lines(path), 3)
+
+    def test_files_reached_only_by_a_test_module_declaration_are_excluded(self):
+        """A `#[cfg(test)] mod x;` makes x.rs a test module, not product code."""
+        write(
+            self.root,
+            "crates/example/src/lib.rs",
+            "#[cfg(test)]\nmod helpers_tests;\n\npub fn value() -> u8 {\n    1\n}\n",
+        )
+        write(
+            self.root,
+            "crates/example/src/helpers_tests.rs",
+            "pub fn helper() {\n    assert_eq!(1, 1);\n}\n",
+        )
+        write(
+            self.root,
+            "crates/example/src/product.rs",
+            "pub fn kept() -> u8 {\n    2\n}\n",
+        )
+        files = production_loc.scope_files(self.root, "reference")
+        names = {path.name for path in files}
+        self.assertIn("product.rs", names)
+        self.assertNotIn("helpers_tests.rs", names)
+        # The two product files count three lines each; the test module counts none.
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["reference"]["lines"], 6)
+
+    def test_a_test_only_file_makes_the_modules_it_declares_test_only_too(self):
+        """The exclusion is transitive, which is how a nested diagnostic is reached."""
+        write(
+            self.root,
+            "crates/example/src/lib.rs",
+            "#[cfg(test)]\nmod native_tests;\n\npub fn value() -> u8 {\n    1\n}\n",
+        )
+        write(
+            self.root,
+            "crates/example/src/native_tests.rs",
+            '#[path = "issue100_diagnostic.rs"]\nmod issue100_diagnostic;\n',
+        )
+        write(
+            self.root,
+            "crates/example/src/issue100_diagnostic.rs",
+            "pub fn diagnostic() -> u8 {\n    9\n}\n",
+        )
+        names = {path.name for path in production_loc.scope_files(self.root, "reference")}
+        self.assertNotIn("native_tests.rs", names)
+        self.assertNotIn("issue100_diagnostic.rs", names)
+        # Only lib.rs is product code here.
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["reference"]["lines"], 3)
+
     def test_sql_comments_do_not_count_but_sql_code_does(self):
         path = write(
             self.root,

@@ -89,3 +89,17 @@ fresh checkout of main contains them. Issues have self-contained scope and #167
 contains the complete handoff. No source commit/push, release or benchmark result
 is claimed by this tracker. Read current GitHub state for issue completion; this
 page records their mapping rather than mirroring a second status database.
+
+## Stages 3-4 closeout (2026-09-17)
+
+The Stages 3-4 batch (#168 / #169, under #165) was closed out against the
+independent review of `91c3a0741fff64e8161d5c1b6e759f347ffbf757`. The completion
+gate table, the per-packet changes, every control run, the memory ledger and the
+remaining owner decisions live in
+[`stages-3-4-closeout-report.md`](stages-3-4-closeout-report.md); the raw evidence is
+in `docs/roadmap/0.1/0.1.7/evidence/stages-3-4-closeout-20260916T235641Z/`.
+
+Two items need an owner answer and are recorded there as escalation E2/E1: the
+pooled lane assignment against the design table (value groups in v6, pooled leaf
+records in the v1 ordinary lane, v5 refused by scope) and the repeated-sample
+measurement campaign. Everything else the review named is fixed or measured.

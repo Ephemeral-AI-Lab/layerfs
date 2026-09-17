@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import sys
 
 SKIP_DIRS = {"target", "tests", "examples", "benches", "node_modules"}
@@ -119,8 +120,55 @@ def skip_char_literal_or_lifetime(source: str, out: list, index: int) -> int:
     return index + 1
 
 
+def split_top_level(expression: str) -> list:
+    """Splits one cfg expression on the commas that are not inside parentheses."""
+    parts = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(expression):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(expression[start:index])
+            start = index + 1
+    parts.append(expression[start:])
+    return [part for part in parts if part]
+
+
+def implies_test(predicate: str) -> bool:
+    """True when a cfg predicate can only hold while `cfg(test)` does.
+
+    `test` implies it. `all(a, b)` implies it when any part does, because every
+    part must hold. `any(a, b)` implies it only when every part does, because one
+    non-test alternative is enough to reach the item in a production build.
+    `not(...)` never implies it - a negated test is exactly the production branch -
+    and neither does a feature, target or debug-assertion predicate on its own.
+    """
+    predicate = predicate.replace(" ", "")
+    if predicate == "test":
+        return True
+    for combinator, every_part_must_imply in (("all(", False), ("any(", True)):
+        if predicate.startswith(combinator) and predicate.endswith(")"):
+            parts = split_top_level(predicate[len(combinator) : -1])
+            if not parts:
+                return False
+            implied = [implies_test(part) for part in parts]
+            return all(implied) if every_part_must_imply else any(implied)
+    return False
+
+
 def blank_inline_tests(code: str) -> str:
-    """Blank #[cfg(test)] items and their bodies from legacy product source."""
+    """Blank test-only `#[cfg(...)]` items and their bodies.
+
+    Only an item that cannot be reached outside a test build is removed: plain
+    `#[cfg(test)]`, `#[cfg(all(test, ...))]` and `#[cfg(any(test))]`. A predicate
+    that merely mentions test is production code - `cfg(not(test))`,
+    `cfg(any(test, feature = "x"))` and `cfg(any(debug_assertions,
+    feature = "test-instrumentation"))` all compile for something other than a
+    test build, so removing them would delete shipped lines.
+    """
     out = list(code)
     cursor = 0
     while True:
@@ -132,7 +180,7 @@ def blank_inline_tests(code: str) -> str:
             break
         attribute = code[found : end + 2]
         cursor = end + 2
-        if "test" not in attribute.replace(" ", ""):
+        if not implies_test(attribute[len("#[cfg(") : -2]):
             continue
         body = skip_attributes(code, cursor)
         stop = item_end(code, body)
@@ -141,6 +189,69 @@ def blank_inline_tests(code: str) -> str:
                 out[position] = " "
         cursor = stop
     return "".join(out)
+
+
+def declared_modules(path: Path, text: str) -> list:
+    """Modules `path` declares, with whether a test build is the only way in.
+
+    Returns `(test_only, target)` pairs. A declaration inside an already test-only
+    file is itself test only, which is what makes the exclusion transitive.
+    """
+    declarations = []
+    pattern = re.compile(
+        r"(?P<attributes>(?:#\[[^\]]*\]\s*)*)mod\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;"
+    )
+    directory = path.parent if path.stem in {"mod", "lib", "main"} else path.parent / path.stem
+    for match in pattern.finditer(text):
+        attributes = match.group("attributes")
+        test_only = any(
+            implies_test(attribute[attribute.find("(") + 1 : -2])
+            for attribute in re.findall(r"#\[cfg\([^\]]*\)\]", attributes)
+        ) or any(
+            "test" in attribute and "cfg(" not in attribute
+            for attribute in re.findall(r"#\[[^\]]*\]", attributes)
+        )
+        explicit = re.search(r'#\[path\s*=\s*"([^"]+)"\]', attributes)
+        if explicit:
+            target = path.parent / explicit.group(1)
+        else:
+            candidate = directory / match.group("name")
+            target = (
+                candidate.with_suffix(".rs")
+                if (candidate.with_suffix(".rs")).exists()
+                else candidate / "mod.rs"
+            )
+        declarations.append((test_only, target))
+    return declarations
+
+
+def test_only_files(files: list) -> set:
+    """Files under `src/` that only a test build can reach.
+
+    A `#[cfg(test)] mod x;` declaration makes `x.rs` test-only, and so does a
+    declaration inside a file that is itself test-only. Such a file is a test
+    module that happens to live under `src/`; counting it as product code inflates
+    the reference subtotal by thousands of lines.
+    """
+    known = {path.resolve() for path in files}
+    excluded = set()
+    changed = True
+    while changed:
+        changed = False
+        for path in files:
+            text = blank_rust(path.read_text(encoding="utf-8"))
+            # A declaration inside a file that is itself test-only is test-only too,
+            # which is how a nested diagnostic beside its parent test module is
+            # reached.
+            declaring_file_is_test_only = path.resolve() in excluded
+            for test_only, target in declared_modules(path, text):
+                resolved = target.resolve()
+                if resolved not in known or resolved in excluded:
+                    continue
+                if test_only or declaring_file_is_test_only:
+                    excluded.add(resolved)
+                    changed = True
+    return {path for path in files if path.resolve() in excluded}
 
 
 def skip_attributes(code: str, cursor: int) -> int:
@@ -210,7 +321,8 @@ def scope_files(root: Path, scope: str) -> list:
         elif "sql" in parts and path.suffix == ".sql":
             # Runtime SQL is shipped implementation for either product scope.
             files.append(path)
-    return files
+    excluded = test_only_files(files)
+    return [path for path in files if path not in excluded]
 
 
 def physical_lines(path: Path) -> int:

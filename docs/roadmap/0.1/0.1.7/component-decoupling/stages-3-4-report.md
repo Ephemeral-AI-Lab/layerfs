@@ -52,14 +52,27 @@ Three modes remain independently runnable and were actually run
   iteratively with bounded depth, encoded and canonical work; every intermediate is
   authenticated; chronology is enforced by locator order, so a cycle is not
   expressible.
-* **Physical metadata pooling (E): NOT IMPLEMENTED.** No inode-leaf grammar, value
-  groups, ordinals, pooled records, pooled reader or bounded index exists yet. The
-  `metadata_value_groups` table is shipped and remains empty. This is the main
-  unmet part of #168 (§6).
+* **Physical metadata pooling (E): IMPLEMENTED.** `object/inode_leaf.rs` carries
+  the supplied canonical grammar (73-byte value, 31-byte header, 81-byte row,
+  44-byte pooled prefix, 12-byte pooled row, 100 rows per leaf);
+  `encoding/pool/*` writes value groups in the v6 lane and FULL/COPY-INSERT leaf
+  records, assigns ordinals in first-encounter order, keeps the bounded
+  131 072-entry index window and reads pooled leaves back through authenticated
+  groups. `metadata_value_groups` is populated by every pooled save, and
+  `metadata_pool`, `metadata_pool_index`, `metadata_window` and
+  `metadata_fingerprint_collision` exercise it. **Correction (2026-09-17):** the
+  original §1 text in this document said "NOT IMPLEMENTED ... the table remains
+  empty", which contradicted this document's own §5/§6 tables and the source; the
+  independent review recorded the contradiction and this paragraph replaces it.
+  The two lane-assignment deviations from the design table (pooled value groups in
+  v6, pooled leaf records in the v1 ordinary lane; v5 refused by scope) are
+  recorded in `physical-encoding-and-packing.md`.
 * **Larger records and lanes.** A whole-file record whose planned compact form
   cannot fit a normal pack is planned into a singleton pack (v7) with the same
-  frame bytes and the same FULL/PREFIX choice. The pooled-metadata lane (v6) exists
-  as a grammar and is exercised only by the format tests; nothing writes it yet.
+  frame bytes and the same FULL/PREFIX choice. The pooled-metadata lane (v6) is
+  written by every pooled save: value groups are encoded there, while the pooled
+  leaf records themselves are stored in the v1 ordinary lane and distinguished by
+  the `objects.object_role` column.
 * **Format matrix.** v1 ordinary, v2 native, v4 compact whole-file, v6 pooled
   metadata and v7 singleton are recognized by version; v3, v5 and unknown versions
   are rejected explicitly with no trial decode.
@@ -81,14 +94,20 @@ Three modes remain independently runnable and were actually run
   byte-identical to their base ranges, returns the base root itself. The comparison
   is bounded and stops at the first difference; a mismatch replays the same edits
   for construction and both passes stay charged.
-* **Decoded frontier (D): PARTIAL.** There is one owned decoded unfinished
-  representation per operation (`ExtentBuilder` wrapped by `EditFrontier`), retained
-  entries are bounded by page capacity and height, and pages are sealed as soon as
-  a later edit cannot reach them. Stored-node **split/concat reuse** is not
-  implemented: an edit re-derives the mapping from the retained extent sequence, so
-  unchanged mapping pages are re-encoded even though the chunk payloads they refer
-  to are retained. Reference-root equivalence for large → large edits is therefore
-  **not established** (§7).
+* **Decoded frontier (D): IMPLEMENTED.** `file/edit/tree.rs` holds one owned
+  representation per unfinished node: a page the canonical builder emitted is held
+  as the finalized object it already is, and a node the operation built from
+  decoded parts is held decoded under an operation-local key and encoded and hashed
+  exactly once, in `commit_node`, after the commit walk proves it final. A stored
+  subtree stays `ObjectId + checked summary` and is read only when a split or join
+  needs its boundary, so unchanged mapping pages keep their identity and are never
+  re-encoded; a draft a later split or join supersedes is released.
+  **Correction (2026-09-17):** the original §1 text said the frontier was PARTIAL
+  and that stored-node split/concat reuse was not implemented; the review recorded
+  that this contradicted §5/§6 and the source, and this paragraph replaces it.
+  Reference-root equivalence for large → large edits is established by
+  `edit_reference`'s nine sealed cases (re-verified by the review and by this
+  batch).
 
 ## 2. Supported profile, formats and ranges
 
@@ -118,11 +137,24 @@ and classification for every snapshot; before = the commit's first parent
 materialized with `git archive`, after = the staged or committed tree).
 
 ```text
-Production LOC at HEAD dfd54fd8e
-  core      10929   layerfs-content 4385, layerfs-storage 5812, layerfs-telemetry 732
-  reference 68476   unchanged (coexistence, not removal)
-  combined  79405
+Production LOC (corrected counter, Stages 3-4 closeout commit)
+  core      10983   layerfs-content 4388, layerfs-storage 5863, layerfs-telemetry 732
+  reference 65417   unchanged by this batch (coexistence, not removal)
+  combined  76400
 ```
+
+**Correction (2026-09-17).** This section was written against `dfd54fd8e` and
+5 commits before the reviewed snapshot `91c3a0741`, and it quoted the counter's
+uncorrected reference subtotal. The independent review found two counter defects
+(`tools/production_loc.py`): any `#[cfg(...)]` merely *containing* "test" removed
+production code (**956** reference lines over-removed, measured), and test-only
+files reached by a `#[cfg(test)] mod x;` declaration were counted as product code
+(**4 083** lines, measured). Both are fixed, with a focused tool test for each
+defect, and the same corrected counter is applied to the pre-Stage-3 base
+(`c38961f2f`, core 6 152), to this snapshot and to every commit since. The core
+subtotal is unchanged by the fix: `core/crates/*/src` contains no `cfg` attribute
+at all. The corrected numbers at the closeout commit are the block above; the
+closeout report carries the same figures with the commands that produced them.
 
 Directory totals (production LOC; parent directories include their children):
 
@@ -194,25 +226,31 @@ Tests per target (actual counts from the run above):
 
 | Target | Tests | Target | Tests |
 | --- | ---: | --- | ---: |
-| `edit_batch` | 7 | `metadata_pool` | 9 |
-| `edit_bounds` | 8 | `metadata_pool_index` | 5 |
+| `edit_batch` | 7 | `metadata_pool` | 14 |
+| `edit_bounds` | 9 | `metadata_pool_index` | 5 |
 | `edit_localized` | 5 | `metadata_window` | 2 |
 | `edit_model` | 6 | `metadata_chain` | 2 |
 | `edit_noop` | 7 | `metadata_fingerprint_collision` | 2 |
-| `edit_reference` | 2 | `delta_payload` | 10 |
-| `edit_single` | 9 | `delta_chains` | 8 |
-| `edit_timing` | 4 | `policy_capacity` | 7 |
-| `edit_transitions` | 5 | `physical_formats` | 5 |
-| `file_complete` | 14 | `edit_pipeline` | 4 |
+| `edit_reference` | 2 | `delta_payload` | 13 |
+| `edit_single` | 9 | `delta_chains` | 9 |
+| `edit_timing` | 4 | `policy_capacity` | 8 |
+| `edit_transitions` | 5 | `physical_formats` | 6 |
+| `file_complete` | 14 | `edit_pipeline` | 5 |
 | `file_read` | 8 | `cas_reuse` | 8 |
 | `inode_leaf` | 6 | `cas_roundtrip` | 6 |
-| `object_identity` | 9 | `core_pipeline` | 5 |
-| `streaming` | 8 | `memory_bounds` | 7 |
-| `timing` (C1) | 11 | `pack_locator` | 7 |
+| `object_identity` | 10 | `core_pipeline` | 5 |
+| `streaming` | 9 | `memory_bounds` | 7 |
+| `timing` (C1) | **7** | `pack_locator` | 8 |
 | | | `persistence_failure` | 7 |
-| | | `visibility` | 5 |
+| | | `visibility` | 7 |
 | | | `timing` (C2) | 4 |
 | | | telemetry (`timer*`) | 37 |
+
+**Correction (2026-09-17).** The `timing` (C1) cell said 11; the target runs 7
+(counted from the workspace run's own output, and 7 is what the closeout evidence
+records). The other cells above are the counts the same run reports at the closeout
+commit, so this table and the code agree. The global total in this document's §6 was
+correct for its own snapshot.
 
 Retained evidence: `evidence/stages-3-4-oracle-20260916T222738Z-corrected/` (eight
 reference edit cases) and `evidence/stages-3-4-oracle-20260917T034500Z/` (the ninth,
@@ -275,10 +313,17 @@ with their claims marked superseded.
    and storage *improvements* over v0.1.6 remain unproven; the measurement round in
    `evidence/stages-3-4-timing-20260917T031000Z/` is a wiring demonstration in the
    debug profile with one sample per case, not a qualification.
-2. **Small → large and large → small still rebuild the mapping.** Only large → large
-   takes the stored-tree route; a cutoff-crossing edit rebuilds because the resulting
-   page shape is different work. There is no fallback and no second runtime mode, and
-   the transition tests cover every accepted cutoff.
+2. **Transition read amplification is unmeasured, not non-compliant.** A whole-file
+   base streams retained bytes and replacements through the complete builder, and a
+   chunked base whose result falls below the cutoff assembles retained ranges without
+   reading a discarded range - exactly what the handoff's §3.C prescribes
+   (`file/edit/apply.rs:106-109`), with no fallback route and no second runtime mode;
+   dispatch is on the viewed representation alone. What this batch does not have is a
+   *measurement* of how many bytes those two transitions read per byte they produce:
+   `edit_localized` establishes the demand set for the large → large stored-tree
+   route, and the transition routes are covered for correctness only. **Correction
+   (2026-09-17):** the original text called this a rebuild defect; the review showed
+   the code does what the handoff prescribes, so the residual gap is stated instead.
 3. **Memory evidence is declared-capacity plus external accounting.** Product-reported
    live capacity (`Store::pool_index_entries/bytes`) and the external test accounting
    in `edit_bounds`, `edit_localized` and `memory_bounds` bound the live state; no
@@ -329,3 +374,156 @@ with their claims marked superseded.
   (`examples/rope_edit_oracle.rs`, `examples/fingerprint_collision_search.rs`) are
   development/search tools for oracle generation and are never candidate
   dependencies.
+
+## 8. Per-file actual sizes (file-plan §4)
+
+The file plan's §4 requires this table: `path | action | before production LOC |
+actual after | signed delta | recommended final range | below/within/above |
+physical lines | explanation and responsibility`. It was missing from this
+document; the independent review recorded the omission, and the table below is it,
+recomputed at the Stages 3-4 closeout commit with the **corrected** counter
+(`tools/production_loc.py`, applied identically to the pre-Stage-3 base
+`c38961f2f` and to the current tree).
+
+`before` is the plan's base column, which the review verified equals `c38961f2f`
+for these files. `after` is production LOC; `physical` is every physical line,
+including comments and blanks, which is the 999-line ceiling measure. A plan row
+whose file does not exist is marked *merged or folded*: the review assessed each of
+those merges as justified and not a saving claim, and §5 of this document carries
+the same assessment.
+
+| path | action | before | after | delta | recommended | verdict | physical | responsibility |
+| --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- |
+| `core/crates/layerfs-content/src/lib.rs` | Update | 16 | 24 | +8 | 18–35 | within | 41 | Public edit and object reexports |
+| `core/crates/layerfs-content/src/error.rs` | Update | 116 | 120 | +4 | 120–190 | within | 174 | Edit/input/capacity errors |
+| `core/crates/layerfs-content/src/policy.rs` | Update | 106 | 135 | +29 | 150–250 | below | 226 | Validated configurable policy and derived C1 capacities |
+| `core/crates/layerfs-content/src/object/mod.rs` | Update | 12 | 23 | +11 | 14–24 | within | 29 | Declarations/reexports |
+| `core/crates/layerfs-content/src/object/id.rs` | Retain | 89 | 77 | -12 | 89 | changed | 105 | Frozen identity |
+| `core/crates/layerfs-content/src/object/codec.rs` | Update | 107 | 107 | +0 | 107–150 | within | 138 | Canonical limits independent of routing cutoff |
+| `core/crates/layerfs-content/src/object/access.rs` | Update | 18 | 18 | +0 | 40–90 | below | 36 | Bounded shared authenticated owners; ordered demands |
+| `core/crates/layerfs-content/src/object/output.rs` | Update | 111 | 121 | +10 | 100–170 | within | 187 | Moved final bytes and bounded advisory predecessors |
+| `core/crates/layerfs-content/src/object/predecessor.rs` | New | 0 | 64 | +64 | 45–85 | within | 102 | Bounded candidates and explicit provenance |
+| `core/crates/layerfs-content/src/object/inode_leaf.rs` | New | 0 | 307 | +307 | 160–260 | above | 392 | Checked compact inode-leaf grammar needed for C2 pooling only |
+| `core/crates/layerfs-content/src/file/mod.rs` | Update | 10 | 17 | +7 | 14–24 | within | 23 | File operation reexports |
+| `core/crates/layerfs-content/src/file/content.rs` | Update | 195 | 197 | +2 | 150–230 | within | 254 | Capacity-aware complete/whole construction |
+| `core/crates/layerfs-content/src/file/read.rs` | Update | 111 | 111 | +0 | 90–160 | within | 127 | Read using an operation-local authenticated view |
+| `core/crates/layerfs-content/src/file/view.rs` | New | 0 | 86 | +86 | 90–160 | below | 112 | Open/authenticate base once; scoped logical reads |
+| `core/crates/layerfs-content/src/file/cdc/mod.rs` | Retain | 5 | 5 | +0 | 5 | exact | 10 | Frozen CDC exports |
+| `core/crates/layerfs-content/src/file/cdc/gear.rs` | Retain | 494 | 494 | +0 | 494 | exact | 538 | Frozen table and algorithm |
+| `core/crates/layerfs-content/src/file/mapping/mod.rs` | Update | 15 | 15 | +0 | 18–30 | below | 20 | Mapping reexports |
+| `core/crates/layerfs-content/src/file/mapping/types.rs` | Update | 182 | 182 | +0 | 180–250 | within | 248 | Checked summaries, extent bounds and roles |
+| `core/crates/layerfs-content/src/file/mapping/codec.rs` | Update | 303 | 303 | +0 | 280–380 | within | 334 | Frozen canonical node grammar; reuse checked decode |
+| `core/crates/layerfs-content/src/file/mapping/build.rs` | Update | 236 | 309 | +73 | 220–330 | within | 391 | Final child-first streaming emission |
+| `core/crates/layerfs-content/src/file/mapping/read.rs` | Update | 210 | 210 | +0 | 180–290 | within | 241 | Grouped node/payload acquisition and shared repeated demand |
+| `core/crates/layerfs-content/src/file/edit/mod.rs` | New | 0 | 15 | +15 | 8–16 | within | 20 | Edit declarations/reexports |
+| `core/crates/layerfs-content/src/file/edit/input.rs` | New | 0 | 286 | +286 | 90–160 | above | 390 | Checked ordered edit stream and stable replacement range capability |
+| `core/crates/layerfs-content/src/file/edit/apply.rs` | New | 0 | 388 | +388 | 130–230 | above | 450 | Known final-size dispatch and sequential edit operation |
+| `core/crates/layerfs-content/src/file/edit/compare.rs` | New | 0 | 67 | +67 | 80–140 | below | 86 | Bounded applicable no-op comparison and replay |
+| `core/crates/layerfs-content/src/file/edit/split.rs` | New | 0 | 23 | +23 | 160–260 | below | 32 | Path-local split preserving slices/subtrees |
+| `core/crates/layerfs-content/src/file/edit/concat.rs` | New | 0 | 19 | +19 | 210–350 | below | 29 | Join/coalesce/partition/root-collapse rules |
+| `core/crates/layerfs-content/src/file/edit/finish.rs` | New | 0 | 38 | +38 | 110–190 | below | 54 | Proven finality, child-first sealing and final root |
+| `core/crates/layerfs-storage/src/lib.rs` | Update | 11 | 11 | +0 | 14–28 | below | 30 | Storage/encoding public reexports only |
+| `core/crates/layerfs-storage/src/error.rs` | Update | 105 | 105 | +0 | 120–200 | below | 154 | Explicit physical/dependency/capacity failures |
+| `core/crates/layerfs-storage/src/policy.rs` | Update | 148 | 193 | +45 | 180–300 | within | 328 | Resolved profile, cutoff/depth/work/frame capacities |
+| `core/crates/layerfs-storage/src/cas/mod.rs` | Update | 11 | 11 | +0 | 14–24 | below | 16 | CAS declarations/reexports |
+| `core/crates/layerfs-storage/src/cas/store.rs` | Update | 327 | 385 | +58 | 260–420 | within | 518 | Scoped store/read/save ownership and bounded Store-owned caches |
+| `core/crates/layerfs-storage/src/cas/owner.rs` | Update | 364 | 711 | +347 | 320–520 | above | 911 | Writer state, physical lanes, publication/cleanup invariants |
+| `core/crates/layerfs-storage/src/cas/batch.rs` | Update | 58 | 58 | +0 | 90–160 | below | 87 | Byte/count admission and planned singleton |
+| `core/crates/layerfs-storage/src/cas/save.rs` | Update | 49 | 52 | +3 | 90–170 | below | 76 | Batched membership/bases and moved input; no per-object clone |
+| `core/crates/layerfs-storage/src/cas/membership.rs` | Update | 42 | 32 | -10 | 70–140 | below | 47 | Exact reuse/collision under valid ownership |
+| `core/crates/layerfs-storage/src/cas/dependencies.rs` | Update | 62 | 60 | -2 | 90–170 | below | 86 | Logical references plus selected physical dependencies |
+| `core/crates/layerfs-storage/src/cas/read.rs` | Update | 65 | 74 | +9 | 120–220 | below | 101 | Grouped acquisition, retained ceiling and shared decoded owners |
+| `core/crates/layerfs-storage/src/cas/finish.rs` | Update | 16 | 16 | +0 | 20–50 | below | 25 | Final drain, acknowledgement and one terminal disposition |
+| `core/crates/layerfs-storage/src/encoding/mod.rs` | Update | 9 | 11 | +2 | 12–24 | below | 17 | Encoding exports |
+| `core/crates/layerfs-storage/src/encoding/full.rs` | Update | 112 | 177 | +65 | 110–190 | within | 213 | Capacity-aware existing FULL alternatives |
+| `core/crates/layerfs-storage/src/encoding/decode.rs` | Update | 103 | 170 | +67 | 100–180 | within | 192 | Explicit physical dispatch and canonical authentication |
+| `core/crates/layerfs-storage/src/encoding/codec.rs` | Retire | 367 | 508 | +141 | 0 | changed | 633 | Move and extend into codec/; count relocation once |
+| `core/crates/layerfs-storage/src/encoding/delta/mod.rs` | New | 0 | 4 | +4 | 8–16 | below | 8 | Payload delta declarations/reexports |
+| `core/crates/layerfs-storage/src/encoding/delta/record.rs` | New | 0 | 201 | +201 | 100–180 | above | 240 | WHOLE_FILE/CHUNK FULL/PREFIX framing |
+| `core/crates/layerfs-storage/src/encoding/delta/select.rs` | New | 0 | 276 | +276 | 160–280 | within | 380 | One trial, role-aware cost/eligibility/work accounting |
+| `core/crates/layerfs-storage/src/encoding/delta/read.rs` | New | 0 | 224 | +224 | 170–300 | within | 298 | Iterative dependency reconstruction and intermediate checks |
+| `core/crates/layerfs-storage/src/encoding/delta/candidates.rs` | New | 0 | 126 | +126 | 100–180 | within | 166 | Admitted-FULL cache/signatures and ordered bounded candidate acquisition |
+| `core/crates/layerfs-storage/src/encoding/pool/mod.rs` | New | 0 | 9 | +9 | 8–16 | within | 14 | Physical pooling exports |
+| `core/crates/layerfs-storage/src/encoding/pool/value_group.rs` | New | 0 | 77 | +77 | 140–240 | below | 103 | Build/hash/compress exact value-group body once |
+| `core/crates/layerfs-storage/src/encoding/pool/index.rs` | New | 0 | 203 | +203 | 160–280 | within | 261 | Bounded BTreeSet window, sync, equality candidates and invalidation |
+| `core/crates/layerfs-storage/src/encoding/pool/leaf.rs` | New | 0 | 101 | +101 | 140–240 | below | 140 | Canonical rows to pooled ordinals and inverse mapping |
+| `core/crates/layerfs-storage/src/encoding/pool/delta.rs` | New | 0 | 261 | +261 | 160–280 | within | 287 | Pooled COPY/INSERT selection/codec with exact cost rules |
+| `core/crates/layerfs-storage/src/encoding/pool/read.rs` | New | 0 | 310 | +310 | 160–280 | above | 369 | Bounded value-group authentication and per-chain work accounting |
+| `core/crates/layerfs-storage/src/pack/mod.rs` | Update | 10 | 13 | +3 | 14–24 | below | 18 | Pack declarations/reexports |
+| `core/crates/layerfs-storage/src/pack/layout.rs` | Update | 321 | 396 | +75 | 280–440 | within | 489 | Checked explicit format/locator grammar including selected capacities |
+| `core/crates/layerfs-storage/src/pack/placement.rs` | Update | 123 | 113 | -10 | 130–230 | below | 150 | Fit/base chronology before assembly |
+| `core/crates/layerfs-storage/src/pack/assemble.rs` | Update | 195 | 223 | +28 | 180–300 | within | 252 | Borrowed groups; assemble one selected write |
+| `core/crates/layerfs-storage/src/sqlite/mod.rs` | Update | 8 | 10 | +2 | 10–20 | within | 15 | SQLite exports |
+| `core/crates/layerfs-storage/src/sqlite/connection.rs` | Update | 50 | 50 | +0 | 50–80 | within | 72 | Selected no-WAL/no-sync/zero-retry profile |
+| `core/crates/layerfs-storage/src/sqlite/schema.rs` | Update | 223 | 232 | +9 | 220–340 | within | 267 | Explicit schema/profile compatibility and new valid policy ranges |
+| `core/crates/layerfs-storage/src/sqlite/lookup.rs` | Update | 118 | 141 | +23 | 130–220 | within | 177 | Paged locator/base lookups and required indexes |
+| `core/crates/layerfs-storage/src/sqlite/write.rs` | Update | 83 | 83 | +0 | 120–220 | below | 117 | Atomic packs/locators/base/catalogue writes |
+| `core/crates/layerfs-storage/src/sqlite/cleanup.rs` | Update | 58 | 70 | +12 | 80–150 | below | 100 | Known-owned reverse dependency cleanup and cache invalidation |
+| `core/crates/layerfs-storage/src/sqlite/pool.rs` | New | 0 | 118 | +118 | 120–200 | below | 162 | Bounded value-group catalogue queries/writes under one ceiling |
+| `core/crates/layerfs-storage/sql/schema.sql` | Update | 46 | 48 | +2 | 80–130 | below | 69 | Exact roles/policy/constraints/indexes; retain publication watermark |
+| `core/crates/layerfs-content/src/file/mapping/predecessor.rs` | New | 0 | — | — | 100–180 | merged or folded into a sibling (see the closeout report) | — | Bounded reference cursor with original/current coordinate distinction |
+| `core/crates/layerfs-content/src/file/edit/frontier.rs` | New | 0 | — | — | 180–300 | merged or folded into a sibling (see the closeout report) | — | Owned decoded unfinished nodes and charged bounds |
+| `core/crates/layerfs-storage/src/encoding/codec/mod.rs` | New | 0 | — | — | 8–16 | merged or folded into a sibling (see the closeout report) | — | Codec declarations/reexports |
+| `core/crates/layerfs-storage/src/encoding/codec/profile.rs` | New | 0 | — | — | 80–140 | merged or folded into a sibling (see the closeout report) | — | Pinned parameters and checked workspace/frame capacities |
+| `core/crates/layerfs-storage/src/encoding/codec/encode.rs` | New | 0 | — | — | 220–340 | merged or folded into a sibling (see the closeout report) | — | Reused bounded FULL/PREFIX and group compression workspace |
+| `core/crates/layerfs-storage/src/encoding/codec/decode.rs` | New | 0 | — | — | 260–420 | merged or folded into a sibling (see the closeout report) | — | Frame checks, prefix lifetimes and bounded decompression |
+| `core/crates/layerfs-storage/src/pack/read.rs` | New | 0 | — | — | 100–190 | merged or folded into a sibling (see the closeout report) | — | Grouped body/record views; avoid repeated group decode |
+| `core/crates/layerfs-storage/src/pack/singleton.rs` | New | 0 | — | — | 90–160 | merged or folded into a sibling (see the closeout report) | — | Budget-checked consuming singleton assembly |
+| `core/crates/layerfs-content/src/file/edit/tree.rs` | Unplanned | 0 | 627 | +627 | — | unplanned addition | 805 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/lib.rs` | Unplanned | 0 | 3 | +3 | — | unplanned addition | 16 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/timer/format.rs` | Unplanned | 0 | 69 | +69 | — | unplanned addition | 82 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/timer/json.rs` | Unplanned | 0 | 115 | +115 | — | unplanned addition | 136 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/timer/mod.rs` | Unplanned | 0 | 8 | +8 | — | unplanned addition | 25 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/timer/recording.rs` | Unplanned | 0 | 232 | +232 | — | unplanned addition | 291 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/timer/report.rs` | Unplanned | 0 | 170 | +170 | — | unplanned addition | 249 | see the closeout report |
+| `core/crates/layerfs-telemetry/src/timer/scope.rs` | Unplanned | 0 | 135 | +135 | — | unplanned addition | 206 | see the closeout report |
+
+### 8.1 Directory totals
+
+| Directory | before | actual after | delta | recommended | verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| `layerfs-content/src/` | 2336 | 4388 | +2052 | 3632–5522 | within |
+| `layerfs-content/src/object/` | 337 | 717 | +380 | 555–868 | within |
+| `layerfs-content/src/file/` | 1761 | 3392 | +1631 | 2789–4179 | within |
+| `layerfs-content/src/file/cdc/` | 499 | 499 | +0 | 499 | within |
+| `layerfs-content/src/file/mapping/` | 946 | 1019 | +73 | 978–1460 | within |
+| `layerfs-content/src/file/edit/` | 0 | 1463 | +1463 | 968–1646 | within |
+| `layerfs-storage/src/` | 3038 | 5815 | +2777 | 5008–8578 | within |
+| `layerfs-storage/src/cas/` | 994 | 1399 | +405 | 1074–1874 | within |
+| `layerfs-storage/src/encoding/` | 591 | 2658 | +2067 | 2096–3602 | within |
+| `layerfs-storage/src/encoding/codec/` | 0 | 0 | +0 | 568–916 | below |
+| `layerfs-storage/src/encoding/delta/` | 0 | 831 | +831 | 538–956 | within |
+| `layerfs-storage/src/encoding/pool/` | 0 | 961 | +961 | 768–1336 | within |
+| `layerfs-storage/src/pack/` | 649 | 745 | +96 | 794–1344 | below |
+| `layerfs-storage/src/sqlite/` | 540 | 704 | +164 | 730–1230 | below |
+| `layerfs-storage/sql/` | 46 | 48 | +2 | 80–130 | below |
+
+### 8.2 Disjoint package totals at the closeout commit
+
+| Scope | Production LOC | Files |
+| --- | ---: | ---: |
+| C1 `layerfs-content` | 4 388 | 29 |
+| C2 `layerfs-storage` including its 48 SQL LOC | 5 863 | 39 |
+| telemetry | 732 | 7 |
+| **core (three packages)** | **10 983** | **75** |
+| reference `crates/` (unchanged coexistence) | 65 417 | 193 |
+| **combined product as reported** | **76 400** | **268** |
+
+The reference subtotal is quoted with the corrected counter, which is the point of
+the W9.5 correction: the counter's uncorrected rule removed 956 shipped reference
+lines and counted 4 083 lines of test-only modules that live under `src/`. Both
+are fixed and both are covered by a focused tool test. The core subtotal is
+unchanged by the correction, because `core/crates/*/src` contains no `cfg`
+attribute at all.
+
+### 8.3 Files that are not plan rows
+
+The plan has 75 rows; 67 exist as planned, 8 were merged rather than created
+(`file/mapping/predecessor.rs`, `file/edit/frontier.rs`, `encoding/codec/{mod,
+profile,encode,decode}.rs`, `pack/read.rs`, `pack/singleton.rs`), and 8 files exist
+without a plan row (`object/inode_leaf.rs`, `file/edit/tree.rs`, `file/edit/split.rs`,
+`file/edit/concat.rs`, `file/edit/finish.rs`, `encoding/pool/*` — of which the pool
+directory has plan rows for its files — plus `sqlite/pool.rs` and `pack/layout.rs`
+extensions). The unplanned additions are in the table above with `Unplanned`; the
+review's §5.2 assessed the two with real weight (`file/edit/tree.rs`,
+`object/inode_leaf.rs`) and neither is a thin wrapper.
