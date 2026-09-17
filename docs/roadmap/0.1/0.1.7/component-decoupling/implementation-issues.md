@@ -103,3 +103,10 @@ Two items need an owner answer and are recorded there as escalation E2/E1: the
 pooled lane assignment against the design table (value groups in v6, pooled leaf
 records in the v1 ordinary lane, v5 refused by scope) and the repeated-sample
 measurement campaign. Everything else the review named is fixed or measured.
+
+Eighteen of the twenty completion-gate rows are PASS. The two that are not - G13
+(the matched campaign under a pre-committed addendum) and G15 ("existing-or-better"
+resolved or waived) - need the campaign decision E1, so neither #168 nor #169 may be
+closed yet. The row-by-row text to post on each issue is the report's §4, and the
+verification contract's case registry is RUN or NOT_RUN in
+[`stages-3-4-verification.md`](stages-3-4-verification.md) §2.1.
