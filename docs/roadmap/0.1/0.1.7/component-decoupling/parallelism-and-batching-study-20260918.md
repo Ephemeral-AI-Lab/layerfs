@@ -25,7 +25,9 @@ Release: [v0.1.7](../README.md). Parent:
 | F1 | The reference runs a bounded producer/consumer pool for construction; core is single-threaded | **core lacks** |
 | F2 | The reference sets `cache_size = 32 MiB` and `cache_spill = OFF`; core sets neither, leaving SQLite's 2 MiB default with spilling ON | **core lacks** |
 | F3 | The reference sets `locking_mode = EXCLUSIVE` and `threads = 0`; core sets neither | **core lacks** |
-| F4 | The reference's lookup page is 128 objects; core's read wave is 4,096 | **core better** |
+| F4 | ~~read batching~~ **RETRACTED — both page SQL at 128.** See §7 | *corrected* |
+| F8 | The reference inserts up to 128 rows per multi-row INSERT; core issues one statement per row | **core lacks** |
+| F9 | Core reads a whole pack once per wave and caches it; the reference opens a read-only blob per record | **core better** |
 | F5 | The reference fills groups to 65,536 bytes; core seals at a 48 KiB target | **differs, unclear** |
 | F6 | Queue slabs, admission batches, pack and group limits, and the journal/synchronous/temp profile are identical | **shared** |
 | F7 | Admission itself is serial in *both* trees — the reference parallelises the producer, never the consumer | **shared** |
@@ -285,22 +287,114 @@ Note that (b) and (c) are **not** statements about durability. Both trees keep
 `fsync`. `locking_mode = EXCLUSIVE` is a locking-scope setting, not a durability
 change, and core's no-WAL / no-fsync rules are untouched by it.
 
-### 2.3 Read batching — where core is ahead (F4)
+### 2.3 Read batching — corrected (F4 retracted)
+
+An earlier revision of this study claimed core was ahead on read batching because
+`READ_OBJECT_LIMIT = 4,096` against the reference's `OBJECT_PAGE_COUNT = 128`.
+**That was wrong**, and the mistake is worth recording because the two constants
+measure different things.
 
 ```text
-   CRITICAL MAXIMUM_READ_DEMANDS   = 4,096    ONE wave = one grouped SQL lookup
-   STORAGE  READ_OBJECT_LIMIT      = 4,096    deliberately matched across the boundary
+   CORE — crates/layerfs-storage/src/sqlite/lookup.rs
+        pub fn pages(ids: &[ObjectId]) -> impl Iterator<Item = &[ObjectId]> {
+            ids.chunks(LOOKUP_PAGE_IDS)          // LOOKUP_PAGE_IDS = 128
+        }
+        ⇒ a 4,096-id wave is 32 SQL queries of 128 ids each, not one query
 
-   core/crates/layerfs-storage/src/policy.rs:
-     "One wave is one grouped SQL lookup plus one shared decode workspace, so the
-      reference's lookup page (128) is the wrong figure to copy here: a tree walk
-      demands a page's children at once."
+   REFERENCE — crates/layerfs-layerstack-store/src/objects/read.rs
+        let count = connection.limit(SQLITE_LIMIT_VARIABLE_NUMBER)?
+            .min(OBJECT_PAGE_COUNT);             // = 128
+        for page in ids.chunks(count) { … }
+        ⇒ also 128 ids per query
 ```
 
-The reference's `OBJECT_PAGE_COUNT = 128` is the figure core explicitly rejected.
-Core demands up to **32× more ids per lookup**, and adds an internal mapping wave
-of `READ_WAVE_OBJECTS = 32` objects (≤ 1 MiB) for extent traversal. On read
-batching core is not behind — it is ahead, and the reasoning is recorded in source.
+`READ_OBJECT_LIMIT` is a **demand ceiling** — how many ids C1 may name in one
+provider call — not a SQL page size. Core's own comment ("one wave is one grouped
+SQL lookup") reads as though it were one query; the implementation pages at 128
+exactly as the reference does.
+
+**So SQL round trips are identical on the read path**, and core's real gain is
+different and smaller: a 4,096-id demand is one *provider* call instead of up to
+32, and the wave shares one decode workspace. That is an API-surface and
+memory-sharing improvement, not a round-trip one.
+
+### 2.3a Multi-row INSERT — F8, a core regression
+
+The clearest round-trip difference in either direction, found after the first
+revision of this study.
+
+```text
+   REFERENCE — objects/admission.rs
+        let locator_rows = sql_rows(transaction, 5, 12)?;
+        for page in locators.chunks(locator_rows) {
+            let sql = format!(
+                "INSERT INTO objects(…) VALUES {}",
+                vec!["(?,?,?,?,?)"; page.len()].join(","));      // MULTI-ROW
+            transaction.prepare_cached(&sql)?.execute(params_from_iter(values))?;
+        }
+
+        fn sql_rows(connection, parameters, row_bytes) -> usize {
+            OBJECT_PAGE_COUNT                                   // 128  ← binds here
+                .min(parameters_limit / parameters)             // 32,766 / 5
+                .min(sql_limit.saturating_sub(256) / row_bytes)
+        }
+
+   CORE — cas/owner.rs
+        for (record_number, member) in pending.members.iter().enumerate() {
+            write::insert_object(&self.connection, &ObjectRow { … })?;   // ONE ROW
+        }
+
+        sqlite/write.rs:
+          "INSERT INTO objects (…) VALUES (?1, …, ?7)"    ← single-row, executed per row
+```
+
+| | Rows per statement | Statements for 8,191 rows |
+| --- | ---: | ---: |
+| Reference | **128** (capped by `OBJECT_PAGE_COUNT`) | **64** |
+| Core | 1 | **8,191** |
+
+The reference issues **≈127× fewer statements** for the same transaction. The
+`prepare_cached` call is cached in both, so the difference is not SQL parsing — it
+is 8,191 separate `execute` cycles against 64, each with its own step/reset over
+the same prepared statement.
+
+The same pattern applies to packs: the reference uses
+`INSERT INTO object_packs(pack_id,data) VALUES {}` (multi-row, `admission.rs:1547`)
+where core uses `insert_pack` — `INSERT INTO object_packs (pack_id, data)
+VALUES (?1, ?2)` — one row per statement. Core's only multi-row-looking statement,
+`INSERT INTO object_packs (pack_id, data) VALUES (?1, ?2)`, is in fact single-row.
+
+### 2.3b Pack-body reads — F9, where core is ahead
+
+```text
+   REFERENCE — objects/read.rs, six sites, ALL read-only
+        let blob = connection.blob_open("main", "object_packs", "data",
+                                        pack_id, /* read_only = */ true)?;
+        blob.read_at_exact(&mut buffer[..length], 41 + self.cursor)?;
+        ⇒ SQLite INCREMENTAL BLOB I/O: opens a handle per extraction and
+          reads only the byte range it needs; NO whole-pack read, NO cache
+
+   CORE — sqlite/lookup.rs + encoding/delta/read.rs
+        pub fn pack_bytes(connection, pack_id) -> Vec<u8> {
+            query_row("SELECT data FROM object_packs WHERE pack_id = ?1", …) // WHOLE PACK
+        }
+        Resolver::pack_of(&mut self.packs, connection, pack_id)
+        ⇒ one read per pack per wave, retained in BTreeMap<i64, Vec<u8>>
+          under DEPENDENCY_PACK_CACHE_BYTES = 4 MiB
+```
+
+So for N records drawn from one pack, the reference performs N blob opens (each
+followed by range reads) while core performs **one** `SELECT` and serves the rest
+from memory.
+
+**But the trade is real and runs the other way on bytes.** Core reads the whole
+pack — up to `PACK_LIMIT = 256 KiB` — even when it needs a single record; the
+reference reads only the range it needs. Core buys fewer SQLite API calls with
+more bytes read. Which wins depends on how many records a wave draws from each
+pack, and on whether the pack is already page-cached.
+
+Note that rusqlite's `blob` feature **is** enabled in core's manifest, so the
+capability is available and unused.
 
 ### 2.4 What is identical (F6)
 
@@ -320,7 +414,9 @@ general regression.
 | Dimension | Verdict |
 | --- | --- |
 | Batch arithmetic (sizes, counts, limits) | equivalent — core ported the reference's numbers |
-| Read batching | **core is ahead** (4,096 vs 128) |
+| Read batching | **equal** — both page SQL at 128; core's 4,096 is a demand ceiling, not a page size |
+| Multi-row INSERT | **core is behind** — 64 statements against 8,191 for the same rows |
+| Pack-body reads | **core is ahead** — one cached read per pack per wave against a blob open per record |
 | Memory bounding | core declares every ceiling; nothing grows without an owner |
 | Delta candidate cache | **identical** — both 128 KiB / 1,024 slots (`INDEX_BYTES`, `SLOTS`) |
 | Ordering spill | core's filesystem reference reducer spills to a tiered run store under one declared byte owner |
@@ -370,6 +466,20 @@ already drains instantly, and the pool would buy nothing.
 all three, and the third may mean the answer is "in the Stage 7 adapter, not in the
 product".
 
+### O5 — multi-row INSERT (F8) · cheap and bounded
+
+**Known:** the reference batches up to 128 rows per `INSERT` and issues 64
+statements for an 8,191-row transaction; core issues one statement per row, 8,191
+of them. The reference's chunk size is computed from SQLite's own limits
+(`sql_rows`) rather than hardcoded.
+**Unknown:** the per-statement overhead at core's row sizes.
+**Test:** one save at the transaction ceiling, single-row against multi-row
+insertion, holding everything else constant. `SaveOutcome.commits` and the timer
+are sufficient instruments.
+**Why it ranks high:** it needs no concurrency, no format change and no new
+constant beyond a chunk size derived from `SQLITE_LIMIT_VARIABLE_NUMBER` and
+`SQLITE_LIMIT_SQL_LENGTH` — the same derivation the reference already uses.
+
 ### O4 — group target (F5) · unclear direction
 
 **Known:** core seals at 48 KiB, the reference fills to 65,536.
@@ -396,7 +506,29 @@ demonstrated.
 
 ---
 
-## 6. Explicit non-findings
+## 6a. Corrections to earlier revisions of this study
+
+An earlier revision, committed as `5e45897dd` and superseded here, contained one
+substantive error. It is recorded rather than quietly fixed, because the mistake is
+instructive.
+
+**F4 retracted.** That revision claimed core was ahead on read batching —
+"4,096 against 128, 32× fewer lookups". It conflated two different constants:
+`READ_OBJECT_LIMIT` is a *demand ceiling* (how many ids C1 may name in one provider
+call), while the SQL page size is `LOOKUP_PAGE_IDS = 128`, identical to the
+reference's `OBJECT_PAGE_COUNT`. Core's `pages()` chunks by 128, so a 4,096-id
+wave is 32 queries in both trees. §2.3 carries the corrected analysis.
+
+The error came from reading core's own comment — "one wave is one grouped SQL
+lookup" — as a description of the implementation rather than of the API surface.
+The implementation pages. That comment is imprecise, and the study should have
+checked `pages()` before making the claim.
+
+Two findings were added after that revision, from the same re-examination: **F8**
+(multi-row INSERT, a core regression) and **F9** (pack-body reads, a core
+advantage). Neither was visible in the first pass.
+
+## 6b. Explicit non-findings
 
 - **No measurement was taken.** Every figure is a declared constant.
 - **No performance claim.** A configuration difference is not an effect; the
