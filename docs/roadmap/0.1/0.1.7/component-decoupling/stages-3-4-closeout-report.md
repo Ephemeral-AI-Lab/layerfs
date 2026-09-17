@@ -689,6 +689,56 @@ item 6 is recorded as follows, in the form the closure table allows:
 > records the 512-leaf run exiting 1 with the named error instead of printing
 > `[incomplete]` and succeeding.
 
+### R44 — the three remaining items: **answered by the owner, 2026-09-17**
+
+Added by the Stage 5 remediation round (2026-09-17), which was required to obtain
+these answers rather than assume them. This subsection supersedes the *heading* of
+"### E2 — the two format/design deviations: **not answered; still open**" above and
+the "met for the unclipped arms only" paragraph that follows it; both stay as
+written, because they are the record of what was true when they were written.
+
+**The owner's reply, quoted verbatim:** `proceed`
+
+It was given in answer to three dispositions, each quoted here exactly as it was
+put to the owner, so the reply can be read against the text it answers:
+
+> **E2.** *"E2 is answered: the pooled-leaf v1 lane with `objects.object_role` is the
+> shipped assignment and is waived as a format change; the v5 row is corrected to
+> say this profile does not implement a v5 reader rather than naming one."*
+> **W10.** *"W10's 8 MiB−1 deferred-state boundary is accepted as UNRUN with its
+> source proof. It stays a waiver of a measurement, not a measurement; if a row is
+> ever wanted it is carried by #171."*
+> **#168 item 6.** *"#168 item 6 is accepted as met for the unclipped arms only. The
+> clipped arm is permanently disqualified as a measured row under D1; any
+> replacement row belongs to #171."*
+
+The same text and the same one-word reply are quoted in
+[#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170). **Nothing here is
+paraphrased into a longer waiver than the owner gave**, and no measurement is
+created by any of the three:
+
+* **E2(a) — waived.** Pooled leaf records stay in the v1 Ordinary lane,
+  distinguished by `objects.object_role`, exactly as
+  `physical_formats::the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones`
+  asserts. **No code change.**
+* **E2(b) — the wording moved, 2026-09-17.** `physical-encoding-and-packing.md`'s v5
+  row no longer reads "Supported older unpooled metadata reader"; it now says this
+  profile implements no v5 reader and refuses v5 packs. The refusal itself is
+  unchanged, and the deviation note records the decision.
+* **W10 — accepted as UNRUN, carried by #171 if ever wanted.** The `8 MiB - 1`
+  deferred-state refusal at `file/edit/tree.rs:337` still has **no coverage**. The
+  premise is measured (3,148 B per draft on the largest in-budget shape); reaching
+  the branch needs a base of 427,819,008 B. This is a **waiver of a measurement, not
+  a measurement**, and the boundary stays listed as unrun everywhere it appears
+  (`w10/README.md`, the G19 row, §W10.3 above).
+* **#168 item 6 — accepted for the unclipped arms only.** The clipped
+  `e1c-pooled-512` arm stays retained, disclosed and disqualified as a measured row
+  under D1. No replacement row is produced here and none is implied.
+
+The three R44 questions are therefore **closed as owner decisions**, and the Stage 5
+remediation round's only remaining unproven row is `VF-6` (complete-operation
+comparison), which is `NOT_RUN` by pre-declaration with a source-backed reason.
+
 ### E3 — #169 acceptance item 2: **answered, and closed by evidence**
 
 This is the one decision the round could settle with work rather than direction.

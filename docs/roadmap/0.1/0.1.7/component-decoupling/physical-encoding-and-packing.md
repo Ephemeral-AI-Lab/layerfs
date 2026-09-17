@@ -273,7 +273,7 @@ any genuinely required grammar change needs an explicit compatibility contract.
 | v2 | Active native chunk records with compressed FULL/PREFIX frames |
 | v3 | Whole-file small-content grammar used by older supported profiles |
 | v4 | Active compact whole-file small-content framing |
-| v5 | Supported older unpooled metadata reader - **not implemented by the v0.1.7 candidate; scope decision recorded below** |
+| v5 | Older unpooled metadata reader of the **reference** profile - **this profile implements no v5 reader and refuses v5 packs; scope decision recorded below** |
 | v6 | Active pooled physical inode metadata - **the candidate writes value groups in v6 and pooled leaf records in v1; deviation recorded below** |
 | LFCNT1 / 107 and associated whole-owner/slice representations | Explicit read compatibility; not ordinary WHOLE_FILE SmallContent or plain FULL merely because no delta-base column is set |
 
@@ -287,17 +287,23 @@ are recorded here instead of being left implicit:
   returns `PackLane::Ordinary`), distinguishing the two by the
   `objects.object_role` column. It is self-consistent, covered by
   `physical_formats`, and reads back through the role column. It is *not* what this
-  table's v6 row describes. Moving pooled leaf records into v6 is a format change
-  and is an open owner decision (closeout escalation E2); until it is answered the
-  shipped assignment is the one asserted by `physical_formats`.
+  table's v6 row describes. Moving pooled leaf records into v6 is a format change.
+  **Owner decision, 2026-09-17 (closeout escalation E2): the format change is
+  waived.** The shipped assignment stands exactly as `physical_formats` asserts it,
+  and no code changes. The owner's reply and the three dispositions it answers to
+  are recorded verbatim in `stages-3-4-closeout-report.md` §6 and quoted in
+  [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170).
 * **v5 / unpooled metadata.** The candidate rejects v5 explicitly and by design
   (`parse_header` refuses every version it does not implement). It could not act on
   a v5 pack in this batch even if it wanted to: its schema identity is deliberately
   not the reference's (`sql/schema.sql`: `application_id = 1279677261`,
   `user_version = 4`), so a reference Store is not a candidate Store. This is a
-  scope statement for v0.1.7 rather than a claim that v5 readers exist here, and it
-  is an open owner decision whether this table should keep naming v5 as a supported
-  reader (closeout escalation E2).
+  scope statement for v0.1.7 rather than a claim that v5 readers exist here.
+  **Owner decision, 2026-09-17 (closeout escalation E2): the table's v5 row is
+  corrected above** - it no longer reads "Supported older unpooled metadata
+  reader", because this profile does not implement one. The refusal stays; only the
+  row's wording moved. Recorded with the same owner reply in
+  `stages-3-4-closeout-report.md` §6 and quoted in #170.
 
 Use [explicit format dispatch](../../../../../crates/layerfs-layerstack-store/src/objects/pack.rs#L111)
 and retain required [whole-owner compatibility](../../../../../crates/layerfs-layerstack-store/src/objects/whole.rs#L1).
