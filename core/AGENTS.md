@@ -21,10 +21,15 @@ This file adds the owner's product-source and module-structure requirements.
   and the detailed C1/C2 contracts it lists.
   For Stages 3–4, use the [combined handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-handoff.md)
   and its [file/LOC plan](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-file-plan.md).
-  The partial implementation continues through the [current prompts](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-continuation-prompt.md):
-  correct the oracle and finish stored-tree reuse/finality; independently finish
-  pooling coverage/qualification; then integrate and review final acceptance.
-  Pooling is implemented, so its remaining coverage does not block D.
+  Stages 3–4 are closed with the explicit qualifications/waivers in their
+  [closure record](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-completion-round-20260917.md);
+  do not restart their older continuation prompts or infer measured performance.
+  For Stage 5, use the [filesystem handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-handoff.md)
+  and [file/LOC plan](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-file-plan.md).
+  Resolve the existing inode-leaf canonical-header compatibility gate before
+  relying on that codec for filesystem-root equivalence.
+  Stage 5 attributes are portable mode/mtime plus bounded generic key/value data;
+  do not port Apple-specific codecs/semantics or APFS materialization into core.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 

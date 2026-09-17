@@ -128,6 +128,15 @@ remain mandatory. No runtime setting or performance result is claimed here.
 
 ## Plan status
 
+**Current implementation handoff:** [Stage 5](component-decoupling/stage-5-handoff.md),
+with its [exact source/test/LOC plan](component-decoupling/stage-5-file-plan.md),
+completes filesystem trees, inodes, attributes and reference ordering in #170.
+The [Stages 3–4 closure record](component-decoupling/stages-3-4-completion-round-20260917.md)
+records completed scopes and explicit unmeasured owner waivers; it is not a
+performance baseline claim. Stage 6 qualifies the whole core and Stage 7 integrates
+the later Workspace/runtime shape. No new Stage 5 implementation or measurements
+are claimed by these handoff documents.
+
 Design planning (owner direction, 2026-09-16). The
 [component-decoupling discussion index](component-decoupling/README.md) organizes
 the proposed clusters and their future design documents. The

@@ -8,9 +8,18 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
-- [Current Stages 3–4 continuation prompts](stages-3-4-continuation-prompt.md):
+- [Stage 5 handoff](stage-5-handoff.md): complete filesystem trees, scoped inodes,
+  portable/generic attributes and reference ordering, with canonical/topology/resource proof gates,
+  real storage/timers, external tests and source-backed optimization qualification.
+- [Stage 5 exact file/LOC plan](stage-5-file-plan.md): 39 new focused filesystem
+  files, existing C1/C2 integration paths, per-file/directory ranges and actual-size
+  reporting. No new crate or generic scratch framework.
+- [Stages 3–4 closure record](stages-3-4-completion-round-20260917.md): completed
+  stage scopes and explicit unmeasured owner-waived rows; no inherited speed claim.
+- [Prior Stages 3–4 continuation prompts](stages-3-4-continuation-prompt.md):
   D oracle/tree implementation and independent pooling coverage/qualification,
-  then combined acceptance. Pooling is implemented; D remains incomplete.
+  then combined acceptance. These describe earlier execution; the closure record
+  supersedes their unfinished-work status.
 - [D implementation prompt](stages-3-4-continue-d.md): fix compared edit coordinates,
   then complete stored-node split/concat, exact-root/finality and localization proof.
 - [Pooling coverage prompt](stages-3-4-continue-pooling.md): real index boundary,

@@ -17,8 +17,9 @@ init_namespace remains an operation name, not this component's name.
 ## 1. Decision and scope
 
 Reuse the existing bounded sorted-tree engine. Feed final directory bindings and
-typed inode values directly into it. Keep attributes with their existing checked
-codecs. Use one private inode-effects reducer for reference accounting and ordered
+typed inode values directly into it. Keep portable attributes and bounded generic
+attribute storage; remove platform-specific semantics from C1/C2. Use one private
+inode-effects reducer for reference accounting and ordered
 final records; retain compact ordering records where arbitrary change order needs
 them. Cut encoded staging and repeated conversions around these algorithms.
 
@@ -299,16 +300,44 @@ neutral input contract. Whole-operation zero-temporary-storage is not establishe
 
 ### C1: logical attributes
 
-PortableMetadataV1 has mode and mtime. The canonical formats also support the
-existing Apple xattr, ACL and BSD-flags domains. Do not add implied uid/gid/atime
-semantics. Preserve [domain/key checks and portable values](../../../../../crates/layerfs-content/src/tree/metadata/portable.rs#L9),
-supported value limits and [ACL/flag validation](../../../../../crates/layerfs-content/src/tree/metadata/apple_acl.rs#L19).
-Projection choices do not authorize dropping stored attributes.
+**Owner scope decision, 2026-09-17:** remove Apple-specific metadata from the
+replacement core. APFS materialization is outside v0.1.7. C1/C2 contain no Apple
+ACL codec, BSD flag interpretation, platform xattr whitelist or native filesystem
+metadata calls. Platform metadata interpretation/enforcement belongs to a future
+adapter only when that adapter actually needs it; no adapter is added here.
 
-Patch existing metadata while preserving untouched keys/domains. Constructing
-only mode and mtime is appropriate for new portable-only metadata, not replacing
-an existing tree that also has xattrs. Values use existing extent-only ropes;
-the regular-file small/large cutoff must not reclassify metadata values.
+Keep portable mode and mtime with their checked value grammar. Do not add implied
+uid/gid/atime semantics. Keep one generic attribute tree:
+
+```text
+attribute key: domain + key bytes -> extent-only value root
+                       |
+             +---------+--------------------+
+             |                              |
+       portable mode / mtime          other domains
+       checked typed values           opaque values
+```
+
+Validate framing, ordering, lengths, references and resource limits for all entries.
+Retain the existing structural bounds (nonempty UTF-8 domain <=64 bytes, key <=255
+bytes, neither containing NUL), with the reserved portable domain limited to its
+mode/mtime keys. Other domains use that generic grammar without an OS whitelist;
+their values are data, not permissions C1/C2 enforce. There is no special handling
+based on an Apple name. Bounded generic read/set/remove/patch is sufficient.
+
+The [reference validator](../../../../../crates/layerfs-content/src/tree/metadata/portable.rs#L53)
+has a platform-specific whitelist. Removing it is an intentional acceptance-contract
+change, not unchanged platform support. Record the accepted profile in Stage 5;
+compare canonical bytes/partitions with v0.1.6 for common supported inputs and
+verify new generic-domain behavior separately. Do not claim preservation of the
+reference's platform-specific validation or access-control enforcement.
+
+Patches preserve untouched keys and value roots opaquely, without decoding those
+values or stripping them. Existing platform-labelled values, when structurally
+accepted, follow the same generic rule as any other opaque data. An unsupported
+required profile fails explicitly; no silent conversion, automatic migration or
+compatibility fallback is added. Values use existing extent-only ropes; the
+regular-file small/large cutoff must not reclassify metadata values.
 
 Keep the streaming MetadataTreeBuilder, but stop cloning/encoding a candidate
 page on every push merely to test fit:

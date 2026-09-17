@@ -41,7 +41,27 @@ amendments with the exact source under review. The original recommendation was
 exclude tests/docs/examples/manifests/tooling and are not physical file ceilings.
 Actual results and misses must be reported, never hidden by weakening correctness.
 
-## Current continuation: Stages 3–4
+## Current handoff: Stage 5
+
+Use the [Stage 5 handoff](stage-5-handoff.md) and
+[exact file/LOC plan](stage-5-file-plan.md) to complete #170. The deliverable is
+native filesystem trees, scoped inode identities/values, portable/generic attributes,
+reference accounting/ordering and bounded reads, composed with real C2 and timers.
+Start with the documented inode-leaf 73-versus-81 header compatibility gate and
+same-input canonical oracles; do not rely on an internal round-trip as parity proof.
+The owner removed platform-specific attribute support from Stage 5: no Apple
+codecs or APFS materialization. Preserve unrelated attribute data through the
+generic tree without promising platform interpretation/enforcement.
+
+#168/#169 are closed under the [recorded scope and waivers](stages-3-4-completion-round-20260917.md).
+Unmeasured performance stays unmeasured and is not automatically waived for #170.
+Stage 5's own correctness/resource/performance requirements remain here; #171
+broadens whole-core qualification and #172 owns later runtime integration.
+
+## Prior continuation: Stages 3–4
+
+The following records the earlier recovery routing. Its incomplete-state wording
+is historical; read the closure record above for the later disposition.
 
 Use the [continuation prompts](stages-3-4-continuation-prompt.md) for #168/#169:
 correct D's oracle and complete stored-tree split/concat/finality; independently
@@ -141,4 +161,4 @@ evidence and left three things the closeout text above does not carry.
   numbers.
 
 Remaining work is sequenced in
-[`stages-3-4-evidence-closeout-prompt.md`](`stages-3-4-evidence-closeout-prompt.md`).
+[`stages-3-4-evidence-closeout-prompt.md`](stages-3-4-evidence-closeout-prompt.md).
