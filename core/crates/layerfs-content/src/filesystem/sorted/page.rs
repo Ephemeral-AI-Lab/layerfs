@@ -24,6 +24,9 @@ pub const MAXIMUM_SCRATCH_BYTES: usize = 4 * 1024 * 1024;
 /// Children read in one bounded authenticated batch.
 pub const BATCH_CHILDREN: usize = 32;
 
+/// One slot of the accumulating right spine: a private page, if one exists.
+pub(crate) type PageSlot<K, V> = Option<Box<Page<K, V>>>;
+
 /// One bounded group of children: how many were read, their canonical bytes and
 /// the allocation lease retained while the caller descends into them.
 pub(crate) type BatchChildren = (usize, Vec<(ObjectId, Vec<u8>)>, Option<Lease>);
@@ -137,6 +140,7 @@ pub(crate) struct Engine<'o, 'e, F: Format> {
     pub format: PhantomData<F>,
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     /// Builds an engine over the supplied boundary and observer.
     pub(crate) fn new(
@@ -325,8 +329,6 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
                 key: &entry.key,
                 child: entry.id,
                 value: entry.value.as_ref(),
-                count: entry.count,
-                bytes: entry.bytes,
             })
             .collect::<Vec<_>>();
         let _codec = self.budget.reserve(

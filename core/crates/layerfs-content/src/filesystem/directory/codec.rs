@@ -136,8 +136,6 @@ pub fn encode_directory_page(page: &DirectoryPage) -> ContentResult<Vec<u8>> {
                     key: name,
                     child: None,
                     value: Some(serial),
-                    count: 1,
-                    bytes: 0,
                 })
                 .collect::<Vec<_>>();
             <CompactDirectory as Format>::encode(&PageView {
@@ -159,8 +157,6 @@ pub fn encode_directory_page(page: &DirectoryPage) -> ContentResult<Vec<u8>> {
                     key: name,
                     child: Some(*child),
                     value: None,
-                    count: 0,
-                    bytes: 0,
                 })
                 .collect::<Vec<_>>();
             <CompactDirectory as Format>::encode(&PageView {

@@ -7,6 +7,8 @@
 //! its page shapes, and the read-back logical state. A passing round trip would
 //! not be evidence; this comparison is.
 
+#![allow(dead_code)]
+
 mod support;
 
 use std::collections::BTreeMap;

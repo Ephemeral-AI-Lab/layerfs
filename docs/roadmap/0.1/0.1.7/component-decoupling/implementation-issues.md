@@ -43,6 +43,12 @@ Actual results and misses must be reported, never hidden by weakening correctnes
 
 ## Current handoff: Stage 5
 
+Use the [Stage 5 and cumulative Stages 1–5 review prompt](stages-1-5-reviewer-handoff.md)
+for independent acceptance review of #170 and the complete C1/C2 implementation.
+It requires actual LOC, all-stage criteria, simplification, speed/resource/safety
+evidence, practical limits and a source-accurate future adapter map. The reviewer
+reports separate stage/core verdicts and leaves issue state unchanged.
+
 Use the [Stage 5 handoff](stage-5-handoff.md) and
 [exact file/LOC plan](stage-5-file-plan.md) to complete #170. The deliverable is
 native filesystem trees, scoped inode identities/values, portable/generic attributes,

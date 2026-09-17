@@ -5,6 +5,8 @@
 //! is exercised separately here, together with value preservation, extent-only
 //! value roots, exact page sizing and explicit refusals.
 
+#![allow(dead_code)]
+
 mod support;
 
 use layerfs_content::filesystem::attributes::build::{build_attribute_tree, AttributeTreeBuilder};

@@ -97,8 +97,8 @@ pub fn lookup_many(
             return Err(ContentError::InvalidRecord("inode serial"));
         }
     }
-    let mut level: Vec<(ObjectId, bool, Option<(u8, u64)>, Vec<usize>)> =
-        vec![(table.root, true, None, (0..serials.len()).collect())];
+    type Demand = (ObjectId, bool, Option<(u8, u64)>, Vec<usize>);
+    let mut level: Vec<Demand> = vec![(table.root, true, None, (0..serials.len()).collect())];
     let mut depth = 0_u8;
     while !level.is_empty() {
         if depth > crate::filesystem::limits::MAXIMUM_TREE_LEVEL {

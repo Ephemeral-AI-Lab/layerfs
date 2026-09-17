@@ -242,13 +242,13 @@ impl<'a> ReferenceReducer<'a> {
     /// The pending map is merged with the spilled runs (pending is newest) and
     /// each effect row's base record is read in a bounded wave. The returned
     /// stream owns the final run and must be consumed before the operation ends.
-    pub fn finish<'r>(
+    pub fn finish(
         mut self,
-        reader: &'r dyn AuthenticatedObjects,
+        reader: &dyn AuthenticatedObjects,
         table: InodeTable,
         base_batch: usize,
         root_serial: u64,
-    ) -> ContentResult<FinalRows<'r>> {
+    ) -> ContentResult<FinalRows<'_>> {
         self.runs.consolidate()?;
         let pending = std::mem::take(&mut self.pending);
         let run_count = self.runs.single_run().map_or(0, |run| run.count);
@@ -315,6 +315,7 @@ pub struct FinalRows<'r> {
 }
 
 impl<'r> FinalRows<'r> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         reader: &'r dyn AuthenticatedObjects,
         table: InodeTable,

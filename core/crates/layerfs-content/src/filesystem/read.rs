@@ -174,12 +174,7 @@ impl<'a> FilesystemRead<'a> {
     /// Resolves several inode serials, sharing each level's wave.
     pub fn lookup_inodes(&mut self, serials: &[u64]) -> ContentResult<Vec<Option<InodeValue>>> {
         let table = self.table();
-        Ok(lookup_many(
-            self.reader,
-            table,
-            serials,
-            &mut self.work.inode,
-        )?)
+        lookup_many(self.reader, table, serials, &mut self.work.inode)
     }
 
     /// Reads one symlink's stored target.

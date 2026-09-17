@@ -4,6 +4,8 @@
 //! replacement must produce exactly those bytes for exactly those inputs, and must
 //! reject every malformed, trailing, reserved or overflowing variant of them.
 
+#![allow(dead_code)]
+
 mod support;
 
 use layerfs_content::filesystem::attributes::codec::{
@@ -208,7 +210,6 @@ fn malformed_and_reserved_input_is_rejected_once() {
     let mut total = leaf_bytes.clone();
     let count = u64::from(u16::from_be_bytes([total[13 + 13], total[13 + 14]]));
     total[13 + 23..13 + 31].copy_from_slice(&(count * 73).to_be_bytes());
-    total[13 + 23 - 9] = total[13 + 23 - 9];
     assert!(decode_inode_page(&total).is_err());
 
     let (_, _, _, _, _, root_bytes) = codec_case(manifest::CODEC_ROOT);

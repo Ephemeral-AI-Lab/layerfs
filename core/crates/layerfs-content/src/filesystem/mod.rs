@@ -26,5 +26,8 @@ pub use read::{DirectoryListing, FilesystemRead, FilesystemReadWork, Resolved, S
 pub use root::{profile_id, scope_for_seed, FilesystemRoot, FilesystemRootId};
 pub use sorted::{DirectoryRoot, SortedWork, MAXIMUM_SCRATCH_BYTES};
 pub use symlink::SymlinkTarget;
-pub use update::{build_filesystem, update_filesystem, FilesystemResult, FilesystemUpdateCounters};
+pub use update::{
+    build_filesystem, build_filesystem_timed, update_filesystem, update_filesystem_timed,
+    FilesystemResult, FilesystemUpdateCounters,
+};
 pub use validate::{check, CheckedInput, FilesystemTopology};

@@ -30,6 +30,11 @@ pub trait OrderingRun {
     fn flush(&mut self) -> ContentResult<()>;
     /// Bytes written so far.
     fn len(&self) -> u64;
+
+    /// True when nothing has been written yet.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// One source of runs owned by the caller.

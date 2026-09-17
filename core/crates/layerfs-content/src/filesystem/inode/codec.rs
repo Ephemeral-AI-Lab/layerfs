@@ -106,8 +106,6 @@ pub fn encode_inode_page(page: &InodePage) -> ContentResult<Vec<u8>> {
                     key: serial,
                     child: None,
                     value: Some(value),
-                    count: 1,
-                    bytes: 0,
                 })
                 .collect::<Vec<_>>();
             <CompactInodes as Format>::encode(&PageView {
@@ -128,8 +126,6 @@ pub fn encode_inode_page(page: &InodePage) -> ContentResult<Vec<u8>> {
                     key: serial,
                     child: Some(*child),
                     value: None,
-                    count: 1,
-                    bytes: 0,
                 })
                 .collect::<Vec<_>>();
             <CompactInodes as Format>::encode(&PageView {

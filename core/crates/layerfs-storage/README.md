@@ -144,3 +144,17 @@ External targets: `cas_roundtrip`, `cas_reuse`, `pack_locator`,
 `examples/measure_edits.rs` (`--mode c1|c2|pipeline --case
 small|chunked|small-to-large|large-to-small|batch --threshold-bytes N --output
 FRESH_DIR`).
+
+## Filesystem-tree roles
+
+Admission now accepts the Stage 5 tree roles as ordinary framed objects: one
+directory leaf, directory branch, inode branch, filesystem root, attribute leaf,
+attribute branch and symlink target per canonical page. They are stored whole in
+the ordinary lane and never choose a payload delta. The pooled inode leaf keeps
+role 6 and its own lane, locators and reader.
+
+The persisted role range is 1–13. A Store created by an earlier revision keeps
+its narrower `CHECK (object_role BETWEEN 1 AND 6)` and therefore rejects the new
+roles explicitly; the new roles require a Store created with the widened
+constraint. No migration, remapping or silent rewrite happens. The schema stays
+version 4 with four tables and twenty-one columns.

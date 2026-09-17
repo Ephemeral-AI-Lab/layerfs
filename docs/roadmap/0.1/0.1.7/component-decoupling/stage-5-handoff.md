@@ -6,6 +6,8 @@ Complete [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) under
 [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165).
 Exact source/test paths and per-file/directory LOC recommendations:
 [stage-5-file-plan.md](stage-5-file-plan.md).
+Independent acceptance uses the [Stage 5 and cumulative core reviewer handoff](stages-1-5-reviewer-handoff.md),
+which reviews the final Stages 1–5 artifact and future adapter boundaries.
 This is the last planned C1/C2 feature-implementation stage; Stage 6 qualifies the
 whole core and Stage 7 designs/integrates the surrounding runtime. Neither stage
 absorbs incomplete Stage 5 behavior or its own required verification.

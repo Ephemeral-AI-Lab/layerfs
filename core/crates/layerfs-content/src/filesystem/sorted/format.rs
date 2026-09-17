@@ -110,10 +110,6 @@ pub(crate) struct RowView<'a, K, V> {
     pub child: Option<ObjectId>,
     /// Typed leaf value; a leaf row only.
     pub value: Option<&'a V>,
-    /// Entries in this row's subtree; a branch row only.
-    pub count: u64,
-    /// Encoded row bytes in this row's subtree; a branch row only.
-    pub bytes: u64,
 }
 
 /// A page handed to a format encoder.

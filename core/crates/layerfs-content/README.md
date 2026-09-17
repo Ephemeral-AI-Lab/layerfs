@@ -86,3 +86,36 @@ cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-
 External targets: `object_identity`, `file_complete`, `file_read`, `streaming`,
 `timing`. The frozen identities in `object_identity.rs` were computed
 independently from the profile formulas, so a framing or hashing change fails.
+
+## Filesystem trees (Stage 5)
+
+The crate also builds, updates and reads filesystem trees:
+
+```rust
+use layerfs_content::filesystem::{
+    build_filesystem, update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects,
+    FilesystemRead, FilesystemRootId, InodeUpdate, LogicalPath, PathName,
+};
+```
+
+- `FilesystemObjects` is the operation's boundary: authenticated reads from a
+  caller-supplied provider and finalized output to a caller-supplied consumer.
+- A native input is a strictly sorted final binding list per directory, a
+  strictly sorted typed inode value list, and the serials the caller's allocator
+  just created. Reference counts are derived from the bindings the operation
+  actually retained; a caller-supplied count is never trusted.
+- Reads resolve, stat, list (bounded by count and bytes), readlink and read
+  attributes; batches share each level's authenticated wave.
+- Attributes are portable `mode`/`mtime` plus generic `domain + key` data with no
+  platform whitelist and no interpretation. Values are always extent-backed.
+- Ordering uses one 88-byte compact record grammar, a bounded pending map and
+  caller-supplied seekable run backing (`FileBacking` is the local
+  implementation; claiming it is free memory or disk is not allowed).
+- The accepted write profile is the compact scoped-inline profile only. Another
+  profile fails with `UnsupportedProfile` before any mutation.
+
+Reference parity for the tree grammars is sealed in
+`tests/fixtures/filesystem/` and checked by `tests/filesystem_reference.rs`,
+`tests/filesystem_codec.rs` and `tests/filesystem_attributes.rs`; see
+`docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-report.md` for the exact
+scope, limits and open criteria.

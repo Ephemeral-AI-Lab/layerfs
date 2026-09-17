@@ -46,6 +46,7 @@ where
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     /// Appends one entry, splitting the page when it no longer fits.
     pub(crate) fn push(
@@ -92,6 +93,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     }
 
     /// Merges one underfull neighbour pair and re-partitions them together.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn merge(
         &mut self,
         left: Node<F::Key, F::Value>,
@@ -139,6 +141,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     }
 
     /// Emits the previous node when both neighbours are filled, else redistributes.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn sibling(
         &mut self,
         pending: &mut Option<Node<F::Key, F::Value>>,
@@ -164,6 +167,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     }
 
     /// Merges one subtree's changes into its final pages.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn edit<I>(
         &mut self,
         id: Option<ObjectId>,

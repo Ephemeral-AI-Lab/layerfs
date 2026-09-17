@@ -15,6 +15,7 @@ use crate::object::ObjectId;
 
 impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     /// Merges one optional base tree with strictly sorted final changes.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn apply_root(
         objects: &'o mut FilesystemObjects<'e>,
         root: Option<ObjectId>,
@@ -55,7 +56,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
                 Option<Box<crate::filesystem::sorted::page::Page<F::Key, F::Value>>>,
             >(),
         )?;
-        let mut levels: Vec<Option<Box<crate::filesystem::sorted::page::Page<F::Key, F::Value>>>> =
+        let mut levels: Vec<crate::filesystem::sorted::page::PageSlot<F::Key, F::Value>> =
             (0..32).map(|_| None).collect();
         engine.edit(root, read, None, &mut changes, &mut |engine, node| {
             if first.is_none() && levels.iter().all(Option::is_none) {
@@ -110,9 +111,10 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
 }
 
 /// Appends one final child to the accumulating right spine.
+#[allow(clippy::needless_lifetimes)]
 fn append_root<'o, 'e, F: Format>(
     engine: &mut Engine<'o, 'e, F>,
-    levels: &mut [Option<Box<crate::filesystem::sorted::page::Page<F::Key, F::Value>>>],
+    levels: &mut [crate::filesystem::sorted::page::PageSlot<F::Key, F::Value>],
     mut node: crate::filesystem::sorted::page::Node<F::Key, F::Value>,
 ) -> ContentResult<()> {
     loop {

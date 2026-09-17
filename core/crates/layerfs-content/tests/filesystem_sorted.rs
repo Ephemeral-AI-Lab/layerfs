@@ -5,7 +5,7 @@ mod support;
 use layerfs_content::filesystem::directory::read::lookup;
 use layerfs_content::filesystem::directory::update::{apply_bindings, empty_directory};
 use layerfs_content::filesystem::path::PathName;
-use layerfs_content::filesystem::{FilesystemObjects, MAXIMUM_SCRATCH_BYTES};
+use layerfs_content::filesystem::MAXIMUM_SCRATCH_BYTES;
 use layerfs_content::{ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId};
 use support::filesystem::{with_objects, TreeStore};
 
@@ -68,9 +68,7 @@ fn initial_construction_needs_no_provisional_seed() {
 #[test]
 fn a_genuinely_empty_directory_is_emitted_once() {
     let mut store = TreeStore::new();
-    let root = with_objects(&mut store, |objects| empty_directory(objects))
-        .expect("empty")
-        .0;
+    let root = with_objects(&mut store, empty_directory).expect("empty").0;
     assert_eq!(store.len(), 1);
     assert_eq!(store.order().len(), 1);
     let page = layerfs_content::filesystem::directory::codec::decode_directory_page(

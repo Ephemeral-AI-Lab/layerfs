@@ -82,7 +82,7 @@ fn wide(count: usize) -> (Session, u64, Vec<u64>) {
 
 #[test]
 fn resolve_stat_and_list_agree_on_the_same_tree() {
-    let (mut session, d, serials) = wide(7);
+    let (session, d, serials) = wide(7);
     let mut read = session.read().expect("reader");
     assert_eq!(
         read.stat(&LogicalPath::root()).expect("root").kind,
@@ -133,7 +133,7 @@ fn resolve_stat_and_list_agree_on_the_same_tree() {
 
 #[test]
 fn listing_is_bounded_by_bytes_as_well_as_count() {
-    let (mut session, d, _serials) = wide(20);
+    let (session, _d, _serials) = wide(20);
     let mut read = session.read().expect("reader");
     let path = LogicalPath::new("d").unwrap();
     let by_count = read.list(&path, None, 5, 8192).expect("count bound");
@@ -171,7 +171,7 @@ fn listing_is_bounded_by_bytes_as_well_as_count() {
 
 #[test]
 fn repeated_and_shared_demands_keep_order_and_cardinality() {
-    let (mut session, d, serials) = wide(60);
+    let (session, _d, serials) = wide(60);
     let mut read = session.read().expect("reader");
     let names = vec![
         name("e0000"),
@@ -204,7 +204,6 @@ fn repeated_and_shared_demands_keep_order_and_cardinality() {
         synthetic("read/content-0000")
     );
     assert_eq!(values[3], None, "an absent serial is absent, not missing");
-    let _ = d;
 }
 
 #[test]

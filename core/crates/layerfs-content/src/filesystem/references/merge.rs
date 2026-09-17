@@ -68,6 +68,7 @@ impl<'a> RunReader<'a> {
     }
 
     /// Next row in serial order, if any remains.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> ContentResult<Option<Row>> {
         if self.remaining == 0 {
             return Ok(None);

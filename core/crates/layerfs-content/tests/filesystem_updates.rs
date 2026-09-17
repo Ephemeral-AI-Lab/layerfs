@@ -23,7 +23,7 @@ fn inode(kind: InodeKind, content: &str, metadata: &str) -> InodeValue {
 fn a_tiny_tree_is_created_and_read_back_exactly() {
     let mut session = Session::new(1).expect("empty filesystem");
     assert!(
-        session.store.len() > 0,
+        !session.store.is_empty(),
         "an empty root still emits its pages"
     );
     let directory = session.allocate();
@@ -292,6 +292,16 @@ fn removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable() {
     );
 }
 
+/// Number of root objects this session has published so far.
+fn root_objects(session: &Session) -> usize {
+    session
+        .store
+        .order()
+        .iter()
+        .filter(|(_, role)| *role == layerfs_content::ObjectRole::FilesystemRoot)
+        .count()
+}
+
 #[test]
 fn an_unsorted_or_duplicate_change_list_is_refused_before_any_write() {
     let mut session = Session::new(1).expect("empty filesystem");
@@ -305,6 +315,7 @@ fn an_unsorted_or_duplicate_change_list_is_refused_before_any_write() {
         value: inode(InodeKind::RegularFile, "content/f", "meta/f"),
     }];
     let before = session.root;
+    let roots_before = root_objects(&session);
     let outcome = session.apply(&updates, &inodes, &[file]);
     assert!(matches!(
         outcome,
@@ -314,13 +325,10 @@ fn an_unsorted_or_duplicate_change_list_is_refused_before_any_write() {
         session.root, before,
         "a refused input leaves the root alone"
     );
-    assert!(
-        session
-            .store
-            .order()
-            .iter()
-            .all(|(id, _)| *id != session.root || true),
-        "no new root was published"
+    assert_eq!(
+        root_objects(&session),
+        roots_before,
+        "a refused input publishes no new root object"
     );
     let duplicate = [DirectoryUpdate {
         parent: 1,
