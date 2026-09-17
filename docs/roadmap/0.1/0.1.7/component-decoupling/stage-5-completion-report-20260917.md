@@ -164,6 +164,52 @@ moved `references/backing.rs` (116→295), `references/runs.rs` (247→434),
 accounts the bytes and the grammar has disjoint fields. Every production file stays
 under the 999-physical-line ceiling and every `mod.rs` under 200 lines.
 
+## 9a. Audited per-commit production LOC (self-review finding)
+
+Re-measured with the same counter against each commit's exact tree
+(`python3 tools/production_loc.py --root <worktree of the commit> --json`). Two
+early commit messages and two later ones were prepared from the pre-`cargo fmt`
+working tree, so their quoted numbers differ from the committed snapshot. History
+is **not** rewritten: the comparison campaign's receipt and the replay identities
+name these commits, and rewriting them would break those seals. The exact first
+parent table is the audit record.
+
+| Commit | Parent → committed (core total) | Signed delta | Message says |
+| --- | ---: | ---: | --- |
+| `429f586dc` docs: land the handoff inputs | 11,160 → 11,160 | 0 | 0 |
+| `4f1b7d847` reference fixtures | 11,160 → 11,160 | 0 | 0 |
+| `07f0fe8eb` filesystem implementation | 11,160 → 17,523 | +6,363 | +6,337 |
+| `5d08d9e83` codec/reference/attribute/update targets | 17,523 → 17,563 | +40 | +28 |
+| `bfd7abf2c` C2 roles, matrices, pipeline | 17,563 → 17,698 | +135 | +205 |
+| `c17f59bef` result/verification docs | 17,698 → 17,697 | −1 | 0 |
+| `5fdde161c` construction bindings | 17,697 → 17,697 | 0 | 0 |
+| `979fbd5bc` per-target results | 17,697 → 17,697 | 0 | 0 |
+| `42e21677a` ordering ownership/cleanup/counters | 17,697 → 17,909 | +212 | +212 |
+| `821ddbe30` explicit cleanup attempt | 17,909 → 17,898 | −11 | +4 |
+| `f723663a5` four matrices | 17,898 → 17,905 | +7 | −8 |
+| `3b4941f1e` comparison driver | 17,905 → 17,905 | 0 | 0 |
+| `34f75b15b` verification addendum | 17,905 → 17,905 | 0 | 0 |
+| `89b40c4c0` completion report | 17,905 → 17,905 | 0 | 0 |
+
+The deltas are line-count changes, not performance or quality claims; a negative
+delta in a message-only or refactor commit is normal.
+
+## 9b. Profile and schema compatibility, verified against the schema text
+
+Reproduced from `core/crates/layerfs-storage/sql/schema.sql` and its immediate
+predecessor (the same file with the previous `BETWEEN 1 AND 6` role ceiling), by
+applying each schema to a throwaway SQLite file and inserting one locator per role:
+
+| Schema | Roles 1, 6 | Roles 7, 13 | Role 14 |
+| --- | --- | --- | --- |
+| current (`BETWEEN 1 AND 13`) | accepted | accepted | rejected |
+| previous (`BETWEEN 1 AND 6`) | accepted | **rejected** | rejected |
+
+A Store created by the previous revision therefore refuses the new tree roles with
+a SQL constraint failure rather than mis-recording them, and no code path migrates,
+rewrites or remaps a stored role. The schema stays version 4 with four tables and
+twenty-one columns.
+
 ## 10. Remaining concerns and boundaries
 
 1. **Independent review** (§8) is outstanding.
