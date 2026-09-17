@@ -176,7 +176,7 @@ pub fn check<'a>(
             }
         }
     }
-    check_parent_aliases(reader, input, &topology, &additions, &by_parent)?;
+    check_parent_aliases(reader, input, &topology, &by_parent)?;
     for update in input.directories {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
@@ -217,7 +217,6 @@ fn check_parent_aliases(
     reader: &dyn AuthenticatedObjects,
     input: &FilesystemInput<'_>,
     topology: &FilesystemTopology,
-    additions: &BTreeMap<u64, u64>,
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
 ) -> ContentResult<()> {
     if by_parent.is_empty() {
@@ -226,9 +225,30 @@ fn check_parent_aliases(
     let Some(table) = topology.table else {
         return Ok(());
     };
-    let mut bound: BTreeMap<u64, (Vec<u8>, u64)> = BTreeMap::new();
+    // The candidate children this batch binds under a new name.
+    let mut candidates: BTreeMap<u64, ()> = BTreeMap::new();
     for (parent, names) in by_parent {
-        let record = lookup_one(reader, table, *parent)?;
+        for name in names {
+            if let Some(child) = single_binding(input, parent, name) {
+                candidates.insert(child, ());
+            }
+        }
+    }
+    let Some(root) = topology.base else {
+        return Ok(());
+    };
+    // The one binding a non-file child has may sit in a directory this batch
+    // never names, so the walk covers the base tree once, bounded by the same
+    // entry ceiling as every other whole-tree check.
+    let mut bound: BTreeMap<u64, Vec<(Vec<u8>, u64)>> = BTreeMap::new();
+    let mut pending = vec![root.root_inode().serial()];
+    let mut visited = 0_usize;
+    let mut seen: BTreeSet<u64> = BTreeSet::new();
+    while let Some(parent) = pending.pop() {
+        if !seen.insert(parent) {
+            continue;
+        }
+        let record = lookup_one(reader, table, parent)?;
         let mut after = None;
         loop {
             let page = list_after(
@@ -239,10 +259,29 @@ fn check_parent_aliases(
                 crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
                 &mut DirectoryReadWork::default(),
             )?;
+            visited = visited.saturating_add(page.entries.len());
+            if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
+                return Err(ContentError::InvalidRecord("cycle check work limit"));
+            }
             for (key, serial) in page.entries {
-                let duplicated = additions.get(&serial).copied().unwrap_or(0) > 1;
-                if !duplicated && names.iter().any(|name| name.as_slice() == key.as_bytes()) {
-                    bound.insert(serial, (key.as_bytes().to_vec(), *parent));
+                // Only a name this batch leaves alone is still bound by the
+                // base: a name it restates or drops is the caller's own edit.
+                let restated = by_parent.get(&parent).is_some_and(|names| {
+                    names.iter().any(|name| name.as_slice() == key.as_bytes())
+                });
+                if restated {
+                    continue;
+                }
+                if lookup_optional(reader, table, serial)?
+                    .is_some_and(|value| value.kind == InodeKind::Directory)
+                {
+                    pending.push(serial);
+                }
+                if candidates.contains_key(&serial) {
+                    bound
+                        .entry(serial)
+                        .or_default()
+                        .push((key.as_bytes().to_vec(), parent));
                 }
             }
             match page.continuation {
@@ -256,13 +295,15 @@ fn check_parent_aliases(
             let Some(child) = single_binding(input, parent, name) else {
                 continue;
             };
-            let Some((base_name, base_parent)) = bound.get(&child) else {
+            let Some(base) = bound.get(&child) else {
                 continue;
             };
-            // The batch restates the binding the base has, or it unbinds the
-            // base name first, which is the one legal way to move the inode.
-            let restated = base_parent == parent && base_name.as_slice() == name.as_slice();
-            if !restated && base_binding_survives(input, *base_parent, base_name, child) {
+            let legal = base.iter().any(|(base_name, base_parent)| {
+                // The batch restates the binding the base has, so nothing moves.
+                (base_parent == parent && base_name.as_slice() == name.as_slice())
+                    || !base_binding_survives(input, *base_parent, base_name, child)
+            });
+            if !legal {
                 return Err(ContentError::InvalidRecord("multiple parents"));
             }
         }
