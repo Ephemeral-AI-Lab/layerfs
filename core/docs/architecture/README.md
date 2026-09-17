@@ -81,7 +81,7 @@ Two cautions on these numbers, because both have already caused drift:
 
 ## Contents
 
-Seven papers. Chapter numbers are global to the set, so a reference such as
+Ten papers. Chapter numbers are global to the set, so a reference such as
 "§6.8" resolves to one place no matter which paper it appears in.
 
 | Paper | Chapters | Covers |
@@ -93,6 +93,9 @@ Seven papers. Chapter numbers are global to the set, so a reference such as
 | [`05-storage.md`](05-storage.md) | 6 | Schema, publication watermark, pack framings, representation selection, pooling, reconstruction |
 | [`06-limits.md`](06-limits.md) | 7, 9 | End-to-end flows, then every declared bound with the check that enforces it |
 | [`07-importing.md`](07-importing.md) | 11 | **Proposal — draft, not finalized:** the four-phase plan for importing a directory tree, with the master pipeline diagram and what binds where. No importer exists; nothing in it has been executed. |
+| [`08-representations.md`](08-representations.md) | 12–13 | The four mechanisms as layers (representation split, CDC, CAS, delta), the funnel, the transition matrix, storage economics, and the v0.1.6 comparison — with time/memory/storage asymptotics |
+| [`09-delta-hints.md`](09-delta-hints.md) | 14 | **Proposal — draft, not finalized:** positional delta hints, why the change is one producer, the bounds, and the two-arm test that would decide it |
+| [`10-counters.md`](10-counters.md) | 15 | Every counter C1 and C2 return, which ones make a claim checkable, and the twelve-4,096 disambiguation |
 
 This paper adds the module map ([§8](#8-module-map)), what the set does not claim
 ([§10](#10-what-this-set-does-not-claim)) and the source index.

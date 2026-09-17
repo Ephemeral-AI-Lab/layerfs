@@ -88,5 +88,12 @@ independent review of the pinned snapshot; the completion gate table, the eviden
 round and the two open owner decisions are in
 [`stages-3-4-closeout-report.md`](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-closeout-report.md).
 The three packages are C1 `layerfs-content`, C2 `layerfs-storage` and
-`layerfs-telemetry`; the closeout commit reports 10 983 production LOC across them
-with the corrected counter described in that report.
+`layerfs-telemetry`. That closeout packet reported 10,983 production LOC for the
+snapshot it measured (`aa4b5a9e4`), and the batch tip recorded 11,058; **neither
+describes the current tree.** At `1884e3eca` the counter reports **18,792
+production lines across 116 files** (`layerfs-content` 11,917; `layerfs-storage`
+6,112; `layerfs-telemetry` 763), alongside the unchanged reference tree at 65,417
+and a combined 84,209. Counted with `tools/production_loc.py`, which excludes
+comments, blanks, tests, examples, docs and manifests, and includes shipped
+runtime SQL; a physical `wc -l` total is a different measure (24,493 here) and
+must not be quoted as this one.

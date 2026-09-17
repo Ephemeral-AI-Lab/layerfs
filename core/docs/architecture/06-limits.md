@@ -222,7 +222,13 @@ Exceeding a work bound is an **explicit refusal** — "the same error a genuine 
 gets, **never a claim that the tree was proven acyclic**". That last clause matters:
 the failure must not be reportable as a proof.
 
-**2. `MAXIMUM_TREE_LEVEL` is derived, not restated.**
+**2. Twelve constants are named `4_096`, and three of them are not counts.**
+`MAXIMUM_PATH_BYTES`, `MAXIMUM_SYMLINK_TARGET_BYTES` and `SINGLETON_FRAMING_SLACK`
+are **byte** limits; only two of the twelve are read-wave batches, and none is the
+write batch (512 objects / 512 KiB). The full disambiguation is
+[§15.4](10-counters.md#154-the-twelve-4096s--a-disambiguation).
+
+**3. `MAXIMUM_TREE_LEVEL` is derived, not restated.**
 `limits::MAXIMUM_TREE_LEVEL = file::mapping::MAX_LEVEL` ("one owner, one name"),
 and the source records that two independent `31`s used to sit in the tree — "which
 is how a reader loses track of which enforcement uses which". The same discipline
@@ -230,7 +236,7 @@ appears in `MAXIMUM_ATTRIBUTE_VALUE_BYTES` (derived from the chunk maximum) and
 `MAXIMUM_SCRATCH_BYTES` (one name for one figure, after a `4 MiB` and a
 `4 MiB − 1` twin coexisted with no caller on the twin).
 
-**3. Attribute values are bounded by the chunk grammar, not by a round number.**
+**4. Attribute values are bounded by the chunk grammar, not by a round number.**
 `MAXIMUM_ATTRIBUTE_VALUE_BYTES` is derived from `cdc::MAXIMUM_CHUNK_BYTES` because
 an attribute value is stored as one extent-only root over one canonical chunk
 object. The source states the reason a larger constant would be wrong: "a bound
