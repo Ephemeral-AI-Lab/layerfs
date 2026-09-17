@@ -102,9 +102,10 @@ Thirteen papers. Chapter numbers are global to the set, so a reference such as
 
 **Proposals** live one level down, in [`proposal/`](proposal/), and are a different
 kind of document — they state what should be built rather than what exists. The
-first is [`proposal/init-commit-and-concurrency.md`](proposal/init-commit-and-concurrency.md):
+first is [`proposal/02-init-commit-and-concurrency.md`](proposal/02-init-commit-and-concurrency.md):
 the init/commit pipelines against the Store, every DB operation by phase, and the
-three concurrency cases with their prerequisite races.
+three concurrency cases with their prerequisite races. The folder README states the
+three co-design pairs and their design order.
 
 This paper adds the module map ([§8](#8-module-map)), what the set does not claim
 ([§10](#10-what-this-set-does-not-claim)) and the source index.
