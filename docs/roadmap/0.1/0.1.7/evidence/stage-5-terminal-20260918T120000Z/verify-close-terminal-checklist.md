@@ -390,3 +390,117 @@ SATISFIED (F1), 3 SATISFIED, 4 SATISFIED (F6), 5 FALSIFIED IN PART (F3), 6
 SATISFIED with F2/F4, 7 SATISFIED, 8 completed by this pass pending
 adjudication, 9 SATISFIED WITH CAVEAT (F1/F2/F3), 10 PENDING BY DESIGN
 (preconditions verified).
+
+---
+
+# RE-VERIFICATION (post-remedy)
+
+Remedy commit `6989a4da7daa418260991d1821eccc075b0233fd` (now HEAD; working
+tree clean; `git rev-parse HEAD` exit 0). The range `4d887a6b9..6989a4da7`
+contains one owner architecture commit (`f3957dc76`, docs) and the remedy
+commit; the examples and all product `src/` are byte-unchanged
+(`git diff --stat 4d887a6b9..6989a4da7 -- core/crates/*/examples/` empty; the
+one product-tree change in the remedy is the `filesystem_bounds.rs` test file).
+Each remedy re-verified independently:
+
+**F6 → REMEDIATED.** `the_cycle_check_work_limit_is_reachable_and_reported`
+(`core/crates/layerfs-content/tests/filesystem_bounds.rs:786-824`) now asserts
+a build stating exactly the ceiling is accepted with
+`entries_examined == limit`, and `limit + 1` is the first refusal
+(`InvalidRecord("cycle check work limit")`); `limit` is
+`validate::MAXIMUM_CYCLE_CHECK_ENTRIES`, which is `limits::MAXIMUM_WALK_ENTRIES`
+(`validate.rs:55`) — the same 4,096 constant, not a twin. Ran it twice: inside
+the full workspace suite and explicitly
+(`cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-content --test
+filesystem_bounds the_cycle_check_work_limit --locked` → "1 passed; 0 failed",
+exit 0).
+
+**F2 → REMEDIATED.** §2's totals block now states C1 11,917 / C2 6,112 /
+telemetry 763 / core 18,792 / reference 65,417 / combined 84,209, and records
+the stale first version (18,797/84,214 at `134b8df73`) and its cause
+(`3ecb952c8`'s −5 dead-code deletion) — the exact failure mode the row is
+about. My recount of HEAD reproduces the new figures exactly
+(`tools/production_loc.py --json`: core 18,792, C1 11,917, C2 6,112, telemetry
+763, reference 65,417, combined 84,209). The R2-F15 README row now carries the
+same corrected figures.
+
+**F3 → REMEDIATED.** `case-selection-r4/` holds 21 receipts: all six
+`filesystem_timing_c1` cases (`c1-*.log` — counters distinct per case and
+identical to my own fresh runs: empty 0/1/129 B, directory-update 6 waves
+4/19,586 B, inode-update 1/1/368 B, hardlink-move 2/2/423 B, subtree-remove
+6/4/16,797 B, attributes 0/5/507 B) and all fifteen `measure_edits`
+case×mode combinations (`edits-{c1,c2,pipeline}-{small,chunked,small-to-large,
+large-to-small,batch}.log` — per-case fixtures distinct: 65,536/1/512,
+262,144/1/4,096, 131,071/1/131,072, 262,144/1/0, 196,808/3/1,000; the c2 logs
+carry the honest "supplied-object wiring probe ... not a per-case comparison"
+disclosure). I ran **all 21 combinations myself** on the remedied tree: every
+one exit 0, and every fixture + node-count line matches its receipt
+(the 6 timing_c1 cases and 5 of the 15 edits combos in the first pass; the
+remaining 10 re-run now, all MATCH). The r4 c2-small receipt is
+line-consistent with round-3's `edits-c2/small.log` (deterministic lines
+identical; only elapsed figures and tmp paths differ). §16's N-1 row now
+carries the coverage note, including the five WP-A examples with no `--case`
+flag. The examples' sources are unchanged, so the receipts describe the
+shipped binaries.
+
+**F1 → REMEDIATED.** §16's Stage 5 N-13 row now reads "(a cumulative-matrix
+row, shown here for completeness; counted in the cumulative denominator only,
+not in this table's 83)" — the 84-displayed-rows/83-denominator ambiguity is
+resolved; the totals line (81 PASS + 1 NOT_RUN + 1 NOT_APPLICABLE = 83) now
+accounts for every row the table displays as a Stage 5 row.
+
+**F4 → REMEDIATED.** `per-commit-loc-reread-3.log` audits
+`3ecb952c8, 1884e3eca, 5b93c3184, 680115bcd, 4d887a6b9, f3957dc76` — every
+commit in `99743b2cf..6989a4da7` **except the remedy commit itself** (the log
+is carried by that commit, so it cannot list it); all listed rows reproduce
+exactly. My own recount of `6989a4da7` (first parent `f3957dc76` = 18,792 →
+`6989a4da7` = 18,792, delta 0, via `git archive` + `production_loc.py`)
+matches its disclosure exactly, so the full range is audited (log + recount).
+§2's re-audit note now points at all three reread receipts.
+
+**F5 → REMEDIATED.** The round README's code-tree row now states `head.txt` is
+a tree pointer refreshed at the check-log commit naming `134b8df73` and that
+the closing tree is the round's final commit; the Checks section distinguishes
+`check-*.log` (mid tree) from `check-final-*.log` (closing tree), states where
+the exit codes are recorded, and discloses the head.txt/git-status.txt refresh
+as the one intentional edit to an existing file; the R2-F15 row carries
+18,792/84,209; a "The closing pass (2026-09-18)" section records the five
+verifiers and this falsifier's findings and remedies.
+
+Two residual nits, recorded for completeness, neither a false claim: (a) the
+README's "Production LOC" header row still reads "core 18,708 → 18,797 (+89)"
+— accurate for the round's two product commits, with the final-tree 18,792
+stated in the adjacent corrected R2-F15 row and §2, but the arrow can be
+misread as round-end; (b) the Checks section says the exit codes are recorded
+"in `stage-5-report.md` §16's preamble" — §16's preamble records the suite
+green with counts (65 blocks / 434 / 0); the explicit all-eight-exit-0
+statement lives in §12 of the completion report and in the landing commit
+messages (both verified true). The codes are recorded; the pointer is one
+section off.
+
+**Checks on the remedied tree (re-run, all exit 0):** boundary guard (116
+files), core-tools self-tests (6), LOC self-tests (17), fmt, workspace tests
+(65 result blocks, 434 passed, 0 failed, 0 ignored — identical totals to the
+pre-remedy tree, the remedy modified an existing test), clippy `-D warnings`,
+`production_loc.py --files`, `git diff --check`.
+
+## Final §8 verdicts on the remedied tree (6989a4da7)
+
+| # | Item | Verdict |
+| --- | --- | --- |
+| 1 | Eight §6 checks exit 0, counts recorded | **SATISFIED** — all eight re-run by me on this tree, all exit 0, counts 65/434/0 and 116 files reproduced; exit codes recorded in the landing commit messages and §12 |
+| 2 | Stage 5 matrix 0 FAIL / 0 INCOMPLETE / 0 unowned, dispositions, waived rows unpromoted | **SATISFIED** — F1 remediated (N-13 annotated); no FAIL/PARTIAL/INCOMPLETE row; VF-6 owner disposition written and owned (#171 exists); S3-6/S4-5 unchanged and excluded; 81+1+1 = 83 now consistent with the displayed table |
+| 3 | Cumulative matrix the same | **SATISFIED** — 36 rows = 34 PASS + 2 owner-WAIVED, counted; table unchanged by the remedy |
+| 4 | Every limits row correct, classed, boundary-cased or derived with arithmetic | **SATISFIED** — 19 rows verified against source in the first pass; F6 remediated (the walk ceiling's tight boundary is now a committed, passing test) |
+| 5 | Every `--case` selects the operation it names, receipt proves it | **SATISFIED** — F3 remediated: 18 + 6 + 15 = 39 receipts cover every case×mode of the three `--case` examples; I ran all 21 r4 combinations myself (all exit 0, all match); the five no-flag examples are named in N-1's note |
+| 6 | Every Stage-5 commit's LOC disclosure reproduces | **SATISFIED** — F2/F4 remediated: §2 states the true final totals (recounted), reread-1/2/3 + my recounts cover the whole range incl. `6989a4da7` (18,792→18,792 ✓); the seven historic drift rows remain documented beside their recomputed values (by-design reading accepted) |
+| 7 | Comparison governance decided, eligible receipt cited | **SATISFIED** — unchanged by the remedy (addendum untouched, empty diff); sha256 and ancestry verified in the first pass |
+| 8 | Closing pass, zero open findings, all adjudicated | **SATISFIED** — the five closing verifiers' reports and this falsifier's report are committed; findings F1-F6 adjudicated, remediated in `6989a4da7` and re-verified here |
+| 9 | Completion report states totals, closed rows, unmeasured rows with reasons | **SATISFIED** — §12 unchanged (all its numbers verified true); §16's unmeasured list complete; the F1/F2/F3 caveats that qualified this item are remediated |
+| 10 | #170 closed with a final comment; nothing tagged or released | **PENDING BY DESIGN** — preconditions re-verified on the remedied tree: HEAD exists, matrices published, evidence directory committed (incl. reread-3, case-selection-r4 and the five closing reports), no v0.1.7 tag (`git tag -l \| grep -c 0.1.7` → 0) |
+
+**Conclusion.** On the remedied tree every §8 item is satisfied except item 10,
+which is pending by design (the #170 closure comment happens after this pass).
+The six findings were all bookkeeping; none survives re-verification, and no
+behavioral or measurement defect was found in either pass. Every measurement
+receipt, per-commit LOC disclosure and check I tested reproduces exactly.
