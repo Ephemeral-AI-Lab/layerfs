@@ -253,6 +253,11 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             } else {
                 lease.shrink(reserved - actual);
             }
+            // One grouped demand is one wave and returns `chunk` pages: the
+            // batched children are read, authenticated and decoded exactly like
+            // a point read's single page, so they are charged like one.
+            self.work.pages_read = self.work.pages_read.saturating_add(chunk as u64);
+            self.work.read_waves = self.work.read_waves.saturating_add(1);
             return Ok((chunk, values, Some(lease)));
         }
         Ok((1, Vec::new(), None))

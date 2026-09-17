@@ -1045,3 +1045,161 @@ fn the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand() {
         release.released
     );
 }
+
+#[test]
+fn one_batched_demand_is_exactly_one_read_wave() {
+    // A grouped demand is one authenticated wave that returns many objects. The
+    // boundary charges it as one wave, never two: `read_waves` is the number of
+    // provider calls an operation made, and a receipt reads it that way.
+    let mut store = TreeStore::new();
+    let ids = (0..3)
+        .map(|index| store.insert(ObjectRole::DirectoryLeaf, vec![index as u8; 16]))
+        .collect::<Vec<_>>();
+    let mut sink = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&store, &mut sink);
+    let values = objects.read_batch(&ids).expect("one grouped wave");
+    assert_eq!(values.len(), 3, "every demanded object is returned");
+    let work = objects.work();
+    assert_eq!(
+        work.read_waves, 1,
+        "one grouped demand is one wave, not two: {} waves for one call",
+        work.read_waves
+    );
+    assert_eq!(work.objects_read, 3, "the wave's objects are all charged");
+    assert_eq!(
+        work.bytes_read, 48,
+        "and only the bytes the provider actually returned"
+    );
+    // The point-read path keeps charging one object and one wave per call, so the
+    // two paths agree on what a wave is.
+    let mut objects = FilesystemObjects::new(&store, &mut sink);
+    objects.read(ids[0]).expect("one point read");
+    assert_eq!(objects.work().read_waves, 1);
+    assert_eq!(objects.work().objects_read, 1);
+}
+
+/// Runs the three-name rename over a 4,000-entry directory (the wide shape) and
+/// reports what the boundary charged plus the provider's own demand shapes.
+struct WideRename {
+    pages_read: u64,
+    objects_read: u64,
+    boundary_waves: u64,
+    waves: Vec<usize>,
+    demanded: usize,
+}
+
+impl WideRename {
+    /// Objects returned by grouped demand waves (a wave wider than one), which is
+    /// exactly the work `batch_children` does.
+    fn grouped_objects(&self) -> usize {
+        self.waves.iter().copied().filter(|width| *width > 1).sum()
+    }
+
+    /// Objects returned by single-object waves (point reads).
+    fn point_objects(&self) -> usize {
+        self.waves.iter().copied().filter(|width| *width == 1).sum()
+    }
+}
+
+/// Runs the three-name rename over a 4,000-entry directory (the wide shape) and
+/// reports what the boundary charged, so a counter test can read both the page
+/// count and the provider's own demand shapes.
+fn wide_rename_charges() -> WideRename {
+    let Wide {
+        session,
+        directory,
+        serials,
+        ..
+    } = wide(4_000, 12, 1);
+    let (root, scope) = (session.root, session.scope);
+    let temp = TempDir::new("bounds-batched-charges");
+    let mut backing = RecordingBacking::new(temp.path());
+    let mut changes = (0..3)
+        .map(|index| (name(&format!("f{index:04}")), None))
+        .collect::<Vec<_>>();
+    changes.extend((0..3).map(|index| (name(&format!("r{index:04}")), Some(serials[index]))));
+    changes.sort_by(|left, right| left.0.cmp(&right.0));
+    let directories = [DirectoryUpdate {
+        parent: directory,
+        changes,
+    }];
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(root)),
+        scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let mut report = WideRename {
+        pages_read: 0,
+        objects_read: 0,
+        boundary_waves: 0,
+        waves: Vec::new(),
+        demanded: 0,
+    };
+    {
+        let mut objects = FilesystemObjects::new(&provider, &mut sink);
+        let result = update_filesystem(&mut objects, &input, Some(&mut backing))
+            .expect("wide batched update");
+        report.pages_read = result.counters.directories.pages_read;
+        report.objects_read = result.counters.objects.objects_read;
+        report.boundary_waves = result.counters.objects.read_waves;
+    }
+    report.waves = provider.waves();
+    report.demanded = provider.demands();
+    report
+}
+
+#[test]
+fn a_grouped_demand_is_one_wave_and_every_page_it_decoded() {
+    // A wide directory's changed-path merge fetches its sibling children as one
+    // bounded group and then decodes each one. Two counter readings follow from
+    // that single fact: the group is **one** wave (not one per object, and not
+    // two), and the children it decoded are **pages read** (the counter's own
+    // doc says "including batched ones").
+    //
+    // Measured on this fixture (4,000-entry directory, the three-name rename):
+    // the boundary issues 5 point reads and 1 grouped demand of 14 objects, so
+    // `read_waves` is 6 and the grouped call charges 14 decoded pages on top of
+    // one point-read page. Before both fixes the same run reported 9 waves (the
+    // group counted twice: once for the demand and once for its decode) and 1
+    // page (the 14 batched decodes were invisible).
+    let report = wide_rename_charges();
+    let grouped = report.grouped_objects();
+    assert!(
+        grouped > 0,
+        "the fixture issued a grouped demand wave: {:?}",
+        report.waves
+    );
+    assert_eq!(
+        grouped + report.point_objects(),
+        report.demanded,
+        "every demand the provider served is either point or grouped"
+    );
+    assert_eq!(
+        report.boundary_waves, 6,
+        "5 point reads and 1 grouped demand are 6 waves, not 9",
+    );
+    assert!(
+        report.boundary_waves < report.objects_read + 2,
+        "a grouped demand is one wave for many objects: {} waves for {} objects",
+        report.boundary_waves,
+        report.objects_read
+    );
+    assert!(
+        report.pages_read >= 15,
+        "the merged group's 14 batched children are pages read: {} reported for \
+         {} waves",
+        report.pages_read,
+        report.boundary_waves
+    );
+    assert!(
+        report.objects_read >= grouped as u64,
+        "the grouped children are objects read as well: {} for {grouped}",
+        report.objects_read
+    );
+}

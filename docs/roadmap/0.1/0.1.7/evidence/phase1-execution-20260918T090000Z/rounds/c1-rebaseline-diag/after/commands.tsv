@@ -1,0 +1,4 @@
+X1	order-forced-64-repeat	0	0.238	/tmp/layerfs-phase1-target/release/phase0client order 4000 2000 64
+X2	c1-subtree-remove-repeat	0	0.042	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/filesystem_timing_c1 --case subtree-remove --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/c1-rebaseline-diag/after/output/X2/c1-subtree-remove-repeat
+D25	order-default-4096	0	0.025	/tmp/layerfs-phase1-target/release/phase0client order 4000 2000 4096
+D26	order-forced-64	0	0.162	/tmp/layerfs-phase1-target/release/phase0client order 4000 2000 64

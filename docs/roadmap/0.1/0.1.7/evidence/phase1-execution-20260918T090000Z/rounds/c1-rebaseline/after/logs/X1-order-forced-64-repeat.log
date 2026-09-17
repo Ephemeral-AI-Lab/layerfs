@@ -1,0 +1,7 @@
+$ /tmp/layerfs-phase1-target/release/phase0client order 4000 2000 64
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.186
+--- stdout ---
+order pairs 2000 pending 64 spilled 3968 elapsed_ns 172310458 rows_read 59007 rows_written 25760 runs_created 124 merges 61 peak_run_bytes 568320 peak_live_runs 5 peak_pending 64 held_now 0 peak_backing 568320 emitted 14 dir_pages_read 2 dir_pages_created 11 dir_pages_reused 0 dir_scratch 376110 ino_pages_read 1 ino_pages_created 2 ino_pages_reused 40 ino_scratch 349820 objects_read 98 read_waves 11 bytes_read 400354 rows_touched 4001 final_values 2001 final_removals 0
+--- stderr ---

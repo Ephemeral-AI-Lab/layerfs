@@ -104,7 +104,6 @@ impl<'a> FilesystemObjects<'a> {
             ids.len() as u64,
             values.iter().map(|value| value.len() as u64).sum(),
         );
-        self.work.read_waves = self.work.read_waves.saturating_add(1);
         Ok(values)
     }
 

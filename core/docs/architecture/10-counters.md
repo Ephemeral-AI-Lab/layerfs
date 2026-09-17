@@ -4,8 +4,9 @@
 > not a product contract.
 
 Part of the [replacement-core architecture](README.md) set. Source pin
-`1884e3eca`; scope, method, measurement status and upkeep are stated in the
-[index](README.md).
+`1884e3eca`; the two `15.6` counter readings corrected by #178 **C1**
+(2026-09-18) are marked in place and carry their own commit. Scope, method,
+measurement status and upkeep are stated in the [index](README.md).
 
 Chapter numbers are global to the set: this paper holds **chapter 15**.
 
@@ -177,6 +178,8 @@ with batching; `filesystem_limits.rs` pins it that way
 | `ValidationWork.entries_examined` | tree size | entries **charged to the walk**, which is per-walk scoped |
 | `PoolCounters.reused_values` | deduped values | values that reused an existing ordinal in the bounded window |
 | `StoreReadCounters.ceiling` | a limit | the watermark **applied** to every acquired location |
+| `ObjectWork.read_waves` | one per object | one per **provider call**: a grouped demand of *n* objects is **one** wave (corrected at C1; it was charged twice) |
+| `SortedWork.pages_read` | stored pages requested | pages **decoded**, including the children a grouped fetch returned (corrected at C1; batched decodes charged nothing) |
 
 ### 15.7 What counters cannot tell you
 

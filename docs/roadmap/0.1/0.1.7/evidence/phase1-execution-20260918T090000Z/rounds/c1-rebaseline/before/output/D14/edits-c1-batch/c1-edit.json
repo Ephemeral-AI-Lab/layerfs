@@ -1,0 +1,32 @@
+{
+  "name": "file.edit",
+  "elapsed_ns": 38834,
+  "children": [
+    {
+      "name": "edit.op",
+      "elapsed_ns": 37708,
+      "children": [
+        {
+          "name": "edit.base",
+          "elapsed_ns": 791,
+          "children": [
+            {"name": "edit.base_read", "elapsed_ns": 333, "children": []}
+          ]
+        },
+        {"name": "edit.compare", "elapsed_ns": 167, "children": []},
+        {"name": "edit.split", "elapsed_ns": 5500, "children": []},
+        {"name": "edit.split", "elapsed_ns": 42, "children": []},
+        {"name": "edit.split", "elapsed_ns": 291, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 9166, "children": []},
+        {"name": "edit.split", "elapsed_ns": 1542, "children": []},
+        {"name": "edit.split", "elapsed_ns": 1083, "children": []},
+        {"name": "edit.split", "elapsed_ns": 208, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 3000, "children": []},
+        {"name": "edit.split", "elapsed_ns": 1042, "children": []},
+        {"name": "edit.split", "elapsed_ns": 709, "children": []},
+        {"name": "edit.split", "elapsed_ns": 167, "children": []},
+        {"name": "edit.finish", "elapsed_ns": 3417, "children": []}
+      ]
+    }
+  ]
+}

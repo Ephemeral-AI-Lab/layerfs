@@ -1,0 +1,33 @@
+$ cargo +1.85.1 build --release --offline --locked
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/client
+exit_code 0
+wall_s 8.085
+--- stdout ---
+--- stderr ---
+   Compiling libc v0.2.189
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling pkg-config v0.3.34
+   Compiling vcpkg v0.2.15
+   Compiling foldhash v0.2.0
+   Compiling arrayref v0.3.9
+   Compiling cfg-if v1.0.5
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling bitflags v2.13.2
+   Compiling smallvec v1.16.1
+   Compiling fallible-iterator v0.3.0
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry)
+   Compiling hashbrown v0.17.1
+   Compiling libsqlite3-sys v0.38.2
+   Compiling hashlink v0.12.2
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.6
+   Compiling rusqlite v0.40.2
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling phase0client v0.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/client)
+    Finished `release` profile [optimized] target(s) in 8.05s
