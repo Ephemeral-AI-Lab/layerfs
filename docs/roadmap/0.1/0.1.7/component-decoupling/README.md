@@ -155,8 +155,14 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   C2 `layerfs-storage`, telemetry) — boundaries, algorithms, on-disk formats and
   declared limits. It lives with the product it describes; see
   [`core/docs/architecture/`](../../../../../core/docs/architecture/README.md) —
-  six papers covering the boundary, objects, files, filesystem, storage and
-  limits.
+  ten papers covering the boundary, objects, files, filesystem, storage, limits,
+  importing, representations, delta hints and counters.
+- [Parallelism and batching study (2026-09-18)](parallelism-and-batching-study-20260918.md):
+  what the reference does with worker pools and SQLite tuning, what `core/` does
+  instead, and which differences are real. Source reads only, no measurement, no
+  recommendation; it exists to tell [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171)
+  what to measure first and what not to assume.
+
 
 The proposal has been saved here for discussion before implementation. Owner
 direction: group related components into clusters, design the boundaries
