@@ -25,6 +25,6 @@ pub mod pack;
 pub mod policy;
 pub mod sqlite;
 
-pub use cas::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreReadCounters};
+pub use cas::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreProvider, StoreReadCounters};
 pub use error::{StorageError, StorageResult};
 pub use policy::{SchemaIdentity, StorageCapacities, StoragePolicy, SCHEMA_IDENTITY};

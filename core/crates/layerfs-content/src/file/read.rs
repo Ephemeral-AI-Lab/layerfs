@@ -121,7 +121,7 @@ fn emit_classified(
             }
             scope
                 .child("content.traverse")
-                .run(|_| mapping::read_range(reader, state, range, sink))
+                .run(|traverse| mapping::read_range(reader, state, range, sink, traverse))
         }
     }
 }

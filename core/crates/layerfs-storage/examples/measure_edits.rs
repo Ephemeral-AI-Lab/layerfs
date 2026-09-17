@@ -524,7 +524,7 @@ fn run_pipeline(
     ) = timed(options, "edit.save", |scope| {
         // The base is read back through the real Store, exactly as a Workspace
         // would supply it: no in-memory copy of the base objects is required.
-        let reader = StoreReader { store: &store };
+        let reader = StoreReader::new(&store);
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         let mut handoff = SaveHandoff::new(&mut operation);
         let constructed = apply_edits(
@@ -560,7 +560,7 @@ fn run_pipeline(
     );
     let (verify, verify_report): (Result<Vec<u8>, ContentError>, TimingReport) =
         timed(options, "verify.readback", |read| {
-            let reader = StoreReader { store: &store };
+            let reader = StoreReader::new(&store);
             let mut out = Vec::new();
             read_all(&reader, edited_root, &mut out, read.child("content.read"))?;
             Ok(out)
@@ -604,17 +604,6 @@ fn run_pipeline(
 use layerfs_content::EditSource;
 
 /// Independent read provider backed by a real Store connection.
-struct StoreReader<'a> {
-    store: &'a Store,
-}
-
-impl AuthenticatedObjects for StoreReader<'_> {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        let (values, _) = Timing::disabled("storage.read", |scope| {
-            self.store.read_batch(ids, scope.child("storage.read"))
-        })
-        .0
-        .map_err(|_: StorageError| ContentError::MissingObject)?;
-        Ok(values)
-    }
-}
+///
+/// The product bridge, so the harness exercises the same adapter a runtime does.
+use layerfs_storage::StoreProvider as StoreReader;

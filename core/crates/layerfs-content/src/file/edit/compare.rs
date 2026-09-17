@@ -53,11 +53,12 @@ pub fn compare_replacements(
             while offset < len {
                 let take = (len - offset).min(COMPARE_WINDOW_BYTES as u64);
                 base_window.clear();
-                compare.child("edit.compare.window").run(|_| {
+                compare.child("edit.compare.window").run(|window| {
                     view.read_range(
                         reader,
                         base.0 + offset..base.0 + offset + take,
                         &mut base_window,
+                        window,
                     )
                 })?;
                 if base_window.len() as u64 != take {

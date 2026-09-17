@@ -384,23 +384,42 @@ pub struct DecompressionWorkspace {
 }
 
 impl DecompressionWorkspace {
-    /// Allocates the bounded decode workspace and its static context.
+    /// A decode workspace whose bounded arena is allocated on first use.
+    ///
+    /// The arena is the read's own decode scratch, not a per-read constant: a
+    /// read that decompresses nothing - a wave served entirely from uncompressed
+    /// ordinary records - pays nothing for it, and the first frame that needs a
+    /// decoder materialises it once for the rest of that read. One read call
+    /// therefore allocates this arena at most once, and only when it has real
+    /// decode work to do.
     pub fn new() -> StorageResult<Self> {
-        let mut memory = workspace(DECODE_WORKSPACE_BYTES)?;
-        // SAFETY: as above; the static decoder neither allocates nor needs a free.
-        let context = unsafe {
-            ZSTD_initStaticDCtx(
-                memory.as_mut_ptr().cast::<c_void>(),
-                workspace_bytes(&memory),
-            )
-        };
-        if context.is_null() {
-            return Err(resource());
-        }
-        Ok(Self { memory, context })
+        Ok(Self {
+            memory: Vec::new(),
+            context: ptr::null_mut(),
+        })
     }
 
-    /// Bytes charged by the decode workspace.
+    /// Materialises the decode arena and returns its static context.
+    fn context(&mut self) -> StorageResult<*mut ZSTD_DCtx> {
+        if self.context.is_null() {
+            let mut memory = workspace(DECODE_WORKSPACE_BYTES)?;
+            // SAFETY: the static decoder neither allocates nor needs a free.
+            let context = unsafe {
+                ZSTD_initStaticDCtx(
+                    memory.as_mut_ptr().cast::<c_void>(),
+                    workspace_bytes(&memory),
+                )
+            };
+            if context.is_null() {
+                return Err(resource());
+            }
+            self.memory = memory;
+            self.context = context;
+        }
+        Ok(self.context)
+    }
+
+    /// Bytes charged by the decode workspace, zero until it is materialised.
     pub fn workspace_bytes(&self) -> usize {
         workspace_bytes(&self.memory)
     }
@@ -419,7 +438,7 @@ impl DecompressionWorkspace {
         {
             return Err(StorageError::Integrity("Zstandard frame bounds"));
         }
-        let context = self.context;
+        let context = self.context()?;
         // SAFETY: `context` is a live static decoder inside `self.memory`.
         // Header parsing only reads `frame`; the destination is exactly the
         // validated declared size, never a frame-derived grow.
@@ -479,7 +498,7 @@ impl DecompressionWorkspace {
         {
             return Err(StorageError::Integrity("Zstandard frame bounds"));
         }
-        let context = self.context;
+        let context = self.context()?;
         // SAFETY: as in `decompress`; `prefix` is borrowed for this call only.
         unsafe {
             let header = parse_frame_header(frame)?;
@@ -537,7 +556,7 @@ impl DecompressionWorkspace {
         {
             return Err(StorageError::Integrity("group body frame bounds"));
         }
-        let context = self.context;
+        let context = self.context()?;
         // SAFETY: as in `decompress`; only `frame` is read for header parsing.
         unsafe {
             let header = parse_frame_header(frame)?;

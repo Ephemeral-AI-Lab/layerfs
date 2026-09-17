@@ -72,7 +72,12 @@ pub fn read_value(
         });
     }
     let mut output = Vec::with_capacity(length);
-    read_range(reader, state, 0..length as u64, &mut output)?;
+    // An attribute value read has no timing scope of its own yet, so its mapping
+    // waves run under a disabled node rather than under the caller's duration.
+    layerfs_telemetry::timer::Timing::disabled("attributes.value", |scope| {
+        read_range(reader, state, 0..length as u64, &mut output, scope)
+    })
+    .0?;
     if output.len() != length {
         return Err(ContentError::LengthMismatch {
             expected: state.logical_len,

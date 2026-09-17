@@ -72,18 +72,8 @@ impl AuthenticatedObjects for Bag {
     }
 }
 
-/// Provider over one reopened Store.
-struct StoreReader<'a> {
-    store: &'a layerfs_storage::Store,
-}
-
-impl AuthenticatedObjects for StoreReader<'_> {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        disabled(|scope| self.store.read_batch(ids, scope.child("storage.read")))
-            .map(|(values, _)| values)
-            .map_err(|_| ContentError::MissingObject)
-    }
-}
+/// Provider over one reopened Store: the product bridge, not a copy of it.
+use layerfs_storage::StoreProvider as StoreReader;
 
 /// A built tree: the root, the independent object set and the serials it used.
 struct Fixture {
@@ -346,7 +336,7 @@ fn a_real_tree_saves_reopens_and_reads_back_exactly() {
     drop(store);
 
     let store = open_store(&temp.store_path("filesystem"));
-    let reader = StoreReader { store: &store };
+    let reader = StoreReader::new(&store);
     let root_bytes = reader
         .read_canonical(fixture.root)
         .expect("root object is stored");
@@ -418,7 +408,7 @@ fn a_patch_saved_to_the_store_keeps_untouched_attribute_roots() {
     save_fixture(&store, &fixture);
     drop(store);
     let store = open_store(&temp.store_path("filesystem"));
-    let reader = StoreReader { store: &store };
+    let reader = StoreReader::new(&store);
     let mut sink = Bag::default();
     let patches = vec![AttributePatch::Set {
         key: AttributeKey::new("user.example".to_owned(), b"note".to_vec()).unwrap(),
@@ -441,7 +431,7 @@ fn a_patch_saved_to_the_store_keeps_untouched_attribute_roots() {
         })
         .expect("save patch");
     }
-    let reader2 = StoreReader { store: &store };
+    let reader2 = StoreReader::new(&store);
     let portable = read_portable(
         &reader2,
         patch_root,
@@ -460,7 +450,7 @@ fn a_reopened_store_serves_an_update_of_the_saved_tree() {
     save_fixture(&store, &fixture);
     drop(store);
     let store = open_store(&temp.store_path("filesystem"));
-    let reader = StoreReader { store: &store };
+    let reader = StoreReader::new(&store);
     let directories = [DirectoryUpdate {
         parent: 1,
         changes: vec![
@@ -664,7 +654,7 @@ fn a_caller_authorized_value_root_is_not_an_object_dependency() {
     drop(store);
 
     let store = open_store(&temp.store_path("filesystem"));
-    let reader = StoreReader { store: &store };
+    let reader = StoreReader::new(&store);
     let root_bytes = reader
         .read_canonical(fixture.root)
         .expect("the root object is stored");

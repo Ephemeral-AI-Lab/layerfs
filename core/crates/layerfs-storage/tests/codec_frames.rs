@@ -27,6 +27,47 @@ fn decode(profile: CodecProfile, frame: &[u8], raw_length: usize) -> Result<Vec<
     workspace.decompress(profile, frame, raw_length)
 }
 
+/// R37: the decode arena is charged when a frame needs it, not when a read opens.
+///
+/// Every C2 read call used to materialise a fixed one-MiB decode arena before it
+/// knew whether anything needed decoding. The arena is now allocated on first use,
+/// so a wave served entirely from uncompressed records charges nothing and a wave
+/// with real decode work materialises it exactly once.
+#[test]
+fn the_decode_arena_is_charged_only_when_a_frame_needs_it() {
+    use layerfs_storage::encoding::DECODE_WORKSPACE_BYTES;
+    let capacities = capacities(131_072);
+    let profile = CodecProfile::whole_file(&capacities);
+    let raw = support::noise(48_000);
+    let frame = encode(profile, &raw);
+
+    let mut workspace = DecompressionWorkspace::new().expect("decode workspace");
+    assert_eq!(
+        workspace.workspace_bytes(),
+        0,
+        "opening a decode workspace allocates nothing"
+    );
+    assert_eq!(
+        workspace
+            .decompress(profile, &frame, raw.len())
+            .expect("decode"),
+        raw
+    );
+    assert_eq!(
+        workspace.workspace_bytes(),
+        DECODE_WORKSPACE_BYTES,
+        "the first frame materialises the declared arena once"
+    );
+    // A second frame reuses the same arena instead of allocating another.
+    assert_eq!(
+        workspace
+            .decompress(profile, &frame, raw.len())
+            .expect("decode"),
+        raw
+    );
+    assert_eq!(workspace.workspace_bytes(), DECODE_WORKSPACE_BYTES);
+}
+
 #[test]
 fn a_valid_frame_round_trips_through_both_decode_entry_points() {
     let capacities = capacities(131_072);

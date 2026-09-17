@@ -125,7 +125,7 @@ fn assemble_final(
     source: &dyn EditSource,
     scope: TimingScope<'_, layerfs_telemetry::timer::Pending>,
 ) -> ContentResult<Vec<u8>> {
-    scope.run(|_assemble| assemble_inner(view, reader, stream, source))
+    scope.run(|assemble| assemble_inner(view, reader, stream, source, assemble))
 }
 
 fn assemble_inner(
@@ -133,6 +133,7 @@ fn assemble_inner(
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
+    scope: &TimingScope<'_, layerfs_telemetry::timer::Active>,
 ) -> ContentResult<Vec<u8>> {
     let final_len = stream.final_len();
     let mut out: Vec<u8> = Vec::new();
@@ -148,7 +149,7 @@ fn assemble_inner(
         match segment {
             Segment::Retain { base } => {
                 if base.1 > base.0 {
-                    view.read_range(reader, base.0..base.1, &mut out)?;
+                    view.read_range(reader, base.0..base.1, &mut out, scope)?;
                 }
             }
             Segment::Replace { index, len, .. } => {

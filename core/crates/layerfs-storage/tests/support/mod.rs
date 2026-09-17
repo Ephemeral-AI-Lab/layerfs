@@ -151,17 +151,9 @@ impl AuthenticatedObjects for Provider<'_> {
 
 /// Provider that serves canonical bytes from a real Store.
 ///
-/// The store read is the production path; a failure there is reported as a missing
-/// object because that is the only way a provider can say "I do not have it".
-pub struct StoreProvider<'a>(pub &'a Store);
-
-impl AuthenticatedObjects for StoreProvider<'_> {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        disabled(|scope| self.0.read_batch(ids, scope.child("storage.read")))
-            .map(|(values, _)| values)
-            .map_err(|_| ContentError::MissingObject)
-    }
-}
+/// This is the product bridge an adapter uses, not a second implementation of
+/// it: the test drives the same object the runtime does.
+pub use layerfs_storage::StoreProvider;
 
 /// Reads the whole logical file through the real C1 read path, with every
 /// canonical object acquired from the real Store.
@@ -169,7 +161,7 @@ pub fn read_logical(store: &Store, root: ObjectId) -> Vec<u8> {
     let mut bytes = Vec::new();
     disabled(|scope| {
         read_all(
-            &StoreProvider(store),
+            &StoreProvider::new(store),
             root,
             &mut bytes,
             scope.child("content.read"),

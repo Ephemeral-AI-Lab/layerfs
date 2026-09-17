@@ -1,14 +1,18 @@
 //! Bounded extent traversal and ordered payload demand.
 //!
-//! Navigation reads one mapping page per visited node as a one-ID batch. Payload
-//! reads are grouped: every distinct payload demanded inside a bounded wave is
-//! acquired by a single batch call, then each demand is served from the wave in
-//! logical order. A payload demanded more than once is read once and borrowed;
-//! it is never cloned per demand. The wave is released before the next one, so a
-//! long read never holds the whole file payload.
+//! Navigation is batched by level: every mapping page the requested range can
+//! reach at one level is demanded in one provider call, so a read issues one
+//! navigation call per bounded level wave instead of one point call per visited
+//! page. Payload reads are grouped the same way: every distinct payload demanded
+//! inside a bounded wave is acquired by one call, then each demand is served from
+//! the wave in logical order. A payload demanded more than once is read once and
+//! borrowed; it is never cloned per demand. The wave is released before the next
+//! one, so a long read never holds the whole file payload.
 
 use std::io::Write;
 use std::ops::Range;
+
+use layerfs_telemetry::timer::{Active, TimingScope};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::cdc;
@@ -20,12 +24,23 @@ use crate::object::{AuthenticatedObjects, ObjectId};
 pub const READ_WAVE_OBJECTS: usize = 32;
 /// Declared byte ceiling of one wave: the object bound at the largest chunk.
 pub const READ_WAVE_BYTES: usize = READ_WAVE_OBJECTS * cdc::MAXIMUM_CHUNK_BYTES;
+/// Navigation pages one level wave may hold at once.
+///
+/// A level is demanded in waves of this many pages, so the pages themselves are
+/// capped at READ_NAVIGATION_WAVE * MAX_NODE_OBJECT_BYTES. The frontier retains
+/// one 56-byte entry per mapping node the range still has to reach at the next
+/// level; the same read visits those nodes and pays for them either way.
+pub const READ_NAVIGATION_WAVE: usize = 32;
 
 /// Work performed by a logical read.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ReadCounters {
     /// Mapping pages read.
     pub nodes_read: u64,
+    /// Navigation provider calls issued.
+    pub node_batches_read: u64,
+    /// Largest single navigation call.
+    pub max_node_batch: u64,
     /// Distinct payload objects read.
     pub payload_ids_read: u64,
     /// Payload batch calls issued.
@@ -43,19 +58,34 @@ struct Demand {
     length: u32,
 }
 
-struct Wave<'a> {
+/// One mapping node the traversal has still to reach.
+struct Frontier {
+    id: ObjectId,
+    root: bool,
+    level: u8,
+    origin: u64,
+    expected_root: Option<(u64, u64)>,
+}
+
+struct Wave<'a, 'r, 's> {
     reader: &'a dyn AuthenticatedObjects,
     sink: &'a mut dyn Write,
+    scope: &'s TimingScope<'r, Active>,
     demands: Vec<Demand>,
     distinct: Vec<ObjectId>,
     counters: ReadCounters,
 }
 
-impl<'a> Wave<'a> {
-    fn new(reader: &'a dyn AuthenticatedObjects, sink: &'a mut dyn Write) -> Self {
+impl<'a, 'r, 's> Wave<'a, 'r, 's> {
+    fn new(
+        reader: &'a dyn AuthenticatedObjects,
+        sink: &'a mut dyn Write,
+        scope: &'s TimingScope<'r, Active>,
+    ) -> Self {
         Self {
             reader,
             sink,
+            scope,
             demands: Vec::with_capacity(READ_WAVE_OBJECTS * 2),
             distinct: Vec::with_capacity(READ_WAVE_OBJECTS),
             counters: ReadCounters::default(),
@@ -84,7 +114,9 @@ impl<'a> Wave<'a> {
         if self.demands.is_empty() {
             return Ok(());
         }
-        let values = self.reader.read_canonical_batch(&self.distinct)?;
+        let values = self
+            .reader
+            .read_canonical_batch_scoped(&self.distinct, self.scope.child("mapping.payload"))?;
         if values.len() != self.distinct.len() {
             return Err(ContentError::BatchCardinality {
                 requested: self.distinct.len(),
@@ -132,19 +164,19 @@ impl<'a> Wave<'a> {
     }
 }
 
-/// Reads `range` of a chunked file, emitting bytes in logical order.
+/// Reads a range of a chunked file, emitting bytes in logical order.
 ///
 /// The file state's declared length and extent count are the root page's own
 /// summary, and a read checks that the page it actually decoded agrees with them
 /// before it traverses anything. The traversal is then checked against what it
 /// emitted: a range is served exactly or refused, never partly served under an
-/// `Ok`. Both checks are on bytes this read already acquired, so they add no
-/// read.
+/// Ok. Both checks are on bytes this read already acquired, so they add no read.
 pub fn read_range(
     reader: &dyn AuthenticatedObjects,
     state: FileState,
     range: Range<u64>,
     sink: &mut dyn Write,
+    scope: &TimingScope<'_, Active>,
 ) -> ContentResult<ReadCounters> {
     if range.start > range.end || range.end > state.logical_len {
         return Err(ContentError::InvalidRange {
@@ -157,17 +189,8 @@ pub fn read_range(
         return Ok(ReadCounters::default());
     }
     let requested = range.end - range.start;
-    let mut wave = Wave::new(reader, sink);
-    descend(
-        reader,
-        state.mapping_root,
-        true,
-        state.tree_level,
-        0,
-        &range,
-        &mut wave,
-        Some((state.logical_len, state.extent_count)),
-    )?;
+    let mut wave = Wave::new(reader, sink, scope);
+    traverse(state, &range, &mut wave)?;
     wave.flush()?;
     if wave.counters.payload_bytes_read != requested {
         return Err(ContentError::InvalidRecord("mapping coverage"));
@@ -175,70 +198,112 @@ pub fn read_range(
     Ok(wave.counters)
 }
 
-/// Traverses one page, checking the root against the file state it was opened from.
-#[allow(clippy::too_many_arguments)]
-fn descend(
-    reader: &dyn AuthenticatedObjects,
-    id: ObjectId,
-    root: bool,
-    level: u8,
-    origin: u64,
+/// Walks the mapping tree one level per bounded navigation wave.
+///
+/// The recursion the previous form used is unrolled into a frontier so that one
+/// level's demands become one grouped call: the frontier holds the nodes still to
+/// reach, in logical order, and each wave of at most READ_NAVIGATION_WAVE pages is
+/// acquired, decoded and released before the next. A child whose subtree starts
+/// at or after range.end is never demanded - that is where the recursive form
+/// stopped descending - and neither is any node after it, because the frontier is
+/// in logical order.
+fn traverse(
+    state: FileState,
     range: &Range<u64>,
-    wave: &mut Wave<'_>,
-    expected_root: Option<(u64, u64)>,
+    wave: &mut Wave<'_, '_, '_>,
 ) -> ContentResult<()> {
-    let canonical = reader.read_canonical(id)?;
-    wave.counters.nodes_read = wave.counters.nodes_read.saturating_add(1);
-    let node = decode_node_with_context(&canonical, root)?;
-    if node.level() != level {
-        return Err(ContentError::InvalidRecord("mapping level"));
-    }
-    if let Some((logical_len, extent_count)) = expected_root {
-        if node.logical_len() != logical_len || node.extent_count() != extent_count {
-            return Err(ContentError::InvalidRecord("mapping coverage"));
+    let reader = wave.reader;
+    let scope = wave.scope;
+    let mut level = vec![Frontier {
+        id: state.mapping_root,
+        root: true,
+        level: state.tree_level,
+        origin: 0,
+        expected_root: Some((state.logical_len, state.extent_count)),
+    }];
+    let mut depth = 0_u8;
+    while !level.is_empty() {
+        if depth > crate::file::mapping::types::MAX_LEVEL {
+            return Err(ContentError::MappingDepthExceeded);
         }
-    }
-    match node {
-        ExtentNode::Leaf { extents, .. } => {
-            let mut position = origin;
-            for extent in extents {
-                position = push_extent(extent, position, range, wave)?;
+        depth = depth.saturating_add(1);
+        let mut next: Vec<Frontier> = Vec::new();
+        let mut finished = false;
+        for chunk in level.chunks(READ_NAVIGATION_WAVE) {
+            let ids: Vec<ObjectId> = chunk.iter().map(|node| node.id).collect();
+            let pages =
+                reader.read_canonical_batch_scoped(&ids, scope.child("mapping.navigate"))?;
+            if pages.len() != ids.len() {
+                return Err(ContentError::BatchCardinality {
+                    requested: ids.len(),
+                    returned: pages.len(),
+                });
             }
-            Ok(())
-        }
-        ExtentNode::Branch { children, .. } => {
-            let mut previous = origin;
-            for child in children {
-                let end = child.cumulative_logical_end;
-                if end <= range.start {
-                    previous = end;
-                    continue;
+            wave.counters.nodes_read = wave.counters.nodes_read.saturating_add(ids.len() as u64);
+            wave.counters.node_batches_read = wave.counters.node_batches_read.saturating_add(1);
+            wave.counters.max_node_batch = wave.counters.max_node_batch.max(ids.len() as u64);
+            for (node, canonical) in chunk.iter().zip(&pages) {
+                let page = decode_node_with_context(canonical, node.root)?;
+                if page.level() != node.level {
+                    return Err(ContentError::InvalidRecord("mapping level"));
                 }
-                if previous >= range.end {
-                    return Ok(());
+                if let Some((logical_len, extent_count)) = node.expected_root {
+                    if page.logical_len() != logical_len || page.extent_count() != extent_count {
+                        return Err(ContentError::InvalidRecord("mapping coverage"));
+                    }
                 }
-                descend(
-                    reader,
-                    child.child_object_id,
-                    false,
-                    level - 1,
-                    previous,
-                    range,
-                    wave,
-                    None,
-                )?;
-                previous = end;
+                match page {
+                    ExtentNode::Leaf { extents, .. } => {
+                        let mut position = node.origin;
+                        for extent in extents {
+                            position = push_extent(extent, position, range, wave)?;
+                        }
+                    }
+                    ExtentNode::Branch { children, .. } => {
+                        let child_level = node
+                            .level
+                            .checked_sub(1)
+                            .ok_or(ContentError::MappingDepthExceeded)?;
+                        let mut previous = node.origin;
+                        for child in children {
+                            let end = child.cumulative_logical_end;
+                            if end <= range.start {
+                                previous = end;
+                                continue;
+                            }
+                            if previous >= range.end {
+                                finished = true;
+                                break;
+                            }
+                            next.push(Frontier {
+                                id: child.child_object_id,
+                                root: false,
+                                level: child_level,
+                                origin: previous,
+                                expected_root: None,
+                            });
+                            previous = end;
+                        }
+                    }
+                }
+                if finished {
+                    break;
+                }
             }
-            Ok(())
+            if finished {
+                break;
+            }
         }
+        level = next;
     }
+    Ok(())
 }
 
 fn push_extent(
     extent: ExtentSlice,
     position: u64,
     range: &Range<u64>,
-    wave: &mut Wave<'_>,
+    wave: &mut Wave<'_, '_, '_>,
 ) -> ContentResult<u64> {
     let end = position
         .checked_add(u64::from(extent.logical_length()))

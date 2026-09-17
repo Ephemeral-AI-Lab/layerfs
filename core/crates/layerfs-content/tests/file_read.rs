@@ -5,8 +5,8 @@ mod support;
 use layerfs_content::file::mapping::decode_file_state;
 use layerfs_content::{read_all, read_range, ContentError, ObjectRole};
 use support::{
-    build_file, disabled_scope, noise, patterned, read_back, repeat, CountingStore, MemoryStore,
-    PoisonedStore,
+    build_file, disabled_scope, mapping_page_sizes, noise, patterned, read_back, repeat,
+    CountingStore, MemoryStore, PoisonedStore,
 };
 
 fn chunked(len: usize) -> (MemoryStore, layerfs_content::ConstructedFile, Vec<u8>) {
@@ -203,6 +203,57 @@ fn a_provider_failure_is_returned_once_and_stops_the_read() {
     .unwrap_err();
     assert_eq!(error, ContentError::MissingObject);
     assert!(out.len() < 200_000, "the read stopped at the failure");
+}
+
+/// Navigation is grouped by level, not one point call per visited page.
+///
+/// The fixture carries a real two-level mapping tree, so the difference is
+/// visible: every mapping page is still read exactly once, but the pages of one
+/// level arrive in a single provider call (a level wave) instead of one call each.
+#[test]
+fn navigation_acquires_a_whole_level_per_provider_call() {
+    use layerfs_content::file::mapping::READ_NAVIGATION_WAVE;
+    let bytes = noise(4 * 1024 * 1024 + 17);
+    let (store, constructed, _) = chunked(bytes.len());
+    let pages = mapping_page_sizes(&store, constructed.root);
+    assert!(
+        pages.len() >= 3,
+        "the fixture must carry a real mapping tree: {pages:?}"
+    );
+    let leaves = pages.iter().filter(|(level, _, _)| *level == 0).count() as u64;
+    assert!(
+        leaves >= 2,
+        "the fixture must carry several leaves: {pages:?}"
+    );
+
+    let mut out = Vec::new();
+    let counters = disabled_scope(|scope| {
+        layerfs_content::read_all_bounded(
+            &store,
+            constructed.root,
+            u64::MAX,
+            &mut out,
+            scope.child("content.read"),
+        )
+    })
+    .expect("read");
+    assert_eq!(out, bytes);
+    assert_eq!(
+        counters.nodes_read as usize,
+        pages.len(),
+        "every mapping page is read exactly once: {counters:?}"
+    );
+    // Two levels: the root, then every leaf of the range in bounded level waves.
+    let expected = 1 + leaves.div_ceil(READ_NAVIGATION_WAVE as u64);
+    assert_eq!(
+        counters.node_batches_read, expected,
+        "one navigation call per level wave: {counters:?}"
+    );
+    assert!(
+        counters.node_batches_read < counters.nodes_read,
+        "navigation must not be one call per page: {counters:?}"
+    );
+    assert_eq!(counters.max_node_batch, leaves);
 }
 
 /// The read wave never exceeds its declared object and byte window.

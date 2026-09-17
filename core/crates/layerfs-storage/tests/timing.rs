@@ -5,7 +5,7 @@ mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::{StorageError, Store};
 use layerfs_telemetry::timer::{Timing, TimingNode, TimingReport};
-use support::{construct_file, create_store, noise, patterned, TempDir};
+use support::{construct_file, create_store, noise, open_store, patterned, TempDir};
 
 fn disabled(store: &Store, root: layerfs_content::ObjectId) -> Vec<u8> {
     let (values, _) = Timing::disabled("read", |scope| {
@@ -38,6 +38,60 @@ fn save_recorded(
         }
         operation.finish(root.child("storage.finish"))
     })
+}
+
+/// R39: a provider's work is a named child of the caller's span, not its duration.
+///
+/// A content read that resolves mapping pages and payloads through the product
+/// bridge records those waves inside the operation tree the caller started. The
+/// Store's own connection, ceiling read and decode nest under the navigation wave
+/// the reader named, so an integrated row can tell C1's traversal from C2's read
+/// instead of charging both to one span.
+#[test]
+fn a_content_read_attributes_its_mapping_waves_inside_the_callers_span() {
+    let dir = TempDir::new("timing_read");
+    let path = dir.store_path("timing_read");
+    let store = create_store(&path);
+    let bytes = noise(1024 * 1024 + 17);
+    let (collected, root, _) = construct_file(&bytes);
+    save_recorded(&store, collected.finalized(), "c2.save")
+        .0
+        .expect("save succeeds");
+    drop(store);
+
+    let reopened = open_store(&path);
+    let provider = layerfs_storage::StoreProvider::new(&reopened);
+    let mut out = Vec::new();
+    let (result, report) = Timing::record("c1.read", |read| {
+        layerfs_content::read_all(&provider, root, &mut out, read.child("content.read"))
+    });
+    result.expect("read succeeds");
+    assert_eq!(out, bytes);
+
+    let tree = report.root().expect("a recorded root");
+    assert_eq!(child_names(tree), vec!["content.read".to_string()]);
+    let content = &tree.children()[0];
+    let inner = child_names(content);
+    assert!(inner.contains(&"content.acquire".to_string()), "{inner:?}");
+    assert!(inner.contains(&"content.traverse".to_string()), "{inner:?}");
+    let traverse = content
+        .children()
+        .iter()
+        .find(|child| child.name() == "content.traverse")
+        .expect("the traversal node");
+    let waves = child_names(traverse);
+    assert!(waves.contains(&"mapping.navigate".to_string()), "{waves:?}");
+    assert!(waves.contains(&"mapping.payload".to_string()), "{waves:?}");
+    let navigate = traverse
+        .children()
+        .iter()
+        .find(|child| child.name() == "mapping.navigate")
+        .expect("a navigation wave");
+    let inside = child_names(navigate);
+    assert!(
+        inside.contains(&"storage.read".to_string()),
+        "the Store's own read nests under the wave the reader named: {inside:?}"
+    );
 }
 
 #[test]

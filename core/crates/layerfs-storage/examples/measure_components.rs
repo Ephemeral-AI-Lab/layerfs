@@ -18,8 +18,8 @@ use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 use layerfs_content::{
-    construct_bytes, construct_stream, read_all, AuthenticatedObjects, ConstructionPolicy,
-    ContentError, ContentResult, DiscardingConsumer, ObjectId,
+    construct_bytes, construct_stream, read_all, ConstructionPolicy, ContentResult,
+    DiscardingConsumer,
 };
 use layerfs_storage::{SaveHandoff, StorageError, StoragePolicy, Store};
 use layerfs_telemetry::timer::{Timing, TimingReport};
@@ -285,7 +285,7 @@ fn run_pipeline(options: &Options, bytes: &[u8]) -> Result<(), Failure> {
             }
             let constructed = constructed?;
             let outcome = operation.finish(root.child("storage.finish"))?;
-            let reader = StoreReader { store: &store };
+            let reader = StoreReader::new(&store);
             let mut out = Vec::new();
             read_all(
                 &reader,
@@ -317,20 +317,9 @@ fn run_pipeline(options: &Options, bytes: &[u8]) -> Result<(), Failure> {
 }
 
 /// Independent read provider backed by a real Store connection.
-struct StoreReader<'a> {
-    store: &'a Store,
-}
-
-impl AuthenticatedObjects for StoreReader<'_> {
-    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        let (values, _) = Timing::disabled("storage.read", |scope| {
-            self.store.read_batch(ids, scope.child("storage.read"))
-        })
-        .0
-        .map_err(|_: StorageError| ContentError::MissingObject)?;
-        Ok(values)
-    }
-}
+///
+/// The product bridge, so the harness exercises the same adapter a runtime does.
+use layerfs_storage::StoreProvider as StoreReader;
 
 /// Consumer that keeps the prepared canonical objects for the C2-only mode.
 struct VecConsumer<'a>(&'a mut Vec<layerfs_content::FinalizedObject>);

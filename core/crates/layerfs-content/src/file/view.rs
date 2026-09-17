@@ -9,7 +9,7 @@
 use std::io::Write;
 use std::ops::Range;
 
-use layerfs_telemetry::timer::TimingScope;
+use layerfs_telemetry::timer::{Active, TimingScope};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::content::{self, FileContent};
@@ -78,11 +78,16 @@ impl FileView {
     }
 
     /// Reads one logical base range, appending it to `sink`.
+    ///
+    /// The caller supplies the timing scope the navigation and payload waves run
+    /// under, so the mapping reads this view issues are attributed to that node
+    /// rather than silently taking the caller's own duration.
     pub fn read_range(
         &self,
         reader: &dyn AuthenticatedObjects,
         range: Range<u64>,
         sink: &mut dyn Write,
+        scope: &TimingScope<'_, Active>,
     ) -> ContentResult<()> {
         if range.start > range.end || range.end > self.logical_len() {
             return Err(ContentError::InvalidRange {
@@ -105,7 +110,7 @@ impl FileView {
                 sink.write_all(slice).map_err(|_| ContentError::Io)
             }
             FileContent::Chunked(state) => {
-                mapping::read_range(reader, state, range, sink).map(|_| ())
+                mapping::read_range(reader, state, range, sink, scope).map(|_| ())
             }
         }
     }

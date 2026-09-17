@@ -49,7 +49,7 @@ fn read_back(store: &Store, root: ObjectId) -> Vec<u8> {
     let mut out = Vec::new();
     disabled(|scope| {
         read_all(
-            &StoreProvider { store, root },
+            &StoreProvider::new(store),
             root,
             &mut out,
             scope.child("content.read"),
@@ -60,23 +60,8 @@ fn read_back(store: &Store, root: ObjectId) -> Vec<u8> {
     out
 }
 
-/// Reads intermediate objects through a single independent Store connection.
-struct StoreProvider<'a> {
-    store: &'a Store,
-    root: ObjectId,
-}
-
-impl layerfs_content::AuthenticatedObjects for StoreProvider<'_> {
-    fn read_canonical_batch(
-        &self,
-        ids: &[ObjectId],
-    ) -> layerfs_content::ContentResult<Vec<Vec<u8>>> {
-        let (values, _) = disabled(|scope| self.store.read_batch(ids, scope.child("storage.read")))
-            .map_err(|_| ContentError::MissingObject)?;
-        let _ = self.root;
-        Ok(values)
-    }
-}
+/// Reads intermediate objects through the product Store bridge.
+use layerfs_storage::StoreProvider;
 
 #[test]
 fn a_streamed_file_survives_construction_storage_and_readback() {
@@ -160,10 +145,7 @@ fn integrated_and_independent_runs_produce_the_same_roots() {
         let mut out = Vec::new();
         disabled(|scope| {
             read_all(
-                &StoreProvider {
-                    store: &independent_store,
-                    root: integrated.root,
-                },
+                &StoreProvider::new(&independent_store),
                 integrated.root,
                 &mut out,
                 scope.child("content.read"),

@@ -215,6 +215,32 @@ role and reports that decoder's refusal; it does not fall back to another gramma
 The reproduction is `a_disagreeing_role_declaration_is_refused_by_its_own_decoder`
 in `core/crates/layerfs-storage/tests/cas_roundtrip.rs`.
 
+### Placement constraints this implementation accepts
+
+Two properties of this seam are deliberate and are recorded here so an adapter
+meets them rather than discovering them.
+
+**The seam is a local filesystem path.** `Store::create` and `Store::open` take a
+path and open embedded SQLite on it directly; there is no path-to-handle or
+connection-provider seam between the Store and the engine, and a pack body is
+read as one whole BLOB by primary key rather than by a byte range. A remote or
+object-store backend would therefore need a new seam - a handle provider and a
+byte-range pack read - and is not reachable by configuration. Until such a seam
+exists, a Store is a local directory and its packs move with it.
+
+**One operation is pinned to one thread per side.** `SaveOperation` owns a raw
+Zstandard context, the ordering `FileBacking` is `Rc`-based, and
+[`TimingScope`](telemetry.md) handles are neither `Send` nor `Sync`; moving an
+operation to another thread moves those with it. A placement adapter must
+therefore pin one save, one read and one construction each to a single thread,
+and may not hand an in-flight operation across a thread pool or an async runtime.
+This is what keeps the "one attempted operation" rule checkable: there is no
+second thread that could retry, resume or race the first.
+
+Neither property is a claim that a threaded or remote placement is impossible. It
+is a claim about where the work would have to go, and it is stated here instead of
+being left implicit in the types.
+
 With one mutation coordinator, the established absence result remains valid until
 its selected insertion. Remove the [late epoch refresh and winner-list rebuild](../../../../../crates/layerfs-layerstack-store/src/objects/admission.rs#L1295).
 Unexpected authority/state invalidation fails; no reread/reprepare. A known own
