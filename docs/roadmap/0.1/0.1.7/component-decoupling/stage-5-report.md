@@ -227,6 +227,21 @@ Edited existing files: `src/lib.rs` (+7), `src/error.rs` (+33),
 | `python3 tools/production_loc.py --files` | see §2 |
 | Reference-vs-replacement timing campaign | **NOT RUN** (no comparative arm exists) |
 
+New external targets and their exact results:
+
+| Target | Tests | Result |
+| --- | ---: | --- |
+| `filesystem_codec` | 6 | PASS |
+| `filesystem_reference` | 2 | PASS |
+| `filesystem_sorted` | 6 | PASS |
+| `filesystem_read` | 4 | PASS |
+| `filesystem_updates` | 6 | PASS |
+| `filesystem_hardlinks` | 5 | PASS |
+| `filesystem_topology` | 8 | PASS |
+| `filesystem_attributes` | 9 | PASS |
+| `filesystem_timing` | 2 | PASS |
+| `filesystem_pipeline` (C2) | 3 | PASS |
+
 The three smoke commands from the handoff were executed and print actual roots,
 counters and nanosecond timings:
 
