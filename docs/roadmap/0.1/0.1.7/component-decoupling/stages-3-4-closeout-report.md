@@ -78,8 +78,8 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G4 | Frontier memory is a function of height/fanout, asserted by a real oracle | W3, W4.1 | **PASS** | `w3/README.md`; peaks `[2208,2288,2448,2768,3408]` at 1/2/4/8/16 edits; control without release `[6308,…,129728]` |
 | G5 | Finality argument committed; children-before-parents asserted for edits | W3, W4.6 | **PASS** | finality argument R1-R3 in `w3/README.md`; `assert_children_precede_parents` called from `edit_bounds` |
 | G6 | All nine sealed reference cases still match root, partition and survivors | W3 | **PASS** | `w3/w3-verify.log`: `edit_reference` 2 tests / nine sealed cases, exit 0 |
-| G7 | Every overclaiming or vacuous oracle replaced; each new case fails without its fix | W4 | OPEN | |
-| G8 | Integrated multi-edit chunked pipeline case exists and passes | W4.5 | OPEN | |
+| G7 | Every overclaiming or vacuous oracle replaced; each new case fails without its fix | W4 | **PASS** | `w4/README.md`; W4.1-W4.8 table, two measured controls, the rest source-derived and labelled |
+| G8 | Integrated multi-edit chunked pipeline case exists and passes | W4.5 | **PASS** | `edit_pipeline::a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates`, store-backed logical readback |
 | G9 | Every significant allocation has owner, bound, multiplicity, lifetime and release event | W5, W7.3 | OPEN | |
 | G10 | No size-proportional hidden collector remains on a real path | W5 | OPEN | |
 | G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | OPEN | |
@@ -91,7 +91,7 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | OPEN | |
 | G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | OPEN | |
 | G19 | Limits boundary list run or explicitly unrun with reasons | W10 | OPEN | |
-| G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | IN PROGRESS | see §3 |
+| G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | IN PROGRESS | see §3; every commit so far carries the line |
 
 **Stage verdicts.** Stage 3 needs G1, G2, G9-G14, G17-G19. Stage 4 needs G3-G8,
 G13-G15, G17-G19. Neither is complete yet.
@@ -149,6 +149,26 @@ G13-G15, G17-G19. Neither is complete yet.
   (43 targets / 251 tests).
 * **Finality.** Rules R1-R3 and the join/edit arguments are in `w3/README.md`.
 * **Production LOC.** core `10938 -> 11053` (delta +115); C1 4385 -> 4500.
+
+### W4 — oracles repaired, unexercised cases closed (G7, G8) — PASS
+
+* **Change.** Test-only: `edit_bounds` (W4.1 replacement lives in W3, plus the new
+  bounded sink), `policy_capacity` (depth 4 versus depth 50), `object_identity`
+  (envelope ±1 and the `FinalizedObject::new` refusal), `streaming` (source and
+  per-file assertions), `edit_pipeline` (renamed single-edit case plus a real
+  multi-edit store-backed case), `metadata_pool` (honest group case, compressed
+  group, damaged delta, chain budget on both sides), `metadata_pool_index`
+  (invalidation oracle that can actually reach the phantom ordinals),
+  `delta_chains` (role check reached with a real stored object of another role),
+  and `support` (advisory-preserving consumer, store-backed logical reader,
+  byte-counting source). `assert_children_precede_parents` is now called from an
+  `edit_*` target (W4.6).
+* **Proof.** `w4-verify.log`: 18 focused targets plus the workspace suite
+  (43 targets, 258 tests, 0 failed), clippy, fmt, product boundary, both tool
+  suites and `git diff --check`, all exit 0 (one clippy lint in a new test is
+  retained with its re-run). `w4-fails-without-fix.log` holds two measured
+  controls; the rest are labelled source-derived in `w4/README.md`.
+* **Production LOC.** core `11053 -> 11053` (delta 0; test-only).
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 

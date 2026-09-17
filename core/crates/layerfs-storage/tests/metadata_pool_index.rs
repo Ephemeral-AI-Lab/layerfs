@@ -156,8 +156,15 @@ fn a_cold_store_synchronizes_from_the_catalogue_without_reassigning() {
     assert_eq!(ObjectId::for_bytes(&read[0]), second_id);
 }
 
+/// After a save fails mid-way, the set holds nothing from it.
+///
+/// The reviewed version of this case failed a save and then re-used values the
+/// *first* save had already pooled, which the catalogue resolves on its own: it
+/// would have passed with the phantom entries still present. This version pools
+/// the failed save's own private values again, which is the only request that can
+/// reach the phantom ordinals the failed save had assigned.
 #[test]
-fn a_failed_save_invalidates_the_set_instead_of_reusing_phantom_ordinals() {
+fn a_failed_save_leaves_no_usable_state_in_the_set() {
     let dir = TempDir::new("index-invalidate");
     let path = dir.store_path("index");
     let store = create_store(&path);
@@ -165,11 +172,12 @@ fn a_failed_save_invalidates_the_set_instead_of_reusing_phantom_ordinals() {
     let first = leaf(&values);
     let first_id = first.id();
     save_one(&store, first).expect("first");
+    let retained_groups = ordinals(&path);
+    assert_eq!(retained_groups, vec![(1, 8)]);
 
     // A save that fails after the leaf was prepared: the second accepted object
     // carries a whole-file role over a foreign payload, so the wave fails after
-    // the leaf's values were resolved and grouped. Whatever the index learned must
-    // not survive as usable state.
+    // the leaf's values were resolved, given ordinals and grouped.
     let private = (100..108).map(value).collect::<Vec<_>>();
     let bad = FinalizedObject::new(
         ObjectRole::WholeFile,
@@ -188,18 +196,32 @@ fn a_failed_save_invalidates_the_set_instead_of_reusing_phantom_ordinals() {
         matches!(error, StorageError::Content(_) | StorageError::Integrity(_)),
         "got {error}"
     );
+    // The failed attempt left the catalogue exactly as it was, and the retained
+    // set holds no entry at all.
+    assert_eq!(ordinals(&path), retained_groups);
+    assert_eq!(
+        store.pool_index_entries(),
+        0,
+        "the failed save's ordinals must not survive in the set"
+    );
 
-    let second = with_predecessor(leaf_from(1_000, &values), first_id);
+    // The same private values in a later save: every one of them is new, none of
+    // them resolves to an ordinal the failed save had assigned by hand, and the
+    // leaf is readable afterwards.
+    let second = with_predecessor(leaf_from(1_000, &private), first_id);
     let second_id = second.id();
     let outcome = save_one(&store, second).expect("second");
     assert_eq!(
-        outcome.pool.new_values, 0,
+        outcome.pool.new_values, 8,
         "no phantom ordinals were reused"
     );
-    assert_eq!(outcome.pool.reused_values, 8);
-    assert_eq!(ordinals(&path).len(), 1);
-    let (read, _) = read_objects(&store, &[second_id]).expect("read");
-    assert_eq!(ObjectId::for_bytes(&read[0]), second_id);
+    assert_eq!(outcome.pool.reused_values, 0);
+    assert_eq!(ordinals(&path), vec![(1, 8), (9, 8)]);
+    let (read, _) = read_objects(&store, &[first_id, second_id]).expect("read");
+    assert_eq!(read.len(), 2);
+    for (id, bytes) in [first_id, second_id].iter().zip(read) {
+        assert_eq!(ObjectId::for_bytes(&bytes), *id);
+    }
 }
 
 #[test]

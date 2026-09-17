@@ -27,14 +27,39 @@ fn stream<R: std::io::Read>(
     })
 }
 
+/// Every read this path issues is bounded by a declared window, and no byte is
+/// read twice.
+///
+/// The path has two bounded readers: the threshold probe, which is bounded by the
+/// declared cutoff, and the frozen chunk scanner, whose own window is the maximum
+/// chunk. The oracle is therefore stated on what the declarations promise - no
+/// single request exceeds the declared cutoff, the scanner streams in many bounded
+/// requests, and the source delivers exactly the input once - rather than on the
+/// standard library's buffer-growth pattern inside the probe.
 #[test]
-fn input_requests_stay_bounded_by_the_declared_chunk_window() {
+fn input_requests_stay_bounded_by_the_declared_windows() {
     let bytes = noise(131_072 * 6);
-    let source = CountingSource::new(bytes.as_slice());
+    let cutoff = ConstructionPolicy::frozen_default().small_file_threshold_bytes() as usize;
     let mut consumer = DiscardingConsumer::new();
-    let constructed = stream(bytes.as_slice(), &mut consumer).unwrap();
+    let mut source = CountingSource::new(bytes.as_slice());
+    let constructed = stream(&mut source, &mut consumer).unwrap();
     assert_eq!(constructed.logical_len, bytes.len() as u64);
-    let _ = source;
+    assert!(
+        source.largest_request() <= cutoff,
+        "a single read asked for {} bytes, above the declared cutoff {cutoff}",
+        source.largest_request()
+    );
+    assert!(
+        source.requests()
+            >= bytes.len() as u64 / layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES as u64,
+        "the scanner did not stream the input: {} requests",
+        source.requests()
+    );
+    assert_eq!(
+        source.bytes_read(),
+        bytes.len() as u64,
+        "the source was read exactly once, with no re-read and no over-read"
+    );
 }
 
 #[test]
@@ -70,18 +95,31 @@ fn children_are_emitted_before_their_parents() {
 
 #[test]
 fn many_files_do_not_retain_the_whole_workload() {
-    let mut peak = 0usize;
     let mut consumer = DiscardingConsumer::new();
     let mut root_seen = Vec::new();
+    let mut per_file = Vec::new();
+    let mut emitted = 0_u64;
     for index in 0..24u32 {
         let bytes = repeat(200_000, index as u8);
         let constructed = stream(bytes.as_slice(), &mut consumer).unwrap();
         root_seen.push(constructed.root);
-        peak = peak.max(consumer.objects() as usize);
+        let now = consumer.objects();
+        per_file.push(now - emitted);
+        emitted = now;
     }
     assert_eq!(root_seen.len(), 24);
-    assert!(consumer.objects() > 24, "each file emitted several objects");
-    let _ = peak;
+    assert!(
+        per_file.iter().all(|count| *count > 1),
+        "each file emitted several objects: {per_file:?}"
+    );
+    // What one stream retains is a function of that stream, not of how many files
+    // ran before it: the per-file emission count stays at the first file's shape
+    // while the cumulative total grows with the number of files.
+    assert!(
+        per_file.iter().all(|count| *count <= per_file[0] + 2),
+        "a later file did more work than the first: {per_file:?}"
+    );
+    assert_eq!(emitted, per_file.iter().sum::<u64>());
 }
 
 #[test]

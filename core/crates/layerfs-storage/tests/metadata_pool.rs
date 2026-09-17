@@ -8,6 +8,7 @@ mod support;
 
 use layerfs_content::inode_leaf::{
     encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, INODE_VALUE_BYTES,
+    MAXIMUM_LEAF_ROWS,
 };
 use layerfs_content::{
     AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance,
@@ -132,45 +133,73 @@ fn repeated_values_reuse_the_same_ordinals_across_leaves_and_saves() {
     }
 }
 
+/// The catalogue's group rows, in ordinal order, as `(first_ordinal, count)`.
+fn catalogue_groups(path: &std::path::Path) -> Vec<(u32, u32)> {
+    let connection = rusqlite::Connection::open(path).expect("external connection");
+    let mut statement = connection
+        .prepare("SELECT first_ordinal, count FROM metadata_value_groups ORDER BY first_ordinal")
+        .expect("catalogue query");
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)? as u32, row.get::<_, i64>(1)? as u32))
+        })
+        .expect("catalogue rows")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect");
+    rows
+}
+
+/// One group per leaf, and the group capacity is never reached by this path.
+///
+/// The reviewed version of this case was named for crossing the group boundary at
+/// 165 values, which the public path cannot do: a pooled leaf carries at most
+/// `MAXIMUM_LEAF_ROWS` (100) values and the lane groups only the values one leaf
+/// resolved, so a group is one leaf's own values. What is observable is asserted
+/// here: three full leaves produce three groups of exactly one hundred values at
+/// ordinals 1, 101 and 201, each leaf's pooled row is readable, and no group in the
+/// catalogue exceeds the leaf page capacity.
 #[test]
-fn values_cross_a_group_boundary_at_one_hundred_sixty_five() {
+fn a_group_holds_one_leaf_and_never_reaches_the_group_capacity() {
+    // This case documents that one leaf cannot fill a group.
+    const { assert!(MAXIMUM_LEAF_ROWS < layerfs_storage::policy::VALUES_PER_GROUP) };
     let dir = TempDir::new("pool-boundary");
     let path = dir.store_path("pool");
     let store = create_store(&path);
-    // 100 rows is the page maximum, so two leaves carry the first 200 values and
-    // the third starts at 201 - one value past the 165-value group boundary.
-    let first = leaf(
-        1,
-        &(0..100)
+    let mut previous = None;
+    let mut leaves = Vec::new();
+    for round in 0..3_u64 {
+        let first = 1 + round * 1_000;
+        let values = (first..first + MAXIMUM_LEAF_ROWS as u64)
             .map(|index| value(InodeKind::RegularFile, 1, index))
-            .collect::<Vec<_>>(),
+            .collect::<Vec<_>>();
+        let leaf = match previous {
+            Some(base) => with_predecessor(leaf(round * 1_000 + 1, &values), base),
+            None => leaf(1, &values),
+        };
+        let id = leaf.id();
+        let outcome = save_one(&store, leaf).expect("leaf save");
+        assert_eq!(outcome.pool.leaves, 1);
+        assert_eq!(outcome.pool.new_values, MAXIMUM_LEAF_ROWS as u64);
+        assert_eq!(
+            outcome.pool.groups, 1,
+            "one leaf's values are one group in round {round}"
+        );
+        let (read, _) = read_objects(&store, &[id]).expect("leaf read");
+        assert_eq!(ObjectId::for_bytes(&read[0]), id);
+        assert_eq!(read[0].len(), 44 + MAXIMUM_LEAF_ROWS * 81);
+        previous = Some(id);
+        leaves.push(id);
+    }
+    let groups = catalogue_groups(&path);
+    assert_eq!(groups, vec![(1, 100), (101, 100), (201, 100)]);
+    assert!(
+        groups
+            .iter()
+            .all(|(_, count)| *count as usize <= MAXIMUM_LEAF_ROWS),
+        "a group above the leaf page capacity exists: {groups:?}"
     );
-    let first_id = first.id();
-    save_one(&store, first).expect("first leaf");
-    let second = with_predecessor(
-        leaf(
-            1_000,
-            &(1_000..1_100)
-                .map(|index| value(InodeKind::RegularFile, 1, index))
-                .collect::<Vec<_>>(),
-        ),
-        first_id,
-    );
-    let second_id = second.id();
-    let outcome = save_one(&store, second).expect("second leaf");
-    assert_eq!(outcome.pool.new_values, 100);
-    assert_eq!(outcome.pool.groups, 1, "100 values still fit one group");
-    let third_values = (2_000..2_100)
-        .map(|index| value(InodeKind::RegularFile, 1, index))
-        .collect::<Vec<_>>();
-    let third = with_predecessor(leaf(2_000, &third_values), second_id);
-    let third_id = third.id();
-    let outcome = save_one(&store, third).expect("third leaf");
-    assert_eq!(outcome.pool.new_values, 100);
-    assert_eq!(outcome.pool.groups, 1);
-    let (read, _) = read_objects(&store, &[third_id]).expect("read");
-    assert_eq!(ObjectId::for_bytes(&read[0]), third_id);
-    assert_eq!(read[0].len(), 44 + 100 * 81);
+    let (read, _) = read_objects(&store, &leaves).expect("read all leaves");
+    assert_eq!(read.len(), 3);
 }
 
 #[test]
@@ -388,4 +417,234 @@ fn one_save_reuses_a_value_group_it_created_itself() {
     let (read, _) = read_objects(&store, &[second_id]).expect("read back");
     assert_eq!(ObjectId::for_bytes(&read[0]), second_id);
     assert_eq!(read[0], second_canonical);
+}
+
+/// A compressible group really takes the `Zstandard` branch, and the bytes the
+/// reader gets back are the ones the writer put in.
+///
+/// Every other pooled fixture is BLAKE3-derived and deduplicated, so its group
+/// bodies are incompressible and the compressed branch never executed. This case
+/// pools values that share 65 of their 73 bytes, then reads the *pack directory
+/// entry* the writer produced: the group must be recorded as `Zstandard`, its
+/// stored bytes must be shorter than the decoded body, and the leaf must still
+/// read back as its exact canonical bytes.
+#[test]
+fn a_compressible_group_is_stored_as_a_zstandard_frame() {
+    let dir = TempDir::new("pool-compressed");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    // Distinct values that differ in eight bytes and share the other sixty-five.
+    let constant_content = ObjectId::for_bytes(&[0x11_u8; 32]);
+    let constant_metadata = ObjectId::for_bytes(&[0x22_u8; 8]);
+    let values: Vec<[u8; INODE_VALUE_BYTES]> = (1..=MAXIMUM_LEAF_ROWS as u64)
+        .map(|refs| {
+            encode_inode_value(InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: refs,
+                content_root: constant_content,
+                metadata_root: constant_metadata,
+            })
+        })
+        .collect();
+    let pooled = leaf(1, &values);
+    let id = pooled.id();
+    let outcome = save_one(&store, pooled).expect("leaf save");
+    assert_eq!(outcome.pool.groups, 1);
+    drop(store);
+
+    // The stored group, straight out of the pack and its directory.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let (pack_id, group_number): (i64, i64) = connection
+        .query_row(
+            "SELECT pack_id, group_number FROM metadata_value_groups ORDER BY first_ordinal LIMIT 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("catalogue row");
+    let pack: Vec<u8> = connection
+        .query_row(
+            "SELECT data FROM object_packs WHERE pack_id = ?1",
+            [pack_id],
+            |row| row.get(0),
+        )
+        .expect("pack row");
+    drop(connection);
+    let header = layerfs_storage::pack::parse_header(&pack).expect("pack header");
+    let view = layerfs_storage::pack::group_view(&pack, header, group_number as usize)
+        .expect("group view");
+    assert_eq!(
+        view.codec,
+        layerfs_storage::pack::GroupCodec::Zstandard,
+        "a compressible group must be stored compressed"
+    );
+    assert!(
+        view.end - view.start < view.decoded_length,
+        "the stored frame is smaller than the body: {} of {}",
+        view.end - view.start,
+        view.decoded_length
+    );
+
+    // The reader decompresses it and still returns the exact canonical leaf.
+    let reopened = open_store(&path);
+    let (read, _) = read_objects(&reopened, &[id]).expect("read back");
+    assert_eq!(ObjectId::for_bytes(&read[0]), id);
+    let (again, _) = read_objects(&reopened, &[id]).expect("cached read back");
+    assert_eq!(again[0], read[0]);
+}
+
+/// A damaged pooled delta leaf is refused, never silently returned.
+#[test]
+fn a_damaged_pooled_delta_leaf_is_refused() {
+    let dir = TempDir::new("pool-tamper");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    let base_values = (0..100)
+        .map(|index| value(InodeKind::RegularFile, 1, index))
+        .collect::<Vec<_>>();
+    let base = leaf(1, &base_values);
+    let base_id = base.id();
+    save_one(&store, base).expect("base leaf");
+    // One changed value: the second leaf is a real COPY/INSERT delta.
+    let mut changed = base_values.clone();
+    changed[40] = value(InodeKind::RegularFile, 1, 9_999);
+    let dependent = with_predecessor(leaf(1, &changed), base_id);
+    let dependent_id = dependent.id();
+    let outcome = save_one(&store, dependent).expect("dependent leaf");
+    assert_eq!(
+        outcome.pool.delta_leaves, 1,
+        "the second leaf is a stored delta"
+    );
+    let (read, _) = read_objects(&store, &[dependent_id]).expect("read before tampering");
+    assert_eq!(ObjectId::for_bytes(&read[0]), dependent_id);
+    drop(store);
+
+    // Flip the last byte of the pack that holds the delta record: whatever it
+    // lands on - an instruction, an inserted value or the framing - the reader
+    // must refuse the record rather than return different bytes.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let pack_id: i64 = connection
+        .query_row(
+            "SELECT pack_id FROM objects WHERE object_id = ?1",
+            [dependent_id.to_bytes().to_vec()],
+            |row| row.get(0),
+        )
+        .expect("object row");
+    let pack: Vec<u8> = connection
+        .query_row(
+            "SELECT data FROM object_packs WHERE pack_id = ?1",
+            [pack_id],
+            |row| row.get(0),
+        )
+        .expect("pack row");
+    let mut damaged = pack.clone();
+    let last = damaged.len() - 1;
+    damaged[last] ^= 0xff;
+    assert_eq!(
+        connection
+            .execute(
+                "UPDATE object_packs SET data = ?1 WHERE pack_id = ?2",
+                rusqlite::params![damaged, pack_id],
+            )
+            .expect("pack update"),
+        1
+    );
+    drop(connection);
+    let reopened = open_store(&path);
+    let error = read_objects(&reopened, &[dependent_id]).expect_err("a damaged record is refused");
+    assert!(
+        matches!(error, StorageError::Integrity(_)),
+        "expected an integrity refusal, got {error}"
+    );
+}
+
+/// The pooled chain budget binds on both sides of the boundary.
+///
+/// The writer refuses to create a dependent whose chain would exceed the
+/// canonical budget - the leaf is counted as `work_exceeded` and stored FULL - and
+/// a reader handed a longer chain, which only tampering can produce, refuses it
+/// with the reader's own work check instead of reconstructing bytes outside the
+/// budget.
+#[test]
+fn a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides() {
+    let dir = TempDir::new("pool-chain-work");
+    let path = dir.store_path("pool");
+    // A depth that lets a tampered chain reach the *work* check rather than the
+    // depth check: the budget itself is depth-independent.
+    let store = disabled(|scope| {
+        Store::create(
+            &path,
+            StoragePolicy::frozen_default().with_metadata_depth(50),
+            scope.child("store"),
+        )
+    })
+    .expect("store");
+    assert_eq!(store.capacities().metadata_chain_canonical_limit, 65_536);
+
+    // Each leaf repeats its predecessor's hundred values except one, so every
+    // trial wins and the chain really extends by one record per save.
+    let mut carried: Vec<[u8; INODE_VALUE_BYTES]> = (0..MAXIMUM_LEAF_ROWS as u64)
+        .map(|index| value(InodeKind::RegularFile, 1, index))
+        .collect();
+    let mut accepted = Vec::new();
+    let mut refused = None;
+    for round in 0..12_u64 {
+        if round > 0 {
+            carried[(round as usize) % MAXIMUM_LEAF_ROWS] =
+                value(InodeKind::RegularFile, 1, 10_000 + round);
+        }
+        // The same serials every round: only the one changed value moves, so the
+        // physical body differs in a single row and the trial can win.
+        let object = match accepted.last().copied() {
+            Some(base) => with_predecessor(leaf(1, &carried), base),
+            None => leaf(1, &carried),
+        };
+        let id = object.id();
+        let outcome = save_one(&store, object).expect("leaf save");
+        if outcome.pool.work_exceeded > 0 {
+            assert_eq!(
+                outcome.pool.full_leaves, 1,
+                "a refused chain is stored FULL, never stored outside its budget"
+            );
+            assert_eq!(outcome.pool.delta_leaves, 0);
+            refused = Some(id);
+            break;
+        }
+        if round == 0 {
+            assert_eq!(outcome.pool.full_leaves, 1, "the chain root is stored FULL");
+            assert_eq!(outcome.pool.new_values, 100);
+        } else {
+            assert_eq!(outcome.pool.delta_leaves, 1, "round {round} is a delta");
+            assert_eq!(outcome.pool.new_values, 1, "round {round} adds one value");
+        }
+        accepted.push(id);
+    }
+    let refused = refused.expect("the canonical budget must bind within eleven links");
+    assert!(accepted.len() >= 2, "no chain was built");
+    let deepest = *accepted.last().expect("deepest accepted leaf");
+
+    // Every chain the writer accepted is readable, including the deepest one.
+    let (read, _) = read_objects(&store, &[deepest]).expect("deepest accepted chain");
+    assert_eq!(ObjectId::for_bytes(&read[0]), deepest);
+    drop(store);
+
+    // Splice the refused leaf onto the accepted chain: the reader's own work
+    // check must refuse the longer chain.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let affected = connection
+        .execute(
+            "UPDATE objects SET base_object_id = ?2 WHERE object_id = ?1",
+            rusqlite::params![refused.to_bytes().to_vec(), deepest.to_bytes().to_vec()],
+        )
+        .expect("row change");
+    assert_eq!(affected, 1);
+    drop(connection);
+    let reopened = open_store(&path);
+    let error = read_objects(&reopened, &[refused]).expect_err("a past-budget chain is refused");
+    assert!(
+        matches!(&error, StorageError::Integrity(what) if *what == "pooled chain work"),
+        "expected the reader's work check, got {error}"
+    );
+    // The accepted chain is untouched and still readable under the same ceiling.
+    let (read, _) = read_objects(&reopened, &[deepest]).expect("accepted chain after tampering");
+    assert_eq!(ObjectId::for_bytes(&read[0]), deepest);
 }

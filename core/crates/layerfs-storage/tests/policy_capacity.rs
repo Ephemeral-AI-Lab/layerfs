@@ -262,3 +262,57 @@ fn the_minimum_supported_cutoff_is_the_published_minimum() {
         MINIMUM_SMALL_FILE_THRESHOLD_BYTES
     );
 }
+
+/// A configured depth is a *limit on the chain an operation may build*, never a
+/// work or memory budget: depth 4 and depth 50 derive the same limits.
+///
+/// The reviewed version of this case compared two cutoffs at identical depths, so
+/// nothing compared a shallow configuration with a deep one. This case does, and
+/// it also pins the depth each role actually uses, which is what a selection
+/// consults.
+#[test]
+fn a_deeper_configured_depth_never_widens_a_work_or_live_budget() {
+    let shallow = StorageCapacities::from_policy(policy_for(131_072, 4, 4)).expect("capacities");
+    let deep = StorageCapacities::from_policy(policy_for(131_072, 50, 50)).expect("capacities");
+
+    assert_eq!(shallow.whole_file_delta_max_depth, 4);
+    assert_eq!(deep.whole_file_delta_max_depth, 50);
+    assert_eq!(shallow.chunk_delta_max_depth, 4);
+    assert_eq!(deep.chunk_delta_max_depth, 50);
+
+    // Every chain, batch, transaction, pack and group bound is depth-independent.
+    assert_eq!(shallow.chain_canonical_limit, deep.chain_canonical_limit);
+    assert_eq!(shallow.chain_encoded_limit, deep.chain_encoded_limit);
+    assert_eq!(shallow.batch_objects, deep.batch_objects);
+    assert_eq!(shallow.batch_bytes, deep.batch_bytes);
+    assert_eq!(shallow.transaction_rows, deep.transaction_rows);
+    assert_eq!(shallow.transaction_bytes, deep.transaction_bytes);
+    assert_eq!(shallow.pack_limit, deep.pack_limit);
+    assert_eq!(shallow.singleton_pack_limit, deep.singleton_pack_limit);
+    assert_eq!(shallow.group_limit, deep.group_limit);
+    assert_eq!(shallow.metadata_group_limit, deep.metadata_group_limit);
+    assert_eq!(
+        shallow.metadata_chain_canonical_limit,
+        deep.metadata_chain_canonical_limit
+    );
+    assert_eq!(
+        shallow.metadata_chain_encoded_limit,
+        deep.metadata_chain_encoded_limit
+    );
+    assert_eq!(
+        shallow.whole_file_canonical_limit,
+        deep.whole_file_canonical_limit
+    );
+
+    // The depth a role consults is the configured one for that role.
+    assert_eq!(shallow.delta_depth_for_role(ObjectRole::WholeFile), 4);
+    assert_eq!(deep.delta_depth_for_role(ObjectRole::WholeFile), 50);
+    assert_eq!(shallow.delta_depth_for_role(ObjectRole::Chunk), 4);
+    assert_eq!(deep.delta_depth_for_role(ObjectRole::Chunk), 50);
+
+    // Depth zero disables the prospective delta for that role and nothing else.
+    let disabled = StorageCapacities::from_policy(policy_for(131_072, 0, 50)).expect("capacities");
+    assert_eq!(disabled.delta_depth_for_role(ObjectRole::WholeFile), 0);
+    assert_eq!(disabled.delta_depth_for_role(ObjectRole::Chunk), 50);
+    assert_eq!(disabled.chain_canonical_limit, deep.chain_canonical_limit);
+}

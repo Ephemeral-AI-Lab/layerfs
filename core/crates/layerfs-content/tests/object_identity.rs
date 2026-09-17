@@ -301,3 +301,70 @@ fn the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope() {
         Err(ContentError::ObjectLimitExceeded { .. })
     ));
 }
+
+/// The envelope ceiling at plus or minus one, and the rejection that keeps an
+/// oversized object away from a Store.
+///
+/// No role can *produce* a canonical object at either magnitude: the whole-file
+/// envelope is cutoff-bounded (1 048 598 bytes at the largest accepted cutoff),
+/// a chunk payload is at most 32 781 bytes and a pooled leaf at most 8 144, so
+/// the 16 MiB envelope is a format guard rather than a reachable acceptance path
+/// in C2. What is reachable is the guard itself, and it is exercised here at the
+/// boundary: exactly the envelope ceiling is not refused *for its total*, one byte
+/// over is refused by name, and `FinalizedObject::new` - the only constructor that
+/// feeds a save - refuses the oversized bytes before any Store sees them.
+#[test]
+fn the_envelope_ceiling_is_enforced_at_plus_or_minus_one() {
+    assert_eq!(MAX_CANONICAL_OBJECT_BYTES, 16 * 1024 * 1024);
+
+    // Exactly at the ceiling: the total is accepted, and the *field* ceiling is
+    // what refuses the hand-built declaration, which proves the total check did
+    // not fire one byte early.
+    let mut at_ceiling = vec![0u8; MAX_CANONICAL_OBJECT_BYTES];
+    at_ceiling[..OBJECT_MAGIC.len()].copy_from_slice(&OBJECT_MAGIC);
+    at_ceiling[4] = 1;
+    at_ceiling[5..9].copy_from_slice(&(MAX_PAYLOAD_BYTES as u32).to_be_bytes());
+    at_ceiling[HEADER_LEN..HEADER_LEN + 4]
+        .copy_from_slice(&((MAX_OBJECT_FIELD_BYTES + 1) as u32).to_be_bytes());
+    assert_eq!(
+        decode_bytes_object(&at_ceiling),
+        Err(ContentError::ObjectLimitExceeded {
+            limit: MAX_OBJECT_FIELD_BYTES,
+            actual: MAX_OBJECT_FIELD_BYTES + 1,
+        }),
+        "the envelope ceiling must not fire at exactly the envelope ceiling"
+    );
+
+    // One byte over: the envelope ceiling is named.
+    let mut over_ceiling = at_ceiling.clone();
+    over_ceiling.push(0);
+    assert_eq!(
+        decode_bytes_object(&over_ceiling),
+        Err(ContentError::ObjectLimitExceeded {
+            limit: MAX_CANONICAL_OBJECT_BYTES,
+            actual: MAX_CANONICAL_OBJECT_BYTES + 1,
+        })
+    );
+
+    // The object the Store would receive is refused before it is constructed, so
+    // an oversized envelope can never reach a save, a pack or a row.
+    assert_eq!(
+        layerfs_content::FinalizedObject::new(
+            layerfs_content::ObjectRole::WholeFile,
+            over_ceiling.clone()
+        )
+        .unwrap_err(),
+        ContentError::ObjectLimitExceeded {
+            limit: MAX_CANONICAL_OBJECT_BYTES,
+            actual: MAX_CANONICAL_OBJECT_BYTES + 1,
+        }
+    );
+    assert!(
+        layerfs_content::FinalizedObject::new(
+            layerfs_content::ObjectRole::WholeFile,
+            at_ceiling.clone()
+        )
+        .is_err(),
+        "an envelope that declares an over-wide field is refused too"
+    );
+}

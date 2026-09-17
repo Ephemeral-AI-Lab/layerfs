@@ -11,8 +11,8 @@ mod support;
 
 use layerfs_content::FinalizedConsumer;
 use layerfs_content::{
-    apply_edits, construct_bytes, ConstructionPolicy, ContentResult, Edit, EditRequest, EditSource,
-    EditStream, ObjectId, ObjectRole, Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, ContentError, ContentResult, Edit,
+    EditRequest, EditSource, EditStream, ObjectId, ObjectRole, Replacements,
 };
 use support::{disabled_scope, extent_count, mapping_page_sizes, noise, read_back, MemoryStore};
 
@@ -451,4 +451,112 @@ fn a_missing_base_root_is_reported_as_missing() {
     })
     .unwrap_err();
     assert_eq!(error, layerfs_content::ContentError::MissingObject);
+}
+
+/// A sink whose declared capacity binds during emission fails the edit once.
+///
+/// The reviewed coverage had a consumer that rejects on a *count*; this case
+/// bounds a sink by the bytes it will hold, fills it in the middle of the
+/// children-first emission a chunked multi-edit produces, and requires: the
+/// declared failure is returned once, no root is claimed, the accepted prefix is
+/// still children-first, and the identical edit succeeds against an unbounded
+/// sink - so the failure is the sink's capacity and not the edit.
+#[test]
+fn a_bounded_sink_that_fills_during_emission_fails_the_edit_once() {
+    struct Bounded {
+        budget: usize,
+        held: usize,
+        seen: Vec<ObjectId>,
+    }
+    impl FinalizedConsumer for Bounded {
+        fn accept(&mut self, object: layerfs_content::FinalizedObject) -> ContentResult<()> {
+            let length = object.canonical_len();
+            if self.held + length > self.budget {
+                return Err(ContentError::OutputRejected);
+            }
+            self.held += length;
+            self.seen.push(object.id());
+            Ok(())
+        }
+    }
+
+    let base = noise(400_000);
+    let (store, root) = build(&base);
+    let mut replacements = Replacements::new();
+    let mut edits = Vec::new();
+    let mut position = 1_000_u64;
+    for index in 0..8_u64 {
+        let length = 300 + index;
+        edits.push(Edit::overwrite(position, position + length));
+        replacements.push(noise(length as usize));
+        position += 4_096;
+    }
+    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+
+    // The same edit against an unbounded store, for the totals to compare with.
+    let mut complete = MemoryStore::new();
+    disabled_scope(|scope| {
+        apply_edits(
+            policy(),
+            &policy().capacities(),
+            &store,
+            EditRequest {
+                root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut complete,
+            scope.child("edit"),
+        )
+    })
+    .expect("unbounded edit");
+    let total = complete.order().len();
+    assert!(total > 2, "the edit emits several objects: {total}");
+
+    let mut sink = Bounded {
+        budget: complete.canonical_bytes() as usize / 2,
+        held: 0,
+        seen: Vec::new(),
+    };
+    let error = disabled_scope(|scope| {
+        apply_edits(
+            policy(),
+            &policy().capacities(),
+            &store,
+            EditRequest {
+                root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut sink,
+            scope.child("edit"),
+        )
+    })
+    .expect_err("the bounded sink fills before the edit finishes");
+    assert_eq!(error, ContentError::OutputRejected);
+    assert!(
+        !sink.seen.is_empty() && sink.seen.len() < total,
+        "the capacity bound must bind mid-emission: {} of {total}",
+        sink.seen.len()
+    );
+
+    // The accepted prefix is still children-first.
+    let mut position_of = std::collections::BTreeMap::new();
+    for (index, id) in sink.seen.iter().enumerate() {
+        position_of.entry(*id).or_insert(index);
+    }
+    for (index, id) in sink.seen.iter().enumerate() {
+        let role = complete
+            .order()
+            .iter()
+            .find(|(candidate, _)| candidate == id)
+            .map(|(_, role)| *role)
+            .expect("the accepted object is one the edit emits");
+        let canonical = complete.canonical(*id).expect("canonical bytes");
+        for reference in support::references_of(canonical, role) {
+            if let Some(child) = position_of.get(&reference) {
+                assert!(*child < index, "{role:?} {id} preceded its child");
+            }
+        }
+    }
 }

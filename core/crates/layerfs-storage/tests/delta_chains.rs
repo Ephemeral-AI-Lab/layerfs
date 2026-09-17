@@ -162,27 +162,40 @@ fn a_chain_that_would_exceed_its_work_budget_is_never_stored() {
     }
 }
 
+/// A recorded dependency of another logical role is refused by the role check.
+///
+/// The reviewed version pointed the base at an identity that does not exist at
+/// all, so the read failed as a *missing* dependency and the role check was never
+/// reached. This version stores a real object of another role and points the
+/// dependency at it, which is the only way to reach the check.
 #[test]
 fn a_wrong_role_dependency_is_rejected() {
     let dir = TempDir::new("chain-role");
     let path = dir.store_path("chain");
     let store = create_store(&path);
     let base = whole(&noise(30_000));
-    let base_id = base.id();
     save_one(&store, base).expect("base");
     let dependent = whole(&noise(30_000));
     let dependent_id = dependent.id();
     save_one(&store, dependent).expect("dependent");
+    // A real, stored object of a different role: a chunk payload.
+    let other = FinalizedObject::new(
+        ObjectRole::Chunk,
+        layerfs_content::file::mapping::encode_chunk_object(&noise(20_000)).expect("chunk"),
+    )
+    .expect("canonical chunk");
+    let other_id = other.id();
+    save_one(&store, other).expect("chunk");
     drop(store);
-    // Point the dependent's recorded base at a resource of another role.
+
+    // Point the dependent's recorded base at that chunk.
     let connection = rusqlite::Connection::open(&path).expect("external connection");
-    let chunk_id = layerfs_content::ObjectId::for_bytes(b"not the same role");
     let affected = connection
         .execute(
             "UPDATE objects SET base_object_id = ?2 WHERE object_id = ?1",
             rusqlite::params![
                 dependent_id.to_bytes().to_vec(),
-                chunk_id.to_bytes().to_vec()
+                other_id.to_bytes().to_vec()
             ],
         )
         .expect("row change");
@@ -191,10 +204,12 @@ fn a_wrong_role_dependency_is_rejected() {
     let reopened = open_store(&path);
     let error = read_objects(&reopened, &[dependent_id]).unwrap_err();
     assert!(
-        matches!(error, StorageError::ObjectMissing(_)),
-        "a base that does not exist is a missing dependency: {error}"
+        matches!(&error, StorageError::Integrity(what) if *what == "dependency role"),
+        "a dependency of another role is refused by the role check: {error}"
     );
-    let _ = base_id;
+    // The object of the other role is untouched and still readable on its own.
+    let (values, _) = read_objects(&reopened, &[other_id]).expect("chunk read");
+    assert_eq!(ObjectId::for_bytes(&values[0]), other_id);
 }
 
 #[test]

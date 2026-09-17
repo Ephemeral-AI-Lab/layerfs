@@ -1,0 +1,85 @@
+=== control A: the pooled index is never invalidated | 2026-09-17T00:30:33Z
+index.rs: PoolIndex::invalidate becomes a no-op.
+Expected: a_failed_save_leaves_no_usable_state_in_the_set fails on the retained entries.
+
+=== pooled index invalidation removed | 2026-09-17T00:30:33Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool_index
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.02s
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 5 tests
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_failed_save_leaves_no_usable_state_in_the_set ... FAILED
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+failures:
+
+---- a_failed_save_leaves_no_usable_state_in_the_set stdout ----
+
+thread 'a_failed_save_leaves_no_usable_state_in_the_set' panicked at crates/layerfs-storage/tests/metadata_pool_index.rs:202:5:
+assertion `left == right` failed: the failed save's ordinals must not survive in the set
+  left: 16
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_failed_save_leaves_no_usable_state_in_the_set
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool_index`
+--- exit 101 | wall 1.791s
+=== control B: value-group compression removed | 2026-09-17T00:30:35Z
+value_group.rs: the Zstandard branch is never taken, so every group stays Raw.
+Expected: a_compressible_group_is_stored_as_a_zstandard_frame fails.
+
+=== value-group compression removed | 2026-09-17T00:30:35Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test metadata_pool a_compressible_group
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+warning: variable does not need to be mutable
+  --> crates/layerfs-storage/src/encoding/pool/value_group.rs:48:9
+   |
+48 |     let mut encoded = body.clone();
+   |         ----^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+  --> crates/layerfs-storage/src/encoding/pool/value_group.rs:49:9
+   |
+49 |     let mut codec = GroupCodec::Raw;
+   |         ----^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: `layerfs-storage` (lib) generated 2 warnings (run `cargo fix --lib -p layerfs-storage` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.78s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 1 test
+test a_compressible_group_is_stored_as_a_zstandard_frame ... FAILED
+
+failures:
+
+---- a_compressible_group_is_stored_as_a_zstandard_frame stdout ----
+
+thread 'a_compressible_group_is_stored_as_a_zstandard_frame' panicked at crates/layerfs-storage/tests/metadata_pool.rs:477:5:
+assertion `left == right` failed: a compressible group must be stored compressed
+  left: Raw
+ right: Zstandard
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_compressible_group_is_stored_as_a_zstandard_frame
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool`
+--- exit 101 | wall 1.520s

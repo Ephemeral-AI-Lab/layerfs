@@ -272,6 +272,7 @@ pub struct CountingSource<R> {
     inner: R,
     requests: u64,
     largest: usize,
+    bytes: u64,
 }
 
 impl<R: Read> CountingSource<R> {
@@ -281,6 +282,7 @@ impl<R: Read> CountingSource<R> {
             inner,
             requests: 0,
             largest: 0,
+            bytes: 0,
         }
     }
 
@@ -293,13 +295,20 @@ impl<R: Read> CountingSource<R> {
     pub fn largest_request(&self) -> usize {
         self.largest
     }
+
+    /// Bytes the source actually delivered.
+    pub fn bytes_read(&self) -> u64 {
+        self.bytes
+    }
 }
 
 impl<R: Read> Read for CountingSource<R> {
     fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
         self.requests += 1;
         self.largest = self.largest.max(output.len());
-        self.inner.read(output)
+        let read = self.inner.read(output)?;
+        self.bytes += read as u64;
+        Ok(read)
     }
 }
 
