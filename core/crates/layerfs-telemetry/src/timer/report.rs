@@ -12,6 +12,10 @@ pub enum NodeOutcome {
     Ok,
     /// The measured operation returned an error.
     Error,
+    /// The measured operation never returned: it panicked or its scope was
+    /// dropped while still running, so its outcome is unknown rather than
+    /// successful.
+    Unknown,
 }
 
 impl NodeOutcome {
@@ -20,12 +24,48 @@ impl NodeOutcome {
         matches!(self, Self::Error)
     }
 
+    /// Returns true when the measured operation never returned.
+    ///
+    /// A node is unknown when its scope started and never finished - the
+    /// operation panicked, or its closure was dropped before it returned. It is
+    /// **not** success: a consumer that reads the outcome alone must not treat a
+    /// node that never completed as an operation that completed successfully.
+    pub const fn is_unknown(self) -> bool {
+        matches!(self, Self::Unknown)
+    }
+
     pub(crate) fn from_result<T, E>(result: &Result<T, E>) -> Self {
         match result {
             Ok(_) => Self::Ok,
             Err(_) => Self::Error,
         }
     }
+
+    /// Fixed-width name used by both presentations.
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Error => "error",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// Whether a finished report measured everything it was asked to record.
+///
+/// Disabled recording and a clipped report are different states with different
+/// consequences, so they are different values: a disabled run is legitimate and
+/// performs no measurement, while a clipped run measured an operation and could
+/// not describe all of it. A caller that checks only
+/// [`TimingReport::is_incomplete`] therefore never fails a disabled row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Completeness {
+    /// Recording was disabled: there is no root and nothing was measured.
+    Disabled,
+    /// A measured root is present and carries every requested node.
+    Complete,
+    /// A measured root is present and missing detail the caller asked for.
+    Clipped,
 }
 
 /// One completed measurement and the completed measurements it caused.
@@ -239,11 +279,30 @@ impl TimingReport {
         }
     }
 
-    /// Returns true when the report has no root or missing detail is flagged.
+    /// Returns true when a **measured** report is missing requested detail.
+    ///
+    /// A disabled report is not clipped and returns false: it measured nothing,
+    /// which is a legitimate state, not a loss of detail. Callers that must
+    /// distinguish "measured and complete" from "nothing was measured" use
+    /// [`completeness`](Self::completeness) or
+    /// [`has_root`](Self::has_root).
     pub fn is_incomplete(&self) -> bool {
         match &self.root {
             Some(root) => root.is_incomplete(),
-            None => true,
+            None => false,
+        }
+    }
+
+    /// Returns whether this report is disabled, complete or clipped.
+    ///
+    /// This is the three-state form of [`is_incomplete`](Self::is_incomplete):
+    /// the boolean cannot tell a legitimate disabled run from a loss of recorded
+    /// detail, and a measured row must fail only on the latter.
+    pub fn completeness(&self) -> Completeness {
+        match &self.root {
+            None => Completeness::Disabled,
+            Some(root) if root.is_incomplete() => Completeness::Clipped,
+            Some(_) => Completeness::Complete,
         }
     }
 }

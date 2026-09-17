@@ -43,6 +43,7 @@ pub fn apply_edits(
     consumer: &mut dyn FinalizedConsumer,
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
+    policy.validated()?;
     scope.run(|edit| {
         let view = FileView::open(reader, request.root, edit.child("edit.base"))?;
         if view.logical_len() != request.edits.base_len() {
@@ -108,7 +109,10 @@ pub fn apply_edits(
                 })
             }
             crate::policy::Representation::Chunked => match view.file_state()? {
-                Some(_) => replace_chunked(capacities, &view, reader, &request, consumer, edit),
+                // The view already acquired and decoded the base root, so the
+                // chunked route is handed that decoded state instead of reading
+                // and decoding the same object a second time.
+                Some(state) => replace_chunked(capacities, state, reader, &request, consumer, edit),
                 None => stream_combined(capacities, &view, &request, consumer, edit),
             },
         }
@@ -205,17 +209,23 @@ fn append_replacement(
 /// replacement into its own subtree, and concatenate the three parts. A subtree the
 /// edit does not touch keeps its stored identity and is never read again, and only
 /// the nodes the final mapping reaches are published.
+#[allow(clippy::too_many_arguments)]
 fn replace_chunked(
     capacities: &ConstructionCapacities,
-    view: &FileView,
+    state: crate::file::mapping::FileState,
     reader: &dyn AuthenticatedObjects,
     request: &EditRequest<'_>,
     consumer: &mut dyn FinalizedConsumer,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
-    let (state, mut summary) = edit
-        .child("edit.base_read")
-        .run(|_| crate::file::edit::tree::read_state(reader, view.root()))?;
+    // One read of the base root per edit, not two: the state the view decoded is
+    // the state this route starts from, and the summary is derived from it.
+    let mut summary = crate::file::mapping::NodeSummary {
+        id: state.mapping_root,
+        bytes: state.logical_len,
+        extents: state.extent_count,
+        level: state.tree_level,
+    };
     // The only fact the loop carries forward about the result is its length: the
     // mapping root lives in `summary` and every other field of the file state is
     // derived once, at emission.

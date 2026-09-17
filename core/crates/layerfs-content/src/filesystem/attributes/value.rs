@@ -34,10 +34,13 @@ pub fn emit_value(objects: &mut FilesystemObjects<'_>, bytes: &[u8]) -> ContentR
     let length = u32::try_from(bytes.len()).map_err(|_| ContentError::LengthOverflow)?;
     let leaf = FinalizedObject::new(
         ObjectRole::ExtentLeaf,
-        encode_node(&ExtentNode::Leaf {
-            subtree_logical_bytes: u64::from(length),
-            extents: vec![ExtentSlice::new(payload_id, 0, length)?],
-        })?,
+        encode_node(
+            &ExtentNode::Leaf {
+                subtree_logical_bytes: u64::from(length),
+                extents: vec![ExtentSlice::new(payload_id, 0, length)?],
+            },
+            true,
+        )?,
     )?
     .with_references(vec![payload_id]);
     let leaf_id = objects.emit(leaf)?;

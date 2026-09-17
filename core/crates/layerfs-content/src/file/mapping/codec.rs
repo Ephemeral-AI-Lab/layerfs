@@ -97,9 +97,15 @@ pub fn decode_chunk_payload(value: &[u8]) -> ContentResult<&[u8]> {
     Ok(bytes)
 }
 
-/// Encodes one extent-tree page after validating it.
-pub fn encode_node(node: &ExtentNode) -> ContentResult<Vec<u8>> {
-    node.validate(true)?;
+/// Encodes one extent-tree page after validating it **in its own context**.
+///
+/// `root` is the context the page will be decoded in: a non-root page must
+/// satisfy the canonical partition, so a short non-root page that this function
+/// accepted would be publishable and unreadable. The caller knows the context -
+/// it is the one that decides which page is the tree's root - so the encoder asks
+/// for it instead of assuming every page it sees is a root.
+pub fn encode_node(node: &ExtentNode, root: bool) -> ContentResult<Vec<u8>> {
+    node.validate(root)?;
     let entry_len = match node {
         ExtentNode::Leaf { .. } => LEAF_ENTRY_LEN,
         ExtentNode::Branch { .. } => BRANCH_ENTRY_LEN,

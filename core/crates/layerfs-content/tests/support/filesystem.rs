@@ -90,7 +90,8 @@ impl TreeStore {
 
 impl FinalizedConsumer for TreeStore {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        let (id, role, bytes, _) = object.into_parts();
+        let parts = object.into_parts();
+        let (id, role, bytes) = (parts.id, parts.role, parts.canonical);
         self.roles.insert(id, role);
         self.objects.insert(id, bytes);
         self.order.push((id, role));

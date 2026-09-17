@@ -26,8 +26,14 @@ pub const MINIMUM_INODE_BRANCH_CHILDREN: u64 = 64;
 pub const MAXIMUM_INODE_BRANCH_CHILDREN: u64 = 127;
 /// Smallest canonical bytes of a non-root directory or attribute page.
 pub const MINIMUM_FILLED_PAGE_BYTES: usize = 3_277;
+/// Largest bytes one filesystem operation may hold for its own unfinished pages.
+///
+/// One name, one figure, and the default below derived from it. Two constants used
+/// to encode this same nominal ceiling - one as `4 MiB` and one as `4 MiB - 1` -
+/// so a reader could not tell which of the two the enforcement used.
+pub const MAXIMUM_OPERATION_SCRATCH_BYTES: usize = 4 * 1024 * 1024;
 /// Default bytes one filesystem operation may hold for its own unfinished pages.
-pub const DEFAULT_OPERATION_SCRATCH_BYTES: usize = 4 * 1024 * 1024 - 1;
+pub const DEFAULT_OPERATION_SCRATCH_BYTES: usize = MAXIMUM_OPERATION_SCRATCH_BYTES - 1;
 /// Largest bytes of one symbolic-link target, matching the reference grammar.
 pub const MAXIMUM_SYMLINK_TARGET_BYTES: usize = 4_096;
 /// Largest bytes of one generic attribute domain.
@@ -37,7 +43,34 @@ pub const MAXIMUM_ATTRIBUTE_KEY_BYTES: usize = 255;
 /// The only domain whose keys carry typed meaning in this profile.
 pub const PORTABLE_ATTRIBUTE_DOMAIN: &str = "portable";
 /// Largest bytes of one attribute value.
-pub const MAXIMUM_ATTRIBUTE_VALUE_BYTES: usize = 1024 * 1024;
+///
+/// An attribute value is stored as **one** extent-only root whose payload is one
+/// canonical chunk object, so the chunk grammar's own maximum is what the value
+/// bound can honestly promise: a larger value has no representation in this
+/// grammar, and a bound above it would be a limit no write path can reach and no
+/// read path can return. The constant is derived from that maximum rather than
+/// restated, so the two cannot drift apart.
+pub const MAXIMUM_ATTRIBUTE_VALUE_BYTES: usize = crate::file::cdc::MAXIMUM_CHUNK_BYTES;
+/// Bindings one whole-tree validation walk may examine before it refuses.
+///
+/// The ceiling is charged **once per walk, not once per operation**: the
+/// effective-cycle check walks the subtree of every directory the operation
+/// rebinds, and each of those walks gets its own allowance, so an operation that
+/// rebinds N directories may spend up to N times this many entries. Two
+/// consequences follow, and both are part of the operation's contract rather than
+/// accidents of the implementation:
+///
+/// - one `build_filesystem` call is refused above 4,095 bindings, because its
+///   single reachability walk charges every entry the tree states, so a tree
+///   larger than that is reached by several operations that each stay under the
+///   ceiling; and
+/// - an existing directory whose effective subtree exceeds the ceiling can never
+///   be renamed or relocated, however small the change is, because the walk of
+///   the directory being rebound is bounded by this figure and exceeding a work
+///   bound is an explicit refusal - the same error a genuine cycle gets, never a
+///   claim that the tree was proven acyclic.
+pub const MAXIMUM_WALK_ENTRIES: usize = 4_096;
+
 /// Largest keys one attribute-key listing may return.
 ///
 /// A declared operation bound, not a format bound: the attribute grammar bounds a

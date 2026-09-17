@@ -124,7 +124,9 @@ impl Collected {
 impl FinalizedConsumer for Collected {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
         let predecessors = object.predecessors().clone();
-        let (id, role, bytes, references) = object.into_parts();
+        let parts = object.into_parts();
+        let (id, role, bytes, references) =
+            (parts.id, parts.role, parts.canonical, parts.references);
         self.objects.push((id, role, bytes, references));
         self.advisories.push(predecessors);
         Ok(())

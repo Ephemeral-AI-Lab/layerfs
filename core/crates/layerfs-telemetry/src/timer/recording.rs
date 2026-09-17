@@ -272,12 +272,21 @@ impl Inner {
         let (outcome, incomplete, elapsed) = {
             let slot = &inner.slots[id];
             let incomplete = slot.incomplete || slot.running;
+            // A slot that is still running when the tree is collected never
+            // returned: its scope's closure panicked or was dropped. Reporting the
+            // outcome it was created with would serialise a panic as success, so it
+            // reports that its outcome is unknown.
+            let outcome = if slot.running {
+                NodeOutcome::Unknown
+            } else {
+                slot.outcome
+            };
             let elapsed = if slot.running {
                 Duration::ZERO
             } else {
                 slot.elapsed
             };
-            (slot.outcome, incomplete, elapsed)
+            (outcome, incomplete, elapsed)
         };
         let mut nodes = Vec::with_capacity(children.len());
         let mut incomplete = incomplete;

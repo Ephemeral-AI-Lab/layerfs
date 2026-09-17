@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use layerfs_telemetry::timer::{
-    Active, NodeOutcome, Timing, TimingNode, TimingReport, TimingScope, MAX_DEPTH, MAX_LABEL_BYTES,
-    MAX_NODES,
+    Active, Completeness, NodeOutcome, Timing, TimingNode, TimingReport, TimingScope, MAX_DEPTH,
+    MAX_LABEL_BYTES, MAX_NODES,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -204,8 +204,46 @@ fn disabled_recording_runs_the_operation_and_records_nothing() {
     assert!(!report.has_root());
     assert_eq!(report.node_count(), 0);
     assert_eq!(report.levels(), 0);
-    assert!(report.is_incomplete());
+    // Pinned behaviour changed deliberately: a disabled report measures nothing,
+    // which is legitimate, so it is no longer reported as incomplete. A measured
+    // row that fails on a clipped report must not fail on a disabled one, and a
+    // caller that needs to tell them apart reads `completeness()`.
+    assert!(!report.is_incomplete());
+    assert_eq!(report.completeness(), Completeness::Disabled);
     assert!(report.root().is_none());
+}
+
+#[test]
+fn disabled_and_clipped_reports_are_distinguishable() {
+    let (result, disabled) = Timing::disabled("off", |_| ok(1_u32));
+    assert_eq!(result, Ok(1));
+    assert_eq!(disabled.completeness(), Completeness::Disabled);
+    assert!(!disabled.is_incomplete());
+    assert!(!disabled.has_root());
+
+    let (result, complete) = Timing::record("on", |_| ok(2_u32));
+    assert_eq!(result, Ok(2));
+    assert_eq!(complete.completeness(), Completeness::Complete);
+    assert!(!complete.is_incomplete());
+
+    // A report that lost requested detail is clipped, and only that state is
+    // incomplete: the two are different values, not one boolean.
+    let mut root = TimingNode::new("clipped", Duration::from_nanos(1));
+    root.push_child(TimingNode::new("kept", Duration::from_nanos(1)));
+    let clipped = TimingReport::from_root(root.with_incomplete(true));
+    assert_eq!(clipped.completeness(), Completeness::Clipped);
+    assert!(clipped.is_incomplete());
+    assert!(clipped.has_root());
+
+    // Attaching a disabled report marks the measured node incomplete, so a
+    // measured row cannot silently accept a child that was never recorded.
+    let (_result, attached) = Timing::record("attach", |scope| {
+        scope.attach(Some(TimingReport::disabled()));
+        ok(3_u32)
+    });
+    assert_eq!(attached.completeness(), Completeness::Clipped);
+    assert!(attached.is_incomplete());
+    assert!(attached.has_root());
 }
 
 #[test]
@@ -246,8 +284,16 @@ fn a_panic_caught_inside_the_operation_leaves_the_recording_usable() {
     let unstable = &root.children()[0];
     assert!(unstable.is_incomplete());
     assert_eq!(unstable.elapsed(), Duration::ZERO);
+    // Pinned behaviour changed deliberately: a scope that never returned has an
+    // unknown outcome. It was serialised as `Ok` because the slot was created
+    // with that outcome, which made a panic look like success to any consumer
+    // reading the outcome rather than the incomplete flag.
+    assert_eq!(unstable.outcome(), NodeOutcome::Unknown);
+    assert!(unstable.outcome().is_unknown());
+    assert!(!unstable.outcome().is_error());
     assert_eq!(root.children()[1].outcome(), NodeOutcome::Ok);
     assert!(root.is_incomplete());
+    assert_eq!(report.completeness(), Completeness::Clipped);
 }
 
 #[test]

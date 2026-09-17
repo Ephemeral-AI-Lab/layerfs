@@ -806,6 +806,109 @@ fn the_cycle_check_work_limit_is_reachable_and_reported() {
     let _ = backing.cleanup_failed();
 }
 
+/// R2-F7: the declared entry ceiling also caps one operation's rebinding work.
+///
+/// The ceiling bounds **each** whole-tree walk an operation performs, and a rename
+/// of a directory walks that directory's effective subtree. A directory whose
+/// subtree exceeds the ceiling therefore cannot be rebound at all, however small
+/// the change is - and a tree that large is reachable, because several operations
+/// can grow it one under-limit step at a time. Both halves are pinned here: the
+/// second operation grows the directory past the ceiling and is accepted, and the
+/// rename of the directory it produced is refused by the ceiling.
+#[test]
+fn a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound() {
+    let limit = layerfs_content::filesystem::validate::MAXIMUM_CYCLE_CHECK_ENTRIES;
+    let mut session = Session::new(1).expect("empty");
+    let parent = session.allocate();
+    let child = session.allocate();
+
+    // Step one: the base tree. One operation stays under the ceiling, so it is
+    // accepted, and the directory it binds holds `limit` entries.
+    let mut directories = vec![DirectoryUpdate {
+        parent: 1,
+        changes: vec![(name("d"), Some(parent))],
+    }];
+    let mut inodes = vec![
+        InodeUpdate {
+            serial: parent,
+            value: dir_value(),
+        },
+        InodeUpdate {
+            serial: child,
+            value: dir_value(),
+        },
+    ];
+    let mut new_inodes = vec![parent, child];
+    let mut changes = Vec::new();
+    for index in 0..(limit - 8) {
+        let serial = session.allocate();
+        changes.push((name(&format!("f{index:05}")), Some(serial)));
+        inodes.push(InodeUpdate {
+            serial,
+            value: regular(&format!("bounds/rebind-{index}")),
+        });
+        new_inodes.push(serial);
+    }
+    directories.push(DirectoryUpdate { parent, changes });
+    directories.push(DirectoryUpdate {
+        parent: child,
+        changes: Vec::new(),
+    });
+    inodes.sort_by_key(|update| update.serial);
+    new_inodes.sort_unstable();
+    let built = session
+        .apply(&directories, &inodes, &new_inodes)
+        .expect("the first operation stays under the ceiling");
+    assert!(
+        built.counters.validation.entries_examined <= limit as u64,
+        "one operation never exceeds the ceiling it declares: {:?}",
+        built.counters.validation
+    );
+
+    // Step two: grow the same directory past the ceiling. Its own subtree is not
+    // walked, so this operation is accepted and the directory now holds more
+    // entries than the ceiling.
+    let mut directories = Vec::new();
+    let mut inodes = Vec::new();
+    let mut new_inodes = Vec::new();
+    let mut changes = Vec::new();
+    for index in 0..32 {
+        let serial = session.allocate();
+        changes.push((name(&format!("g{index:05}")), Some(serial)));
+        inodes.push(InodeUpdate {
+            serial,
+            value: regular(&format!("bounds/grow-{index}")),
+        });
+        new_inodes.push(serial);
+    }
+    directories.push(DirectoryUpdate { parent, changes });
+    inodes.sort_by_key(|update| update.serial);
+    new_inodes.sort_unstable();
+    session
+        .apply(&directories, &inodes, &new_inodes)
+        .expect("growing a large directory does not walk it");
+
+    // Step three: rename the directory. The rename is small, but the effective
+    // cycle check walks the directory it rebinds, so the ceiling refuses it with
+    // the limit's own message rather than reporting a cycle.
+    let directories = vec![DirectoryUpdate {
+        parent: 1,
+        changes: vec![(name("d"), None), (name("moved"), Some(parent))],
+    }];
+    let outcome = session.apply(&directories, &[], &[]);
+    assert!(
+        matches!(
+            outcome,
+            Err(layerfs_content::ContentError::InvalidRecord(
+                "cycle check work limit"
+            ))
+        ),
+        "a rename of a directory over the ceiling is refused by that ceiling, not \
+         reported as a cycle: {outcome:?}"
+    );
+    let _ = child;
+}
+
 /// R30: the release frontier reads its base records in waves, not one per demand.
 ///
 /// The frontier used to ask the provider for one inode record per serial it

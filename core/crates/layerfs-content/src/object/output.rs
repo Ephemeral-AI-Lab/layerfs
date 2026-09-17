@@ -151,9 +151,37 @@ impl FinalizedObject {
     }
 
     /// Moves the owned pieces to a consumer that stores or forwards them.
-    pub fn into_parts(self) -> (ObjectId, ObjectRole, Vec<u8>, Vec<ObjectId>) {
-        (self.id, self.role, self.canonical, self.references)
+    ///
+    /// The pieces are the identity, the role, the canonical bytes, the direct
+    /// references **and the advisory predecessors**. A predecessor is an input the
+    /// production save path consumes to choose a physical representation, so a
+    /// consumer that takes ownership through this call has to receive it: a form
+    /// that dropped it silently discarded an input the object was built with.
+    pub fn into_parts(self) -> ObjectParts {
+        ObjectParts {
+            id: self.id,
+            role: self.role,
+            canonical: self.canonical,
+            references: self.references,
+            predecessors: self.predecessors,
+        }
     }
+}
+
+/// Owned pieces of one finalized object, as [`FinalizedObject::into_parts`] moves
+/// them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObjectParts {
+    /// Canonical identity.
+    pub id: ObjectId,
+    /// Logical role.
+    pub role: ObjectRole,
+    /// Canonical bytes.
+    pub canonical: Vec<u8>,
+    /// Direct logical child identities, in canonical order.
+    pub references: Vec<ObjectId>,
+    /// Bounded advisory predecessors, in preference order.
+    pub predecessors: AdvisoryPredecessors,
 }
 
 /// Bounded sink for finalized canonical objects.

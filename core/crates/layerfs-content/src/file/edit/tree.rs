@@ -16,8 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::{
-    decode_file_state, decode_node_with_context, encode_node, ChildDescriptor, ExtentNode,
-    ExtentSlice, FileState, NodeSummary, MAX_ENTRIES, MAX_LEVEL,
+    decode_node_with_context, encode_node, ChildDescriptor, ExtentNode, ExtentSlice, NodeSummary,
+    MAX_ENTRIES, MAX_LEVEL,
 };
 use crate::object::{
     AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
@@ -446,7 +446,7 @@ impl<'a> EditObjects<'a> {
                     ExtentNode::Leaf { .. } => ObjectRole::ExtentLeaf,
                     ExtentNode::Branch { .. } => ObjectRole::ExtentBranch,
                 };
-                let canonical = encode_node(&node)?;
+                let canonical = encode_node(&node, root)?;
                 let references = node.references();
                 let object = FinalizedObject::new(role, canonical)?.with_references(references);
                 let id = object.id();
@@ -892,22 +892,4 @@ pub fn emit_branch(
         subtree_extent_count: extents,
         children: descriptors,
     })
-}
-
-/// Reads the file state behind a root and returns it with its mapping summary.
-pub fn read_state(
-    reader: &dyn AuthenticatedObjects,
-    root: ObjectId,
-) -> ContentResult<(FileState, NodeSummary)> {
-    let canonical = reader.read_canonical(root)?;
-    let state = decode_file_state(&canonical)?;
-    Ok((
-        state,
-        NodeSummary {
-            id: state.mapping_root,
-            bytes: state.logical_len,
-            extents: state.extent_count,
-            level: state.tree_level,
-        },
-    ))
 }

@@ -299,6 +299,35 @@ fn unsupported_policy_values_are_rejected_before_work() {
             field: "chunk_delta_max_depth"
         })
     );
+    // And each entry point refuses such a policy itself, before it does any work:
+    // the README says an unsupported value fails "before work begins", which was
+    // only true on the storage bridge. The body of this check is the same call the
+    // entry point makes, so a caller that skips `validated()` cannot construct or
+    // edit with a policy nobody accepted.
+    let rejected = ConstructionPolicy::new(1_048_577, 8, 4);
+    let capacities = ConstructionPolicy::frozen_default().capacities();
+    let mut consumer = MemoryStore::new();
+    let outcome = disabled_scope(|scope| {
+        construct_bytes(
+            rejected,
+            &capacities,
+            b"payload",
+            &mut consumer,
+            scope.child("content"),
+        )
+    });
+    assert_eq!(
+        outcome,
+        Err(ContentError::UnsupportedPolicy {
+            field: "small_file_threshold_bytes"
+        }),
+        "construction refuses an unsupported policy before emitting anything"
+    );
+    assert!(
+        consumer.is_empty(),
+        "a refused policy emits no object: {}",
+        consumer.len()
+    );
     assert!(policy().validated().is_ok());
 }
 

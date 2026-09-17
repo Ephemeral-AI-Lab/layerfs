@@ -10,7 +10,7 @@ mod support;
 use layerfs_content::{
     apply_edits, construct_bytes, Edit, EditRequest, EditStream, ObjectId, Replacements,
 };
-use support::{build_file, disabled_scope, noise, patterned, read_back, MemoryStore};
+use support::{build_file, disabled_scope, noise, patterned, read_back, repeat, MemoryStore};
 
 const CUTOFF: usize = 131_072;
 
@@ -278,4 +278,85 @@ fn a_chunked_base_reads_and_edits_without_a_full_pass() {
     assert_eq!(len, final_bytes.len() as u64);
     let bytes = read_back(&result_store, root).expect("edited chunked file reads back");
     assert_eq!(bytes, final_bytes);
+}
+
+/// An edit acquires and decodes the base root exactly once.
+///
+/// The chunked route used to open the view (one authenticated read plus one
+/// decode of the root) and then read and decode the same root again to get the
+/// file state behind it. With an in-memory provider the duplicate was invisible -
+/// the object was already there - but through a C2-backed provider each of those
+/// calls is a fresh connection and decode workspace, so the duplicate was real
+/// work. This case counts the reads the provider is asked for and pins the number
+/// of times the base root's own identity is demanded.
+#[test]
+fn an_edit_reads_and_decodes_the_base_root_once() {
+    use std::cell::RefCell;
+    use std::collections::BTreeMap;
+
+    use layerfs_content::{
+        AuthenticatedObjects, ContentResult, Edit, EditStream, ObjectId, Replacements,
+    };
+
+    /// Counts every demand this provider is asked for.
+    struct Counting<'a> {
+        inner: &'a MemoryStore,
+        demands: RefCell<Vec<ObjectId>>,
+        batches: RefCell<usize>,
+    }
+
+    impl AuthenticatedObjects for Counting<'_> {
+        fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+            *self.batches.borrow_mut() += 1;
+            self.demands.borrow_mut().extend_from_slice(ids);
+            self.inner.read_canonical_batch(ids)
+        }
+    }
+
+    let base = repeat(9_000, 0x51);
+    let (store, constructed) = support::build_file(&base);
+    let edits =
+        EditStream::new(base.len() as u64, vec![Edit::new(4_000, 4_032, 32)]).expect("stream");
+    let mut replacements = Replacements::new();
+    replacements.push(vec![0x77_u8; 32]);
+    let counter = Counting {
+        inner: &store,
+        demands: RefCell::new(Vec::new()),
+        batches: RefCell::new(0),
+    };
+    let mut consumer = MemoryStore::new();
+    let policy = layerfs_content::ConstructionPolicy::frozen_default();
+    let result = disabled_scope(|scope| {
+        layerfs_content::apply_edits(
+            policy,
+            &policy.capacities(),
+            &counter,
+            layerfs_content::EditRequest {
+                root: constructed.root,
+                edits: &edits,
+                source: &replacements,
+            },
+            &mut consumer,
+            scope.child("edit"),
+        )
+    })
+    .expect("the edit applies");
+
+    let demands = counter.demands.borrow();
+    let root_demands = demands.iter().filter(|id| **id == constructed.root).count();
+    assert_eq!(
+        root_demands, 1,
+        "the base root is demanded exactly once per edit, not once for the view and \
+         once for its file state: {demands:?}"
+    );
+    let counts = demands.iter().fold(BTreeMap::new(), |mut map, id| {
+        *map.entry(*id).or_insert(0_usize) += 1;
+        map
+    });
+    assert!(
+        counts.values().all(|count| *count <= 1),
+        "no identity is demanded twice in one edit: {counts:?}"
+    );
+    assert!(result.logical_len > 0);
+    let _ = result.root;
 }

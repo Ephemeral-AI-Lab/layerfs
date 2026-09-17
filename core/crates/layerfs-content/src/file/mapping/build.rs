@@ -204,7 +204,9 @@ impl ExtentBuilder {
     ) -> ContentResult<()> {
         let mut current = level;
         while self.levels[current].len() > self.flush_at {
-            let summary = self.emit_prefix(consumer, current, MAX_ENTRIES)?;
+            // A streaming flush emits a full page that a higher level will hold,
+            // so it is never the tree's root page.
+            let summary = self.emit_prefix(consumer, current, MAX_ENTRIES, false)?;
             self.push_summary(current + 1, summary)?;
             if self.levels[current].len() <= self.flush_at {
                 // This level is under its bound again; only the one above can have
@@ -236,11 +238,11 @@ impl ExtentBuilder {
                         return Ok(children[0]);
                     }
                 }
-                return self.emit_prefix(consumer, level, len);
+                return self.emit_prefix(consumer, level, len, true);
             }
             if len != 0 {
                 let first = if len > MAX_ENTRIES { len / 2 } else { len };
-                let summary = self.emit_prefix(consumer, level, first)?;
+                let summary = self.emit_prefix(consumer, level, first, false)?;
                 self.push_summary(level + 1, summary)?;
                 continue;
             }
@@ -256,6 +258,7 @@ impl ExtentBuilder {
         consumer: &mut dyn FinalizedConsumer,
         level: usize,
         count: usize,
+        root: bool,
     ) -> ContentResult<NodeSummary> {
         let node = match &mut self.levels[level] {
             Pending::Extents(entries) => {
@@ -292,7 +295,7 @@ impl ExtentBuilder {
                 }
             }
         };
-        emit_node(consumer, &node, &mut self.build)
+        emit_node(consumer, &node, &mut self.build, root)
     }
 
     fn push_summary(&mut self, level: usize, summary: NodeSummary) -> ContentResult<()> {
@@ -340,6 +343,7 @@ pub fn emit_empty_leaf(
             extents: Vec::new(),
         },
         build,
+        true,
     )
 }
 
@@ -366,6 +370,7 @@ fn emit_node(
     consumer: &mut dyn FinalizedConsumer,
     node: &ExtentNode,
     build: &mut MappingBuild,
+    root: bool,
 ) -> ContentResult<NodeSummary> {
     if node.level() > MAX_LEVEL {
         return Err(ContentError::MappingDepthExceeded);
@@ -374,7 +379,8 @@ fn emit_node(
         ExtentNode::Leaf { .. } => ObjectRole::ExtentLeaf,
         ExtentNode::Branch { .. } => ObjectRole::ExtentBranch,
     };
-    let object = FinalizedObject::new(role, encode_node(node)?)?.with_references(node.references());
+    let object =
+        FinalizedObject::new(role, encode_node(node, root)?)?.with_references(node.references());
     let summary = NodeSummary {
         id: object.id(),
         bytes: node.logical_len(),

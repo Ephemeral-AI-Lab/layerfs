@@ -23,8 +23,10 @@ fn write_node(writer: &mut impl Write, node: &TimingNode, depth: usize) -> io::R
     write_indent(writer, depth)?;
     write_escaped(writer, node.name())?;
     write!(writer, "  {}", elapsed_text(node.elapsed()))?;
-    if node.outcome().is_error() {
-        writer.write_all(b" [error]")?;
+    match node.outcome() {
+        crate::timer::report::NodeOutcome::Ok => {}
+        crate::timer::report::NodeOutcome::Error => writer.write_all(b" [error]")?,
+        crate::timer::report::NodeOutcome::Unknown => writer.write_all(b" [unknown]")?,
     }
     if node.is_incomplete() {
         writer.write_all(b" [incomplete]")?;

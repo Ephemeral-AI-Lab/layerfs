@@ -325,13 +325,12 @@ impl<'r, 'b> RunStore<'r, 'b> {
                 scan
             };
             // A request the cursor has already passed needs this run from the
-            // front: the rows in between were never compared with it.
+            // front: the rows in between were never compared with it. With no
+            // recorded resume point the cursor cannot answer anything, so the scan
+            // also starts where it can compare rows in order - which is the front.
             let from = match scan.resume {
                 Some(resume) if serial >= resume => scan.offset,
                 Some(_) => 0,
-                // The cursor's row serial is unknown, so the scan has to start
-                // where it can compare rows in order.
-                None if scan.offset == 0 => 0,
                 None => 0,
             };
             let mut reader = RunReader::seek_from(run, self.merge_buffer, from)?;
@@ -530,17 +529,18 @@ impl<'r, 'b> RunStore<'r, 'b> {
 /// scan, and one behind it starts the scan again. That makes an ascending sweep
 /// cost one pass over a run's rows instead of one pass per serial.
 ///
-/// `settled` is the largest serial this tier examined without finding. It only
-/// grows, and every serial up to it was compared with the row that would hold it,
-/// so a request below it needs no read at all. `offset` is where the scan stopped,
-/// which is always a row boundary; the reader that follows the run handle is built
-/// per call from it, so the state is two integers plus the tier's cached window.
+/// `offset` is where the scan stopped, which is always a row boundary, and
+/// `resume` is the smallest serial that position may still answer. A reader over
+/// the tier's run is built per call from `offset`; that rebuild is a real cost in
+/// an ascending sweep and is recorded here rather than described as free.
+///
+/// A `settled` field used to sit beside these. It was never read, so the doc that
+/// claimed a request below it "needs no read at all" described behaviour the code
+/// did not have, and `resume` is the field that actually decides.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct LookupScan {
     /// File offset of the next row to examine.
     offset: u64,
-    /// Largest serial this tier compared with its row without finding.
-    settled: u64,
     /// Smallest serial the cursor at `offset` may still answer. `None` means the
     /// row at the cursor was not read, so nothing below the cursor is safe.
     resume: Option<u64>,

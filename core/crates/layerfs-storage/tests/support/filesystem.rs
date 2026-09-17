@@ -58,7 +58,8 @@ impl Bag {
 
 impl FinalizedConsumer for Bag {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        let (id, role, bytes, _) = object.into_parts();
+        let parts = object.into_parts();
+        let (id, role, bytes) = (parts.id, parts.role, parts.canonical);
         self.objects.insert(id, (role, bytes));
         Ok(())
     }

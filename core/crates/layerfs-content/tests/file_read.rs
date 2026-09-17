@@ -499,3 +499,237 @@ fn a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode() {
         "the read produced {error}"
     );
 }
+
+/// The payload wave refuses an object larger than the chunk grammar allows.
+///
+/// A wave declares both an object count and a byte ceiling. The count was
+/// enforced and the byte figure was not: a provider that served an oversized
+/// object under a chunk role had its payload sliced and copied out, so the row
+/// that quoted `READ_WAVE_BYTES` described a bound nothing checked. The object
+/// here is canonical and correctly identified - it is refused because of its
+/// **size**, not because its bytes do not hash to its id - so the refusal cannot
+/// be confused with the identity check. Its extent restates four bytes, so a
+/// conforming object would be legal; the provider below hands back a chunk far
+/// past the chunk maximum, which is exactly the case the byte ceiling exists for.
+/// The page encoder validates the context the page will be read in.
+///
+/// The encoder used to validate every page it was given as a **root**, so a short
+/// page emitted for a non-root position was publishable and then unreadable: the
+/// reader refuses a non-root page below the canonical partition minimum. The
+/// encoder now takes the context from the caller that decides which page is the
+/// tree's root, and this case pins both sides of it - the same short page is
+/// accepted as a root and refused as a child.
+#[test]
+fn a_short_page_is_accepted_as_a_root_and_refused_as_a_non_root() {
+    use layerfs_content::file::mapping::{encode_node, ExtentNode, ExtentSlice, MIN_ENTRIES};
+    use layerfs_content::ObjectId;
+
+    let short = ExtentNode::Leaf {
+        subtree_logical_bytes: 0,
+        extents: Vec::new(),
+    };
+    assert!(
+        encode_node(&short, true).is_ok(),
+        "an empty leaf is the canonical root of an empty mapping"
+    );
+    let outcome = encode_node(&short, false);
+    assert!(
+        matches!(outcome, Err(ContentError::NonCanonicalPagePartition)),
+        "a page below the partition minimum is refused in child context: {outcome:?}"
+    );
+
+    // The boundary itself: one entry short is refused, the minimum is accepted.
+    let page = |count: usize| ExtentNode::Leaf {
+        subtree_logical_bytes: (count * 4) as u64,
+        extents: (0..count)
+            .map(|index| {
+                ExtentSlice::new(ObjectId::for_bytes(&(index as u32).to_be_bytes()), 0, 4)
+                    .expect("four-byte extent")
+            })
+            .collect(),
+    };
+    assert!(matches!(
+        encode_node(&page(MIN_ENTRIES - 1), false),
+        Err(ContentError::NonCanonicalPagePartition)
+    ));
+    assert!(
+        encode_node(&page(MIN_ENTRIES), false).is_ok(),
+        "a page at the partition minimum is a legal child"
+    );
+}
+
+#[test]
+fn the_payload_wave_enforces_both_its_object_and_its_byte_ceiling() {
+    use layerfs_content::file::mapping::{
+        encode_chunk_object, encode_file_state, encode_node, profile_id, ExtentNode, ExtentSlice,
+        FileState, READ_WAVE_BYTES, READ_WAVE_OBJECTS,
+    };
+    use layerfs_content::{
+        AuthenticatedObjects, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId,
+        ObjectRole,
+    };
+
+    /// Serves the real leaf and state, and one crafted payload under them.
+    struct CraftedChunk {
+        inner: MemoryStore,
+        payload_id: ObjectId,
+        canonical: Vec<u8>,
+    }
+
+    impl AuthenticatedObjects for CraftedChunk {
+        fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+            ids.iter()
+                .map(|id| {
+                    if *id == self.payload_id {
+                        return Ok(self.canonical.clone());
+                    }
+                    self.inner.read_canonical(*id)
+                })
+                .collect()
+        }
+    }
+
+    let oversize = layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES + 1_024;
+    // Hand-built canonical chunk: the object envelope, a 4-byte payload length and
+    // the chunk value header, exactly as the public encoder writes them, but with a
+    // payload the public encoder refuses to produce.
+    let mut value = Vec::new();
+    value.extend_from_slice(b"LFS4CHK\0");
+    value.extend_from_slice(&vec![0x6b_u8; oversize]);
+    let mut canonical = Vec::new();
+    canonical.extend_from_slice(b"LFSO");
+    canonical.push(1);
+    canonical.extend_from_slice(&((value.len() + 4) as u32).to_be_bytes());
+    canonical.extend_from_slice(&(value.len() as u32).to_be_bytes());
+    canonical.extend_from_slice(&value);
+
+    let payload_id = ObjectId::for_bytes(&canonical);
+    let leaf = FinalizedObject::new(
+        ObjectRole::ExtentLeaf,
+        encode_node(
+            &ExtentNode::Leaf {
+                subtree_logical_bytes: 4,
+                extents: vec![ExtentSlice::new(payload_id, 0, 4).expect("four-byte extent")],
+            },
+            true,
+        )
+        .expect("leaf"),
+    )
+    .expect("canonical leaf")
+    .with_references(vec![payload_id]);
+    let leaf_id = leaf.id();
+    let state = FinalizedObject::new(
+        ObjectRole::FileState,
+        encode_file_state(FileState {
+            logical_len: 4,
+            extent_count: 1,
+            tree_level: 0,
+            profile_id: profile_id(),
+            mapping_root: leaf_id,
+        })
+        .expect("state"),
+    )
+    .expect("canonical state")
+    .with_references(vec![leaf_id]);
+    let root = state.id();
+
+    let mut inner = MemoryStore::new();
+    inner.accept(leaf).expect("the leaf is held");
+    inner.accept(state).expect("the state is held");
+    let store = CraftedChunk {
+        inner,
+        payload_id,
+        canonical,
+    };
+
+    let mut out = Vec::new();
+    let outcome = disabled_scope(|scope| {
+        read_range(&store, root, 0..4, &mut out, scope.child("content.read"))
+    });
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::ObjectLimitExceeded { limit, actual })
+                if limit == layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES
+                    && actual == oversize
+        ),
+        "an object above the chunk maximum is refused at the wave boundary: {outcome:?}"
+    );
+    assert!(
+        out.is_empty(),
+        "a refused wave emits no bytes: {}",
+        out.len()
+    );
+
+    // The byte ceiling's arithmetic, locked: one wave holds at most
+    // `READ_WAVE_OBJECTS` payloads and each is at most one chunk, so the largest
+    // legal wave is exactly `READ_WAVE_BYTES`. Moving either constant without the
+    // other would leave the byte figure describing a bound the object count
+    // already refuses, and this assertion fails instead.
+    assert_eq!(
+        READ_WAVE_BYTES,
+        READ_WAVE_OBJECTS * layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES
+    );
+    let chunk = layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES;
+    let mut store = MemoryStore::new();
+    let mut extents = Vec::new();
+    for index in 0..READ_WAVE_OBJECTS {
+        let bytes = vec![index as u8; chunk];
+        let canonical = encode_chunk_object(&bytes).expect("a maximum-sized chunk is legal");
+        let object = FinalizedObject::new(ObjectRole::Chunk, canonical).expect("canonical chunk");
+        let id = object.id();
+        store.accept(object).expect("the provider holds it");
+        extents.push(ExtentSlice::new(id, 0, chunk as u32).expect("extent at the maximum"));
+    }
+    let total = READ_WAVE_OBJECTS * chunk;
+    let leaf = FinalizedObject::new(
+        ObjectRole::ExtentLeaf,
+        encode_node(
+            &ExtentNode::Leaf {
+                subtree_logical_bytes: total as u64,
+                extents,
+            },
+            true,
+        )
+        .expect("a legal leaf"),
+    )
+    .expect("canonical leaf");
+    let leaf_id = leaf.id();
+    store.accept(leaf).expect("the provider holds it");
+    let state = FinalizedObject::new(
+        ObjectRole::FileState,
+        encode_file_state(FileState {
+            logical_len: total as u64,
+            extent_count: READ_WAVE_OBJECTS as u64,
+            tree_level: 0,
+            profile_id: profile_id(),
+            mapping_root: leaf_id,
+        })
+        .expect("state"),
+    )
+    .expect("canonical state")
+    .with_references(vec![leaf_id]);
+    let root = state.id();
+    store.accept(state).expect("the provider holds it");
+
+    let mut out = Vec::new();
+    let counters = disabled_scope(|scope| {
+        read_range(
+            &store,
+            root,
+            0..total as u64,
+            &mut out,
+            scope.child("content.read"),
+        )
+    })
+    .expect("the largest legal wave is served");
+    assert_eq!(out.len(), total);
+    assert_eq!(
+        counters.max_payload_batch as usize, READ_WAVE_OBJECTS,
+        "one wave holds exactly the object ceiling at the chunk maximum: {counters:?}"
+    );
+    assert!(
+        counters.payload_bytes_read as usize <= READ_WAVE_BYTES,
+        "the bytes one read serves stay inside the declared ceiling: {counters:?}"
+    );
+}

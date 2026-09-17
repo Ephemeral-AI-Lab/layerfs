@@ -368,3 +368,50 @@ fn the_envelope_ceiling_is_enforced_at_plus_or_minus_one() {
         "an envelope that declares an over-wide field is refused too"
     );
 }
+
+/// Moving an object's pieces keeps the predecessor input the save path consumes.
+///
+/// `into_parts` is how a consumer takes ownership of a finalized object, and the
+/// production save path reads `predecessors()` on the object it is handed to pick
+/// a physical representation. The tuple form dropped them, so a consumer that
+/// moved its pieces silently lost an input the object had been built with. This
+/// case builds an object that carries a predecessor, moves it, and checks the
+/// predecessor arrives.
+#[test]
+fn moving_an_objects_pieces_keeps_its_advisory_predecessors() {
+    use layerfs_content::{
+        FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance, MAXIMUM_ADVISORY_PREDECESSORS,
+    };
+
+    let bytes = patterned(4_096);
+    let canonical = layerfs_content::file::encode_whole_file(
+        &layerfs_content::ConstructionPolicy::frozen_default().capacities(),
+        &bytes,
+    )
+    .expect("whole-file object");
+    let object = FinalizedObject::new(ObjectRole::WholeFile, canonical.clone()).expect("finalized");
+    let identity = object.id();
+    let base = ObjectId::for_bytes(b"object-identity/predecessor-base");
+
+    let object = object.with_predecessors(
+        layerfs_content::AdvisoryPredecessors::explicit(base).expect("one predecessor"),
+    );
+    let parts = object.into_parts();
+    assert_eq!(parts.id, identity);
+    assert_eq!(parts.role, ObjectRole::WholeFile);
+    assert_eq!(parts.canonical, canonical);
+    assert!(parts.references.is_empty());
+    assert_eq!(
+        parts.predecessors.ids().collect::<Vec<_>>(),
+        vec![base],
+        "the moved pieces still carry the predecessor"
+    );
+    assert!(
+        parts.predecessors.len() <= MAXIMUM_ADVISORY_PREDECESSORS,
+        "the predecessor bound travels with them"
+    );
+    let entries = parts.predecessors.entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].id(), base);
+    assert_eq!(entries[0].provenance(), PredecessorProvenance::OriginalBase);
+}

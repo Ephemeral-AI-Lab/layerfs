@@ -544,25 +544,51 @@ fn a_binding_serial_outside_the_stored_range_is_refused() {
 }
 
 #[test]
-fn an_attribute_value_over_the_declared_bound_is_refused_on_write() {
-    // The 1 MiB value bound is what a bounded read can return whole. A write that
-    // bypasses it would create an attribute the read path refuses to hand back.
+fn the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary() {
+    // The declared bound is the largest value one extent-only value root can
+    // carry, and that figure is the chunk grammar's maximum. What this case pins
+    // is the **boundary**, both sides of it: the last accepted value is emitted
+    // and read back whole, and the first refused value is refused by the declared
+    // bound rather than by whichever codec happened to run first. A case that
+    // wrote some smaller value could not discriminate at the bound at all.
     let limit = layerfs_content::filesystem::limits::MAXIMUM_ATTRIBUTE_VALUE_BYTES;
+    assert_eq!(
+        limit,
+        layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES,
+        "the declared value bound is the chunk maximum, so a value it accepts has a \
+         representation and a value it refuses has none"
+    );
+
     let mut store = TreeStore::new();
-    let too_large = vec![0x5a_u8; limit + 1];
-    let outcome = with_objects(&mut store, |objects| emit_value(objects, &too_large));
+    let at_limit = vec![0x5a_u8; limit];
+    let outcome = with_objects(&mut store, |objects| emit_value(objects, &at_limit));
+    let root = match outcome {
+        Ok(root) => root,
+        Err(error) => panic!("the value exactly at the declared bound must be accepted: {error}"),
+    };
+    let read_back = layerfs_content::filesystem::attributes::value::read_value(&store, root, limit)
+        .expect("the value at the bound is read back whole");
+    assert_eq!(
+        read_back.len(),
+        limit,
+        "the read path returns exactly what was written"
+    );
+    assert!(
+        read_back.iter().all(|byte| *byte == 0x5a),
+        "the read path returns the written bytes, not a prefix"
+    );
+
+    let mut store = TreeStore::new();
+    let over = vec![0x5a_u8; limit + 1];
+    let outcome = with_objects(&mut store, |objects| emit_value(objects, &over));
     assert!(
         matches!(
             outcome,
             Err(ContentError::ObjectLimitExceeded { limit: refused, actual })
                 if refused == limit && actual == limit + 1
         ),
-        "one byte over the declared value bound must be refused: {outcome:?}"
+        "one byte over the declared bound must be refused by the declared bound: {outcome:?}"
     );
-    // Exactly at the bound is still an accepted value.
-    let at_limit = vec![0x5a_u8; 4096];
-    let outcome = with_objects(&mut store, |objects| emit_value(objects, &at_limit));
-    assert!(outcome.is_ok(), "a small value is emitted: {outcome:?}");
 }
 
 /// R26/R33: a branch that misstates its summary is refused by the tree engine.

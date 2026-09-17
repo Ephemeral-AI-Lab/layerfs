@@ -48,9 +48,11 @@ pub struct ValidationWork {
 /// directory whose effective subtree is larger than this is refused with the same
 /// error a genuine cycle gets, because proving it acyclic would cost more entries
 /// than the operation declared it would walk. The figure is part of the
-/// operation's resource contract, and the entries the walk examines are charged
-/// to `ValidationWork::entries_examined` so a caller can see how close it came.
-pub const MAXIMUM_CYCLE_CHECK_ENTRIES: usize = 4_096;
+/// operation's resource contract, the entries the walk examines are charged to
+/// `ValidationWork::entries_examined` so a caller can see how close it came, and
+/// both consequences of its per-walk scope are stated with
+/// [`MAXIMUM_WALK_ENTRIES`](crate::filesystem::limits::MAXIMUM_WALK_ENTRIES).
+pub const MAXIMUM_CYCLE_CHECK_ENTRIES: usize = crate::filesystem::limits::MAXIMUM_WALK_ENTRIES;
 /// Serial demands one allocator-precondition wave may make.
 pub const ALLOCATION_CHECK_BATCH: usize = 64;
 

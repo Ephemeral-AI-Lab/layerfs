@@ -20,7 +20,10 @@ use crate::filesystem::sorted::format::{
 use crate::object::{FinalizedObject, ObjectId, ObjectRole};
 
 /// Largest work one operation may hold for its own unfinished pages.
-pub const MAXIMUM_SCRATCH_BYTES: usize = 4 * 1024 * 1024;
+///
+/// The figure is the one ceiling the filesystem profile declares, not a second
+/// copy of it: `limits` owns the number and every enforcement site names it.
+pub const MAXIMUM_SCRATCH_BYTES: usize = crate::filesystem::limits::MAXIMUM_OPERATION_SCRATCH_BYTES;
 /// Children read in one bounded authenticated batch.
 pub const BATCH_CHILDREN: usize = 32;
 

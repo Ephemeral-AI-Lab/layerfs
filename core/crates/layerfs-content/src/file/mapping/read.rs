@@ -22,7 +22,14 @@ use crate::object::{AuthenticatedObjects, ObjectId};
 
 /// Distinct payloads a single wave may hold.
 pub const READ_WAVE_OBJECTS: usize = 32;
-/// Declared byte ceiling of one wave: the object bound at the largest chunk.
+/// Declared byte ceiling of one wave.
+///
+/// Both halves of the wave are enforced, not just the count: the objects a wave
+/// demands are checked against [`cdc::MAXIMUM_CHUNK_BYTES`] as they are decoded,
+/// and the bytes it serves are charged against this figure and refused when they
+/// exceed it. A provider that hands back an oversized payload under a chunk role
+/// is therefore refused at the wave boundary instead of being copied through,
+/// which is what makes the object bound and the byte bound the same claim.
 pub const READ_WAVE_BYTES: usize = READ_WAVE_OBJECTS * cdc::MAXIMUM_CHUNK_BYTES;
 /// Navigation pages one level wave may hold at once.
 ///
@@ -123,11 +130,29 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                 returned: values.len(),
             });
         }
-        // Every demanded object is a CHUNK; its role decoder owns the check.
+        // Every demanded object is a CHUNK; its role decoder owns the role
+        // check, and the wave owns the size check: an oversized payload is refused
+        // here rather than sliced, so `READ_WAVE_BYTES` is a bound on bytes this
+        // read actually acquired.
         let mut payloads: Vec<&[u8]> = Vec::with_capacity(values.len());
+        let mut wave_bytes = 0_usize;
         for value in &values {
             let inner = crate::object::decode_bytes_object(value)?;
-            payloads.push(decode_chunk_payload(inner)?);
+            let payload = decode_chunk_payload(inner)?;
+            if payload.len() > cdc::MAXIMUM_CHUNK_BYTES {
+                return Err(ContentError::ObjectLimitExceeded {
+                    limit: cdc::MAXIMUM_CHUNK_BYTES,
+                    actual: payload.len(),
+                });
+            }
+            wave_bytes = wave_bytes.saturating_add(payload.len());
+            payloads.push(payload);
+        }
+        if wave_bytes > READ_WAVE_BYTES {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit: READ_WAVE_BYTES,
+                actual: wave_bytes,
+            });
         }
         self.counters.payload_batches_read = self.counters.payload_batches_read.saturating_add(1);
         self.counters.payload_ids_read = self

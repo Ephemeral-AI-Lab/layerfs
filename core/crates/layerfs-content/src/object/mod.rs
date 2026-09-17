@@ -23,7 +23,7 @@ pub use inode_leaf::{
     InodeLeafRow, InodeValue, PooledRow, INODE_VALUE_BYTES, LEAF_ROW_BYTES, MAXIMUM_LEAF_ROWS,
     POOLED_PREFIX_BYTES, POOLED_ROW_BYTES, POOLED_VALUE_CANONICAL_BYTES,
 };
-pub use output::{DiscardingConsumer, FinalizedConsumer, FinalizedObject, ObjectRole};
+pub use output::{DiscardingConsumer, FinalizedConsumer, FinalizedObject, ObjectParts, ObjectRole};
 pub use predecessor::{
     AdvisoryPredecessor, AdvisoryPredecessors, PredecessorProvenance, MAXIMUM_ADVISORY_PREDECESSORS,
 };

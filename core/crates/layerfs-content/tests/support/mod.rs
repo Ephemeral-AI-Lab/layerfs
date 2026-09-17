@@ -84,7 +84,8 @@ impl MemoryStore {
 
 impl FinalizedConsumer for MemoryStore {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        let (id, role, bytes, _) = object.into_parts();
+        let parts = object.into_parts();
+        let (id, role, bytes) = (parts.id, parts.role, parts.canonical);
         self.order.push((id, role));
         self.objects.insert(id, (role, bytes));
         Ok(())

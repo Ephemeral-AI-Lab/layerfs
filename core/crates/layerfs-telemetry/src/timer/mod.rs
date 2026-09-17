@@ -21,5 +21,5 @@ mod report;
 mod scope;
 
 pub use recording::{MAX_DEPTH, MAX_LABEL_BYTES, MAX_NODES};
-pub use report::{NodeOutcome, TimingNode, TimingReport};
+pub use report::{Completeness, NodeOutcome, TimingNode, TimingReport};
 pub use scope::{Active, Pending, Timing, TimingScope};

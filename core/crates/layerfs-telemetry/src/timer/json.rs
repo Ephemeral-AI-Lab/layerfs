@@ -67,9 +67,9 @@ fn write_leaf(writer: &mut impl Write, node: &TimingNode) -> io::Result<()> {
 }
 
 fn write_flag_fields(writer: &mut impl Write, node: &TimingNode, depth: usize) -> io::Result<()> {
-    if node.outcome().is_error() {
+    if !matches!(node.outcome(), crate::timer::report::NodeOutcome::Ok) {
         write_indent(writer, depth)?;
-        writer.write_all(b"\"outcome\": \"error\",\n")?;
+        writeln!(writer, "\"outcome\": \"{}\",", node.outcome().as_str())?;
     }
     if node.is_incomplete() {
         write_indent(writer, depth)?;
@@ -79,8 +79,8 @@ fn write_flag_fields(writer: &mut impl Write, node: &TimingNode, depth: usize) -
 }
 
 fn write_inline_flags(writer: &mut impl Write, node: &TimingNode) -> io::Result<()> {
-    if node.outcome().is_error() {
-        writer.write_all(b", \"outcome\": \"error\"")?;
+    if !matches!(node.outcome(), crate::timer::report::NodeOutcome::Ok) {
+        write!(writer, ", \"outcome\": \"{}\"", node.outcome().as_str())?;
     }
     if node.is_incomplete() {
         writer.write_all(b", \"incomplete\": true")?;

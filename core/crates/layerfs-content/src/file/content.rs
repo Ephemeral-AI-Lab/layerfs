@@ -75,12 +75,19 @@ pub fn whole_file_payload(canonical: &[u8]) -> ContentResult<Option<&[u8]>> {
 
 /// Encodes the canonical object of a whole-file payload.
 ///
-/// The value is written into its final canonical allocation once; there is no
-/// inner allocation that the outer object then copies.
+/// The value is assembled in its own allocation and the canonical envelope is a
+/// second one, so an accepted payload of `n` bytes peaks at roughly `2n` plus the
+/// framing, as `content-io.md`'s memory ledger records. The single-allocation cut
+/// is **not** implemented here; this comment says what the code does.
 pub fn encode_whole_file(
     capacities: &ConstructionCapacities,
     bytes: &[u8],
 ) -> ContentResult<Vec<u8>> {
+    // The cut this comment used to claim is not implemented: the value is built
+    // in its own allocation and `encode_bytes_object` allocates the canonical
+    // object around it, so the peak is roughly twice the value plus its framing.
+    // The memory ledger states that figure; the comment no longer claims
+    // otherwise.
     if bytes.is_empty() || bytes.len() > capacities.whole_file_raw_limit {
         return Err(ContentError::BoundedCapacityExceeded {
             what: "construction.whole_file",
@@ -147,6 +154,10 @@ pub fn construct_bytes(
     consumer: &mut dyn FinalizedConsumer,
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
+    // A policy this profile does not support is refused before any work: the
+    // entry point is where a caller learns its inputs are unusable, not the first
+    // object that happens to depend on the unsupported field.
+    policy.validated()?;
     scope.run(|construct| construct_bytes_in(policy, capacities, bytes, consumer, construct))
 }
 
@@ -194,6 +205,7 @@ pub fn construct_stream<R: Read>(
     consumer: &mut dyn FinalizedConsumer,
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
+    policy.validated()?;
     scope.run(|construct| {
         let cutoff = policy.small_file_threshold_bytes();
         let mut prefix = Vec::new();
