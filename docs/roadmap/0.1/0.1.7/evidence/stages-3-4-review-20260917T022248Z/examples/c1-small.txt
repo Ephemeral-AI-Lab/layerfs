@@ -1,0 +1,25 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.05s
+     Running `core/target/debug/examples/measure_edits --mode c1 --case small --threshold-bytes 131072 --output /tmp/lfsrev/smoke/c1`
+mode: c1
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+base root: 950a13bc1eb6c354370bdf5971770706139f7caf29021e6ee0ffdfb489428603
+result root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+result length: 65536
+emitted: 1 objects, 65559 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  1.388ms
+  edit.op  1.382ms
+    edit.base  78.583us
+      edit.base_read  77.208us
+    edit.compare  19.250us
+      edit.compare.window  959ns
+    edit.assemble  21.750us
+    content.encode  14.083us
+    content.emit  2.708us
+timings: 9 nodes at 4 levels -> /tmp/lfsrev/smoke/c1/c1-edit.json

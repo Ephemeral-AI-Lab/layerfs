@@ -1,0 +1,25 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running `core/target/debug/examples/measure_edits --mode c2 --case small --threshold-bytes 131072 --output /tmp/lfsrev/smoke/c2`
+mode: c2
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+save: inserted 2 reused 0 prefix records 1 full records 1 trials 1
+store: /tmp/lfsrev/smoke/c2/store.sqlite
+readback: verified 65559 canonical bytes through an independent read wave
+exclusions: no C1 file construction and no full-file object collection is timed
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+storage.save  134.467ms
+  store.create  102.748ms
+  storage.begin  3.191ms
+  storage.accept  2.708us
+    storage.batch  959ns
+  storage.accept  500ns
+    storage.batch  250ns
+  storage.finish  11.068ms
+  storage.read  5.867ms
+    storage.decode  761.833us
+    storage.read  4.591ms
+timings: 11 nodes at 3 levels -> /tmp/lfsrev/smoke/c2/c2-save.json

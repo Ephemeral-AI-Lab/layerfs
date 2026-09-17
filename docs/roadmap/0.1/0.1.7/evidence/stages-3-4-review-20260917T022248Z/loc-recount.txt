@@ -1,0 +1,22 @@
+# Independent recount of selected first-parent pairs with the current tool
+c38961f2f core         6152 production lines in   52 files reference   65417 production lines in  193 files combined    71569 production lines 
+64e3f9d6a core         8660 production lines in   68 files reference   65417 production lines in  193 files combined    74077 production lines 
+---
+24ef187d4 core         8660 production lines in   68 files reference   65417 production lines in  193 files combined    74077 production lines 
+da8ee5769 core        10399 production lines in   75 files reference   65417 production lines in  193 files combined    75816 production lines 
+---
+2b2dbc028 core        10415 production lines in   75 files reference   65417 production lines in  193 files combined    75832 production lines 
+01d9f70f3 core        10893 production lines in   75 files reference   65417 production lines in  193 files combined    76310 production lines 
+---
+42f9364c8 core        10938 production lines in   75 files reference   65417 production lines in  193 files combined    76355 production lines 
+df3cdb05b core        11053 production lines in   75 files reference   65417 production lines in  193 files combined    76470 production lines 
+---
+b9a8a67ff core        11166 production lines in   75 files reference   65417 production lines in  193 files combined    76583 production lines 
+aa4b5a9e4 core        10983 production lines in   75 files reference   65417 production lines in  193 files combined    76400 production lines 
+---
+09c1246a5 core        10983 production lines in   75 files reference   65417 production lines in  193 files combined    76400 production lines 
+6566a95a3 core        10983 production lines in   75 files reference   65417 production lines in  193 files combined    76400 production lines 
+---
+6566a95a3 core        10983 production lines in   75 files reference   65417 production lines in  193 files combined    76400 production lines 
+c56c28dd1 core        11058 production lines in   75 files reference   65417 production lines in  193 files combined    76475 production lines 
+---

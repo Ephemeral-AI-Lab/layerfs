@@ -178,3 +178,39 @@ The seven required deliverables and a criterion-by-criterion verdict are collect
 **self-review** by the implementing agent: independence is not claimed, and the
 independent pass described by
 [`stages-3-4-reviewer-handoff.md`](stages-3-4-reviewer-handoff.md) remains open.
+
+## 8. Erratum and open items (added 2026-09-17, post-collection evidence audit)
+
+Sections 1 and 2 are the frozen contract and are **not** rewritten. This section
+records what an audit of the retained receipts changed about how they may be read.
+
+1. **§2.1's matched-campaign row is stale in one clause.** It says "the owner
+   decision in the closeout report's E1 is open". That decision was answered on
+   2026-09-17: the owner passed G13 and G15 by written waiver (§4; closeout report
+   §1). The row's status is unchanged — the campaign is `NOT_RUN` and no matched
+   arm was collected — only its reason is now "waived in writing" rather than
+   "waiting on a decision".
+2. **"read amplification on the representation transition" stays `NOT_RUN` and is
+   now graded INCOMPLETE against #169's acceptance item 2** — not merely "unmeasured
+   in this batch". It is the one declared row whose closure cannot come from the
+   waiver that covers G13/G15, and it is Stage 3–4 work, not Stage 6/7 work.
+3. **The frozen identity in §1 is not satisfied by the two measured rounds.** "every
+   run exports `LAYERFS_CONSTRUCTION_WORKERS=1`" appears in no `command.txt` of
+   `evidence/stages-3-4-timing-20260917T031000Z/` or
+   `evidence/stages-3-4-matched-c1-20260917T050000Z/`, and no core source reads the
+   variable (the closeout rounds do export it). The line stands until an owner
+   decision replaces it; it must not be cited as an enforced condition of those arms.
+4. **§2.1's `store-bytes` row is receipt-backed** (`w8/w8-verify.log:112`) and the
+   eleven RUN rows were re-verified case by case against source and raw logs. The two
+   `NOT_RUN` rows remain the matched campaign and read amplification.
+5. **Two §4-adjacent statements are weaker than they read.** The timing round's
+   per-command budgets are asserted, not evidenced (`wall_seconds` is printed by no
+   tool), and the round's clipped arm (`e1c-pooled-512`, 57.46 % of its scope
+   unattributed — recomputed from `store/pooled-save.json`: root 3 105 519 375 ns,
+   retained children 1 320 950 951 ns) stays exactly as disclosed.
+6. **The matched-C1 pair's correctness conclusion is the part that holds**; its
+   latency, storage and memory columns do not, for the reasons the ledger itself
+   gives (interleaved observations, unaligned write boundaries, no instrumentation).
+
+Sequencing of the remaining work:
+[`stages-3-4-evidence-closeout-prompt.md`](`stages-3-4-evidence-closeout-prompt.md`).

@@ -1,0 +1,109 @@
+# HANDOFF C2 TARGETS
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/delta_chains.rs (core/target/debug/deps/delta_chains-f35fbf213b29e438)
+
+running 9 tests
+test an_unsupported_depth_is_rejected_before_any_store_exists ... ok
+test the_default_depths_are_the_documented_ones ... ok
+test a_cyclic_dependency_is_refused_by_chronology ... ok
+test a_wrong_role_dependency_is_rejected ... ok
+test the_save_reports_every_chain_it_acquired_not_only_the_last ... ok
+test a_corrupt_intermediate_is_rejected_during_reconstruction ... ok
+test a_reduced_depth_stops_at_its_own_boundary ... ok
+test an_increased_depth_is_honoured_up_to_its_boundary ... ok
+test a_chain_that_would_exceed_its_work_budget_is_never_stored ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/delta_payload.rs (core/target/debug/deps/delta_payload-3a690eab668b7ad1)
+
+running 15 tests
+test an_absent_chunk_candidate_selects_full ... ok
+test the_c1_handoff_reports_the_same_selection_as_a_direct_save ... ok
+test depth_zero_disables_prospective_delta_entirely ... ok
+test an_ineligible_chunk_candidate_selects_full ... ok
+test an_absent_or_ineligible_candidate_selects_full ... ok
+test native_delta_uses_the_first_supplied_eligible_candidate_only ... ok
+test exact_reuse_is_decided_before_any_trial ... ok
+test a_corrupt_base_fails_the_save_instead_of_selecting_full ... ok
+test the_admitted_full_cache_supplies_a_candidate_within_one_save ... ok
+test an_unrelated_candidate_loses_the_cost_comparison ... ok
+test an_explicit_predecessor_produces_a_readable_prefix_record ... ok
+test the_chunk_lane_honours_its_own_depth_cap ... ok
+test a_same_save_unsealed_chunk_predecessor_selects_full ... ok
+test a_delta_chain_is_resolved_iteratively_and_reaches_every_step ... ok
+test a_fifty_link_chunk_chain_is_admitted_and_read ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-64a9908979aab1ab)
+
+running 5 tests
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 15 tests
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 5 tests
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_failed_save_leaves_no_usable_state_in_the_set ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running tests/physical_formats.rs (core/target/debug/deps/physical_formats-dce48c851f47630a)
+
+running 6 tests
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test the_lane_table_names_one_limit_per_lane ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/policy_capacity.rs (core/target/debug/deps/policy_capacity-0c494ceb3d49140b)
+
+running 9 tests
+test the_minimum_supported_cutoff_is_the_published_minimum ... ok
+test a_deeper_configured_depth_never_widens_a_work_or_live_budget ... ok
+test a_larger_cutoff_keeps_the_chain_and_live_budgets_unchanged ... ok
+test the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts ... ok
+test the_pooled_metadata_depth_is_persisted_and_checked_separately ... ok
+test an_unsupported_or_conflicting_policy_is_rejected_before_mutation ... ok
+test every_supported_cutoff_is_persisted_and_reopened_unchanged ... ok
+test a_larger_incompressible_whole_file_record_uses_the_singleton_lane ... ok
+test boundaries_follow_the_configured_cutoff_not_a_frozen_one ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+exit=0

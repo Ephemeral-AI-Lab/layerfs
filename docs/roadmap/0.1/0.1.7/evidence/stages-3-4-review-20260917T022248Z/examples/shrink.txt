@@ -1,0 +1,35 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running `core/target/debug/examples/measure_edits --mode pipeline --case large-to-small --threshold-bytes 1048576 --output /tmp/lfsrev/smoke/shrink`
+mode: pipeline
+case: large-to-small
+threshold-bytes: 1048576
+timing: on
+fixture: base 2097152 bytes, 1 edit(s), 0 replacement bytes
+stream: 1 edit(s), base 2097152 -> final 1048576 bytes
+base preparation (untimed): root 920b1cad7eb4b0503715e05198ef85c17f1a78153ad8efd38b48e9acf1b58e27 stored as 114 object(s), 10 pack(s), acknowledged true
+edited root: 5bdb5824866a79c78b79e140230c30eb16a61736a8d4c0df3e066406685c54e0
+edited length: 1048576
+save: acknowledged true inserted 2 reused 0 packs 1 prefix records 0 full records 2
+readback bytes: 1048576
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  8.052ms
+  storage.begin  2.980ms
+  file.edit  4.018ms
+    edit.base  1.487ms
+      edit.base_read  1.477ms
+    edit.compare  1.375us
+    edit.base_read  1.056ms
+    edit.split  1.353ms
+    edit.split  14.083us
+    edit.split  708ns
+    edit.finish  83.334us
+  storage.finish  939.250us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  56.597ms
+  content.read  56.594ms
+    content.acquire  1.167ms
+    content.traverse  55.421ms
+timings: 12 nodes at 4 levels -> /tmp/lfsrev/smoke/shrink/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /tmp/lfsrev/smoke/shrink/pipeline-readback.json

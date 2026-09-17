@@ -1,0 +1,108 @@
+# HANDOFF C1 TARGETS
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.83s
+     Running tests/edit_batch.rs (core/target/debug/deps/edit_batch-45f38d42c5b3375b)
+
+running 7 tests
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test repeated_length_changes_accumulate ... ok
+test adjacent_edits_stay_separate_segments ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test several_separated_edits_apply_in_order ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-399165d349c2fb0d)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+test the_edit_stream_ceiling_is_enforced_before_any_work ... ok
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.99s
+
+     Running tests/edit_model.rs (core/target/debug/deps/edit_model-c558645ac151bd78)
+
+running 6 tests
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+test a_chunked_update_matches_the_model ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/edit_noop.rs (core/target/debug/deps/edit_noop-e3c83a4470051457)
+
+running 7 tests
+test an_out_of_range_replacement_length_is_an_error ... ok
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test several_equal_replacements_are_all_recognised ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/edit_single.rs (core/target/debug/deps/edit_single-37a27c6f70875093)
+
+running 9 tests
+test an_inapplicable_range_is_rejected_before_any_work ... ok
+test a_declared_length_that_does_not_match_its_bytes_fails ... ok
+test complete_deletion_returns_the_empty_representation ... ok
+test append_at_end_of_file ... ok
+test overwrite_in_the_middle ... ok
+test the_base_objects_are_never_rewritten ... ok
+test insert_and_delete_change_the_length_exactly ... ok
+test overwrite_at_the_head_and_the_tail ... ok
+test a_chunked_base_reads_and_edits_without_a_full_pass ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/edit_timing.rs (core/target/debug/deps/edit_timing-9dda51fdd6fa9c60)
+
+running 4 tests
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-94c3d6eb99691726)
+
+running 5 tests
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+test known_and_streamed_complete_lengths_agree ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running tests/inode_leaf.rs (core/target/debug/deps/inode_leaf-26ffe6e7a6c6e40e)
+
+running 6 tests
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test malformed_leaves_are_rejected ... ok
+test a_leaf_round_trips_with_its_exact_layout ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit=0

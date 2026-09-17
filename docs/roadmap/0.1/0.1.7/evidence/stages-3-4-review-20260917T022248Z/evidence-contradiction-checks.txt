@@ -1,0 +1,24 @@
+### 1. smoke README claim vs raw receipt
+34:| pipeline small-to-large | `4fb197e6bda95fb1f877f41da2750ae2d80c3f6352a618d2a1bd0d318418b8e3` | 2 097 151 | `edit.save` 158.824 ms (observed once) | verified byte-for-byte against the model |
+raw grow elapsed_ns = 193977292
+occurrences of 158.824/158824 in retained evidence:        3
+
+### 2. timing round arm count
+      21
+e1a-pooled-24 e1b-pooled-128 e1c-pooled-512 e2-c1-batch e2-c1-chunked e2-c1-large-to-small e2-c1-small-to-large e2-c1-small e2-c2-batch e2-c2-chunked e2-c2-large-to-small e2-c2-small-to-large e2-c2-small e2-pipeline-batch e2-pipeline-chunked e2-pipeline-large-to-small e2-pipeline-small-to-large e2-pipeline-small e3a-pooled-24-off e3b-pipeline-chunked-on e3c-pipeline-chunked-off 
+
+### 3. workers env var in timing/matched receipts
+       0
+
+### 4. w7 README RSS values present in raw log?
+0
+
+### 5. C2 arm store identities
+e2-c2-small              a9e6591458c23bbc
+e2-c2-chunked            b59c7b24d91ad7d4
+e2-c2-small-to-large     b59c7b24d91ad7d4
+e2-c2-large-to-small     b59c7b24d91ad7d4
+e2-c2-batch              b59c7b24d91ad7d4
+
+### 6. workers var in closeout runs
+stages-3-4-closeout-20260916T235641Z/w4/w4-verify.log:20

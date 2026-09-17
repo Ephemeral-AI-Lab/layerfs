@@ -525,3 +525,70 @@ reference 65417 by the corrected counter, combined 76475.
 
 Neither issue may be closed until G13 (and, for #169, G15) is PASS or waived in
 writing by the owner.
+
+---
+
+## 5. Post-audit evidence corrections and remaining items (added 2026-09-17, independent evidence audit)
+
+An independent audit re-read every retained receipt in this batch (all
+`evidence/stages-3-4-*/` rounds, re-stat'ed, cross-read against the source and
+against the artifacts they claim to come from). It confirmed the correctness
+evidence and found the items below. **Nothing in §1-§4 is rewritten**: this section
+adds findings and names what they affect.
+
+### 5.1 Still open in-batch
+
+#169 acceptance item 2 ("small -> large, large -> small and empty transitions ...
+with sound physical read amplification accounting") is **INCOMPLETE**:
+`stages-3-4-verification.md:68` records the row `NOT_RUN` — "no case exists".
+Correctness is covered (`edit_transitions` 5/5); the accounting is not, and it is
+Stage 3–4 work: #171 is "qualify the complete C1/C2 core" and #172 is runtime
+integration, and `stages-3-4-completion-handoff.md:220` forbids postponing a
+Stage 3–4 acceptance requirement by relabelling it Stage 6.
+
+#168 and #169 are closed on GitHub (API `updatedAt` 2026-09-17T02:15Z). The written
+waiver behind that closure covers G13 and G15 only and does not mention read
+amplification, so the item needs either its case or its own written waiver — not
+silence.
+
+### 5.2 Evidence defects (report-side; no receipt is changed or re-labelled)
+
+* `evidence/stages-3-4-smoke-20260916T210931Z/README.md:34` quotes `edit.save`
+  158.824 ms for pipeline small-to-large; the retained
+  `grow/pipeline-edit-save.json:3` says `"elapsed_ns": 193977292` (193.977 ms).
+  Reported as E-D1 by the review and again as F-6; still uncorrected at HEAD.
+* the same README quotes the `shrink2` run (5 970 333 ns; readback 54 928 042 ns)
+  under the `shrink` label — `shrink/` is 6 060 625 ns with a 54 762 208 ns
+  readback.
+* `w7/README.md:82-87`'s `rss before -> after` column matches none of the three
+  ledgers retained in `w7/w7-verify.log` (lines 24-29, 45-50, 86-91). The four
+  heap columns match the first ledger verbatim; the RSS pairs are unsourced.
+* `w7/README.md:94` and G12 call 3 450 007 B "3.45 MiB" (3.45 MB; 3.29 MiB).
+* `w7/README.md:77-78` and G12 call a 24-leaf, 2 400-distinct-value fixture "the
+  E1b shape"; E1b is 128 leaves with 227 distinct values
+  (`evidence/stages-3-4-timing-20260917T031000Z/e1b-pooled-128/stdout.log`).
+* G4's with-fix peak vector `[2208, 2288, 2448, 2768, 3408]` exists only in
+  `w3/README.md:114`: `edit_bounds` prints peaks only on failure, so no raw
+  receipt carries it. The control vector is receipted
+  (`w3/w3-fails-without-fix.log:12`).
+* `stages-3-4-verification.md:23`'s frozen identity "every run exports
+  `LAYERFS_CONSTRUCTION_WORKERS=1`" is satisfied by no timing-round or matched-C1
+  receipt, and no core source reads the variable.
+* `wall_seconds` is printed by no product tool: the <=15 s per-command rule is
+  asserted by an unrecorded wrapper rather than evidenced.
+* the timing round's recorded tool sha256 values match nothing on disk (the examples
+  were rebuilt at 09:46 local), so that round cannot be reproduced from the tip. The
+  matched-C1 pair's binaries still match their recorded hashes.
+* `stages-3-4-verification.md:67` says the E1 decision "is open" while §4 of the
+  same file records the written waiver; reconciled by §8 of that file.
+
+### 5.3 The three comparison axes, stated once more
+
+No v0.1.6-versus-candidate campaign of any kind exists. Latency: n = 1 per arm with
+reversing order (reference 224 875-351 666 ns, candidate 186 000-468 333 ns).
+Storage: boundaries unaligned and measured in memory, neither arm opening a Store.
+Memory: instrumented on the candidate side only, one sample, debug profile. The
+waiver is accurate about what it waives; it must not be read as a measurement.
+
+The remaining work is sequenced in
+[`stages-3-4-evidence-closeout-prompt.md`](`stages-3-4-evidence-closeout-prompt.md`).

@@ -1,0 +1,32 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running `core/target/debug/examples/measure_edits --mode pipeline --case small-to-large --threshold-bytes 1048576 --output /tmp/lfsrev/smoke/grow`
+mode: pipeline
+case: small-to-large
+threshold-bytes: 1048576
+timing: on
+fixture: base 1048575 bytes, 1 edit(s), 1048576 replacement bytes
+stream: 1 edit(s), base 1048575 -> final 2097151 bytes
+base preparation (untimed): root 4f190bb980adc6f36fd1c61a7e147a55d26d17f8d91e27f39c94cb19919d28ba stored as 1 object(s), 1 pack(s), acknowledged true
+edited root: 4fb197e6bda95fb1f877f41da2750ae2d80c3f6352a618d2a1bd0d318418b8e3
+edited length: 2097151
+save: acknowledged true inserted 65 reused 53 packs 6 prefix records 0 full records 65
+readback bytes: 2097151
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  218.182ms
+  storage.begin  4.670ms
+  file.edit  198.772ms
+    edit.base  45.269ms
+      edit.base_read  45.259ms
+    edit.compare  1.709us
+    content.chunk  153.355ms
+    edit.finish  105.792us
+  storage.finish  2.950ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  110.598ms
+  content.read  110.595ms
+    content.acquire  1.310ms
+    content.traverse  109.278ms
+timings: 9 nodes at 4 levels -> /tmp/lfsrev/smoke/grow/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /tmp/lfsrev/smoke/grow/pipeline-readback.json

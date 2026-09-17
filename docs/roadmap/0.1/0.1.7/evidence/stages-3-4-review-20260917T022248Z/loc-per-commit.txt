@@ -1,0 +1,32 @@
+# Per-commit first-parent production LOC audit: c38961f2f..HEAD (reviewed tree b29f8e4a3)
+# columns: hash | count of Production LOC lines | the line | has Scope: | has Method:
+64e3f9d6a2ce83f56beacb41b3b3828270d4831b | 1 | Production LOC: 74628 -> 77136 (delta +2508) | scope=0 | method=1
+0c548c7617418fe871eda334784570e539c3ff62 | 1 | Production LOC: 77136 -> 77136 (delta 0) | scope=0 | method=1
+24ef187d4b9d8aca90882219eeacd86f4c594016 | 1 | Production LOC: 77136 -> 77136 (delta 0) | scope=0 | method=1
+da8ee5769fe13a22768b66f284b44a9341acecdf | 1 | Production LOC: 77136 -> 78875 (delta +1739) | scope=0 | method=1
+b499315706f53f61bebfa714739869bd073b4f19 | 1 | Production LOC: 78875 -> 78891 (delta +16) | scope=0 | method=1
+315a339fabe36c55ef91c3a12e5a7541af9b6315 | 1 | Production LOC: 78891 -> 78891 (delta 0) | scope=0 | method=1
+2b2dbc028a0e4e330611455348eecd04723b7163 | 1 | Production LOC: 78891 -> 78891 (delta 0) | scope=0 | method=1
+01d9f70f36d870d0f410653b2c3a118ded5dc431 | 1 | Production LOC: 10415 -> 10893 (delta +478) | scope=1 | method=1
+5a0fef716ca80d57740ae89fb512ff13ba1d660f | 1 | Production LOC: 10893 -> 10929 (delta +36) | scope=1 | method=1
+c255dcfaf39d9e813150bf268cb9bbf162852b58 | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=1
+dfd54fd8e8ee5f633f9ff80de2967c4c25b6f2c2 | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=0
+c99192b166f56325c5f3c1e3822808354d9a1857 | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=1
+fba18606ebeb5fa217cb8168063c16a5edc1d61b | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=0
+65f2a402d5f9936fa1af6a97bc8be344eea9ba0c | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=0
+275c81ab747cad0af44b19df4513df7a99ca8ce2 | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=1
+91c3a0741fff64e8161d5c1b6e759f347ffbf757 | 1 | Production LOC: 10929 -> 10929 (delta 0) | scope=1 | method=1
+97414bac473f0bcaf5a41156c05a13adaca9f939 | 1 | Production LOC: 10929 -> 10938 (delta +9) | scope=0 | method=0
+42f9364c807ec8837a8366a9e6109b3309108ec7 | 1 | Production LOC: 10938 -> 10938 (delta 0) | scope=0 | method=0
+df3cdb05bfbcb74eef3a4eb2523040e9292e5569 | 1 | Production LOC: 10938 -> 11053 (delta +115) | scope=0 | method=0
+7693bf925915f093b39248fec24a3df3e83e3bdd | 1 | Production LOC: 11053 -> 11053 (delta 0) | scope=0 | method=0
+b9a8a67ff2200da64d32ff122c51a4e26c6be58b | 1 | Production LOC: 11053 -> 11166 (delta +113) | scope=0 | method=0
+aa4b5a9e44a985c3019c734fd08896f1859dce30 | 1 | Production LOC: 11166 -> 10983 (delta -183) | scope=0 | method=0
+09c1246a560b7c90e49e4a24eefcb39753ab97f3 | 1 | Production LOC: 10983 -> 10983 (delta 0) | scope=0 | method=0
+6566a95a3762f0a4452f6da752c4127847c43fde | 1 | Production LOC: 10983 -> 10983 (delta 0) | scope=0 | method=0
+c56c28dd154107715873cddc0d3d0f0d7cc95643 | 1 | Production LOC: 10983 -> 11058 (delta +75) | scope=0 | method=0
+8fb05b4652841e0dfa346ab93da9e2c3ec38bf2c | 1 | Production LOC: 11058 -> 11058 (delta 0) | scope=0 | method=0
+4d11de984126ef23610828b1650b77d3816eafe5 | 1 | Production LOC: 11058 -> 11058 (delta 0) | scope=0 | method=0
+2b4f8b47d1366729caf759f75c6646c60b8c8786 | 1 | Production LOC: 11058 -> 11058 (delta 0) | scope=0 | method=0
+97c2c7c27af3edcc5f3152bfff87f9c86dc94e33 | 1 | Production LOC: 11058 -> 11058 (delta 0) | scope=0 | method=0
+b29f8e4a3708a3ece9b67fb719af990bbb0b1cb5 | 1 | Production LOC: 11058 -> 11058 (delta 0) | scope=0 | method=0

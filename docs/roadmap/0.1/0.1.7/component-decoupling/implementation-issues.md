@@ -114,3 +114,31 @@ no comparison campaign exists, and the qualification is deferred to Stage 6 (#17
 The row-by-row text posted on each issue is the report's §4, and the verification
 contract's case registry is RUN or NOT_RUN in
 [`stages-3-4-verification.md`](stages-3-4-verification.md) §2.1.
+
+## Post-audit addendum to the Stages 3-4 closeout (2026-09-17)
+
+An independent audit of every retained receipt confirmed the batch's correctness
+evidence and left three things the closeout text above does not carry.
+
+* **#169 acceptance item 2 is incomplete.** Size transitions were tested
+  (`edit_transitions` 5/5) but the required *physical read amplification
+  accounting* has no case: `stages-3-4-verification.md:68` records it `NOT_RUN`.
+  The waiver behind the closures covers G13/G15 only, so this item needs either its
+  case or its own written waiver. It is not Stage 6/7 work: #171 is "qualify the
+  complete C1/C2 core", #172 is runtime integration, and
+  `stages-3-4-completion-handoff.md:220` forbids relabelling a Stage 3–4
+  requirement as Stage 6.
+* **No v0.1.6-versus-candidate campaign exists on any axis** (latency n = 1 with
+  reversing order; storage boundaries unaligned and measured in memory; memory
+  instrumented candidate-side only). That is what the waiver says; it is restated
+  here so the closed state is not read as a measured comparison.
+* **Report-side evidence defects** are listed in
+  `stages-3-4-closeout-report.md` §5 — including a smoke README number that
+  contradicts its own retained receipt (158.824 ms against `193977292` ns), an
+  unsourced RSS column, a MiB/MB unit error carried into G12, an "E1b shape"
+  mislabel, and timing-round tool hashes that no longer match anything on disk.
+  Receipts were not touched; corrections belong in the reports that quote the
+  numbers.
+
+Remaining work is sequenced in
+[`stages-3-4-evidence-closeout-prompt.md`](`stages-3-4-evidence-closeout-prompt.md`).

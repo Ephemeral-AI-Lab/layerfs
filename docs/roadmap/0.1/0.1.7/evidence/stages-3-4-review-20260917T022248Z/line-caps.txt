@@ -1,0 +1,10 @@
+# Physical-line caps on the reviewed tree
+$ find core/crates -path "*/src/*" -name "*.rs" -exec awk END{if(NR>999)...
+files over 999 physical lines:
+(none above)
+lib.rs/mod.rs over 200 physical lines:
+(none above)
+
+production file count:
+      74
+       1

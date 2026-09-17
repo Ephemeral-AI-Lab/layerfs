@@ -1,0 +1,7 @@
+# clippy --workspace --all-targets -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+
+real	0m0.248s
+user	0m0.070s
+sys	0m0.073s
+exit=0

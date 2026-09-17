@@ -1,0 +1,17 @@
+# Per-packet artifact audit of the closeout evidence round
+# Round: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-closeout-20260916T235641Z/
+# Command: for w in w1..w10; do ls $w/*fails-without-fix* ; ls $w/*verify*.log ; done
+
+w1   verify=w1/w1-verify.log    control=w1/w1-fails-without-fix.log    (exit101 x1)
+w2   verify=w2/w2-verify.log    control=w2/w2-fails-without-fix.log    (exit101 x1)
+w3   verify=w3/w3-verify.log    control=w3/w3-fails-without-fix.log    (exit101 x2)
+w4   verify=w4/w4-verify.log    control=w4/w4-fails-without-fix.log    (exit101 x2)
+w5   verify=w5/w5-verify.log    control=w5/w5-fails-without-fix.log    (exit101 x1)
+w6   verify=w6/w6-verify.log    control=w6/w6-fails-without-fix.log    (exit101 x2, exit0 x1 = the disclosed control-A that proves nothing)
+w7   verify=w7/w7-verify.log    control=NONE
+w8   verify=w8/w8-verify.log    control=NONE
+w9   verify=w9/w9-verify.log    control=NONE
+w10  verify=w10/w10-verify.log  control=NONE
+
+=> 6 of 10 packets carry a control log; W7-W10 carry none, although W7 backs gate G12
+   (memory), W8 backs G14/G16, W9 backs G17/G18 and W10 backs G19.

@@ -1,0 +1,45 @@
+# Audited counter on the reviewed tree (HEAD b29f8e4a3, clean)
+$ python3 tools/production_loc.py --detail
+core        11058 production lines in   75 files
+          layerfs-content                                     4463
+          layerfs-storage                                     5863
+          layerfs-telemetry                                    732
+reference   65417 production lines in  193 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10986
+          layerfs-layerstack-store                           18376
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          979
+          layerfs-workspace                                  11776
+          layerfs-workspace-core                              2452
+combined    76475 production lines
+
+# Base snapshot (pre-Stage-3) c38961f2f
+$ git archive c38961f2f | tar -x -C base ; python3 tools/production_loc.py --root base --detail
+core         6152 production lines in   52 files
+          layerfs-content                                     2336
+          layerfs-storage                                     3084
+          layerfs-telemetry                                    732
+reference   65417 production lines in  193 files
+          layerfs-cli                                         1142
+          layerfs-content                                    15701
+          layerfs-daemon                                      3233
+          layerfs-fuse                                       10986
+          layerfs-layerstack-store                           18376
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          979
+          layerfs-workspace                                  11776
+          layerfs-workspace-core                              2452
+combined    71569 production lines
+
+# Combined
+core         6152 production lines in   52 files
+reference   65417 production lines in  193 files
+combined    71569 production lines
+core        11058 production lines in   75 files
+reference   65417 production lines in  193 files
+combined    76475 production lines
