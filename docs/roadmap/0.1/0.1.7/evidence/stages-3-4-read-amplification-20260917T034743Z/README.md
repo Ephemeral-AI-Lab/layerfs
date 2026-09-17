@@ -180,6 +180,16 @@ the 15 s / 25 s budget rules in `docs/general/benchmark_rules.md` govern a
 *performance* selection's complete command, and no row of this round is a
 performance selection.
 
+## 7.1 The receipt still binds the closing tree
+
+The A1 case's sources did not change after this round's commit. `git diff --stat
+841d9d2b1 <closing commit> -- core/crates/*/src core/crates/*/tests/edit_transitions.rs
+core/crates/*/tests/edit_pipeline.rs` is **empty**, so the archived executables are
+still what those targets build, and the later commit's changes (examples, one test
+print, documentation) are outside the binaries this receipt names. Had any of them
+changed, the receipt would have had to be re-collected rather than re-pointed —
+which is exactly the rule that makes the archive worth keeping.
+
 ## 8. What this round does not measure
 
 * **It is not a v0.1.6 comparison.** There is no reference arm here, so nothing in
