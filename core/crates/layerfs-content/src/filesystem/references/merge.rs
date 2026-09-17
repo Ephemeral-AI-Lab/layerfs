@@ -43,45 +43,47 @@ pub struct MergeWork {
     pub peak_run_bytes: u64,
 }
 
-/// One sequential reader over a run with a bounded private buffer.
-pub struct RunReader<'a> {
-    handle: &'a dyn OrderingRun,
+/// Buffered sequential row-reader state over one run, without the run itself.
+///
+/// The scan owns its buffer; the run's storage is borrowed per call. That split
+/// is what lets the run store keep one reader per tier alive across lookups:
+/// the buffer is allocated once, the cursor state is the scan's fields, and the
+/// handle comes from whichever run the tier holds today.
+pub struct RunScan {
+    /// File offset of the next row to read.
     offset: u64,
+    /// Rows the run still holds beyond `offset`.
     remaining: u64,
+    /// The retained buffer, sized to whole rows.
     buffer: Vec<u8>,
+    /// Valid bytes in `buffer`.
     filled: usize,
+    /// Bytes of `buffer` already consumed.
     consumed: usize,
 }
 
-impl<'a> RunReader<'a> {
-    /// A reader over `run`, buffering whole rows only.
-    pub fn new(run: &'a Run, buffer_bytes: usize) -> Self {
+impl RunScan {
+    /// A scan with one bounded buffer of `buffer_bytes`.
+    ///
+    /// The buffer is rounded to whole rows and is never reallocated; a restart
+    /// only invalidates the bytes it holds.
+    pub fn new(buffer_bytes: usize) -> Self {
         let rows = (buffer_bytes / ROW_BYTES).max(1);
         Self {
-            handle: run.handle.as_ref(),
             offset: 0,
-            remaining: run.count,
+            remaining: 0,
             buffer: vec![0; rows * ROW_BYTES],
             filled: 0,
             consumed: 0,
         }
     }
 
-    /// Rows this reader has returned.
-    pub const fn rows(&self) -> u64 {
-        self.offset / ROW_BYTES as u64
-    }
-
-    /// File offset of the next row.
-    pub const fn run_offset(&self) -> u64 {
-        self.offset
-    }
-
-    /// A reader that starts `offset` bytes into `run`.
+    /// Positions the scan `offset` bytes into `run`, keeping the buffer.
     ///
-    /// `offset` is a whole number of rows, so the first row this reader returns
-    /// is the one at that position.
-    pub fn seek_from(run: &'a Run, buffer_bytes: usize, offset: u64) -> ContentResult<Self> {
+    /// `offset` must be a whole number of rows within the run, so the first row
+    /// this scan returns is the one at that position. Positioning invalidates
+    /// the buffered bytes; it does not allocate.
+    pub fn start(&mut self, run: &Run, offset: u64) -> ContentResult<()> {
         if offset % ROW_BYTES as u64 != 0 {
             return Err(ContentError::InvalidOrderingRecord("run seek offset"));
         }
@@ -89,21 +91,17 @@ impl<'a> RunReader<'a> {
         if skipped > run.count {
             return Err(ContentError::InvalidOrderingRecord("run seek past end"));
         }
-        let rows = (buffer_bytes / ROW_BYTES).max(1);
-        Ok(Self {
-            handle: run.handle.as_ref(),
-            offset,
-            remaining: run.count - skipped,
-            buffer: vec![0; rows * ROW_BYTES],
-            filled: 0,
-            consumed: 0,
-        })
+        self.offset = offset;
+        self.remaining = run.count - skipped;
+        self.filled = 0;
+        self.consumed = 0;
+        Ok(())
     }
 
     /// Puts the last returned row back, so the next call returns it again.
     ///
-    /// A scan that stops on a row it did not compare with its request leaves that
-    /// row pending instead of consuming it.
+    /// A scan that stops on a row it did not compare with its request leaves
+    /// that row pending instead of consuming it.
     pub fn rewind(&mut self) {
         if self.consumed >= ROW_BYTES {
             self.consumed -= ROW_BYTES;
@@ -113,16 +111,17 @@ impl<'a> RunReader<'a> {
     }
 
     /// Next row in serial order, if any remains.
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> ContentResult<Option<Row>> {
+    ///
+    /// The row is served from the retained buffer when it is already held and
+    /// from one bounded `read_at` when it is not.
+    pub fn next(&mut self, handle: &dyn OrderingRun) -> ContentResult<Option<Row>> {
         if self.remaining == 0 {
             return Ok(None);
         }
         if self.consumed == self.filled {
             let rows = self.remaining.min((self.buffer.len() / ROW_BYTES) as u64) as usize;
             let filled = rows * ROW_BYTES;
-            self.handle
-                .read_at(self.offset, &mut self.buffer[..filled])?;
+            handle.read_at(self.offset, &mut self.buffer[..filled])?;
             self.consumed = 0;
             self.filled = filled;
         }
@@ -134,6 +133,63 @@ impl<'a> RunReader<'a> {
         self.offset += ROW_BYTES as u64;
         self.remaining -= 1;
         Ok(Some(row))
+    }
+
+    /// File offset of the next row.
+    pub const fn run_offset(&self) -> u64 {
+        self.offset
+    }
+
+    /// Rows this scan has returned since it was positioned.
+    pub const fn rows(&self) -> u64 {
+        self.offset / ROW_BYTES as u64
+    }
+}
+
+/// One sequential reader over a run with a bounded private buffer.
+///
+/// The reader is a fresh [`RunScan`] plus the run's handle, for callers - the
+/// merge and visit paths - that read a whole run once and drop the reader. The
+/// run store's lookup path uses `RunScan` directly so its buffer survives the
+/// call.
+pub struct RunReader<'a> {
+    handle: &'a dyn OrderingRun,
+    scan: RunScan,
+}
+
+impl<'a> RunReader<'a> {
+    /// A reader over `run`, buffering whole rows only.
+    pub fn new(run: &'a Run, buffer_bytes: usize) -> Self {
+        let mut scan = RunScan::new(buffer_bytes);
+        scan.remaining = run.count;
+        Self {
+            handle: run.handle.as_ref(),
+            scan,
+        }
+    }
+
+    /// Puts the last returned row back, so the next call returns it again.
+    ///
+    /// A scan that stops on a row it did not compare with its request leaves that
+    /// row pending instead of consuming it.
+    pub fn rewind(&mut self) {
+        self.scan.rewind();
+    }
+
+    /// Next row in serial order, if any remains.
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> ContentResult<Option<Row>> {
+        self.scan.next(self.handle)
+    }
+
+    /// File offset of the next row.
+    pub const fn run_offset(&self) -> u64 {
+        self.scan.run_offset()
+    }
+
+    /// Rows this reader has returned.
+    pub const fn rows(&self) -> u64 {
+        self.scan.rows()
     }
 }
 

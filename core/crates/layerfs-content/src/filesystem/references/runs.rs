@@ -18,12 +18,19 @@
 //! what returns their bytes; nothing counts only the final run while older files
 //! are still owned. The physical owner is the backing, whose own ceiling is
 //! enforced when a run appends.
+//!
+//! **One reader per tier.** A lookup does not build a reader: each tier keeps a
+//! [`RunScan`](merge::RunScan) with its own retained buffer for the lifetime of
+//! the tier's run, so lookups are amortized reads from a buffer the store
+//! already owns. At most `MAXIMUM_LEVELS` such buffers exist at once, each
+//! bounded by the declared merge buffer, and every one of them is dropped when
+//! its tier's run is replaced or released.
 
 use std::collections::BTreeMap;
 
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::references::backing::OrderingBacking;
-use crate::filesystem::references::merge::{merge_runs, MergeWork, Run, RunReader};
+use crate::filesystem::references::merge::{merge_runs, MergeWork, Run, RunReader, RunScan};
 use crate::filesystem::references::record::{Row, ROW_BYTES};
 
 /// Default bytes of one merge buffer.
@@ -38,7 +45,11 @@ pub struct RunStore<'r, 'b> {
     backing: Option<&'r mut (dyn OrderingBacking + 'b)>,
     levels: Vec<Option<Run>>,
     /// One resumable lookup scan per tier, parallel to `levels`.
-    scans: Vec<LookupScan>,
+    ///
+    /// A tier's scan - and with it the tier's retained reader buffer - is
+    /// created by the first lookup that reaches a live run in that tier, and
+    /// empty tiers never allocate one.
+    scans: Vec<Option<LookupScan>>,
     merge_buffer: usize,
     limit: u64,
     /// Bytes of the pending rows the reducer is about to spill.
@@ -102,10 +113,10 @@ impl<'r, 'b> RunStore<'r, 'b> {
         self.limit
     }
 
-    /// Drops every tier's scan position, keeping the tiers themselves.
+    /// Drops every tier's scan, keeping the tiers themselves.
     ///
-    /// Called whenever a tier's run is replaced: the position belongs to the run
-    /// that was scanned, not to the tier.
+    /// Called whenever a tier's run is replaced: the position and the retained
+    /// buffer belong to the run that was scanned, not to the tier.
     fn reset_scans(&mut self) {
         self.scans.clear();
     }
@@ -298,12 +309,18 @@ impl<'r, 'b> RunStore<'r, 'b> {
 
     /// Finds the newest run row for `serial`, if any tier holds one.
     ///
-    /// Each tier keeps the position its scan reached, so an ascending sweep reads
-    /// a run once instead of re-reading it per serial. A request at or above the
-    /// position continues the scan; a request below it starts the run again,
-    /// because a scan that resumed past a row never compared it. Rows read here
-    /// are charged to `rows_read`, which is what makes the reported work describe
-    /// the operation instead of only its spills.
+    /// Each tier keeps one reader - a [`RunScan` with its own retained buffer -
+    /// for the lifetime of the tier's run, so a lookup continues the scan that
+    /// the previous lookup left in place instead of rebuilding a reader. An
+    /// ascending sweep therefore neither allocates nor re-reads bytes it
+    /// already holds; only a request the cursor has passed restarts the run
+    /// from the front, and that restart keeps the buffer and invalidates its
+    /// bytes. Rows read here are charged to `rows_read`, which is what makes
+    /// the reported work describe the operation instead of only its spills.
+    ///
+    /// The lookup scans retain at most `MAXIMUM_LEVELS` buffers of
+    /// `merge_buffer` bytes each, bounded by the tier count and dropped
+    /// whenever a tier's run is replaced.
     pub fn find(&mut self, serial: u64) -> ContentResult<Option<Row>> {
         for index in 0..self.levels.len() {
             let Some(run) = self.levels[index].as_ref() else {
@@ -313,30 +330,21 @@ impl<'r, 'b> RunStore<'r, 'b> {
                 continue;
             }
             while self.scans.len() <= index {
-                self.scans.push(LookupScan::default());
+                self.scans.push(None);
             }
-            let scan = self.scans[index];
-            let mut scan = if scan.total == 0 {
-                LookupScan {
-                    total: run.count,
-                    ..scan
-                }
-            } else {
-                scan
-            };
+            let buffer_bytes = self.merge_buffer;
+            let scan = self.scans[index].get_or_insert_with(|| LookupScan::new(buffer_bytes));
             // A request the cursor has already passed needs this run from the
-            // front: the rows in between were never compared with it. With no
-            // recorded resume point the cursor cannot answer anything, so the scan
-            // also starts where it can compare rows in order - which is the front.
-            let from = match scan.resume {
-                Some(resume) if serial >= resume => scan.offset,
-                Some(_) => 0,
-                None => 0,
-            };
-            let mut reader = RunReader::seek_from(run, self.merge_buffer, from)?;
+            // front: the rows in between were never compared with it. A request
+            // at or beyond the cursor continues the tier's scan where it
+            // stopped, with the buffer it already holds.
+            match scan.resume {
+                Some(resume) if serial >= resume => {}
+                _ => scan.reader.start(run, 0)?,
+            }
             let mut found = None;
             let mut resume = None;
-            while let Some(row) = reader.next()? {
+            while let Some(row) = scan.reader.next(run.handle.as_ref())? {
                 self.work.rows_read = self.work.rows_read.saturating_add(1);
                 if row.serial() == serial {
                     found = Some(row);
@@ -345,7 +353,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
                 if row.serial() > serial {
                     // This row was not compared with the request: leave it at the
                     // cursor so a later request still sees it.
-                    reader.rewind();
+                    scan.reader.rewind();
                     resume = Some(row.serial());
                     break;
                 }
@@ -356,9 +364,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
                 // the one that matched is above this serial.
                 resume = Some(serial.saturating_add(1));
             }
-            scan.offset = reader.run_offset();
             scan.resume = resume;
-            self.scans[index] = scan;
             if let Some(row) = found {
                 return Ok(Some(row));
             }
@@ -524,28 +530,36 @@ impl<'r, 'b> RunStore<'r, 'b> {
 ///
 /// `find` is called once per touched serial, once per released child and again
 /// for every row state the reducer samples. Each run is sorted and the reducer's
-/// demands ascend, so the scan keeps its position: a request the tier already
-/// settled is answered without a read, one beyond the position continues the
-/// scan, and one behind it starts the scan again. That makes an ascending sweep
-/// cost one pass over a run's rows instead of one pass per serial.
+/// demands ascend, so the scan keeps both its position and its buffered reader:
+/// a request the tier already settled is answered from the buffer the scan
+/// holds, one beyond the position continues the scan, and one behind it starts
+/// the scan again. That makes an ascending sweep cost one pass over a run's
+/// rows instead of one pass per serial - and no allocation per lookup, because
+/// the buffer belongs to the tier and is allocated once.
 ///
-/// `offset` is where the scan stopped, which is always a row boundary, and
-/// `resume` is the smallest serial that position may still answer. A reader over
-/// the tier's run is built per call from `offset`; that rebuild is a real cost in
-/// an ascending sweep and is recorded here rather than described as free.
+/// `resume` is the smallest serial the cursor at `reader`'s position may still
+/// answer. `None` means the row at the cursor was not read, so nothing below
+/// the cursor is safe.
 ///
-/// A `settled` field used to sit beside these. It was never read, so the doc that
-/// claimed a request below it "needs no read at all" described behaviour the code
-/// did not have, and `resume` is the field that actually decides.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// The scan belongs to the tier's current run: `RunStore` drops every scan
+/// whenever a run is replaced, which returns the buffers with the positions.
 struct LookupScan {
-    /// File offset of the next row to examine.
-    offset: u64,
-    /// Smallest serial the cursor at `offset` may still answer. `None` means the
-    /// row at the cursor was not read, so nothing below the cursor is safe.
+    /// The tier's retained buffered reader: one buffer, positioned by the
+    /// cursor below and reused by every lookup this tier answers.
+    reader: RunScan,
+    /// Smallest serial the cursor may still answer. `None` means the row at
+    /// the cursor was not read, so nothing below the cursor is safe.
     resume: Option<u64>,
-    /// Rows in the run.
-    total: u64,
+}
+
+impl LookupScan {
+    /// A scan with one bounded buffer of `buffer_bytes`.
+    fn new(buffer_bytes: usize) -> Self {
+        Self {
+            reader: RunScan::new(buffer_bytes),
+            resume: None,
+        }
+    }
 }
 
 /// Copies one run into a fresh handle so a merge never aliases its own input.
@@ -567,11 +581,6 @@ fn copy_run(
     Ok(handle)
 }
 
-/// Reads every live run with newest-row precedence, without consuming it.
-///
-/// Levels are scanned newest first, so a serial that two levels hold is emitted
-/// once, from the newer one, and the older duplicate is skipped. Readers are
-/// bounded: one per live tier, each with the declared merge buffer.
 /// Reads every row of one run in serial order.
 pub fn visit_run(
     run: &Run,
