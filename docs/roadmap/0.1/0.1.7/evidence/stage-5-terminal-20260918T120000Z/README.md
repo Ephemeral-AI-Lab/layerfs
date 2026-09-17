@@ -8,7 +8,7 @@
 | | |
 | --- | --- |
 | Code tree | `6c00e0f53` provider failures / pragma set / profile verification / unsafe boundary, `9327f6695` one reader per ordering tier; `head.txt` is a tree pointer refreshed at the check-log commit to name `134b8df73`, the tree the check logs ran on; the closing tree is the final commit of this round |
-| Production LOC | core 18,708 → 18,797 (+89): C1 11,902 → 11,922 (+20), C2 6,043 → 6,112 (+69), telemetry 763 → 763 (0); reference 65,417 unchanged |
+| Production LOC | the round's two product commits moved core 18,708 → 18,797 (+89: C1 +20, C2 +69); the verification-remedy commit then deleted the dead scratch twin (−5), so the round's final tree stands at core 18,792 / combined 84,209 (C1 11,917, C2 6,112, telemetry 763; reference 65,417 unchanged) |
 | Rows claimed | `R2-F4`, `R2-F8`/`N-6`, `R2-F10`/`N-7`, `R2-F11`/`N-8`, `R2-F15`, `R2-F23`/`N-17`, `R2-F24`, `N-13`, `N-14`, `TR-5`, `F27` (info) |
 | Checks | the eight handoff §6 commands, logs `check-*.log`, run on the round's final tree |
 
@@ -108,7 +108,8 @@ subagent reproduces it from these receipts or through the public entry points.
 `check-*.log` hold the raw output of the eight handoff §6 commands run on the
 round's mid tree (`134b8df73`), and `check-final-*.log` the same commands on the
 closing tree; every command's exit code (all 0) is recorded in the landing
-commit messages and in `stage-5-report.md` §16's preamble. `git-status.txt` and
+commit messages and in the completion report's §12 (§16's preamble carries
+the suite counts). `git-status.txt` and
 `head.txt` are tree pointers, refreshed at the check-log commit to name the tree
 the checks ran on - that refresh is the one intentional edit to an existing file
 in this directory (closing falsifier finding F5); every receipt is unedited
