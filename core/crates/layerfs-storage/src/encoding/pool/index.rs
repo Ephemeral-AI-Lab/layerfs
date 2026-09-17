@@ -105,15 +105,15 @@ impl PoolIndex {
         reader: &mut PoolReader,
         workspace: &mut DecompressionWorkspace,
     ) -> StorageResult<()> {
-        let end = pool::next_ordinal(connection)?;
-        if end < self.next {
+        let end = pool::ordinal_end(connection)?;
+        if end < u64::from(self.next) {
             return Err(StorageError::Integrity("metadata index chronology"));
         }
-        if self.next == end {
+        if end == u64::from(self.next) {
             return Ok(());
         }
         let mut cursor = self.next;
-        if cursor == 1 && end > 1 + METADATA_INDEX_VALUES as u32 {
+        if cursor == 1 && end > 1 + METADATA_INDEX_VALUES as u64 {
             // Cold start: replay the whole-group eviction recurrence from the
             // catalogue so the payload of evicted groups is never read.
             cursor = retained_start(connection, end)?;
@@ -121,7 +121,7 @@ impl PoolIndex {
             self.entries.clear();
             self.retained_bytes = 0;
         }
-        while cursor < end {
+        while u64::from(cursor) < end {
             let row = pool::group_for(connection, cursor)?
                 .ok_or(StorageError::Integrity("metadata catalogue gap"))?;
             if row.first_ordinal != cursor {
@@ -175,20 +175,20 @@ impl PoolIndex {
         if values.is_empty() {
             return Ok(found);
         }
-        let mut candidates: Vec<u32> = Vec::new();
+        // An ordered set, not a vector with a linear `contains`: every retained
+        // entry can carry the same fingerprint, and a linear dedup inside the loop
+        // is quadratic in the candidate count. The set both dedups and orders, so
+        // the ordinal walk below is unchanged.
+        let mut candidates: BTreeSet<u32> = BTreeSet::new();
         for value in values {
             let fingerprint = fingerprint(value);
-            for (candidate, ordinal) in self
+            for (_candidate, ordinal) in self
                 .entries
                 .range((fingerprint, 0)..=(fingerprint, u32::MAX))
             {
-                let _ = candidate;
-                if !candidates.contains(ordinal) {
-                    candidates.push(*ordinal);
-                }
+                candidates.insert(*ordinal);
             }
         }
-        candidates.sort_unstable();
         let mut ordinal_values: Option<(u32, Vec<[u8; INODE_VALUE_BYTES]>)> = None;
         for ordinal in candidates {
             let needed = ordinal_values.as_ref().is_none_or(|(first, values)| {
@@ -221,7 +221,7 @@ impl PoolIndex {
 /// catalogue order and the whole window restarts whenever the next group would
 /// exceed the retained entry bound. Only the catalogue is read, never the payload
 /// of a group that would immediately be discarded.
-fn retained_start(connection: &Connection, end: u32) -> StorageResult<u32> {
+fn retained_start(connection: &Connection, end: u64) -> StorageResult<u32> {
     let mut next = 1_u32;
     let mut first = 1_u32;
     let mut entries = 0_usize;
@@ -241,7 +241,7 @@ fn retained_start(connection: &Connection, end: u32) -> StorageResult<u32> {
         entries += group.count;
         Ok(())
     })?;
-    if next != end {
+    if u64::from(next) != end {
         return Err(StorageError::Integrity("metadata catalogue endpoint"));
     }
     Ok(first)

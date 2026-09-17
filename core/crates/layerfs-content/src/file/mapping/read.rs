@@ -133,6 +133,13 @@ impl<'a> Wave<'a> {
 }
 
 /// Reads `range` of a chunked file, emitting bytes in logical order.
+///
+/// The file state's declared length and extent count are the root page's own
+/// summary, and a read checks that the page it actually decoded agrees with them
+/// before it traverses anything. The traversal is then checked against what it
+/// emitted: a range is served exactly or refused, never partly served under an
+/// `Ok`. Both checks are on bytes this read already acquired, so they add no
+/// read.
 pub fn read_range(
     reader: &dyn AuthenticatedObjects,
     state: FileState,
@@ -149,6 +156,7 @@ pub fn read_range(
     if range.start == range.end {
         return Ok(ReadCounters::default());
     }
+    let requested = range.end - range.start;
     let mut wave = Wave::new(reader, sink);
     descend(
         reader,
@@ -158,11 +166,17 @@ pub fn read_range(
         0,
         &range,
         &mut wave,
+        Some((state.logical_len, state.extent_count)),
     )?;
     wave.flush()?;
+    if wave.counters.payload_bytes_read != requested {
+        return Err(ContentError::InvalidRecord("mapping coverage"));
+    }
     Ok(wave.counters)
 }
 
+/// Traverses one page, checking the root against the file state it was opened from.
+#[allow(clippy::too_many_arguments)]
 fn descend(
     reader: &dyn AuthenticatedObjects,
     id: ObjectId,
@@ -171,12 +185,18 @@ fn descend(
     origin: u64,
     range: &Range<u64>,
     wave: &mut Wave<'_>,
+    expected_root: Option<(u64, u64)>,
 ) -> ContentResult<()> {
     let canonical = reader.read_canonical(id)?;
     wave.counters.nodes_read = wave.counters.nodes_read.saturating_add(1);
     let node = decode_node_with_context(&canonical, root)?;
     if node.level() != level {
         return Err(ContentError::InvalidRecord("mapping level"));
+    }
+    if let Some((logical_len, extent_count)) = expected_root {
+        if node.logical_len() != logical_len || node.extent_count() != extent_count {
+            return Err(ContentError::InvalidRecord("mapping coverage"));
+        }
     }
     match node {
         ExtentNode::Leaf { extents, .. } => {
@@ -205,6 +225,7 @@ fn descend(
                     previous,
                     range,
                     wave,
+                    None,
                 )?;
                 previous = end;
             }

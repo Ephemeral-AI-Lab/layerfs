@@ -189,6 +189,11 @@ fn plan_lane(
     if contribution <= capacities.pack_limit {
         return Ok((PackLane::WholeFile, compact));
     }
+    // The compact record lost. It is released before the singleton record is
+    // built, so the two candidate records are never live together: at the largest
+    // accepted record that overlap would be two ~16 MiB allocations for one
+    // object, and only one of them is written.
+    drop(compact);
     let record = record::encode(PackLane::Singleton, raw_length, base, frame)?;
     let contribution = HEADER_LEN + DIRECTORY_ENTRY_LEN + record.len() + 8;
     if contribution > capacities.singleton_pack_limit {

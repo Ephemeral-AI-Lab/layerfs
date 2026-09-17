@@ -17,6 +17,8 @@ use layerfs_content::inode_leaf::{
 };
 use layerfs_content::ObjectId;
 
+use std::collections::BTreeSet;
+
 use crate::error::{StorageError, StorageResult};
 use crate::policy::METADATA_RECORD_LIMIT;
 
@@ -111,9 +113,12 @@ pub fn canonical_length(rows: usize) -> StorageResult<usize> {
 /// Distinct ordinals a body refers to, in first-encounter order.
 pub fn ordinals(body: &[u8]) -> StorageResult<Vec<u32>> {
     let (_, rows) = decode_pooled_body(body)?;
+    // The returned order is first-encounter order, so the accumulator stays a
+    // vector; membership is asked of a set instead of a linear scan of it.
+    let mut seen: BTreeSet<u32> = BTreeSet::new();
     let mut ordinals: Vec<u32> = Vec::new();
     for row in &rows {
-        if !ordinals.contains(&row.ordinal) {
+        if seen.insert(row.ordinal) {
             ordinals.push(row.ordinal);
         }
     }

@@ -33,12 +33,15 @@ pub struct ValueGroupRow {
 /// Next ordinal a new value group starts at when the Store holds no group.
 const FIRST_ORDINAL: u32 = 1;
 
-/// Highest ordinal already assigned plus one.
+/// Exclusive end of the assigned ordinal space, as an integer wide enough to hold
+/// the end of a full catalogue (`2^32`).
 ///
 /// Only rows whose start is within one group width of the maximum can reach the
 /// end, so the exact `MAX(first_ordinal + count)` is found without scanning the
-/// catalogue; the schema bounds every count to one group width.
-pub fn next_ordinal(connection: &Connection) -> StorageResult<u32> {
+/// catalogue; the schema bounds every count to one group width. This is the
+/// *cursor* reading: a synchronizing reader needs the end of the space even when
+/// no further ordinal can be assigned, so the ceiling is not an error here.
+pub fn ordinal_end(connection: &Connection) -> StorageResult<u64> {
     let next: i64 = connection.query_row(
         "SELECT COALESCE(MAX(first_ordinal + count), ?1) FROM metadata_value_groups \
          WHERE first_ordinal > (SELECT MAX(first_ordinal) FROM metadata_value_groups) - ?2",
@@ -48,7 +51,19 @@ pub fn next_ordinal(connection: &Connection) -> StorageResult<u32> {
     if !(i64::from(FIRST_ORDINAL)..=i64::from(u32::MAX) + 1).contains(&next) {
         return Err(StorageError::Integrity("metadata ordinal maximum"));
     }
-    Ok(next as u32)
+    Ok(next as u64)
+}
+
+/// Ordinal a new value group may start at, refusing an exhausted space.
+///
+/// The ordinal column is a `u32`, so the exclusive end of a full catalogue
+/// (`2^32`) is not assignable. Naming that here makes the ceiling report itself:
+/// before this check the end value was truncated to `0` by the cast, and the
+/// caller stored a group at ordinal zero, which failed later as an unrelated
+/// "metadata group row" or "metadata index chronology" integrity error.
+pub fn next_ordinal(connection: &Connection) -> StorageResult<u32> {
+    u32::try_from(ordinal_end(connection)?)
+        .map_err(|_| StorageError::Integrity("metadata ordinal maximum"))
 }
 
 /// Inserts one catalogue row inside the caller's open transaction.

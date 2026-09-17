@@ -63,14 +63,6 @@ pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
 pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
 /// Rows removed by one bounded cleanup page.
 pub const CLEANUP_PAGE_ROWS: usize = 128;
-/// Largest whole-file payload accepted at the default cutoff.
-pub const WHOLE_FILE_RAW_LIMIT: usize = 131_071;
-/// Largest accepted whole-file codec frame at the default cutoff.
-pub const WHOLE_FILE_FRAME_LIMIT: usize = 135_168;
-/// Largest chunk payload accepted by the frozen CDC profile.
-pub const CHUNK_RAW_LIMIT: usize = 32_768;
-/// Largest accepted chunk codec frame.
-pub const CHUNK_FRAME_LIMIT: usize = 33_024;
 /// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
 /// bytes-role envelope and the 10-byte whole-file value header. The chunk lane's
 /// equivalent is 21 bytes, because a chunk value carries only its eight-byte
@@ -88,12 +80,6 @@ pub const VALUES_PER_GROUP: usize = 165;
 pub const METADATA_GROUP_LIMIT: usize = 16 * 1024;
 /// Rows in one pooled metadata leaf.
 pub const POOLED_LEAF_ROWS_LIMIT: usize = 100;
-/// Canonical prefix of a pooled metadata leaf: envelope plus node header.
-pub const POOLED_LEAF_PREFIX: usize = 44;
-/// Canonical bytes of one pooled value row.
-pub const POOLED_VALUE_BYTES: usize = 81;
-/// Physical bytes of one pooled value row.
-pub const POOLED_PHYSICAL_ROW: usize = 12;
 
 /// Chain-work budgets. These are separate from the cutoff and the depths: a
 /// deeper chain is still bounded by the bytes it may decode and encode.

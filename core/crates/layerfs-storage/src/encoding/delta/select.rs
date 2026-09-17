@@ -188,8 +188,14 @@ pub struct SelectInput<'a> {
 /// back to the admitted-FULL winner cache only when no listed candidate is
 /// acquired. A `CHUNK` object considers the first eligible listed candidate and
 /// never the cache: its correspondence is already known by the caller.
+///
+/// `id` is the canonical bytes' identity, which the caller already holds on the
+/// finalized object it is admitting. Deriving it here instead would re-hash the
+/// whole canonical object - up to a megabyte - once for every cache update on the
+/// path, which is work the save has already paid exactly once.
 pub fn select(
     input: &mut SelectInput<'_>,
+    id: ObjectId,
     canonical: &[u8],
     role: ObjectRole,
     advisory: &[ObjectId],
@@ -213,10 +219,9 @@ pub fn select(
     let depth_cap = input.capacities.delta_depth_for_role(role);
     if depth_cap == 0 {
         if lane == PackLane::WholeFile {
-            input.candidates.insert(
-                ObjectId::for_bytes(canonical),
-                signature(raw_payload(canonical, role)?),
-            );
+            input
+                .candidates
+                .insert(id, signature(raw_payload(canonical, role)?));
         }
         return Ok(full);
     }
@@ -236,9 +241,7 @@ pub fn select(
         _ => match acquisition(input, role, advisory, depth_cap)? {
             Some(id) => Some(id),
             None => {
-                let found = input
-                    .candidates
-                    .find(ObjectId::for_bytes(canonical), &signature(raw));
+                let found = input.candidates.find(id, &signature(raw));
                 match found {
                     Some(id) => match probe(input, id, role, depth_cap)? {
                         true => Some(id),
@@ -252,9 +255,7 @@ pub fn select(
     let Some(base_id) = candidate else {
         input.counters.no_candidate = input.counters.no_candidate.saturating_add(1);
         if lane == PackLane::WholeFile {
-            input
-                .candidates
-                .insert(ObjectId::for_bytes(canonical), signature(raw));
+            input.candidates.insert(id, signature(raw));
         }
         return Ok(full);
     };
@@ -278,9 +279,7 @@ pub fn select(
     {
         input.counters.work_exceeded = input.counters.work_exceeded.saturating_add(1);
         if lane == PackLane::WholeFile {
-            input
-                .candidates
-                .insert(ObjectId::for_bytes(canonical), signature(raw));
+            input.candidates.insert(id, signature(raw));
         }
         return Ok(full);
     }
@@ -293,7 +292,7 @@ pub fn select(
             .cost_of(input.connection, base_id)?
             .ok_or(StorageError::Integrity("selected base is not stored"))?;
         input.depths.record(
-            ObjectId::for_bytes(canonical),
+            id,
             ChainCost {
                 depth: base_cost.depth.saturating_add(1),
                 canonical: base_cost.canonical.saturating_add(canonical.len() as u64),
@@ -304,9 +303,7 @@ pub fn select(
     } else {
         input.counters.full_losses = input.counters.full_losses.saturating_add(1);
         if lane == PackLane::WholeFile {
-            input
-                .candidates
-                .insert(ObjectId::for_bytes(canonical), signature(raw));
+            input.candidates.insert(id, signature(raw));
         }
         Ok(full)
     }

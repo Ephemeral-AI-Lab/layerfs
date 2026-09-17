@@ -293,3 +293,119 @@ fn the_retained_set_is_bounded_by_entries_not_by_file_size() {
         "retained {bytes} bytes exceeds one entry's worth per retained value"
     );
 }
+
+#[test]
+fn the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero() {
+    // The pooled ordinal column is a `u32` and the schema allows a group to end
+    // exactly at `2^32`. The exclusive end of a full catalogue is therefore not
+    // assignable, and the old accessor returned it through a `u32` cast, which is
+    // zero: the next group was inserted at ordinal zero and the failure surfaced
+    // later as an unrelated "metadata group row" or "metadata index chronology"
+    // integrity error. The ceiling now names itself.
+    use layerfs_storage::sqlite::connection::open as open_connection;
+    use layerfs_storage::sqlite::pool::{insert_group, next_ordinal, ordinal_end, ValueGroupRow};
+
+    let dir = TempDir::new("ordinal-ceiling");
+    let path = dir.store_path("ordinal");
+    let store = create_store(&path);
+    drop(store);
+    let connection = open_connection(&path, false).expect("connection");
+    connection
+        .execute(
+            "INSERT INTO object_packs (pack_id, data) VALUES (1, zeroblob(32))",
+            [],
+        )
+        .expect("pack row");
+    let digest = ObjectId::for_bytes(b"ordinal-ceiling");
+
+    // A catalogue that already reaches the last assignable ordinal: the cursor is
+    // `u32::MAX`, which is still a valid ordinal to hand out.
+    insert_group(
+        &connection,
+        &ValueGroupRow {
+            first_ordinal: u32::MAX - 1,
+            count: 1,
+            pack_id: 1,
+            group_number: 0,
+            digest,
+        },
+    )
+    .expect("a group ending at the last assignable ordinal");
+    assert_eq!(
+        ordinal_end(&connection).expect("end cursor"),
+        u64::from(u32::MAX)
+    );
+    assert_eq!(
+        next_ordinal(&connection).expect("the last ordinal is still free"),
+        u32::MAX,
+        "the last ordinal must still be handed out"
+    );
+
+    // A catalogue whose every ordinal is assigned: the cursor is one past the end
+    // of the space, which is not representable as an ordinal.
+    connection
+        .execute("DELETE FROM metadata_value_groups", [])
+        .expect("clear");
+    insert_group(
+        &connection,
+        &ValueGroupRow {
+            first_ordinal: u32::MAX,
+            count: 1,
+            pack_id: 1,
+            group_number: 0,
+            digest,
+        },
+    )
+    .expect("a group ending exactly at the ceiling");
+    assert_eq!(ordinal_end(&connection).expect("end cursor"), 1_u64 << 32);
+}
+
+#[test]
+fn the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason() {
+    use layerfs_storage::sqlite::connection::open as open_connection;
+    use layerfs_storage::sqlite::pool::{insert_group, next_ordinal, ValueGroupRow};
+
+    let dir = TempDir::new("ordinal-full");
+    let path = dir.store_path("ordinal");
+    let store = create_store(&path);
+    drop(store);
+    let connection = open_connection(&path, false).expect("connection");
+    connection
+        .execute(
+            "INSERT INTO object_packs (pack_id, data) VALUES (1, zeroblob(32))",
+            [],
+        )
+        .expect("pack row");
+    // A group that ends exactly at `2^32` exhausts the ordinal space.
+    insert_group(
+        &connection,
+        &ValueGroupRow {
+            first_ordinal: u32::MAX,
+            count: 1,
+            pack_id: 1,
+            group_number: 0,
+            digest: ObjectId::for_bytes(b"ordinal-full"),
+        },
+    )
+    .expect("group ending at the ceiling");
+    let error = next_ordinal(&connection).expect_err("the space is exhausted");
+    assert!(
+        matches!(error, StorageError::Integrity("metadata ordinal maximum")),
+        "the ceiling produced {error}"
+    );
+}
+
+#[test]
+fn one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by() {
+    // The per-save ordinal memo is bounded by one leaf's row count. A leaf at that
+    // exact bound is admitted, so the bound is a real ceiling and not an off-by-one
+    // refusal.
+    let dir = TempDir::new("index-full-leaf");
+    let path = dir.store_path("index");
+    let store = create_store(&path);
+    let values = (0..100).map(value).collect::<Vec<_>>();
+    let outcome = save_one(&store, leaf(&values)).expect("a full leaf is admitted");
+    assert_eq!(outcome.pool.leaves, 1);
+    assert_eq!(outcome.pool.new_values, 100);
+    assert_eq!(ordinals(&path), vec![(1, 100)]);
+}

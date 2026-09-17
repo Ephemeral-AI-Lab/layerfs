@@ -128,8 +128,22 @@ impl ConstructionPolicy {
     }
 
     /// Capacities derived from this policy by checked arithmetic.
+    ///
+    /// `new` is a `const fn` that accepts any candidate and `validated` is a
+    /// separate call, so this accessor can be reached with a policy nobody
+    /// accepted - including the zero cutoff in
+    /// [`ConstructionPolicy::new`]'s own documentation example. The whole-file
+    /// limit is therefore derived with a saturating subtraction and the invariant
+    /// `validated` enforces is asserted here: a debug build stops at the accessor
+    /// with the reason, instead of computing a wrapped limit, and a release build
+    /// gets capacities that fail closed on the first whole-file object rather
+    /// than a limit that underflowed.
     pub const fn capacities(self) -> ConstructionCapacities {
-        let raw = self.small_file_threshold_bytes as usize - 1;
+        debug_assert!(
+            self.small_file_threshold_bytes >= MINIMUM_SMALL_FILE_THRESHOLD_BYTES,
+            "capacities() requires a validated cutoff"
+        );
+        let raw = (self.small_file_threshold_bytes as usize).saturating_sub(1);
         let bound = conservative_frame_bound(raw);
         ConstructionCapacities {
             whole_file_raw_limit: raw,
@@ -138,10 +152,9 @@ impl ConstructionPolicy {
             } else {
                 DEFAULT_WHOLE_FILE_FRAME_LIMIT
             },
-            whole_file_canonical_limit: raw + WHOLE_FILE_CANONICAL_OVERHEAD,
+            whole_file_canonical_limit: raw.saturating_add(WHOLE_FILE_CANONICAL_OVERHEAD),
             chunk_raw_limit: crate::file::cdc::MAXIMUM_CHUNK_BYTES,
             chunk_minimum_raw: crate::file::cdc::MINIMUM_CHUNK_BYTES,
-            mapping_node_limit: 8_192,
             canonical_object_limit: MAX_CANONICAL_OBJECT_BYTES,
             stream_flush_entries: MAX_MAPPING_ENTRIES + STREAM_FLUSH_HEADROOM,
             whole_file_delta_max_depth: self.whole_file_delta_max_depth,
@@ -213,8 +226,6 @@ pub struct ConstructionCapacities {
     pub chunk_raw_limit: usize,
     /// Smallest chunk payload accepted by the frozen CDC profile.
     pub chunk_minimum_raw: usize,
-    /// Largest canonical mapping node object.
-    pub mapping_node_limit: usize,
     /// Largest canonical object of any role.
     pub canonical_object_limit: usize,
     /// Entry count that triggers a streaming flush of a full mapping page.

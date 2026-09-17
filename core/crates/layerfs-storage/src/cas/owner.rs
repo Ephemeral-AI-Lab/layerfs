@@ -26,6 +26,18 @@ use std::collections::BTreeMap;
 /// Soft group target: a group is sealed once the next record would pass it.
 const GROUP_TARGET: usize = 48 * 1024;
 
+/// Distinct values the pooled lane's per-save ordinal memo may hold at once.
+///
+/// Owner: one save operation's pooled lane. Bound: this many `(value, ordinal)`
+/// entries. Live multiplicity: one map per save. Lifetime: one leaf - the map is
+/// reset once that leaf's value groups are written, because the catalogue rows
+/// and the retained index window answer those values from then on. Release:
+/// cleared per leaf, and dropped with the operation. Worst case is therefore one
+/// leaf's worth of values: `POOLED_LEAF_ROWS_LIMIT` (100) entries of a 73-byte
+/// key, a `u32` value and a `BTreeMap` node share, about 12 KiB. A leaf that
+/// somehow offered more fails closed rather than growing the map.
+const PENDING_VALUES_LIMIT: usize = crate::policy::POOLED_LEAF_ROWS_LIMIT;
+
 /// One record waiting for its group to be framed and placed.
 ///
 /// Only identifiers and lengths are retained, never the payload: a group is bounded
@@ -119,7 +131,9 @@ pub struct MutationOwner {
     pool_index: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
     /// Bounded pooled-value reader used while synchronizing the index.
     pool_reader: crate::encoding::pool::PoolReader,
-    /// Ordinals assigned by this save but not yet visible to the index.
+    /// Ordinals this save assigned that the retained window does not answer yet.
+    ///
+    /// Bounded and reset per leaf; see `PENDING_VALUES_LIMIT`.
     pending_values: BTreeMap<[u8; 73], u32>,
     /// Next ordinal this save may assign.
     next_ordinal: Option<u32>,
@@ -403,6 +417,7 @@ impl MutationOwner {
         };
         select(
             &mut input,
+            object.id(),
             object.canonical(),
             object.role(),
             advisory,
@@ -442,6 +457,36 @@ impl MutationOwner {
         use layerfs_content::inode_leaf::{pooled_body, INODE_VALUE_BYTES};
         self.sync_pool_index()?;
         let leaf = layerfs_content::inode_leaf::InodeLeaf::decode(object.canonical())?;
+        // One batch demand for every distinct value of this leaf that the save's
+        // own memo cannot answer, in first-encounter order. Asking per row cost
+        // one point query per row; the index is a batch API.
+        let mut unknown: Vec<[u8; INODE_VALUE_BYTES]> = Vec::new();
+        let mut seen: std::collections::BTreeSet<[u8; INODE_VALUE_BYTES]> =
+            std::collections::BTreeSet::new();
+        for row in &leaf.rows {
+            if !self.pending_values.contains_key(&row.value) && seen.insert(row.value) {
+                unknown.push(row.value);
+            }
+        }
+        let known: BTreeMap<[u8; INODE_VALUE_BYTES], u32> = if unknown.is_empty() {
+            BTreeMap::new()
+        } else {
+            let mut index = self
+                .pool_index
+                .lock()
+                .map_err(|_| StorageError::Integrity("pool index lock"))?;
+            // The owner's own ceiling, not an unbounded one: a catalogue row
+            // belonging to a pack this save has not published (and did not
+            // create) is refused here rather than resolved.
+            index.find(
+                &self.connection,
+                &self.capacities,
+                self.ceiling,
+                &mut self.pool_reader,
+                &mut self.decompression,
+                &unknown,
+            )?
+        };
         let mut ordinals = Vec::with_capacity(leaf.rows.len());
         let mut fresh: Vec<[u8; INODE_VALUE_BYTES]> = Vec::new();
         for row in &leaf.rows {
@@ -450,43 +495,36 @@ impl MutationOwner {
                     self.pool.reused_values += 1;
                     *ordinal
                 }
-                None => {
-                    let known = {
-                        let mut index = self
-                            .pool_index
-                            .lock()
-                            .map_err(|_| StorageError::Integrity("pool index lock"))?;
-                        // The owner's own ceiling, not an unbounded one: a
-                        // catalogue row belonging to a pack this save has not
-                        // published (and did not create) is refused here rather
-                        // than resolved.
-                        index.find(
-                            &self.connection,
-                            &self.capacities,
-                            self.ceiling,
-                            &mut self.pool_reader,
-                            &mut self.decompression,
-                            std::slice::from_ref(&row.value),
-                        )?
-                    };
-                    match known.get(&row.value).copied() {
-                        Some(ordinal) => {
-                            self.pool.reused_values += 1;
-                            ordinal
-                        }
-                        None => {
-                            let ordinal = self.assign_ordinal()?;
-                            self.pending_values.insert(row.value, ordinal);
-                            fresh.push(row.value);
-                            self.pool.new_values += 1;
-                            ordinal
-                        }
+                None => match known.get(&row.value).copied() {
+                    Some(ordinal) => {
+                        self.pool.reused_values += 1;
+                        ordinal
                     }
-                }
+                    None => {
+                        let ordinal = self.assign_ordinal()?;
+                        if self.pending_values.len() >= PENDING_VALUES_LIMIT {
+                            return Err(StorageError::Integrity("metadata pending values"));
+                        }
+                        self.pending_values.insert(row.value, ordinal);
+                        fresh.push(row.value);
+                        self.pool.new_values += 1;
+                        ordinal
+                    }
+                },
             };
             ordinals.push(ordinal);
         }
         self.write_value_groups(&fresh)?;
+        // The leaf's value groups are catalogue rows in this save's own open
+        // transaction, and the retained index window was told about them by
+        // `note_group`, so the memo has nothing left to answer: it is reset once
+        // per leaf. That is what bounds it - a leaf holds at most
+        // `POOLED_LEAF_ROWS_LIMIT` rows - instead of accumulating one entry per
+        // distinct value of the whole operation. A value whose window entry was
+        // evicted in the meantime resolves exactly as it does after a cold start:
+        // the index misses it and a duplicate physical value is stored, which the
+        // window's own eviction semantics already allow.
+        self.pending_values.clear();
         let body = pooled_body(object.canonical(), &ordinals)?;
         self.pool.leaves += 1;
         let full = crate::encoding::pool::leaf::encode_full(&body)?;

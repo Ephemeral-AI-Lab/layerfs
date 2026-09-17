@@ -96,14 +96,6 @@ impl PackLane {
         }
     }
 
-    /// Records one group of this lane may hold.
-    pub const fn records_per_group(self) -> usize {
-        match self {
-            Self::WholeFile | Self::PooledMetadata | Self::Singleton => 1,
-            Self::Ordinary | Self::Native => RECORD_COUNT_LIMIT,
-        }
-    }
-
     /// Largest assembled pack of this lane.
     pub const fn pack_limit(self) -> usize {
         match self {

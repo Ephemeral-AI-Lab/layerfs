@@ -172,7 +172,49 @@ pub fn build_group(
 }
 
 /// Assembles the selected groups into the exact pack bytes to write.
+///
+/// The groups stay borrowed: the caller retains them as the lane's open tail, so
+/// the assembled pack and the retained tail are live together by design. Use
+/// [`assemble_consuming`] when the caller is closing the pack instead, which
+/// releases each constituent body as it is copied.
 pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8>> {
+    let length = checked_pack_length(lane, groups)?;
+    let mut bytes = Vec::with_capacity(length);
+    write_header_and_directory(lane, groups, &mut bytes)?;
+    for group in groups {
+        append_body(lane, group, &mut bytes)?;
+    }
+    if bytes.len() != length {
+        return Err(StorageError::Integrity("assembled pack length"));
+    }
+    Ok(bytes)
+}
+
+/// Assembles the groups of a pack that is being closed, releasing each one.
+///
+/// The lane's retained open tail exists so that a later group can append to the
+/// pack without moving any group or record ordinal. A pack that is being *closed*
+/// needs no tail, so the caller hands its groups over and every constituent body
+/// is dropped as soon as it has been copied into the assembly. Peak live bytes
+/// are then the assembly plus the groups not yet copied - approximately one pack
+/// - instead of the assembly plus the whole retained tail.
+pub fn assemble_consuming(lane: PackLane, groups: Vec<EncodedGroup>) -> StorageResult<Vec<u8>> {
+    let length = checked_pack_length(lane, &groups)?;
+    let mut bytes = Vec::with_capacity(length);
+    write_header_and_directory(lane, &groups, &mut bytes)?;
+    // Bodies are appended in group order and each group is dropped at the end of
+    // its own iteration, so the released bytes are the ones already copied.
+    for group in groups {
+        append_body(lane, &group, &mut bytes)?;
+    }
+    if bytes.len() != length {
+        return Err(StorageError::Integrity("assembled pack length"));
+    }
+    Ok(bytes)
+}
+
+/// Validates a group set and returns the exact assembled length.
+fn checked_pack_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<usize> {
     if groups.is_empty() || groups.len() > lane.group_count_limit() {
         return Err(StorageError::Integrity("pack group count"));
     }
@@ -184,7 +226,31 @@ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8
             actual: length as u64,
         });
     }
-    let mut bytes = Vec::with_capacity(length);
+    Ok(length)
+}
+
+fn append_body(lane: PackLane, group: &EncodedGroup, bytes: &mut Vec<u8>) -> StorageResult<()> {
+    match lane {
+        PackLane::WholeFile => {
+            // The compact lane stores the record tag and the frame; the two
+            // little-endian length fields are dropped and re-derived from the
+            // canonical length recorded with the locator.
+            bytes.push(group.bytes[0]);
+            bytes.extend_from_slice(&group.bytes[1 + WHOLE_FILE_COMPACT_DROP..]);
+        }
+        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
+            bytes.extend_from_slice(&group.bytes);
+        }
+    }
+    Ok(())
+}
+
+/// Writes the pack header and the group directory.
+fn write_header_and_directory(
+    lane: PackLane,
+    groups: &[EncodedGroup],
+    bytes: &mut Vec<u8>,
+) -> StorageResult<()> {
     bytes.extend_from_slice(&PACK_MAGIC);
     bytes.extend_from_slice(&lane.version().to_le_bytes());
     bytes.extend_from_slice(
@@ -202,13 +268,6 @@ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8
                         .to_le_bytes(),
                 );
                 offset += group.bytes.len() - WHOLE_FILE_COMPACT_DROP;
-            }
-            for group in groups {
-                // The compact lane stores the record tag and the frame; the two
-                // little-endian length fields are dropped and re-derived from the
-                // canonical length recorded with the locator.
-                bytes.push(group.bytes[0]);
-                bytes.extend_from_slice(&group.bytes[1 + WHOLE_FILE_COMPACT_DROP..]);
             }
         }
         PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
@@ -240,13 +299,7 @@ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8
                 ]);
                 offset += group.bytes.len();
             }
-            for group in groups {
-                bytes.extend_from_slice(&group.bytes);
-            }
         }
     }
-    if bytes.len() != length {
-        return Err(StorageError::Integrity("assembled pack length"));
-    }
-    Ok(bytes)
+    Ok(())
 }

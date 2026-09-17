@@ -27,13 +27,24 @@ pub struct ExtentSlice {
 }
 
 impl ExtentSlice {
-    /// Checks that the slice is nonempty and cannot overflow its payload.
+    /// Checks that the slice is nonempty and lies inside a canonical chunk payload.
+    ///
+    /// The upper bound is the frozen chunk grammar's own raw maximum, not the
+    /// payload the slice happens to name: a chunk payload can never decode to
+    /// more than [`cdc::MAXIMUM_CHUNK_BYTES`] bytes, so a slice reaching past that
+    /// is unsatisfiable by every payload that could ever be named here. Checking
+    /// it while the slice is constructed rejects a forged or corrupt mapping page
+    /// at decode, instead of deferring the refusal to the read that first slices
+    /// the payload.
     pub fn new(
         payload_object_id: ObjectId,
         source_offset: u32,
         logical_length: u32,
     ) -> ContentResult<Self> {
-        if logical_length == 0 || source_offset.checked_add(logical_length).is_none() {
+        let end = source_offset
+            .checked_add(logical_length)
+            .ok_or(ContentError::InvalidRecord("extent slice"))?;
+        if logical_length == 0 || end > crate::file::cdc::MAXIMUM_CHUNK_BYTES as u32 {
             return Err(ContentError::InvalidRecord("extent slice"));
         }
         Ok(Self {

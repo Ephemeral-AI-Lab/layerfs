@@ -275,3 +275,39 @@ fn reading_a_store_that_was_removed_underneath_fails_cleanly() {
         "got {error:?}"
     );
 }
+
+#[test]
+fn cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement() {
+    // The pack rows carry the pack bodies. Deleting every remaining pack in one
+    // statement would dirty one journal page per 4096 deleted bytes inside a
+    // single MEMORY-journal transaction; the objects pass was already paged and
+    // charged, and this case pins the same discipline for the pack pass.
+    use layerfs_storage::sqlite::cleanup::abandon;
+    use layerfs_storage::sqlite::connection::open as open_connection;
+
+    let dir = TempDir::new("cleanup-paging");
+    let path = dir.store_path("cleanup");
+    let store = create_store(&path);
+    drop(store);
+    let connection = open_connection(&path, false).expect("connection");
+    let packs = 300_i64;
+    for pack_id in 1..=packs {
+        connection
+            .execute(
+                "INSERT INTO object_packs (pack_id, data) VALUES (?1, zeroblob(1024))",
+                [pack_id],
+            )
+            .expect("pack row");
+    }
+    let report = abandon(&connection, 0).expect("cleanup");
+    assert_eq!(report.packs, packs as u64, "every owned pack is removed");
+    assert!(
+        report.pages >= 3,
+        "300 pack rows of 1 KiB were deleted in {} page(s)",
+        report.pages
+    );
+    let remaining: i64 = connection
+        .query_row("SELECT COUNT(*) FROM object_packs", [], |row| row.get(0))
+        .expect("count");
+    assert_eq!(remaining, 0);
+}

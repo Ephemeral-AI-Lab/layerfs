@@ -7,7 +7,7 @@
 //! actually contains and existing group/record ordinals never move.
 
 use crate::error::{StorageError, StorageResult};
-use crate::pack::assemble;
+use crate::pack::assemble::{assemble, assemble_consuming};
 use crate::pack::layout::{append_fits, assembled_length, EncodedGroup, PackLane};
 
 /// One pack this save created and may still append to.
@@ -81,7 +81,10 @@ impl LanePlacement {
             };
             if !fits_open {
                 if let Some((pack_id, created, placed)) = pending.take() {
-                    writes.push(self.assemble_write(lane, pack_id, created, placed)?);
+                    // The open pack is full and is about to be replaced, so its
+                    // tail is dead: the assembly consumes the groups and releases
+                    // each body as it is copied instead of holding both.
+                    writes.push(self.assemble_write(lane, pack_id, created, placed, true)?);
                 }
                 let pack_id = *next_pack_id;
                 if pack_id <= 0 {
@@ -121,29 +124,38 @@ impl LanePlacement {
             });
         }
         if let Some((pack_id, created, placed)) = pending {
-            writes.push(self.assemble_write(lane, pack_id, created, placed)?);
+            // This pack stays open: a later group may still append to it, so the
+            // tail is retained and the assembly borrows it.
+            writes.push(self.assemble_write(lane, pack_id, created, placed, false)?);
         }
         Ok(writes)
     }
 
+    /// Assembles the write for `pack_id`; `closing` releases the tail it drains.
     fn assemble_write(
-        &self,
+        &mut self,
         lane: PackLane,
         pack_id: i64,
         created: bool,
         placed: Vec<PlacedGroup>,
+        closing: bool,
     ) -> StorageResult<SelectedWrite> {
         let open = self
             .open
-            .as_ref()
+            .as_mut()
             .ok_or(StorageError::Integrity("placement state"))?;
         if open.pack_id != pack_id {
             return Err(StorageError::Integrity("placement pack identity"));
         }
+        let bytes = if closing {
+            assemble_consuming(lane, std::mem::take(&mut open.groups))?
+        } else {
+            assemble(lane, &open.groups)?
+        };
         Ok(SelectedWrite {
             pack_id,
             created: created && placed.first().is_some_and(|group| group.group_number == 0),
-            bytes: assemble(lane, &open.groups)?,
+            bytes,
             placed,
         })
     }

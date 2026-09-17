@@ -97,8 +97,6 @@ fn declared_pack_and_group_bounds_are_enforced_on_the_bytes() {
 fn the_lane_table_names_one_limit_per_lane() {
     assert_eq!(PackLane::Singleton.pack_limit(), 16 * 1024 * 1024 + 4_096);
     assert_eq!(PackLane::Ordinary.pack_limit(), 256 * 1024);
-    assert_eq!(PackLane::WholeFile.records_per_group(), 1);
-    assert_eq!(PackLane::PooledMetadata.records_per_group(), 1);
     assert_eq!(PackLane::Singleton.group_count_limit(), 1);
     assert_eq!(PackLane::PooledMetadata.body_limit(), 16 * 1024);
     for lane in PackLane::ALL {
@@ -230,4 +228,52 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
         matches!(error, StorageError::UnsupportedPolicy { field } if field == "pack framing version"),
         "v5 must be refused as an unsupported framing: {error}"
     );
+}
+
+#[test]
+fn closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes() {
+    // Placement closes a full pack by handing its groups to the consuming
+    // assembly, which releases each body as it copies it, and keeps the tail when
+    // the pack stays open. The two paths must produce byte-identical packs: the
+    // difference is when the constituent bodies are released, never what is
+    // written.
+    use layerfs_storage::encoding::CompressionWorkspace;
+    use layerfs_storage::pack::{assemble, assemble_consuming, build_group};
+
+    let mut workspace = CompressionWorkspace::new().expect("encode workspace");
+    for lane in [
+        PackLane::Ordinary,
+        PackLane::Native,
+        PackLane::WholeFile,
+        PackLane::PooledMetadata,
+        PackLane::Singleton,
+    ] {
+        let groups = match lane {
+            PackLane::WholeFile => {
+                vec![build_group(lane, &[vec![0x11; 4_096]], None).expect("compact group")]
+            }
+            PackLane::PooledMetadata => vec![
+                build_group(lane, &[vec![0x22; 512]], None).expect("pooled group"),
+                build_group(lane, &[vec![0x33; 256]], None).expect("pooled group"),
+            ],
+            PackLane::Singleton => {
+                vec![build_group(lane, &[vec![0x44; 32_768]], None).expect("singleton group")]
+            }
+            _ => vec![
+                build_group(
+                    lane,
+                    &[vec![0x55; 300], vec![0x66; 200]],
+                    Some(&mut workspace),
+                )
+                .expect("ordinary group"),
+                build_group(lane, &[vec![0x77; 1_024]], Some(&mut workspace))
+                    .expect("ordinary group"),
+                build_group(lane, &[vec![0x88; 4_096]], Some(&mut workspace))
+                    .expect("ordinary group"),
+            ],
+        };
+        let borrowed = assemble(lane, &groups).expect("retained-tail assembly");
+        let consumed = assemble_consuming(lane, groups).expect("consuming assembly");
+        assert_eq!(borrowed, consumed, "{lane:?}");
+    }
 }

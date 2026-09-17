@@ -178,7 +178,7 @@ fn repeated_identity_across_batches_reuses_without_rewriting() {
 }
 
 #[test]
-fn a_corrupted_stored_record_is_rejected_as_a_collision() {
+fn a_corrupted_stored_record_is_refused_before_its_identity_is_trusted() {
     let dir = TempDir::new("collision");
     let path = dir.store_path("collision");
     let bytes = patterned(6_000);
@@ -190,12 +190,14 @@ fn a_corrupted_stored_record_is_rejected_as_a_collision() {
 
     let reopened = open_store(&path);
     let error = save_all(&reopened, &collected).unwrap_err();
+    // Exact variant, not a union. The reviewed version accepted
+    // `Collision | Integrity` and named the case after the collision branch, but
+    // a tampered record never reaches an identity comparison: the record is a
+    // framed Zstandard payload and its own checksum refuses it first. Asserting
+    // that exact refusal keeps the case honest about which check it exercises.
     assert!(
-        matches!(
-            error,
-            StorageError::Collision(_) | StorageError::Integrity(_)
-        ),
-        "unexpected error: {error}"
+        matches!(error, StorageError::Integrity("Zstandard codec failure")),
+        "a tampered record produced {error}"
     );
 }
 

@@ -240,13 +240,25 @@ impl<'a> EditObjects<'a> {
     /// release of what the boundary work already disconnected, not a walk of the
     /// retained tree and not a prune pass over the mapping.
     pub fn settle(&mut self, live: NodeSummary) {
-        while let Some(id) = self
-            .detached
-            .iter()
-            .copied()
-            .find(|candidate| *candidate != live.id)
-        {
-            self.release(id);
+        // One pass collects every candidate the set holds, instead of restarting
+        // a linear scan from the beginning after each release - which was
+        // quadratic in the detached set. Releasing a draft can detach its
+        // children, so the passes repeat until the set only holds the result;
+        // each pass strictly reduces the number of live drafts, so the number of
+        // passes is bounded by the tree's depth.
+        while !self.detached.is_empty() {
+            let pending: Vec<ObjectId> = self
+                .detached
+                .iter()
+                .copied()
+                .filter(|candidate| *candidate != live.id)
+                .collect();
+            if pending.is_empty() {
+                return;
+            }
+            for id in pending {
+                self.release(id);
+            }
         }
     }
 

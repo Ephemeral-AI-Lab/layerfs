@@ -260,9 +260,12 @@ fn a_corrupt_intermediate_is_rejected_during_reconstruction() {
     support::corrupt_first_pack(&path);
     let reopened = open_store(&path);
     let error = read_objects(&reopened, &[ids[3]]).unwrap_err();
+    // Exact variant, not a union: the corrupt record is a framed Zstandard
+    // payload, so its own checksum refuses it before any identity comparison, and
+    // that is the refusal this case is about.
     assert!(
-        matches!(error, StorageError::Integrity(_) | StorageError::Engine(_)),
-        "got {error}"
+        matches!(error, StorageError::Integrity("Zstandard codec failure")),
+        "a corrupt intermediate produced {error}"
     );
 }
 

@@ -110,11 +110,25 @@ fn a_pooled_value_object_is_exactly_ninety_four_canonical_bytes() {
     // canonical object.
     let mut damaged = canonical.clone();
     damaged[13] ^= 0xff;
-    assert!(decode_pooled_value(&damaged).is_err());
+    assert!(matches!(
+        decode_pooled_value(&damaged),
+        Err(ContentError::InvalidRecord("pooled value framing"))
+    ));
     let mut payload = canonical;
     *payload.last_mut().expect("byte") ^= 0xff;
     assert!(decode_pooled_value(&payload).is_ok());
 }
+
+/// Canonical bytes of the envelope a value is carried in.
+///
+/// A value offset is a canonical offset plus this. The reviewed version of the
+/// case below patched `canonical[14]` and `canonical[13]` and called them "a wrong
+/// role tag" and "a count that disagrees with the row area": both are inside the
+/// envelope's magic, so those two cases only exercised envelope framing and the
+/// fields they named were never touched. They are patched at their real offsets
+/// here, and every refusal is asserted as its exact variant rather than as a bare
+/// `is_err()`.
+const ENVELOPE_LEN: usize = 13;
 
 #[test]
 fn malformed_leaves_are_rejected() {
@@ -124,51 +138,104 @@ fn malformed_leaves_are_rejected() {
     // Trailing bytes.
     let mut trailing = canonical.clone();
     trailing.push(0);
-    assert!(InodeLeaf::decode(&trailing).is_err());
+    assert!(matches!(
+        InodeLeaf::decode(&trailing),
+        Err(ContentError::TrailingBytes)
+    ));
 
-    // A wrong role tag.
+    // A wrong role tag: value byte 10.
     let mut role = canonical.clone();
-    role[10 + 4] = 8;
-    assert!(InodeLeaf::decode(&role).is_err());
+    role[ENVELOPE_LEN + 10] = 8;
+    assert!(matches!(
+        InodeLeaf::decode(&role),
+        Err(ContentError::InvalidRecord("inode leaf role/level"))
+    ));
 
-    // A count that disagrees with the row area.
+    // A count that disagrees with the subtree count in the same header: value
+    // bytes 13..15 against value bytes 15..23.
     let mut count = canonical.clone();
-    count[13] = 0;
-    count[14] = 5;
-    assert!(InodeLeaf::decode(&count).is_err());
+    count[ENVELOPE_LEN + 13] = 0;
+    count[ENVELOPE_LEN + 14] = 5;
+    assert!(matches!(
+        InodeLeaf::decode(&count),
+        Err(ContentError::NonCanonicalPagePartition)
+    ));
+
+    // A row area shorter than the header's count: the last row is cut away.
+    let mut short_rows = canonical.clone();
+    short_rows.truncate(short_rows.len() - 1);
+    assert!(matches!(
+        InodeLeaf::decode(&short_rows),
+        Err(ContentError::TrailingBytes | ContentError::UnexpectedEof)
+    ));
+
+    // The envelope's own magic, damaged: still refused, and as framing.
+    let mut magic = canonical.clone();
+    magic[ENVELOPE_LEN + 1] ^= 0xff;
+    assert!(matches!(
+        InodeLeaf::decode(&magic),
+        Err(ContentError::UnsupportedFraming)
+    ));
 
     // Out-of-order serials are rejected by the encoder and by a re-encode check.
     let mut unordered = original.clone();
     unordered.rows.swap(0, 1);
-    assert!(unordered.encode().is_err());
+    assert!(matches!(
+        unordered.encode(),
+        Err(ContentError::InvalidRecord("inode key order"))
+    ));
 
     // A zero serial is not a valid key.
     let mut zero = original.clone();
     zero.rows[0].serial = 0;
-    assert!(zero.encode().is_err());
+    assert!(matches!(
+        zero.encode(),
+        Err(ContentError::InvalidRecord("inode serial"))
+    ));
 
     // The subtree byte total must match the row count.
     let mut wrong_total = original.clone();
     wrong_total.subtree_bytes += 73;
-    assert!(wrong_total.encode().is_err());
+    assert!(matches!(
+        wrong_total.encode(),
+        Err(ContentError::LengthMismatch { .. })
+    ));
 
     // More rows than the profile allows.
     let big = leaf(MAXIMUM_LEAF_ROWS + 1);
-    assert!(big.encode().is_err());
+    assert!(matches!(
+        big.encode(),
+        Err(ContentError::NonCanonicalPagePartition)
+    ));
 
     // Zero rows is not a page.
     let empty = leaf(0);
-    assert!(empty.encode().is_err());
+    assert!(matches!(
+        empty.encode(),
+        Err(ContentError::NonCanonicalPagePartition)
+    ));
 }
 
 #[test]
 fn a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width() {
     let canonical = leaf(2).encode().expect("encodes");
-    assert!(pooled_body(&canonical, &[1, 0]).is_err());
-    assert!(pooled_body(&canonical, &[1]).is_err());
+    assert!(matches!(
+        pooled_body(&canonical, &[1, 0]),
+        Err(ContentError::InvalidRecord("pooled ordinal count"))
+    ));
+    assert!(matches!(
+        pooled_body(&canonical, &[1]),
+        Err(ContentError::InvalidRecord("pooled ordinal count"))
+    ));
     let mut body = pooled_body(&canonical, &[1, 2]).expect("body");
     body.push(0);
-    assert!(decode_pooled_body(&body).is_err());
+    assert!(matches!(
+        decode_pooled_body(&body),
+        Err(ContentError::InvalidRecord("pooled body rows"))
+    ));
     let short = vec![0_u8; POOLED_PREFIX_BYTES - 1];
-    assert!(decode_pooled_body(&short).is_err());
+    assert!(matches!(
+        decode_pooled_body(&short),
+        Err(ContentError::UnexpectedEof)
+    ));
 }
