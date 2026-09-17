@@ -1,0 +1,34 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.75s
+     Running tests/file_read.rs (core/target/debug/deps/file_read-349677dd17761237)
+
+running 12 tests
+test whole_file_root_rejects_a_range_beyond_its_payload ... ok
+test repeated_demands_of_one_payload_read_it_once_and_emit_it_every_time ... ok
+test empty_range_at_end_of_file_is_empty_and_at_eof_bound_is_allowed ... ok
+test out_of_bounds_and_inverted_ranges_fail ... ok
+test full_read_returns_exact_bytes_for_every_representation ... ok
+test a_provider_failure_is_returned_once_and_stops_the_read ... ok
+test a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode ... ok
+
+thread 'a_state_that_contradicts_its_root_page_is_refused_before_the_walk' panicked at crates/layerfs-content/tests/file_read.rs:383:6:
+called `Result::unwrap_err()` on an `Ok` value: ReadCounters { nodes_read: 1, payload_ids_read: 22, payload_batches_read: 1, max_payload_batch: 22, payload_bytes_read: 393216 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_state_that_contradicts_its_root_page_is_refused_before_the_walk ... FAILED
+test ranges_cross_extents_and_page_boundaries ... ok
+test a_wave_is_released_before_the_next_one_is_read ... ok
+
+thread 'a_state_that_overstates_its_mapping_is_refused_not_partly_served' panicked at crates/layerfs-content/tests/file_read.rs:351:6:
+called `Result::unwrap_err()` on an `Ok` value: ReadCounters { nodes_read: 3, payload_ids_read: 3, payload_batches_read: 2, max_payload_batch: 2, payload_bytes_read: 5242881 }
+test a_state_that_overstates_its_mapping_is_refused_not_partly_served ... FAILED
+test a_large_read_acquires_payloads_in_bounded_batches ... ok
+
+failures:
+
+failures:
+    a_state_that_contradicts_its_root_page_is_refused_before_the_walk
+    a_state_that_overstates_its_mapping_is_refused_not_partly_served
+
+test result: FAILED. 10 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.52s
+
+error: test failed, to rerun pass `-p layerfs-content --test file_read`

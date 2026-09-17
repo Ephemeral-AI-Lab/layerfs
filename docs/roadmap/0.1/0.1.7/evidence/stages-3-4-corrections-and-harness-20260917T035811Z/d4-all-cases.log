@@ -1,0 +1,25 @@
+case=small exit=0
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 65559 canonical bytes, patched 256 bytes at offset 16384, dependent 65559 canonical bytes
+a9e6591458c23bbc
+163840
+case=chunked exit=0
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 131094 canonical bytes, patched 256 bytes at offset 32767, dependent 131094 canonical bytes
+b59c7b24d91ad7d4
+294912
+case=small-to-large exit=0
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 131094 canonical bytes, patched 256 bytes at offset 32767, dependent 131094 canonical bytes
+b59c7b24d91ad7d4
+294912
+case=large-to-small exit=0
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 131094 canonical bytes, patched 256 bytes at offset 32767, dependent 131094 canonical bytes
+b59c7b24d91ad7d4
+294912
+case=batch exit=0
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 131094 canonical bytes, patched 256 bytes at offset 32767, dependent 131094 canonical bytes
+b59c7b24d91ad7d4
+294912

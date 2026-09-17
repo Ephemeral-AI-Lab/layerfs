@@ -109,13 +109,13 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G9 | Every significant allocation has owner, bound, multiplicity, lifetime and release event | W5, W7.3 | **PASS** | ledger in `w7/README.md` (15 owners, no unowned owner) and `w5/README.md` |
 | G10 | No size-proportional hidden collector remains on a real path | W5 | **PASS** | `w5/README.md`; catalogue streamed, placement measured not copied, every level flushed, both pack caches bounded, cleanup transactions bounded |
 | G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | **PASS** | `examples/memory_ledger.rs` + `w7/w7-verify.log`: 6 measured phases, sampled RSS at boundaries, lifetime RSS labelled |
-| G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | **PASS** | `w7/README.md`: pooled save at the E1b shape peaks at 3.45 MiB heap with index 57 600 B + 3 MiB codec workspaces + SQLite journal/BLOBs live |
+| G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | **PASS** (corrected 2026-09-17, C4/C5) | `w7/README.md`: a pooled save of a 24-leaf, 2 400-distinct-value fixture peaks at **3 450 007 B = 3.45 MB = 3.29 MiB** heap with index 57 600 B + 3 MiB codec workspaces + SQLite journal/BLOBs live. The row previously read "3.45 MiB" and "the E1b shape": E1b is 128 leaves with 227 distinct values, which this fixture is not |
 | G13 | Matched reference campaign collected under a pre-committed addendum with aligned byte accounting | W8 | **PASS (owner waiver, 2026-09-17)** | No campaign was collected and none is claimed; the row is accepted unmeasured by owner direction (E1, §1). The single matched pair remains a non-comparative diagnostic |
 | G14 | Every declared verification case is RUN or NOT_RUN with a reason | W8.4 | **PASS** | `stages-3-4-verification.md` §2.1: eleven declared cases mapped to the product case that executes them, two `NOT_RUN` with reasons, plus the new real `store-bytes` row (`w8/README.md`, `w8/w8-verify.log`) |
 | G15 | "Existing-or-better" for latency/storage/memory is resolved, or waived in writing | W8.6 | **PASS (owner waiver, 2026-09-17)** | Waived in writing by the owner (E1, §1); latency, storage and memory stay unqualified against v0.1.6 and no comparison is claimed. Stage 6 (#171) carries the qualification |
 | G16 | The clipped `e1c` receipt is re-collected or annotated wherever quoted | W8.7 | **PASS** | `w8/README.md`: the receipt is untouched, and the disclosure was added to the ledger (appended), `stages-3-4-verification.md` §4 and the final review's quoting table; re-collection is declined with the reason |
 | G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | **PASS** | `w9/README.md`; report §1/§7 corrected in place, §8 carries the plan's table, oracle paperwork fixed |
-| G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | **PASS** | `w9/README.md`: 956 over-removed lines and 4 083 test-module lines measured; combined 76 400; both snapshots counted by the corrected counter |
+| G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | **PASS** (restated 2026-09-17, C9) | `w9/README.md`: the batch measured 956 over-removed lines and 4 083 test-module lines (the independent 2026-09-16 review recounted **1 027** and **3 737**); both snapshots counted by the corrected counter. **At the batch tip the totals are core 11 058 / reference 65 417 / combined 76 475**; the W9 packet's 10 983 / 76 400 are that packet's own snapshot (`aa4b5a9e4`) and are not the batch total |
 | G19 | Limits boundary list run or explicitly unrun with reasons | W10 | **PASS** | `w10/README.md`; 13 boundaries, 12 run through public APIs with raw stdout in `w10/w10-verify.log`, the 8 MiB - 1 deferred refusal UNRUN with its source proof (408 MiB base floor) and its premise measured |
 | G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | **PASS** | eleven commits from `97414bac4` to `4d11de984` each carry exactly one first-parent `Production LOC:` line (checked with `git log --format=%B`); findings closure table in §2.1 |
 
@@ -126,7 +126,7 @@ recorded in §1 with exactly what the waiver does not claim. Stage 3 and Stage 4
 therefore complete **with the qualification deferred to Stage 6 (#171)**, and no
 performance, storage or memory comparison against v0.1.6 is asserted anywhere.
 
-### 2.1 Review findings closure (F1-F10)
+### 2.1 Review findings closure (F1-F10, and the 2026-09-16 review's F3)
 
 `stages-3-4-review-20260916T233008Z.md` grades its findings S1 (blocks an issue's
 own acceptance), S2 (real defect or real missing work) and S3 (documentation or
@@ -136,6 +136,7 @@ and where its proof lives:
 | Finding | Severity | Packet | Status and evidence |
 | --- | --- | --- | --- |
 | F1 CHUNK delta candidates skip the eligibility check | S1 | W1 | Closed: `select.rs` probe; three `delta_payload` cases, all three fail without the fix (`w1/README.md`, `w1/w1-fails-without-fix.log`) |
+| F3 no matched v0.1.6 campaign exists, so the three comparison axes have no artifact | S2 | W8, E1 | **Not closed by this batch, and recorded as such**: the owner waived the rows in writing (E1, §1) and Stage 6 (#171) carries the qualification; `stages-3-4-verification.md` §2.1 and §4, and §5.3 below, state that no campaign exists. This row was **absent from the table** until 2026-09-17 (C12) |
 | F1b the pooled lane reads above the publication watermark | S2 | W2 | Closed: four pooled read sites supply `self.ceiling`; structural and behavioural oracles, both fail without it (`w2/README.md`) |
 | F1c cold-start index replay materialises the whole catalogue | S2 | W5.1 | Closed: `pool::for_each_group` streams it and the recurrence keeps three scalars (`w5/README.md`) |
 | F2 checkpoint D's decoded frontier not implemented | S1 | W3, W10.1 | Closed: `Draft::Page`/`Draft::Node`, one encode/hash per node at final emission, release on supersession, plus the refcounted cascade W10.1 added after the ceiling case found the deeper leak (`w3/README.md`, `w10/README.md` §1) |
@@ -145,12 +146,28 @@ and where its proof lives:
 | F7 pack placement deep-clones the open pack per fit probe | S2 | W5.3 | Closed: `layout::append_fits` probes in place; `pack_locator` fit-probe equivalence (`w5/README.md`) |
 | F8 unbounded owners the ledger does not carry | S2 | W5, W7.3 | Closed: fifteen owners with bound, multiplicity, lifetime and release event; no unowned owner remains (`w5/README.md`, `w7/README.md`) |
 | F9 latent traps in the extended code | S3 | W6 | Closed: dead code deleted, traps removed or made explicit, deviations recorded (`w6/README.md`) |
-| F10 documented format/design deviations to confirm with the owner | S2 | W6.3, W6.4 | Addressed as far as the agent may go: both deviations are now recorded in the design document and the code, and the confirmation itself is the owner decision E2. No code change until it is answered (`w6/README.md`, `physical-encoding-and-packing.md`) |
+| F10 documented format/design deviations to confirm with the owner | S2 | W6.3, W6.4, E2 | **Open as a decision, closed as work the agent may do**: both deviations are recorded in the design document and in the code and pinned by a `physical_formats` case. The confirmation itself is the owner decision E2 and is unanswered; §6 records the escalation. No code change until it is answered (`w6/README.md`, `physical-encoding-and-packing.md`) |
 
-Eleven findings: two S1 (F1, F2) and six S2 (F1b, F1c, F4, F6, F7, F8) closed with
-a measured control run, a structural oracle, or the bounds and ledger work of W5 and
-W7.3; one S2 (F10) resolved into the recorded owner decision E2, with no code change
-until the owner answers; and two S3 documentation findings (F5, F9) closed.
+**Correction (2026-09-17, C12).** The table above has been amended, and the
+census is now stated against the rows rather than in prose. Three defects are
+repaired; the reader should know exactly which, because G20's second clause rests
+on this table.
+
+* **F3 (the measurement blocker) had no row at all.** The 2026-09-17 review
+  recorded that as F-21(g); it now has one, and its status is the honest one: this
+  batch did not close it, the owner waived the rows in writing, and Stage 6 (#171)
+  carries the qualification.
+* **The count did not match the table.** The heading said "Eleven findings" while
+  the table carried eleven rows *before* this correction — F1, F1b, F1c, F2, F4,
+  F5, F6, F7, F8, F9, F10 — and the review counted ten. This correction does not
+  arbitrate the one-row difference; it records both counts and states the row
+  census that can be checked: **twelve rows now**, F1, F1b, F1c, F2, F3, F4, F5,
+  F6, F7, F8, F9, F10, where F1b and F1c are the earlier review's own sub-findings
+  of F1 and are counted as separate rows because they were separate work packets.
+* **F10 was not unresolved so much as unlabelled.** Its status read "Addressed as
+  far as the agent may go". That is true and it is also not `Closed`: it is an
+  unanswered owner decision, and it is now written as **E2, unanswered** so no
+  reader takes it for a closed S2.
 
 ---
 
@@ -321,9 +338,16 @@ until the owner answers; and two S3 documentation findings (F5, F9) closed.
 * **W9.4** The file plan's required per-file table now lives in the report §8, with
   directory totals, disjoint package totals and the files that are not plan rows.
 * **W9.5** Both counter defects fixed with a focused tool test each; the same
-  corrected counter is applied to `c38961f2f` (core 6 152) and to the current tree
-  (core 10 983, reference 65 417, combined **76 400**). The over-removal is 956
-  lines and the test-module inflation 4 083 lines, both measured.
+  corrected counter is applied to `c38961f2f` (core 6 152) and to the tree this
+  packet was written against, `aa4b5a9e4` (core 10 983, reference 65 417, combined
+  **76 400**). **Correction (2026-09-17, C9):** those totals are that snapshot's,
+  not the batch's. The tip totals are core **11 058** in 75 files, reference
+  65 417, combined **76 475**, and a later commit's counter change moved the
+  reference subtotal from 68 476 to 65 417, so any combined figure quoted before
+  `6566a95a3` is stale by 3 059. The over-removal is 956 lines and the test-module
+  inflation 4 083 lines as this batch measured them; the independent 2026-09-16
+  review recounted **1 027** and **3 737** over the same rule, and both
+  measurements stand as their own.
 * **W9.6** `core/README.md`, the roadmap index, `implementation-plan.md`,
   `implementation-issues.md` and the experiment ledger (L33) carry the closeout.
 * **Evidence.** `w9/w9-verify.log` — 11 commands, all exit 0.
@@ -592,3 +616,89 @@ waiver is accurate about what it waives; it must not be read as a measurement.
 
 The remaining work is sequenced in
 [`stages-3-4-evidence-closeout-prompt.md`](`stages-3-4-evidence-closeout-prompt.md`).
+
+---
+
+## 6. Owner decisions, answered in writing (2026-09-17)
+
+Added by the completion round that closes the remaining items
+([`stages-3-4-final-completion-prompt.md`](stages-3-4-final-completion-prompt.md) §6).
+Three decisions were blocking. **One is answered by work, two remain the owner's
+and are recorded here as unanswered rather than answered on the owner's behalf** —
+which is the failure mode the 2026-09-17 review named as F-2, where the waiver
+existed only in agent-authored text.
+
+### E1 — the matched campaign: **not answered; the axes stay unqualified**
+
+No owner direction was received in this round, and this report does not invent one.
+What is recorded instead is the state a reader needs, plus the two texts the owner
+can adopt.
+
+* **Latency, storage and memory remain unmeasured against v0.1.6, at every n.** No
+  campaign exists; none is claimed; **#171 (Stage 6) is the carrying issue** if the
+  decision is to re-scope, and the previously recorded waiver still covers **G13 and
+  G15 only**. Nothing in this round's work upgrades them, and §5.3 stands unchanged.
+* **The prerequisites a campaign would need are now landed**, so the decision is
+  executable rather than blocked: telemetry clipping is a hard failure for a
+  measured row (D1), the tools print their own `wall_seconds` (D2), the worker
+  identity is recorded and its real status stated (D3), the C2 lane can no longer
+  be read as a per-case comparison (D4), both matched-pair executables are archived
+  by sha256 with identity files (D5), and the four packets without a control log are
+  labelled source-derived (D6). Receipts:
+  `evidence/stages-3-4-corrections-and-harness-20260917T035811Z/`.
+* **If the owner answers "no"**, the re-scope text to adopt is: *"Stages 3–4 close
+  with latency, storage and memory unqualified against v0.1.6 at every n. The
+  matched campaign is re-scoped to #171 (Stage 6), which carries it under its own
+  committed addendum; no comparison is claimed, no speedup is asserted, and no
+  gate that depended on one is upgraded. G13 and G15 stay PASS by the owner's
+  written waiver of 2026-09-17 and stay unmeasured."* The agent records this as a
+  **draft to be adopted**, not as an adopted decision.
+* **If the owner answers "yes"**, §7 of the completion prompt sequences the work:
+  the versioned addendum first, the aligned byte-accounting boundary, the
+  reference-side memory instrument, the sealed pair, then collection. None of it is
+  started here, and no sample may be taken before the addendum is committed.
+
+### E2 — the two format/design deviations: **not answered; still open**
+
+The deviations are real, recorded and pinned: pooled leaf records stay in the v1
+ordinary lane and are distinguished by `objects.object_role`; format version 5 is
+refused by scope. They are recorded in code, in
+[`physical-encoding-and-packing.md`](physical-encoding-and-packing.md) lines 270–284,
+and by the `physical_formats::the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones`
+case — which is the P-4 positive finding of the review. **The owner's confirmation
+was not received in this round**, so the decision is recorded as open, not as
+confirmed. No code change follows from it either way until it is answered.
+
+### A2 — #168 acceptance item 6: **met for the unclipped arms only, with the clipping stated**
+
+Not an owner decision, but it belongs in this section because it is the other
+half-answered acceptance item and the prompt that raised it defines exactly two
+acceptable outcomes. The clipped arm was **not** re-collected inside the budget, so
+item 6 is recorded as follows, in the form the closure table allows:
+
+> #168's item 6 ("independent timers and complete save/read evidence include all
+> real acquisition/encoding/packing/SQL work") is **met for the unclipped arms
+> only**. The `e1c-pooled-512` arm of the timing round remains **clipped**:
+> 57.46 % of its scope is unattributed (root 3 105 519 375 ns, retained children
+> 1 320 950 951 ns), its receipt is untouched and is never re-labelled, and it is
+> disclosed wherever it is quoted — the timing ledger, `stages-3-4-verification.md`
+> §4 and §8.5, and the W8 packet. No claim in this batch rests on that arm, and its
+> 3.155 s wall time is used only as budget accounting. Under D1 a run that clips now
+> **fails**, so the same arm cannot be collected again and read as a measured row:
+> `evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d1-clipped-run.log`
+> records the 512-leaf run exiting 1 with the named error instead of printing
+> `[incomplete]` and succeeding.
+
+### E3 — #169 acceptance item 2: **answered, and closed by evidence**
+
+This is the one decision the round could settle with work rather than direction.
+#168 and #169 were closed on 2026-09-17 at `02:15Z` on a waiver that does not
+mention read amplification, so item 2 needed either its case or a waiver naming it.
+**It has its case.** `edit_transitions::the_transition_reads_only_what_it_keeps_and_charges_it`
+and `edit_pipeline::a_transition_charges_only_the_retained_base_at_the_store` pass
+with six negative controls and twelve measured rows, and the verification registry
+row `read amplification on the representation transition` is flipped from `NOT_RUN`
+to `RUN` naming the receipt
+(`evidence/stages-3-4-read-amplification-20260917T034743Z/`,
+`stages-3-4-verification.md` §2.1 and §8.7). **No waiver is needed for this row and
+none is offered**, and the waiver that closed G13/G15 is not stretched to cover it.

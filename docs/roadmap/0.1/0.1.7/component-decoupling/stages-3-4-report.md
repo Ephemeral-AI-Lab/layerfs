@@ -137,24 +137,41 @@ and classification for every snapshot; before = the commit's first parent
 materialized with `git archive`, after = the staged or committed tree).
 
 ```text
-Production LOC (corrected counter, Stages 3-4 closeout commit)
-  core      10983   layerfs-content 4388, layerfs-storage 5863, layerfs-telemetry 732
+Production LOC (corrected counter, at the batch tip c56c28dd1)
+  core      11058   layerfs-content 4463, layerfs-storage 5863, layerfs-telemetry 732
   reference 65417   unchanged by this batch (coexistence, not removal)
-  combined  76400
+  combined  76475
+
+Production LOC (corrected counter, at this section's original snapshot aa4b5a9e4)
+  core      10983   layerfs-content 4388, layerfs-storage 5863, layerfs-telemetry 732
+  reference 65417   combined 76400
 ```
 
 **Correction (2026-09-17).** This section was written against `dfd54fd8e` and
 5 commits before the reviewed snapshot `91c3a0741`, and it quoted the counter's
 uncorrected reference subtotal. The independent review found two counter defects
 (`tools/production_loc.py`): any `#[cfg(...)]` merely *containing* "test" removed
-production code (**956** reference lines over-removed, measured), and test-only
-files reached by a `#[cfg(test)] mod x;` declaration were counted as product code
-(**4 083** lines, measured). Both are fixed, with a focused tool test for each
+production code (**956** reference lines over-removed as this batch measured it;
+the independent 2026-09-16 review recounted **1 027** over the same rule), and
+test-only files reached by a `#[cfg(test)] mod x;` declaration were counted as
+product code (**4 083** lines as this batch measured it; the review recounted
+**3 737**). **Corrected 2026-09-17 (C11):** the reviewed text attributed
+"956 / 4 083" to the earlier review; those are this batch's own measurements and the
+review's are the pair above. Both stand as their own measurement, and neither is
+re-labelled. Both defects are fixed, with a focused tool test for each
 defect, and the same corrected counter is applied to the pre-Stage-3 base
 (`c38961f2f`, core 6 152), to this snapshot and to every commit since. The core
 subtotal is unchanged by the fix: `core/crates/*/src` contains no `cfg` attribute
 at all. The corrected numbers at the closeout commit are the block above; the
 closeout report carries the same figures with the commands that produced them.
+
+**Correction (2026-09-17, C9).** The block above was the `aa4b5a9e4` (W9) snapshot's
+totals and the section presented them as the batch's. Both snapshots are now in the
+block, each labelled, and the tip is the one the batch closes on: core **11 058** in
+75 files, reference 65 417, combined **76 475**. A later commit's counter change
+(`6566a95a3`) also moved the reference subtotal from 68 476 to 65 417, so any
+combined figure quoted before it is stale by 3 059. Section 9.2 carries the same
+correction for the disjoint package table.
 
 Directory totals (production LOC; parent directories include their children):
 
@@ -175,12 +192,21 @@ Directory totals (production LOC; parent directories include their children):
 | `core/crates/layerfs-storage/sql/` | 48 |
 | `core/crates/layerfs-telemetry/src/` | 732 |
 
-Larger production files (production / physical): `cas/owner.rs` 710 / 890,
-`file/edit/tree.rs` 552 / 645, `encoding/codec.rs` 508 / 632, `file/cdc/gear.rs`
-494 / 538, `file/edit/apply.rs` 391 / 447, `cas/store.rs` 395 / 530,
-`pack/layout.rs` 381 / 466. Every production file is under the 999-line ceiling and
-every `lib.rs`/`mod.rs` is under 200 lines (`storage/src/lib.rs` 11 / 30 is the
-largest declaration file).
+Larger production files (production / physical) at this section's original
+snapshot: `cas/owner.rs` 710 / 890, `file/edit/tree.rs` 552 / 645,
+`encoding/codec.rs` 508 / 632, `file/cdc/gear.rs` 494 / 538,
+`file/edit/apply.rs` 391 / 447, `cas/store.rs` 395 / 530, `pack/layout.rs` 381 / 466.
+Every production file is under the 999-line ceiling and every `lib.rs`/`mod.rs` is
+under 200 lines (`storage/src/lib.rs` 11 / 30 is the largest declaration file).
+
+**Snapshot note (2026-09-17, C7).** Those figures belong to the snapshot this
+section was written against; the independent review measured the same two files at
+the reviewed tip as `cas/owner.rs` 911 and `file/edit/tree.rs` **901** physical
+lines, and at the time of this correction they are 949 and 913. The caps still
+hold, and the boundary guard (`python3 core/tools/check_product_boundary.py`)
+re-scans them on every round rather than relying on this table. Section 9's per-file
+table is the same snapshot's; its `file/edit/tree.rs` row states 805 physical lines,
+which is the W9 measurement, not the reviewed tip's 901.
 
 Per-commit production LOC for this batch (first parent → committed tree):
 
@@ -375,7 +401,9 @@ with their claims marked superseded.
   development/search tools for oracle generation and are never candidate
   dependencies.
 
-## 8. Per-file actual sizes (file-plan §4)
+## 9. Per-file actual sizes (file-plan §4)
+
+*(Renumbered from `## 8.` on 2026-09-17; see the note at the end of this section. The earlier `## 8. What was removed, retained, relocated, deferred` above keeps its number, so `§8.2` in older documents is now `§9.2`.)*
 
 The file plan's §4 requires this table: `path | action | before production LOC |
 actual after | signed delta | recommended final range | below/within/above |
@@ -383,7 +411,12 @@ physical lines | explanation and responsibility`. It was missing from this
 document; the independent review recorded the omission, and the table below is it,
 recomputed at the Stages 3-4 closeout commit with the **corrected** counter
 (`tools/production_loc.py`, applied identically to the pre-Stage-3 base
-`c38961f2f` and to the current tree).
+`c38961f2f` and to the current tree). **Snapshot note (2026-09-17, C7):** the
+"current tree" is the W9/`aa4b5a9e4` snapshot this table was computed against, not
+the batch tip and not the reviewed snapshot; the `file/edit/tree.rs` row below
+carries 805 physical lines where the reviewed tip measures 901 and this round
+measures 913. The table is retained as the W9 measurement, labelled, and the tip's
+per-file figures are the review's §3.1 and the boundary guard's scan.
 
 `before` is the plan's base column, which the review verified equals `c38961f2f`
 for these files. `after` is production LOC; `physical` is every physical line,
@@ -469,7 +502,7 @@ the same assessment.
 | `core/crates/layerfs-storage/src/encoding/codec/decode.rs` | New | 0 | — | — | 260–420 | merged or folded into a sibling (see the closeout report) | — | Frame checks, prefix lifetimes and bounded decompression |
 | `core/crates/layerfs-storage/src/pack/read.rs` | New | 0 | — | — | 100–190 | merged or folded into a sibling (see the closeout report) | — | Grouped body/record views; avoid repeated group decode |
 | `core/crates/layerfs-storage/src/pack/singleton.rs` | New | 0 | — | — | 90–160 | merged or folded into a sibling (see the closeout report) | — | Budget-checked consuming singleton assembly |
-| `core/crates/layerfs-content/src/file/edit/tree.rs` | Unplanned | 0 | 627 | +627 | — | unplanned addition | 805 | see the closeout report |
+| `core/crates/layerfs-content/src/file/edit/tree.rs` | Unplanned | 0 | 627 | +627 | — | unplanned addition | 805 *(W9 snapshot; 901 at the reviewed tip, 913 now — see the snapshot note)* | see the closeout report |
 | `core/crates/layerfs-telemetry/src/lib.rs` | Unplanned | 0 | 3 | +3 | — | unplanned addition | 16 | see the closeout report |
 | `core/crates/layerfs-telemetry/src/timer/format.rs` | Unplanned | 0 | 69 | +69 | — | unplanned addition | 82 | see the closeout report |
 | `core/crates/layerfs-telemetry/src/timer/json.rs` | Unplanned | 0 | 115 | +115 | — | unplanned addition | 136 | see the closeout report |
@@ -478,7 +511,7 @@ the same assessment.
 | `core/crates/layerfs-telemetry/src/timer/report.rs` | Unplanned | 0 | 170 | +170 | — | unplanned addition | 249 | see the closeout report |
 | `core/crates/layerfs-telemetry/src/timer/scope.rs` | Unplanned | 0 | 135 | +135 | — | unplanned addition | 206 | see the closeout report |
 
-### 8.1 Directory totals
+### 9.1 Directory totals
 
 | Directory | before | actual after | delta | recommended | verdict |
 | --- | ---: | ---: | ---: | --- | --- |
@@ -498,7 +531,26 @@ the same assessment.
 | `layerfs-storage/src/sqlite/` | 540 | 704 | +164 | 730–1230 | below |
 | `layerfs-storage/sql/` | 46 | 48 | +2 | 80–130 | below |
 
-### 8.2 Disjoint package totals at the closeout commit
+### 9.2 Disjoint package totals at the closeout commit
+
+**Correction (2026-09-17, C9).** This table certified core **10 983** / combined
+**76 400** — the `aa4b5a9e4` (W9) snapshot — while the batch tip and W10 say
+**11 058** / **76 475**. Both are recorded below, each against the snapshot it
+belongs to; the tip is the one the batch closes on.
+
+At the batch tip (`c56c28dd1`, the last product commit of Stages 3–4):
+
+| Scope | Production LOC | Files |
+| --- | ---: | ---: |
+| C1 `layerfs-content` | 4 463 | 29 |
+| C2 `layerfs-storage` including its 48 SQL LOC | 5 863 | 39 |
+| telemetry | 732 | 7 |
+| **core (three packages)** | **11 058** | **75** |
+| reference `crates/` (unchanged coexistence) | 65 417 | 193 |
+| **combined product** | **76 475** | **268** |
+
+For comparison, the same counter over the `aa4b5a9e4` snapshot this section was
+originally written against:
 
 | Scope | Production LOC | Files |
 | --- | ---: | ---: |
@@ -507,7 +559,7 @@ the same assessment.
 | telemetry | 732 | 7 |
 | **core (three packages)** | **10 983** | **75** |
 | reference `crates/` (unchanged coexistence) | 65 417 | 193 |
-| **combined product as reported** | **76 400** | **268** |
+| **combined product** | **76 400** | **268** |
 
 The reference subtotal is quoted with the corrected counter, which is the point of
 the W9.5 correction: the counter's uncorrected rule removed 956 shipped reference
@@ -516,14 +568,21 @@ are fixed and both are covered by a focused tool test. The core subtotal is
 unchanged by the correction, because `core/crates/*/src` contains no `cfg`
 attribute at all.
 
-### 8.3 Files that are not plan rows
+### 9.3 Files that are not plan rows
 
 The plan has 75 rows; 67 exist as planned, 8 were merged rather than created
 (`file/mapping/predecessor.rs`, `file/edit/frontier.rs`, `encoding/codec/{mod,
-profile,encode,decode}.rs`, `pack/read.rs`, `pack/singleton.rs`), and 8 files exist
-without a plan row (`object/inode_leaf.rs`, `file/edit/tree.rs`, `file/edit/split.rs`,
-`file/edit/concat.rs`, `file/edit/finish.rs`, `encoding/pool/*` — of which the pool
-directory has plan rows for its files — plus `sqlite/pool.rs` and `pack/layout.rs`
-extensions). The unplanned additions are in the table above with `Unplanned`; the
-review's §5.2 assessed the two with real weight (`file/edit/tree.rs`,
-`object/inode_leaf.rs`) and neither is a thin wrapper.
+profile,encode,decode}.rs`, `pack/read.rs`, `pack/singleton.rs`), and **one** file
+exists without a plan row: `file/edit/tree.rs`.
+
+**Correction (2026-09-17, C8).** The reviewed text listed eight files "without a
+plan row". Six of them **have** plan rows — `object/inode_leaf.rs`,
+`file/edit/split.rs`, `file/edit/concat.rs`, `file/edit/finish.rs`,
+`sqlite/pool.rs` and `pack/layout.rs` (`stages-3-4-file-plan.md:100,118,119,120,221,232`)
+— and `encoding/pool/*` has plan rows at `:214–219`, which the reviewed sentence
+half-conceded in a parenthesis. That list was therefore not a list of unplanned
+files but of files whose row it had failed to match. `file/edit/tree.rs` is the
+only genuine unplanned Stage 3–4 addition, and the independent review reached the
+same conclusion (F-21(b)). The unplanned addition is in the table above with
+`Unplanned`; the review's §5.2 assessed it and `object/inode_leaf.rs` as the two
+with real weight, and neither is a thin wrapper.

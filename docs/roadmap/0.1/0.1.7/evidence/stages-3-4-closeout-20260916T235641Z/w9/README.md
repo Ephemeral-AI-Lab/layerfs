@@ -76,7 +76,18 @@ Measured on the same tree with the same scanner:
 
 The same corrected counter is applied to the pre-Stage-3 base `c38961f2f`
 (core **6 152**: C1 2 336, C2 3 084, telemetry 732) and to the current tree
-(core **10 983**: C1 4 388, C2 5 863, telemetry 732); core grew +4 831. The core
+(core **10 983**: C1 4 388, C2 5 863, telemetry 732); core grew +4 831.
+
+**Correction (2026-09-17, C9) — applies to the totals above, not to their
+measurement.** Everything in this packet is measured at the snapshot it names, and
+none of these numbers was re-run or rewritten. What changes is how the totals may
+be read: `10 983` / `76 400` are **this packet's own tree**, `aa4b5a9e4`, and not
+the batch total. At the batch tip (`c56c28dd1`) the same counter reports core
+**11 058** in 75 files, reference 65 417, combined **76 475**. G18 and report §9.2
+quoted this packet's figures as the batch's and are corrected in place; the packet
+itself stands as the W9 measurement. The reference subtotal also moved once more
+after this packet, from 68 476 to 65 417 (`6566a95a3`), which is why any combined
+figure quoted before it is stale by 3 059. The core
 subtotal does not move with the correction, because `core/crates/*/src` contains no
 `cfg` attribute at all. No combined total is quoted anywhere in this batch without
 both scopes having been counted by the corrected counter.
@@ -106,3 +117,20 @@ and `git diff --check` - every command exit 0.
 * `stages-3-4-report.md`'s §8 table uses the plan's `before` column as its
   baseline; the per-file `before` values were not recomputed from `c38961f2f` file
   by file (the review verified the column matches the base for these files).
+
+## Control-log status (added 2026-09-17, D6)
+
+This packet retains **no `*-fails-without-fix` control log**. W1–W6 each retain
+one; W7, W8, W9 and W10 do not, so every margin this packet's oracles assert is
+**source-derived** rather than demonstrated to fail without its fix. The
+independent 2026-09-17 review recorded this as F-23 and counted the census in
+`evidence/stages-3-4-review-20260917T022248Z/packet-control-audit.txt`.
+
+They are labelled rather than repaired here. A control for these packets needs a
+patch that reinstates the defect each oracle guards — for W7 the memory ledger's
+charging path, for W10 the limits boundary list — and neither patch existed when
+this round ran. Writing one and reporting it as a control after the fact would be a
+receipt manufactured for the occasion, which the standing rules forbid; the honest
+alternative the review allows is this label. Gate G7's claim that "each new case
+fails without its fix" therefore holds for W1–W6 only, and the batch's own tracker
+says so (closeout report §2, G7 is scoped to W4 there; §6 records the gap).

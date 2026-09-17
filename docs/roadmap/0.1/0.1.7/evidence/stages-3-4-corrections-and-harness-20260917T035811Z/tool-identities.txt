@@ -1,0 +1,29 @@
+round: stages-3-4-corrections-and-harness-20260917T035811Z
+commit: (round taken on the working tree; committed immediately after as the
+  corrections-and-harness commit; the two example binaries below are the ones the
+  receipts in this directory were produced by)
+toolchain: cargo 1.85.1 (d73d2caf9 2024-12-31)
+
+The archive follows the house convention already used for the benchmark
+executable: a git-ignored `benchmark-results/host-store/binary-archive/<sha256>/`
+holding the exact binary plus a `<name>.identity.json` and a
+`<name>.archive-observation.json`. The evidence tree therefore carries the
+identity and the path, and not a multi-megabyte copy; the host holds the bytes.
+
+measure_pooled sha256=0eaa92cd9da41ab5f8f2efc5e6ddc93f53ee083e9323864284a2c6c3580e4bc9 bytes=5218016
+  archive: benchmark-results/host-store/binary-archive/0eaa92cd9da41ab5f8f2efc5e6ddc93f53ee083e9323864284a2c6c3580e4bc9/measure_pooled
+measure_edits sha256=a00607ce96ebfcd3196cb55e3d50cd60c57f9e3988f33e9b3113aa4ed94eed02 bytes=6047312
+  archive: benchmark-results/host-store/binary-archive/a00607ce96ebfcd3196cb55e3d50cd60c57f9e3988f33e9b3113aa4ed94eed02/measure_edits
+memory_ledger sha256=4e07cfdbf249f79f87cf35837e51fe5d65ee7b2477fc5c29997bd719af493b9e bytes=5481744
+  archive: benchmark-results/host-store/binary-archive/4e07cfdbf249f79f87cf35837e51fe5d65ee7b2477fc5c29997bd719af493b9e/memory_ledger
+rebuild (all three): cargo +1.85.1 build --manifest-path core/Cargo.toml --workspace --locked --examples
+
+Timing round (stages-3-4-timing-20260917T031000Z/tool-identities.txt) recorded:
+  measure_pooled d7e5c7856581e7026d27a7d4e37fd80c525fc39ad14cd67211e1f469fd7917f6
+  measure_edits  f7cdc5ff7a09013ba922457630fbbf5178f6fc221db4e55572fcebbf7ed43818
+Neither advances to any binary archived here, and neither can any more: those
+executables were rebuilt at 09:46 local on 2026-09-17 and no copy was kept. The
+timing round therefore stays source-identical but binary-unbound (F-8), and this
+archive seals the state from this round forward - it does not repair that round.
+Every receipt taken after this point must name one of these hashes, or the archive
+path of the binary it was taken with.

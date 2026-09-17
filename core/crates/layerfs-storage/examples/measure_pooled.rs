@@ -191,12 +191,27 @@ fn save_report(report: &TimingReport, path: &Path) -> Result<(), Failure> {
         path.display()
     );
     if report.is_incomplete() {
-        println!("timings: INCOMPLETE - detail was clipped, not zero");
+        // D1: a clipped tree is a hard failure for a measured row, not a note; the
+        // file stays on disk because receipts are never withdrawn.
+        return Err(format!(
+            "timings: INCOMPLETE - the node budget clipped this tree; the run is not a \
+             measured row and {} must not be quoted",
+            path.display()
+        )
+        .into());
     }
     Ok(())
 }
 
 fn main() -> Result<(), Failure> {
+    // D2: the whole-command wall time is printed by the tool itself.
+    let started = std::time::Instant::now();
+    let result = run();
+    println!("wall_seconds: {:.6}", started.elapsed().as_secs_f64());
+    result
+}
+
+fn run() -> Result<(), Failure> {
     let options = parse_options()?;
     let store_path = options.output.join("store.sqlite");
     let policy = StoragePolicy::new(1, 131_072, 8, 4).validated()?;

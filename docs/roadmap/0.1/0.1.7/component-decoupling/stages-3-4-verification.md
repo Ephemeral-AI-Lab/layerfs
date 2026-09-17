@@ -65,7 +65,7 @@ performance claim - these are correctness and footprint rows.
 | `singleton-1m` | `policy_capacity::a_larger_incompressible_whole_file_record_uses_the_singleton_lane`, `memory_bounds::the_supported_incompressible_singletons_are_stored_and_read_back`, `memory_bounds::a_complete_file_singleton_never_creates_a_payload_file` | RUN |
 | `store-bytes` | `memory_bounds::the_retained_footprint_reports_pack_bodies_and_database_bytes` | RUN (new in W8.4) |
 | matched v0.1.6 campaign (payload, storage, memory, latency gates) | none | **NOT_RUN** - the owner decision in the closeout report's E1 is open, so no addendum was committed and no matched arm was collected; see §4 |
-| read amplification on the representation transition | none | **NOT_RUN** - no case exists; the residual gap the acceptance report names, unmeasured in this batch |
+| read amplification on the representation transition | `edit_transitions::the_transition_reads_only_what_it_keeps_and_charges_it`, `edit_pipeline::a_transition_charges_only_the_retained_base_at_the_store` | RUN (2026-09-17, receipt `evidence/stages-3-4-read-amplification-20260917T034743Z/`; superseded from `NOT_RUN` by §8.7) |
 
 The `store-bytes` row is real, not a placeholder. One sample of a deterministic
 1 048 583-byte chunked fixture (`construct_file`), saved through a real `Store`, then
@@ -211,6 +211,39 @@ records what an audit of the retained receipts changed about how they may be rea
 6. **The matched-C1 pair's correctness conclusion is the part that holds**; its
    latency, storage and memory columns do not, for the reasons the ledger itself
    gives (interleaved observations, unaligned write boundaries, no instrumentation).
+7. **The read-amplification row is `RUN`, superseding item 2 above.** Item 2 of
+   this section graded the row `INCOMPLETE` against #169's acceptance item 2 while
+   no case existed; the case now exists and passes, so the registry row above is
+   flipped rather than left standing. The receipt is
+   [`evidence/stages-3-4-read-amplification-20260917T034743Z/`](../evidence/stages-3-4-read-amplification-20260917T034743Z/README.md),
+   collected at commit `841d9d2b1` with both executables archived by sha256, six
+   negative controls and the twelve measured rows quoted from its own raw log. The
+   accounted quantity is stated before the measurement: canonical bytes acquired
+   from the supplied provider per logical byte produced, with `EditCounters`
+   reported beside it and its *absence* on the whole-file and empty paths pinned
+   rather than reported as zero. Measured amplification is 0.333 for an insert,
+   1.06–1.19 for a delete that keeps an eighth of the file, 0.007–0.039 for a
+   512-byte in-place overwrite, and exactly one object (the file state) for a
+   complete deletion; 24/49/188 and 29/58/218 payload objects lying entirely
+   inside the discarded interval are left unread at the three cutoffs. This is
+   **not** a v0.1.6 comparison and does not touch G13/G15, which stay unmeasured.
+
+8. **The frozen single-worker identity is satisfied by construction, not by the
+   variable.** Added 2026-09-17 (D3). §1's line stands as frozen text, and this
+   entry records what it can and cannot be cited for. The variable is now exported
+   by the rounds that followed this entry — the D4 receipt in
+   `evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d4-c2-wiring.log`
+   records `export LAYERFS_CONSTRUCTION_WORKERS=1` in its own command line — so the
+   declared identity is at least recorded rather than asserted. But **no core source
+   reads the variable** (`grep -rn 'env::var' core/crates/*/src/` is empty and C1/C2
+   spawn no thread at all), so it cannot be an *enforced* condition: a run that
+   omitted it would behave identically. The property the line exists to protect —
+   one construction worker — therefore holds for these rounds **by construction**
+   (there is no worker to limit in either crate) and not because the environment was
+   set. §1's sentence must not be cited as an enforced condition of any receipt; the
+   workspace-side rule (`construction_worker_limit()` in
+   `crates/layerfs-workspace/src/changes.rs`) is the one that is actually wired, and
+   it governs the Workspace cases, none of which are in this batch.
 
 Sequencing of the remaining work:
 [`stages-3-4-evidence-closeout-prompt.md`](`stages-3-4-evidence-closeout-prompt.md`).

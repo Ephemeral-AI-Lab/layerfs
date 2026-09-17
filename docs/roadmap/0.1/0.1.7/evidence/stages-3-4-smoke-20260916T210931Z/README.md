@@ -31,11 +31,43 @@ copied from the run output.
 | c1 small | `8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798` | 65 536 | `file.edit` 2.551 ms (observed once) | n/a (DB-free) |
 | c2 small | n/a (supplied canonical objects) | 65 536 | `storage.save` 42.079 ms (observed once) | 65 559 bytes verified |
 | pipeline chunked | recorded in `pipeline/` | 262 144 | recorded in `pipeline/pipeline-edit-save.json` | verified byte-for-byte against the model |
-| pipeline small-to-large | `4fb197e6bda95fb1f877f41da2750ae2d80c3f6352a618d2a1bd0d318418b8e3` | 2 097 151 | `edit.save` 158.824 ms (observed once) | verified byte-for-byte against the model |
-| pipeline large-to-small | `5bdb5824866a79c78b79e140230c30eb16a61736a8d4c0df3e066406685c54e0` | 1 048 576 | `edit.save` 5.970 ms (observed once) | `verify.readback` 54.928 ms, verified |
+| pipeline small-to-large | `4fb197e6bda95fb1f877f41da2750ae2d80c3f6352a618d2a1bd0d318418b8e3` | 2 097 151 | `edit.save` **193.977 ms** (receipt below; the reviewed line read 158.824 ms) | verified byte-for-byte against the model |
+| pipeline large-to-small | `5bdb5824866a79c78b79e140230c30eb16a61736a8d4c0df3e066406685c54e0` | 1 048 576 | `edit.save` **5.970 ms** — this is the `shrink2` receipt (receipt below) | `verify.readback` **54.928 ms** — also `shrink2`, verified |
 | pipeline batch | recorded in `batch/` | 390 916 | recorded in `batch/pipeline-edit-save.json` | verified byte-for-byte against the model |
 
-The `large-to-small` run also shows the decomposition the contract asks for:
+### Correction (2026-09-17, applies to the table above)
+
+Two rows of the table quoted numbers the round's own receipts do not support. Both
+were reported earlier — as **E-D1** by the 2026-09-16 review
+(`stages-3-4-review-20260916T233008Z`, `evidence-audit.md:76,565`) and as **F-6** by
+the 2026-09-17 review — and neither had been corrected before this round.
+
+* **`edit.save` for `pipeline small-to-large` was quoted as 158.824 ms.** The
+  retained `grow/pipeline-edit-save.json:3` says `"elapsed_ns": 193977292`, i.e.
+  **193.977 ms**. The 158.824 ms figure has no receipt: the run's stdout was not
+  retained, so the number cannot be reproduced from anything on disk and is
+  withdrawn rather than re-labelled. The receipt value above is the one this
+  directory can support.
+* **The `large-to-small` row quoted the `shrink2` run under the `shrink` label.**
+  The two runs are separate directories with separate receipts:
+
+  | Run | `edit.save` | `verify.readback` |
+  | --- | ---: | ---: |
+  | `shrink/` | `6060625` ns = 6.061 ms | `54762208` ns = 54.762 ms |
+  | `shrink2/` | `5970333` ns = 5.970 ms | `54928042` ns = 54.928 ms |
+
+  The table above (and the decomposition below) quoted **5.970 ms** and
+  **54.928 ms**, which are `shrink2`'s numbers, under the `shrink` name. Both runs
+  remain on disk unchanged; the label, not the receipt, was wrong.
+
+No file in this directory was rewritten to make the numbers agree, and neither
+receipt was re-run or promoted. This round is admission-ineligible as a
+performance receipt (it was a wiring smoke run), so the correction is an
+evidence-hygiene fix and not a change to any claim.
+
+The `large-to-small` run also shows the decomposition the contract asks for. The
+decomposition below is `shrink2`'s, which is the run the quoted
+`edit.save 5.970ms` / `verify.readback 54.928ms` pair belongs to:
 
 ```text
 edit.save              5.970ms

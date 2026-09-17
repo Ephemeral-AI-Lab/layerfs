@@ -1,0 +1,6 @@
+control patch C: extent-slice grammar bound removed (types.rs)
+ core/crates/layerfs-content/src/file/mapping/types.rs | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+control patch D: next_ordinal truncating cast restored (sqlite/pool.rs)
+ core/crates/layerfs-storage/src/sqlite/pool.rs | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)

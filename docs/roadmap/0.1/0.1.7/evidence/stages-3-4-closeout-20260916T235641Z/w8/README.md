@@ -87,3 +87,20 @@ and G15 by written waiver, unmeasured, no flaw being open in the recorded audits
 deferred the qualification to Stage 6 (#171). Nothing in this directory changes: the
 registry, the store-bytes row and the clipping disclosure stand as collected, and the
 waiver claims no campaign, no comparison and no speed.
+
+## Control-log status (added 2026-09-17, D6)
+
+This packet retains **no `*-fails-without-fix` control log**. W1–W6 each retain
+one; W7, W8, W9 and W10 do not, so every margin this packet's oracles assert is
+**source-derived** rather than demonstrated to fail without its fix. The
+independent 2026-09-17 review recorded this as F-23 and counted the census in
+`evidence/stages-3-4-review-20260917T022248Z/packet-control-audit.txt`.
+
+They are labelled rather than repaired here. A control for these packets needs a
+patch that reinstates the defect each oracle guards — for W7 the memory ledger's
+charging path, for W10 the limits boundary list — and neither patch existed when
+this round ran. Writing one and reporting it as a control after the fact would be a
+receipt manufactured for the occasion, which the standing rules forbid; the honest
+alternative the review allows is this label. Gate G7's claim that "each new case
+fails without its fix" therefore holds for W1–W6 only, and the batch's own tracker
+says so (closeout report §2, G7 is scoped to W4 there; §6 records the gap).

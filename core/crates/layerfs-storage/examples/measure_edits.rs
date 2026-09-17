@@ -297,7 +297,17 @@ fn save_report(report: &TimingReport, path: &Path) -> Result<(), Failure> {
         path.display()
     );
     if report.is_incomplete() {
-        println!("timings: INCOMPLETE - detail was clipped, not zero");
+        // D1: a clipped tree is a hard failure for a measured row, not a note. A
+        // tree whose detail was dropped cannot be quoted as this run's work, and
+        // the node budget is what clips it, so the run reports the loss as its own
+        // failure instead of leaving a partial tree for a reader to trust. The
+        // file is still on disk: receipts are never withdrawn.
+        return Err(format!(
+            "timings: INCOMPLETE - the node budget clipped this tree; the run is not a \
+             measured row and {} must not be quoted",
+            path.display()
+        )
+        .into());
     }
     Ok(())
 }
@@ -314,6 +324,16 @@ fn render(report: &TimingReport) {
 }
 
 fn main() -> Result<(), Failure> {
+    // D2: the whole-command wall time is printed by the tool itself, so the
+    // per-command budget rule rests on a recorded metric rather than on an
+    // unrecorded wrapper.
+    let started = std::time::Instant::now();
+    let result = run();
+    println!("wall_seconds: {:.6}", started.elapsed().as_secs_f64());
+    result
+}
+
+fn run() -> Result<(), Failure> {
     let options = parse_options()?;
     let policy = ConstructionPolicy::new(options.threshold, 8, 4).validated()?;
     let fixture = fixture(options.case, options.threshold)?;
@@ -388,6 +408,18 @@ fn run_c1(
 
 /// C2 only: bounded supplied canonical objects through the real save and read.
 fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> Result<(), Failure> {
+    // D4: this lane is a **supplied-object wiring probe**, not a per-case
+    // comparison. It truncates the fixture to the whole-file raw limit and applies
+    // its own fixed patch, so `--case` selects the fixture the base is taken from
+    // and nothing else - four of the five `e2-c2-*` arms of the timing round wrote
+    // a byte-identical `store.sqlite` for exactly this reason. The banner and the
+    // stored-workload line below say so in the run's own output, so no reader can
+    // take two rows of this lane for two cases.
+    println!(
+        "c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored \
+         workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is \
+         not a per-case comparison"
+    );
     // Two bounded supplied whole-file objects: a base and a near copy. The near
     // copy carries the base as an explicit predecessor, so a PREFIX record can be
     // selected without constructing any file here.
@@ -400,6 +432,13 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     let patch = changed.len().saturating_sub(change).min(256);
     let filler = noise(patch);
     changed[change..change + patch].copy_from_slice(&filler);
+    let expected = layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?;
+    println!(
+        "stored workload: base {} canonical bytes, patched {patch} bytes at offset {change}, \
+         dependent {} canonical bytes",
+        layerfs_content::file::encode_whole_file(&policy.capacities(), base_raw)?.len(),
+        expected.len()
+    );
     let store_path = options.output.join("store.sqlite");
     let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
     type SaveResult = Result<(Store, Vec<Vec<u8>>), StorageError>;
@@ -438,7 +477,6 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     });
     let (store, values) = result?;
     println!("store: {}", store.path().display());
-    let expected = layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?;
     if values.len() != 1 || values[0] != expected {
         return Err("authenticated readback differs from the supplied object".into());
     }

@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-64a9908979aab1ab)
+
+running 6 tests
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+MEASURED read-amplification-store case=large-to-small base_payload_bytes=2099504 payload_acquired=84588 final_bytes=65536 exclusive_discarded=107 store_objects=8 store_packs_read=5 store_pages=5 store_edges=0 store_max_depth=0 store_canonical_bytes=0 store_ceiling=10 packs_in_store=10          packs_acquired=3 amplification_milli=1290
+test a_transition_charges_only_the_retained_base_at_the_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+

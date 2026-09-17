@@ -1,0 +1,41 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.32s
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-2500f92d7c396546)
+
+running 1 test
+
+thread 'cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement' panicked at crates/layerfs-storage/tests/persistence_failure.rs:304:5:
+300 pack rows of 1 KiB were deleted in 0 page(s)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... FAILED
+
+failures:
+
+failures:
+    cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-storage --test persistence_failure`
+---- cleanup exit: 101 ----
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 1 test
+
+thread 'one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by' panicked at crates/layerfs-storage/tests/metadata_pool_index.rs:407:51:
+a full leaf is admitted: Integrity("metadata pending values")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by ... FAILED
+
+failures:
+
+failures:
+    one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool_index`
+---- memo exit: 101 ----

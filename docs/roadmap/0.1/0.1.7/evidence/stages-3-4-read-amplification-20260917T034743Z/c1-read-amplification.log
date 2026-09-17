@@ -1,0 +1,26 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-c47a00f97272e149)
+
+running 7 tests
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+MEASURED read-amplification case=small-to-large-131072 base_payload_bytes=65559 acquired_bytes=65559 acquired_payload_bytes=65559 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=196608 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+test known_and_streamed_complete_lengths_agree ... ok
+test a_whole_file_result_reports_no_counters_and_that_is_recorded ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+MEASURED read-amplification case=large-to-small-131072 base_payload_bytes=524897 acquired_bytes=78083 acquired_payload_bytes=75569 acquired_node_bytes=2514 acquired_objects=7 exclusive_discarded=24 final_bytes=65536 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=1191
+MEASURED read-amplification case=to-empty-131072 base_payload_bytes=524897 acquired_bytes=106 acquired_payload_bytes=0 acquired_node_bytes=106 acquired_objects=1 exclusive_discarded=29 final_bytes=0 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=null
+MEASURED read-amplification case=in-place-131072 base_payload_bytes=524897 acquired_bytes=20474 acquired_payload_bytes=17854 acquired_node_bytes=2620 acquired_objects=3 exclusive_discarded=0 final_bytes=524288 nodes_read=7 nodes_created=1 payloads_created=1 peak_deferred_bytes=1768 amplification_milli=39
+MEASURED read-amplification case=small-to-large-262144 base_payload_bytes=131095 acquired_bytes=131095 acquired_payload_bytes=131095 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=393216 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+test exact_boundaries_at_every_accepted_cutoff ... ok
+MEASURED read-amplification case=large-to-small-262144 base_payload_bytes=1049794 acquired_bytes=154351 acquired_payload_bytes=149517 acquired_node_bytes=4834 acquired_objects=11 exclusive_discarded=49 final_bytes=131072 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=1177
+MEASURED read-amplification case=to-empty-262144 base_payload_bytes=1049794 acquired_bytes=106 acquired_payload_bytes=0 acquired_node_bytes=106 acquired_objects=1 exclusive_discarded=58 final_bytes=0 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=null
+MEASURED read-amplification case=in-place-262144 base_payload_bytes=1049794 acquired_bytes=29988 acquired_payload_bytes=25048 acquired_node_bytes=4940 acquired_objects=3 exclusive_discarded=0 final_bytes=1048576 nodes_read=7 nodes_created=1 payloads_created=1 peak_deferred_bytes=2928 amplification_milli=28
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+MEASURED read-amplification case=small-to-large-1048576 base_payload_bytes=524311 acquired_bytes=524311 acquired_payload_bytes=524311 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=1572864 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+MEASURED read-amplification case=large-to-small-1048576 base_payload_bytes=4198882 acquired_bytes=556746 acquired_payload_bytes=547552 acquired_node_bytes=9194 acquired_objects=34 exclusive_discarded=188 final_bytes=524288 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=1061
+MEASURED read-amplification case=to-empty-1048576 base_payload_bytes=4198882 acquired_bytes=106 acquired_payload_bytes=0 acquired_node_bytes=106 acquired_objects=1 exclusive_discarded=218 final_bytes=0 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=null
+MEASURED read-amplification case=in-place-1048576 base_payload_bytes=4198882 acquired_bytes=30992 acquired_payload_bytes=16528 acquired_node_bytes=14464 acquired_objects=5 exclusive_discarded=0 final_bytes=4194304 nodes_read=10 nodes_created=3 payloads_created=1 peak_deferred_bytes=9424 amplification_milli=7
+test the_transition_reads_only_what_it_keeps_and_charges_it ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
+

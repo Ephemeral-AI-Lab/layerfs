@@ -495,8 +495,13 @@ chronology rules. A final hash alone does not replace every dependency check.
 
 Metadata PoolRead shares bounded decoded values across a demand wave while each
 chain resets its work allowance. Preserve that distinction and its [existing limits](../../../../../crates/layerfs-layerstack-store/src/objects/metadata.rs#L466).
-Metadata currently has 16 edges and 128-KiB canonical closure with additional
-pool/acquisition work bounds. Work budgets are not extra allocation buckets.
+Metadata currently has 16 edges and a **65 536-byte canonical closure** with
+additional pool/acquisition work bounds. **Corrected 2026-09-17 (C10):** this
+sentence said "128-KiB canonical closure", which no constant supports. The source
+is `METADATA_CHAIN_CANONICAL_LIMIT = 8 * 8_192 = 65 536` and
+`METADATA_CHAIN_ENCODED_LIMIT = 17 * 8_193 = 139 281`
+(`core/crates/layerfs-storage/src/policy.rs`). Work budgets are not extra
+allocation buckets.
 
 Count simultaneous allocations, not unrelated maxima:
 

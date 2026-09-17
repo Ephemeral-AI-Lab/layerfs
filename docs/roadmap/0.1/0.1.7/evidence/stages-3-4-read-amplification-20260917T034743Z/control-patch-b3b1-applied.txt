@@ -1,0 +1,6 @@
+control patch E: cleanup pack delete restored to one statement
+ core/crates/layerfs-storage/src/sqlite/cleanup.rs | 58 +++--------------------
+ 1 file changed, 6 insertions(+), 52 deletions(-)
+control patch F: PENDING_VALUES_LIMIT lowered to 4
+ core/crates/layerfs-storage/src/cas/owner.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)

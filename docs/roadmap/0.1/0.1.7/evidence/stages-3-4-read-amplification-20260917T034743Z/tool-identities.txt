@@ -1,0 +1,27 @@
+round: stages-3-4-read-amplification-20260917T034743Z
+commit: 841d9d2b1d811745026719096d6b736bfe3fe567
+toolchain: cargo 1.85.1 (d73d2caf9 2024-12-31), rustc 1.85.1 (4eb161250 2025-03-15)
+host UTC: 2026-09-17T03:49:56Z
+
+The archive follows the house convention already used for the benchmark
+executable: a git-ignored `benchmark-results/host-store/binary-archive/<sha256>/`
+holding the exact binary plus a `<name>.identity.json` and a
+`<name>.archive-observation.json`. The evidence tree therefore carries the
+identity and the path, and not a multi-megabyte copy; the host holds the bytes.
+
+edit_transitions (C1 read-amplification case, target tests/edit_transitions.rs)
+  sha256: 647d766a11e1ec6805604060bab12a6ba5a478ed94646085fe1976e41fe27185
+  archive: benchmark-results/host-store/binary-archive/647d766a11e1ec6805604060bab12a6ba5a478ed94646085fe1976e41fe27185/edit_transitions
+  identity: .../647d766a11e1ec6805604060bab12a6ba5a478ed94646085fe1976e41fe27185/edit_transitions.identity.json
+  bytes: 2795104
+  rebuild: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-content --test edit_transitions --no-run
+
+edit_pipeline (C2 Store-charged read-amplification case, target tests/edit_pipeline.rs)
+  sha256: bd4dfc58356ce61bef076574fa6e3af55fd7f94d1f599e76c0548db0600da0c8
+  archive: benchmark-results/host-store/binary-archive/bd4dfc58356ce61bef076574fa6e3af55fd7f94d1f599e76c0548db0600da0c8/edit_pipeline
+  identity: .../bd4dfc58356ce61bef076574fa6e3af55fd7f94d1f599e76c0548db0600da0c8/edit_pipeline.identity.json
+  bytes: 6768192
+  rebuild: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-storage --test edit_pipeline --no-run
+
+This is what the previous timing round did not retain, which is why its tool
+identities now match nothing on disk.

@@ -220,7 +220,11 @@ fn pooled_leaf(first_serial: u64, values: &[[u8; INODE_VALUE_BYTES]]) -> Finaliz
 }
 
 fn main() {
-    if let Err(failure) = run() {
+    // D2: the whole-command wall time is printed by the tool itself.
+    let started = std::time::Instant::now();
+    let result = run();
+    println!("wall_seconds: {:.6}", started.elapsed().as_secs_f64());
+    if let Err(failure) = result {
         eprintln!("memory_ledger: {failure}");
         std::process::exit(1);
     }

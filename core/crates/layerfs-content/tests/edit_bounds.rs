@@ -326,6 +326,10 @@ fn the_retained_frontier_does_not_grow_with_the_edit_count() {
             "doubling the edit count doubled the frontier: {peaks:?}"
         );
     }
+    // The passing vector is printed rather than only described: it is the with-fix
+    // half of the control pair, and without this line it exists only as prose in
+    // the packet README, which is what the 2026-09-17 review recorded as F-19(b).
+    println!("MEASURED frontier peaks (bytes), 1/2/4/8/16 edits: {peaks:?}");
 }
 
 #[test]

@@ -1,0 +1,27 @@
+mode: c2
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 65559 canonical bytes, patched 256 bytes at offset 16384, dependent 65559 canonical bytes
+save: inserted 2 reused 0 prefix records 1 full records 1 trials 1
+store: /tmp/d4-c2/store.sqlite
+readback: verified 65559 canonical bytes through an independent read wave
+exclusions: no C1 file construction and no full-file object collection is timed
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+storage.save  37.780ms
+  store.create  6.663ms
+  storage.begin  6.470ms
+  storage.accept  6.667us
+    storage.batch  2.208us
+  storage.accept  584ns
+    storage.batch  166ns
+  storage.finish  13.607ms
+  storage.read  5.949ms
+    storage.decode  881.458us
+    storage.read  4.694ms
+timings: 11 nodes at 3 levels -> /tmp/d4-c2/c2-save.json
+wall_seconds: 0.048487
+exit: 0

@@ -1,0 +1,52 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.92s
+     Running tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-c47a00f97272e149)
+
+running 7 tests
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+MEASURED read-amplification case=small-to-large-131072 base_payload_bytes=65559 acquired_bytes=65559 acquired_payload_bytes=65559 acquired_node_bytes=0 acquired_objects=1 exclusive_discarded=0 final_bytes=196608 nodes_read=0 nodes_created=0 payloads_created=0 peak_deferred_bytes=0 amplification_milli=333
+test known_and_streamed_complete_lengths_agree ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test a_whole_file_result_reports_no_counters_and_that_is_recorded ... ok
+
+thread 'the_transition_reads_only_what_it_keeps_and_charges_it' panicked at crates/layerfs-content/tests/edit_transitions.rs:666:13:
+large -> small at 131072 acquired 600466 payload bytes for a 65536 byte result
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_transition_reads_only_what_it_keeps_and_charges_it ... FAILED
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+
+failures:
+
+failures:
+    the_transition_reads_only_what_it_keeps_and_charges_it
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_transitions`
+---- C1 exit: 101 ----
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-64a9908979aab1ab)
+
+running 6 tests
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+
+thread 'a_transition_charges_only_the_retained_base_at_the_store' panicked at crates/layerfs-storage/tests/edit_pipeline.rs:582:9:
+a payload entirely inside the discarded range was acquired from the Store
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_transition_charges_only_the_retained_base_at_the_store ... FAILED
+
+failures:
+
+failures:
+    a_transition_charges_only_the_retained_base_at_the_store
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+error: test failed, to rerun pass `-p layerfs-storage --test edit_pipeline`
+---- C2 exit: 101 ----

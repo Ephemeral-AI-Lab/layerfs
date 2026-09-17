@@ -115,6 +115,23 @@ Measured peaks (bytes), with the release rule in place: `[2208, 2288, 2448, 2768
 3408]` for 1/2/4/8/16 edits — the growth is the final page's own decoded size
 (two extents per overwrite), not the edit count.
 
+**Correction (2026-09-17, C6).** That vector had no raw receipt in this packet:
+`edit_bounds` prints peaks only when the bound fails, so the passing vector existed
+only as the prose above while the *control* vector was receipted
+(`w3/w3-fails-without-fix.log:12`). The 2026-09-17 review recorded this as F-19(b).
+The case now prints its vector unconditionally, and it was re-run at the batch tip
+into a fresh round:
+
+```text
+MEASURED frontier peaks (bytes), 1/2/4/8/16 edits: [2208, 2288, 2448, 2768, 3408]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 1.34s
+```
+
+Receipt: `evidence/stages-3-4-corrections-and-harness-20260917T035811Z/c6-frontier-vector.log`
+(command, exit and wall time in that directory's `commands.txt`). The reproduction
+confirms this packet's vector byte for byte; the number above is this packet's, the
+receipt is the tip's, and both are labelled.
+
 ## Control runs (`w3-fails-without-fix.log`)
 
 * **Control A — release removed** (`EditObjects::release` becomes a no-op):

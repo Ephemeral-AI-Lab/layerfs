@@ -1,0 +1,12 @@
+PASS: scanned 75 production Rust/SQL files; semantic review still required
+boundary exit: 0
+Ran 5 tests in 0.009s
+
+OK
+Ran 17 tests in 0.044s
+
+OK
+core        11160 production lines in   75 files
+reference   65417 production lines in  193 files
+combined    76577 production lines
+diff-check exit: 0

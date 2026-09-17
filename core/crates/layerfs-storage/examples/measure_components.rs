@@ -343,6 +343,14 @@ impl layerfs_content::FinalizedConsumer for VecConsumer<'_> {
 }
 
 fn main() -> Result<(), Failure> {
+    // D2: the whole-command wall time is printed by the tool itself.
+    let started = std::time::Instant::now();
+    let result = run();
+    println!("wall_seconds: {:.6}", started.elapsed().as_secs_f64());
+    result
+}
+
+fn run() -> Result<(), Failure> {
     let options = parse_options()?;
     let bytes = read_input(&options.input)?;
     println!("input: {} ({} bytes)", options.input.display(), bytes.len());

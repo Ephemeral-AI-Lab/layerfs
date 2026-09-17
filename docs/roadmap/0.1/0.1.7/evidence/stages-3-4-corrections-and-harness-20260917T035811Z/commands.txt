@@ -1,0 +1,65 @@
+round: stages-3-4-corrections-and-harness-20260917T035811Z
+host UTC at round start: 2026-09-17T03:58:11Z
+commit: 841d9d2b1d811745026719096d6b736bfe3fe567 (dirty: examples + docs, see the commit that follows)
+toolchain: cargo 1.85.1 (d73d2caf9 2024-12-31)
+
+=== D1: a clipped telemetry tree is a hard failure
+command: sh -c cd /Users/yifanxu/Ephemeral-AI-Lab/layerfs && ./core/target/debug/examples/measure_pooled --leaves 512 --rows 100 --output /tmp/d1-clip; echo "exit: $?"
+exit: 0
+wall_ms: 4687
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d1-clipped-run.log
+
+=== D2: wall_seconds printed by the tool, unclipped arm
+command: sh -c cd /Users/yifanxu/Ephemeral-AI-Lab/layerfs && ./core/target/debug/examples/measure_pooled --leaves 24 --rows 100 --output /tmp/d2-normal; echo "exit: $?"
+exit: 0
+wall_ms: 179
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d2-normal-pooled.log
+
+=== D4: the C2 lane states that --case selects the fixture only
+command: sh -c cd /Users/yifanxu/Ephemeral-AI-Lab/layerfs && export LAYERFS_CONSTRUCTION_WORKERS=1 && ./core/target/debug/examples/measure_edits --mode c2 --case small --threshold-bytes 131072 --output /tmp/d4-c2; echo "exit: $?"
+exit: 0
+wall_ms: 763
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d4-c2-wiring.log
+
+=== D4: the same lane on a different case stores the same workload
+command: sh -c cd /Users/yifanxu/Ephemeral-AI-Lab/layerfs && ./core/target/debug/examples/measure_edits --mode c2 --case large-to-small --threshold-bytes 131072 --output /tmp/d4-c2b; echo "exit: $?"
+exit: 0
+wall_ms: 78
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d4-c2-wiring-second-case.log
+
+=== D4: every --case through the C2 lane, with its stored workload and store hash
+command: sh -c cd /Users/yifanxu/Ephemeral-AI-Lab/layerfs && for c in small chunked small-to-large large-to-small batch; do rm -rf /tmp/d4-all/$c; ./core/target/debug/examples/measure_edits --mode c2 --case $c --threshold-bytes 131072 --output /tmp/d4-all/$c > /tmp/d4-all/$c.log 2>&1; echo "case=$c exit=$?"; grep "stored workload" /tmp/d4-all/$c.log; shasum -a 256 /tmp/d4-all/$c/store.sqlite | cut -c1-16; ls -l /tmp/d4-all/$c/store.sqlite | awk "{print \$5}"; done
+exit: 0
+wall_ms: 372
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/d4-all-cases.log
+
+=== C6: the with-fix frontier vector, receipted
+command: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-content --test edit_bounds the_retained_frontier_does_not_grow_with_the_edit_count -- --nocapture
+exit: 0
+wall_ms: 1633
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/c6-frontier-vector.log
+
+=== workspace test suite
+command: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked
+exit: 0
+wall_ms: 102776
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/tests.log
+
+=== workspace clippy -D warnings
+command: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+exit: 0
+wall_ms: 307
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/clippy.log
+
+=== rustfmt 1.96.0 check
+command: cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
+exit: 0
+wall_ms: 670
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/fmt.log
+
+=== boundary guard, tool suites, LOC, diff check
+command: sh -c python3 core/tools/check_product_boundary.py; echo "boundary exit: $?"; python3 -m unittest discover -s core/tools -p "test_*.py" 2>&1 | tail -3; python3 -m unittest discover -s tools -p "test_production_loc.py" 2>&1 | tail -3; python3 tools/production_loc.py; git diff --check; echo "diff-check exit: $?"
+exit: 0
+wall_ms: 6222
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-corrections-and-harness-20260917T035811Z/checks.log
+

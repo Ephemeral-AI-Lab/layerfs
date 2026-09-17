@@ -1,0 +1,41 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.62s
+     Running tests/file_read.rs (core/target/debug/deps/file_read-349677dd17761237)
+
+running 1 test
+
+thread 'a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode' panicked at crates/layerfs-content/tests/file_read.rs:429:5:
+an out-of-grammar slice produced length mismatch: recorded 262144, actual 245780
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode ... FAILED
+
+failures:
+
+failures:
+    a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p layerfs-content --test file_read`
+---- slice exit: 101 ----
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.11s
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 2 tests
+
+thread 'the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason' panicked at crates/layerfs-storage/tests/metadata_pool_index.rs:391:43:
+the space is exhausted: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason ... FAILED
+test the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero ... ok
+
+failures:
+
+failures:
+    the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool_index`
+---- ceiling exit: 101 ----

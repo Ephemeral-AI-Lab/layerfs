@@ -129,3 +129,20 @@ C2 `5863 -> 5863`, telemetry `732 -> 732`; reference `65417` unchanged, combined
 `76400 -> 76475`. All +75 are the frontier fix (`tree.rs`, `apply.rs`); the
 `POOLED_VALUE_CACHE_BYTES` move is net zero (one declared constant line added in
 `policy.rs`, one removed from `read.rs`, both counted as code).
+
+## Control-log status (added 2026-09-17, D6)
+
+This packet retains **no `*-fails-without-fix` control log**. W1–W6 each retain
+one; W7, W8, W9 and W10 do not, so every margin this packet's oracles assert is
+**source-derived** rather than demonstrated to fail without its fix. The
+independent 2026-09-17 review recorded this as F-23 and counted the census in
+`evidence/stages-3-4-review-20260917T022248Z/packet-control-audit.txt`.
+
+They are labelled rather than repaired here. A control for these packets needs a
+patch that reinstates the defect each oracle guards — for W7 the memory ledger's
+charging path, for W10 the limits boundary list — and neither patch existed when
+this round ran. Writing one and reporting it as a control after the fact would be a
+receipt manufactured for the occasion, which the standing rules forbid; the honest
+alternative the review allows is this label. Gate G7's claim that "each new case
+fails without its fix" therefore holds for W1–W6 only, and the batch's own tracker
+says so (closeout report §2, G7 is scoped to W4 there; §6 records the gap).

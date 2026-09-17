@@ -1,0 +1,65 @@
+round: stages-3-4-read-amplification-20260917T034743Z
+host UTC at round start: 2026-09-17T03:48:05Z
+commit: 841d9d2b1d811745026719096d6b736bfe3fe567
+toolchain: cargo 1.85.1 (d73d2caf9 2024-12-31)
+
+=== c1 read amplification (whole target)
+command: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-content --test edit_transitions -- --nocapture
+exit: 0
+wall_ms: 1969
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/c1-read-amplification.log
+
+=== c2 Store-charged read amplification (whole target)
+command: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-storage --test edit_pipeline -- --nocapture
+exit: 0
+wall_ms: 467
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/c2-read-amplification.log
+
+=== control A: read-amplification assertions without the localized read
+command: sh -c cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-content --test edit_transitions -- --nocapture; echo "---- C1 exit: $? ----"; cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-storage --test edit_pipeline -- --nocapture; echo "---- C2 exit: $? ----"
+exit: 0
+wall_ms: 4579
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/fails-without-fix.log
+
+=== control B: corrupt-root coverage assertions without the checks
+command: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-content --test file_read -- --nocapture
+exit: 101
+wall_ms: 3969
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/b5-fails-without-fix.log
+
+=== controls C and D: slice bound and ordinal ceiling
+command: sh -c cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-content --test file_read a_leaf_slice_outside_the_chunk_grammar -- --nocapture; echo "---- slice exit: $? ----"; cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-storage --test metadata_pool_index the_ordinal_ceiling -- --nocapture; echo "---- ceiling exit: $? ----"
+exit: 0
+wall_ms: 5407
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/b5b4-fails-without-fix.log
+
+=== controls E and F: cleanup paging and the pending-value guard
+command: sh -c cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-storage --test persistence_failure cleanup_pages_the_pack_rows -- --nocapture; echo "---- cleanup exit: $? ----"; cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked -p layerfs-storage --test metadata_pool_index one_leaf_may_hold_every_row -- --nocapture; echo "---- memo exit: $? ----"
+exit: 0
+wall_ms: 4292
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/b3b1-fails-without-fix.log
+
+=== workspace test suite
+command: cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked
+exit: 0
+wall_ms: 131987
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/tests.log
+
+=== workspace clippy -D warnings
+command: cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+exit: 0
+wall_ms: 1640
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/clippy.log
+
+=== rustfmt 1.96.0 check
+command: cargo +1.96.0 fmt --manifest-path core/Cargo.toml --all --check
+exit: 0
+wall_ms: 651
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/fmt.log
+
+=== boundary guard, tool suites, LOC, diff check
+command: sh -c python3 core/tools/check_product_boundary.py; echo "boundary exit: $?"; python3 -m unittest discover -s core/tools -p "test_*.py" 2>&1 | tail -3; python3 -m unittest discover -s tools -p "test_production_loc.py" 2>&1 | tail -3; python3 tools/production_loc.py; echo "loc exit: $?"; git diff --check; echo "diff-check exit: $?"
+exit: 0
+wall_ms: 6223
+log: docs/roadmap/0.1/0.1.7/evidence/stages-3-4-read-amplification-20260917T034743Z/checks.log
+
