@@ -790,6 +790,35 @@ fn the_cycle_check_work_limit_is_reachable_and_reported() {
         "the walk's entries are charged to the build: {:?}",
         built.counters.validation
     );
+    // The tight boundary, in the bindings the walk charges: a build stating
+    // exactly the ceiling is accepted and charges every stated entry, and one
+    // more is the first refusal. (The round-2 review first reported this as
+    // "4,095 accepted / 4,096 refused" counting only the files inside the
+    // built directory; two independent round-4 probes and this case pin the
+    // walk's own counting instead.)
+    let at_limit = build_wide(
+        limit,
+        layerfs_content::filesystem::scope_for_seed([0x6f; 32]),
+    )
+    .expect("a build stating exactly the ceiling is accepted");
+    assert_eq!(
+        at_limit.counters.validation.entries_examined, limit as u64,
+        "the accepted boundary build charges exactly the ceiling's entries: {:?}",
+        at_limit.counters.validation
+    );
+    let first_refused = build_wide(
+        limit + 1,
+        layerfs_content::filesystem::scope_for_seed([0x70; 32]),
+    );
+    assert!(
+        matches!(
+            first_refused,
+            Err(layerfs_content::ContentError::InvalidRecord(
+                "cycle check work limit"
+            ))
+        ),
+        "one binding over the ceiling is the first refusal: {first_refused:?}"
+    );
     let outcome = build_wide(
         limit + 512,
         layerfs_content::filesystem::scope_for_seed([0x6e; 32]),

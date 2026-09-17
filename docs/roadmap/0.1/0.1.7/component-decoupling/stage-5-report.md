@@ -197,10 +197,14 @@ after the commit, which is what the repository rule forbids.
 counter reproduces `18708 -> 18708 (delta 0)` - the delta is right, but the
 levels were copied from the preceding product commit's message
 (`2fe2a4642`, +58) instead of being re-run on `de648507b`'s own first parent.
-Every other commit from `f288d2af7` to this round's HEAD reproduces exactly
-(re-audited 2026-09-18: `6b7170e05`, `5e2a20a0c`, `2fe2a4642`, `afcb76c0e`,
-`9b58d1a17`, `5ca20eb92`, `a293c2a75`, `b069cb33a`, `6c00e0f53`, `9327f6695`,
-`134b8df73`, `99743b2cf`).
+Every other commit from `f288d2af7` to the closing tree reproduces exactly
+(re-audited 2026-09-18 across
+[`per-commit-loc-reread.log`](../evidence/stage-5-terminal-20260918T120000Z/per-commit-loc-reread.log),
+[`…-2.log`](../evidence/stage-5-terminal-20260918T120000Z/per-commit-loc-reread-2.log)
+covering `f288d2af7..99743b2cf`, and
+[`…-3.log`](../evidence/stage-5-terminal-20260918T120000Z/per-commit-loc-reread-3.log)
+covering `99743b2cf..HEAD`, including the closing falsifier's own recount of
+`bfd7abf2c`, `3ecb952c8` and the final tree).
 
 Two further disclosure defects, both stated here rather than repaired in history:
 
@@ -218,11 +222,17 @@ Two further disclosure defects, both stated here rather than repaired in history
 
 ### Totals of the tree that carries this correction (R2-F15)
 
-This section is stated at the round-4 tree, not at `b3df5461c`: C1 **11,922**,
-C2 **6,112**, telemetry **763**, core total **18,797**, reference unchanged at
-**65,417**, combined **84,214** (`tools/production_loc.py`, same counter and
-scope; the round-4 commits after `9327f6695` are documentation and evidence only,
-so the production totals do not move again in this round).
+Stated at the final round-4 tree (`4d887a6b9` and the closing remedies after it):
+C1 **11,917**, C2 **6,112**, telemetry **763**, core total **18,792**, reference
+unchanged at **65,417**, combined **84,209** (`tools/production_loc.py`, same
+counter and scope; reproduced by the closing falsifier's independent recount).
+The first version of this block, landed at `134b8df73`, stated 18,797 / 84,214
+and promised the production totals would not move again in the round; that
+promise was wrong - the verification-remedy commit `3ecb952c8` deleted the dead
+`4 MiB − 1` scratch twin and its accessor (−5 production lines), and the closing
+verification pass caught the stale headline as its finding F2 (the exact failure
+mode this row is about). Every per-commit disclosure in the round reproduces
+exactly; this block now states the tree that carries it.
 
 ## 3. Criteria and checkpoints
 
@@ -749,6 +759,43 @@ ascending sweep).
 | `verify-R2-F8-N6.md` | N-6, R2-F8, R2-F9 | PASS (code, docs, dead states, allocation test) |
 | `verify-R2-F8-scaling.md` | N-6 (scaling receipt) | the receipt reproduced: work counters identical to the review's pre-fix grid, amplification still superlinear with the O(n log n) reason stated |
 | `verify-TR5.md` | TR-5 | the coexistence receipt reproduced with the operation's own counters; scope/unit/counter per row; no process-level claim |
+| `verify-close-correctness.md` | Stage 5 CI/PS/SI/SC/WT/RA/OR | closing pass: all 41 rows CONFIRMED; the cited artifacts byte-unchanged since the review tree where claimed; falsification (golden bytes, multi-move cycles) positive |
+| `verify-close-reads-attributes.md` | Stage 5 RD/AT/C2/TR | closing pass: all groups CONFIRMED; AT-4 and RD-4 falsified live through the public API; TR-1 re-ran the examples; the extended §5 coexistence table matches the code |
+| `verify-close-evidence-limits.md` | Stage 5 VF + N | closing pass: CONFIRMED; VF-6's disposition verified and no complete-operation claim anywhere; all 19 §6 rows classed; the corrected walk figures reproduced by its own probe |
+| `verify-close-cumulative.md` | cumulative matrix + routes | closing pass: CONFIRMED (34 PASS + 2 owner-WAIVED of 36; waived rows unpromoted; routes green; the sixth follows VF-6) |
+| `verify-close-terminal-checklist.md` | handoff §8 items 1-10 | closing falsifier: items 1, 3, 4, 7, 10 satisfied; items 2, 6, 9 satisfied with six bookkeeping findings (F1-F6), all remediated below |
+
+The closing falsifier's six findings and their remedies (all bookkeeping; the
+falsifier itself confirmed every per-commit disclosure and every measurement
+receipt it checked reproduces exactly):
+
+- **F1** — §16's Stage 5 table displayed 84 row-equivalents (the cumulative
+  matrix's N-13 double-listed) against the stated denominator 83. Remedied: the
+  N-13 row is now annotated as a cumulative-matrix row counted only in that
+  denominator.
+- **F2** — §2's R2-F15 totals block stated 18,797 / 84,214 and promised no
+  further moves; the remedy commit's −5 dead-code deletion made the final tree
+  18,792 / 84,209. Remedied: the block now states the final figures and records
+  the failure it caught (the exact failure mode the row is about).
+- **F3** — the case-selection receipts covered 18/18 `measure_filesystem`
+  combinations but only 2/6 `filesystem_timing_c1` cases and 1/15
+  `measure_edits` combinations. Remedied: `case-selection-r4/` in the evidence
+  directory completes the matrix (all six `filesystem_timing_c1` cases, all
+  fifteen `measure_edits` case×mode combinations, each exit 0 with distinct
+  per-case work), and the N-1 row carries the coverage note, including the five
+  WP-A examples that have no `--case` flag to select.
+- **F4** — the LOC re-audit stopped at `99743b2cf`. Remedied:
+  `per-commit-loc-reread-3.log` audits every commit from there to the closing
+  tree (all reproduce exactly, including the owner's architecture commits).
+- **F5** — `head.txt` was refreshed mid-round (9327f6695 → 134b8df73) against
+  the README's "nothing was edited" letter. Remedied: the README now states the
+  identity files are tree pointers refreshed at the check-log commit to name
+  the tree the checks ran on; the receipts themselves are unedited.
+- **F6** — the walk ceiling's tight boundary (4,096 accepted / 4,097 refused)
+  rested on the verifier's probe, not a committed test. Remedied:
+  `the_cycle_check_work_limit_is_reachable_and_reported` now pins both sides of
+  the tight boundary and asserts the accepted build charges exactly the
+  ceiling's entries.
 
 ### Stage 5 matrix - final (denominator 83)
 
@@ -782,7 +829,7 @@ rows cite the round that remediated them and the verifier that confirmed it.
 | VF-6 | complete-operation comparison | **NOT_RUN - owner disposition** | deferred to Stage 6 (#171) by owner decision, recorded in addendum §6; not a waiver, not promoted; Stage 5 makes no complete-operation claim |
 | VF-7 | LOC census and plan accounting | PASS | §2 corrections; `verify-R2-F4-F15.md` |
 | VF-8 | oracle reproduced independently | PASS (round 2) | round-2 review §4.1 |
-| N-1 | every `--case`/`--mode` selects the claimed operation | PASS | `verify-R2-F1-F2-F3-F14.md` |
+| N-1 | every `--case`/`--mode` selects the claimed operation | PASS | `verify-R2-F1-F2-F3-F14.md`; the closing pass completed the receipt matrix (`case-selection-r4/`: all six `filesystem_timing_c1` cases and all fifteen `measure_edits` case×mode combinations, each exit 0 with distinct per-case work) - the three examples with a `--case` flag are fully receipted, and the five WP-A examples without the flag (`measure_components`, `measure_pooled`, `filesystem_primitives_candidate`, `edit_timing_c1`, `memory_ledger`) select nothing and claim nothing |
 | N-2 | per-commit LOC disclosure reproducible | PASS | correction record + re-audit receipts; `verify-R2-F4-F15.md` |
 | N-3 | addendum cites the eligible receipt | PASS | `verify-VF5-VF6-F5.md` |
 | N-4 | attribute value bound documented as enforced | PASS | `verify-R2-F6-AT4-F25.md` |
@@ -794,7 +841,7 @@ rows cite the round that remediated them and the verifier that confirmed it.
 | N-10 | a failed child reports a failed outcome | PASS | `verify-R2-F12-F13.md` |
 | N-11 | read wave has a declared byte ceiling | PASS | enforced at the payload wave with a refusal test; qualification recorded; `verify-N11-F21.md` |
 | N-12 | revision and payload reclamation | NOT_APPLICABLE | unchanged (no DELETE exists except failed-save cleanup; retention is a later owner's) |
-| **N-13** | `layerfs-storage` unsafe boundary | PASS | audited module boundary, deny elsewhere, guard-enforced, design note with the complete inventory; `verify-N13.md` |
+| **N-13** | `layerfs-storage` unsafe boundary (a cumulative-matrix row, shown here for completeness; counted in the cumulative denominator only, not in this table's 83) | PASS | audited module boundary, deny elsewhere, guard-enforced, design note with the complete inventory; `verify-N13.md` |
 
 **Stage 5 totals: 81 PASS, 0 FAIL, 0 PARTIAL/INCOMPLETE, 1 NOT_RUN with a
 written owner disposition (VF-6, deferred to Stage 6), 1 NOT_APPLICABLE (N-12),

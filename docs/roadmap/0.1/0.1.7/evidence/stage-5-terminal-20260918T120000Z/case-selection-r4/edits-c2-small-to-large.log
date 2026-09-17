@@ -1,0 +1,21 @@
+mode: c2
+case: small-to-large
+threshold-bytes: 131072
+timing: on
+fixture: base 131071 bytes, 1 edit(s), 131072 replacement bytes
+stream: 1 edit(s), base 131071 -> final 262143 bytes
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 131094 canonical bytes, patched 256 bytes at offset 32767, dependent 131094 canonical bytes
+preparation untimed: two whole-file objects encoded in 5115875 ns; only their admission is timed below
+save: inserted 2 reused 0 prefix records 0 full records 2 trials 0
+store: /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.RWsTC86ZpU/run/store.sqlite
+readback separately labelled elapsed_ns 6815250
+readback: verified 131094 canonical bytes through an independent read wave
+exclusions: no C1 file construction and no full-file object collection is timed; `storage.save` covers Store creation, the begin/accept/finish calls and nothing else
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+storage.save  21.220ms
+  store.create  3.348ms
+  storage.begin  2.136ms
+  storage.finish  15.399ms
+timings: 4 nodes at 2 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.RWsTC86ZpU/run/c2-save.json
+wall_seconds: 0.038459

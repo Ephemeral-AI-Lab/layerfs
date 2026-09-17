@@ -1,0 +1,37 @@
+mode: pipeline
+case: small-to-large
+threshold-bytes: 131072
+timing: on
+fixture: base 131071 bytes, 1 edit(s), 131072 replacement bytes
+stream: 1 edit(s), base 131071 -> final 262143 bytes
+base preparation (untimed): root e5298cc9f61b748e4628cb34c3ef94fee9504182aa8e0a5312f99f4a84e474e3 stored as 1 object(s), 1 pack(s)
+edited root: 451a46621d93dedb292e71d9a4a316c84f0e3804ae4d821f169fd96e146f1f0b
+edited length: 262143
+save: inserted 15 reused 3 packs 2 prefix records 0 full records 15
+readback bytes: 262143
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  23.224ms
+  storage.begin  1.949ms
+  file.edit  17.408ms
+    edit.base  7.020ms
+      edit.base_read  7.014ms
+    edit.compare  1.208us
+    content.chunk  10.274ms
+    edit.finish  105.041us
+  storage.finish  3.433ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  13.597ms
+  content.read  13.595ms
+    content.acquire  1.252ms
+    content.traverse  12.338ms
+      mapping.navigate  1.078ms
+        storage.decode  166ns
+        storage.read  893.292us
+      mapping.payload  11.222ms
+        storage.decode  125ns
+        storage.read  11.048ms
+timings: 9 nodes at 4 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.UWrvVDDdF5/run/pipeline-edit-save.json
+timings: 10 nodes at 5 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.UWrvVDDdF5/run/pipeline-readback.json
+wall_seconds: 0.058394

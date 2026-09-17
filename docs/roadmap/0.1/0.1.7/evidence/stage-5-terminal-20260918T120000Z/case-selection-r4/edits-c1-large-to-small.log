@@ -1,0 +1,24 @@
+mode: c1
+case: large-to-small
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 0 replacement bytes
+stream: 1 edit(s), base 262144 -> final 131072 bytes
+base root: 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d
+result root: 4148b0a15f376de13e49481270f7025689bd6e61b381e4a8ec296c752ada6813
+result length: 131072
+emitted: 2 objects, 510 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  109.833us
+  edit.op  106.625us
+    edit.base  15.750us
+      edit.base_read  13.292us
+    edit.compare  1.292us
+    edit.split  33.792us
+    edit.split  10.125us
+    edit.split  625ns
+    edit.finish  27.000us
+timings: 9 nodes at 4 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.TDHGGPbKmW/run/c1-edit.json
+wall_seconds: 0.015778

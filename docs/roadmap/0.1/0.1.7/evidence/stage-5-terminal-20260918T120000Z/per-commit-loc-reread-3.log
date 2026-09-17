@@ -1,0 +1,9 @@
+# Final-range per-commit LOC audit: every commit 99743b2cf..HEAD, run 2026-09-17T20:44:28Z
+# (extends per-commit-loc-reread-2.log, which stops at 99743b2cf - closing falsifier finding F4)
+# columns: commit recomputed-before -> recomputed-after (delta) | the commit message's own disclosure line
+3ecb952c8 18797->18792 -5 | Production LOC: 18797 -> 18792 (delta -5). Scope: core/crates/*/src plus
+1884e3eca 18792->18792 +0 | Production LOC: 18792 -> 18792 (delta 0). Scope: core/crates/*/src plus
+5b93c3184 18792->18792 +0 | Production LOC: 18792 -> 18792 (delta 0). Scope: core/crates/*/src plus
+680115bcd 18792->18792 +0 | Production LOC: 18792 -> 18792 (delta 0). Scope: core/crates/*/src plus shipped
+4d887a6b9 18792->18792 +0 | Production LOC: 18792 -> 18792 (delta 0). Scope: core/crates/*/src plus
+f3957dc76 18792->18792 +0 | Production LOC: 18792 -> 18792 (delta 0). Scope: core/crates/*/src plus shipped

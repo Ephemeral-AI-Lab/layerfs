@@ -1,0 +1,17 @@
+case hardlink-move
+root e21709c54dcfa9b8e122b06e4203e289953d402f983b84cb58e96eab6059ba33
+inode_table a2dbc5de8d969f27771051b56ed84ee90e427a055a633b5c577d3b5c9956e6f8
+directories 1 bindings +1 -0
+objects read 2 waves 2 bytes 423 emitted 3 bytes 567
+directories: pages read 1 created 1 reused 0 untouched 0 scratch peak 873 top-level 2
+inodes: pages read 1 created 1 reused 0 scratch peak 2856
+references: rows 3 spilled 0 values 3 removals 0 released 0 peak pending 3
+elapsed_ns 188500
+phase validate elapsed_ns 55417
+phase directories elapsed_ns 33750
+phase references elapsed_ns 1791
+phase inodes elapsed_ns 47125
+phase cleanup elapsed_ns 625
+phase root.encode elapsed_ns 6750
+report_nodes 7
+prepared_objects 8

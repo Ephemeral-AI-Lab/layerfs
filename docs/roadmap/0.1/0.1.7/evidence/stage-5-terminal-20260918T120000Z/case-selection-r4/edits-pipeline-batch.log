@@ -1,0 +1,47 @@
+mode: pipeline
+case: batch
+threshold-bytes: 131072
+timing: on
+fixture: base 196608 bytes, 3 edit(s), 1000 replacement bytes
+stream: 3 edit(s), base 196608 -> final 194308 bytes
+base preparation (untimed): root 9b67d5821a39fe14ddec724ab82b05dbb76c8bc99b9849dd5314ded1410c75b4 stored as 14 object(s), 2 pack(s)
+edited root: c887efb266fb423889ab26851d61652e52d017135fb4e6367530691c10383d84
+edited length: 194308
+save: inserted 4 reused 0 packs 2 prefix records 1 full records 3
+readback bytes: 194308
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  6.601ms
+  storage.begin  1.921ms
+  file.edit  2.311ms
+    edit.base  1.120ms
+      edit.base_read  1.116ms
+    edit.compare  1.375us
+    edit.split  1.032ms
+    edit.split  208ns
+    edit.split  1.291us
+    content.chunk  40.416us
+    edit.split  4.916us
+    edit.split  3.708us
+    edit.split  459ns
+    content.chunk  19.833us
+    edit.split  4.375us
+    edit.split  3.208us
+    edit.split  375ns
+    edit.finish  31.833us
+  storage.finish  2.305ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  12.855ms
+  content.read  12.853ms
+    content.acquire  1.043ms
+    content.traverse  11.807ms
+      mapping.navigate  1.043ms
+        storage.decode  167ns
+        storage.read  891.458us
+      mapping.payload  10.721ms
+        storage.decode  125ns
+        storage.read  10.565ms
+timings: 19 nodes at 4 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.BFciWcssxi/run/pipeline-edit-save.json
+timings: 10 nodes at 5 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.BFciWcssxi/run/pipeline-readback.json
+wall_seconds: 0.040929

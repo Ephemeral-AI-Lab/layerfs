@@ -1,0 +1,17 @@
+case inode-update
+root 5683171299b060ce04b2a0d0b814afd1a7f2e0d6cb3930017038e057896d205f
+inode_table 8e142c8f340da3fb187cc0f3646994bd383366dab6c0d6e8606138103c704f47
+directories 0 bindings +0 -0
+objects read 1 waves 1 bytes 368 emitted 2 bytes 497
+directories: pages read 0 created 0 reused 0 untouched 0 scratch peak 0 top-level 2
+inodes: pages read 1 created 1 reused 0 scratch peak 2856
+references: rows 1 spilled 0 values 1 removals 0 released 0 peak pending 1
+elapsed_ns 106333
+phase validate elapsed_ns 15292
+phase directories elapsed_ns 125
+phase references elapsed_ns 1542
+phase inodes elapsed_ns 50041
+phase cleanup elapsed_ns 791
+phase root.encode elapsed_ns 7000
+report_nodes 7
+prepared_objects 7

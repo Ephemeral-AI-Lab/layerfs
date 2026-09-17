@@ -7,7 +7,7 @@
 
 | | |
 | --- | --- |
-| Code tree | `9327f6695` (`head.txt`): `6c00e0f53` provider failures / pragma set / profile verification / unsafe boundary, `9327f6695` one reader per ordering tier |
+| Code tree | `6c00e0f53` provider failures / pragma set / profile verification / unsafe boundary, `9327f6695` one reader per ordering tier; `head.txt` is a tree pointer refreshed at the check-log commit to name `134b8df73`, the tree the check logs ran on; the closing tree is the final commit of this round |
 | Production LOC | core 18,708 → 18,797 (+89): C1 11,902 → 11,922 (+20), C2 6,043 → 6,112 (+69), telemetry 763 → 763 (0); reference 65,417 unchanged |
 | Rows claimed | `R2-F4`, `R2-F8`/`N-6`, `R2-F10`/`N-7`, `R2-F11`/`N-8`, `R2-F15`, `R2-F23`/`N-17`, `R2-F24`, `N-13`, `N-14`, `TR-5`, `F27` (info) |
 | Checks | the eight handoff §6 commands, logs `check-*.log`, run on the round's final tree |
@@ -26,7 +26,7 @@
 | `N-13` | `check-boundary.log`, `check-core-tools-tests.log` | `unsafe` is denied crate-wide in `layerfs-storage` and allowed on exactly the audited `encoding/codec.rs` (module doc carries the FFI inventory); the boundary guard rejects `unsafe` elsewhere in the crate and a storage `lib.rs` without the deny; the `forbid` deviation is recorded with the inventory in `physical-encoding-and-packing.md` |
 | `N-14` | `filesystem-tree.md` §9 | the caller-owned input bound declared as an explicit adapter obligation (protocol-level request ceiling, enforced by refusal); C1 claims no bound on caller-held input |
 | `R2-F11` / `N-8`, `F27` | `admission-and-persistence.md` | the SQL transaction row and the preparation-batch row stated as commit/flush triggers with the code's actual semantics; one maximal object may exceed the transaction figure alone |
-| `R2-F15` / `VF-7` | `stage-5-report.md` §2 | the report's headline states the totals of the tree that carries it (C1 11,922 / C2 6,112 / telemetry 763 / core 18,797 / combined 84,214) |
+| `R2-F15` / `VF-7` | `stage-5-report.md` §2 | the report's headline states the totals of the tree that carries it: C1 11,917 / C2 6,112 / telemetry 763 / core 18,792 / combined 84,209 (the first version of the block, landed at `134b8df73`, said 18,797 and was caught stale by the closing falsifier after the remedy commit's −5 dead-code deletion; the block now records that correction) |
 
 ## The diagnostics client
 
@@ -105,9 +105,33 @@ subagent reproduces it from these receipts or through the public entry points.
 
 ## Checks
 
-`check-*.log` hold the eight handoff §6 commands, each with its exit code, run on
-the round's final tree. `git-status.txt` and `head.txt` record the tree the
-receipts ran on.
+`check-*.log` hold the raw output of the eight handoff §6 commands run on the
+round's mid tree (`134b8df73`), and `check-final-*.log` the same commands on the
+closing tree; every command's exit code (all 0) is recorded in the landing
+commit messages and in `stage-5-report.md` §16's preamble. `git-status.txt` and
+`head.txt` are tree pointers, refreshed at the check-log commit to name the tree
+the checks ran on - that refresh is the one intentional edit to an existing file
+in this directory (closing falsifier finding F5); every receipt is unedited
+after it was written.
 
 No row is marked PASS by this directory. A row flips only when a verification
 subagent reproduces it from these receipts or through the public entry points.
+
+## The closing pass (2026-09-18)
+
+Five read-only closing verifiers covered the whole ledger on the final tree:
+`verify-close-correctness.md` (Stage 5 CI/PS/SI/SC/WT/RA/OR - all 41 rows
+confirmed, falsification positive), `verify-close-reads-attributes.md`
+(RD/AT/C2/TR - all confirmed, AT-4 and RD-4 falsified live through the public
+API), `verify-close-evidence-limits.md` (VF + N - confirmed, VF-6's disposition
+verified, all 19 §6 limits rows classed), `verify-close-cumulative.md`
+(34 PASS + 2 owner-WAIVED of 36, waived rows unpromoted, routes green), and
+`verify-close-terminal-checklist.md` (the handoff §8 falsifier - items 1, 3, 4,
+7, 10 satisfied; items 2, 6, 9 satisfied with six bookkeeping findings F1-F6,
+every one adjudicated and remediated: the §16 N-13 row annotation, the §2
+totals correction, the completed case-selection matrix in `case-selection-r4/`,
+the `per-commit-loc-reread-3.log` final-range audit, the identity-pointer
+disclosure above, and the committed tight walk-ceiling boundary test). The
+falsifier re-ran all eight §6 checks itself (all exit 0) and reproduced both
+measurement receipts number-for-number by rebuilding the diagnostics client.
+No behavioral or measurement defect was found by the closing pass.

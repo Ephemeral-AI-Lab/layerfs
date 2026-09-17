@@ -1,0 +1,33 @@
+mode: pipeline
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+base preparation (untimed): root 950a13bc1eb6c354370bdf5971770706139f7caf29021e6ee0ffdfb489428603 stored as 1 object(s), 1 pack(s)
+edited root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+edited length: 65536
+save: inserted 1 reused 0 packs 1 prefix records 1 full records 0
+readback bytes: 65536
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  11.860ms
+  storage.begin  2.117ms
+  file.edit  5.345ms
+    edit.base  4.129ms
+      edit.base_read  4.122ms
+    edit.compare  14.958us
+      edit.compare.window  2.375us
+    edit.assemble  6.292us
+    content.encode  6.334us
+    content.emit  1.625us
+  storage.finish  4.294ms
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  5.593ms
+  content.read  5.586ms
+    content.acquire  5.580ms
+    content.emit  2.667us
+timings: 11 nodes at 4 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.SmdZZtld90/run/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmp.SmdZZtld90/run/pipeline-readback.json
+wall_seconds: 0.030731
