@@ -79,3 +79,11 @@ separately with the same identities (W8.8), then resolve the gates.
   external test case and documentation only.
 * `stages-3-4-verification.md` §2.1, the ledger annotation, the §4 disclosure and
   the review correction named above.
+
+## Note added 2026-09-17 after the owner's waiver
+
+The section above describes the state while E1 was open. The owner then passed G13
+and G15 by written waiver, unmeasured, no flaw being open in the recorded audits, and
+deferred the qualification to Stage 6 (#171). Nothing in this directory changes: the
+registry, the store-bytes row and the clipping disclosure stand as collected, and the
+waiver claims no campaign, no comparison and no speed.

@@ -107,6 +107,10 @@ I/O. Command:
 ## 4. Current state of collection
 
 **No v0.1.6 comparison campaign was collected for this batch, and none is claimed.**
+On 2026-09-17 the owner passed the two qualification rows (G13, G15) by written
+waiver, unmeasured, on the finding that no flaw is open in the recorded audits; the
+qualification itself is deferred to Stage 6 (#171). The waiver and its scope are
+recorded in `stages-3-4-closeout-report.md` §1 and §2.
 Three rounds of receipts exist and are retained as they were produced:
 
 | Round | Contents | Status |

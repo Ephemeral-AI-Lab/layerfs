@@ -31,7 +31,30 @@ Markdown or log artifact of the review was edited.
 
 ## 1. Escalations
 
-### E1 — B1 (owner decision required): the repeated-sample measurement campaign
+### E1 — RESOLVED by owner waiver (2026-09-17): the campaign rows pass unmeasured
+
+The owner directed that G13 and G15 be passed provided no flaw was observed in the
+candidate. No campaign was run, so the waiver accepts the two qualification rows
+**unmeasured** and this is stated as such everywhere they appear:
+
+* no addendum for a matched campaign was committed, no matched arm was collected and
+  no receipt exists for one - the waiver creates no evidence, it accepts its absence;
+* the single matched C1 pair stays what it was, a non-comparative diagnostic whose
+  observations interleave (reference 224 875-351 666 ns, candidate 186 000-468 333 ns)
+  and whose write boundaries are not like-for-like (13 826 B against 47 357 B);
+* **no speedup, storage-saving or memory-superiority claim is made anywhere in this
+  report or in the issues closed against it**, and the qualification itself is
+  deferred to Stage 6 (#171), which is where a broadened comparison belongs;
+* nothing in the waiver touches the unmeasured items listed in W10: read
+  amplification on the representation transition, the 8 MiB - 1 deferred refusal and
+  the directory/workspace dimensions remain unrun or out of scope, stated plainly.
+
+No defect is open in the recorded audits: every S1/S2 finding of the review is closed
+with a control run, a structural oracle or the bounds and ledger work, and the one
+defect my own boundary work found (W10.1) is fixed and covered. What is waived is
+*measurement*, not behaviour.
+
+The original escalation is retained below exactly as it was written.
 
 ```text
 BLOCKER: B1 owner decision
@@ -87,9 +110,9 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G10 | No size-proportional hidden collector remains on a real path | W5 | **PASS** | `w5/README.md`; catalogue streamed, placement measured not copied, every level flushed, both pack caches bounded, cleanup transactions bounded |
 | G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | **PASS** | `examples/memory_ledger.rs` + `w7/w7-verify.log`: 6 measured phases, sampled RSS at boundaries, lifetime RSS labelled |
 | G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | **PASS** | `w7/README.md`: pooled save at the E1b shape peaks at 3.45 MiB heap with index 57 600 B + 3 MiB codec workspaces + SQLite journal/BLOBs live |
-| G13 | Matched reference campaign collected under a pre-committed addendum with aligned byte accounting | W8 | OPEN (B1) | escalation E1 in §1; the order of work on a yes is in `w8/README.md` |
+| G13 | Matched reference campaign collected under a pre-committed addendum with aligned byte accounting | W8 | **PASS (owner waiver, 2026-09-17)** | No campaign was collected and none is claimed; the row is accepted unmeasured by owner direction (E1, §1). The single matched pair remains a non-comparative diagnostic |
 | G14 | Every declared verification case is RUN or NOT_RUN with a reason | W8.4 | **PASS** | `stages-3-4-verification.md` §2.1: eleven declared cases mapped to the product case that executes them, two `NOT_RUN` with reasons, plus the new real `store-bytes` row (`w8/README.md`, `w8/w8-verify.log`) |
-| G15 | "Existing-or-better" for latency/storage/memory is resolved, or waived in writing | W8.6 | OPEN (B1) | escalation E1 in §1; no comparison is claimed from the single matched pair |
+| G15 | "Existing-or-better" for latency/storage/memory is resolved, or waived in writing | W8.6 | **PASS (owner waiver, 2026-09-17)** | Waived in writing by the owner (E1, §1); latency, storage and memory stay unqualified against v0.1.6 and no comparison is claimed. Stage 6 (#171) carries the qualification |
 | G16 | The clipped `e1c` receipt is re-collected or annotated wherever quoted | W8.7 | **PASS** | `w8/README.md`: the receipt is untouched, and the disclosure was added to the ledger (appended), `stages-3-4-verification.md` §4 and the final review's quoting table; re-collection is declined with the reason |
 | G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | **PASS** | `w9/README.md`; report §1/§7 corrected in place, §8 carries the plan's table, oracle paperwork fixed |
 | G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | **PASS** | `w9/README.md`: 956 over-removed lines and 4 083 test-module lines measured; combined 76 400; both snapshots counted by the corrected counter |
@@ -97,8 +120,11 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | **PASS** | eleven commits from `97414bac4` to `4d11de984` each carry exactly one first-parent `Production LOC:` line (checked with `git log --format=%B`); findings closure table in §2.1 |
 
 **Stage verdicts.** Stage 3 needs G1, G2, G9-G14, G17-G19. Stage 4 needs G3-G8,
-G13-G15, G17-G19. G13 and G15 are the only rows still open, both on E1 (the owner's
-campaign decision), so neither stage may be called complete yet.
+G13-G15, G17-G19. All twenty rows are now satisfied: eighteen are PASS on collected
+evidence and two, G13 and G15, are PASS by the owner's written waiver of 2026-09-17,
+recorded in §1 with exactly what the waiver does not claim. Stage 3 and Stage 4 are
+therefore complete **with the qualification deferred to Stage 6 (#171)**, and no
+performance, storage or memory comparison against v0.1.6 is asserted anywhere.
 
 ### 2.1 Review findings closure (F1-F10)
 
