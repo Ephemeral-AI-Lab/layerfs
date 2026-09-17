@@ -7,16 +7,12 @@
 //! inode-record identity; those had no remaining semantic consumer once final
 //! typed values and reference effects became the operation's inputs.
 //!
-//! ```text
-//! [0..8]   serial (u64, big endian, nonzero)
-//! [8]      version (1)
-//! [9]      tag: 1 = new-inode binding count, 2 = existing-inode effect total
-//! [10..12] declared row length (u16, big endian, 96)
-//! [12]     typed-value flag (0 = no value, 1 = 73-byte value present)
-//! [13..21] tally: retained bindings (tag 1, u64) or signed effect total (tag 2)
-//! [21..94] the inode value, present only when the flag is set
-//! [94..96] reserved, zero
-//! ```
+//! Layout, all fields big endian: bytes 0..8 hold the serial; byte 8 the version;
+//! byte 9 the tag (1 for a new-inode binding count, 2 for an existing inode's
+//! effect total); bytes 10..12 the declared row length (96); byte 12 the
+//! typed-value flag (0 = no value, 1 = a 73-byte value follows); bytes 13..21 the
+//! tally (retained bindings, or a signed effect total); bytes 21..94 the inode
+//! value, present only when the flag is set; bytes 94..96 reserved and zero.
 //!
 //! The tally is the only count this grammar trusts. For a `Count` row the typed
 //! value is stored exactly as supplied, including its own count field, which the
