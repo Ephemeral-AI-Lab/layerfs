@@ -396,11 +396,8 @@ fn check_effective_cycles(
     reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
 ) -> ContentResult<()> {
-    // A build has no stored page to list and therefore no subtree to walk: every
-    // directory it names is one it allocates, and its bindings are the ones this
-    // operation states. An update is where a rebinding can close a cycle.
     if checked.input.base.is_none() {
-        return Ok(());
+        return check_build_reachability(reader, checked);
     }
     let table = checked.topology.table;
     for update in checked.input.directories {
@@ -461,6 +458,77 @@ fn check_effective_cycles(
                     }
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// Proves that a build's stated bindings form a tree rooted at the root.
+///
+/// A build has no stored page to list, so its obligation is the one the root
+/// implies: every directory this operation allocates is reachable from the root
+/// exactly once, which is what makes a disconnected cycle - two directories
+/// binding each other with nothing binding either of them - a refusal. The walk
+/// is bounded by the same entry ceiling as every other whole-tree check.
+fn check_build_reachability(
+    _reader: &dyn AuthenticatedObjects,
+    checked: &CheckedInput<'_>,
+) -> ContentResult<()> {
+    // Every directory binding this operation states, as `(parent, child)` pairs.
+    // `update_for` answers by parent serial, so the pairs come from the updates
+    // themselves rather than from a serial-keyed lookup.
+    let mut stated: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    for update in checked.input.directories {
+        let children = update
+            .changes
+            .iter()
+            .filter_map(|(_, binding)| *binding)
+            .collect::<Vec<_>>();
+        stated.insert(update.parent, children);
+    }
+    // The root is reached by definition: it is the walk's own starting point.
+    let declared: BTreeSet<u64> = checked
+        .input
+        .new_inodes
+        .iter()
+        .filter(|serial| **serial != checked.input.root_serial)
+        .filter(|serial| {
+            checked
+                .input
+                .value_for(**serial)
+                .is_some_and(|value| value.kind == InodeKind::Directory)
+        })
+        .copied()
+        .collect();
+    let mut edges: BTreeMap<u64, u32> = declared.iter().map(|serial| (*serial, 0)).collect();
+    let mut seen: BTreeSet<u64> = BTreeSet::new();
+    let mut visited = 0_usize;
+    let mut pending = vec![checked.input.root_serial];
+    while let Some(serial) = pending.pop() {
+        if !seen.insert(serial) {
+            continue;
+        }
+        for child in stated.get(&serial).map(Vec::as_slice).unwrap_or(&[]) {
+            visited = visited.saturating_add(1);
+            if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
+                return Err(ContentError::InvalidRecord("cycle check work limit"));
+            }
+            // A binding is an edge into the child. Only a directory has to be
+            // reached exactly once: a regular file may be bound several times.
+            if let Some(count) = edges.get_mut(child) {
+                *count = count.checked_add(1).ok_or(ContentError::LengthOverflow)?;
+                if *count > 1 {
+                    return Err(ContentError::InvalidRecord("multiple parents"));
+                }
+            }
+            pending.push(*child);
+        }
+    }
+    // Every directory this operation allocates is held by a binding the root
+    // reaches; one that is not is either disconnected or inside a cycle.
+    for serial in declared {
+        if edges.get(&serial).copied().unwrap_or(0) == 0 {
+            return Err(ContentError::InvalidRecord("effective tree cycle"));
         }
     }
     Ok(())
