@@ -141,10 +141,21 @@ fn save_timings(report: &TimingReport, path: &Path) -> Result<(), Failure> {
         report.node_count(),
         report.levels()
     );
-    if report.is_incomplete() {
-        println!("timings: INCOMPLETE — detail was clipped, not zero");
-    }
     println!("timings: written to {}", path.display());
+    if report.is_incomplete() {
+        // A clipped tree is a hard failure for a measured row, exactly as it is
+        // for the Stage-5 pair: the node budget dropped detail this run cannot
+        // describe, so the process exits non-zero and says so instead of leaving
+        // a partial tree for a reader to quote. The receipt stays on disk -
+        // receipts are append-only - but the run is not a row.
+        return Err(format!(
+            "timings: INCOMPLETE - the node budget clipped this tree to {} nodes; {} must not be \
+             quoted as this run's work",
+            report.node_count(),
+            path.display()
+        )
+        .into());
+    }
     Ok(())
 }
 

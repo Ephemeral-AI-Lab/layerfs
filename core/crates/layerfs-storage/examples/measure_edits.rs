@@ -433,33 +433,42 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     let filler = noise(patch);
     changed[change..change + patch].copy_from_slice(&filler);
     let expected = layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?;
+    // The two canonical objects are C1 construction, and this lane declares C1
+    // construction excluded from `storage.save`. They are therefore built here,
+    // outside every timed region, and the objects handed to the save are the
+    // bytes this tool printed: the row that follows measures admission and
+    // nothing else.
+    let construction_started = std::time::Instant::now();
+    let base_canonical = layerfs_content::file::encode_whole_file(&policy.capacities(), base_raw)?;
+    let base = FinalizedObject::new(
+        layerfs_content::ObjectRole::WholeFile,
+        base_canonical.clone(),
+    )?;
+    let base_id = base.id();
+    let mut predecessors = layerfs_content::AdvisoryPredecessors::new();
+    predecessors.push(
+        base_id,
+        layerfs_content::PredecessorProvenance::OriginalBase,
+    )?;
+    let dependent = FinalizedObject::new(layerfs_content::ObjectRole::WholeFile, expected.clone())?
+        .with_predecessors(predecessors);
+    let dependent_id = dependent.id();
     println!(
         "stored workload: base {} canonical bytes, patched {patch} bytes at offset {change}, \
          dependent {} canonical bytes",
-        layerfs_content::file::encode_whole_file(&policy.capacities(), base_raw)?.len(),
+        base_canonical.len(),
         expected.len()
+    );
+    println!(
+        "preparation untimed: two whole-file objects encoded in {} ns; only their admission is \
+         timed below",
+        construction_started.elapsed().as_nanos()
     );
     let store_path = options.output.join("store.sqlite");
     let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
-    type SaveResult = Result<(Store, Vec<Vec<u8>>), StorageError>;
+    type SaveResult = Result<Store, StorageError>;
     let (result, report): (SaveResult, TimingReport) = timed(options, "storage.save", |save| {
         let store = Store::create(&store_path, policy_row, save.child("store.create"))?;
-        let base = FinalizedObject::new(
-            layerfs_content::ObjectRole::WholeFile,
-            layerfs_content::file::encode_whole_file(&policy.capacities(), base_raw)?,
-        )?;
-        let base_id = base.id();
-        let mut predecessors = layerfs_content::AdvisoryPredecessors::new();
-        predecessors.push(
-            base_id,
-            layerfs_content::PredecessorProvenance::OriginalBase,
-        )?;
-        let dependent = FinalizedObject::new(
-            layerfs_content::ObjectRole::WholeFile,
-            layerfs_content::file::encode_whole_file(&policy.capacities(), &changed)?,
-        )?
-        .with_predecessors(predecessors);
-        let dependent_id = dependent.id();
         let mut operation = store.begin_save(save.child("storage.begin"))?;
         operation.accept(base)?;
         operation.accept(dependent)?;
@@ -472,11 +481,26 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
             outcome.full_records,
             outcome.delta.trials
         );
-        let (values, _) = store.read_batch(&[dependent_id], save.child("storage.read"))?;
-        Ok((store, values))
+        Ok(store)
     });
-    let (store, values) = result?;
+    let store = result?;
     println!("store: {}", store.path().display());
+    // The authenticated read-back is its own labelled region, not part of the
+    // save: `storage.save` above says what it excluded, so the read cannot sit
+    // inside it.
+    let read_started = std::time::Instant::now();
+    let values = layerfs_telemetry::timer::Timing::disabled(
+        "measure.readback",
+        |scope| -> Result<Vec<Vec<u8>>, StorageError> {
+            let (values, _) = store.read_batch(&[dependent_id], scope.child("storage.read"))?;
+            Ok(values)
+        },
+    )
+    .0?;
+    println!(
+        "readback separately labelled elapsed_ns {}",
+        read_started.elapsed().as_nanos()
+    );
     if values.len() != 1 || values[0] != expected {
         return Err("authenticated readback differs from the supplied object".into());
     }
@@ -484,7 +508,10 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
         "readback: verified {} canonical bytes through an independent read wave",
         values[0].len()
     );
-    println!("exclusions: no C1 file construction and no full-file object collection is timed");
+    println!(
+        "exclusions: no C1 file construction and no full-file object collection is timed; \
+         `storage.save` covers Store creation, the begin/accept/finish calls and nothing else"
+    );
     render(&report);
     save_report(&report, &options.output.join("c2-save.json"))
 }

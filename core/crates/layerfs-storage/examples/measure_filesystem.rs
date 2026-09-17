@@ -45,7 +45,8 @@ impl Bag {
 
 impl FinalizedConsumer for Bag {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        let (id, role, bytes, _) = object.into_parts();
+        let parts = object.into_parts();
+        let (id, role, bytes) = (parts.id, parts.role, parts.canonical);
         self.objects.insert(id, (role, bytes));
         Ok(())
     }
@@ -345,7 +346,16 @@ fn main() -> Result<(), String> {
     };
     match config.mode.as_str() {
         "c1" => run_c1(&bag, &input, &mut backing, entries),
-        "c2" => run_c2(&config, &bag),
+        "c2" => {
+            // `--case` must select what the banner says it selects in this mode
+            // too. The update that produces the case's object set runs here,
+            // outside every timed region, and c2 measures admission of the
+            // objects it produced - so a `c2` row names the case that built it.
+            let (case_bag, case_root, case_counters) =
+                apply_case(&bag, &input, &mut backing, entries);
+            println!("case_work applied untimed: {case_counters}");
+            run_c2(&config, &case_bag, case_root, entries)
+        }
         "pipeline" => run_pipeline(&config, &bag, &input, &mut backing, entries),
         other => panic!("unknown mode {other}"),
     }?;
@@ -396,9 +406,77 @@ fn run_c1(
     Ok(())
 }
 
+/// Applies the case's own change set, outside every timed region.
+///
+/// The result is the fixture extended with the objects that change set emitted,
+/// and the root it produced. `--mode c2` admits exactly this object set, so the
+/// per-case counters of a `c2` row come from the case rather than from the
+/// shared fixture.
+fn apply_case(
+    bag: &Bag,
+    input: &FilesystemInput<'_>,
+    backing: &mut FileBacking,
+    entries: usize,
+) -> (Bag, ObjectId, CaseWork) {
+    if input.directories.is_empty() && input.inodes.is_empty() {
+        // `empty` re-emits the base root unchanged; there is nothing to apply.
+        return (
+            bag.clone(),
+            input.base.expect("base root").0,
+            CaseWork::default(),
+        );
+    }
+    let mut sink = Bag::default();
+    let result = disabled(|_| {
+        let mut objects = FilesystemObjects::new(bag, &mut sink);
+        let backing_ref: &mut dyn OrderingBacking = backing;
+        update_filesystem(&mut objects, input, Some(backing_ref))
+    })
+    .expect("case update");
+    let counters = result.counters;
+    let mut staged = bag.clone();
+    staged.objects.extend(sink.objects);
+    (
+        staged,
+        result.root.0,
+        CaseWork {
+            directory_updates: counters.directory_updates,
+            bindings_added: counters.bindings_added,
+            bindings_removed: counters.bindings_removed,
+            inode_updates: input.inodes.len(),
+            entries,
+        },
+    )
+}
+
+/// What one `--mode c2` run applied before it admitted the result.
+#[derive(Default)]
+struct CaseWork {
+    directory_updates: u64,
+    bindings_added: u64,
+    bindings_removed: u64,
+    inode_updates: usize,
+    entries: usize,
+}
+
+impl std::fmt::Display for CaseWork {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "directories {} bindings +{} -{} inode updates {} fixture entries {}",
+            self.directory_updates,
+            self.bindings_added,
+            self.bindings_removed,
+            self.inode_updates,
+            self.entries
+        )
+    }
+}
+
 /// Admission only: the objects are prepared before the timed region.
-fn run_c2(config: &Config, bag: &Bag) -> Result<(), String> {
+fn run_c2(config: &Config, bag: &Bag, case_root: ObjectId, entries: usize) -> Result<(), String> {
     let store = fresh_store(config);
+    println!("case_root {case_root}");
     let objects = bag
         .objects
         .iter()
@@ -427,6 +505,12 @@ fn run_c2(config: &Config, bag: &Bag) -> Result<(), String> {
     println!(
         "full_records {} prefix_records {} pooled {}",
         outcome.full_records, outcome.prefix_records, outcome.pool.new_values
+    );
+    // The row names the case's own root and lists the case's own tree, so two
+    // `c2` rows that admitted two different object sets cannot print as one.
+    println!(
+        "readback separately labelled: {}",
+        readback(bag, case_root, entries)
     );
     require_complete(&report)
 }

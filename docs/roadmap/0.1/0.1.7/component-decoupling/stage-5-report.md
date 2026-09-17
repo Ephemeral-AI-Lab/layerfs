@@ -331,9 +331,11 @@ Measured peaks are reported by the runs (`peak_scratch_bytes`, `rows_spilled`,
 | Inode branch | format | 64–127 children non-root |
 | Directory page | format | 2/5 fill = 3,277 canonical bytes |
 | Attribute key | enforced | domain ≤ 64 UTF-8 bytes, key ≤ 255 bytes, no NUL |
-| Attribute value | enforced | ≤ 1 MiB, always extent-backed |
+| Attribute value | enforced | ≤ 32,768 bytes (the chunk maximum), always extent-backed |
 | Symlink target | enforced | ≤ 4,096 bytes, no NUL |
 | Inode serial | enforced | 1 .. `i64::MAX` |
+| Read wave | enforced | ≤ 32 payload objects and ≤ 1,048,576 bytes (`READ_WAVE_OBJECTS × MAXIMUM_CHUNK_BYTES`): the count is enforced as payloads are demanded, and each decoded payload is refused above the chunk maximum, so the byte figure is a bound on what a wave can acquire rather than an estimate. The two constants are asserted equal to the product by the wave's own case |
+| Whole-tree walk entries | enforced | ≤ 4,096 bindings **per walk**, charged once per walk and not once per operation: one build is refused above 4,095 bindings, and a directory whose effective subtree exceeds the ceiling can never be rebound (`MAXIMUM_WALK_ENTRIES`) |
 | Operation scratch | configurable | ≥ 1,024 bytes, default 4 MiB − 1 |
 | Pending records | configurable | ≥ 1, default 4,096 |
 | Theoretical | not claimed | no unlimited-workspace or constant-RSS claim is made |
@@ -435,11 +437,20 @@ document state tests, not targets.
 
 ### Corrections to this document
 
-1. **§6, the attribute-value row is wrong.** The enforced bound is **32,768 bytes**,
-   not 1 MiB: `attributes/value.rs:22-56` emits exactly one chunk object, so the
-   1 MiB branch at `:26-31` is unreachable. Reproduced through the public API: a
-   1 MiB value is refused with `object limit 32768 exceeded by 1048576`. Matrix row
-   `AT-4` was promoted on the wrong figure.
+1. **§6, the attribute-value row was wrong, and the bound is now the row.**
+   The enforced bound is **32,768 bytes**, not 1 MiB: an attribute value is one
+   extent-only root whose payload is one canonical chunk object, so the 1 MiB
+   branch the table advertised was unreachable. Reproduced through the public API:
+   a 1 MiB value is refused with `object limit 32768 exceeded by 1048576`. Matrix
+   row `AT-4` was promoted on the wrong figure. **Remedied** (WP-D, round 3):
+   `limits.rs` now derives `MAXIMUM_ATTRIBUTE_VALUE_BYTES` from
+   `cdc::MAXIMUM_CHUNK_BYTES` instead of restating a larger figure, so the two
+   cannot drift; the §6 row above states 32,768 and names the grammar that fixes
+   it; and the boundary case
+   `filesystem_failure::the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary`
+   emits and reads back a value of exactly 32,768 bytes and refuses 32,769 with the
+   declared bound as the reported limit. The previous case wrote 4,096 bytes and so
+   did not discriminate at any bound.
 2. **§6 omits a capacity limit that changes what a Workspace can build.**
    `MAXIMUM_CYCLE_CHECK_ENTRIES = 4,096` (`filesystem/validate.rs:53`) is enforced
    per whole-tree walk, so a single `build_filesystem` call is refused above
