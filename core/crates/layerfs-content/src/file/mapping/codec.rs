@@ -8,7 +8,8 @@
 use crate::error::{ContentError, ContentResult};
 use crate::file::cdc;
 use crate::file::mapping::types::{
-    ChildDescriptor, ExtentNode, ExtentSlice, FileState, MAX_NODE_OBJECT_BYTES,
+    ChildDescriptor, ExtentNode, ExtentSlice, FileState, MAX_ENTRIES, MAX_LEVEL,
+    MAX_NODE_OBJECT_BYTES, MINIMUM_ROOT_ENTRIES, MINIMUM_ROOT_LEAF_ENTRIES, MIN_ENTRIES,
 };
 use crate::object::{
     canonical_len, codec, encode_bytes_object_to, ObjectId, HEADER_LEN, OBJECT_MAGIC,
@@ -34,12 +35,14 @@ pub fn profile_id() -> ObjectId {
         bytes.extend_from_slice(b"layerfs/mapping-profile/bplus-extent/v3\0");
         bytes.extend_from_slice(&VERSION.to_be_bytes());
         bytes.extend_from_slice(&[LEAF, BRANCH, FILE_STATE, 0]);
-        bytes.extend_from_slice(&64_u16.to_be_bytes());
-        bytes.extend_from_slice(&128_u16.to_be_bytes());
-        bytes.extend_from_slice(&0_u16.to_be_bytes());
-        bytes.extend_from_slice(&2_u16.to_be_bytes());
-        bytes.push(31);
-        bytes.extend_from_slice(&32_768_u32.to_be_bytes());
+        // Every accepted partition bound is hashed through the constant that
+        // enforces it, so moving one of them moves this identity.
+        bytes.extend_from_slice(&(MIN_ENTRIES as u16).to_be_bytes());
+        bytes.extend_from_slice(&(MAX_ENTRIES as u16).to_be_bytes());
+        bytes.extend_from_slice(&(MINIMUM_ROOT_LEAF_ENTRIES as u16).to_be_bytes());
+        bytes.extend_from_slice(&(MINIMUM_ROOT_ENTRIES as u16).to_be_bytes());
+        bytes.push(MAX_LEVEL);
+        bytes.extend_from_slice(&(cdc::MAXIMUM_CHUNK_BYTES as u32).to_be_bytes());
         bytes.extend_from_slice(&[4, 4, 8, 1, 1, 1, 1, 1]);
         bytes.extend_from_slice(&cdc::profile_id());
         ObjectId::from_bytes(blake3::hash(&bytes).as_bytes()).expect("BLAKE3 digest width")
@@ -61,7 +64,9 @@ pub fn encode_chunk_object(bytes: &[u8]) -> ContentResult<Vec<u8>> {
         .len()
         .checked_add(bytes.len())
         .ok_or(ContentError::LengthOverflow)?;
-    let canonical_length = canonical_len(value_len)?;
+    // One declaration of the chunk's canonical width, shared with the read path.
+    // The payload bound checked above keeps it inside the object field ceiling.
+    let canonical_length = chunk_canonical_len(bytes.len());
     let payload_len = u32::try_from(value_len + 4).map_err(|_| ContentError::LengthOverflow)?;
     let mut canonical = Vec::with_capacity(canonical_length);
     canonical.extend_from_slice(&OBJECT_MAGIC);

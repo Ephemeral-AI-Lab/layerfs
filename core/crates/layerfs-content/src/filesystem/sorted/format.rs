@@ -368,48 +368,20 @@ impl Format for CompactInodes {
         let count = node_count(value);
         let subtree_count = node_subtree_count(value);
         let subtree_bytes = node_subtree_bytes(value);
-        let mut cursor = NODE_HEADER_BYTES;
-        let mut entries = Vec::with_capacity(count);
         match role {
-            INODE_LEAF_ROLE
-                if level == 0
-                    && subtree_count == count as u64
-                    && count >= 1
-                    && count as u64 <= MAXIMUM_INODE_LEAF_ROWS =>
-            {
-                for _ in 0..count {
-                    let key = u64::from_be_bytes(
-                        take(value, &mut cursor, 8)?
-                            .try_into()
-                            .map_err(|_| ContentError::UnexpectedEof)?,
-                    );
-                    if key == 0 {
-                        return Err(ContentError::InvalidRecord("inode serial"));
-                    }
-                    let record = crate::object::inode_leaf::decode_inode_value(take(
-                        value,
-                        &mut cursor,
-                        LEAF_ROW_BYTES - 8,
-                    )?)?;
+            // One grammar with `object::inode_leaf`: the leaf page is framed,
+            // bounded, ordered and value-checked there, and this route only maps
+            // its rows into the engine's wire form.
+            INODE_LEAF_ROLE if level == 0 => {
+                let rows = crate::object::inode_leaf::decode_leaf_value(value)?;
+                let mut entries = Vec::with_capacity(rows.len());
+                for row in rows {
                     entries.push(WireEntry {
-                        key,
+                        key: row.serial,
                         child: None,
-                        value: Some(record),
+                        value: Some(crate::object::inode_leaf::decode_inode_value(&row.value)?),
                     });
                 }
-                if cursor != value.len() {
-                    return Err(ContentError::TrailingBytes);
-                }
-                let expected = (count as u64)
-                    .checked_mul(LEAF_ROW_BYTES as u64)
-                    .ok_or(ContentError::LengthOverflow)?;
-                if expected != subtree_bytes {
-                    return Err(ContentError::LengthMismatch {
-                        expected,
-                        actual: subtree_bytes,
-                    });
-                }
-                reject_unordered(&entries)?;
                 Ok(Wire {
                     level,
                     count: count as u64,
@@ -424,6 +396,8 @@ impl Format for CompactInodes {
                     && count >= 2
                     && count as u64 <= MAXIMUM_INODE_BRANCH_CHILDREN =>
             {
+                let mut cursor = NODE_HEADER_BYTES;
+                let mut entries = Vec::with_capacity(count);
                 for _ in 0..count {
                     let key = u64::from_be_bytes(
                         take(value, &mut cursor, 8)?
@@ -487,25 +461,34 @@ impl Format for CompactInodes {
             }
             previous = Some(*row.key);
         }
-        let (total, bytes) = if page.level == 0 {
-            let bytes = (count as u64)
-                .checked_mul(LEAF_ROW_BYTES as u64)
-                .ok_or(ContentError::LengthOverflow)?;
-            (count as u64, bytes)
-        } else {
-            // A branch's recorded totals are its own summary: the engine passes
-            // the totals it accumulated from the children it read.
-            let total = page.count;
-            if total < count as u64 {
-                return Err(ContentError::InvalidRecord("inode subtree summary"));
-            }
-            (
-                total,
-                total
-                    .checked_mul(LEAF_ROW_BYTES as u64)
-                    .ok_or(ContentError::LengthOverflow)?,
-            )
-        };
+        if page.level == 0 {
+            // One grammar with `object::inode_leaf`: the shared leaf encoder
+            // writes the header and the rows, so a leaf page cannot have two
+            // canonical forms or two errors for one malformation.
+            let rows = page
+                .rows
+                .iter()
+                .map(|row| {
+                    Ok(crate::object::inode_leaf::InodeLeafRow {
+                        serial: *row.key,
+                        value: crate::object::inode_leaf::encode_inode_value(
+                            *row.value
+                                .ok_or(ContentError::InvalidRecord("inode leaf value"))?,
+                        ),
+                    })
+                })
+                .collect::<ContentResult<Vec<_>>>()?;
+            return finish_node(crate::object::inode_leaf::encode_leaf_value(&rows)?);
+        }
+        // A branch's recorded totals are its own summary: the engine passes the
+        // totals it accumulated from the children it read.
+        let total = page.count;
+        if total < count as u64 {
+            return Err(ContentError::InvalidRecord("inode subtree summary"));
+        }
+        let bytes = total
+            .checked_mul(LEAF_ROW_BYTES as u64)
+            .ok_or(ContentError::LengthOverflow)?;
         let mut value = node_header(
             &INODE_MAGIC,
             Self::role(page.level),
@@ -516,20 +499,11 @@ impl Format for CompactInodes {
         )?;
         for row in page.rows {
             value.extend_from_slice(&row.key.to_be_bytes());
-            match page.level {
-                0 => {
-                    let record = row
-                        .value
-                        .ok_or(ContentError::InvalidRecord("inode leaf value"))?;
-                    value
-                        .extend_from_slice(&crate::object::inode_leaf::encode_inode_value(*record));
-                }
-                _ => value.extend_from_slice(
-                    row.child
-                        .ok_or(ContentError::InvalidRecord("inode child"))?
-                        .as_bytes(),
-                ),
-            }
+            value.extend_from_slice(
+                row.child
+                    .ok_or(ContentError::InvalidRecord("inode child"))?
+                    .as_bytes(),
+            );
         }
         finish_node(value)
     }

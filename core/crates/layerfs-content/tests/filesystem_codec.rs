@@ -20,7 +20,7 @@ use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::root::{FilesystemRoot, ROOT_VALUE_BYTES};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::filesystem::{profile_id, scope_for_seed, InodeScope};
-use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+use layerfs_content::object::inode_leaf::{encode_inode_value, InodeKind, InodeLeaf, InodeValue};
 use layerfs_content::{ContentError, ObjectId, ObjectRole};
 use support::filesystem::synthetic;
 
@@ -170,6 +170,71 @@ fn attribute_pages_match_the_reference_bytes() {
         }
     );
     assert_eq!(encode_attribute_page(&page).expect("encodes"), attr_bytes);
+}
+
+/// R11: one leaf-page grammar behind both routes.
+///
+/// The pool-facing `InodeLeaf` route and the engine's own inode-page route are
+/// the same code, so the sealed two-row reference leaf decodes to the same rows
+/// and re-encodes to the same bytes through either, and every malformation both
+/// routes evaluate is refused with the same error.
+#[test]
+fn both_inode_leaf_routes_are_one_grammar() {
+    const ENVELOPE: usize = 13;
+    let (_, _, _, _, _, sealed) = codec_case(manifest::CODEC_INODE_LEAF);
+    let leaf = InodeLeaf::decode(&sealed).expect("pooled leaf route decodes");
+    let page = decode_inode_page(&sealed).expect("engine route decodes");
+    let InodePage::Leaf { entries } = &page else {
+        panic!("the sealed two-row leaf decoded as a branch");
+    };
+    assert_eq!(entries.len(), leaf.rows.len(), "row counts agree");
+    for (entry, row) in entries.iter().zip(&leaf.rows) {
+        assert_eq!(entry.0, row.serial, "serial agrees");
+        assert_eq!(encode_inode_value(entry.1), row.value, "value agrees");
+    }
+    assert_eq!(
+        leaf.encode().expect("pooled leaf route encodes"),
+        sealed,
+        "pooled leaf route reproduces the sealed bytes"
+    );
+    assert_eq!(
+        encode_inode_page(&page).expect("engine route encodes"),
+        sealed,
+        "engine route reproduces the sealed bytes"
+    );
+
+    // A reserved flag byte, a count that disagrees with the recorded subtree
+    // count, a wrong subtree byte total, a truncated row area, a zero serial and
+    // out-of-order rows are one error each, whichever route reads the page.
+    let mut reserved = sealed.clone();
+    reserved[ENVELOPE + 12] = 1;
+    let mut count = sealed.clone();
+    count[ENVELOPE + 13] = 0;
+    count[ENVELOPE + 14] = 3;
+    let mut total = sealed.clone();
+    total[ENVELOPE + 23..ENVELOPE + 31].copy_from_slice(&73_u64.to_be_bytes());
+    let mut truncated = sealed.clone();
+    truncated.truncate(truncated.len() - 1);
+    let mut zero = sealed.clone();
+    zero[ENVELOPE + 31..ENVELOPE + 39].copy_from_slice(&0_u64.to_be_bytes());
+    let mut unordered = sealed.clone();
+    unordered[ENVELOPE + 31..ENVELOPE + 39].copy_from_slice(&9_u64.to_be_bytes());
+    for (name, bytes) in [
+        ("reserved flag", reserved),
+        ("count disagrees", count),
+        ("subtree total", total),
+        ("truncated rows", truncated),
+        ("zero serial", zero),
+        ("out of order", unordered),
+    ] {
+        let pooled = InodeLeaf::decode(&bytes).expect_err(&format!("{name}: pooled route"));
+        let engine = decode_inode_page(&bytes).expect_err(&format!("{name}: engine route"));
+        assert_eq!(
+            format!("{pooled:?}"),
+            format!("{engine:?}"),
+            "{name}: the two routes must refuse identically"
+        );
+    }
 }
 
 #[test]

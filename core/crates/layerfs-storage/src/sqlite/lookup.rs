@@ -170,8 +170,3 @@ pub fn highest_pack_id(connection: &Connection) -> StorageResult<i64> {
         |row| row.get(0),
     )?)
 }
-
-/// Reads the persisted policy row.
-pub fn policy(connection: &Connection) -> StorageResult<crate::policy::StoragePolicy> {
-    crate::sqlite::schema::validate(connection, None)
-}

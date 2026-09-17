@@ -191,6 +191,30 @@ that reads a persisted root must therefore treat a `MissingObject` from a value
 root as an authorized-root failure of its own composition, not as a defect of the
 save that acknowledged it.
 
+### Caller-declared object role
+
+A role is the producer's declaration alongside the bytes, not a field C2 re-derives.
+Checked local construction establishes identity, role and references together, so
+the declared code always names the grammar those bytes are in; the Store writes the
+declared code and does not re-parse the inner tag to confirm it. Re-deriving it
+would be the separate role-validation pass `canonical-objects.md` removes, paid on
+every object of every save for a property the constructing caller already holds.
+
+The two framed roles are the exception, and only because their raw payload has to
+be *found*: `raw_payload` checks the `LFS4CHK`/`LFS5SML` framing before a chunk or
+whole-file record is built, so a `Chunk` or `WholeFile` declaration that disagrees
+with the bytes is refused at admission. Every unframed tree role is stored verbatim
+in the ordinary lane, so a declaration that disagrees with the object's own inner
+tag is persisted **as declared** and is then refused by that role's own checked
+decoder on the read which follows - never reinterpreted, never converted, never
+silently repaired, and never repaired by a second decoder chosen from the bytes.
+
+A caller that declares a role must therefore be the component that built those
+bytes. An adapter reading a persisted object selects its decoder from the persisted
+role and reports that decoder's refusal; it does not fall back to another grammar.
+The reproduction is `a_disagreeing_role_declaration_is_refused_by_its_own_decoder`
+in `core/crates/layerfs-storage/tests/cas_roundtrip.rs`.
+
 With one mutation coordinator, the established absence result remains valid until
 its selected insertion. Remove the [late epoch refresh and winner-list rebuild](../../../../../crates/layerfs-layerstack-store/src/objects/admission.rs#L1295).
 Unexpected authority/state invalidation fails; no reread/reprepare. A known own

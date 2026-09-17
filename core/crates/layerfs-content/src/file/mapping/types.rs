@@ -15,6 +15,10 @@ pub const MIN_ENTRIES: usize = 64;
 pub const MAX_ENTRIES: usize = MAX_MAPPING_ENTRIES;
 /// Largest branch level the grammar can express.
 pub const MAX_LEVEL: u8 = 31;
+/// Smallest children of a root branch: a root summary is never a single child.
+pub const MINIMUM_ROOT_ENTRIES: usize = 2;
+/// Smallest entries of a root leaf; the frozen profile records it as zero.
+pub const MINIMUM_ROOT_LEAF_ENTRIES: usize = 0;
 /// Largest canonical mapping node object.
 pub const MAX_NODE_OBJECT_BYTES: usize = 8_192;
 
@@ -207,7 +211,10 @@ impl ExtentNode {
                 subtree_extent_count,
                 children,
             } => {
-                if *level == 0 || *level > MAX_LEVEL || (root && children.len() < 2) {
+                if *level == 0
+                    || *level > MAX_LEVEL
+                    || (root && children.len() < MINIMUM_ROOT_ENTRIES)
+                {
                     return Err(ContentError::NonCanonicalPagePartition);
                 }
                 let mut bytes = 0;

@@ -60,15 +60,4 @@ impl InodeIdentity {
     pub const fn serial(self) -> u64 {
         self.serial
     }
-
-    /// Rejects an identity that does not belong to `scope`.
-    pub fn check_scope(self, scope: InodeScope) -> ContentResult<Self> {
-        if self.scope == scope {
-            Ok(self)
-        } else {
-            Err(ContentError::ScopeMismatch {
-                what: "inode identity",
-            })
-        }
-    }
 }

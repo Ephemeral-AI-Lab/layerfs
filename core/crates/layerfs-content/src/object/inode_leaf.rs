@@ -186,22 +186,12 @@ pub struct InodeLeaf {
 
 impl InodeLeaf {
     /// Encodes the page into its canonical object bytes after full validation.
+    ///
+    /// The grammar itself is [`encode_leaf_value`]; this route adds the recorded
+    /// subtree byte total and the object envelope.
     pub fn encode(&self) -> ContentResult<Vec<u8>> {
-        let count = self.rows.len();
-        if count == 0 || count > MAXIMUM_LEAF_ROWS {
-            return Err(ContentError::NonCanonicalPagePartition);
-        }
-        if self
-            .rows
-            .windows(2)
-            .any(|pair| pair[0].serial >= pair[1].serial)
-        {
-            return Err(ContentError::InvalidRecord("inode key order"));
-        }
-        if self.rows.iter().any(|row| row.serial == 0) {
-            return Err(ContentError::InvalidRecord("inode serial"));
-        }
-        let subtree_bytes = (count as u64)
+        let value = encode_leaf_value(&self.rows)?;
+        let subtree_bytes = (self.rows.len() as u64)
             .checked_mul(LEAF_ROW_BYTES as u64)
             .ok_or(ContentError::LengthOverflow)?;
         if self.subtree_bytes != subtree_bytes {
@@ -210,32 +200,15 @@ impl InodeLeaf {
                 actual: self.subtree_bytes,
             });
         }
-        let mut value = Vec::with_capacity(NODE_HEADER_BYTES + count * LEAF_ROW_BYTES);
-        value.extend_from_slice(&INODE_LEAF_MAGIC);
-        value.extend_from_slice(&INODE_LEAF_VERSION.to_be_bytes());
-        value.extend_from_slice(&[LEAF_ROLE, 0, 0]);
-        value.extend_from_slice(
-            &u16::try_from(count)
-                .map_err(|_| ContentError::LengthOverflow)?
-                .to_be_bytes(),
-        );
-        value.extend_from_slice(&(count as u64).to_be_bytes());
-        value.extend_from_slice(&subtree_bytes.to_be_bytes());
-        for row in &self.rows {
-            value.extend_from_slice(&row.serial.to_be_bytes());
-            value.extend_from_slice(&row.value);
-        }
         crate::object::codec::encode_bytes_object(&value)
     }
 
     /// Decodes and validates a canonical leaf page without re-encoding it.
     ///
-    /// Every check the encoder enforces is repeated here directly: framing, magic,
-    /// version, role, level, flags, the row-count bound, the declared byte total,
-    /// the exact row width, serial ordering and the value grammar of every row.
-    /// A malformed or hand-built page therefore fails on this route exactly as it
-    /// would fail a re-encode comparison, and the sealed fixtures prove the
-    /// accepted set is unchanged.
+    /// The grammar itself is [`decode_leaf_value`]; this route adds the object
+    /// envelope. A malformed or hand-built page fails here exactly as it fails
+    /// the sorted engine's own leaf decoder, with the same error, because both
+    /// call the one leaf grammar.
     pub fn decode(canonical: &[u8]) -> ContentResult<Self> {
         if canonical.len() > MAXIMUM_NODE_OBJECT_BYTES {
             return Err(ContentError::ObjectLimitExceeded {
@@ -244,74 +217,9 @@ impl InodeLeaf {
             });
         }
         let value = crate::object::codec::decode_bytes_object(canonical)?;
-        if value.len() < NODE_HEADER_BYTES {
-            return Err(ContentError::UnexpectedEof);
-        }
-        if !value.starts_with(&INODE_LEAF_MAGIC) {
-            return Err(ContentError::UnsupportedFraming);
-        }
-        let version = u16::from_be_bytes([value[8], value[9]]);
-        if version != INODE_LEAF_VERSION {
-            return Err(ContentError::UnsupportedMappingVersion { version });
-        }
-        if value[10] != LEAF_ROLE || value[11] != 0 || value[12] != 0 {
-            return Err(ContentError::InvalidRecord("inode leaf role/level"));
-        }
-        let count = usize::from(u16::from_be_bytes([value[13], value[14]]));
-        let subtree_count = u64::from_be_bytes(
-            value[15..23]
-                .try_into()
-                .map_err(|_| ContentError::UnexpectedEof)?,
-        );
-        let subtree_bytes = u64::from_be_bytes(
-            value[23..31]
-                .try_into()
-                .map_err(|_| ContentError::UnexpectedEof)?,
-        );
-        if count == 0 || count > MAXIMUM_LEAF_ROWS || subtree_count != count as u64 {
-            return Err(ContentError::NonCanonicalPagePartition);
-        }
-        let rows_bytes = count
-            .checked_mul(LEAF_ROW_BYTES)
-            .ok_or(ContentError::LengthOverflow)?;
-        if value.len()
-            != NODE_HEADER_BYTES
-                .checked_add(rows_bytes)
-                .ok_or(ContentError::LengthOverflow)?
-        {
-            return Err(ContentError::InvalidRecord("inode leaf length"));
-        }
-        if subtree_bytes != rows_bytes as u64 {
-            return Err(ContentError::LengthMismatch {
-                expected: rows_bytes as u64,
-                actual: subtree_bytes,
-            });
-        }
-        let mut rows = Vec::with_capacity(count);
-        let mut previous = None;
-        for row in value[NODE_HEADER_BYTES..].chunks_exact(LEAF_ROW_BYTES) {
-            let serial = u64::from_be_bytes(
-                row[..8]
-                    .try_into()
-                    .map_err(|_| ContentError::UnexpectedEof)?,
-            );
-            if serial == 0 {
-                return Err(ContentError::InvalidRecord("inode serial"));
-            }
-            if previous.is_some_and(|previous| previous >= serial) {
-                return Err(ContentError::InvalidRecord("inode key order"));
-            }
-            previous = Some(serial);
-            let mut bytes = [0_u8; INODE_VALUE_BYTES];
-            bytes.copy_from_slice(&row[8..]);
-            decode_inode_value(&bytes)?;
-            rows.push(InodeLeafRow {
-                serial,
-                value: bytes,
-            });
-        }
+        let rows = decode_leaf_value(value)?;
         Ok(Self {
-            subtree_bytes,
+            subtree_bytes: rows.len() as u64 * LEAF_ROW_BYTES as u64,
             rows,
         })
     }
@@ -325,6 +233,125 @@ impl InodeLeaf {
     pub fn row_bytes(&self) -> u64 {
         self.rows.len() as u64 * LEAF_ROW_BYTES as u64
     }
+}
+
+/// Encodes one checked leaf page value: the node header and the `(serial, value)`
+/// rows. The caller owns the object envelope.
+///
+/// This is the single leaf-page grammar. [`InodeLeaf::encode`] and the sorted
+/// engine's own inode-leaf encoder both call it, so one malformation cannot have
+/// two different errors.
+pub(crate) fn encode_leaf_value(rows: &[InodeLeafRow]) -> ContentResult<Vec<u8>> {
+    let count = rows.len();
+    if count == 0 || count > MAXIMUM_LEAF_ROWS {
+        return Err(ContentError::NonCanonicalPagePartition);
+    }
+    if rows.windows(2).any(|pair| pair[0].serial >= pair[1].serial) {
+        return Err(ContentError::InvalidRecord("inode key order"));
+    }
+    if rows.iter().any(|row| row.serial == 0) {
+        return Err(ContentError::InvalidRecord("inode serial"));
+    }
+    let subtree_bytes = (count as u64)
+        .checked_mul(LEAF_ROW_BYTES as u64)
+        .ok_or(ContentError::LengthOverflow)?;
+    let mut value = Vec::with_capacity(NODE_HEADER_BYTES + count * LEAF_ROW_BYTES);
+    value.extend_from_slice(&INODE_LEAF_MAGIC);
+    value.extend_from_slice(&INODE_LEAF_VERSION.to_be_bytes());
+    value.extend_from_slice(&[LEAF_ROLE, 0, 0]);
+    value.extend_from_slice(
+        &u16::try_from(count)
+            .map_err(|_| ContentError::LengthOverflow)?
+            .to_be_bytes(),
+    );
+    value.extend_from_slice(&(count as u64).to_be_bytes());
+    value.extend_from_slice(&subtree_bytes.to_be_bytes());
+    for row in rows {
+        value.extend_from_slice(&row.serial.to_be_bytes());
+        value.extend_from_slice(&row.value);
+    }
+    Ok(value)
+}
+
+/// Decodes and validates one leaf page value already split out of its envelope.
+///
+/// Every check the leaf encoder enforces is repeated here directly: framing,
+/// magic, version, role, level, flags, the row-count bound, the exact row width,
+/// the declared byte total, serial ordering and the value grammar of every row.
+/// A caller that only needs the rows never re-encodes to discover malformation.
+pub(crate) fn decode_leaf_value(value: &[u8]) -> ContentResult<Vec<InodeLeafRow>> {
+    if value.len() < NODE_HEADER_BYTES {
+        return Err(ContentError::UnexpectedEof);
+    }
+    if !value.starts_with(&INODE_LEAF_MAGIC) {
+        return Err(ContentError::UnsupportedFraming);
+    }
+    let version = u16::from_be_bytes([value[8], value[9]]);
+    if version != INODE_LEAF_VERSION {
+        return Err(ContentError::UnsupportedMappingVersion { version });
+    }
+    if value[10] != LEAF_ROLE || value[11] != 0 {
+        return Err(ContentError::InvalidRecord("inode leaf role/level"));
+    }
+    // The reserved flag byte is named exactly as the shared node-header check
+    // names it, so a page that carries it fails the same way on both routes.
+    if value[12] != 0 {
+        return Err(ContentError::InvalidRecord("node flags"));
+    }
+    let count = usize::from(u16::from_be_bytes([value[13], value[14]]));
+    let subtree_count = u64::from_be_bytes(
+        value[15..23]
+            .try_into()
+            .map_err(|_| ContentError::UnexpectedEof)?,
+    );
+    let subtree_bytes = u64::from_be_bytes(
+        value[23..31]
+            .try_into()
+            .map_err(|_| ContentError::UnexpectedEof)?,
+    );
+    if count == 0 || count > MAXIMUM_LEAF_ROWS || subtree_count != count as u64 {
+        return Err(ContentError::NonCanonicalPagePartition);
+    }
+    let rows_bytes = count
+        .checked_mul(LEAF_ROW_BYTES)
+        .ok_or(ContentError::LengthOverflow)?;
+    if value.len()
+        != NODE_HEADER_BYTES
+            .checked_add(rows_bytes)
+            .ok_or(ContentError::LengthOverflow)?
+    {
+        return Err(ContentError::InvalidRecord("inode leaf length"));
+    }
+    if subtree_bytes != rows_bytes as u64 {
+        return Err(ContentError::LengthMismatch {
+            expected: rows_bytes as u64,
+            actual: subtree_bytes,
+        });
+    }
+    let mut rows = Vec::with_capacity(count);
+    let mut previous = None;
+    for row in value[NODE_HEADER_BYTES..].chunks_exact(LEAF_ROW_BYTES) {
+        let serial = u64::from_be_bytes(
+            row[..8]
+                .try_into()
+                .map_err(|_| ContentError::UnexpectedEof)?,
+        );
+        if serial == 0 {
+            return Err(ContentError::InvalidRecord("inode serial"));
+        }
+        if previous.is_some_and(|previous| previous >= serial) {
+            return Err(ContentError::InvalidRecord("inode key order"));
+        }
+        previous = Some(serial);
+        let mut bytes = [0_u8; INODE_VALUE_BYTES];
+        bytes.copy_from_slice(&row[8..]);
+        decode_inode_value(&bytes)?;
+        rows.push(InodeLeafRow {
+            serial,
+            value: bytes,
+        });
+    }
+    Ok(rows)
 }
 
 /// Physical width of a pooled leaf for a canonical leaf of `canonical_length`.

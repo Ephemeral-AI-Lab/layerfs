@@ -94,12 +94,3 @@ fn hex(value: u8) -> ContentResult<u8> {
         _ => Err(ContentError::InvalidIdentityText),
     }
 }
-
-/// Authenticates `canonical` against a caller-supplied expected identity.
-pub fn authenticate(expected: ObjectId, canonical: &[u8]) -> ContentResult<()> {
-    if ObjectId::for_bytes(canonical) == expected {
-        Ok(())
-    } else {
-        Err(ContentError::IdentityMismatch)
-    }
-}

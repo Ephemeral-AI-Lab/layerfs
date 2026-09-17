@@ -5,9 +5,69 @@ mod support;
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{SchemaIdentity, StorageError, StoragePolicy, Store, SCHEMA_IDENTITY};
 use support::{
-    construct_file, create_store, disabled, noise, open_store, patterned, read_objects, repeat,
-    save_all, TempDir,
+    assembled_small_object, construct_file, create_store, disabled, noise, open_store, patterned,
+    read_objects, repeat, save_all, save_one, TempDir,
 };
+
+/// The declared role is the producer's, and a disagreement is refused in the
+/// role's own decoder rather than reinterpreted (contract: "Caller-declared
+/// object role" in `admission-and-persistence.md`).
+#[test]
+fn a_disagreeing_role_declaration_is_refused_by_its_own_decoder() {
+    use layerfs_content::filesystem::directory::codec::decode_directory_page;
+    use layerfs_content::filesystem::inode::codec::{
+        decode_inode_page, encode_inode_page, InodePage,
+    };
+    use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+    use layerfs_content::{FinalizedObject, ObjectId};
+
+    let dir = TempDir::new("declared-role");
+    let path = dir.store_path("declared-role");
+    let store = create_store(&path);
+
+    // A framed role has to find its own payload, so a declaration that disagrees
+    // with the bytes is refused at admission instead of being stored.
+    let whole = assembled_small_object(&patterned(2_048));
+    let mismatched = FinalizedObject::new(ObjectRole::Chunk, whole).expect("canonical object");
+    assert!(matches!(
+        save_one(&store, mismatched),
+        Err(StorageError::Integrity(
+            "chunk role with a non-chunk payload"
+        ))
+    ));
+
+    // An unframed tree role is stored verbatim, so the disagreement is persisted
+    // as declared and refused by the declared role's decoder on the next read.
+    let page = encode_inode_page(&InodePage::Leaf {
+        entries: vec![(
+            7,
+            InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 1,
+                content_root: ObjectId::for_bytes(b"declared-role/content"),
+                metadata_root: ObjectId::for_bytes(b"declared-role/metadata"),
+            },
+        )],
+    })
+    .expect("inode leaf page");
+    let leaf_id = ObjectId::for_bytes(&page);
+    let declared =
+        FinalizedObject::new(ObjectRole::DirectoryLeaf, page.clone()).expect("canonical object");
+    save_one(&store, declared).expect("an unframed declaration is stored as declared");
+    drop(store);
+
+    let reopened = open_store(&path);
+    let (values, _) = read_objects(&reopened, &[leaf_id]).expect("read succeeds");
+    assert_eq!(values[0], page, "the stored bytes are the declared object");
+    assert!(
+        decode_inode_page(&values[0]).is_ok(),
+        "the object's own grammar reads it"
+    );
+    assert!(
+        decode_directory_page(&values[0]).is_err(),
+        "the declared role's decoder refuses it instead of reinterpreting"
+    );
+}
 
 #[test]
 fn fresh_store_writes_the_declared_schema_identity() {

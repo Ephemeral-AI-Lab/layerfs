@@ -6,8 +6,10 @@
 
 mod support;
 
+use layerfs_content::filesystem::references::ReferenceReducer;
 use layerfs_content::filesystem::{DirectoryUpdate, InodeUpdate, LogicalPath, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+use layerfs_content::ContentError;
 use support::filesystem::{synthetic, value, Session};
 
 fn name(value: &str) -> PathName {
@@ -300,8 +302,39 @@ fn a_regular_file_keeps_at_least_one_binding() {
     );
     assert!(matches!(
         outcome,
-        Err(layerfs_content::ContentError::InvalidRecord(
-            "new inode without binding"
-        ))
+        Err(ContentError::InvalidRecord("new inode without binding"))
     ));
+}
+
+#[test]
+fn a_declared_new_inode_cannot_lose_a_binding() {
+    // A serial the caller declared new did not exist before the operation, so no
+    // base page can hold a binding to remove. The reducer refuses the
+    // contradiction instead of folding it into the signed effect of a stored
+    // record, and the label is the sibling of the disconnected-record refusal.
+    let mut reducer = ReferenceReducer::new(64, None, 4096, 1 << 20);
+    let declared = 41;
+    reducer
+        .declare_new(declared)
+        .expect("declares a new serial");
+    assert!(
+        matches!(
+            reducer.note_removed_binding(declared),
+            Err(ContentError::InvalidRecord("new inode loses a binding"))
+        ),
+        "a declared new inode cannot lose a base binding"
+    );
+    // Any other serial is an ordinary stored record and takes the signed effect.
+    reducer
+        .note_removed_binding(77)
+        .expect("an undeclared serial takes the signed effect");
+    assert_eq!(
+        reducer.state(77).expect("state"),
+        Some(
+            layerfs_content::filesystem::references::PendingState::Existing {
+                value: None,
+                delta: -1,
+            }
+        )
+    );
 }

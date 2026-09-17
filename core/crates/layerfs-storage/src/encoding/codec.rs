@@ -626,8 +626,3 @@ pub fn compress_group_body(
         Ok(None)
     }
 }
-
-/// Level and window cap used by the ordinary group body codec.
-pub const fn group_body_parameters() -> (i32, u32) {
-    (GROUP_LEVEL, GROUP_WINDOW_LOG_MAX)
-}

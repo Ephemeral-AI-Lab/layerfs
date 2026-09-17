@@ -16,7 +16,7 @@ pub use codec::{
     canonical_len, decode_bytes_object, encode_bytes_object, encode_bytes_object_to, BYTES_KIND,
     HEADER_LEN, MAX_PAYLOAD_BYTES, OBJECT_MAGIC,
 };
-pub use id::{authenticate, ObjectId, DIGEST_BYTES, OBJECT_DOMAIN};
+pub use id::{ObjectId, DIGEST_BYTES, OBJECT_DOMAIN};
 pub use inode_leaf::{
     decode_inode_value, decode_pooled_body, decode_pooled_value, encode_inode_value,
     encode_pooled_value, pooled_body, pooled_physical_length, rebuild_leaf, InodeKind, InodeLeaf,

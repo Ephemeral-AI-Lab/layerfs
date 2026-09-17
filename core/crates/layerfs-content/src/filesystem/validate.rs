@@ -113,10 +113,6 @@ pub struct CheckedInput<'a> {
     pub topology: FilesystemTopology,
     /// Bindings each child serial gains inside this operation.
     pub additions: BTreeMap<u64, u64>,
-    /// Bindings each child serial loses inside this operation.
-    pub removals: BTreeMap<u64, u64>,
-    /// Serial of every declared new identity.
-    pub declared_new: Vec<u64>,
 }
 
 /// Checks membership, identity use and effective topology before any mutation.
@@ -129,7 +125,6 @@ pub fn check<'a>(
     input.check()?;
     let topology = FilesystemTopology::load(reader, input.base, input.scope, input.root_serial)?;
     let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
-    let removals: BTreeMap<u64, u64> = BTreeMap::new();
     // Children with a stored record that this batch binds exactly once, by the
     // parent that binds them: the final pass decides whether that binding is the
     // one the base already has or a second parent.
@@ -225,13 +220,10 @@ pub fn check<'a>(
             }
         }
     }
-    let declared_new = input.new_inodes.to_vec();
     let checked = CheckedInput {
         input,
         topology,
         additions,
-        removals,
-        declared_new,
     };
     check_effective_cycles(reader, &checked, unreachable, work)?;
     Ok(checked)

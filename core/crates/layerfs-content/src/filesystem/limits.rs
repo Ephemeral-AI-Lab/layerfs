@@ -24,8 +24,6 @@ pub const MAXIMUM_INODE_LEAF_ROWS: u64 = 100;
 pub const MINIMUM_INODE_BRANCH_CHILDREN: u64 = 64;
 /// Largest children of one inode branch.
 pub const MAXIMUM_INODE_BRANCH_CHILDREN: u64 = 127;
-/// Smallest children of a non-root directory branch.
-pub const MINIMUM_DIRECTORY_BRANCH_CHILDREN: u64 = 2;
 /// Smallest canonical bytes of a non-root directory or attribute page.
 pub const MINIMUM_FILLED_PAGE_BYTES: usize = 3_277;
 /// Default bytes one filesystem operation may hold for its own unfinished pages.

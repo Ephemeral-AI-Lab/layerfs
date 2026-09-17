@@ -122,10 +122,19 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
     }
 
     /// Records that one binding to `serial` was removed by this operation.
+    ///
+    /// A serial the caller declared new had no binding before this operation: the
+    /// allocator precondition, checked against the base before any mutation, says
+    /// so. A removal reaching a new row therefore contradicts the declaration, and
+    /// it is refused rather than folded into the signed effect of a stored record.
+    /// The filesystem operation checks the precondition first, so this branch is
+    /// reachable only through this public reducer API; the sibling refusal for a
+    /// declared new inode that ends with no binding is `new inode without
+    /// binding`.
     pub fn note_removed_binding(&mut self, serial: u64) -> ContentResult<()> {
         let row = self.entry(serial)?;
         match row {
-            Row::Count { .. } => Err(ContentError::InvalidRecord("new inode removal")),
+            Row::Count { .. } => Err(ContentError::InvalidRecord("new inode loses a binding")),
             Row::Effect { delta, .. } => {
                 *delta = delta.checked_sub(1).ok_or(ContentError::LengthOverflow)?;
                 Ok(())
@@ -145,14 +154,6 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
             } => *existing = Some(value),
         }
         Ok(())
-    }
-
-    /// True when any pending or spilled row mentions `serial`.
-    pub fn is_touched(&mut self, serial: u64) -> ContentResult<bool> {
-        if self.pending.contains_key(&serial) {
-            return Ok(true);
-        }
-        Ok(self.runs.find(serial)?.is_some())
     }
 
     /// The newest pending state of `serial`, without creating a row for it.
