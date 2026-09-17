@@ -147,6 +147,21 @@ Alternative lifetimes and nested reservations must not be added blindly.
 | Remote DB adapter | Selected provider's request/response, serialization and SDK buffering; exact limits not chosen | In-flight bounded reads/writes coexist with canonical/encoded batches | Bound bytes and request concurrency before submission; count copies/expansion and runtime buffers. Slow consumption stops production |
 | Timer/report | [recording.rs](../../../../../core/crates/layerfs-telemetry/src/timer/recording.rs#L14): <=1024 nodes, depth32, label128 bytes | Operation; collection/attachment/serialization can overlap report structures | Coarse scope counts, disabled path before work, no payload capture. Report output/temporary text has its own owner and release event |
 
+**Candidate C2 profile (v0.1.7 Stages 3-4).** Every row above audits the v0.1.6
+reference. The candidate's connection profile is smaller and is stated here so the
+two are not confused: `PRAGMA journal_mode = MEMORY`, `synchronous = OFF`,
+`temp_store = MEMORY`, `foreign_keys = ON` and `busy_timeout = 0`
+(`core/crates/layerfs-storage/src/sqlite/connection.rs`). It sets **no**
+`cache_size` and **no** `mmap_size` pragma, so the engine's page cache, the MEMORY
+journal and `temp_store` b-trees run on the host library's defaults and are charged
+to no budget of this product; `cache_size` is not a total RSS cap and is not
+presented as one anywhere in the candidate. Connection multiplicity is one
+connection per open operation: one writer admitted by a single `BEGIN IMMEDIATE`
+with a zero busy timeout, and readers unbounded, each capturing the publication
+watermark once. The engine's own maxima (page size, cache, database size) are
+environment-dependent and unqualified, because the build links the system
+`libsqlite3` rather than a bundled copy.
+
 The reference is not evidence that all these owners already fit a single
 global memory cap. Missing charges for map/set allocation, reference-journal
 growth, simultaneous scratch connections and SQLite temporary allocations are

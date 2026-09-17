@@ -80,10 +80,10 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G6 | All nine sealed reference cases still match root, partition and survivors | W3 | **PASS** | `w3/w3-verify.log`: `edit_reference` 2 tests / nine sealed cases, exit 0 |
 | G7 | Every overclaiming or vacuous oracle replaced; each new case fails without its fix | W4 | **PASS** | `w4/README.md`; W4.1-W4.8 table, two measured controls, the rest source-derived and labelled |
 | G8 | Integrated multi-edit chunked pipeline case exists and passes | W4.5 | **PASS** | `edit_pipeline::a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates`, store-backed logical readback |
-| G9 | Every significant allocation has owner, bound, multiplicity, lifetime and release event | W5, W7.3 | OPEN | |
+| G9 | Every significant allocation has owner, bound, multiplicity, lifetime and release event | W5, W7.3 | **PASS** | ledger in `w7/README.md` (15 owners, no unowned owner) and `w5/README.md` |
 | G10 | No size-proportional hidden collector remains on a real path | W5 | **PASS** | `w5/README.md`; catalogue streamed, placement measured not copied, every level flushed, both pack caches bounded, cleanup transactions bounded |
-| G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | OPEN | |
-| G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | OPEN | |
+| G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | **PASS** | `examples/memory_ledger.rs` + `w7/w7-verify.log`: 6 measured phases, sampled RSS at boundaries, lifetime RSS labelled |
+| G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | **PASS** | `w7/README.md`: pooled save at the E1b shape peaks at 3.45 MiB heap with index 57 600 B + 3 MiB codec workspaces + SQLite journal/BLOBs live |
 | G13 | Matched reference campaign collected under a pre-committed addendum with aligned byte accounting | W8 | OPEN (B1) | |
 | G14 | Every declared verification case is RUN or NOT_RUN with a reason | W8.4 | OPEN | |
 | G15 | "Existing-or-better" for latency/storage/memory is resolved, or waived in writing | W8.6 | OPEN (B1) | |
@@ -220,6 +220,36 @@ G13-G15, G17-G19. Neither is complete yet.
   boundary, both tool suites and `git diff --check`, all exit 0; controls in
   `w6/w6-fails-without-fix.log`.
 * **Production LOC.** core `11166 -> 10983` (delta -183); C1 -120, C2 -63.
+
+### W7 — memory instrumentation and the allocation ledger (G9, G11, G12) — PASS
+
+* **W7.1** `core/crates/layerfs-storage/examples/memory_ledger.rs` installs a
+  counting `#[global_allocator]` in an external target and reports, per real
+  product phase, current bytes, phase-local peak, allocation count and charged
+  bytes. Product source gains no hook.
+* **W7.2** RSS is sampled with `ps -o rss=` **at phase boundaries only**, with the
+  window and coverage stated in the receipt; the lifetime high-water is reported
+  from `/usr/bin/time -l` on the example binary (16 777 216 B) and labelled as a
+  lifetime number; the in-process `ru_maxrss` row is `null` with its reason.
+* **W7.3** The ledger in `w7/README.md` covers the COW frontier, the immutable
+  bases, the FULL/PREFIX alternatives, all five pack lanes, the SQLite MEMORY
+  journal and BLOB copies, the ordered set, both pack caches, the value cache, the
+  candidate index, the depth cache, both codec workspaces, the builder levels and
+  the telemetry report — each with owner, bound, live multiplicity, overlap,
+  lifetime and release event. No unowned owner remains.
+* **W7.4** The receipt states what the connection profile sets and what it does
+  not (`cache_size`/`mmap_size` unset, engine maxima the host library's,
+  connection count unqualified); `content-io-memory-audit.md` now carries the
+  candidate profile beside the reference rows it audits.
+* **G12's result.** At the E1b shape (24 leaves × 100 rows = 2 400 values) the
+  pooled save's phase-local heap peak is 3.45 MiB with the ordered set (57 600 B),
+  the codec workspaces (3 MiB) and SQLite work live; the phase charges 81.5 MiB
+  across 9 977 allocations, so the pooled lane spends allocation rate rather than
+  residency. Nulls and coverage are tabulated.
+* **Evidence.** `w7/w7-verify.log`: the example run (exit 0), the same binary under
+  `/usr/bin/time -l` with its sha256, 14 focused targets, the workspace suite
+  (43/263), clippy, fmt, boundary, tools and `git diff --check` — all exit 0.
+* **Production LOC.** core `10983 -> 10983` (delta 0; example and docs only).
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 
