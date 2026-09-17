@@ -248,3 +248,87 @@ fn a_store_created_with_an_unsupported_policy_is_rejected_before_work() {
         "nothing was created for an unsupported policy"
     );
 }
+
+/// The `store-bytes` row: what a real Store retains, with the pack bodies named
+/// separately from the database that contains them.
+///
+/// The verification contract's registry asks for a real store-bytes row, and the
+/// retained receipts report neither pack bytes nor database bytes. Packs are rows
+/// inside the database (`object_packs.data`), so the row reports the pack bodies
+/// and the file that holds them apart: a database size delta is not write I/O and
+/// is never reported as such. One sample of one deterministic fixture - a
+/// footprint report, not a timing claim.
+#[test]
+fn the_retained_footprint_reports_pack_bodies_and_database_bytes() {
+    let dir = TempDir::new("store_bytes");
+    let path = dir.store_path("store_bytes");
+    let store = create_store(&path);
+    let bytes = noise(1_048_576 + 7);
+    let (collected, root, _) = construct_file(&bytes);
+    let objects = collected.objects().len();
+    let canonical = collected.canonical_bytes();
+    let outcome = save_all(&store, &collected).expect("save succeeds");
+    let read_back = support::read_logical(&store, root);
+    drop(store);
+    assert_eq!(
+        read_back, bytes,
+        "the fixture reads back before it is measured"
+    );
+
+    let database = std::fs::metadata(&path).expect("database file").len();
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let pack_bodies: i64 = connection
+        .query_row(
+            "SELECT COALESCE(SUM(length(data)), 0) FROM object_packs",
+            [],
+            |row| row.get(0),
+        )
+        .expect("pack bodies");
+    let largest_pack: i64 = connection
+        .query_row(
+            "SELECT COALESCE(MAX(length(data)), 0) FROM object_packs",
+            [],
+            |row| row.get(0),
+        )
+        .expect("largest pack");
+    let packs: i64 = connection
+        .query_row("SELECT count(*) FROM object_packs", [], |row| row.get(0))
+        .expect("pack count");
+    let entries = files_in(dir.path());
+    println!(
+        "MEASURED store-bytes: raw={} canonical={} objects={} inserted={} packs={} \
+         pack_bodies={} largest_pack={} database={} files={:?}",
+        bytes.len(),
+        canonical,
+        objects,
+        outcome.inserted,
+        packs,
+        pack_bodies,
+        largest_pack,
+        database,
+        entries
+    );
+    assert_eq!(
+        outcome.inserted, objects as u64,
+        "every object was inserted"
+    );
+    assert!(
+        packs > 0 && pack_bodies > 0,
+        "the store retained pack bodies"
+    );
+    assert!(
+        pack_bodies as u64 <= database,
+        "pack bodies are contained in the database: {pack_bodies} > {database}"
+    );
+    // A chunked fixture stays in the ordinary lanes, so every pack body is inside
+    // the declared ordinary pack limit and none of them was spilled to a file.
+    assert!(
+        largest_pack as u64 <= layerfs_storage::policy::PACK_LIMIT as u64,
+        "a pack body exceeded the ordinary lane limit: {largest_pack}"
+    );
+    assert_eq!(
+        entries,
+        vec!["store_bytes.sqlite".to_string()],
+        "one database file, no payload or spool file"
+    );
+}

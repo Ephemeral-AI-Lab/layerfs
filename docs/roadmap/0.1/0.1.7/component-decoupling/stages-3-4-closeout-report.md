@@ -42,7 +42,8 @@ Exact question or condition: may the matched v0.1.6-versus-candidate C1 campaign
 Evidence: docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-verification.md and
   stages-3-4-measurement-addendum.md (n = 1 rule); the review's §6.5.
 What I did instead while waiting: W1-W7, W9 and W10.
-What remains blocked: G13, G14, G15 (and therefore the Stage 3 "qualified" verdict).
+What remains blocked: G13 and G15 (and therefore the Stage 3 "qualified" verdict). G14
+  and G16 were completed while waiting and are PASS.
 Next action on unblock: commit the versioned campaign addendum (cases, seeds,
   identities, cache state, sample count), then collect the matched arms.
 ```
@@ -85,16 +86,43 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | **PASS** | `examples/memory_ledger.rs` + `w7/w7-verify.log`: 6 measured phases, sampled RSS at boundaries, lifetime RSS labelled |
 | G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | **PASS** | `w7/README.md`: pooled save at the E1b shape peaks at 3.45 MiB heap with index 57 600 B + 3 MiB codec workspaces + SQLite journal/BLOBs live |
 | G13 | Matched reference campaign collected under a pre-committed addendum with aligned byte accounting | W8 | OPEN (B1) | |
-| G14 | Every declared verification case is RUN or NOT_RUN with a reason | W8.4 | OPEN | |
+| G14 | Every declared verification case is RUN or NOT_RUN with a reason | W8.4 | **PASS** | `stages-3-4-verification.md` §2.1: eleven declared cases mapped to the product case that executes them, two `NOT_RUN` with reasons, plus the new real `store-bytes` row (`w8/README.md`, `w8/w8-verify.log`) |
 | G15 | "Existing-or-better" for latency/storage/memory is resolved, or waived in writing | W8.6 | OPEN (B1) | |
-| G16 | The clipped `e1c` receipt is re-collected or annotated wherever quoted | W8.7 | OPEN | |
+| G16 | The clipped `e1c` receipt is re-collected or annotated wherever quoted | W8.7 | **PASS** | `w8/README.md`: the receipt is untouched, and the disclosure was added to the ledger (appended), `stages-3-4-verification.md` §4 and the final review's quoting table; re-collection is declined with the reason |
 | G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | **PASS** | `w9/README.md`; report §1/§7 corrected in place, §8 carries the plan's table, oracle paperwork fixed |
 | G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | **PASS** | `w9/README.md`: 956 over-removed lines and 4 083 test-module lines measured; combined 76 400; both snapshots counted by the corrected counter |
 | G19 | Limits boundary list run or explicitly unrun with reasons | W10 | **PASS** | `w10/README.md`; 13 boundaries, 12 run through public APIs with raw stdout in `w10/w10-verify.log`, the 8 MiB - 1 deferred refusal UNRUN with its source proof (408 MiB base floor) and its premise measured |
-| G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | IN PROGRESS | see §3; every commit so far carries the line |
+| G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | **PASS** | nine commits from `97414bac4` to `c56c28dd1` each carry exactly one first-parent `Production LOC:` line (checked with `git log --format=%B`); findings closure table in §2.1 |
 
 **Stage verdicts.** Stage 3 needs G1, G2, G9-G14, G17-G19. Stage 4 needs G3-G8,
-G13-G15, G17-G19. Neither is complete yet.
+G13-G15, G17-G19. G13 and G15 are the only rows still open, both on E1 (the owner's
+campaign decision), so neither stage may be called complete yet.
+
+### 2.1 Review findings closure (F1-F10)
+
+`stages-3-4-review-20260916T233008Z.md` grades its findings S1 (blocks an issue's
+own acceptance), S2 (real defect or real missing work) and S3 (documentation or
+latent trap); G20 asks for the S1/S2 ones to be closed. Every finding, its packet
+and where its proof lives:
+
+| Finding | Severity | Packet | Status and evidence |
+| --- | --- | --- | --- |
+| F1 CHUNK delta candidates skip the eligibility check | S1 | W1 | Closed: `select.rs` probe; three `delta_payload` cases, all three fail without the fix (`w1/README.md`, `w1/w1-fails-without-fix.log`) |
+| F1b the pooled lane reads above the publication watermark | S2 | W2 | Closed: four pooled read sites supply `self.ceiling`; structural and behavioural oracles, both fail without it (`w2/README.md`) |
+| F1c cold-start index replay materialises the whole catalogue | S2 | W5.1 | Closed: `pool::for_each_group` streams it and the recurrence keeps three scalars (`w5/README.md`) |
+| F2 checkpoint D's decoded frontier not implemented | S1 | W3, W10.1 | Closed: `Draft::Page`/`Draft::Node`, one encode/hash per node at final emission, release on supersession, plus the refcounted cascade W10.1 added after the ceiling case found the deeper leak (`w3/README.md`, `w10/README.md` §1) |
+| F4 oracles that do not test what they claim | S2 | W4 | Closed: per-case table of what each replaced oracle now asserts, two measured controls (`w4/README.md`, `w4/w4-fails-without-fix.log`) |
+| F5 acceptance documents contradict the code | S3 | W9 | Closed: report §1/§7 corrected in place with dates, §8 per-file table, oracle headers fixed (`w9/README.md`) |
+| F6 a full canonical clone per object on the prepared-save path | S2 | W5.2 | Closed: `MutationOwner::offer` takes `&FinalizedObject` (`w5/README.md`) |
+| F7 pack placement deep-clones the open pack per fit probe | S2 | W5.3 | Closed: `layout::append_fits` probes in place; `pack_locator` fit-probe equivalence (`w5/README.md`) |
+| F8 unbounded owners the ledger does not carry | S2 | W5, W7.3 | Closed: fifteen owners with bound, multiplicity, lifetime and release event; no unowned owner remains (`w5/README.md`, `w7/README.md`) |
+| F9 latent traps in the extended code | S3 | W6 | Closed: dead code deleted, traps removed or made explicit, deviations recorded (`w6/README.md`) |
+| F10 documented format/design deviations to confirm with the owner | S2 | W6.3, W6.4 | Addressed as far as the agent may go: both deviations are now recorded in the design document and the code, and the confirmation itself is the owner decision E2. No code change until it is answered (`w6/README.md`, `physical-encoding-and-packing.md`) |
+
+Eleven findings: two S1 (F1, F2) and six S2 (F1b, F1c, F4, F6, F7, F8) closed with
+a measured control run, a structural oracle, or the bounds and ledger work of W5 and
+W7.3; one S2 (F10) resolved into the recorded owner decision E2, with no code change
+until the owner answers; and two S3 documentation findings (F5, F9) closed.
 
 ---
 
@@ -271,6 +299,31 @@ G13-G15, G17-G19. Neither is complete yet.
 * **W9.6** `core/README.md`, the roadmap index, `implementation-plan.md`,
   `implementation-issues.md` and the experiment ledger (L33) carry the closeout.
 * **Evidence.** `w9/w9-verify.log` — 11 commands, all exit 0.
+
+### W8 — the campaign packet, completed except the owner-gated campaign (G14, G16) — PASS; G13/G15 OPEN (E1)
+
+* **W8.4 (G14)** `stages-3-4-verification.md` §2.1 now maps every case the frozen
+  contract declares to the product case that runs it: eleven RUN, and two `NOT_RUN`
+  with reasons - the matched campaign itself (E1 open, so no addendum and no arm may
+  exist) and read amplification on the representation transition, which has no case
+  and is the residual gap the acceptance report names. The missing `store-bytes` row
+  is now real: a 1 048 583-byte fixture saved through a real Store retains 60 objects
+  (1 052 271 B canonical) in six pack bodies of 1 052 818 B, largest 259 777 B inside
+  the 262 144-byte ordinary pack limit, inside one 1 204 224-byte database file and no
+  other file; the row reports pack bodies apart from the database and never presents a
+  database delta as write I/O.
+* **W8.7 (G16)** The clipped `e1c-pooled-512` receipt is disclosed everywhere it is
+  quoted - an appended ledger section, a dated paragraph in
+  `stages-3-4-verification.md` §4, and a dated correction above the table in
+  `stages-3-4-final-review.md`. The receipt, its tree and its `stdout.log` are
+  untouched and nothing is re-labelled. Re-collection is declined with the reason
+  recorded: the arm is a wiring demonstration whose cited counts are complete, and a
+  second n=1 run could not change what it may be claimed for.
+* **Blocked.** W8.1/W8.2/W8.3/W8.5/W8.6/W8.8 and rows G13/G15 need E1's answer; the
+  order of work on a yes is stated in `w8/README.md`.
+* **Evidence.** `w8/w8-verify.log` (two recorded command groups, both exit 0, raw
+  `MEASURED store-bytes` line on disk) and `w8/README.md`.
+* **Production LOC.** unchanged at `11058` (test and documentation only, delta 0).
 
 ### W10 — limits boundary coverage (G19) — PASS, one boundary UNRUN
 

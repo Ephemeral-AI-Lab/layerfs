@@ -43,6 +43,48 @@ tests use (`noise` = fixed xorshift stream, `patterned` = index-derived bytes).
 | Policy | `singleton-1m` | 1 048 575-byte incompressible whole-file record | stored in its own pack, read back exactly, one database file on disk |
 | Index/footprint | `store-bytes` | each pipeline case | total retained pack bytes and database bytes reported; a DB size delta is never reported as write I/O |
 
+### 2.1 Registry status: every declared case is RUN or NOT_RUN (added 2026-09-17, W8.4)
+
+The cases §2 declares are executed by the product's own external test targets, one
+sample per case, with the fixture built inside the case. "RUN" below means the case
+executed in this batch and its success criterion is an assertion in the named case;
+a command that cannot run is `NOT_RUN` with its reason. Nothing here is a
+performance claim - these are correctness and footprint rows.
+
+| Declared case | Product case that runs it | Status |
+| --- | --- | --- |
+| `whole-file-delta-win` | `delta_payload::an_explicit_predecessor_produces_a_readable_prefix_record` | RUN |
+| `whole-file-delta-lose` | `delta_payload::an_unrelated_candidate_loses_the_cost_comparison`, `delta_payload::an_absent_or_ineligible_candidate_selects_full` | RUN |
+| `chunk-delta-win` | `delta_payload::the_chunk_lane_honours_its_own_depth_cap`, `delta_payload::a_fifty_link_chunk_chain_is_admitted_and_read` | RUN |
+| `small-overwrite` | `edit_single::overwrite_in_the_middle`, `edit_single::overwrite_at_the_head_and_the_tail` | RUN |
+| `chunked-overwrite` | `edit_single::a_chunked_base_reads_and_edits_without_a_full_pass` | RUN |
+| `grow` / `shrink` / `empty` | `edit_transitions::every_conversion_direction_reaches_the_fresh_construction_root`, `edit_transitions::exact_boundaries_at_every_accepted_cutoff`, `edit_single::insert_and_delete_change_the_length_exactly`, `edit_single::complete_deletion_returns_the_empty_representation` | RUN |
+| `multi-edit` | `edit_batch::several_separated_edits_apply_in_order`, `edit_batch::many_small_edits_are_applied_in_one_pass`, `edit_pipeline::a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates` | RUN |
+| `equal-replacement` / `empty-stream` | `edit_noop::an_equal_replacement_preserves_the_base_root`, `edit_noop::an_empty_stream_returns_the_base_root_untouched` | RUN |
+| `cutoff-128k/256k/1m` | `policy_capacity::boundaries_follow_the_configured_cutoff_not_a_frozen_one`, `policy_capacity::every_supported_cutoff_is_persisted_and_reopened_unchanged`, `edit_transitions::exact_boundaries_at_every_accepted_cutoff` | RUN |
+| `singleton-1m` | `policy_capacity::a_larger_incompressible_whole_file_record_uses_the_singleton_lane`, `memory_bounds::the_supported_incompressible_singletons_are_stored_and_read_back`, `memory_bounds::a_complete_file_singleton_never_creates_a_payload_file` | RUN |
+| `store-bytes` | `memory_bounds::the_retained_footprint_reports_pack_bodies_and_database_bytes` | RUN (new in W8.4) |
+| matched v0.1.6 campaign (payload, storage, memory, latency gates) | none | **NOT_RUN** - the owner decision in the closeout report's E1 is open, so no addendum was committed and no matched arm was collected; see §4 |
+| read amplification on the representation transition | none | **NOT_RUN** - no case exists; the residual gap the acceptance report names, unmeasured in this batch |
+
+The `store-bytes` row is real, not a placeholder. One sample of a deterministic
+1 048 583-byte chunked fixture (`construct_file`), saved through a real `Store`, then
+measured on the closed database:
+
+```text
+MEASURED store-bytes: raw=1048583 canonical=1052271 objects=60 inserted=60 packs=6 \
+  pack_bodies=1052818 largest_pack=259777 database=1204224 files=["store_bytes.sqlite"]
+```
+
+Read as: the 60 canonical objects (1 052 271 B) are framed into six pack bodies
+totalling 1 052 818 B, the largest 259 777 B - inside the ordinary 262 144-byte pack
+limit - and all of it lives in rows of the single 1 204 224-byte database file, with
+no pack, payload or spool file on disk. Pack bodies are therefore reported apart from
+the database that contains them, and no database size delta is presented as write
+I/O. Command:
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test memory_bounds the_retained_footprint_reports_pack_bodies_and_database_bytes -- --nocapture`
+(raw stdout in `w8/w8-verify.log`).
+
 ## 3. Measurement rules for any later comparison
 
 1. One sample per case per arm unless an owner-approved campaign says otherwise;
@@ -78,6 +120,15 @@ The round's declarations were committed before collection in
 [`stages-3-4-measurement-addendum.md`](stages-3-4-measurement-addendum.md); every arm
 finished inside the 15 s per-command budget (longest 3.155 s) and the timing on/off
 pairs print identical product lines.
+
+**Disclosure (added 2026-09-17, W8.7).** The longest arm, `e1c-pooled-512`, is
+**telemetry-clipped**: its `stdout.log` prints `pooled.save 3.105s [incomplete]`,
+its timing tree carries `"incomplete": true` on the root and on one
+`storage.accept`, and its `timings:` line states that detail was clipped rather
+than zero, leaving 57.5 % of that scope unattributed. The receipt and its tree stay
+exactly as produced and are never re-labelled; only its 3.155 s *wall time* is used
+above, as budget accounting. The round is a wiring and correctness demonstration
+and no performance claim rests on any of its arms.
 
 The families this contract lists (payload FULL/DELTA, transitions, pooling reuse
 and turnover, pack boundaries, grouped reads and failure cleanup) are covered by the

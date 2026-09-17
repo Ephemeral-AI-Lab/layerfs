@@ -95,3 +95,17 @@ cgroup figure is used as a phase number.
 - No warm/cold contrast: the addendum declares no cache-state contrast, and a cold
   claim would need the cold contract's invalidation and residency check, which the
   in-process fixture cannot provide.
+
+## Annotation added 2026-09-17 (W8.7) - the `e1c-pooled-512` row is telemetry-clipped
+
+The `e1c-pooled-512` row above is quoted from a receipt whose timing tree is
+incomplete: `stdout.log` prints `pooled.save 3.105s [incomplete]`, the tree carries
+`"incomplete": true` on its root and on one `storage.accept`, and `timings:` reports
+that detail was clipped rather than zero, leaving 57.5 % of that scope
+unattributed. The receipt and its tree are retained exactly as produced and are not
+re-labelled; this note is appended so that no reader of the row mistakes the
+3.155 s wall time for a fully attributed measurement. The clipping is disclosed in
+`stages-3-4-verification.md` §4 and was recorded as E-D7 by the review's own
+evidence audit. Re-collection was not attempted: the arm is a wiring and
+correctness demonstration, not performance evidence, and a single-sample re-run
+would not change what it may be claimed for.

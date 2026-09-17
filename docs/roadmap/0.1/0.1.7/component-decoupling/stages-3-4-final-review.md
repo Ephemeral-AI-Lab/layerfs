@@ -284,6 +284,15 @@ profile, one sample each, in-process fixture, no warm-cache credit):
 | 128 × 100 | 227 / 12 573 | 16 / 112 | 112 | 15 | 227, 5 448 B | 114 688 | 0.834 s |
 | 512 × 100 | 611 / 50 589 | 64 / 448 | 448 | 63 | 611, 14 664 B | 323 584 | 3.155 s |
 
+**Correction (added 2026-09-17, W8.7, by the implementation agent).** The
+`512 x 100` row above is quoted from a telemetry-clipped receipt: its `stdout.log`
+prints `pooled.save 3.105s [incomplete]`, its timing tree carries
+`"incomplete": true` on the root and on one `storage.accept`, and 57.5 % of that
+scope is unattributed. The receipt is retained unchanged; the 3.155 s column above
+is a whole-command wall time, and the counts in the row are read from the receipt's
+own summary lines, which are complete. Nothing else in the row or in the paragraph
+below depends on the clipped detail.
+
 Read as: 51 200 admitted rows in 512 leaves collapse to 611 pooled values (98.8% reuse),
 seven of eight leaves are COPY/INSERT deltas, and the chain restarts exactly where the
 65 536-byte canonical budget binds (`full leaves = work-exceeded + 1` at all three sizes;
