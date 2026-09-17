@@ -289,8 +289,8 @@
 - **Verification receipt:** `measure_filesystem --mode c1 --case
   directory-update --entries 200` (D7) and `filesystem_timing_c1 --case
   directory-update` (D2): all `SortedWork` counters (pages_read/created/reused,
-  `peak_scratch_bytes`) and the root **bit-identical**; elapsed diagnostic-only,
-  expected lower. Direction: no counter moves — stated plainly.
+  `peak_scratch_bytes`) and the root **bit-identical**; elapsed
+  diagnostic-only, expected lower. No counter moves — stated plainly.
 - **Commit slicing:** one commit; fully independent of the edit-path items
   (different subsystem); may land in parallel.
 - **Risks / open questions:** the new `Page` field must not perturb scratch
