@@ -40,6 +40,20 @@ pub const MAXIMUM_ATTRIBUTE_KEY_BYTES: usize = 255;
 pub const PORTABLE_ATTRIBUTE_DOMAIN: &str = "portable";
 /// Largest bytes of one attribute value.
 pub const MAXIMUM_ATTRIBUTE_VALUE_BYTES: usize = 1024 * 1024;
+/// Rows one directory leaf may hold at the page ceiling.
+///
+/// A page is a fixed header plus one row per entry, and a row is never shorter
+/// than a 2-byte name length, a one-byte name and an 8-byte serial. This quotient
+/// is therefore the largest row count any page can have, and the check that uses
+/// it is a count ceiling, not a size proof: whether a particular set of rows fits
+/// depends on how long its names are, and the encoder decides that from the exact
+/// encoded size before it assembles the page. The reference's split threshold
+/// added one to this quotient, which is one row more than a page can ever hold.
+pub const MAXIMUM_DIRECTORY_LEAF_ROWS: usize =
+    (MAXIMUM_PAGE_BYTES - EMPTY_PAGE_BYTES) / (2 + 1 + 8);
+
+/// Bytes a tree page carries before its first row.
+pub const EMPTY_PAGE_BYTES: usize = 44;
 
 /// True when a page of `bytes` canonical length satisfies the 2/5 fill rule.
 pub const fn filled_page(bytes: usize) -> bool {

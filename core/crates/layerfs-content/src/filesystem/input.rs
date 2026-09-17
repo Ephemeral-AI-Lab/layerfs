@@ -143,6 +143,15 @@ pub struct FilesystemInput<'a> {
     pub resources: FilesystemResources,
 }
 
+/// True for the serials the compact profile can store.
+///
+/// The root's own identity has a separate check ([`InodeIdentity::new`]); this
+/// one covers the serials a binding or a supplied value names, which is where a
+/// serial the leaf grammar would reject enters the operation.
+const fn serial_in_range(serial: u64) -> bool {
+    serial > 0 && serial <= crate::filesystem::identity::MAXIMUM_INODE_SERIAL
+}
+
 impl FilesystemInput<'_> {
     /// Checks the shape of every supplied list before any object is touched.
     pub fn check(&self) -> ContentResult<()> {
@@ -152,6 +161,13 @@ impl FilesystemInput<'_> {
         }
         for update in self.directories {
             update.check()?;
+            if update
+                .changes
+                .iter()
+                .any(|(_, binding)| binding.is_some_and(|serial| !serial_in_range(serial)))
+            {
+                return Err(ContentError::InvalidRecord("inode serial"));
+            }
         }
         if self
             .directories
@@ -167,7 +183,16 @@ impl FilesystemInput<'_> {
         {
             return Err(ContentError::NonCanonicalOrdering);
         }
-        if self.inodes.iter().any(|update| update.serial == 0) {
+        // The compact profile stores one serial in eight bytes and the tree
+        // grammar requires it below `i64::MAX`. The root's identity is checked by
+        // `InodeIdentity::new`; every other serial enters through a binding or a
+        // supplied value, so both lists are range-checked here, before any leaf
+        // byte is written.
+        if self
+            .inodes
+            .iter()
+            .any(|update| !serial_in_range(update.serial))
+        {
             return Err(ContentError::InvalidRecord("inode serial"));
         }
         if self.new_inodes.windows(2).any(|pair| pair[0] >= pair[1]) {

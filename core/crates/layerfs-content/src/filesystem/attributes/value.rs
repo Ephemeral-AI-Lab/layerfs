@@ -15,9 +15,19 @@ use crate::filesystem::objects::FilesystemObjects;
 use crate::object::{FinalizedObject, ObjectId, ObjectRole};
 
 /// Emits one extent-only value root and returns its file-state identity.
+///
+/// The declared value bound applies here and not only on the read side: a value
+/// this function accepts is one a bounded read can return whole, so a caller
+/// cannot create an attribute the read path would refuse to hand back.
 pub fn emit_value(objects: &mut FilesystemObjects<'_>, bytes: &[u8]) -> ContentResult<ObjectId> {
     if bytes.is_empty() {
         return Err(ContentError::InvalidRecord("attribute value"));
+    }
+    if bytes.len() > crate::filesystem::limits::MAXIMUM_ATTRIBUTE_VALUE_BYTES {
+        return Err(ContentError::ObjectLimitExceeded {
+            limit: crate::filesystem::limits::MAXIMUM_ATTRIBUTE_VALUE_BYTES,
+            actual: bytes.len(),
+        });
     }
     let payload = FinalizedObject::new(ObjectRole::Chunk, encode_chunk_object(bytes)?)?;
     let payload_id = objects.emit(payload)?;

@@ -255,3 +255,56 @@ fn roles_and_identity_are_not_interchangeable() {
         "persisted role codes are part of the stored contract"
     );
 }
+
+#[test]
+fn a_directory_leaf_never_exceeds_the_page_ceiling() {
+    // A leaf page is a fixed header plus one row per entry. Two bounds apply and
+    // they are different questions: the row count may never exceed what the
+    // shortest possible row allows, and a particular set of rows may fit only if
+    // its encoded size does. The reference's threshold added one row to the count
+    // quotient, which is one row more than a page can ever hold, so a count that
+    // passed its partition check could still fail its size check and be reported
+    // as a size error.
+    let ceiling = layerfs_content::filesystem::limits::MAXIMUM_DIRECTORY_LEAF_ROWS;
+    let page_bytes = layerfs_content::filesystem::limits::MAXIMUM_PAGE_BYTES;
+    let empty = layerfs_content::filesystem::limits::EMPTY_PAGE_BYTES;
+    assert_eq!(ceiling, (page_bytes - empty) / (2 + 1 + 8));
+    let rows = |count: usize, name_bytes: usize| {
+        (0..count)
+            .map(|index| {
+                let name = format!("{index:0width$}", width = name_bytes);
+                (
+                    PathName::new(&name[..name_bytes.min(name.len())]).expect("name"),
+                    index as u64 + 2,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let encode = |count: usize, name_bytes: usize| {
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: rows(count, name_bytes),
+        })
+    };
+    // One row past the count quotient is a partition refusal.
+    assert!(
+        matches!(
+            encode(ceiling + 1, 6),
+            Err(ContentError::NonCanonicalPagePartition)
+        ),
+        "one row over the count quotient is a partition refusal"
+    );
+    // Within the count quotient the encoded size decides, and it decides as a
+    // partition refusal too: 64 rows of the longest names cannot fit.
+    assert!(
+        matches!(
+            encode(64, 255),
+            Err(ContentError::NonCanonicalPagePartition)
+        ),
+        "a page whose rows do not fit is a partition refusal, not a size error"
+    );
+    // Thirty of the longest names do fit, and short names fit far more than that.
+    let longest = encode(30, 255).expect("30 long rows fit");
+    assert!(longest.len() <= page_bytes);
+    let short = encode(200, 6).expect("200 short rows fit");
+    assert!(short.len() <= page_bytes);
+}

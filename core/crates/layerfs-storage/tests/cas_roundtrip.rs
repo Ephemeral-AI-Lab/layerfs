@@ -175,3 +175,40 @@ fn a_read_wave_is_bounded_by_the_declared_ceiling() {
         other => panic!("one object over the ceiling must be refused: {other:?}"),
     }
 }
+
+#[test]
+fn an_old_same_version_store_is_refused_at_open() {
+    // The role ceiling is the one constraint that changes without changing the
+    // column shape. A Store written with a narrower one was accepted at open and
+    // failed only at the first tree-role INSERT; the text is now required, so the
+    // refusal happens where the caller can see it.
+    let dir = TempDir::new("old-role-ceiling");
+    let path = dir.store_path("old-role-ceiling");
+    let store = create_store(&path);
+    drop(store);
+    {
+        let connection = rusqlite::Connection::open(&path).expect("raw connection");
+        connection
+            .execute_batch(
+                "PRAGMA foreign_keys = OFF;\
+                 DROP TABLE objects;\
+                 CREATE TABLE objects (\
+                     object_id BLOB NOT NULL PRIMARY KEY CHECK (length(object_id) = 32),\
+                     object_role INTEGER NOT NULL CHECK (object_role BETWEEN 1 AND 6),\
+                     canonical_length INTEGER NOT NULL CHECK (canonical_length > 0 AND canonical_length <= 16777216),\
+                     base_object_id BLOB CHECK (base_object_id IS NULL OR (length(base_object_id) = 32 AND base_object_id <> object_id)) REFERENCES objects(object_id) ON DELETE NO ACTION,\
+                     pack_id INTEGER NOT NULL REFERENCES object_packs(pack_id),\
+                     group_number INTEGER NOT NULL CHECK (group_number >= 0 AND group_number < 256),\
+                     record_number INTEGER NOT NULL CHECK (record_number >= 0 AND record_number < 8191)\
+                 ) STRICT, WITHOUT ROWID;\
+                 CREATE UNIQUE INDEX objects_locations ON objects(pack_id, group_number, record_number);",
+            )
+            .expect("rewrite with the previous role ceiling");
+    }
+    match disabled(|scope| Store::open(&path, scope.child("store"))) {
+        Err(StorageError::UnsupportedPolicy { field }) => {
+            assert_eq!(field, "object role constraint");
+        }
+        other => panic!("an old role ceiling must be refused at open: {other:?}"),
+    }
+}

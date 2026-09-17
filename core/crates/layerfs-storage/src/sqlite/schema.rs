@@ -146,7 +146,36 @@ pub fn identity(connection: &Connection, expected: SchemaIdentity) -> StorageRes
     Ok(())
 }
 
+/// Constraint text the persisted tables must carry.
+///
+/// The role ceiling is the one that changes without changing the column shape, so
+/// a Store written by an older same-version build would otherwise open and then
+/// refuse the first tree-role INSERT. Requiring the text at open makes the
+/// refusal happen where the caller can see it: the Store is refused rather than
+/// accepted and failed later.
+const REQUIRED_CONSTRAINTS: &[(&str, &str)] =
+    &[("objects", "CHECK (object_role BETWEEN 1 AND 13)")];
+
 fn validate_table(connection: &Connection, table: &str, columns: &[&str]) -> StorageResult<()> {
+    if let Some((_, constraint)) = REQUIRED_CONSTRAINTS.iter().find(|(name, _)| *name == table) {
+        let sql: Option<String> = connection
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [table],
+                |row| row.get(0),
+            )
+            .map(Some)
+            .or_else(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                other => Err(other),
+            })?;
+        let sql = sql.ok_or(StorageError::Integrity("required table is missing"))?;
+        if !sql.contains(constraint) {
+            return Err(StorageError::UnsupportedPolicy {
+                field: "object role constraint",
+            });
+        }
+    }
     let sql: Option<String> = connection
         .query_row(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",

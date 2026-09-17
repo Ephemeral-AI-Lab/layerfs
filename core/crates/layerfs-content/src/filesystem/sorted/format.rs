@@ -90,6 +90,12 @@ pub(crate) trait Format {
     fn decode_scratch(bytes: usize) -> usize;
     /// Upper bound on rows one page may hold at `level`.
     fn page_items(level: u8) -> usize;
+    /// Upper bound on rows one page may hold, from the page ceiling itself.
+    ///
+    /// `page_items` says when the engine splits; this says what the canonical
+    /// encoder may accept. The two are separate because the reference's split
+    /// threshold admits one row more than the page can hold.
+    fn max_items(level: u8) -> usize;
     /// True when a non-root page of this size and row count satisfies the fill rule.
     fn filled(size: usize, count: usize, level: u8) -> bool;
     /// True when a page of this exact size and row count fits the page ceiling.
@@ -219,7 +225,7 @@ impl Format for CompactDirectory {
         validate_count(
             page.level,
             count,
-            <Self as Format>::page_items(page.level),
+            <Self as Format>::max_items(page.level),
             <Self as Format>::empty_allowed(),
         )?;
         let rows = page.rows;
@@ -238,6 +244,16 @@ impl Format for CompactDirectory {
                 )
                 .ok_or(ContentError::LengthOverflow)
             })?;
+            // Whether a set of rows fits is a size question, so it is decided
+            // from the exact encoded size before the page is assembled: the count
+            // ceiling alone cannot answer it, because it is derived from the
+            // shortest row a page could hold.
+            let encoded = (EMPTY_PAGE_BYTES as u64)
+                .checked_add(bytes)
+                .ok_or(ContentError::LengthOverflow)?;
+            if encoded > MAXIMUM_PAGE_BYTES as u64 {
+                return Err(ContentError::NonCanonicalPagePartition);
+            }
             (count as u64, bytes)
         } else {
             (page.count, page.bytes)
@@ -291,7 +307,23 @@ impl Format for CompactDirectory {
 
     fn page_items(level: u8) -> usize {
         if level == 0 {
-            (MAXIMUM_PAGE_BYTES - EMPTY_PAGE_BYTES) / 11 + 1
+            // The reference's threshold admits one row more than a page can hold.
+            // Splitting at the page ceiling instead keeps a partition refusal a
+            // partition refusal, and the partitions themselves are unchanged: the
+            // reference's size check rejects that row before any page carries it.
+            crate::filesystem::limits::MAXIMUM_DIRECTORY_LEAF_ROWS
+        } else {
+            DEFAULT_PAGE_ITEMS
+        }
+    }
+
+    fn max_items(level: u8) -> usize {
+        if level == 0 {
+            // Every row is a 2-byte name length, a name and an 8-byte serial, so
+            // a page cannot hold more rows than the shortest possible row allows.
+            // The exact ceiling for a given key set is the encoded size, and
+            // `fits` enforces it after every append.
+            crate::filesystem::limits::MAXIMUM_DIRECTORY_LEAF_ROWS
         } else {
             DEFAULT_PAGE_ITEMS
         }
@@ -442,7 +474,7 @@ impl Format for CompactInodes {
         validate_count(
             page.level,
             count,
-            <Self as Format>::page_items(page.level),
+            <Self as Format>::max_items(page.level),
             <Self as Format>::empty_allowed(),
         )?;
         let mut previous: Option<u64> = None;
@@ -523,6 +555,16 @@ impl Format for CompactInodes {
         // `fits` after each append, exactly as the reference does: a page that
         // reached its row ceiling is split, never refused.
         DEFAULT_PAGE_ITEMS
+    }
+
+    fn max_items(level: u8) -> usize {
+        // An inode leaf and branch have their own declared row counts, which the
+        // decoder already enforces; the encoded size is checked by `fits`.
+        if level == 0 {
+            usize::try_from(MAXIMUM_INODE_LEAF_ROWS).unwrap_or(DEFAULT_PAGE_ITEMS)
+        } else {
+            usize::try_from(MAXIMUM_INODE_BRANCH_CHILDREN).unwrap_or(DEFAULT_PAGE_ITEMS)
+        }
     }
 
     fn filled(_size: usize, count: usize, level: u8) -> bool {

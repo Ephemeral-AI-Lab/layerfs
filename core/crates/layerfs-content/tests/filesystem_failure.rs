@@ -7,17 +7,18 @@
 
 mod support;
 
+use layerfs_content::filesystem::attributes::value::emit_value;
 use layerfs_content::filesystem::{
-    update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemRead,
-    FilesystemResources, FilesystemRootId, InodeUpdate, LogicalPath, PathName,
+    build_filesystem, update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects,
+    FilesystemRead, FilesystemResources, FilesystemRootId, InodeUpdate, LogicalPath, PathName,
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{
     ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectRole,
 };
 use support::filesystem::{
-    count_role, resources, synthetic, value, FailingReader, RecordingBacking, Session, TempDir,
-    TreeStore,
+    count_role, resources, synthetic, value, with_objects, FailingReader, RecordingBacking,
+    Session, TempDir, TreeStore,
 };
 
 fn name(value: &str) -> PathName {
@@ -482,4 +483,84 @@ fn cancellation_leaves_no_owned_ordering_resources_and_repeatable_state() {
     assert_ne!(result.root.0, session.root);
     assert_eq!(backing.counters().releases, 1);
     assert!(!backing.owns_storage());
+}
+
+#[test]
+fn a_binding_serial_outside_the_stored_range_is_refused() {
+    // The compact profile stores one serial in eight bytes and the tree grammar
+    // requires it below `i64::MAX`. The root's identity is checked by its own
+    // constructor; a serial that enters through a binding or a supplied value was
+    // written into leaf bytes and refused later by a page decoder.
+    let scope = layerfs_content::filesystem::scope_for_seed([0x44; 32]);
+    let too_large = (i64::MAX as u64) + 1;
+    for (directories, inodes, new_inodes) in [
+        (
+            vec![DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("x"), Some(too_large))],
+            }],
+            vec![InodeUpdate {
+                serial: 1,
+                value: dir_value(),
+            }],
+            vec![1_u64, too_large],
+        ),
+        (
+            vec![DirectoryUpdate {
+                parent: 1,
+                changes: Vec::new(),
+            }],
+            vec![
+                InodeUpdate {
+                    serial: 1,
+                    value: dir_value(),
+                },
+                InodeUpdate {
+                    serial: too_large,
+                    value: regular("failure/serial"),
+                },
+            ],
+            vec![1_u64, too_large],
+        ),
+    ] {
+        let input = FilesystemInput {
+            base: None,
+            scope,
+            root_serial: 1,
+            directories: &directories,
+            inodes: &inodes,
+            new_inodes: &new_inodes,
+            resources: resources(),
+        };
+        let mut store = TreeStore::new();
+        let outcome = with_objects(&mut store, |objects| {
+            build_filesystem(objects, &input, None)
+        });
+        assert!(
+            matches!(outcome, Err(ContentError::InvalidRecord("inode serial"))),
+            "a serial above the stored range must be refused: {outcome:?}"
+        );
+    }
+}
+
+#[test]
+fn an_attribute_value_over_the_declared_bound_is_refused_on_write() {
+    // The 1 MiB value bound is what a bounded read can return whole. A write that
+    // bypasses it would create an attribute the read path refuses to hand back.
+    let limit = layerfs_content::filesystem::limits::MAXIMUM_ATTRIBUTE_VALUE_BYTES;
+    let mut store = TreeStore::new();
+    let too_large = vec![0x5a_u8; limit + 1];
+    let outcome = with_objects(&mut store, |objects| emit_value(objects, &too_large));
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::ObjectLimitExceeded { limit: refused, actual })
+                if refused == limit && actual == limit + 1
+        ),
+        "one byte over the declared value bound must be refused: {outcome:?}"
+    );
+    // Exactly at the bound is still an accepted value.
+    let at_limit = vec![0x5a_u8; 4096];
+    let outcome = with_objects(&mut store, |objects| emit_value(objects, &at_limit));
+    assert!(outcome.is_ok(), "a small value is emitted: {outcome:?}");
 }
