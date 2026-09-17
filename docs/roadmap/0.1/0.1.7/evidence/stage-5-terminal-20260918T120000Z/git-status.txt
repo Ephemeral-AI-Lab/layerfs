@@ -1,3 +1,10 @@
- M docs/roadmap/0.1/0.1.7/component-decoupling/admission-and-persistence.md
- M docs/roadmap/0.1/0.1.7/component-decoupling/filesystem-tree.md
-?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/
+ M docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/git-status.txt
+ M docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/head.txt
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-boundary.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-cargo-test.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-clippy.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-core-tools-tests.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-diff.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-fmt.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-loc-files.log
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T120000Z/check-loc-tests.log
