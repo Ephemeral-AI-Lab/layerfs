@@ -13,8 +13,8 @@ use layerfs_content::{
 };
 use layerfs_storage::{StorageError, StoragePolicy, Store};
 use support::{
-    assembled_small_object, create_store, disabled, noise, open_store, read_objects, save_one,
-    TempDir,
+    assembled_small_object, create_store, disabled, noise, open_store, patterned, read_objects,
+    save_one, TempDir,
 };
 
 fn whole(raw: &[u8]) -> FinalizedObject {
@@ -281,4 +281,67 @@ fn an_unsupported_depth_is_rejected_before_any_store_exists() {
         assert!(!path.exists());
     }
     let _ = ContentError::LengthOverflow;
+}
+
+/// The save reports the work of **every** chain it acquired.
+///
+/// A resolver reports the chain it just resolved, so a save that acquires two
+/// bases must report their sum: one base's work is one chain, two bases' work is
+/// two objects and two edges' worth of work, and a save with a single base still
+/// reports exactly one.
+#[test]
+fn the_save_reports_every_chain_it_acquired_not_only_the_last() {
+    let dir = TempDir::new("chain-total");
+    let path = dir.store_path("chain");
+    let store = create_store(&path);
+    let first_base = whole(&noise(40_000));
+    let first_base_id = first_base.id();
+    save_one(&store, first_base).expect("first base");
+    let second_base = whole(&patterned(40_000));
+    let second_base_id = second_base.id();
+    save_one(&store, second_base).expect("second base");
+
+    // One save, two objects, two distinct bases.
+    let mut first_bytes = noise(40_000);
+    first_bytes[100] ^= 0xff;
+    let mut second_bytes = patterned(40_000);
+    second_bytes[100] ^= 0xff;
+    let outcome = disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        operation.accept(
+            with_predecessor(whole(&first_bytes), first_base_id),
+            scope.child("storage.accept"),
+        )?;
+        operation.accept(
+            with_predecessor(whole(&second_bytes), second_base_id),
+            scope.child("storage.accept"),
+        )?;
+        operation.finish(scope.child("storage.finish"))
+    })
+    .expect("two-base save");
+    assert_eq!(outcome.delta.trials, 2, "two objects were tried");
+    assert_eq!(
+        outcome.chain.objects, 2,
+        "the save reports both acquired bases, not the last one: {:?}",
+        outcome.chain
+    );
+    assert_eq!(
+        outcome.chain.canonical_bytes,
+        2 * (40_000 + 23),
+        "the charged bytes are both bases' envelopes, not the last one's: {:?}",
+        outcome.chain
+    );
+    assert_eq!(
+        outcome.chain.edges, 0,
+        "both bases are complete objects with no further dependency: {:?}",
+        outcome.chain
+    );
+
+    // A save with a single base still reports exactly that one chain.
+    let mut solo_bytes = noise(40_000);
+    solo_bytes[200] ^= 0xff;
+    let solo = save_one(&store, with_predecessor(whole(&solo_bytes), first_base_id))
+        .expect("single-base save");
+    assert_eq!(solo.chain.objects, 1, "{:?}", solo.chain);
+    assert_eq!(solo.chain.canonical_bytes, 40_000 + 23, "{:?}", solo.chain);
 }

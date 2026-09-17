@@ -98,6 +98,15 @@ pub const POOLED_PHYSICAL_ROW: usize = 12;
 pub const CHAIN_CANONICAL_LIMIT: u64 = 512 * 1024;
 /// Encoded bytes one dependency chain may read.
 pub const CHAIN_ENCODED_LIMIT: u64 = 256 * 1024;
+/// Pack bodies one operation's dependency cache may retain.
+///
+/// Owner: the save operation that fills it. Bound: this many bytes of pack bodies.
+/// Live multiplicity: one cache per save, one copy per distinct pack. Lifetime:
+/// the operation. Release: dropped with the operation, and released wholesale when
+/// the next body would cross the bound - exactly the discipline the pooled value
+/// cache and the index window use. A released body is read again if a later
+/// dependency needs it, so the bound costs reads and never correctness.
+pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 4 * 1024 * 1024;
 /// Decoded value-group work one pooled metadata chain may spend.
 pub const METADATA_DECODED_WORK_LIMIT: u64 = 32 * 1024 * 1024;
 /// Default pooled-metadata dependency depth.
@@ -113,10 +122,12 @@ pub const METADATA_MATCH_BUDGET_BYTES: usize = 128 * 1024;
 /// Largest canonical inode leaf object.
 pub const INODE_LEAF_LIMIT: usize = 8_192;
 /// Retained entries of the bounded metadata value index.
+///
+/// The index's live-byte bound is this entry count times the per-entry charge that
+/// `PoolIndex::live_bytes` reports through `Store::pool_index_bytes`; there is no
+/// separate byte ceiling. A 32 MiB constant with no reader used to sit beside it
+/// and overstated the real bound by an order of magnitude.
 pub const METADATA_INDEX_VALUES: usize = 131_072;
-/// Live bytes the bounded metadata value index may hold.
-pub const METADATA_INDEX_BYTES: usize = 32 * 1024 * 1024;
-
 /// Persisted storage policy: one profile plus the configurable construction values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StoragePolicy {

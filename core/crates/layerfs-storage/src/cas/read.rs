@@ -75,19 +75,19 @@ pub fn read_objects(
             .get(id)
             .copied()
             .ok_or(StorageError::ObjectMissing(*id))?;
-        let before = packs.len();
-        let canonical = {
+        let (canonical, packs_fetched) = {
             let mut resolver = Resolver::new(
                 connection, ceiling, capacities, &mut packs, workspace, &mut chain,
             );
-            resolver.resolve_at(location)?
+            let canonical = resolver.resolve_at(location)?;
+            (canonical, resolver.packs_read())
         };
         totals.objects = totals.objects.saturating_add(chain.objects);
         totals.edges = totals.edges.saturating_add(chain.edges);
         totals.encoded_bytes = totals.encoded_bytes.saturating_add(chain.encoded_bytes);
         totals.canonical_bytes = totals.canonical_bytes.saturating_add(chain.canonical_bytes);
         totals.max_depth = totals.max_depth.max(chain.max_depth);
-        counters.packs_read += (packs.len() - before) as u64;
+        counters.packs_read += packs_fetched;
         if ObjectId::for_bytes(&canonical) != *id {
             return Err(StorageError::Integrity("read identity"));
         }

@@ -159,12 +159,20 @@ pub struct SelectInput<'a> {
     pub candidates: &'a mut Candidates,
     /// Bounded chain-depth cache.
     pub depths: &'a mut DepthCache,
-    /// Pack bodies already read inside this wave.
+    /// Pack bodies this operation already read, bounded by
+    /// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and released wholesale when
+    /// the next body would cross it.
     pub packs: &'a mut BTreeMap<i64, Vec<u8>>,
     /// Decode workspace for base reconstruction.
     pub decode: &'a mut DecompressionWorkspace,
-    /// Work performed while acquiring bases.
+    /// Work performed while acquiring the base just resolved.
     pub chain: &'a mut ChainCounters,
+    /// Work performed while acquiring every base of this operation.
+    ///
+    /// A resolver reports one chain, so the operation's total is accumulated here
+    /// as each acquisition completes; `chain` keeps the value of the chain just
+    /// resolved, which is what the budget check below compares against.
+    pub chain_total: &'a mut ChainCounters,
     /// Selection outcomes.
     pub counters: &'a mut DeltaCounters,
 }
@@ -349,13 +357,17 @@ fn eligible(
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
-    let mut resolver = Resolver::new(
-        input.connection,
-        i64::MAX,
-        input.capacities,
-        input.packs,
-        input.decode,
-        input.chain,
-    );
-    resolver.resolve_dependency(id)
+    let value = {
+        let mut resolver = Resolver::new(
+            input.connection,
+            i64::MAX,
+            input.capacities,
+            input.packs,
+            input.decode,
+            input.chain,
+        );
+        resolver.resolve_dependency(id)?
+    };
+    crate::encoding::delta::read::accumulate(input.chain_total, *input.chain);
+    Ok(value)
 }

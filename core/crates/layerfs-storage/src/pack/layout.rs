@@ -180,17 +180,45 @@ impl EncodedGroup {
     }
 }
 
+/// Bytes one group's directory entry costs in `lane`.
+pub const fn directory_entry_len(lane: PackLane) -> usize {
+    match lane {
+        PackLane::WholeFile => WHOLE_FILE_ENTRY_LEN,
+        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
+            DIRECTORY_ENTRY_LEN
+        }
+    }
+}
+
+/// True when `group` still fits the pack `groups` already describes.
+///
+/// The decision is exact and allocates nothing: `assembled_length` already counts
+/// the header and one directory entry per group, so the incoming group adds one
+/// more directory entry and its body. Placement uses this instead of materialising
+/// a candidate pack, and the result is identical to comparing the assembled length
+/// of `groups` plus the group with the lane's pack limit.
+pub fn append_fits(
+    lane: PackLane,
+    groups: &[EncodedGroup],
+    group: &EncodedGroup,
+) -> StorageResult<bool> {
+    if groups.is_empty() || groups.len() >= lane.group_count_limit() {
+        return Ok(false);
+    }
+    let body = group.body_size(lane)?;
+    let total = assembled_length(lane, groups)?
+        .checked_add(directory_entry_len(lane))
+        .and_then(|total| total.checked_add(body))
+        .ok_or(StorageError::Integrity("pack size"))?;
+    Ok(total <= lane.pack_limit())
+}
+
 /// Exact assembled length of `groups` under `lane`, without allocating the pack.
 pub fn assembled_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<usize> {
     if groups.is_empty() || groups.len() > lane.group_count_limit() {
         return Err(StorageError::Integrity("pack group count"));
     }
-    let directory = match lane {
-        PackLane::WholeFile => WHOLE_FILE_ENTRY_LEN,
-        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
-            DIRECTORY_ENTRY_LEN
-        }
-    };
+    let directory = directory_entry_len(lane);
     let mut total = HEADER_LEN
         .checked_add(
             directory
@@ -204,11 +232,6 @@ pub fn assembled_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResul
             .ok_or(StorageError::Integrity("pack size"))?;
     }
     Ok(total)
-}
-
-/// True when `groups` fit one pack of `lane` exactly.
-pub fn fits(lane: PackLane, groups: &[EncodedGroup]) -> bool {
-    assembled_length(lane, groups).is_ok_and(|length| length <= lane.pack_limit())
 }
 
 /// Parsed pack control area.

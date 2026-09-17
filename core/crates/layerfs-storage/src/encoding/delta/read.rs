@@ -45,6 +45,7 @@ pub struct Resolver<'a> {
     packs: &'a mut BTreeMap<i64, Vec<u8>>,
     workspace: &'a mut DecompressionWorkspace,
     counters: &'a mut ChainCounters,
+    packs_read: u64,
 }
 
 impl<'a> Resolver<'a> {
@@ -64,7 +65,17 @@ impl<'a> Resolver<'a> {
             packs,
             workspace,
             counters,
+            packs_read: 0,
         }
+    }
+
+    /// Pack bodies this resolver fetched from storage.
+    ///
+    /// Counted where the body is fetched, not inferred from the cache's length:
+    /// the cache releases itself wholesale when it reaches its byte bound, so a
+    /// length difference would be wrong exactly when the bound binds.
+    pub const fn packs_read(&self) -> u64 {
+        self.packs_read
     }
 
     /// Reconstructs and authenticates one stored canonical object.
@@ -101,6 +112,7 @@ impl<'a> Resolver<'a> {
         charge_self: bool,
     ) -> StorageResult<Vec<u8>> {
         *self.counters = ChainCounters::default();
+        self.packs_read = 0;
         let id = root.object_id;
         if root.role == layerfs_content::ObjectRole::InodeLeaf {
             // A pooled leaf owns its whole chain: the physical body is rebuilt
@@ -191,7 +203,10 @@ impl<'a> Resolver<'a> {
             self.counters.canonical_bytes = canonical;
         }
         let record_bytes = {
-            let pack = pack_of(self.packs, self.connection, location.pack_id)?;
+            let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
+            if fetched {
+                self.packs_read = self.packs_read.saturating_add(1);
+            }
             record_width(pack, location)?
         };
         if charged {
@@ -201,7 +216,10 @@ impl<'a> Resolver<'a> {
             }
             self.counters.encoded_bytes = encoded;
         }
-        let pack = pack_of(self.packs, self.connection, location.pack_id)?;
+        let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
+        if fetched {
+            self.packs_read = self.packs_read.saturating_add(1);
+        }
         decode_canonical(pack, location, self.capacities, base, self.workspace)
     }
 
@@ -212,20 +230,45 @@ impl<'a> Resolver<'a> {
     }
 }
 
-/// Reads one pack body through the wave's shared cache.
+/// Adds one resolved chain's work to an operation's totals.
+///
+/// A resolver reports the chain it just resolved; an operation that resolves
+/// several reports their sum, so a counter named for the save is not quietly the
+/// last chain's.
+pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
+    total.objects = total.objects.saturating_add(chain.objects);
+    total.edges = total.edges.saturating_add(chain.edges);
+    total.encoded_bytes = total.encoded_bytes.saturating_add(chain.encoded_bytes);
+    total.canonical_bytes = total.canonical_bytes.saturating_add(chain.canonical_bytes);
+    total.max_depth = total.max_depth.max(chain.max_depth);
+}
+
+/// Reads one pack body through the operation's shared cache.
+///
+/// The cache is bounded by [`DEPENDENCY_PACK_CACHE_BYTES`]: when the next body
+/// would push the retained bytes past the bound the whole cache is released, the
+/// same wholesale discipline the pooled value cache uses, so a save can never
+/// retain a body count that grows with the number of packs it touches.
 fn pack_of<'b>(
     packs: &'b mut BTreeMap<i64, Vec<u8>>,
     connection: &Connection,
     pack_id: i64,
-) -> StorageResult<&'b [u8]> {
-    if let std::collections::btree_map::Entry::Vacant(slot) = packs.entry(pack_id) {
+) -> StorageResult<(&'b [u8], bool)> {
+    let mut fetched = false;
+    if !packs.contains_key(&pack_id) {
         let bytes = lookup::pack_bytes(connection, pack_id)?;
-        slot.insert(bytes);
+        let retained: usize = packs.values().map(Vec::len).sum();
+        if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
+            packs.clear();
+        }
+        packs.insert(pack_id, bytes);
+        fetched = true;
     }
-    packs
+    let bytes = packs
         .get(&pack_id)
         .map(Vec::as_slice)
-        .ok_or(StorageError::Integrity("pack cache"))
+        .ok_or(StorageError::Integrity("pack cache"))?;
+    Ok((bytes, fetched))
 }
 
 /// Strict ordering key of one locator.

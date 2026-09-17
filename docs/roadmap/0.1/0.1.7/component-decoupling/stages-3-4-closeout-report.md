@@ -81,7 +81,7 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G7 | Every overclaiming or vacuous oracle replaced; each new case fails without its fix | W4 | **PASS** | `w4/README.md`; W4.1-W4.8 table, two measured controls, the rest source-derived and labelled |
 | G8 | Integrated multi-edit chunked pipeline case exists and passes | W4.5 | **PASS** | `edit_pipeline::a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates`, store-backed logical readback |
 | G9 | Every significant allocation has owner, bound, multiplicity, lifetime and release event | W5, W7.3 | OPEN | |
-| G10 | No size-proportional hidden collector remains on a real path | W5 | OPEN | |
+| G10 | No size-proportional hidden collector remains on a real path | W5 | **PASS** | `w5/README.md`; catalogue streamed, placement measured not copied, every level flushed, both pack caches bounded, cleanup transactions bounded |
 | G11 | Phase-local heap ledger and a labelled RSS scope exist | W7 | OPEN | |
 | G12 | #168's simultaneous index/codec/SQL memory gate has an input and a result | W7 | OPEN | |
 | G13 | Matched reference campaign collected under a pre-committed addendum with aligned byte accounting | W8 | OPEN (B1) | |
@@ -169,6 +169,35 @@ G13-G15, G17-G19. Neither is complete yet.
   retained with its re-run). `w4-fails-without-fix.log` holds two measured
   controls; the rest are labelled source-derived in `w4/README.md`.
 * **Production LOC.** core `11053 -> 11053` (delta 0; test-only).
+
+### W5 — bounded-owner fixes (G9 input, G10) — PASS
+
+* **W5.1** `index.rs::retained_start` no longer materialises the catalogue:
+  `sqlite/pool.rs::for_each_group` streams it (the reference's shape) and the
+  recurrence keeps three scalars.
+* **W5.2** `MutationOwner::offer` takes `&FinalizedObject`; the per-object
+  canonical clone in `cas/save.rs` is gone.
+* **W5.3** `layout::append_fits` replaces the open-pack deep clone and uses
+  `lane.group_count_limit()`/`lane.pack_limit()`; the dead `fits` predicate is
+  deleted. New oracle: `pack_locator` fit-probe equivalence.
+* **W5.4** `flush_streaming` cascades through every level under the same rule;
+  `MappingBuild` reports `peak_pending` and `streaming` asserts the height bound.
+* **W5.5** Both pack caches are bounded by `DEPENDENCY_PACK_CACHE_BYTES` (4 MiB)
+  with a wholesale release; the stale "inside this wave" comment is corrected.
+* **W5.6** Cleanup keeps its single attempt and newest-first order but commits and
+  reopens at the writer's transaction bounds.
+* **W5.7** The dead 32 MiB index budget is gone with the real bound stated where
+  it is reported; `Candidates::live_bytes` returns declared bytes;
+  `SaveOutcome.chain` is the save total (new oracle, with a control run) and
+  `ReadCounters::packs_read` is counted where a body is fetched.
+* **W5.8** The pooled reader caches the covering catalogue row and copies single
+  values (`PoolReader::group_value`) instead of one query and one group clone per
+  row.
+* **Evidence.** `w5/w5-verify.log` (22 targets + workspace 43/261 + clippy, fmt,
+  boundary, tools, `git diff --check`, all exit 0) and `w5/w5-fails-without-fix.log`.
+  The owner ledger with bound, multiplicity, lifetime and release is in
+  `w5/README.md`; W7.3 extends it with the allocations reported live.
+* **Production LOC.** core `11053 -> 11166` (delta +113); C1 +8, C2 +105.
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 

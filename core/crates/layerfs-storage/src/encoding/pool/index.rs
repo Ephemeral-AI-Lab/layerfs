@@ -222,11 +222,12 @@ impl PoolIndex {
 /// exceed the retained entry bound. Only the catalogue is read, never the payload
 /// of a group that would immediately be discarded.
 fn retained_start(connection: &Connection, end: u32) -> StorageResult<u32> {
-    let groups = pool::catalogue(connection, None)?;
     let mut next = 1_u32;
     let mut first = 1_u32;
     let mut entries = 0_usize;
-    for group in groups {
+    // The statement is streamed and only the three scalars above are retained, so
+    // the replay costs the window it computes and not the catalogue it walks.
+    pool::for_each_group(connection, None, |group| {
         if group.first_ordinal != next || group.count == 0 || group.count > VALUES_PER_GROUP {
             return Err(StorageError::Integrity("metadata catalogue gap/range"));
         }
@@ -238,7 +239,8 @@ fn retained_start(connection: &Connection, end: u32) -> StorageResult<u32> {
             entries = 0;
         }
         entries += group.count;
-    }
+        Ok(())
+    })?;
     if next != end {
         return Err(StorageError::Integrity("metadata catalogue endpoint"));
     }

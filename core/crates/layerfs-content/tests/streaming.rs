@@ -183,3 +183,62 @@ fn root_identity_is_stable_across_repeated_streaming_runs() {
     assert_eq!(first.order(), second.order());
     assert_ne!(first_root.root, ObjectId::for_bytes(b"unrelated"));
 }
+
+/// The builder's retained entries are a function of the height and the page
+/// capacity, not of the file length.
+///
+/// `build_streaming` reports the largest number of decoded entries it held at
+/// once. A builder that flushed only its lowest level would accumulate one entry
+/// per 192 extents above it for the length of the stream; this case grows the
+/// input eightfold and twenty-four-fold and requires the peak to stay at the
+/// bound the levels and the flush threshold describe.
+#[test]
+fn the_builder_retains_a_bounded_number_of_entries() {
+    let policy = ConstructionPolicy::frozen_default();
+    let capacities = policy.capacities();
+    let mut peaks = Vec::new();
+    let mut chunks = Vec::new();
+    for length in [1_048_576_usize, 8 * 1_048_576, 24 * 1_048_576] {
+        let bytes = noise(length);
+        let mut consumer = DiscardingConsumer::new();
+        let build = disabled_scope(|_scope| {
+            layerfs_content::file::mapping::build_streaming(
+                &capacities,
+                bytes.as_slice(),
+                &mut consumer,
+            )
+        })
+        .expect("streaming build");
+        assert_eq!(build.logical_len, length as u64);
+        assert!(build.root.is_some());
+        // Every level is flushed under the same rule, so the retained entries are
+        // bounded by the levels the tree actually has.
+        let bound = (usize::from(build.tree_level) + 2) * capacities.stream_flush_entries;
+        assert!(
+            build.peak_pending <= bound,
+            "peak {} exceeds the height bound {bound} at {length} bytes",
+            build.peak_pending
+        );
+        peaks.push(build.peak_pending);
+        chunks.push(build.chunks);
+    }
+    // The peak saturates at the flush threshold while the input grows 24-fold.
+    assert!(
+        chunks[2] > 20 * chunks[0],
+        "the largest input must be much larger: {chunks:?}"
+    );
+    assert!(
+        peaks[1] <= capacities.stream_flush_entries + 2,
+        "the peak exceeds one flush threshold: {peaks:?}"
+    );
+    assert!(
+        peaks[2] <= peaks[1] + capacities.stream_flush_entries,
+        "the peak grew with the file: {peaks:?}"
+    );
+    // Documented coverage gap: the cascade that flushes a level above the first
+    // only changes this peak once level one itself exceeds the threshold, which
+    // takes 192 level-zero flushes - about 590 MB of chunked input, far outside
+    // the command budget. The bound asserted here is therefore the structural one
+    // (`(height + 2) * flush threshold`), and the cascade itself is verified by
+    // reading `flush_streaming`, not by this case.
+}

@@ -68,6 +68,49 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         row: &pool::ValueGroupRow,
     ) -> StorageResult<Vec<[u8; INODE_VALUE_BYTES]>> {
+        self.load_group(connection, capacities, ceiling, workspace, row)?;
+        self.groups
+            .get(&row.first_ordinal)
+            .cloned()
+            .ok_or(StorageError::Integrity("metadata group cache"))
+    }
+
+    /// One value of one authenticated group, copied out of the wave's cache.
+    ///
+    /// A caller that resolves the ordinals of one leaf needs a single value per
+    /// row; this accessor decodes the covering group once and copies seventy-three
+    /// bytes, instead of materialising the whole group per row.
+    pub fn group_value(
+        &mut self,
+        connection: &Connection,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        row: &pool::ValueGroupRow,
+        ordinal: u32,
+    ) -> StorageResult<[u8; INODE_VALUE_BYTES]> {
+        if ordinal < row.first_ordinal
+            || u64::from(ordinal) >= u64::from(row.first_ordinal) + row.count as u64
+        {
+            return Err(StorageError::Integrity("metadata ordinal range"));
+        }
+        self.load_group(connection, capacities, ceiling, workspace, row)?;
+        self.groups
+            .get(&row.first_ordinal)
+            .and_then(|values| values.get((ordinal - row.first_ordinal) as usize))
+            .copied()
+            .ok_or(StorageError::Integrity("metadata ordinal range"))
+    }
+
+    /// Decodes one group into the wave's cache unless it is already there.
+    fn load_group(
+        &mut self,
+        connection: &Connection,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        row: &pool::ValueGroupRow,
+    ) -> StorageResult<()> {
         let _ = capacities;
         // The ceiling is decided before the cache is consulted: a group retained
         // by an earlier read of the same wave is still only readable when its own
@@ -78,8 +121,8 @@ impl PoolReader {
                 ceiling,
             });
         }
-        if let Some(values) = self.groups.get(&row.first_ordinal) {
-            return Ok(values.clone());
+        if self.groups.contains_key(&row.first_ordinal) {
+            return Ok(());
         }
         let body = self.group_body(connection, workspace, row)?;
         self.decoded_work = self
@@ -99,9 +142,9 @@ impl PoolReader {
             self.groups.clear();
             self.retained_bytes = 0;
         }
-        self.groups.insert(row.first_ordinal, values.clone());
+        self.groups.insert(row.first_ordinal, values);
         self.retained_bytes += charged;
-        Ok(values)
+        Ok(())
     }
 
     fn group_body(
@@ -129,9 +172,18 @@ impl PoolReader {
         Ok(body)
     }
 
+    /// Reads one pack body through this wave's cache, bounded as the dependency
+    /// cache is: the cache is released wholesale when the next body would cross
+    /// the declared bound, so a wave's retained pack bytes are a constant rather
+    /// than a function of how many packs it reads.
     fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
-        if let std::collections::btree_map::Entry::Vacant(slot) = self.packs.entry(pack_id) {
-            slot.insert(lookup::pack_bytes(connection, pack_id)?);
+        if !self.packs.contains_key(&pack_id) {
+            let bytes = lookup::pack_bytes(connection, pack_id)?;
+            let retained: usize = self.packs.values().map(Vec::len).sum();
+            if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
+                self.packs.clear();
+            }
+            self.packs.insert(pack_id, bytes);
         }
         self.packs
             .get(&pack_id)
@@ -265,15 +317,34 @@ impl PoolReader {
             return Err(StorageError::Integrity("pooled row count"));
         }
         let mut values = Vec::with_capacity(rows.len());
+        // The rows of one leaf are in ordinal order, so the group covering a row is
+        // almost always the group that covered the row before it: the catalogue is
+        // queried when the covering group changes, not once per row.
+        let mut covering: Option<pool::ValueGroupRow> = None;
         for row in &rows {
-            let group = pool::group_for(connection, row.ordinal)?
-                .ok_or(StorageError::Integrity("metadata ordinal missing"))?;
-            let cached = self.group_values(connection, capacities, ceiling, workspace, &group)?;
-            let index = (row.ordinal - group.first_ordinal) as usize;
-            let value = cached
-                .get(index)
-                .ok_or(StorageError::Integrity("metadata ordinal range"))?;
-            values.push(*value);
+            let group = match covering {
+                Some(group)
+                    if row.ordinal >= group.first_ordinal
+                        && u64::from(row.ordinal)
+                            < u64::from(group.first_ordinal) + group.count as u64 =>
+                {
+                    group
+                }
+                _ => {
+                    let group = pool::group_for(connection, row.ordinal)?
+                        .ok_or(StorageError::Integrity("metadata ordinal missing"))?;
+                    covering = Some(group);
+                    group
+                }
+            };
+            values.push(self.group_value(
+                connection,
+                capacities,
+                ceiling,
+                workspace,
+                &group,
+                row.ordinal,
+            )?);
         }
         let canonical = rebuild_leaf(&prefix, &rows, &values)?;
         if canonical.len() != root.canonical_length {

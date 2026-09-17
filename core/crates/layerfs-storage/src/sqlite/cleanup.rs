@@ -5,11 +5,13 @@
 //! Deletion walks owned locators newest first, so every direct dependent is gone
 //! before its base, and removes owned pack rows last. The attempt runs once; a
 //! failure is surfaced and never retried by an outer wrapper or a destructor.
+//! Each transaction it opens is bounded by the writer's own row and canonical-byte
+//! limits, because the journal is held in memory.
 
 use rusqlite::Connection;
 
 use crate::error::{StorageError, StorageResult};
-use crate::policy::CLEANUP_PAGE_ROWS;
+use crate::policy::{CLEANUP_PAGE_ROWS, TRANSACTION_CANONICAL_BYTES_LIMIT, TRANSACTION_ROW_LIMIT};
 use crate::sqlite::write;
 
 /// What one cleanup attempt removed.
@@ -30,32 +32,43 @@ pub struct CleanupReport {
 pub fn abandon(connection: &Connection, baseline_pack_id: i64) -> StorageResult<CleanupReport> {
     write::begin_immediate(connection)?;
     let mut report = CleanupReport::default();
+    // The attempt is one cleanup, but not one unbounded transaction: the journal
+    // is held in memory, so a transaction that deleted every owned row at once
+    // would hold every modified page in RAM. The same row and canonical-byte
+    // discipline the writer uses bounds each transaction here, and the deletion
+    // order is unchanged - newest locator first, so a dependent is always gone
+    // before its base.
+    let mut open = write::TransactionState { rows: 1, bytes: 0 };
     loop {
         let mut statement = connection.prepare_cached(
-            "SELECT object_id FROM objects WHERE pack_id > ?1 \
+            "SELECT object_id, canonical_length FROM objects WHERE pack_id > ?1 \
              ORDER BY pack_id DESC, group_number DESC, record_number DESC LIMIT ?2",
         )?;
-        let ids: Vec<Vec<u8>> = statement
+        let rows: Vec<(Vec<u8>, i64)> = statement
             .query_map(
                 rusqlite::params![baseline_pack_id, CLEANUP_PAGE_ROWS as i64],
-                |row| row.get::<_, Vec<u8>>(0),
+                |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?)),
             )?
             .collect::<Result<_, _>>()?;
         drop(statement);
-        if ids.is_empty() {
+        if rows.is_empty() {
             break;
         }
-        let placeholders = (1..=ids.len())
+        let mut page_bytes = 0_u64;
+        let placeholders = (1..=rows.len())
             .map(|index| format!("?{index}"))
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!("DELETE FROM objects WHERE object_id IN ({placeholders})");
-        let parameters: Vec<rusqlite::types::Value> = ids
+        let parameters: Vec<rusqlite::types::Value> = rows
             .iter()
-            .map(|id| rusqlite::types::Value::Blob(id.clone()))
+            .map(|(id, length)| {
+                page_bytes = page_bytes.saturating_add((*length).max(0) as u64);
+                rusqlite::types::Value::Blob(id.clone())
+            })
             .collect();
         let removed = connection.execute(&sql, rusqlite::params_from_iter(parameters))?;
-        if removed == 0 || removed > ids.len() {
+        if removed == 0 || removed > rows.len() {
             return Err(StorageError::Integrity("cleanup delete cardinality"));
         }
         report.objects = report
@@ -65,6 +78,16 @@ pub fn abandon(connection: &Connection, baseline_pack_id: i64) -> StorageResult<
         report.pages += 1;
         if report.pages > 1_000_000 {
             return Err(StorageError::Integrity("cleanup page budget"));
+        }
+        open.rows = open.rows.saturating_add(removed as u64);
+        open.bytes = open.bytes.saturating_add(page_bytes);
+        if open.rows >= TRANSACTION_ROW_LIMIT || open.bytes >= TRANSACTION_CANONICAL_BYTES_LIMIT {
+            // Commit what this page removed and continue the same attempt in a
+            // fresh bounded transaction. A failure here is surfaced as it is; the
+            // attempt is never retried and no outer wrapper resumes it.
+            write::commit(connection)?;
+            write::begin_immediate(connection)?;
+            open = write::TransactionState { rows: 1, bytes: 0 };
         }
     }
     let packs = connection.execute(

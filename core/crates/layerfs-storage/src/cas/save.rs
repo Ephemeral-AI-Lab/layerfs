@@ -47,11 +47,14 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
             owner.note_reuse();
             continue;
         }
-        let object = objects[index].clone();
+        // The wave keeps ownership of every offered object: the owner reads the
+        // identity, role, canonical bytes and length, so no per-object copy of the
+        // canonical record is made on the prepared path.
+        let object = &objects[index];
         prepared.insert(object.id(), index);
         match by_id.get(&object.id()).copied() {
             Some(location) => {
-                membership::reuse_or_collide(owner, &object, location)?;
+                membership::reuse_or_collide(owner, object, location)?;
                 owner.note_reuse();
             }
             None if owner.pending_member(object.id()) => {
@@ -60,7 +63,7 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
                     .into_iter()
                     .next()
                     .ok_or(StorageError::Integrity("sealed identity has no row"))?;
-                membership::reuse_or_collide(owner, &object, location)?;
+                membership::reuse_or_collide(owner, object, location)?;
                 owner.note_reuse();
             }
             None => {

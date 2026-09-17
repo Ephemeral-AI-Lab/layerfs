@@ -10,8 +10,9 @@ pub use assemble::{
     assemble, build_group, frame_group, frame_group_bounded, framed_length, FULL_TAG,
 };
 pub use layout::{
-    assembled_length, fits, group_view, parse_header, EncodedGroup, GroupCodec, GroupView,
-    PackHeader, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, PACK_MAGIC, VERSION_NATIVE,
-    VERSION_ORDINARY, VERSION_WHOLE_FILE, WHOLE_FILE_COMPACT_DROP, WHOLE_FILE_ENTRY_LEN,
+    append_fits, assembled_length, directory_entry_len, group_view, parse_header, EncodedGroup,
+    GroupCodec, GroupView, PackHeader, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, PACK_MAGIC,
+    VERSION_NATIVE, VERSION_ORDINARY, VERSION_WHOLE_FILE, WHOLE_FILE_COMPACT_DROP,
+    WHOLE_FILE_ENTRY_LEN,
 };
 pub use placement::{LanePlacement, PlacedGroup, SelectedWrite};

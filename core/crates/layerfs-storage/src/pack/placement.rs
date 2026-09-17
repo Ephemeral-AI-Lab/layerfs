@@ -8,8 +8,7 @@
 
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble;
-use crate::pack::layout::{assembled_length, EncodedGroup, PackLane};
-use crate::policy::{GROUP_COUNT_LIMIT, PACK_LIMIT};
+use crate::pack::layout::{append_fits, assembled_length, EncodedGroup, PackLane};
 
 /// One pack this save created and may still append to.
 #[derive(Clone, Debug)]
@@ -78,14 +77,11 @@ impl LanePlacement {
         let mut writes: Vec<SelectedWrite> = Vec::new();
         let mut pending: Option<(i64, bool, Vec<PlacedGroup>)> = None;
         for group in groups {
+            // Exact fit of the open pack plus this group: the open tail and the
+            // incoming group are measured, never copied, and the lane's own group
+            // and pack limits decide - not the maxima of any other lane.
             let fits_open = match &self.open {
-                Some(open) => {
-                    open.groups.len() < GROUP_COUNT_LIMIT && {
-                        let mut candidate = open.groups.clone();
-                        candidate.push(group.clone());
-                        assembled_length(lane, &candidate).is_ok_and(|length| length <= PACK_LIMIT)
-                    }
-                }
+                Some(open) => append_fits(lane, &open.groups, &group)?,
                 None => false,
             };
             if !fits_open {

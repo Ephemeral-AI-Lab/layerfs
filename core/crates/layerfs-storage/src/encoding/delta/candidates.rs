@@ -100,9 +100,14 @@ impl Candidates {
         })
     }
 
-    /// Bytes charged by the fixed cache.
+    /// Bytes the fixed cache holds.
+    ///
+    /// The declared index bytes: one slot per entry of the power-of-two slot array
+    /// plus one reference per entry of the reference table. Taking the size of the
+    /// boxed slices instead would report the size of a fat pointer, which is what
+    /// the reviewed version did.
     pub fn live_bytes(&self) -> usize {
-        std::mem::size_of_val(&self.slots) + std::mem::size_of_val(&self.references)
+        SLOTS * std::mem::size_of::<Option<Entry>>() + REFERENCES * std::mem::size_of::<u16>()
     }
 
     /// Records one admitted FULL winner.

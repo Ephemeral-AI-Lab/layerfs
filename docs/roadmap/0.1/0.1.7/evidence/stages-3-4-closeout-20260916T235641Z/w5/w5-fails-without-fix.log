@@ -1,0 +1,31 @@
+=== control: the save reports the last chain instead of every chain | 2026-09-17T00:45:39Z
+owner.rs: the reported totals go back to the per-chain counter (the reviewed semantics).
+Expected: the_save_reports_every_chain_it_acquired_not_only_the_last fails.
+
+=== the save total reverted to the last chain | 2026-09-17T00:45:39Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test delta_chains the_save_reports
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.30s
+     Running tests/delta_chains.rs (core/target/debug/deps/delta_chains-f35fbf213b29e438)
+
+running 1 test
+test the_save_reports_every_chain_it_acquired_not_only_the_last ... FAILED
+
+failures:
+
+---- the_save_reports_every_chain_it_acquired_not_only_the_last stdout ----
+
+thread 'the_save_reports_every_chain_it_acquired_not_only_the_last' panicked at crates/layerfs-storage/tests/delta_chains.rs:323:5:
+assertion `left == right` failed: the save reports both acquired bases, not the last one: ChainCounters { objects: 1, edges: 0, encoded_bytes: 282, canonical_bytes: 40023, max_depth: 0 }
+  left: 1
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    the_save_reports_every_chain_it_acquired_not_only_the_last
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p layerfs-storage --test delta_chains`
+--- exit 101 | wall 2.067s

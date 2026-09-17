@@ -37,6 +37,8 @@ pub struct MappingBuild {
     pub tree_level: u8,
     /// Chunk objects emitted.
     pub chunks: u64,
+    /// Largest number of decoded entries the builder held at once.
+    pub peak_pending: usize,
     /// Mapping pages emitted.
     pub nodes: u64,
 }
@@ -175,27 +177,45 @@ impl ExtentBuilder {
     /// Completes the tree, emitting every remaining page child before parent.
     pub fn finish(mut self, consumer: &mut dyn FinalizedConsumer) -> ContentResult<MappingBuild> {
         if self.build.logical_len == 0 {
+            self.build.peak_pending = self.peak_pending;
             return Ok(self.build);
         }
         let root = self.finish_levels(consumer)?;
         self.build.root = Some(root);
         self.build.extent_count = root.extents;
         self.build.tree_level = root.level;
+        self.build.peak_pending = self.peak_pending;
         Ok(self.build)
     }
 
+    /// Flushes every level that is over the streaming bound, lowest first.
+    ///
+    /// A flush removes `MAX_ENTRIES` entries from one level and adds one to the
+    /// level above, so the cascade continues upward for exactly as long as some
+    /// level exceeds the bound: no level accumulates entries for the length of the
+    /// stream, and the retained entry count stays a function of the height and the
+    /// page capacity rather than of the file. The canonical partition is untouched:
+    /// a flush emits a full page and `finish_levels` still partitions whatever
+    /// remains, including the half-partition of an exactly-overfull level.
     fn flush_streaming(
         &mut self,
         consumer: &mut dyn FinalizedConsumer,
         level: usize,
     ) -> ContentResult<()> {
-        loop {
-            if self.levels[level].len() <= self.flush_at {
-                return Ok(());
+        let mut current = level;
+        while self.levels[current].len() > self.flush_at {
+            let summary = self.emit_prefix(consumer, current, MAX_ENTRIES)?;
+            self.push_summary(current + 1, summary)?;
+            if self.levels[current].len() <= self.flush_at {
+                // This level is under its bound again; only the one above can have
+                // been pushed over it.
+                current += 1;
+                if current > usize::from(MAX_LEVEL) {
+                    return Err(ContentError::MappingDepthExceeded);
+                }
             }
-            let summary = self.emit_prefix(consumer, level, MAX_ENTRIES)?;
-            self.push_summary(level + 1, summary)?;
         }
+        Ok(())
     }
 
     fn finish_levels(

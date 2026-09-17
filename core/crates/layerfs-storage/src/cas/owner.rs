@@ -109,8 +109,10 @@ pub struct MutationOwner {
     depths: DepthCache,
     /// Pack bodies already read while acquiring delta bases in this operation.
     pack_cache: BTreeMap<i64, Vec<u8>>,
-    /// Work spent acquiring and reading delta bases.
+    /// Work spent acquiring the base most recently resolved.
     chain: ChainCounters,
+    /// Work spent acquiring and reading every delta base of this operation.
+    chain_total: ChainCounters,
     /// Representation selection outcomes.
     delta: DeltaCounters,
     /// Store-owned bounded ordered set of pooled value candidates.
@@ -210,6 +212,7 @@ impl MutationOwner {
             depths: DepthCache::new(),
             pack_cache: BTreeMap::new(),
             chain: ChainCounters::default(),
+            chain_total: ChainCounters::default(),
             delta: DeltaCounters::default(),
             pool_index,
             pool_reader: crate::encoding::pool::PoolReader::new(),
@@ -303,15 +306,19 @@ impl MutationOwner {
 
     /// Reconstructs one stored object, following and authenticating its chain.
     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
-        let mut resolver = crate::encoding::delta::read::Resolver::new(
-            &self.connection,
-            i64::MAX,
-            &self.capacities,
-            &mut self.pack_cache,
-            &mut self.decompression,
-            &mut self.chain,
-        );
-        resolver.resolve_at(location)
+        let value = {
+            let mut resolver = crate::encoding::delta::read::Resolver::new(
+                &self.connection,
+                i64::MAX,
+                &self.capacities,
+                &mut self.pack_cache,
+                &mut self.decompression,
+                &mut self.chain,
+            );
+            resolver.resolve_at(location)?
+        };
+        crate::encoding::delta::read::accumulate(&mut self.chain_total, self.chain);
+        Ok(value)
     }
 
     /// Prepares and places one missing object.
@@ -323,17 +330,17 @@ impl MutationOwner {
     /// recovery.
     pub fn offer(
         &mut self,
-        object: FinalizedObject,
+        object: &FinalizedObject,
         advisory: &[ObjectId],
         availability: &mut Availability,
     ) -> StorageResult<()> {
         if self.terminal {
             return Err(StorageError::Aborted);
         }
-        availability.validate(&self.connection, &object, i64::MAX, |id| {
+        availability.validate(&self.connection, object, i64::MAX, |id| {
             self.pending_member(id)
         })?;
-        let record = self.select_record(&object, advisory)?;
+        let record = self.select_record(object, advisory)?;
         let lane = record.lane;
         let index = lane.index();
         let body = crate::pack::assemble::framed_length(std::slice::from_ref(&record.record))?;
@@ -393,6 +400,7 @@ impl MutationOwner {
             packs: &mut self.pack_cache,
             decode: &mut self.decompression,
             chain: &mut self.chain,
+            chain_total: &mut self.chain_total,
             counters: &mut self.delta,
         };
         select(
@@ -410,8 +418,10 @@ impl MutationOwner {
     }
 
     /// Work spent acquiring delta bases in this operation.
+    ///
+    /// Every chain the operation acquired, not the last one it resolved.
     pub fn chain_counters(&self) -> ChainCounters {
-        self.chain
+        self.chain_total
     }
 
     /// Live bytes held by the bounded admitted-FULL winner cache.
@@ -809,7 +819,7 @@ impl MutationOwner {
                 // Selection and chain counters live beside the resolver while the
                 // operation runs; the outcome reports the totals once.
                 counters.delta = self.delta;
-                counters.chain = self.chain;
+                counters.chain = self.chain_total;
                 counters.pool = self.pool;
                 Ok(counters)
             }

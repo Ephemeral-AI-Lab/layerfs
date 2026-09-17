@@ -12,6 +12,9 @@ use layerfs_content::ObjectId;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::VALUES_PER_GROUP;
 
+/// One raw catalogue row in the fixed selected column order.
+type CatalogueRow = (i64, i64, i64, i64, Vec<u8>);
+
 /// One catalogue row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ValueGroupRow {
@@ -81,15 +84,7 @@ pub fn group_for(connection: &Connection, ordinal: u32) -> StorageResult<Option<
              FROM metadata_value_groups WHERE first_ordinal <= ?1 \
              ORDER BY first_ordinal DESC LIMIT 1",
             [i64::from(ordinal)],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, Vec<u8>>(4)?,
-                ))
-            },
+            decode_group_row,
         )
         .map(Some)
         .or_else(|error| match error {
@@ -99,55 +94,62 @@ pub fn group_for(connection: &Connection, ordinal: u32) -> StorageResult<Option<
     let Some(row) = row else {
         return Ok(None);
     };
-    let first_ordinal =
-        u32::try_from(row.0).map_err(|_| StorageError::Integrity("metadata first ordinal"))?;
-    let count = usize::try_from(row.1).map_err(|_| StorageError::Integrity("metadata count"))?;
-    if ordinal < first_ordinal
-        || u64::from(ordinal) >= u64::from(first_ordinal) + count as u64
-        || count == 0
-        || count > VALUES_PER_GROUP
+    let group = checked_group_row(row)?;
+    if ordinal < group.first_ordinal
+        || u64::from(ordinal) >= u64::from(group.first_ordinal) + group.count as u64
+        || group.count == 0
+        || group.count > VALUES_PER_GROUP
     {
         return Err(StorageError::Integrity("metadata ordinal range"));
     }
-    Ok(Some(ValueGroupRow {
-        first_ordinal,
-        count,
+    Ok(Some(group))
+}
+
+/// Decodes one catalogue row selected in the fixed `first_ordinal, count,
+/// pack_id, group_number, digest` order.
+fn decode_group_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CatalogueRow> {
+    Ok((
+        row.get::<_, i64>(0)?,
+        row.get::<_, i64>(1)?,
+        row.get::<_, i64>(2)?,
+        row.get::<_, i64>(3)?,
+        row.get::<_, Vec<u8>>(4)?,
+    ))
+}
+
+/// Converts one selected catalogue row into its checked form.
+fn checked_group_row(row: CatalogueRow) -> StorageResult<ValueGroupRow> {
+    Ok(ValueGroupRow {
+        first_ordinal: u32::try_from(row.0)
+            .map_err(|_| StorageError::Integrity("metadata first ordinal"))?,
+        count: usize::try_from(row.1).map_err(|_| StorageError::Integrity("metadata count"))?,
         pack_id: row.2,
         group_number: usize::try_from(row.3)
             .map_err(|_| StorageError::Integrity("metadata group number"))?,
         digest: ObjectId::from_bytes(&row.4)?,
-    }))
+    })
 }
 
-/// Every catalogue row in ordinal order, starting at `from` when given.
-pub fn catalogue(connection: &Connection, from: Option<u32>) -> StorageResult<Vec<ValueGroupRow>> {
-    let mut statement = connection.prepare(
+/// Visits every catalogue row in ordinal order, starting at `from` when given.
+///
+/// The statement is streamed: one row is decoded and handed to the visitor at a
+/// time, so a caller that only needs the eviction recurrence holds no
+/// size-proportional transient - the catalogue can be far larger than the retained
+/// window, and nothing here materialises it.
+pub fn for_each_group(
+    connection: &Connection,
+    from: Option<u32>,
+    mut visit: impl FnMut(ValueGroupRow) -> StorageResult<()>,
+) -> StorageResult<()> {
+    let mut statement = connection.prepare_cached(
         "SELECT first_ordinal, count, pack_id, group_number, digest \
          FROM metadata_value_groups WHERE first_ordinal >= ?1 ORDER BY first_ordinal",
     )?;
-    let rows = statement.query_map([i64::from(from.unwrap_or(FIRST_ORDINAL))], |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, i64>(1)?,
-            row.get::<_, i64>(2)?,
-            row.get::<_, i64>(3)?,
-            row.get::<_, Vec<u8>>(4)?,
-        ))
-    })?;
-    let mut groups = Vec::new();
-    for row in rows {
-        let row = row?;
-        groups.push(ValueGroupRow {
-            first_ordinal: u32::try_from(row.0)
-                .map_err(|_| StorageError::Integrity("metadata first ordinal"))?,
-            count: usize::try_from(row.1).map_err(|_| StorageError::Integrity("metadata count"))?,
-            pack_id: row.2,
-            group_number: usize::try_from(row.3)
-                .map_err(|_| StorageError::Integrity("metadata group number"))?,
-            digest: ObjectId::from_bytes(&row.4)?,
-        });
+    let mut rows = statement.query([i64::from(from.unwrap_or(FIRST_ORDINAL))])?;
+    while let Some(row) = rows.next()? {
+        visit(checked_group_row(decode_group_row(row)?)?)?;
     }
-    Ok(groups)
+    Ok(())
 }
 
 /// Number of stored catalogue rows.

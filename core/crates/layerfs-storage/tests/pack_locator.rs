@@ -297,3 +297,68 @@ fn a_whole_file_record_is_stored_in_its_own_compact_pack() {
         disabled(|scope| reopened.read_batch(&[id], scope.child("storage.read"))).unwrap();
     assert_eq!(ObjectId::for_bytes(&values[0]), id);
 }
+
+/// The placement fit probe agrees with the canonical assembled length.
+///
+/// Placement decides whether a group joins the open pack from the open tail plus
+/// the incoming group, without materialising a candidate pack. That decision must
+/// be exactly the one the canonical predicate makes: compare it with
+/// `assembled_length(groups + [group]) <= pack_limit` around the boundary, for a
+/// lane whose directory entry width differs from the ordinary one, and check the
+/// group-count limit is respected separately.
+#[test]
+fn the_placement_fit_probe_agrees_with_the_canonical_assembled_length() {
+    let mut workspace = layerfs_storage::encoding::codec::CompressionWorkspace::new()
+        .expect("compression workspace");
+    let record = |length: usize| {
+        let mut bytes = vec![layerfs_storage::pack::FULL_TAG];
+        bytes.extend(std::iter::repeat_n(0x5a_u8, length));
+        bytes
+    };
+    for lane in [
+        layerfs_storage::pack::PackLane::Ordinary,
+        layerfs_storage::pack::PackLane::WholeFile,
+        layerfs_storage::pack::PackLane::Native,
+    ] {
+        let per_group = match lane {
+            layerfs_storage::pack::PackLane::WholeFile => 3_000,
+            _ => 16_000,
+        };
+        let mut groups: Vec<layerfs_storage::pack::EncodedGroup> = Vec::new();
+        let mut probes = 0_usize;
+        for _ in 0..lane.group_count_limit() + 4 {
+            let candidate = layerfs_storage::pack::build_group(
+                lane,
+                &[record(per_group)],
+                (lane == layerfs_storage::pack::PackLane::Ordinary).then_some(&mut workspace),
+            )
+            .expect("group");
+            let expected = if groups.is_empty() {
+                false
+            } else {
+                let mut with = groups.clone();
+                with.push(candidate.clone());
+                layerfs_storage::pack::assembled_length(lane, &with)
+                    .is_ok_and(|length| length <= lane.pack_limit())
+            };
+            let observed =
+                layerfs_storage::pack::append_fits(lane, &groups, &candidate).expect("fit probe");
+            assert_eq!(
+                observed,
+                expected,
+                "lane {lane:?} at {} groups",
+                groups.len()
+            );
+            if !observed {
+                groups.clear();
+            }
+            groups.push(candidate);
+            probes += 1;
+        }
+        assert!(probes > 4, "the boundary was probed");
+        assert!(
+            groups.len() <= lane.group_count_limit(),
+            "a pack never exceeds its lane's group count"
+        );
+    }
+}
