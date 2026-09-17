@@ -1,0 +1,22 @@
+RESULT list.max_bytes=1 status=Err error=ObjectLimitExceeded { limit: 1, actual: 16 }
+RESULT list.max_bytes=14 status=Err error=ObjectLimitExceeded { limit: 14, actual: 16 }
+RESULT list.max_bytes=15 status=Err error=ObjectLimitExceeded { limit: 15, actual: 16 }
+RESULT list.max_bytes=16 status=Ok entries=1 continuation=Some("f00000")
+RESULT list.max_bytes=17 status=Ok entries=1 continuation=Some("f00000")
+RESULT list.max_bytes=4096 status=Ok entries=20 continuation=None
+RESULT list.full_page is_ok=true entries=20 continuation_is_none=true
+RESULT build.disconnected_cycle=REFUSED error=InvalidRecord("effective tree cycle")
+RESULT build.orphan_declared_new=REFUSED error=InvalidRecord("new inode without binding")
+RESULT boundary.name_bytes=255 status=ACCEPTED
+RESULT boundary.name_bytes=256 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4095 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4096 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4097 status=REFUSED PathLimitExceeded
+RESULT boundary.path_components=256 bytes=511 status=ACCEPTED
+RESULT boundary.path_components=257 bytes=513 status=REFUSED PathLimitExceeded
+RESULT boundary.symlink_target_bytes=4096 status=ACCEPTED
+RESULT boundary.symlink_target_bytes=4097 status=REFUSED InvalidRecord("symlink target")
+RESULT boundary.inode_serial=9223372036854775807 status=ACCEPTED
+RESULT boundary.inode_serial=9223372036854775808 status=REFUSED InvalidRecord("inode serial")
+RESULT boundary.inode_serial=0 status=REFUSED InvalidRecord("inode serial")
+RESULT read_work.two_stats directory.pages_read=0 directory.read_waves=0 inode.pages_read=3

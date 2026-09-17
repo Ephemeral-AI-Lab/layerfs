@@ -1,0 +1,12 @@
+[package]
+name = "stage5-diagnostics"
+version = "0.0.0"
+edition = "2021"
+
+# Its own workspace root so the repository workspace never claims this evidence crate.
+[workspace]
+
+[dependencies]
+layerfs-content = { path = "../../../../../../../../core/crates/layerfs-content" }
+layerfs-storage = { path = "../../../../../../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../../../../../../core/crates/layerfs-telemetry" }

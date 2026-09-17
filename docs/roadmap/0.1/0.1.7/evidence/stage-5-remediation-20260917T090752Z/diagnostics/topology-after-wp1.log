@@ -1,0 +1,4 @@
+RESULT T1.update_new_dir_cycle=REFUSED error=InvalidRecord("effective tree cycle")
+RESULT T2.dir_second_parent=REFUSED error=InvalidRecord("multiple parents")
+RESULT T3.symlink_second_parent=REFUSED error=InvalidRecord("multiple parents")
+RESULT T4.same_batch_duplicate=REFUSED error=InvalidRecord("multiple parents")
