@@ -118,17 +118,21 @@ fn run<'b>(
     phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
     let mut backing = backing;
-    let (outcome, cleanup_attempted) = {
+    // The flag is set by the body the moment the checked completion runs, so the
+    // failure path below never releases the same backing twice and never depends
+    // on recognising a particular error label.
+    let mut cleanup_attempted = false;
+    let outcome = {
         let borrowed: Option<&mut (dyn OrderingBacking + 'b)> = backing.as_deref_mut();
-        run_inner(objects, input, borrowed, phases)
+        run_body(objects, input, borrowed, phases, &mut cleanup_attempted)
     };
     match outcome {
         Ok(result) => Ok(result),
         Err(error) => {
-            // One attempted operation: the known-owned ordering resources are
-            // released here, once, and the original failure is what the caller
-            // sees. A cleanup that also fails is visible through the backing,
-            // never by replacing the operation's own error.
+            // One attempted operation: known-owned ordering resources are released
+            // here, once, and the original failure is what the caller sees. A
+            // cleanup that also fails is visible through the backing, never by
+            // replacing the operation's own error.
             if !cleanup_attempted {
                 if let Some(backing) = backing {
                     let _ = backing.release();
@@ -139,30 +143,12 @@ fn run<'b>(
     }
 }
 
-/// One attempted operation.
-///
-/// The flag reports whether the checked completion already ran, so the failure
-/// path never releases the same backing twice.
-fn run_inner<'b>(
-    objects: &mut FilesystemObjects<'_>,
-    input: &FilesystemInput<'_>,
-    backing: Option<&mut (dyn OrderingBacking + 'b)>,
-    phases: &FilesystemPhases<'_>,
-) -> (ContentResult<FilesystemResult>, bool) {
-    match run_body(objects, input, backing, phases) {
-        Ok(result) => (Ok(result), true),
-        Err(error) => {
-            let attempted = matches!(error, ContentError::ResourceUnavailable { what } if what == "ordering run cleanup");
-            (Err(error), attempted)
-        }
-    }
-}
-
 fn run_body<'b>(
     objects: &mut FilesystemObjects<'_>,
     input: &FilesystemInput<'_>,
     backing: Option<&mut (dyn OrderingBacking + 'b)>,
     phases: &FilesystemPhases<'_>,
+    cleanup_attempted: &mut bool,
 ) -> ContentResult<FilesystemResult> {
     let checked = phases.phase("validate", || validate::check(objects.reader(), input))?;
     let reader = objects.reader();
@@ -360,6 +346,7 @@ fn run_body<'b>(
     // successful result always means the ordering resources were released.
     counters.references = rows.work();
     drop(rows);
+    *cleanup_attempted = true;
     phases.phase("cleanup", || reducer.release())?;
     let root = match checked.topology.base {
         Some(root) => root.with_inode_table(inode_table),
