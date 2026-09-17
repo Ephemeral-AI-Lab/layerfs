@@ -30,6 +30,9 @@ This file adds the owner's product-source and module-structure requirements.
   relying on that codec for filesystem-root equivalence.
   Stage 5 attributes are portable mode/mtime plus bounded generic key/value data;
   do not port Apple-specific codecs/semantics or APFS materialization into core.
+  Continue the existing Stage 5 work through the [completion prompt](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-continuation-handoff.md):
+  verified ordering fixes, missing failure/resource matrices, qualified comparison
+  and final acceptance. Preserve already-established canonical compatibility proofs.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 
