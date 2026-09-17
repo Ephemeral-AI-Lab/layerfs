@@ -1,0 +1,7 @@
+$ /tmp/layerfs-spillctl-target/release/spillcontrol
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.028
+--- stdout ---
+control cache_size 8 spill_ok true spill_value 1032
+--- stderr ---

@@ -1,0 +1,23 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/filesystem_timing_c1 --case directory-update --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/p0-3-counters/c1-directory-update
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.011
+--- stdout ---
+case directory-update
+root 820dcf462ad2279e037b25e0a762cb478971af3e7c898165539287f9010dc74e
+inode_table f835c80cdf9e5dbbb1c6be107019107d03f749bd7e231ec0403044b4a699b138
+directories 1 bindings +0 -0
+objects read 6 waves 4 bytes 19586 emitted 1 bytes 129
+directories: pages read 1 created 0 reused 1 untouched 0 scratch peak 67708 top-level 1
+inodes: pages read 1 created 0 reused 2 scratch peak 67644
+references: rows 1 spilled 0 values 1 removals 0 released 0 peak pending 1
+elapsed_ns 240125
+phase validate elapsed_ns 102000
+phase directories elapsed_ns 72333
+phase references elapsed_ns 750
+phase inodes elapsed_ns 35250
+phase cleanup elapsed_ns 708
+phase root.encode elapsed_ns 1125
+report_nodes 7
+prepared_objects 8
+--- stderr ---

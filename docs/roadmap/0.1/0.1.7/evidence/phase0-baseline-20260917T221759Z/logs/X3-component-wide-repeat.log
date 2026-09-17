@@ -1,0 +1,19 @@
+$ python3 tools/stage5_component_comparison.py --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/p0-1-component/diagnostic-run-2
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 5.521
+--- stdout ---
+source_commit dcedd7ef13338366bd80446fc7a9008cca69d683
+profile release
+working_tree_dirty False
+case small reference elapsed_ns 363708 wall_s 1.986
+case small candidate elapsed_ns 321292 wall_s 0.691
+case small identity MATCH candidate_over_reference 0.883379
+case wide reference elapsed_ns 2576208 wall_s 0.641
+case wide candidate elapsed_ns 984125 wall_s 0.620
+case wide identity MATCH candidate_over_reference 0.382005
+case large-few-changes reference elapsed_ns 4552958 wall_s 0.677
+case large-few-changes candidate elapsed_ns 1874417 wall_s 0.641
+case large-few-changes identity MATCH candidate_over_reference 0.411692
+receipt /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/p0-1-component/diagnostic-run-2/receipt.json sha256 a400e4097a4c5a642e395046591b73dd201162532ae304b760794940ab66cd4b
+--- stderr ---

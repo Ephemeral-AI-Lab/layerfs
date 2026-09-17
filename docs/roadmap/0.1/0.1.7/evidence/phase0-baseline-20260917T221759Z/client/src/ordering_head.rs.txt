@@ -1,0 +1,175 @@
+//! Round-4 terminal-handoff probes for the Stage 5 ordering rows.
+//!
+//! This client depends on the two core packages as path dependencies, uses only
+//! their public entry points, and prints one labelled block per probe. Nothing
+//! in it is product code and nothing in the repository imports it.
+//!
+//! Row coverage:
+//! - `grid` (R2-F8/N-6): the ordering scaling grid - the same fixture shape the
+//!   round-2 review measured (4,000-file base, `maximum_pending_records = 64`,
+//!   four change sizes), with the review's own columns plus the counters the
+//!   simultaneous-memory row needs.
+//! - `coexist` (TR-5): what one update operation holds at once during its
+//!   references phase - pending rows, ordering bytes, live-tier scan buffers and
+//!   caller backing, each with its scope, unit and the counter that produced it
+//!   - and the sequential-phase scratch peaks beside them.
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::time::Instant;
+
+use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking};
+use layerfs_content::filesystem::references::runs::DEFAULT_MERGE_BUFFER_BYTES;
+use layerfs_content::filesystem::references::record::ROW_BYTES;
+use layerfs_content::filesystem::{
+    build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
+    FilesystemObjects, FilesystemResources, FilesystemRootId, InodeScope, InodeUpdate, PathName,
+};
+use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+use layerfs_content::{
+    AuthenticatedObjects, ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId,
+    ObjectRole,
+};
+
+#[derive(Clone, Debug, Default)]
+struct Bag {
+    objects: BTreeMap<ObjectId, (ObjectRole, Vec<u8>)>,
+}
+
+impl Bag {
+    fn get(&self, id: ObjectId) -> ContentResult<Vec<u8>> {
+        self.objects
+            .get(&id)
+            .map(|(_, bytes)| bytes.clone())
+            .ok_or(ContentError::MissingObject)
+    }
+}
+
+impl FinalizedConsumer for Bag {
+    fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        let parts = object.into_parts();
+        self.objects
+            .insert(parts.id, (parts.role, parts.canonical));
+        Ok(())
+    }
+}
+
+impl AuthenticatedObjects for Bag {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        ids.iter().map(|id| self.get(*id)).collect()
+    }
+}
+
+fn name(value: &str) -> PathName {
+    PathName::new(value).expect("name")
+}
+
+fn synthetic(label: &str) -> ObjectId {
+    ObjectId::for_bytes(format!("layerfs/s5term/{label}").as_bytes())
+}
+
+fn scope() -> InodeScope {
+    scope_for_seed([0x41; 32])
+}
+
+struct Fixture {
+    bag: Bag,
+    root: ObjectId,
+}
+
+/// Builds root (serial 1) with directory d (serial 2) holding `files` files.
+fn fixture(files: usize) -> Fixture {
+    let mut bag = Bag::default();
+    let mut inodes: Vec<InodeUpdate> = vec![
+        InodeUpdate {
+            serial: 1,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: synthetic("root-content"),
+                metadata_root: synthetic("root-meta"),
+            },
+        },
+        InodeUpdate {
+            serial: 2,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: synthetic("d-content"),
+                metadata_root: synthetic("d-meta"),
+            },
+        },
+    ];
+    let mut new_inodes: Vec<u64> = vec![1, 2];
+    for index in 0..files {
+        inodes.push(InodeUpdate {
+            serial: index as u64 + 3,
+            value: InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 0,
+                content_root: synthetic(&format!("content-{index:05}")),
+                metadata_root: synthetic("file-meta"),
+            },
+        });
+        new_inodes.push(index as u64 + 3);
+    }
+    let directories = [
+        DirectoryUpdate {
+            parent: 1,
+            changes: vec![(name("d"), Some(2))],
+        },
+        DirectoryUpdate {
+            parent: 2,
+            changes: (0..files)
+                .map(|index| (name(&format!("f{index:05}")), Some(index as u64 + 3)))
+                .collect(),
+        },
+    ];
+    let input = FilesystemInput {
+        base: None,
+        scope: scope(),
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources: FilesystemResources::default(),
+    };
+    let reader = bag.clone();
+    let mut sink = Bag::default();
+    // The build is itself an operation: above the default pending-row ceiling it
+    // needs a caller-owned ordering backing, exactly like any other operation.
+    let mut backing = FileBacking::new(backing_dir("fixture"));
+    let result = {
+        let mut objects = FilesystemObjects::new(&reader, &mut sink);
+        let backing_ref: &mut dyn OrderingBacking = &mut backing;
+        build_filesystem(&mut objects, &input, Some(backing_ref))
+    }
+    .expect("fixture build");
+    bag.objects.extend(sink.objects);
+    Fixture {
+        bag,
+        root: result.root.0,
+    }
+}
+
+/// A rename batch over the first `pairs` names of d.
+fn rename_pairs(pairs: usize) -> Vec<DirectoryUpdate> {
+    let mut changes: Vec<(PathName, Option<u64>)> = Vec::with_capacity(pairs * 2);
+    for index in 0..pairs {
+        changes.push((name(&format!("f{index:05}")), None));
+        changes.push((name(&format!("r{index:05}")), Some(index as u64 + 3)));
+    }
+    changes.sort_by(|left, right| left.0.cmp(&right.0));
+    vec![DirectoryUpdate {
+        parent: 2,
+        changes,
+    }]
+}
+
+fn backing_dir(label: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("layerfs-s5term-{label}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("backing directory");
+    dir
+}
+

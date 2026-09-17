@@ -1,0 +1,7 @@
+$ cargo +1.85.1 build --release --offline --locked --manifest-path Cargo.toml -p layerfs-content --example stage5_component_reference
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.155
+--- stdout ---
+--- stderr ---
+    Finished `release` profile [optimized] target(s) in 0.12s

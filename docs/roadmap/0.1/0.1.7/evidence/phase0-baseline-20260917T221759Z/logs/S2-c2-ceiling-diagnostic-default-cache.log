@@ -1,0 +1,7 @@
+$ /tmp/layerfs-phase0-target/release/phase0client c2 8191 diagnostic-default-cache
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.024
+--- stdout ---
+c2 rows 8191 canonical_bytes 1023875 cache_arm diagnostic-default-cache elapsed_ns 10138292 commits 1 | pragma cache_size 2000 cache_spill 20000 page_size 4096 journal_mode memory | dbstatus cache_spill ok=true value=0 | cache_write ok=true value=187 | cache_used ok=true value=806400 | note diagnostic: harness-owned connection, same single-row INSERT shape and one transaction; the two diagnostic arms differ ONLY in cache_size/cache_spill
+--- stderr ---

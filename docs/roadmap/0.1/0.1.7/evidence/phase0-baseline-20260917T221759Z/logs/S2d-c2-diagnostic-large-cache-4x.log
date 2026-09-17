@@ -1,0 +1,7 @@
+$ /tmp/layerfs-phase0-target/release/phase0client c2 32764 diagnostic-large-cache
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.071
+--- stdout ---
+c2 rows 32764 canonical_bytes 4095500 cache_arm diagnostic-large-cache elapsed_ns 43037458 commits 1 | pragma cache_size -32768 cache_spill 0 page_size 4096 journal_mode memory | dbstatus cache_spill ok=true value=0 | cache_write ok=true value=740 | cache_used ok=true value=3213056 | note diagnostic: harness-owned connection, same single-row INSERT shape and one transaction; the two diagnostic arms differ ONLY in cache_size/cache_spill
+--- stderr ---
