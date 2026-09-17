@@ -74,10 +74,10 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | --- | --- | --- | --- | --- |
 | G1 | CHUNK absent/ineligible candidate selects FULL; save never fails for an advisory candidate | W1 | **PASS** | `w1/README.md`; `delta_payload` +3 cases, all three fail with `ObjectMissing` without the fix |
 | G2 | Every pooled read applies the owner's captured pack ceiling | W2 | **PASS** | `w2/README.md`; four sites supply `self.ceiling`, structural + behavioural oracles both fail without it |
-| G3 | Emitted edit pages are encoded and hashed once, at final emission; superseded drafts released | W3 | OPEN | |
-| G4 | Frontier memory is a function of height/fanout, asserted by a real oracle | W3, W4.1 | OPEN | |
-| G5 | Finality argument committed; children-before-parents asserted for edits | W3, W4.6 | OPEN | |
-| G6 | All nine sealed reference cases still match root, partition and survivors | W3 | OPEN | |
+| G3 | Emitted edit pages are encoded and hashed once, at final emission; superseded drafts released | W3 | **PASS** | `w3/README.md`; `Draft::Page`/`Draft::Node`, encode+hash only in `commit_node`, release on supersession + `tree::discard` |
+| G4 | Frontier memory is a function of height/fanout, asserted by a real oracle | W3, W4.1 | **PASS** | `w3/README.md`; peaks `[2208,2288,2448,2768,3408]` at 1/2/4/8/16 edits; control without release `[6308,…,129728]` |
+| G5 | Finality argument committed; children-before-parents asserted for edits | W3, W4.6 | **PASS** | finality argument R1-R3 in `w3/README.md`; `assert_children_precede_parents` called from `edit_bounds` |
+| G6 | All nine sealed reference cases still match root, partition and survivors | W3 | **PASS** | `w3/w3-verify.log`: `edit_reference` 2 tests / nine sealed cases, exit 0 |
 | G7 | Every overclaiming or vacuous oracle replaced; each new case fails without its fix | W4 | OPEN | |
 | G8 | Integrated multi-edit chunked pipeline case exists and passes | W4.5 | OPEN | |
 | G9 | Every significant allocation has owner, bound, multiplicity, lifetime and release event | W5, W7.3 | OPEN | |
@@ -121,6 +121,34 @@ G13-G15, G17-G19. Neither is complete yet.
 * **Reachability.** Unreachable through the public API today; the change is
   fail-closed, and `w2/README.md` states that plainly.
 * **Production LOC.** core `10938 -> 10938` (delta 0).
+
+### W3 — checkpoint D's decoded frontier (G3-G6) — PASS
+
+* **Defect.** `file/edit/tree.rs:52-58` held encoded drafts, encoded and hashed
+  each draft at creation (`:105-139`), never released a superseded draft
+  (`:112-132`), decoded again on every visit (`:82-101`) and re-decoded and
+  re-encoded each reached node in `commit_node` (`:185`).
+* **Change.** `Draft::Page(FinalizedObject)` holds a builder page as the finalized
+  object it already is (final emission is a move); `Draft::Node(ExtentNode)` holds
+  a node this operation built, decoded, under an operation-local key, and is
+  encoded and hashed exactly once inside `commit_node` after the walk proves it
+  final. `child_summaries` recovers children from descriptors, and `commit_node`
+  patches each descriptor with the child's real identity before encoding the
+  parent, so children precede parents. `EditObjects::release` drops a node a
+  `split`/`concat` supersedes; `tree::discard` drops the replaced range the edit
+  does not use. `EditCounters::nodes_created` now counts published nodes and
+  `peak_deferred_bytes` the peak live charge. `ConstructedFile` gained
+  `counters: EditCounters` so the real C1 path reports frontier work.
+* **Proof.** `edit_bounds.rs::the_retained_frontier_does_not_grow_with_the_edit_count`
+  replaces the vacuous frontier oracle (W4.1) and asserts per case:
+  `payloads_created == edits`, `nodes_created ==` emitted mapping objects,
+  a changed mapping, child-first emission (W4.6) and a frontier that does not
+  double with the edit count. `w3-fails-without-fix.log` holds both controls.
+  `edit_reference` reproduces all nine sealed cases (exit 0, 56.6 s), plus
+  `edit_localized`, `edit_batch`, `edit_model` and the whole workspace
+  (43 targets / 251 tests).
+* **Finality.** Rules R1-R3 and the join/edit arguments are in `w3/README.md`.
+* **Production LOC.** core `10938 -> 11053` (delta +115); C1 4385 -> 4500.
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 

@@ -12,7 +12,7 @@ mod support;
 use layerfs_content::FinalizedConsumer;
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, ContentResult, Edit, EditRequest, EditSource,
-    EditStream, ObjectId, Replacements,
+    EditStream, ObjectId, ObjectRole, Replacements,
 };
 use support::{disabled_scope, extent_count, mapping_page_sizes, noise, read_back, MemoryStore};
 
@@ -237,39 +237,95 @@ fn many_files_and_many_edits_stay_bounded() {
     }
 }
 
+/// The retained frontier is a function of the tree the operation ends up with,
+/// not of the file length and not of how many edits produced it.
+///
+/// Each case applies a growing number of edits to one fixed-shape chunked file
+/// through the real public edit path and reads the counters that path reports:
+/// every edit must have created its payload and changed the mapping, the emitted
+/// mapping objects must equal `nodes_created`, and the peak frontier must stay at
+/// the bound the final tree and one replacement scan need - a superseded draft is
+/// released, so the peak cannot grow with the edit count.
 #[test]
-fn the_retained_frontier_does_not_grow_with_the_file() {
-    let small = file_with_extents(40);
-    let large = file_with_extents(400);
+fn the_retained_frontier_does_not_grow_with_the_edit_count() {
+    let base = file_with_extents(40);
+    let base_len = base.len() as u64;
+    let (base_store, root) = build(&base);
+    let base_extents = extent_count(&base_store, root);
     let mut peaks = Vec::new();
-    for base in [&small, &large] {
-        let (store, root) = build(base);
-        let replacements = Replacements::new();
-        let mut result = store.merged_clone();
-        let stream = EditStream::new(base.len() as u64, vec![Edit::delete(0, 0)]).expect("valid");
+    for edits in [1_u64, 2, 4, 8, 16] {
+        let mut replacements = Replacements::new();
+        let mut declared = Vec::new();
+        let mut position = 1_000_u64;
+        for index in 0..edits {
+            let length = 300 + index;
+            declared.push(Edit::overwrite(position, position + length));
+            replacements.push(noise(length as usize));
+            position += 2_048;
+        }
+        let stream = EditStream::new(base_len, declared).expect("valid stream");
+        let mut tracking = support::TrackingConsumer::new();
         let constructed = disabled_scope(|scope| {
             apply_edits(
                 policy(),
                 &policy().capacities(),
-                &store,
+                &base_store,
                 EditRequest {
                     root,
                     edits: &stream,
                     source: &replacements,
                 },
-                &mut result,
+                &mut tracking,
                 scope.child("edit"),
             )
         })
-        .expect("empty edit");
-        assert_eq!(constructed.root, root);
-        peaks.push(support::extent_count(&result, root));
+        .expect("chunked edit");
+        assert_eq!(
+            constructed.logical_len, base_len,
+            "overwrites keep the length"
+        );
+        assert_eq!(
+            constructed.counters.payloads_created, edits,
+            "every edit created exactly one replacement payload"
+        );
+        let mapping = tracking
+            .store
+            .roles()
+            .iter()
+            .filter(|role| matches!(role, ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch))
+            .count() as u64;
+        assert!(mapping >= 1, "the edit published no mapping page");
+        assert_eq!(
+            constructed.counters.nodes_created, mapping,
+            "nodes_created must equal the emitted mapping objects"
+        );
+        tracking.assert_children_precede_parents();
+        let mut merged = base_store.merged_clone();
+        merged.absorb(&tracking.store);
+        assert!(
+            extent_count(&merged, constructed.root) > base_extents,
+            "the mapping did not change, so the frontier was never exercised"
+        );
+        peaks.push(constructed.counters.peak_deferred_bytes);
     }
-    assert!(peaks[1] > peaks[0]);
-    // The frontier itself is bounded by the page capacity and the height, so a
-    // ten-times larger file cannot retain ten times the entries; the builder is
-    // exercised through the same public edit path above.
-    assert!(peaks[0] <= 192 && peaks[1] <= 192 * 32);
+    // One boundary path, one replacement scan and the final page fit far inside
+    // this bound; a frontier that merely accumulated drafts would exceed it many
+    // times over at 16 edits.
+    assert!(
+        peaks.iter().all(|peak| *peak <= 64 * 1_024),
+        "the frontier grew past the bound the tree needs: {peaks:?}"
+    );
+    // Doubling the edit count must not double the frontier. One replacement scan
+    // plus the two extents each overwrite adds to the final page fit inside a
+    // kilobyte; a frontier that accumulated superseded drafts instead grows
+    // linearly, and this case measured 6 308 -> 129 728 bytes over the same steps
+    // when the release rule was removed.
+    for window in peaks.windows(2) {
+        assert!(
+            window[1] <= window[0] + 1_024,
+            "doubling the edit count doubled the frontier: {peaks:?}"
+        );
+    }
 }
 
 #[test]

@@ -12,7 +12,7 @@
 //! localized edit costs the affected paths and the join boundaries, never the whole
 //! retained mapping.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::{
@@ -37,23 +37,82 @@ const DEFERRED_OBJECT_OVERHEAD: usize = 128;
 pub struct EditCounters {
     /// Stored or owned nodes read.
     pub nodes_read: u64,
-    /// Nodes created by this operation.
+    /// Mapping nodes this operation created and published.
+    ///
+    /// One per distinct mapping object the commit walk emits, so it equals the
+    /// number of mapping objects the consumer received. A draft a later split or
+    /// join superseded is never counted, because it is never emitted.
     pub nodes_created: u64,
     /// Payload objects created by this operation.
     pub payloads_created: u64,
     /// Payload bytes created.
     pub payload_bytes: u64,
-    /// Largest number of deferred node bytes held at once.
+    /// Largest number of unfinished-node bytes held at once.
     pub peak_deferred_bytes: usize,
 }
 
-/// The operation's private object set: deferred unfinished nodes plus the
-/// already-stored objects it reads through.
+/// Namespace tag of one operation-local draft key.
+///
+/// A key is not an identity: the identity of a mapping page is the digest of its
+/// canonical bytes, and those bytes do not exist until the page is final. Until
+/// then a page this operation built is addressed by a tag plus a counter, so the
+/// mapping is injective, reversible in constant time and needs no table. No
+/// stored object carries the tag - a stored identity is such a digest, and this
+/// tag is not one.
+const DRAFT_KEY_TAG: [u8; 24] = *b"layerfs-edit-draft-key\0\0";
+
+/// One unfinished node this operation owns.
+///
+/// A draft holds exactly one representation and never two. A page the canonical
+/// builder emitted is already framed, immutable, identified and referenced, so it
+/// is held as the finalized object it is: final emission is a move, and its bytes
+/// are decoded only when a split or join actually needs its boundary. A node this
+/// operation built from decoded parts is held decoded and encoded exactly once,
+/// in [`EditObjects::commit_node`], after it is proven final.
+enum Draft {
+    /// A page the canonical builder already produced.
+    Page(FinalizedObject),
+    /// A node this operation built, held decoded.
+    Node(ExtentNode),
+}
+
+impl Draft {
+    /// Bytes this draft charges against the operation's unfinished-node ceiling.
+    ///
+    /// A held page charges its canonical bytes; a held decoded node charges the
+    /// decoded entries it actually occupies, which is the number that bounds the
+    /// operation's memory.
+    fn charge(&self) -> usize {
+        match self {
+            Self::Page(object) => object
+                .canonical_len()
+                .saturating_add(DEFERRED_OBJECT_OVERHEAD),
+            Self::Node(node) => {
+                let entries = match node {
+                    ExtentNode::Leaf { extents, .. } => extents
+                        .len()
+                        .saturating_mul(std::mem::size_of::<ExtentSlice>()),
+                    ExtentNode::Branch { children, .. } => children
+                        .len()
+                        .saturating_mul(std::mem::size_of::<ChildDescriptor>()),
+                };
+                std::mem::size_of::<ExtentNode>()
+                    .saturating_add(entries)
+                    .saturating_add(DEFERRED_OBJECT_OVERHEAD)
+            }
+        }
+    }
+}
+
+/// The operation's private object set: unfinished nodes plus the already-stored
+/// objects it reads through.
 pub struct EditObjects<'a> {
     reader: &'a dyn AuthenticatedObjects,
     consumer: &'a mut dyn FinalizedConsumer,
-    deferred: BTreeMap<ObjectId, Vec<u8>>,
+    drafts: BTreeMap<ObjectId, Draft>,
+    committed: BTreeMap<ObjectId, ObjectId>,
     charged: usize,
+    next_key: u32,
     counters: EditCounters,
 }
 
@@ -66,8 +125,10 @@ impl<'a> EditObjects<'a> {
         Self {
             reader,
             consumer,
-            deferred: BTreeMap::new(),
+            drafts: BTreeMap::new(),
+            committed: BTreeMap::new(),
             charged: 0,
+            next_key: 0,
             counters: EditCounters::default(),
         }
     }
@@ -77,20 +138,22 @@ impl<'a> EditObjects<'a> {
         self.counters
     }
 
-    /// Reads one authenticated canonical object, preferring this operation's own
-    /// unfinished nodes over the stored generation.
-    pub fn read(&self, id: ObjectId) -> ContentResult<Vec<u8>> {
-        match self.deferred.get(&id) {
-            Some(bytes) => Ok(bytes.clone()),
-            None => self.reader.read_canonical(id),
-        }
+    /// Bytes currently held for this operation's unfinished nodes.
+    pub const fn charged_bytes(&self) -> usize {
+        self.charged
     }
 
     /// Reads and decodes one mapping page under its root/non-root context.
     pub fn load_node(&mut self, summary: NodeSummary, root: bool) -> ContentResult<ExtentNode> {
         self.counters.nodes_read = self.counters.nodes_read.saturating_add(1);
-        let canonical = self.read(summary.id)?;
-        let node = decode_node_with_context(&canonical, root)?;
+        let node = match self.drafts.get(&summary.id) {
+            Some(Draft::Node(node)) => node.clone(),
+            Some(Draft::Page(object)) => decode_node_with_context(object.canonical(), root)?,
+            None => {
+                let canonical = self.reader.read_canonical(summary.id)?;
+                decode_node_with_context(&canonical, root)?
+            }
+        };
         if node.level() != summary.level
             || node.logical_len() != summary.bytes
             || node.extent_count() != summary.extents
@@ -100,18 +163,70 @@ impl<'a> EditObjects<'a> {
         Ok(node)
     }
 
-    /// Encodes one node, keeps it as this operation's unfinished state and returns
-    /// its summary. The node is published only if the final tree reaches it.
+    /// Holds one node this operation built, decoded, under a fresh draft key.
+    ///
+    /// The node is not encoded and not hashed here: neither its identity nor its
+    /// bytes are decided until the commit walk proves it final. A node that a
+    /// later split or join replaces is released and never encoded at all.
     pub fn hold_node(&mut self, node: &ExtentNode) -> ContentResult<NodeSummary> {
-        let canonical = encode_node(node)?;
-        let id = ObjectId::for_bytes(&canonical);
-        let charged = canonical
-            .len()
-            .checked_add(DEFERRED_OBJECT_OVERHEAD)
+        let id = self.next_draft_key()?;
+        let draft = Draft::Node(node.clone());
+        self.charge_bytes(draft.charge())?;
+        self.drafts.insert(id, draft);
+        Ok(NodeSummary {
+            id,
+            bytes: node.logical_len(),
+            extents: node.extent_count(),
+            level: node.level(),
+        })
+    }
+
+    /// Holds one page the canonical builder already emitted.
+    ///
+    /// The page's bytes, identity and references are final when the builder emits
+    /// it, so holding it costs one move and publishing it later costs nothing: no
+    /// decode, encode or hash is repeated for a page the builder produced.
+    fn hold_page(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        let id = object.id();
+        if self.drafts.contains_key(&id) {
+            return Ok(());
+        }
+        let charge = object
+            .canonical_len()
+            .saturating_add(DEFERRED_OBJECT_OVERHEAD);
+        self.charge_bytes(charge)?;
+        self.drafts.insert(id, Draft::Page(object));
+        Ok(())
+    }
+
+    /// Releases one draft this operation owns, releasing its charge.
+    ///
+    /// A node a split or a join superseded is unreachable from the final mapping,
+    /// so it is never emitted and holding it would only bound the operation by the
+    /// number of edits rather than by the tree it ends up with. Releasing a
+    /// summary that was already published, or that belongs to the stored
+    /// generation, does nothing.
+    fn release(&mut self, id: ObjectId) {
+        if let Some(draft) = self.drafts.remove(&id) {
+            self.charged = self.charged.saturating_sub(draft.charge());
+        }
+    }
+
+    fn next_draft_key(&mut self) -> ContentResult<ObjectId> {
+        let sequence = self.next_key;
+        self.next_key = sequence
+            .checked_add(1)
             .ok_or(ContentError::LengthOverflow)?;
+        let mut bytes = [0_u8; 32];
+        bytes[..DRAFT_KEY_TAG.len()].copy_from_slice(&DRAFT_KEY_TAG);
+        bytes[DRAFT_KEY_TAG.len()..].copy_from_slice(&u64::from(sequence).to_be_bytes());
+        ObjectId::from_bytes(&bytes)
+    }
+
+    fn charge_bytes(&mut self, charge: usize) -> ContentResult<()> {
         let next = self
             .charged
-            .checked_add(charged)
+            .checked_add(charge)
             .ok_or(ContentError::LengthOverflow)?;
         if next > EDIT_DEFERRED_LIMIT {
             return Err(ContentError::BoundedCapacityExceeded {
@@ -120,22 +235,9 @@ impl<'a> EditObjects<'a> {
                 actual: next as u64,
             });
         }
-        if let Some(prior) = self.deferred.get(&id) {
-            if prior != &canonical {
-                return Err(ContentError::IdentityMismatch);
-            }
-        } else {
-            self.deferred.insert(id, canonical);
-        }
         self.charged = next;
-        self.counters.nodes_created = self.counters.nodes_created.saturating_add(1);
         self.counters.peak_deferred_bytes = self.counters.peak_deferred_bytes.max(next);
-        Ok(NodeSummary {
-            id,
-            bytes: node.logical_len(),
-            extents: node.extent_count(),
-            level: node.level(),
-        })
+        Ok(())
     }
 
     /// Publishes one payload object immediately: a payload named by a surviving
@@ -155,50 +257,102 @@ impl<'a> EditObjects<'a> {
     /// The state is last because it depends on the mapping root, and the mapping
     /// root on its children: a consumer never sees a parent before its child.
     pub fn finish(&mut self, mapping: NodeSummary) -> ContentResult<ObjectId> {
-        self.commit(mapping)?;
-        let root = emit_file_state(self.consumer, mapping)?;
+        let mut published = BTreeSet::new();
+        let root_id = self.commit_node(mapping, true, &mut published)?;
+        let root = emit_file_state(
+            self.consumer,
+            NodeSummary {
+                id: root_id,
+                ..mapping
+            },
+        )?;
         Ok(root)
     }
 
-    /// Publishes every unfinished node the final tree reaches, children first.
+    /// Publishes every unfinished node the final tree reaches, children first, and
+    /// returns the mapping's real identity.
     ///
     /// A node that a later split or join overwrote is simply never reached, so no
     /// speculative object is ever emitted and no prune pass is needed.
-    pub fn commit(&mut self, root: NodeSummary) -> ContentResult<()> {
-        let mut visited = std::collections::BTreeSet::new();
-        self.commit_node(root, true, &mut visited)
+    pub fn commit(&mut self, root: NodeSummary) -> ContentResult<ObjectId> {
+        let mut published = BTreeSet::new();
+        self.commit_node(root, true, &mut published)
     }
 
+    /// Publishes one reached node and returns its real identity.
+    ///
+    /// A stored subtree is already published and is returned unchanged. A draft is
+    /// proven final by being reached from the final mapping: its children are
+    /// committed first, its descriptor identities are patched to the children's
+    /// real identities, and only then is it encoded, hashed and published - once.
     fn commit_node(
         &mut self,
         summary: NodeSummary,
         root: bool,
-        visited: &mut std::collections::BTreeSet<ObjectId>,
-    ) -> ContentResult<()> {
-        if !visited.insert(summary.id) {
-            return Ok(());
-        }
-        let Some(canonical) = self.deferred.get(&summary.id).cloned() else {
-            // A stored subtree: its objects are already published.
-            return Ok(());
+        published: &mut BTreeSet<ObjectId>,
+    ) -> ContentResult<ObjectId> {
+        let Some(draft) = self.drafts.remove(&summary.id) else {
+            // Either a stored subtree, or a draft another reference already
+            // committed during this walk: both answer with their identity.
+            return Ok(self
+                .committed
+                .get(&summary.id)
+                .copied()
+                .unwrap_or(summary.id));
         };
-        let node = decode_node_with_context(&canonical, root)?;
-        if let ExtentNode::Branch {
-            level, children, ..
-        } = &node
-        {
-            for child in child_summaries(children, level - 1)? {
-                self.commit_node(child, false, visited)?;
+        self.charged = self.charged.saturating_sub(draft.charge());
+        let id = match draft {
+            Draft::Page(object) => {
+                if object.role() == ObjectRole::ExtentBranch {
+                    // A branch page publishes its children before itself, so its
+                    // descriptors are read once here; a leaf page needs no decode.
+                    let node = decode_node_with_context(object.canonical(), root)?;
+                    if let ExtentNode::Branch {
+                        level, children, ..
+                    } = &node
+                    {
+                        for child in child_summaries(children, level.saturating_sub(1))? {
+                            self.commit_node(child, false, published)?;
+                        }
+                    }
+                }
+                let id = object.id();
+                if published.insert(id) {
+                    self.consumer.accept(object)?;
+                    self.counters.nodes_created = self.counters.nodes_created.saturating_add(1);
+                }
+                id
             }
-        }
-        let role = match node {
-            ExtentNode::Leaf { .. } => ObjectRole::ExtentLeaf,
-            ExtentNode::Branch { .. } => ObjectRole::ExtentBranch,
+            Draft::Node(mut node) => {
+                if let ExtentNode::Branch {
+                    level, children, ..
+                } = &mut node
+                {
+                    // This page holds its children by draft key; the descriptor
+                    // takes the child's real identity before this page is encoded.
+                    let summaries = child_summaries(children, level.saturating_sub(1))?;
+                    for (index, child) in summaries.into_iter().enumerate() {
+                        let committed = self.commit_node(child, false, published)?;
+                        children[index].child_object_id = committed;
+                    }
+                }
+                let role = match node {
+                    ExtentNode::Leaf { .. } => ObjectRole::ExtentLeaf,
+                    ExtentNode::Branch { .. } => ObjectRole::ExtentBranch,
+                };
+                let canonical = encode_node(&node)?;
+                let references = node.references();
+                let object = FinalizedObject::new(role, canonical)?.with_references(references);
+                let id = object.id();
+                if published.insert(id) {
+                    self.consumer.accept(object)?;
+                    self.counters.nodes_created = self.counters.nodes_created.saturating_add(1);
+                }
+                id
+            }
         };
-        let references = node.references();
-        let object = FinalizedObject::new(role, canonical)?.with_references(references);
-        self.consumer.accept(object)?;
-        Ok(())
+        self.committed.insert(summary.id, id);
+        Ok(id)
     }
 }
 
@@ -216,16 +370,15 @@ impl<'a, 'b> DeferredSink<'a, 'b> {
 
 impl FinalizedConsumer for DeferredSink<'_, '_> {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        // A payload named by a surviving extent is reachable the moment it is
+        // created; a page is held as this operation's unfinished node and is
+        // published only if the final tree reaches it.
         match object.role() {
             ObjectRole::Chunk => {
                 self.objects.publish_payload(object)?;
                 Ok(())
             }
-            _ => {
-                let node = decode_node_with_context(object.canonical(), true)?;
-                self.objects.hold_node(&node)?;
-                Ok(())
-            }
+            _ => self.objects.hold_page(object),
         }
     }
 }
@@ -283,6 +436,18 @@ pub fn coalesce(extents: &mut Vec<ExtentSlice>) -> ContentResult<()> {
     Ok(())
 }
 
+/// Releases the unfinished nodes of a subtree the caller will not use.
+///
+/// A replaced range is not part of the result, so nothing it holds can ever be
+/// published: the draft the split created for it is dropped here instead of being
+/// carried until the operation ends. Only that node is released - the pages it was
+/// split from are shared with the halves that survive.
+pub fn discard(objects: &mut EditObjects<'_>, summary: Option<NodeSummary>) {
+    if let Some(summary) = summary {
+        objects.release(summary.id);
+    }
+}
+
 /// Splits one subtree at `offset`, in its own coordinates.
 ///
 /// `root_context` says whether this subtree is the whole tree, which decides the
@@ -306,7 +471,11 @@ pub fn split(
     if offset == root.bytes {
         return Ok((Some(root), None));
     }
+    // An interior split replaces this node with the two halves it returns, so the
+    // draft it may hold is superseded and released. Every child it was built from
+    // stays live: it is re-referenced by one of the halves or by the recursion.
     let node = objects.load_node(root, root_context)?;
+    objects.release(root.id);
     match node {
         ExtentNode::Leaf { extents, .. } => {
             let mut left = Vec::new();
@@ -401,6 +570,10 @@ fn concat_inner(
     if left.level == right.level {
         let left_node = objects.load_node(left, true)?;
         let right_node = objects.load_node(right, true)?;
+        // A join replaces both inputs: a merged page when they are leaves, and a
+        // rebuilt page when they are branches. Their children stay live.
+        objects.release(left.id);
+        objects.release(right.id);
         return match (left_node, right_node) {
             (ExtentNode::Leaf { mut extents, .. }, ExtentNode::Leaf { extents: other, .. }) => {
                 extents.extend(other);
@@ -431,6 +604,9 @@ fn concat_inner(
             return Err(ContentError::WrongLogicalRole);
         };
         let summaries = child_summaries(&children, level - 1)?;
+        // The taller side is dismantled into a rebuilt prefix and one descending
+        // boundary; every child it held stays live in one of the two.
+        objects.release(left.id);
         let (last, prefix) = summaries
             .split_last()
             .ok_or(ContentError::InvalidRecord("empty branch"))?;
@@ -451,6 +627,9 @@ fn concat_inner(
                     return Err(ContentError::WrongLogicalRole);
                 };
                 let mut summaries = child_summaries(&children, level - 1)?;
+                // Both sides are folded into the page the rebuilt branch is.
+                objects.release(boundary.id);
+                objects.release(prefix.id);
                 summaries.insert(0, prefix);
                 root_from_children(objects, summaries)?
                     .ok_or(ContentError::InvalidRecord("empty concat"))
@@ -477,6 +656,9 @@ fn concat_inner(
         return Err(ContentError::WrongLogicalRole);
     };
     let summaries = child_summaries(&children, level - 1)?;
+    // Mirror of the taller-left case: the taller side is dismantled into a
+    // descending boundary and one rebuilt suffix.
+    objects.release(right.id);
     let (first, suffix) = summaries
         .split_first()
         .ok_or(ContentError::InvalidRecord("empty branch"))?;
@@ -497,6 +679,9 @@ fn concat_inner(
                 return Err(ContentError::WrongLogicalRole);
             };
             let mut summaries = child_summaries(&children, level - 1)?;
+            // Both sides are folded into the page the rebuilt branch is.
+            objects.release(boundary.id);
+            objects.release(suffix.id);
             summaries.push(suffix);
             root_from_children(objects, summaries)?
                 .ok_or(ContentError::InvalidRecord("empty concat"))
@@ -509,6 +694,9 @@ fn concat_inner(
                 return Err(ContentError::WrongLogicalRole);
             };
             let mut summaries = child_summaries(&children, level - 1)?;
+            // The suffix page is rebuilt around the boundary, which stays live as
+            // its first child.
+            objects.release(suffix.id);
             summaries.insert(0, boundary);
             root_from_children(objects, summaries)?
                 .ok_or(ContentError::InvalidRecord("empty concat"))

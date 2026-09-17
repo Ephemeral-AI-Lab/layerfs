@@ -55,6 +55,7 @@ pub fn apply_edits(
             return Ok(ConstructedFile {
                 root: view.root(),
                 logical_len: view.logical_len(),
+                counters: crate::file::edit::EditCounters::default(),
             });
         }
         let final_len = request.edits.final_len();
@@ -70,6 +71,7 @@ pub fn apply_edits(
             return Ok(ConstructedFile {
                 root: view.root(),
                 logical_len: view.logical_len(),
+                counters: crate::file::edit::EditCounters::default(),
             });
         }
         match representation {
@@ -78,6 +80,7 @@ pub fn apply_edits(
                 Ok(ConstructedFile {
                     root: emitted.root,
                     logical_len: 0,
+                    counters: crate::file::edit::EditCounters::default(),
                 })
             }
             crate::policy::Representation::WholeFile => {
@@ -101,6 +104,7 @@ pub fn apply_edits(
                 Ok(ConstructedFile {
                     root,
                     logical_len: bytes.len() as u64,
+                    counters: crate::file::edit::EditCounters::default(),
                 })
             }
             crate::policy::Representation::Chunked => match view.file_state()? {
@@ -220,7 +224,7 @@ fn replace_chunked(
         let (left, tail) = edit.child("edit.split").run(|_| {
             crate::file::edit::tree::split(&mut objects, summary, declared.start(), true)
         })?;
-        let (_, right) = edit.child("edit.split").run(|_| match tail {
+        let (removed, right) = edit.child("edit.split").run(|_| match tail {
             Some(tail) => {
                 crate::file::edit::tree::split(&mut objects, tail, declared.removed_len(), true)
             }
@@ -231,6 +235,9 @@ fn replace_chunked(
                 length: 0,
             }),
         })?;
+        // The replaced range is dropped from the result, so the unfinished node
+        // the split built for it is released here and never encoded.
+        crate::file::edit::tree::discard(&mut objects, removed);
         // The replacement is scanned into its own subtree through the same
         // canonical builder complete construction uses. Its first payload may
         // continue the retained payload immediately before the insert position,
@@ -300,6 +307,7 @@ fn replace_chunked(
     Ok(ConstructedFile {
         root,
         logical_len: state.logical_len,
+        counters: objects.counters(),
     })
 }
 
@@ -353,6 +361,7 @@ fn stream_combined(
     Ok(ConstructedFile {
         root: emitted.root,
         logical_len: emitted.logical_len,
+        counters: crate::file::edit::EditCounters::default(),
     })
 }
 

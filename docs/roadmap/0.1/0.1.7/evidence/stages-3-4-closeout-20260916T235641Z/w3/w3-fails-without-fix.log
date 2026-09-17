@@ -1,0 +1,58 @@
+=== control A: the supersession release removed | 2026-09-17T00:17:47Z
+tree.rs: EditObjects::release becomes a no-op, so a superseded draft keeps charging.
+Expected: the frontier oracle fails because the peak doubles with the edit count.
+
+=== frontier oracle with the release rule removed | 2026-09-17T00:17:47Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --test edit_bounds the_retained_frontier -- --nocapture
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.28s
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-399165d349c2fb0d)
+
+running 1 test
+MEASURED frontier peaks: [6308, 12856, 26672, 57184, 129728]
+
+thread 'the_retained_frontier_does_not_grow_with_the_edit_count' panicked at crates/layerfs-content/tests/edit_bounds.rs:315:5:
+the frontier grew past the bound the tree needs: [6308, 12856, 26672, 57184, 129728]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_retained_frontier_does_not_grow_with_the_edit_count ... FAILED
+
+failures:
+
+failures:
+    the_retained_frontier_does_not_grow_with_the_edit_count
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.18s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_bounds`
+--- exit 101 | wall 4.213s
+=== control B: nodes_created counted where drafts are created, not where they are emitted
+tree.rs: hold_node increments nodes_created (the reviewed semantics).
+Expected: the equality with the emitted mapping objects fails.
+
+=== nodes_created equality with the hold-time counter semantics | 2026-09-17T00:17:59Z | workdir=/Users/yifanxu/Ephemeral-AI-Lab/layerfs
+$ env LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --test edit_bounds the_retained_frontier
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.73s
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-399165d349c2fb0d)
+
+running 1 test
+test the_retained_frontier_does_not_grow_with_the_edit_count ... FAILED
+
+failures:
+
+---- the_retained_frontier_does_not_grow_with_the_edit_count stdout ----
+
+thread 'the_retained_frontier_does_not_grow_with_the_edit_count' panicked at crates/layerfs-content/tests/edit_bounds.rs:298:9:
+assertion `left == right` failed: nodes_created must equal the emitted mapping objects
+  left: 6
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    the_retained_frontier_does_not_grow_with_the_edit_count
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.11s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_bounds`
+--- exit 101 | wall 2.519s

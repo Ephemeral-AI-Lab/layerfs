@@ -34,6 +34,12 @@ pub struct ConstructedFile {
     pub root: ObjectId,
     /// Logical byte length of the file.
     pub logical_len: u64,
+    /// Work the localized-edit frontier performed.
+    ///
+    /// Complete construction and a whole-file result hold no unfinished mapping
+    /// node, so every field is zero there; a chunked edit reports the nodes it
+    /// actually published and the largest frontier it held.
+    pub counters: crate::file::edit::EditCounters,
 }
 
 /// Recorded representation of an already-stored file root.
@@ -169,6 +175,7 @@ fn construct_bytes_in(
             Ok(ConstructedFile {
                 root,
                 logical_len: bytes.len() as u64,
+                counters: crate::file::edit::EditCounters::default(),
             })
         }
         Representation::Empty | Representation::Chunked => {
@@ -245,5 +252,6 @@ fn construct_chunked<R: Read>(
     Ok(ConstructedFile {
         root,
         logical_len: mapping_root.bytes,
+        counters: crate::file::edit::EditCounters::default(),
     })
 }
