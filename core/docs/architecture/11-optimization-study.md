@@ -377,12 +377,28 @@ rather than an oversight. Three consequences follow:
 
 **(a) The page cache is 16× smaller** — 2 MiB against 32 MiB.
 
-**(b) `cache_spill` is left ON where the reference turns it OFF.** This is the part
-that interacts with batching. Core's declared transaction ceiling is `4 MiB − 1` of
-canonical bytes — **twice its own page cache** — so a full-size transaction can
-spill dirty pages mid-flight, and spilled pages may be written and re-read. The
-reference pairs a 32 MiB cache with spilling off, so a 4 MiB transaction stays
-resident and writes once.
+**(b) `cache_spill` is left ON where the reference turns it OFF — and this
+consequence does not materialise.** `cache_spill = OFF` keeps dirty pages resident
+to `COMMIT`; with it ON, a transaction that overflows the page cache spills
+mid-flight and may write and re-read pages.
+
+The reasoning here was that core's declared ceiling of `4 MiB − 1` canonical bytes
+is **twice its own 2 MiB page cache**, so a full-size transaction would spill.
+**That is wrong, and it has been measured.** The `4 MiB − 1` is a *byte* ceiling;
+the binding limit is `TRANSACTION_ROW_LIMIT = 8,191` **rows**, and a product
+transaction reaches 8,191 rows without approaching 4 MiB. No overflow, so no spill:
+
+> `SQLITE_DBSTATUS_CACHE_SPILL` … reads **0** at 8,191 rows and **0** at 4× that,
+> where the 2 MiB/ON and 32 MiB/OFF profiles agree on every other observable. The
+> gate save opens **31** transactions at 8,191 rows, so no product transaction
+> approaches 4 MiB. **The write-path half of the O1 premise is unsupported**; the
+> read-path half still waits for P1-2.
+> — [P0-2 receipt](../../../docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/receipts/p0-2-spilling.md)
+
+The counter is reachable with **no code change** and proven live by a control
+(**1,032** spills at a forced 8-page cache), so the zero is a measurement rather
+than an absent instrument. I mistook a declared ceiling for a reached one; the row
+limit binds first, and the interaction described above cannot occur at these sizes.
 
 **(c) `locking_mode` stays `NORMAL`.** The reference takes `EXCLUSIVE`, removing the
 per-transaction lock cycle. Core commits repeatedly across one save's lifetime, so
@@ -399,7 +415,7 @@ setting; core's no-WAL / no-fsync rules are untouched by it.
 | # | Area | Reference | Core | Verdict |
 | ---: | --- | --- | --- | --- |
 | F1 | Construction pool | bounded producer/consumer, ≤ 4 workers | none | **core lacks** |
-| F2 | SQLite cache / spilling | 32 MiB, `cache_spill = OFF` | 2 MiB default, spilling ON | **core lacks** |
+| F2 | SQLite cache / spilling | 32 MiB, `cache_spill = OFF` | 2 MiB default, spilling ON | **differs — write-path impact DISPROVEN, see §16.6(b)** |
 | F3 | Locking / engine threads | `EXCLUSIVE`, `threads = 0` | defaults | **core lacks** |
 | F4 | ~~read batching~~ | 128 | 128 | **retracted — equal** |
 | F5 | Group target | fills to 65,536 | seals at 49,152 | differs, unclear |
@@ -423,16 +439,32 @@ Nothing here is implemented. Each entry states what is known, what is not, and t
 test that would settle it. Ranked by strength of evidence and by how little the
 change would cost elsewhere.
 
-### O1 — SQLite page cache and spilling (F2)
+**Updated after Phase 0:** O1's write-path premise was disproven by measurement and
+it drops from first place. **O2 (multi-row INSERT) now leads** — it is the one item
+whose premise is a statement count verified by reading, with no engine interaction
+to explain away.
 
-**Known:** the reference uses 32 MiB with spilling off; core leaves a 2 MiB default
-with spilling on, against a 4 MiB − 1 transaction ceiling.
-**Unverified impact:** whether spilling actually occurs at core's transaction sizes,
-and what it costs.
-**Test:** one save at the transaction ceiling, `cache_size` / `cache_spill` set
-versus unset, all else constant.
-**Why first:** connection-level; no concurrency; does not touch the timing tree or
-layout determinism; core's own `Pragma` enum already names the pragmas.
+### O1 — SQLite page cache and spilling (F2) · **WRITE-PATH PREMISE DISPROVEN**
+
+**Measured, not inferred:** no spill occurs at any size this product reaches —
+`SQLITE_DBSTATUS_CACHE_SPILL` is 0 at 8,191 rows and 0 at four times that, with the
+instrument proven live by a control at a forced 8-page cache
+([P0-2](../../../docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/receipts/p0-2-spilling.md)).
+The binding limit is the **row** ceiling, not the byte ceiling, and the row ceiling
+is reached long before the page cache overflows.
+
+**So the write-path half of this opportunity is withdrawn.** What remains is the
+**read-path half**, and it is not measurable yet: with a fresh connection per read
+wave (`#176` RT-05) SQLite discards its page cache every wave, so `cache_size`
+cannot show an effect on reads until connection pooling lands.
+
+**Revised test:** pool the read connection first, then A/B `cache_size` on the read
+path. Tuning the cache before pooling measures a profile that is about to change.
+**Revised rank:** no longer first — see O2.
+
+Kept rather than deleted because the error is instructive: I read a **declared
+ceiling** as a **reached** one, and that difference is exactly what a measurement is
+for.
 
 ### O2 — multi-row INSERT (F8)
 
@@ -469,18 +501,41 @@ producers only deepen a queue that already drains instantly.
 
 ## 16.9 Preconditions
 
-Stated as a precondition, not a suggestion:
+Stated as a precondition, not a suggestion. **Three of the four are now answered
+by Phase 0**, so the state is recorded here rather than left as an open ask.
 
-1. **Is there a gap at all?** No receipt compares core against the v0.1.6 reference
-   on a matched workload. Core is unqualified; Stage 6 owns this.
+1. **Is there a gap at all? — ANSWERED, and the answer is not the one assumed.**
+   A matched-workload receipt now exists
+   ([P0-1](../../../docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/receipts/p0-1-matched-workload.md)):
+   three component cases, identity `MATCH` on all six pinned keys, one worker,
+   cache state declared and equal in both arms. The candidate/reference ratios are
+   **0.909 / 0.329 / 0.519** — all **below 1**, i.e. core is faster on those cases,
+   not slower.
+   **The receipt is diagnostic-only and this study does not treat it as a
+   regression signal:** the `small` case's same-tree re-run spread (0.909 → 0.883)
+   is as large as the cross-tree delta, and `pipeline.filesystem` / `pipeline.c2`
+   are `NOT_RUN` with reasons re-verified on this tree. So the honest statement is:
+   **no gap has been demonstrated, and the direction of the measured difference is
+   the opposite of what this study's ledger implies.** "Core lacks a mechanism" is
+   not the same claim as "core is slower", and §16.7 must not be read as the latter.
 2. **Where is it?** Core's counters locate time by phase — see
-   [`10-counters.md`](10-counters.md).
-3. **Is the consumer ever idle?** This decides whether O4 deserves further thought.
-4. **Does spilling occur?** This decides whether O1 is real.
+   [`10-counters.md`](10-counters.md). A per-phase baseline now exists
+   ([P0-3](../../../docs/roadmap/0.1/0.1.7/evidence/phase0-baseline-20260917T221759Z/receipts/p0-3-counter-baseline.md));
+   `ValidationWork` and the edit family's `nodes_read` are `NOT_EXPOSED` in the
+   frozen vehicles.
+3. **Is the consumer ever idle?** Still open — this decides whether O4 deserves
+   further thought. No consumer-idle equivalent exists in core.
+4. **Does spilling occur? — ANSWERED: no.** See §16.6(b). The row ceiling binds
+   before the byte ceiling, so nothing this product writes overflows the 2 MiB page
+   cache, and O1's write-path premise is withdrawn.
 
-Until (1) is answered, every entry in §16.8 is a hypothesis about a gap nobody has
-demonstrated. And **matching v0.1.6 is not obviously the goal**: core was built to
-be measurable, and `AGENTS.md` pre-commits to accepting a drop for that.
+**The order this study originally proposed is therefore wrong.** It led with O1 on
+an unmeasured premise that turned out to be false, and ranked O2 below it on the
+assumption that cache tuning would matter first. Measurement inverted that.
+
+And **matching v0.1.6 is not obviously the goal**: core was built to be measurable,
+and `AGENTS.md` pre-commits to accepting a drop for that — but on the evidence
+available, no drop has been shown either.
 
 ---
 
