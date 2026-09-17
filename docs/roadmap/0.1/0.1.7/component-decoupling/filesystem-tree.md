@@ -523,3 +523,41 @@ gains. C2 physical index/pack/session proposals are recorded in the
 [encoding](physical-encoding-and-packing.md) and [persistence](admission-and-persistence.md)
 documents; concrete compatibility/resource qualification remains.
 Live Workspace COW stays later; no new crate or public API is frozen here.
+
+### Remediation note (2026-09-17): what an operation owns and what it charges
+
+The first Stage 5 implementation reported its ordering work from the merge path
+alone. An independent review measured the record-backed path at 3.65x-3.83x per
+doubling (quadratic) while the reported `rows_read` grew linearly, and found that
+the declared `ordering_bytes` ceiling did not bound the bytes the operation held
+while a spill merged its inputs into an output. Both are corrected here, and the
+contract they follow is stated rather than implied.
+
+- **Lookup work is charged.** The reducer's run store keeps each tier's scan
+  position, so an ascending sweep reads a run once instead of re-reading it per
+  serial, and the rows it reads are added to `MergeWork::rows_read`. A request
+  below the scan position restarts that tier, because a scan that resumed past a
+  row never compared it; correctness before speed.
+- **The ceiling covers every simultaneous owner.** A spill's older inputs stay
+  charged to the operation until the handle that owns their bytes is dropped, and
+  the merge output is reserved before it is written. `RunStore::owned_bytes`
+  reports live runs, unmerged inputs, the pending rows and the reserved output
+  together, and a backing whose own ceiling cannot hold the declared ceiling is
+  refused once at operation entry.
+- **The touched-serial vector is bounded.** It is one `u64` per touched inode,
+  taken from the same declared ordering budget:
+  `FilesystemResources::maximum_touched_serials()` is `ordering_bytes / 8`, and an
+  operation whose touched set does not fit is refused with `ObjectLimitExceeded`
+  instead of allocating past its own ceiling. A bounded collection that the
+  caller declared is the contract; an unbounded one was not.
+- **Validation is charged.** The checks read the base they are about to change:
+  parent records, the bindings of the directories they walk and the entries of
+  every directory they inspect for a cycle. Those reads and pages are reported in
+  `FilesystemUpdateCounters::validation` (`ValidationWork`), because "repeated
+  reads ... remain charged where they occur" is a requirement of this document,
+  not an option.
+- **A read wave is bounded.** One authenticated wave is one grouped query and one
+  decode workspace, so its size is a declared capacity on both sides of the seam:
+  `StorageCapacities::read_objects` for the Store and
+  `MAXIMUM_READ_DEMANDS` for the filesystem boundary, both 4,096. A longer slice
+  is refused before a connection is opened.
