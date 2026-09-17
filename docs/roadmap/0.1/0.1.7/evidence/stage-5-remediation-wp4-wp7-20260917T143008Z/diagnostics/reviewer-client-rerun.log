@@ -1,0 +1,62 @@
+# reviewer diagnostics re-run at eb42c1347 (2026-09-17)
+# client: retained copy, built unchanged except the dangling arm (see dangling-adaptation.diff)
+
+## stage5-diagnostics fs
+RESULT list.max_bytes=1 status=Err error=ObjectLimitExceeded { limit: 1, actual: 16 }
+RESULT list.max_bytes=14 status=Err error=ObjectLimitExceeded { limit: 14, actual: 16 }
+RESULT list.max_bytes=15 status=Err error=ObjectLimitExceeded { limit: 15, actual: 16 }
+RESULT list.max_bytes=16 status=Ok entries=1 continuation=Some("f00000")
+RESULT list.max_bytes=17 status=Ok entries=1 continuation=Some("f00000")
+RESULT list.max_bytes=4096 status=Ok entries=20 continuation=None
+RESULT list.full_page is_ok=true entries=20 continuation_is_none=true
+RESULT build.disconnected_cycle=REFUSED error=InvalidRecord("effective tree cycle")
+RESULT build.orphan_declared_new=REFUSED error=InvalidRecord("new inode without binding")
+RESULT boundary.name_bytes=255 status=ACCEPTED
+RESULT boundary.name_bytes=256 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4095 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4096 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4097 status=REFUSED PathLimitExceeded
+RESULT boundary.path_components=256 bytes=511 status=ACCEPTED
+RESULT boundary.path_components=257 bytes=513 status=REFUSED PathLimitExceeded
+RESULT boundary.symlink_target_bytes=4096 status=ACCEPTED
+RESULT boundary.symlink_target_bytes=4097 status=REFUSED InvalidRecord("symlink target")
+RESULT boundary.inode_serial=9223372036854775807 status=ACCEPTED
+RESULT boundary.inode_serial=9223372036854775808 status=REFUSED InvalidRecord("inode serial")
+RESULT boundary.inode_serial=0 status=REFUSED InvalidRecord("inode serial")
+RESULT read_work.two_stats directory.pages_read=1 directory.read_waves=1 inode.pages_read=3
+exit=0
+
+## stage5-diagnostics store (old schema)
+OLD_SCHEMA insert role=10: REFUSED (CHECK constraint failed: object_role BETWEEN 1 AND 6)
+OLD_SCHEMA insert role=13: REFUSED (CHECK constraint failed: object_role BETWEEN 1 AND 6)
+RESULT store.open.old_schema=REFUSED error=UnsupportedPolicy { field: "object role constraint" }
+exit=0
+
+## topology
+RESULT T1.update_new_dir_cycle=REFUSED error=InvalidRecord("effective tree cycle")
+RESULT T2.dir_second_parent=REFUSED error=InvalidRecord("multiple parents")
+RESULT T3.symlink_second_parent=REFUSED error=InvalidRecord("multiple parents")
+RESULT T4.same_batch_duplicate=REFUSED error=InvalidRecord("multiple parents")
+exit=0
+
+## ordering
+RESULT arm=no-spill entries=200 elapsed_ns=6923542 rows_touched=401 rows_spilled=0 runs_created=0 merges=0 rows_read=0 rows_written=0 serials_scanned=401 peak_live_runs=0 peak_run_bytes=0 backing_peak=0 backing_held_after=0
+RESULT arm=spilling entries=200 elapsed_ns=57135792 rows_touched=801 rows_spilled=768 runs_created=24 merges=11 rows_read=52466 rows_written=3267 serials_scanned=401 peak_live_runs=3 peak_run_bytes=96192 backing_peak=96192 backing_held_after=0
+RESULT arm=no-spill entries=400 elapsed_ns=14792625 rows_touched=801 rows_spilled=0 runs_created=0 merges=0 rows_read=0 rows_written=0 serials_scanned=801 peak_live_runs=0 peak_run_bytes=0 backing_peak=0 backing_held_after=0
+RESULT arm=spilling entries=400 elapsed_ns=177277791 rows_touched=1601 rows_spilled=1600 runs_created=50 merges=24 rows_read=212769 rows_written=8195 serials_scanned=801 peak_live_runs=4 peak_run_bytes=192192 backing_peak=192192 backing_held_after=0
+RESULT arm=no-spill entries=800 elapsed_ns=32543916 rows_touched=1601 rows_spilled=0 runs_created=0 merges=0 rows_read=0 rows_written=0 serials_scanned=1601 peak_live_runs=0 peak_run_bytes=0 backing_peak=0 backing_held_after=0
+RESULT arm=spilling entries=800 elapsed_ns=554897750 rows_touched=3201 rows_spilled=3200 runs_created=100 merges=49 rows_read=848208 rows_written=19587 serials_scanned=1601 peak_live_runs=5 peak_run_bytes=384192 backing_peak=384192 backing_held_after=0
+RESULT arm=no-spill entries=1600 elapsed_ns=78865792 rows_touched=3201 rows_spilled=0 runs_created=0 merges=0 rows_read=0 rows_written=0 serials_scanned=3201 peak_live_runs=0 peak_run_bytes=0 backing_peak=0 backing_held_after=0
+RESULT arm=spilling entries=1600 elapsed_ns=1994595333 rows_touched=6401 rows_spilled=6400 runs_created=200 merges=99 rows_read=3378078 rows_written=45571 serials_scanned=3201 peak_live_runs=6 peak_run_bytes=768192 backing_peak=768192 backing_held_after=0
+exit=0
+
+## dangling
+RESULT arm=dangling emitted_objects=3 commits=1 inserted=3 packs=2
+RESULT arm=dangling file_value_roots_present_in_store=0 (of 2)
+RESULT arm=dangling read_of_file_content_root=Err(ObjectMissing(ObjectId("1a07bee668932e2f92c76df10036b0deea4b451c9e1eb8fd7ed73899e98c816d")))
+RESULT arm=dangling root_id=16b8c01d62ef40bb6cc50d376817bac96bd00b904acee5e6261b93b9d4a8b952
+RESULT arm=control-emitted emitted_objects=4 commits=1 inserted=4 packs=2
+RESULT arm=control-emitted file_value_roots_present_in_store=1 (of 2)
+RESULT arm=control-emitted read_of_file_content_root=Ok(bytes=55)
+RESULT arm=control-emitted root_id=7356db3e365f764d4637280f84185857c4f5109c503c8aee4a124ba3764abfe3
+exit=0

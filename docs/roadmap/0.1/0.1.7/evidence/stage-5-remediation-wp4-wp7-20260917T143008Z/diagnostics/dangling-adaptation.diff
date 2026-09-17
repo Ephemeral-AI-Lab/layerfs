@@ -1,0 +1,37 @@
+--- /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stages-1-5-review-20260917T160000Z/diagnostics/stage5-diagnostics/src/bin/dangling.rs	2026-09-17 16:29:30
++++ src/bin/dangling.rs	2026-09-17 22:34:18
+@@ -154,10 +154,11 @@
+     let emitted_ids: Vec<ObjectId> = tree.emitted.iter().map(|o| o.id()).collect();
+     let outcome = layerfs_telemetry::timer::Timing::disabled("probe.save", |timing| {
+         let mut operation = store.begin_save(timing.child("begin")).expect("begin");
++        // Adapted (2026-09-17): `SaveOperation::accept` no longer takes a scope -
++        // it creates no timing node of its own, which is the R18 fix. The two
++        // lines below are the only change from the retained reviewer's copy.
+         for object in tree.emitted {
+-            operation
+-                .accept(object, timing.child("accept"))
+-                .expect("accept");
++            operation.accept(object).expect("accept");
+         }
+         operation.finish(timing.child("finish"))
+     })
+@@ -169,13 +170,15 @@
+             return;
+         }
+     };
++    // Adapted (2026-09-17): `SaveOutcome.acknowledged` was hard-coded true and is
++    // gone, so the probe prints the commits that carry the acknowledgement instead
++    // of a boolean that could never be false.
+     println!(
+-        "RESULT arm={label} emitted_objects={} acknowledged={} inserted={} packs={} commits={}",
++        "RESULT arm={label} emitted_objects={} commits={} inserted={} packs={}",
+         emitted_ids.len(),
+-        outcome.acknowledged,
++        outcome.commits,
+         outcome.inserted,
+-        outcome.packs_created,
+-        outcome.commits
++        outcome.packs_created
+     );
+     let present = layerfs_telemetry::timer::Timing::disabled("probe.contains", |timing| {
+         store.contains(&[tree.file_content, tree.file_metadata], timing.child("contains"))
