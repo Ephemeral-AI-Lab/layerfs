@@ -560,3 +560,274 @@ fn a_bounded_sink_that_fills_during_emission_fails_the_edit_once() {
         }
     }
 }
+
+/// The edit-stream ceiling at, just below and just above, and a real run at it.
+///
+/// The stream is validated before any work: an over-ceiling stream never becomes
+/// an `EditStream`, so no request can exist that would emit anything. At the
+/// ceiling the operation really runs, on a chunked base, with the frontier bound
+/// intact.
+#[test]
+fn the_edit_stream_ceiling_is_enforced_before_any_work() {
+    use layerfs_content::MAXIMUM_EDITS_PER_OPERATION;
+
+    // Well separated, non-overlapping four-byte overwrites: 4 097 of them span
+    // fewer than 33 000 bytes of a 400 000-byte base.
+    let declared = |count: usize| {
+        (0..count)
+            .map(|index| {
+                let start = 1_000 + index as u64 * 8;
+                Edit::overwrite(start, start + 4)
+            })
+            .collect::<Vec<_>>()
+    };
+    for count in [MAXIMUM_EDITS_PER_OPERATION - 1, MAXIMUM_EDITS_PER_OPERATION] {
+        let stream = EditStream::new(400_000, declared(count))
+            .unwrap_or_else(|error| panic!("{count} edits are accepted: {error}"));
+        assert_eq!(stream.edits().len(), count);
+    }
+    let error = EditStream::new(400_000, declared(MAXIMUM_EDITS_PER_OPERATION + 1))
+        .expect_err("one edit over the ceiling is refused");
+    assert!(
+        matches!(
+            error,
+            ContentError::BoundedCapacityExceeded {
+                what: "edit.stream",
+                ..
+            }
+        ),
+        "got {error}"
+    );
+
+    // A real run at the ceiling: every one of the 4 096 edits is applied, the
+    // frontier stays bounded and the result is exactly the expected bytes.
+    let base = noise(400_000);
+    let (store, root) = build(&base);
+    let edits = declared(MAXIMUM_EDITS_PER_OPERATION);
+    let mut replacements = Replacements::new();
+    let mut expected = base.clone();
+    for (index, edit) in edits.iter().enumerate() {
+        let mut replacement = noise(4);
+        replacement[0] = (index & 0xff) as u8;
+        replacements.push(replacement.clone());
+        expected.splice(
+            edit.start() as usize..edit.end() as usize,
+            replacement.iter().copied(),
+        );
+    }
+    let stream = EditStream::new(base.len() as u64, edits).expect("accepted stream");
+    // The consumer already holds the base objects, so payloads the delta lane reuses
+    // and payloads it writes are both readable from it.
+    let mut consumer = store.merged_clone();
+    let constructed = disabled_scope(|scope| {
+        apply_edits(
+            policy(),
+            &policy().capacities(),
+            &store,
+            EditRequest {
+                root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut consumer,
+            scope.child("edit"),
+        )
+    })
+    .expect("ceiling-sized edit");
+    assert_eq!(constructed.logical_len, expected.len() as u64);
+    println!("MEASURED ceiling-run counters: {:?}", constructed.counters);
+    // Every edit landed as its own payload, so the run really did cross the whole
+    // stream, and the retained frontier stayed page-scale rather than growing with
+    // the edit count.
+    assert_eq!(
+        constructed.counters.payloads_created, MAXIMUM_EDITS_PER_OPERATION as u64,
+        "one payload per edit: {:?}",
+        constructed.counters
+    );
+    assert!(
+        constructed.counters.peak_deferred_bytes < 512 * 1_024,
+        "the frontier stayed page-scale at the edit ceiling: {:?}",
+        constructed.counters
+    );
+    let observed = read_back(&consumer, constructed.root).expect("ceiling result reads back");
+    assert_eq!(
+        observed, expected,
+        "the ceiling run produced the expected bytes"
+    );
+}
+
+/// The frontier does not grow with **repeated in-place** edits either.
+///
+/// The first frontier case spreads its edits across the file, so the mapping stays
+/// a single page. This case rewrites the same small region over and over, which
+/// grows one page past the entry capacity and turns the mapping into a branch: it
+/// is the shape in which a release rule that only follows the simple boundary
+/// paths leaks a branch per edit. The peak must stay at the tree the file ends up
+/// with, and the result must still be the expected bytes.
+#[test]
+fn the_frontier_does_not_grow_with_repeated_in_place_edits() {
+    // Edits confined to one small region, one round after another, so the mapping
+    // turns into a branch early and every later round rewrites a page it must also
+    // split and rejoin: the shape in which a release rule that follows only the
+    // simple boundary paths leaks a page per edit. Four rounds of increasing size
+    // share the region, so the frontier is compared with the tree each round ends
+    // up with rather than with an edit count.
+    let base = noise(400_000);
+    let (store, root) = build(&base);
+    let mut expected = base.clone();
+    let mut peaks = Vec::new();
+    let mut extents = Vec::new();
+    for count in [128_usize, 256, 512, 1_024] {
+        let first = peaks.len() * 1_024;
+        let mut replacements = Replacements::new();
+        let edits = (0..count)
+            .map(|index| {
+                let start = 1_000 + ((first + index) as u64) * 8;
+                Edit::overwrite(start, start + 4)
+            })
+            .collect::<Vec<_>>();
+        for index in 0..count {
+            let mut replacement = noise(4);
+            replacement[0] = ((first + index) & 0xff) as u8;
+            replacements.push(replacement.clone());
+            let start = 1_000 + ((first + index) as u64) * 8;
+            expected.splice(start as usize..start as usize + 4, replacement);
+        }
+        let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+        let mut consumer = MemoryStore::new();
+        let constructed = disabled_scope(|scope| {
+            apply_edits(
+                policy(),
+                &policy().capacities(),
+                &store,
+                EditRequest {
+                    root,
+                    edits: &stream,
+                    source: &replacements,
+                },
+                &mut consumer,
+                scope.child("edit"),
+            )
+        })
+        .expect("in-place edit stream");
+        assert_eq!(constructed.logical_len, expected.len() as u64);
+        assert_eq!(
+            constructed.counters.payloads_created, count as u64,
+            "every edit created a payload"
+        );
+        peaks.push(constructed.counters.peak_deferred_bytes);
+        // The result's own extent count: the frontier is what the tree the
+        // operation ends up with needs, so the two are compared directly.
+        let mut merged = store.merged_clone();
+        merged.absorb(&consumer);
+        extents.push(support::extent_count(&merged, constructed.root) as usize);
+    }
+    for (index, count) in extents.iter().enumerate() {
+        assert!(
+            *count > 0,
+            "the result has extents for {} edits",
+            [128, 256, 512, 1_024][index]
+        );
+        assert!(
+            peaks[index] <= 128 * count + 8 * 1_024,
+            "the frontier exceeds the tree it ends up with: {} bytes for {count} extents",
+            peaks[index]
+        );
+    }
+    // And a thousand in-place edits leave a page-scale frontier, nowhere near the
+    // 8 MiB ceiling the operation may hold.
+    assert!(
+        peaks[peaks.len() - 1] < 512 * 1_024,
+        "the frontier is not page-scale: {peaks:?}"
+    );
+}
+
+/// The deferred-state ceiling is proved out of reach, not induced.
+///
+/// The charge is live, so crossing `EDIT_DEFERRED_LIMIT` needs ~1 000 drafts alive
+/// at once, and a draft charges at most one mapping node plus the fixed overhead.
+/// A non-root page holds at least [`MIN_ENTRIES`] entries, so a frontier of P pages
+/// spans at least `64(P - 1)` extents, and an edit operation can only create
+/// `length / MINIMUM_CHUNK_BYTES + 3 * edits` extents (three boundary pieces per
+/// edit at most, one of them a sub-minimum replacement tail). Reachability
+/// therefore costs a base of roughly
+/// `(64 * EDIT_DEFERRED_LIMIT / (MAX_NODE_OBJECT_BYTES + 128) - 3 * 4 096) * 8 192`
+/// bytes - some hundreds of MiB - which is far outside this packet's fixture
+/// budget, so the refusal in `tree.rs` is recorded as unrun and this case instead
+/// checks the premise the derivation rests on: on the largest in-budget shape the
+/// measured charge per live draft stays within the maximum a draft may charge.
+#[test]
+fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
+    use layerfs_content::file::cdc::MINIMUM_CHUNK_BYTES;
+    use layerfs_content::file::mapping::{MAX_NODE_OBJECT_BYTES, MIN_ENTRIES};
+    use layerfs_content::file::EDIT_DEFERRED_LIMIT;
+    use layerfs_content::MAXIMUM_EDITS_PER_OPERATION;
+
+    // Eight MiB of base with the full edit budget spread evenly across it: the
+    // largest shape a bounded fixture can offer.
+    let base = noise(8 * 1024 * 1024);
+    let (store, root) = build(&base);
+    let edits = (0..MAXIMUM_EDITS_PER_OPERATION)
+        .map(|index| {
+            let start = 1_000 + index as u64 * 2_048;
+            Edit::overwrite(start, start + 4)
+        })
+        .collect::<Vec<_>>();
+    let mut replacements = Replacements::new();
+    for index in 0..MAXIMUM_EDITS_PER_OPERATION {
+        let mut replacement = noise(4);
+        replacement[0] = (index & 0xff) as u8;
+        replacements.push(replacement);
+    }
+    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let mut consumer = store.merged_clone();
+    let constructed = disabled_scope(|scope| {
+        apply_edits(
+            policy(),
+            &policy().capacities(),
+            &store,
+            EditRequest {
+                root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut consumer,
+            scope.child("edit"),
+        )
+    })
+    .expect("bounded-frontier edit");
+    let counters = constructed.counters;
+    println!("MEASURED deferred shape: {counters:?}");
+    assert_eq!(
+        counters.payloads_created, MAXIMUM_EDITS_PER_OPERATION as u64,
+        "every edit landed"
+    );
+    assert!(
+        counters.peak_deferred_bytes < EDIT_DEFERRED_LIMIT,
+        "the ceiling held without refusing: {counters:?}"
+    );
+    assert!(counters.nodes_created > 0, "a frontier was built");
+    let per_draft = counters.peak_deferred_bytes / counters.nodes_created as usize;
+    assert!(
+        per_draft <= MAX_NODE_OBJECT_BYTES + 128,
+        "a live draft charged more than one node plus overhead: {per_draft} bytes"
+    );
+
+    // The derivation, from the measured charge bound rather than from a number
+    // chosen here: pages the ceiling needs, extents those pages span at the
+    // occupancy floor, and the base bytes those extents imply at the chunk minimum
+    // once the whole edit budget has been spent on boundary pieces.
+    let drafts_needed = EDIT_DEFERRED_LIMIT.div_ceil(MAX_NODE_OBJECT_BYTES + 128);
+    let extents_needed = MIN_ENTRIES * (drafts_needed - 1);
+    let boundary_extents = 3 * MAXIMUM_EDITS_PER_OPERATION;
+    let base_floor = extents_needed.saturating_sub(boundary_extents) * MINIMUM_CHUNK_BYTES;
+    println!(
+        "DERIVED ceiling floor: {per_draft} B/draft measured (bound {}), \
+         {drafts_needed} live pages, {extents_needed} extents, {base_floor} base bytes",
+        MAX_NODE_OBJECT_BYTES + 128
+    );
+    assert!(
+        base_floor > 256 * 1024 * 1024,
+        "the deferred ceiling is out of reach for a bounded fixture: {base_floor} bytes"
+    );
+}

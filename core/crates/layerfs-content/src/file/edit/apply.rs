@@ -289,6 +289,10 @@ fn replace_chunked(
         };
         summary = mapping;
         result_len = mapping.bytes;
+        // The result of this edit is known: drafts the boundary work
+        // disconnected are released here, so the retained frontier is the tree
+        // the operation ends up with rather than the edits that produced it.
+        objects.settle(mapping);
     }
     if result_len != request.edits.final_len() {
         return Err(ContentError::LengthMismatch {

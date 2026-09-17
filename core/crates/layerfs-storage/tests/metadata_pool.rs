@@ -739,3 +739,80 @@ fn a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain() {
     let (read, _) = read_objects(&store, &[at_cap_id]).expect("chain at the cap");
     assert_eq!(ObjectId::for_bytes(&read[0]), at_cap_id);
 }
+
+/// The pooled value cache is released wholesale at its declared bound.
+///
+/// Two hundred leaves of a hundred distinct values each decode 1.39 MiB of values,
+/// well past the 512 KiB the reader may retain: the cache must release itself
+/// rather than grow with the number of leaves, and every leaf must still
+/// reconstruct exactly.
+#[test]
+fn the_pooled_value_cache_releases_at_its_declared_bound() {
+    use layerfs_storage::encoding::codec::DecompressionWorkspace;
+    use layerfs_storage::encoding::pool::PoolReader;
+    use layerfs_storage::policy::POOLED_VALUE_CACHE_BYTES;
+    use layerfs_storage::sqlite::lookup;
+
+    let dir = TempDir::new("pool-value-cache");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    let leaves = 200_u64;
+    let mut ids = Vec::new();
+    let mut previous = None;
+    for step in 0..leaves {
+        let values: Vec<[u8; INODE_VALUE_BYTES]> = (0..MAXIMUM_LEAF_ROWS as u64)
+            .map(|index| value(InodeKind::RegularFile, 1, step * 100 + index))
+            .collect();
+        let object = match previous {
+            Some(base) => with_predecessor(leaf(step * 100 + 1, &values), base),
+            None => leaf(1, &values),
+        };
+        let id = object.id();
+        save_one(&store, object).expect("leaf save");
+        ids.push(id);
+        previous = Some(id);
+    }
+    let capacities = store.capacities();
+    let ceiling = {
+        let connection = rusqlite::Connection::open(&path).expect("external connection");
+        connection
+            .query_row(
+                "SELECT retained_pack_ceiling FROM store_policy WHERE id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .expect("watermark")
+    };
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let mut workspace = DecompressionWorkspace::new().expect("decode workspace");
+    let mut reader = PoolReader::new();
+    let mut peak_retained = 0_usize;
+    let mut decoded_total = 0_u64;
+    for id in &ids {
+        let location = lookup::location(&connection, *id, i64::MAX)
+            .expect("locator")
+            .expect("the leaf is stored");
+        let canonical = reader
+            .leaf_canonical(&connection, &capacities, ceiling, &mut workspace, location)
+            .expect("pooled reconstruction");
+        assert_eq!(ObjectId::for_bytes(&canonical), *id);
+        peak_retained = peak_retained.max(reader.retained_bytes());
+        decoded_total += (MAXIMUM_LEAF_ROWS * INODE_VALUE_BYTES) as u64;
+    }
+    assert!(
+        decoded_total > 2 * POOLED_VALUE_CACHE_BYTES as u64,
+        "the fixture must decode more than the cache may hold twice over: {decoded_total} bytes"
+    );
+    assert!(
+        peak_retained <= POOLED_VALUE_CACHE_BYTES,
+        "the cache grew past its bound: {peak_retained} bytes"
+    );
+    assert!(peak_retained > 0, "the cache was never populated");
+    // More values were decoded than the cache may hold twice over while it never
+    // retained more than the bound, so it must have released itself at least once:
+    // a cache that never released would have had to retain `decoded_total`.
+    println!(
+        "MEASURED pooled value cache: decoded_total={decoded_total} B, \
+         peak_retained={peak_retained} B, bound={POOLED_VALUE_CACHE_BYTES} B, leaves={leaves}"
+    );
+}

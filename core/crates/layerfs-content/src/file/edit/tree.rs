@@ -110,6 +110,10 @@ pub struct EditObjects<'a> {
     reader: &'a dyn AuthenticatedObjects,
     consumer: &'a mut dyn FinalizedConsumer,
     drafts: BTreeMap<ObjectId, Draft>,
+    /// Draft children each live draft still references.
+    parent_refs: BTreeMap<ObjectId, u32>,
+    /// Drafts no live draft references.
+    detached: BTreeSet<ObjectId>,
     committed: BTreeMap<ObjectId, ObjectId>,
     charged: usize,
     next_key: u32,
@@ -126,6 +130,8 @@ impl<'a> EditObjects<'a> {
             reader,
             consumer,
             drafts: BTreeMap::new(),
+            parent_refs: BTreeMap::new(),
+            detached: BTreeSet::new(),
             committed: BTreeMap::new(),
             charged: 0,
             next_key: 0,
@@ -173,6 +179,8 @@ impl<'a> EditObjects<'a> {
         let draft = Draft::Node(node.clone());
         self.charge_bytes(draft.charge())?;
         self.drafts.insert(id, draft);
+        self.detached.insert(id);
+        self.retain_children(node)?;
         Ok(NodeSummary {
             id,
             bytes: node.logical_len(),
@@ -194,9 +202,93 @@ impl<'a> EditObjects<'a> {
         let charge = object
             .canonical_len()
             .saturating_add(DEFERRED_OBJECT_OVERHEAD);
+        // A branch page names the pages it was built from: those are this
+        // operation's drafts, and the parent reference is what keeps them alive.
+        if object.role() == ObjectRole::ExtentBranch {
+            let node = decode_node_with_context(object.canonical(), true)?;
+            self.retain_children(&node)?;
+        }
         self.charge_bytes(charge)?;
         self.drafts.insert(id, Draft::Page(object));
+        self.detached.insert(id);
         Ok(())
+    }
+
+    /// Records that a parent being held references each of its draft children.
+    fn retain_children(&mut self, node: &ExtentNode) -> ContentResult<()> {
+        let ExtentNode::Branch {
+            level, children, ..
+        } = node
+        else {
+            return Ok(());
+        };
+        for child in child_summaries(children, level.saturating_sub(1))? {
+            if self.drafts.contains_key(&child.id) {
+                *self.parent_refs.entry(child.id).or_insert(0) += 1;
+                self.detached.remove(&child.id);
+            }
+        }
+        Ok(())
+    }
+
+    /// Releases every draft the operation still holds but its result does not
+    /// reference.
+    ///
+    /// Called once per edit, after the result of that edit is known. Only drafts
+    /// with no live draft parent are candidates - the set is maintained as the
+    /// operation runs and stays at the size of what is in flight - so this is a
+    /// release of what the boundary work already disconnected, not a walk of the
+    /// retained tree and not a prune pass over the mapping.
+    pub fn settle(&mut self, live: NodeSummary) {
+        while let Some(id) = self
+            .detached
+            .iter()
+            .copied()
+            .find(|candidate| *candidate != live.id)
+        {
+            self.release(id);
+        }
+    }
+
+    /// Releases one draft and detaches the children it was the last reference to.
+    fn release_draft_children(&mut self, draft: &Draft) {
+        let children: Vec<ObjectId> = match draft {
+            Draft::Node(node) => self.child_ids(node).unwrap_or_default(),
+            Draft::Page(object) => {
+                if object.role() != ObjectRole::ExtentBranch {
+                    Vec::new()
+                } else {
+                    decode_node_with_context(object.canonical(), true)
+                        .ok()
+                        .and_then(|node| self.child_ids(&node).ok())
+                        .unwrap_or_default()
+                }
+            }
+        };
+        for child in children {
+            let referenced = self.parent_refs.get(&child).copied().unwrap_or(0);
+            if referenced <= 1 {
+                self.parent_refs.remove(&child);
+                if self.drafts.contains_key(&child) {
+                    self.detached.insert(child);
+                }
+            } else {
+                self.parent_refs.insert(child, referenced - 1);
+            }
+        }
+    }
+
+    fn child_ids(&self, node: &ExtentNode) -> ContentResult<Vec<ObjectId>> {
+        let ExtentNode::Branch {
+            level, children, ..
+        } = node
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(child_summaries(children, level.saturating_sub(1))?
+            .into_iter()
+            .map(|child| child.id)
+            .collect())
     }
 
     /// Releases one draft this operation owns, releasing its charge.
@@ -209,6 +301,8 @@ impl<'a> EditObjects<'a> {
     fn release(&mut self, id: ObjectId) {
         if let Some(draft) = self.drafts.remove(&id) {
             self.charged = self.charged.saturating_sub(draft.charge());
+            self.detached.remove(&id);
+            self.release_draft_children(&draft);
         }
     }
 
@@ -618,9 +712,10 @@ fn concat_inner(
                     return Err(ContentError::WrongLogicalRole);
                 };
                 let mut summaries = child_summaries(&children, level - 1)?;
-                // Both sides are folded into the page the rebuilt branch is.
+                // The loaded page is superseded by the branch that re-hosts its
+                // children; the prefix becomes the first of those children and
+                // stays live.
                 objects.release(boundary.id);
-                objects.release(prefix.id);
                 summaries.insert(0, prefix);
                 root_from_children(objects, summaries)?
                     .ok_or(ContentError::InvalidRecord("empty concat"))
@@ -670,9 +765,10 @@ fn concat_inner(
                 return Err(ContentError::WrongLogicalRole);
             };
             let mut summaries = child_summaries(&children, level - 1)?;
-            // Both sides are folded into the page the rebuilt branch is.
+            // The loaded page is superseded by the branch that re-hosts its
+            // children; the suffix becomes the last of those children and stays
+            // live.
             objects.release(boundary.id);
-            objects.release(suffix.id);
             summaries.push(suffix);
             root_from_children(objects, summaries)?
                 .ok_or(ContentError::InvalidRecord("empty concat"))

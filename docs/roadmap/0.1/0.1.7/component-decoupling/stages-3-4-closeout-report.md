@@ -90,7 +90,7 @@ Next action on unblock: apply the owner's choice and update physical_formats.
 | G16 | The clipped `e1c` receipt is re-collected or annotated wherever quoted | W8.7 | OPEN | |
 | G17 | Acceptance documents match the source; per-file actual-size table exists | W9 | **PASS** | `w9/README.md`; report §1/§7 corrected in place, §8 carries the plan's table, oracle paperwork fixed |
 | G18 | Counter defects fixed, same counter applied to both snapshots, combined total restated | W9.5 | **PASS** | `w9/README.md`: 956 over-removed lines and 4 083 test-module lines measured; combined 76 400; both snapshots counted by the corrected counter |
-| G19 | Limits boundary list run or explicitly unrun with reasons | W10 | OPEN | |
+| G19 | Limits boundary list run or explicitly unrun with reasons | W10 | **PASS** | `w10/README.md`; 13 boundaries, 12 run through public APIs with raw stdout in `w10/w10-verify.log`, the 8 MiB - 1 deferred refusal UNRUN with its source proof (408 MiB base floor) and its premise measured |
 | G20 | Every commit carries a first-parent `Production LOC:` line and this review's S1/S2 findings are closed | all | IN PROGRESS | see §3; every commit so far carries the line |
 
 **Stage verdicts.** Stage 3 needs G1, G2, G9-G14, G17-G19. Stage 4 needs G3-G8,
@@ -271,6 +271,43 @@ G13-G15, G17-G19. Neither is complete yet.
 * **W9.6** `core/README.md`, the roadmap index, `implementation-plan.md`,
   `implementation-issues.md` and the experiment ledger (L33) carry the closeout.
 * **Evidence.** `w9/w9-verify.log` — 11 commands, all exit 0.
+
+### W10 — limits boundary coverage (G19) — PASS, one boundary UNRUN
+
+* **W10.1 (production fix).** The 4 096-edit ceiling case exposed a leak the W3
+  frontier case could not: pages created inside `concat_inner`'s `split` recursion
+  became unreachable when the next level replaced their parent (286 leaked level-1
+  pages at 4 096 edits). `tree.rs` now counts the parents that reference each draft
+  (`parent_refs`) and the drafts no live draft references (`detached`), so releasing
+  a superseded node cascades to children no surviving draft names, and `apply.rs`
+  calls `objects.settle(mapping)` after every edit. This completes G3's release
+  rule; both measured peaks (`353 952` B / 79 pages and `384 112` B / 122 pages at
+  the edit ceiling) and the byte-equality readback are in `w10/README.md` §1.
+* **W10.2** Twelve boundaries run: CHUNK depth at a changed cap (2 vs 3) and at 50,
+  the edit ceiling at 4 095/4 096/4 097 with the refusal in `EditStream::new`
+  before any mutation, the 8 MiB field and 16 MiB envelope at plus or minus one, the
+  pooled window filled to exactly 131 072 distinct entries plus the wholesale reset
+  and the cold-start replay over 131 200 real ordinals, the read wave (measured
+  batch = 32 objects; the byte window is the derived identity, labelled as such),
+  the C2 accept wave splitting by bytes, the `PoolReader` 512 KiB release
+  (`peak_retained=518 300` B against a 1 460 000 B decode), a 24 MiB + 1 C1 read, a
+  6 MiB + 1 file through a real Store (27 packs, twice read back), and the SQLite
+  profile with its host-dependent engine values left unqualified.
+* **W10.3** The 8 MiB - 1 deferred ceiling is **UNRUN**: the charge is live, each
+  live draft charges at most `MAX_NODE_OBJECT_BYTES + 128 = 8 320` B, non-root pages
+  hold at least 64 entries and an edit operation creates at most
+  `length / 8 192 + 3 x 4 096` extents, so crossing the ceiling needs a base of
+  `427 819 008` B (about 408 MiB) - outside the packet's fixture budget. The
+  derivation's premise *is* run and measured (`3 148` B per draft on the largest
+  in-budget shape); the refusal branch has no coverage and is reported as such.
+* **W10.4** Directory, name, path and workspace-size dimensions are recorded as
+  outside Stages 3-4 (Stages 5/7) with no invented value.
+* **Evidence.** `w10/w10-verify.log` (15 blocks: rustfmt, four focused groups, the
+  measured cases with `--nocapture`, the workspace suite 43/272, `edit_reference`
+  56.9 s, clippy, product boundary, both tool suites, plus two of my own
+  command-level mistakes kept on disk) and `w10/README.md`.
+* **Production LOC.** core `10983 -> 11058` (delta +75); C1 `4388 -> 4463`,
+  C2 `5863 -> 5863`, telemetry unchanged; reference `65417`, combined `76400 -> 76475`.
 
 ### W1 — CHUNK delta candidates obey the eligibility rule (G1) — PASS
 

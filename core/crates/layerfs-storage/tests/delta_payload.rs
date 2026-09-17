@@ -428,3 +428,145 @@ fn a_same_save_unsealed_chunk_predecessor_selects_full() {
     let reopened = open_store(&path);
     assert_eq!(support::read_logical(&reopened, applied.root), expected);
 }
+
+/// The CHUNK lane honours its own depth cap, and a changed cap changes the answer.
+///
+/// The chunk depth is a separate policy value from the whole-file depth, so
+/// eligibility must be decided with the chunk bound: the same two-link chain, and
+/// the same dependent naming its deepest record, is ineligible at cap two and
+/// admitted at cap three.
+#[test]
+fn the_chunk_lane_honours_its_own_depth_cap() {
+    let run = |chunk_depth: u8, label: &str| {
+        let dir = TempDir::new(label);
+        let path = dir.store_path("delta");
+        let policy = layerfs_storage::StoragePolicy::new(1, 131_072, 8, chunk_depth);
+        let store =
+            disabled(|scope| Store::create(&path, policy, scope.child("store"))).expect("store");
+        assert_eq!(
+            store.capacities().delta_depth_for_role(ObjectRole::Chunk),
+            chunk_depth
+        );
+        // Incompressible payloads: the unconditional frame is as large as the
+        // payload, so the dictionary-backed prefix frame wins and the chain is real.
+        let mut ids = Vec::new();
+        let mut current = noise(20_000);
+        for step in 0..3_usize {
+            let object = if step == 0 {
+                chunk(&current)
+            } else {
+                with_predecessor(chunk(&current), ids[step - 1])
+            };
+            let id = object.id();
+            let outcome = save_one(&store, object).expect("chain step");
+            if step > 0 {
+                assert_eq!(
+                    outcome.prefix_records, 1,
+                    "chunk step {step} at cap {chunk_depth} must be a prefix record"
+                );
+            }
+            ids.push(id);
+            let mut next = current.clone();
+            let start = step * 64;
+            for byte in &mut next[start..start + 32] {
+                *byte ^= 0xff;
+            }
+            current = next;
+        }
+        assert_eq!(ids.len(), 3, "two links, three records");
+        // A dependent naming the deepest record: its depth is two.
+        let mut beyond = current.clone();
+        beyond[9_000] ^= 0x7f;
+        let deepest = ids[2];
+        let outcome = save_one(&store, with_predecessor(chunk(&beyond), deepest)).expect("save");
+        (outcome, ids)
+    };
+
+    let (at_cap, _) = run(2, "delta-chunk-cap2");
+    assert_eq!(at_cap.delta.trials, 0, "a base at the cap is not acquired");
+    assert_eq!(at_cap.delta.ineligible_candidates, 1);
+    assert_eq!(at_cap.prefix_records, 0);
+    assert_eq!(at_cap.full_records, 1);
+    let (with_room, _) = run(3, "delta-chunk-cap3");
+    assert_eq!(with_room.delta.trials, 1, "one level of headroom admits it");
+    assert_eq!(with_room.prefix_records, 1);
+}
+
+/// The chunk depth accepts fifty links when the chain's bytes allow it.
+///
+/// A chain of minimum-size chunks keeps the canonical work inside its budget, so
+/// depth - not the budget - is what the fifty-first record reaches: the record at
+/// the cap is admitted, one level deeper is not, and the whole chain reads back.
+#[test]
+fn a_fifty_link_chunk_chain_is_admitted_and_read() {
+    let dir = TempDir::new("delta-chunk-depth50");
+    let path = dir.store_path("delta");
+    let policy = layerfs_storage::StoragePolicy::new(1, 131_072, 8, 50);
+    let store =
+        disabled(|scope| Store::create(&path, policy, scope.child("store"))).expect("store");
+    assert_eq!(
+        store.capacities().delta_depth_for_role(ObjectRole::Chunk),
+        50
+    );
+    assert_eq!(store.capacities().chain_canonical_limit, 512 * 1024);
+
+    let mut ids = Vec::new();
+    let mut current = noise(8_192);
+    let mut links = 0_u32;
+    loop {
+        let object = match ids.last().copied() {
+            Some(base) => with_predecessor(chunk(&current), base),
+            None => chunk(&current),
+        };
+        let id = object.id();
+        let outcome = save_one(&store, object).expect("chain step");
+        if links > 0 {
+            if outcome.prefix_records == 1 {
+                // The chain still extends.
+            } else {
+                assert_eq!(
+                    outcome.delta.work_exceeded, 1,
+                    "a refused step is a budget refusal, not a failure: {:?}",
+                    outcome.delta
+                );
+                break;
+            }
+        }
+        ids.push(id);
+        if links == 50 {
+            break;
+        }
+        links += 1;
+        let mut next = current.clone();
+        let start = (links as usize * 37) % 8_000;
+        for byte in &mut next[start..start + 24] {
+            *byte ^= 0xff;
+        }
+        current = next;
+    }
+    assert_eq!(
+        ids.len(),
+        51,
+        "fifty links, fifty-one records: {}",
+        ids.len()
+    );
+    let (values, counters) = read_objects(&store, &[*ids.last().expect("deepest")]).expect("read");
+    assert_eq!(ObjectId::for_bytes(&values[0]), *ids.last().unwrap());
+    assert_eq!(counters.max_depth, 50, "the read follows all fifty edges");
+
+    // One level deeper is past the cap: the base is not acquired and no trial runs.
+    let mut beyond = current.clone();
+    beyond[1_000] ^= 0xff;
+    let outcome = save_one(
+        &store,
+        with_predecessor(chunk(&beyond), *ids.last().unwrap()),
+    )
+    .expect("past cap");
+    assert_eq!(
+        outcome.delta.trials, 0,
+        "a base at depth fifty is not acquired"
+    );
+    assert_eq!(outcome.delta.ineligible_candidates, 1);
+    assert_eq!(outcome.delta.work_exceeded, 0, "depth is not a work budget");
+    assert_eq!(outcome.prefix_records, 0);
+}

@@ -22,9 +22,6 @@ use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_REC
 use crate::sqlite::lookup::{self, ObjectLocation};
 use crate::sqlite::pool;
 
-/// Largest decoded value bytes retained across one wave.
-const VALUE_CACHE_BYTES: usize = 512 * 1024;
-
 /// One wave's pooled reader: pack and decoded-value caches plus work counters.
 #[derive(Debug, Default)]
 pub struct PoolReader {
@@ -148,7 +145,7 @@ impl PoolReader {
             values.push(layerfs_content::inode_leaf::decode_pooled_value(&value)?);
         }
         let charged = values.len() * INODE_VALUE_BYTES;
-        if self.retained_bytes + charged > VALUE_CACHE_BYTES {
+        if self.retained_bytes + charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
             self.groups.clear();
             self.retained_bytes = 0;
         }

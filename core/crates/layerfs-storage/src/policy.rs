@@ -110,6 +110,14 @@ pub const CHAIN_ENCODED_LIMIT: u64 = 256 * 1024;
 /// cache and the index window use. A released body is read again if a later
 /// dependency needs it, so the bound costs reads and never correctness.
 pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 4 * 1024 * 1024;
+/// Decoded values one pooled reader may retain across one wave.
+///
+/// Owner: one pooled reader. Bound: this many canonical decoded value bytes. Live
+/// multiplicity: one cache per reader, one copy per distinct value group. Lifetime:
+/// the wave. Release: the whole cache is dropped when the next group would cross
+/// the bound, or with the reader. Dropping it costs reads and the index window
+/// still finds the group, so the bound costs work and never correctness.
+pub const POOLED_VALUE_CACHE_BYTES: usize = 512 * 1024;
 /// Decoded value-group work one pooled metadata chain may spend.
 pub const METADATA_DECODED_WORK_LIMIT: u64 = 32 * 1024 * 1024;
 /// Default pooled-metadata dependency depth.

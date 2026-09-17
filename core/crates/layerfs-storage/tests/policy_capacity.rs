@@ -316,3 +316,49 @@ fn a_deeper_configured_depth_never_widens_a_work_or_live_budget() {
     assert_eq!(disabled.delta_depth_for_role(ObjectRole::Chunk), 50);
     assert_eq!(disabled.chain_canonical_limit, deep.chain_canonical_limit);
 }
+
+/// The connection profile is exactly the declared one, and the engine's own
+/// maxima stay the host library's.
+///
+/// The profile is an explicit, small set of pragmas; everything the engine decides
+/// for itself - page size, page cache, mmap window, database maximum - is
+/// environment-dependent and is asserted only to be present, never to a value this
+/// repository controls. `cache_size` is not a total RSS cap and is not presented as
+/// one.
+#[test]
+fn the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts() {
+    use layerfs_storage::sqlite::connection::{open as open_connection, pragma_i64};
+
+    let dir = TempDir::new("policy-profile");
+    let path = dir.store_path("policy");
+    let store = create(&path, policy_for(131_072, 8, 4));
+    drop(store);
+    let connection = open_connection(&path, false).expect("profiled connection");
+
+    let journal: String = connection
+        .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+        .expect("journal mode");
+    assert_eq!(journal.to_ascii_lowercase(), "memory");
+    assert_eq!(pragma_i64(&connection, "synchronous").unwrap(), 0);
+    assert_eq!(pragma_i64(&connection, "temp_store").unwrap(), 2);
+    assert_eq!(pragma_i64(&connection, "foreign_keys").unwrap(), 1);
+    assert_eq!(pragma_i64(&connection, "busy_timeout").unwrap(), 0);
+    // The profile sets neither of these; they are the host library's defaults.
+    let page_size = pragma_i64(&connection, "page_size").unwrap();
+    let cache_size = pragma_i64(&connection, "cache_size").unwrap();
+    let mmap_size = pragma_i64(&connection, "mmap_size").unwrap();
+    assert!(page_size > 0, "the engine reports a page size");
+    assert!(
+        cache_size != 0,
+        "the engine reports its own page-cache setting"
+    );
+    let version: String = connection
+        .query_row("SELECT sqlite_version()", [], |row| row.get(0))
+        .expect("engine version");
+    assert!(!version.is_empty(), "the host library reports its version");
+    println!(
+        "MEASURED pragmas: journal_mode={journal} synchronous=0 temp_store=2 \
+         foreign_keys=1 busy_timeout=0 page_size={page_size} cache_size={cache_size} \
+         mmap_size={mmap_size} sqlite_version={version}"
+    );
+}

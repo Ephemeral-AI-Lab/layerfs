@@ -204,3 +204,49 @@ fn a_provider_failure_is_returned_once_and_stops_the_read() {
     assert_eq!(error, ContentError::MissingObject);
     assert!(out.len() < 200_000, "the read stopped at the failure");
 }
+
+/// The read wave never exceeds its declared object and byte window.
+///
+/// A 24 MiB chunked file carries about 1 500 payloads; the reader must acquire
+/// them in bounded batches rather than in one demand set, and the largest batch it
+/// ever asked for must be inside the declared window.
+#[test]
+fn a_large_read_acquires_payloads_in_bounded_batches() {
+    use layerfs_content::file::mapping::{READ_WAVE_BYTES, READ_WAVE_OBJECTS};
+    let bytes = noise(24 * 1024 * 1024 + 1);
+    let (store, constructed, _) = chunked(bytes.len());
+    let mut out = Vec::new();
+    let counters = disabled_scope(|scope| {
+        layerfs_content::read_all_bounded(
+            &store,
+            constructed.root,
+            u64::MAX,
+            &mut out,
+            scope.child("content.read"),
+        )
+    })
+    .expect("large read");
+    assert_eq!(out.len(), bytes.len());
+    assert_eq!(out, bytes);
+    assert!(
+        counters.payload_batches_read > 1,
+        "the fixture must need several batches: {counters:?}"
+    );
+    // The object window is the measured one: a 24 MiB read fills the wave to its
+    // declared bound rather than staying small. The byte window is *derived* from
+    // that same bound at the largest chunk record, so it is asserted as the
+    // identity it is and not presented as a second, independent measurement.
+    assert_eq!(
+        counters.max_payload_batch, READ_WAVE_OBJECTS as u64,
+        "the largest batch is exactly the declared object window: {counters:?}"
+    );
+    assert_eq!(
+        READ_WAVE_BYTES,
+        READ_WAVE_OBJECTS * 32_768,
+        "the declared byte window is the object bound at the largest chunk"
+    );
+    assert!(
+        counters.payload_bytes_read >= bytes.len() as u64,
+        "the read charged the payloads it returned: {counters:?}"
+    );
+}

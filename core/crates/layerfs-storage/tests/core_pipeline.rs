@@ -266,3 +266,39 @@ fn a_pipeline_input_failure_keeps_the_original_error_and_cleans_up() {
         "the failed attempt added no retained pack: {before} -> {after}"
     );
 }
+
+/// A file larger than 5 MiB survives the whole real pipeline, including a reopen.
+///
+/// This is the C2 side of the size boundary: 6 MiB + 1 is about 200 chunk payloads
+/// spread over several packs and preparation waves, and every byte of it is
+/// constructed, stored and read back through a real `Store` and a fresh handle on
+/// the same file - no mock, no in-memory shortcut. The C1 side of the same
+/// boundary (24 MiB + 1 in one logical read) is
+/// `file_read::a_large_read_acquires_payloads_in_bounded_batches`.
+#[test]
+fn a_file_larger_than_five_mebibytes_survives_a_real_store() {
+    let dir = TempDir::new("large-pipeline");
+    let path = dir.store_path("large");
+    let store = create_store(&path);
+    let bytes = noise(6 * 1024 * 1024 + 1);
+    let result = pipeline(&store, &bytes).expect("large pipeline succeeds");
+    assert_eq!(result.logical_len, bytes.len() as u64);
+    assert_eq!(read_back(&store, result.root), bytes);
+
+    drop(store);
+    let reopened = open_store(&path);
+    let (values, counters) =
+        disabled(|scope| reopened.read_batch(&[result.root], scope.child("storage.read")))
+            .expect("root read after reopen");
+    assert_eq!(values.len(), 1);
+    // The root read is one object: the payloads are demanded by the logical read,
+    // not by this call. The publication ceiling it captured shows the file spans
+    // many packs rather than one.
+    assert_eq!(counters.objects, 1);
+    println!("MEASURED 6 MiB root read: {counters:?}");
+    assert!(
+        counters.ceiling > 1,
+        "a file this size must span several packs: {counters:?}"
+    );
+    assert_eq!(read_back(&reopened, result.root), bytes);
+}
