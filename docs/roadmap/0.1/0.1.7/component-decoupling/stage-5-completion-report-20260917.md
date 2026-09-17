@@ -177,6 +177,8 @@ fixtures and tooling excluded):
 | C1 + C2 | 10,428 | 16,965 | 17,173 | +6,745 |
 | Telemetry | 732 | 732 | 732 | 0 |
 | Core total | 11,160 | 17,697 | 17,905 | +6,745 |
+| Reference (`crates/`, all ten crates) | 65,417 | 65,417 | 65,417 | 0 |
+| Combined core + reference | 76,577 | 83,114 | 83,322 | +6,745 |
 
 Per-commit first-parent accounting is audited in §9a — the exact counter run
 against every committed tree, not the message numbers. Files above or below
@@ -233,6 +235,20 @@ A Store created by the previous revision therefore refuses the new tree roles wi
 a SQL constraint failure rather than mis-recording them, and no code path migrates,
 rewrites or remaps a stored role. The schema stays version 4 with four tables and
 twenty-one columns.
+
+## 9c. Acceptance mapping for #170
+
+Every acceptance bullet of the issue, with the evidence that decides it. Statuses
+are stated at the scope the evidence covers; nothing here promotes a `NOT_RUN` row.
+
+| # | Acceptance bullet | Deciding evidence | Status |
+| --- | --- | --- | --- |
+| 1 | Native checked inputs, directory/inode/attribute reads and updates without Workspace/FUSE/history types | `filesystem/{input,validate,read,update}.rs`; targets `filesystem_updates` (6), `filesystem_read` (4), `filesystem_attributes` (9); C2 `filesystem_pipeline` `save-reopen` and `patch-reopen`; `check_product_boundary.py` PASS over 115 files (no Workspace/FUSE/history dependency in either crate) | PASS |
+| 2 | Identity/scope, names, hardlinks, counts, topology/cycles and supported attribute domains preserve canonical results | sealed oracle `stage5_reference_fixtures`; `filesystem_codec` (6), `filesystem_hardlinks` (5), `filesystem_topology` (8), `filesystem_attributes` (9), `filesystem_updates` (6); identity, read-back, boundary and composition gates (§4) binary-equal against the v0.1.6 oracle | PASS |
+| 3 | Shared bounded key traversal and final-only output; no all-files plan or per-file SQL flush | one merge per affected directory, one inode-table merge, one root emission (`sorted/{budget,merge,finish}.rs`); `filesystem_bounds` (4) incl. a 60-name listing at 4 names / 8 KiB per wave and a 40-row directory at 64 B … 4 MiB scratch; `FinalizedConsumer` receives only finalized objects; C2 commits once per operation | PASS |
+| 4 | Ordering record layout/backing, memory/disk work and failures explicit and qualified | 96-byte fixed row grammar with malformed-field rejection; `references/{backing,runs,reduce,release}.rs`, caller-supplied `OrderingBacking`, one byte account reserving before growth; `filesystem_ordering` (8) covers held/peak bytes, tier boundaries, pending-threshold equivalence, checked cleanup and injected failures; ceilings declared in `FilesystemResources` | PASS |
+| 5 | Independent C1 construction and C2 persistence timings with real readback and unchanged disabled behaviour | `filesystem_timing` (2, incl. on/off equality); receipt `stage-5-pipeline-timing-20260917T073302Z`: C1 3,039,208 ns, C2 14,604,375 ns, integrated 17,534,000 ns, read-back 90,583 ns, inserted 8 / packs 2 / commits 1 / pooled 202; the C1 arm opens no database and the C2 arm receives prepared objects | PASS |
+| 6 | Exact correctness and matched successful performance/resource/storage gates passed; existing init producer concurrency retained | correctness gates PASS (§3 G1–G6); matched component rows with all six identities MATCH (§5); storage footprint and resource owners (§4); complete-operation comparison `NOT_RUN` under the frozen [addendum §6](stage-5-verification-addendum-20260917.md) with its source-backed reason, so no complete-operation or superior-speed claim; `construction_worker_limit()` (`crates/layerfs-workspace/src/changes.rs:572`) and the `init_namespace` multi-worker exception are reference paths this continuation never touched — its only root-tree additions are the excluded comparison example and the driver, and reference production LOC is unchanged at 65,417 | PASS at component scope; the one `NOT_RUN` row is pre-declared, not waived |
 
 ## 10. Remaining concerns and boundaries
 
