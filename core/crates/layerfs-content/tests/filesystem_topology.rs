@@ -647,3 +647,53 @@ fn an_update_cycling_two_declared_new_directories_is_refused() {
         "a cycle between two declared-new directories must be refused: {outcome:?}"
     );
 }
+
+#[test]
+fn a_build_cycle_that_the_root_holds_is_refused() {
+    // The root binds `a`, and `a` holds `b` and `b` holds `a`. Every declared
+    // directory has a binding, so the disconnected-record rule cannot see it and
+    // only reachability from the root can: the walk never reaches `a`'s second
+    // edge into `b`, and `b` is bound once but not held by the tree the root
+    // reaches.
+    let mut session = Session::new(1).expect("empty");
+    let a = session.allocate();
+    let b = session.allocate();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("a"), Some(a))],
+            },
+            DirectoryUpdate {
+                parent: a,
+                changes: vec![(name("b"), Some(b))],
+            },
+            DirectoryUpdate {
+                parent: b,
+                changes: vec![(name("a"), Some(a))],
+            },
+        ],
+        &[
+            InodeUpdate {
+                serial: a,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: b,
+                value: directory("unused"),
+            },
+        ],
+        &[a, b],
+    );
+    // The walk reaches `a` from the root, then `b`, then `a` again: a directory
+    // held by two bindings is refused as a second parent, and a declared
+    // directory the root never reaches is refused as a cycle.
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+                | Err(ContentError::InvalidRecord("multiple parents"))
+        ),
+        "a cycle the root reaches through one edge must be refused: {outcome:?}"
+    );
+}
