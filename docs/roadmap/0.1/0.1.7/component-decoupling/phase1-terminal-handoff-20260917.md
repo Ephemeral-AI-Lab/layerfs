@@ -42,8 +42,12 @@ is a bug and is fixed in C1.
 ROUND
   1  take the next item from the landing order (plan §2):
         C1 → V1 → V2 → V3 → P1-2 → P1-1 → P1-3 → P1-4
-        → P1-6 → P1-9 → P1-7 → P1-8 → P1-14 (P1-12 anywhere)
+        → P1-6 → P1-9 → P1-8 → P1-7 → P1-14 (P1-12 anywhere)
         → P1-5 → P1-13 → P1-15 → P1-10 → P1-16
+        (P1-8 before P1-7: the comparing cursor builds on the ordered
+         cursor — the fused-descent design for P1-7 was REJECTED because it
+         would publish before an Equal verdict is known, breaking the
+         zero-emission contract pinned at edit_noop.rs:82)
   2  implement it exactly per its section in the plan + reports; one commit:
      product change + its new tests + the pinned-test update if pre-authorized
      + the architecture-doc update in the SAME commit + the LOC disclosure
