@@ -117,6 +117,27 @@ Every row states a purpose, capacity scope, lifetime/coexistence and release or
 overlimit rule. These are reference limits, not a measured total RSS bound.
 Alternative lifetimes and nested reservations must not be added blindly.
 
+### The replacement core's owners (2026-09-17)
+
+The rows below this note are the **reference** tree's owners. The replacement
+product's own owners are stated where they are implemented, in
+[`filesystem-tree.md`](filesystem-tree.md#remediation-note-2026-09-17-what-an-operation-owns-and-what-it-charges)
+and [`content-io.md`](content-io.md); this note routes to them rather than
+paraphrasing their numbers, and records the four the Stage 5 remediation added so a
+reader of this ledger can find them:
+
+| Owner (replacement core) | Declared bound | Where it is enforced |
+| --- | --- | --- |
+| Touched-serial vector | `FilesystemResources::maximum_touched_serials()` = `ordering_bytes / 8`, one `u64` per touched inode; an operation that does not fit is refused | `references/reduce.rs` |
+| Merge inputs plus output | one ceiling covering live runs, unmerged inputs, pending rows and the reserved output; a backing that cannot hold it is refused at entry | `references/runs.rs`, `references/merge.rs` |
+| Validation work | the records, pages and bindings the validator reads are counted in `FilesystemUpdateCounters::validation` | `validate.rs`, `update.rs` |
+| Read-wave demand | `StorageCapacities::read_objects` and `MAXIMUM_READ_DEMANDS`, both 4,096; a longer slice is refused before a connection is opened, including a batch `Store::contains` | `cas/store.rs`, `cas/provider.rs`, `filesystem/objects.rs` |
+| Release-frontier prefetch | at most one inode record per frontier serial, read in `base_batch`-sized waves and reused from the page wave that found it; the vector is bounded by the same ordering budget as the touched set | `references/release.rs` |
+
+These are declared capacities with enforcement sites, not a whole-process RSS
+bound; no measured memory row exists for the replacement core and none is claimed
+here.
+
 | Allocation / owner | Why it is needed and current bound | Lifetime / coexistence | Target action and qualification |
 | --- | --- | --- | --- |
 | Caller-owned input | Stable bytes, source or edit descriptors; caller's declared size, not a core-enforced whole-input RAM cap | Caller retains through required reads; can coexist with every core phase | Borrow, do not duplicate. Declare caller bytes separately in core-owned measurements and include them in complete-operation claims |

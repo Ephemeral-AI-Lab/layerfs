@@ -560,4 +560,15 @@ contract they follow is stated rather than implied.
   decode workspace, so its size is a declared capacity on both sides of the seam:
   `StorageCapacities::read_objects` for the Store and
   `MAXIMUM_READ_DEMANDS` for the filesystem boundary, both 4,096. A longer slice
-  is refused before a connection is opened.
+  is refused before a connection is opened, and a batch lookup
+  (`Store::contains`) applies the same ceiling rather than paging whatever it is
+  handed.
+- **The release frontier reads in waves.** The traversal that releases a
+  zero-count subtree used to ask for one inode record per serial it popped, after
+  the page wave that had just read that record, so a released subtree paid the
+  record twice. The starting serials are read in `base_batch`-sized waves and a
+  child that reaches zero keeps the record its own page wave already read; the
+  frontier therefore adds no read of its own. The retained records are bounded by
+  the same ordering budget as the touched set, and
+  `filesystem_bounds::the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand`
+  pins it (193 records for 128 released inodes before, 129 after).

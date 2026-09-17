@@ -6,7 +6,7 @@
 //! at an inode that still has an alias elsewhere, because that alias keeps the
 //! inode alive. Unrelated subtrees are never read.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
@@ -62,6 +62,22 @@ pub fn release_zero_count(
     let mut queue: VecDeque<u64> = VecDeque::new();
     let mut cursors: Vec<Cursor> = Vec::new();
     let mut pending: VecDeque<u64> = starting.iter().copied().collect();
+    // Base records the frontier already owns. The starting serials are read in one
+    // bounded wave per `base_batch` instead of one read each, and a child that
+    // reaches zero during a page walk keeps the record that page already read for
+    // it. Without this the frontier asked for one record per demand, so a released
+    // subtree paid a separate read for every directory it walked into - twice for
+    // the ones a page had just supplied.
+    let mut prefetched: BTreeMap<u64, InodeValue> = BTreeMap::new();
+    for wave in starting.chunks(base_batch.max(1)) {
+        let bases = lookup_many(reader, table, wave, &mut InodeReadWork::default())?;
+        work.base_records = work.base_records.saturating_add(wave.len() as u64);
+        for (serial, base) in wave.iter().zip(bases) {
+            if let Some(base) = base {
+                prefetched.insert(*serial, base);
+            }
+        }
+    }
     loop {
         if let Some(serial) = pending.pop_front() {
             let (kind, content_root) = match reducer.state(serial)? {
@@ -70,16 +86,26 @@ pub fn release_zero_count(
                     (value.kind, value.content_root)
                 }
                 Some(PendingState::Existing { value, .. }) => {
-                    let base = base_record(reader, serial)?;
-                    work.base_records = work.base_records.saturating_add(1);
+                    let base = frontier_base(
+                        reader,
+                        serial,
+                        &mut prefetched,
+                        &mut work,
+                        &mut base_record,
+                    )?;
                     (
                         value.map_or(base.kind, |value| value.kind),
                         value.map_or(base.content_root, |value| value.content_root),
                     )
                 }
                 None => {
-                    let base = base_record(reader, serial)?;
-                    work.base_records = work.base_records.saturating_add(1);
+                    let base = frontier_base(
+                        reader,
+                        serial,
+                        &mut prefetched,
+                        &mut work,
+                        &mut base_record,
+                    )?;
                     (base.kind, base.content_root)
                 }
             };
@@ -145,6 +171,9 @@ pub fn release_zero_count(
                 None => (base.kind, base.namespace_ref_count),
             };
             if count == 0 && kind == InodeKind::Directory {
+                // The page wave already read this child's record; the frontier
+                // keeps it rather than asking for it again.
+                prefetched.insert(*serial, base);
                 queue.push_back(*serial);
             }
         }
@@ -154,7 +183,23 @@ pub fn release_zero_count(
         if work.released > 0 {
             work.traversed_directories = work.traversed_directories.saturating_add(1);
         }
-        let _ = base_batch;
     }
     Ok(work)
+}
+
+/// One frontier base record: the prefetched copy when there is one, else one read.
+fn frontier_base(
+    reader: &dyn AuthenticatedObjects,
+    serial: u64,
+    prefetched: &mut BTreeMap<u64, InodeValue>,
+    work: &mut ReleaseWork,
+    base_record: &mut impl FnMut(&dyn AuthenticatedObjects, u64) -> ContentResult<InodeValue>,
+) -> ContentResult<InodeValue> {
+    match prefetched.remove(&serial) {
+        Some(base) => Ok(base),
+        None => {
+            work.base_records = work.base_records.saturating_add(1);
+            base_record(reader, serial)
+        }
+    }
 }

@@ -682,3 +682,114 @@ fn a_caller_authorized_value_root_is_not_an_object_dependency() {
     assert_eq!(stat.content_root, authorized_content);
     assert_eq!(stat.namespace_ref_count, 1);
 }
+
+/// TR-3: the integrated C1+C2 body runs the same work and gives the same answers
+/// with the timer on and off.
+///
+/// The C1-only and C2-only bodies each had an on/off equality case; the
+/// *integrated* body - real construction through `SaveHandoff` into a real save -
+/// had none. Recording must not change what the operation does: same root, same
+/// counters, same admitted objects, same read-back. Only the report differs.
+#[test]
+fn the_integrated_body_agrees_with_itself_when_recording_is_disabled() {
+    use layerfs_storage::{SaveHandoff, SaveOutcome, StorageError};
+    use layerfs_telemetry::timer::{Timing, TimingReport};
+
+    /// One integrated run: construct through the handoff, save, read back.
+    type Integrated = (ObjectId, FilesystemResultShape, SaveOutcome, Vec<u8>);
+
+    fn integrated(
+        store: &layerfs_storage::Store,
+        fixture: &Fixture,
+        recording: bool,
+    ) -> (Result<Integrated, StorageError>, TimingReport) {
+        let directories = [DirectoryUpdate {
+            parent: 1,
+            changes: vec![(name("new"), Some(3))],
+        }];
+        let input = FilesystemInput {
+            base: Some(FilesystemRootId(fixture.root)),
+            scope: fixture.scope,
+            root_serial: 1,
+            directories: &directories,
+            inodes: &[],
+            new_inodes: &[],
+            resources: FilesystemResources::default(),
+        };
+        let body = |timing: &layerfs_telemetry::timer::TimingScope<
+            '_,
+            layerfs_telemetry::timer::Active,
+        >| {
+            let mut operation = store.begin_save(timing.child("storage.begin"))?;
+            let mut handoff = SaveHandoff::new(&mut operation);
+            let constructed = {
+                let mut objects = FilesystemObjects::new(&fixture.bag, &mut handoff);
+                update_filesystem(&mut objects, &input, None)
+            };
+            if let Some(failure) = handoff.take_failure() {
+                return Err(failure);
+            }
+            let constructed = constructed.map_err(|_| StorageError::Aborted)?;
+            let outcome = operation.finish(timing.child("storage.finish"))?;
+            let shape = FilesystemResultShape {
+                root: constructed.root.0,
+                objects_emitted: constructed.counters.objects.objects_emitted,
+                bytes_emitted: constructed.counters.objects.bytes_emitted,
+                pages_created: constructed.counters.directories.pages_created
+                    + constructed.counters.inodes.pages_created,
+            };
+            let provider = layerfs_storage::StoreProvider::new(store);
+            let mut read = FilesystemRead::new(&provider, FilesystemRootId(constructed.root.0))
+                .map_err(|_| StorageError::Aborted)?;
+            let stat = read
+                .stat(&LogicalPath::new("new").unwrap())
+                .map_err(|_| StorageError::Aborted)?;
+            Ok((
+                shape.root,
+                shape,
+                outcome,
+                stat.content_root.to_bytes().to_vec(),
+            ))
+        };
+        if recording {
+            Timing::record("c1c2.integrated", body)
+        } else {
+            Timing::disabled("c1c2.integrated", body)
+        }
+    }
+
+    let mut recorded = None;
+    let mut disabled_run = None;
+    for recording in [true, false] {
+        let temp = TempDir::new(if recording { "timing-on" } else { "timing-off" });
+        let store = create_store(&temp.store_path("filesystem"));
+        let fixture = build_tree().expect("build");
+        save_in_dependency_order(&store, &fixture).expect("base save");
+        let (result, report) = integrated(&store, &fixture, recording);
+        let value = result.expect("the integrated body succeeds");
+        if recording {
+            assert!(
+                !report.is_incomplete(),
+                "the recorded tree must not be clipped"
+            );
+            assert!(report.node_count() > 0, "the recorded tree has nodes");
+            recorded = Some(value);
+        } else {
+            assert!(
+                !report.has_root(),
+                "a disabled run records no tree, whatever it planned"
+            );
+            disabled_run = Some(value);
+        }
+    }
+    assert_eq!(recorded, disabled_run, "recording changed the operation");
+}
+
+/// The comparable shape of one integrated run.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FilesystemResultShape {
+    root: ObjectId,
+    objects_emitted: u64,
+    bytes_emitted: u64,
+    pages_created: u64,
+}

@@ -615,8 +615,28 @@ fn render_case(
     }
 }
 
+/// R12: this generator is gated, and it is not the seal's only guard.
+///
+/// It rewrites `core/crates/layerfs-content/tests/fixtures/filesystem/` in place,
+/// so while it was a plain `#[test]` an ordinary `cargo test` could move the seal
+/// the Stage 5 comparison is measured against. It is now `#[ignore]`d *and*
+/// refuses to run without `LAYERFS_SEAL_FIXTURES=1`, so it writes only when a
+/// person asks for it. The read-only counterpart that fails when the seal changes
+/// is `core/crates/layerfs-content/tests/fixture_seal.rs`, which runs on every
+/// ordinary test run and never writes anything. Re-proving the seal means running
+/// this generator in an isolated `git archive` copy and diffing the result against
+/// the committed directory - never regenerating in place.
 #[test]
+#[ignore = "rewrites the sealed fixtures in place; the read-only guard is core/crates/layerfs-content/tests/fixture_seal.rs"]
 fn stage5_reference_fixtures_are_sealed() {
+    assert_eq!(
+        std::env::var("LAYERFS_SEAL_FIXTURES").as_deref(),
+        Ok("1"),
+        "refusing to rewrite the sealed fixtures: this test writes \
+         core/crates/layerfs-content/tests/fixtures/filesystem/ in place. Set \
+         LAYERFS_SEAL_FIXTURES=1 and pass --ignored to reseal deliberately, in \
+         an isolated copy of the tree."
+    );
     let directory = output_directory();
     std::fs::create_dir_all(&directory).expect("fixture directory");
     let mut manifest = String::new();

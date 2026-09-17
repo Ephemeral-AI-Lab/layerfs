@@ -1,0 +1,13 @@
+# Sealed Stage 5 fixtures: blake3 digest, two spaces, file name, one per line.
+# Frozen when the seal was taken; the comparator in tests/fixture_seal.rs reads it and never rewrites it.
+6a8391962b8f8ec21177a2b0f188c406fe34171a9038481c96610537725963c8  attr-pair.bin
+8d3e454f3a50b155d78b7900ce38ea1b315484b730426343ea29a9b9e1c05637  attr-single.bin
+009de5dd8ad6a5900e9bcc6923d1262992f6bbfeb4242f3293d7f905704a642d  attr-wide.bin
+b39fade624d270c8acafe84ed0c5b6c21345c2e150112b9dcca3d40ef8b64358  codec-directory-branch.bin
+4e93689ab53277f4e44b15d3c7cd47d0d2cda78a30f9ff70437a7f1939bfda5f  codec-directory-leaf.bin
+b04a5b259b5454fdeb0f620ee2136f19cfc6be6d06fecaf257eea7545a06cd7f  codec-inode-branch.bin
+d9488069b49419a60e61dc54d51382795a6d3c5e4ca4eec208f7a6a749a48b6c  codec-inode-leaf.bin
+da70d6ee88c19eb746da385fb2521fbb661216a406575b18e4c495ef90489861  codec-metadata-leaf.bin
+693d3e433f22d8190d1fcd8c6c1cc9a886f0da3ad88d58d4e881d95fc134846a  codec-root.bin
+13075b006b436b24953c26238ffdfc583d318068d69e8b573e7082755b97740e  codec-symlink.bin
+d9073d4b18a5915a6624be1ee51484130ef6381213f0c67fe417bda4bc15b258  manifest.rs

@@ -805,3 +805,111 @@ fn the_cycle_check_work_limit_is_reachable_and_reported() {
     );
     let _ = backing.cleanup_failed();
 }
+
+/// R30: the release frontier reads its base records in waves, not one per demand.
+///
+/// The frontier used to ask the provider for one inode record per serial it
+/// popped, and it did so *after* the page wave that had just read that same record,
+/// so a released subtree paid the record twice. A directory holding many small
+/// subdirectories is the shape that shows it: every subdirectory the frontier
+/// reaches is one extra read. Here the parent holds 64 subdirectories of one file
+/// each, so the wave reads 64 records for the parent's page and one for each
+/// subdirectory page - 128 - where the per-demand form reads 192.
+#[test]
+fn the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand() {
+    const WIDTH: usize = 64;
+    let mut session = Session::new(1).expect("empty");
+    let parent = session.allocate();
+    let subs = (0..WIDTH).map(|_| session.allocate()).collect::<Vec<_>>();
+    let leaves = (0..WIDTH).map(|_| session.allocate()).collect::<Vec<_>>();
+    let mut inodes = vec![InodeUpdate {
+        serial: parent,
+        value: dir_value(),
+    }];
+    let mut new = vec![parent];
+    for (sub, leaf) in subs.iter().zip(leaves.iter()) {
+        inodes.push(InodeUpdate {
+            serial: *sub,
+            value: dir_value(),
+        });
+        inodes.push(InodeUpdate {
+            serial: *leaf,
+            value: regular("bounds/frontier-leaf"),
+        });
+        new.push(*sub);
+        new.push(*leaf);
+    }
+    inodes.sort_by_key(|update| update.serial);
+    new.sort_unstable();
+    let mut updates = vec![DirectoryUpdate {
+        parent: 1,
+        changes: vec![(name("p"), Some(parent))],
+    }];
+    updates.push(DirectoryUpdate {
+        parent,
+        changes: subs
+            .iter()
+            .enumerate()
+            .map(|(index, serial)| (name(&format!("s{index:03}")), Some(*serial)))
+            .collect(),
+    });
+    for (index, (sub, leaf)) in subs.iter().zip(leaves.iter()).enumerate() {
+        updates.push(DirectoryUpdate {
+            parent: *sub,
+            changes: vec![(name(&format!("f{index:03}")), Some(*leaf))],
+        });
+    }
+    session
+        .apply(&updates, &inodes, &new)
+        .expect("wide frontier");
+
+    let temp = TempDir::new("bounds-frontier");
+    let mut backing = RecordingBacking::new(temp.path());
+    let removal = [DirectoryUpdate {
+        parent: 1,
+        changes: vec![(name("p"), None)],
+    }];
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &removal,
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let mut sink = TreeStore::new();
+    let result = {
+        let mut objects = FilesystemObjects::new(&session.store, &mut sink);
+        update_filesystem(&mut objects, &input, Some(&mut backing)).expect("subtree removal")
+    };
+    let release = result.counters.release;
+    assert_eq!(
+        release.released,
+        (2 * WIDTH) as u64,
+        "the subdirectories the parent bound and the files they bind"
+    );
+    // The traversal pushes a cursor for every frontier entry before the finished
+    // one is popped, so the live depth here is the parent plus each subdirectory
+    // that was waiting. That accumulation is pre-existing and unchanged; what this
+    // case pins is the read count below.
+    assert!(
+        release.peak_depth <= WIDTH + 1,
+        "cursor depth {} exceeds the frontier it came from",
+        release.peak_depth
+    );
+    println!(
+        "release: released {} pages {} base_records {}",
+        release.released, release.pages, release.base_records
+    );
+    // Every record the frontier used was already read by the page wave that found
+    // the inode, so a released subtree costs one base record per released inode and
+    // nothing more. The per-demand form pays one extra record for every
+    // subdirectory it walks into - 64 more here.
+    assert!(
+        release.base_records <= release.released + 1,
+        "the frontier paid a read per demand: {} records for {} released inodes",
+        release.base_records,
+        release.released
+    );
+}
