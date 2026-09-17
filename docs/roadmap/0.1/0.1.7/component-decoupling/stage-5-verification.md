@@ -129,6 +129,15 @@ what was frozen when it was written.
 - A row may be `NOT_RUN` with its reason; a missing number is unavailable, never
   zero.
 
+**Correction, 2026-09-17 (this section kept as written).** Two bullets above are
+out of date and are not the current state: the comparative row now exists as the
+component comparison in the [addendum](stage-5-verification-addendum-20260917.md),
+and the four targets listed as "not written" are now
+`filesystem_ordering` (8 cases), `filesystem_failure` (5), `filesystem_bounds` (4)
+and C2 `filesystem_failure` (4). The open list is now only the independent review
+and the complete-operation comparison, which the addendum's §6 keeps `NOT_RUN` with
+its source-backed reason.
+
 ## 6. Evidence shape
 
 ```text

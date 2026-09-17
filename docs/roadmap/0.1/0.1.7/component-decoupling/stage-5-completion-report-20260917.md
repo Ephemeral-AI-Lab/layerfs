@@ -155,7 +155,8 @@ fixtures and tooling excluded):
 | Telemetry | 732 | 732 | 732 | 0 |
 | Core total | 11,160 | 17,697 | 17,905 | +6,745 |
 
-Per-commit first-parent accounting is in each commit message. Files above or below
+Per-commit first-parent accounting is audited in §9a — the exact counter run
+against every committed tree, not the message numbers. Files above or below
 the file plan's recommended ranges are listed in
 [stage-5-report.md](stage-5-report.md#2-source-tree-and-size); this continuation
 moved `references/backing.rs` (116→295), `references/runs.rs` (247→434),
