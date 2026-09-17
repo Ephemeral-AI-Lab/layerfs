@@ -106,29 +106,35 @@ fn run(
         if update.changes.is_empty() {
             // A directory with no changed name keeps the content root it already
             // has; a directory in a new filesystem is a real empty page.
-            let content = match checked.topology.table {
-                Some(_) => {
-                    lookup_base(reader, table, update.parent)?
-                        .ok_or(ContentError::InvalidRecord("directory parent record"))?
-                        .content_root
-                }
-                None => crate::filesystem::directory::update::empty_directory(objects)?.0,
+            let content = if input.new_inodes.contains(&update.parent)
+                || checked.topology.table.is_none()
+            {
+                crate::filesystem::directory::update::empty_directory(objects)?.0
+            } else {
+                lookup_base(reader, table, update.parent)?
+                    .ok_or(ContentError::InvalidRecord("directory parent record"))?
+                    .content_root
             };
             contents.insert(update.parent, content);
             continue;
         }
-        let base_directory = match checked.topology.table {
-            Some(_) => {
-                let record = lookup_base(reader, table, update.parent)?
-                    .ok_or(ContentError::InvalidRecord("directory parent record"))?;
-                if record.kind != InodeKind::Directory {
-                    return Err(ContentError::InvalidRecord("directory parent kind"));
-                }
-                Some(DirectoryRoot(record.content_root))
+        let base_directory = if input.new_inodes.contains(&update.parent) {
+            // A directory this operation allocates has no stored bindings yet.
+            None
+        } else if checked.topology.table.is_some() {
+            let record = lookup_base(reader, table, update.parent)?
+                .ok_or(ContentError::InvalidRecord("directory parent record"))?;
+            if record.kind != InodeKind::Directory {
+                return Err(ContentError::InvalidRecord("directory parent kind"));
             }
-            None => None,
+            Some(DirectoryRoot(record.content_root))
+        } else {
+            None
         };
         let mut observe = |before: Option<u64>, after: Option<u64>| -> ContentResult<()> {
+            if std::env::var("LAYERFS_TRACE").is_ok() {
+                eprintln!("edge {:?} -> {:?}", before, after);
+            }
             if before == after {
                 return Ok(());
             }
@@ -181,21 +187,32 @@ fn run(
         counters.directory_updates = counters.directory_updates.saturating_add(1);
         contents.insert(update.parent, root.0);
     }
-    // A supplied typed value keeps the stored content root unless this operation
-    // rebuilt that inode's directory.
+    // A directory whose bindings this operation merged gets that directory's new
+    // root as its content root. Its kind and attribute root come from the caller's
+    // typed value when one was supplied, and from the stored record otherwise, so
+    // a caller that only changes names does not have to restate its metadata.
+    for (serial, content_root) in &contents {
+        let value = match input.value_for(*serial) {
+            Some(value) => Some(InodeValue {
+                content_root: *content_root,
+                ..value
+            }),
+            None => lookup_base(reader, table, *serial)?.map(|base| InodeValue {
+                content_root: *content_root,
+                ..base
+            }),
+        };
+        let value = value.ok_or(ContentError::InvalidRecord("directory value missing"))?;
+        reducer.note_value(*serial, value)?;
+    }
+    // Every other supplied value keeps the content root the caller named, unless
+    // this operation rebuilt that inode's own directory.
     let mut updates = Vec::with_capacity(input.inodes.len());
     for update in input.inodes {
-        let content_root = contents
-            .get(&update.serial)
-            .copied()
-            .unwrap_or(update.value.content_root);
-        updates.push((
-            update.serial,
-            InodeValue {
-                content_root,
-                ..update.value
-            },
-        ));
+        if contents.contains_key(&update.serial) {
+            continue;
+        }
+        updates.push((update.serial, update.value));
     }
     for (serial, value) in updates {
         reducer.note_value(serial, value)?;

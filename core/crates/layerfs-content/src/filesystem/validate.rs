@@ -104,6 +104,15 @@ pub fn check<'a>(
             // The root directory of a new filesystem is built by this operation.
         } else if update.parent == input.root_serial {
             // A root directory update is legal; the root's own count stays zero.
+        } else if input.new_inodes.contains(&update.parent) {
+            // A directory this operation allocates starts empty; its value must
+            // still declare the directory kind it will have.
+            let value = input
+                .value_for(update.parent)
+                .ok_or(ContentError::InvalidRecord("directory parent value"))?;
+            if value.kind != InodeKind::Directory {
+                return Err(ContentError::InvalidRecord("directory parent kind"));
+            }
         } else if let Some(table) = topology.table {
             let record = lookup_one(reader, table, update.parent)?;
             if record.kind != InodeKind::Directory {

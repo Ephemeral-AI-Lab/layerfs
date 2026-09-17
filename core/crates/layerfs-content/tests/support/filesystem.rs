@@ -66,7 +66,7 @@ impl TreeStore {
         self.objects.values().map(|bytes| bytes.len() as u64).sum()
     }
 
-    /// Merges every object of `other` into this store.
+    /// Merges every object of `other` into this store, keeping emission order.
     pub fn absorb(&mut self, other: &TreeStore) {
         for (id, bytes) in &other.objects {
             self.objects.insert(*id, bytes.clone());
@@ -74,6 +74,7 @@ impl TreeStore {
         for (id, role) in &other.roles {
             self.roles.insert(*id, *role);
         }
+        self.order.extend(other.order.iter().copied());
     }
 }
 
@@ -194,17 +195,145 @@ pub fn resources() -> FilesystemResources {
     FilesystemResources::default()
 }
 
-/// Runs one operation closure with a fresh object boundary.
+/// Consumer that writes into a store shared with the operation's reader.
+struct SharedConsumer(std::rc::Rc<std::cell::RefCell<TreeStore>>);
+
+impl FinalizedConsumer for SharedConsumer {
+    fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        self.0.borrow_mut().accept(object)
+    }
+}
+
+/// Reader that resolves an object the operation just emitted, or the base store.
+struct Overlay<'a> {
+    base: &'a TreeStore,
+    emitted: std::rc::Rc<std::cell::RefCell<TreeStore>>,
+}
+
+impl AuthenticatedObjects for Overlay<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        self.emitted.borrow().read_canonical_batch(ids).or_else(|_| {
+            self.base.read_canonical_batch(ids)
+        })
+    }
+}
+
+/// Runs one operation closure and appends only the objects it newly emitted.
 pub fn with_objects<T>(
     store: &mut TreeStore,
     body: impl FnOnce(&mut FilesystemObjects<'_>) -> ContentResult<T>,
 ) -> ContentResult<T> {
-    let reader_view = store.clone();
-    let mut consumer = store.clone();
+    let shared = std::rc::Rc::new(std::cell::RefCell::new(TreeStore::new()));
+    let mut consumer = SharedConsumer(shared.clone());
     let result = {
-        let mut objects = FilesystemObjects::new(&reader_view, &mut consumer);
+        let reader = Overlay {
+            base: store,
+            emitted: shared.clone(),
+        };
+        let mut objects = FilesystemObjects::new(&reader, &mut consumer);
         body(&mut objects)
     };
-    store.absorb(&consumer);
+    let emitted = shared.borrow().clone();
+    store.absorb(&emitted);
     result
+}
+
+/// One in-memory filesystem built by the public operations, for reuse in tests.
+pub struct Session {
+    /// Objects emitted and read so far.
+    pub store: TreeStore,
+    /// Current root identity.
+    pub root: ObjectId,
+    /// Current decoded root.
+    pub value: layerfs_content::filesystem::FilesystemRoot,
+    /// Allocation scope of every identity in this session.
+    pub scope: layerfs_content::filesystem::InodeScope,
+    /// Root directory serial.
+    pub root_serial: u64,
+    /// Next serial a test's allocator hands out.
+    next_serial: u64,
+    /// Serials already allocated in this session.
+    pub allocated: Vec<u64>,
+}
+
+impl Session {
+    /// Builds an empty filesystem whose root directory is emitted for real.
+    pub fn new(root_serial: u64) -> ContentResult<Self> {
+        let scope = layerfs_content::filesystem::scope_for_seed([0x11; 32]);
+        let mut store = TreeStore::new();
+        let directories = [layerfs_content::filesystem::DirectoryUpdate {
+            parent: root_serial,
+            changes: Vec::new(),
+        }];
+        let inodes = [layerfs_content::filesystem::InodeUpdate {
+            serial: root_serial,
+            value: value(
+                InodeKind::Directory,
+                synthetic("session/root-content"),
+                synthetic("session/root-metadata"),
+            ),
+        }];
+        let new_inodes = [root_serial];
+        let input = layerfs_content::filesystem::FilesystemInput {
+            base: None,
+            scope,
+            root_serial,
+            directories: &directories,
+            inodes: &inodes,
+            new_inodes: &new_inodes,
+            resources: resources(),
+        };
+        let result = with_objects(&mut store, |objects| {
+            layerfs_content::filesystem::build_filesystem(objects, &input, None)
+        })?;
+        Ok(Self {
+            store,
+            root: result.root.0,
+            value: result.value,
+            scope,
+            root_serial,
+            next_serial: root_serial + 1,
+            allocated: vec![root_serial],
+        })
+    }
+
+    /// Allocates the next identity from this session's test allocator.
+    pub fn allocate(&mut self) -> u64 {
+        let serial = self.next_serial;
+        self.next_serial += 1;
+        self.allocated.push(serial);
+        serial
+    }
+
+    /// Applies one complete final-state update.
+    pub fn apply(
+        &mut self,
+        directories: &[layerfs_content::filesystem::DirectoryUpdate],
+        inodes: &[layerfs_content::filesystem::InodeUpdate],
+        new_inodes: &[u64],
+    ) -> ContentResult<layerfs_content::filesystem::FilesystemResult> {
+        let input = layerfs_content::filesystem::FilesystemInput {
+            base: Some(layerfs_content::filesystem::FilesystemRootId(self.root)),
+            scope: self.scope,
+            root_serial: self.root_serial,
+            directories,
+            inodes,
+            new_inodes,
+            resources: resources(),
+        };
+        let result = with_objects(&mut self.store, |objects| {
+            layerfs_content::filesystem::update_filesystem(objects, &input, None)
+        })?;
+        self.root = result.root.0;
+        self.value = result.value;
+        Ok(result)
+    }
+
+    /// Reads one path inside the current root.
+    pub fn read(&self) -> ContentResult<layerfs_content::filesystem::FilesystemRead<'_>> {
+        layerfs_content::filesystem::FilesystemRead::new(
+            &self.store,
+            layerfs_content::filesystem::FilesystemRootId(self.root),
+        )
+    }
 }

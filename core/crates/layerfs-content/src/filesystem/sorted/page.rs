@@ -340,6 +340,8 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         )?;
         let canonical = F::encode(&PageView {
             level: page.level,
+            count: node.count,
+            bytes: node.bytes,
             rows: &rows,
         })?;
         let id = ObjectId::for_bytes(&canonical);

@@ -142,11 +142,16 @@ pub fn encode_directory_page(page: &DirectoryPage) -> ContentResult<Vec<u8>> {
                 .collect::<Vec<_>>();
             <CompactDirectory as Format>::encode(&PageView {
                 level: 0,
+                count: entries.len() as u64,
+                bytes: 0,
                 rows: &rows,
             })
         }
         DirectoryPage::Branch {
-            level, children, ..
+            level,
+            children,
+            subtree_count,
+            subtree_bytes,
         } => {
             let rows = children
                 .iter()
@@ -160,6 +165,8 @@ pub fn encode_directory_page(page: &DirectoryPage) -> ContentResult<Vec<u8>> {
                 .collect::<Vec<_>>();
             <CompactDirectory as Format>::encode(&PageView {
                 level: *level,
+                count: *subtree_count,
+                bytes: *subtree_bytes,
                 rows: &rows,
             })
         }

@@ -117,9 +117,16 @@ pub(crate) struct RowView<'a, K, V> {
 }
 
 /// A page handed to a format encoder.
+///
+/// For a branch the recorded subtree totals are the page's own summary and are
+/// taken from `count`/`bytes`; a leaf derives both from its rows.
 pub(crate) struct PageView<'a, K, V> {
     /// Page level.
     pub level: u8,
+    /// Entries in this subtree; branches only.
+    pub count: u64,
+    /// Encoded row bytes in this subtree; branches only.
+    pub bytes: u64,
     /// Rows in key order.
     pub rows: &'a [RowView<'a, K, V>],
 }
@@ -213,7 +220,12 @@ impl Format for CompactDirectory {
 
     fn encode(page: &PageView<'_, Self::Key, Self::Value>) -> ContentResult<Vec<u8>> {
         let count = page.rows.len();
-        validate_count(page.level, count, <Self as Format>::page_items(page.level))?;
+        validate_count(
+            page.level,
+            count,
+            <Self as Format>::page_items(page.level),
+            <Self as Format>::empty_allowed(),
+        )?;
         let rows = page.rows;
         let mut previous: Option<&[u8]> = None;
         for row in rows {
@@ -232,15 +244,7 @@ impl Format for CompactDirectory {
             })?;
             (count as u64, bytes)
         } else {
-            let total = rows.iter().try_fold(0_u64, |sum, row| {
-                sum.checked_add(row.count)
-                    .ok_or(ContentError::LengthOverflow)
-            })?;
-            let bytes = rows.iter().try_fold(0_u64, |sum, row| {
-                sum.checked_add(row.bytes)
-                    .ok_or(ContentError::LengthOverflow)
-            })?;
-            (total, bytes)
+            (page.count, page.bytes)
         };
         if page.level > 0 && total < count as u64 {
             return Err(ContentError::InvalidRecord("directory subtree summary"));
@@ -439,7 +443,12 @@ impl Format for CompactInodes {
 
     fn encode(page: &PageView<'_, Self::Key, Self::Value>) -> ContentResult<Vec<u8>> {
         let count = page.rows.len();
-        validate_count(page.level, count, <Self as Format>::page_items(page.level))?;
+        validate_count(
+            page.level,
+            count,
+            <Self as Format>::page_items(page.level),
+            <Self as Format>::empty_allowed(),
+        )?;
         let mut previous: Option<u64> = None;
         for row in page.rows {
             if previous.is_some_and(|prior| prior >= *row.key) {
@@ -456,10 +465,9 @@ impl Format for CompactInodes {
                 .ok_or(ContentError::LengthOverflow)?;
             (count as u64, bytes)
         } else {
-            let total = page.rows.iter().try_fold(0_u64, |sum, row| {
-                sum.checked_add(row.count)
-                    .ok_or(ContentError::LengthOverflow)
-            })?;
+            // A branch's recorded totals are its own summary: the engine passes
+            // the totals it accumulated from the children it read.
+            let total = page.count;
             if total < count as u64 {
                 return Err(ContentError::InvalidRecord("inode subtree summary"));
             }
@@ -579,11 +587,16 @@ pub(crate) fn nearest_half(widths: &[usize]) -> usize {
     best
 }
 
-fn validate_count(level: u8, count: usize, maximum: usize) -> ContentResult<()> {
+fn validate_count(
+    level: u8,
+    count: usize,
+    maximum: usize,
+    empty_allowed: bool,
+) -> ContentResult<()> {
     if level > MAXIMUM_TREE_LEVEL {
         return Err(ContentError::MappingDepthExceeded);
     }
-    if count == 0 || count > maximum {
+    if (count == 0 && !empty_allowed) || count > maximum {
         return Err(ContentError::NonCanonicalPagePartition);
     }
     if u16::try_from(count).is_err() {

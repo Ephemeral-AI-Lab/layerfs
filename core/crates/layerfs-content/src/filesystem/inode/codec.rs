@@ -112,11 +112,15 @@ pub fn encode_inode_page(page: &InodePage) -> ContentResult<Vec<u8>> {
                 .collect::<Vec<_>>();
             <CompactInodes as Format>::encode(&PageView {
                 level: 0,
+                count: entries.len() as u64,
+                bytes: 0,
                 rows: &rows,
             })
         }
         InodePage::Branch {
-            level, children, ..
+            level,
+            children,
+            subtree_count,
         } => {
             let rows = children
                 .iter()
@@ -130,6 +134,8 @@ pub fn encode_inode_page(page: &InodePage) -> ContentResult<Vec<u8>> {
                 .collect::<Vec<_>>();
             <CompactInodes as Format>::encode(&PageView {
                 level: *level,
+                count: *subtree_count,
+                bytes: 0,
                 rows: &rows,
             })
         }
