@@ -15,7 +15,13 @@ pub const MAXIMUM_PATH_BYTES: usize = 4_096;
 /// Largest number of components in one canonical path.
 pub const MAXIMUM_PATH_COMPONENTS: usize = 256;
 /// Largest supported tree height.
-pub const MAXIMUM_TREE_LEVEL: u8 = 31;
+///
+/// One owner, one name: the mapping grammar's own level bound
+/// (`file::mapping::MAX_LEVEL`) owns the figure, and this constant is the
+/// filesystem-side name for the same ceiling. Two independent `31`s used to
+/// sit in the tree, one per module, which is how a reader loses track of which
+/// enforcement uses which.
+pub const MAXIMUM_TREE_LEVEL: u8 = crate::file::mapping::MAX_LEVEL;
 /// Smallest recorded rows of a non-root inode leaf.
 pub const MINIMUM_INODE_LEAF_ROWS: u64 = 50;
 /// Largest recorded rows of one inode leaf.
@@ -28,12 +34,11 @@ pub const MAXIMUM_INODE_BRANCH_CHILDREN: u64 = 127;
 pub const MINIMUM_FILLED_PAGE_BYTES: usize = 3_277;
 /// Largest bytes one filesystem operation may hold for its own unfinished pages.
 ///
-/// One name, one figure, and the default below derived from it. Two constants used
-/// to encode this same nominal ceiling - one as `4 MiB` and one as `4 MiB - 1` -
-/// so a reader could not tell which of the two the enforcement used.
+/// One name, one figure. Two constants used to encode this same nominal ceiling -
+/// one as `4 MiB` and one as `4 MiB - 1` - and the `4 MiB - 1` twin had no
+/// caller once the default named this figure, so the twin and its dead accessor
+/// were deleted rather than kept as a second spelling of one ceiling.
 pub const MAXIMUM_OPERATION_SCRATCH_BYTES: usize = 4 * 1024 * 1024;
-/// Default bytes one filesystem operation may hold for its own unfinished pages.
-pub const DEFAULT_OPERATION_SCRATCH_BYTES: usize = MAXIMUM_OPERATION_SCRATCH_BYTES - 1;
 /// Largest bytes of one symbolic-link target, matching the reference grammar.
 pub const MAXIMUM_SYMLINK_TARGET_BYTES: usize = 4_096;
 /// Largest bytes of one generic attribute domain.
@@ -60,15 +65,24 @@ pub const MAXIMUM_ATTRIBUTE_VALUE_BYTES: usize = crate::file::cdc::MAXIMUM_CHUNK
 /// consequences follow, and both are part of the operation's contract rather than
 /// accidents of the implementation:
 ///
-/// - one `build_filesystem` call is refused above 4,095 bindings, because its
+/// - one `build_filesystem` call is refused above 4,096 bindings: a build that
+///   states exactly 4,096 is accepted, 4,097 is the first refusal, because the
 ///   single reachability walk charges every entry the tree states, so a tree
 ///   larger than that is reached by several operations that each stay under the
 ///   ceiling; and
-/// - an existing directory whose effective subtree exceeds the ceiling can never
-///   be renamed or relocated, however small the change is, because the walk of
-///   the directory being rebound is bounded by this figure and exceeding a work
-///   bound is an explicit refusal - the same error a genuine cycle gets, never a
-///   claim that the tree was proven acyclic.
+/// - an existing directory whose effective subtree reaches the ceiling can
+///   never be renamed or relocated, however small the change is, because the
+///   walk of the base tree charges the rest of the tree beside the rebound
+///   directory first, and exceeding a work bound is an explicit refusal - the
+///   same error a genuine cycle gets, never a claim that the tree was proven
+///   acyclic.
+///
+/// The boundary figures above are stated in **bindings the walk charges**. The
+/// round-2 review first reported the build consequence as "4,095 accepted /
+/// 4,096 refused" counting only the files inside the built directory, which
+/// excludes the directory's own binding edge; a round-4 verification probe
+/// reproduced the tight figures through the public API and this doc states
+/// them.
 pub const MAXIMUM_WALK_ENTRIES: usize = 4_096;
 
 /// Largest keys one attribute-key listing may return.

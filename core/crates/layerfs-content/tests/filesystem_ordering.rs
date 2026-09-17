@@ -769,6 +769,42 @@ fn a_spilled_lookup_agrees_with_a_full_scan_of_every_tier() {
         result.counters.references.runs.rows_read > 0,
         "lookups into spilled runs must be charged"
     );
+    // The agreement the name promises: the same input with a pending map large
+    // enough to hold every row (no spill, no run lookup) must produce the same
+    // root as the spilling run, because a lookup into a spilled run answers
+    // exactly what the in-memory map would have answered.
+    let unspilled_resources = layerfs_content::filesystem::FilesystemResources::default();
+    assert!(
+        unspilled_resources.maximum_pending_records > entries,
+        "the no-spill arm must really hold every row"
+    );
+    let input = FilesystemInput {
+        base: Some(layerfs_content::filesystem::FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: std::slice::from_ref(&directory),
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources: unspilled_resources,
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut unspilled_sink = TreeStore::new();
+    let backing_directory = TempDir::new("ordering-lookup-scan-unspilled");
+    let mut unspilled_backing = RecordingBacking::with_capacity(backing_directory.path(), 64 << 20);
+    let unspilled = {
+        let mut objects =
+            layerfs_content::filesystem::FilesystemObjects::new(&provider, &mut unspilled_sink);
+        update_filesystem(&mut objects, &input, Some(&mut unspilled_backing))
+            .expect("no-spill update")
+    };
+    assert_eq!(
+        unspilled.counters.references.rows_spilled, 0,
+        "the comparison arm must not spill"
+    );
+    assert_eq!(
+        result.root, unspilled.root,
+        "spilled lookups must agree with the in-memory answers: same root required"
+    );
 }
 
 #[test]

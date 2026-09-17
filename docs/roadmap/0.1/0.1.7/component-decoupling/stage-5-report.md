@@ -182,21 +182,36 @@ tree, via `git archive`; run 2026-09-18) and it reproduces the review's own
 | `821ddbe30` | 17909 -> 17913 (+4) | 17909 -> 17898 (-11) | -15 |
 | `f723663a5` | 17913 -> 17905 (-8) | 17898 -> 17905 (+7) | -15 |
 
+The `drift` column is the round-2 review's own annotation, kept as published; it
+mixes delta-drift and endpoint-drift per row, so read it as the review's gloss on
+its two exact columns (disclosed, recomputed), not as a single formula.
+
 The other fourteen Stage-5 production commits reproduce exactly, as the review
 also found. The disclosed chain is internally self-consistent
 (17497 -> 17525 -> 17730) and diverges from the committed trees by at most 38
 lines: the numbers were prepared from a pre-commit tree and never re-confirmed
 after the commit, which is what the repository rule forbids.
 
+**One more row, found by this round's own audit (2026-09-18):** `de648507b`
+(post-review, documentation only) discloses `18650 -> 18650 (delta 0)` where the
+counter reproduces `18708 -> 18708 (delta 0)` - the delta is right, but the
+levels were copied from the preceding product commit's message
+(`2fe2a4642`, +58) instead of being re-run on `de648507b`'s own first parent.
+Every other commit from `f288d2af7` to this round's HEAD reproduces exactly
+(re-audited 2026-09-18: `6b7170e05`, `5e2a20a0c`, `2fe2a4642`, `afcb76c0e`,
+`9b58d1a17`, `5ca20eb92`, `a293c2a75`, `b069cb33a`, `6c00e0f53`, `9327f6695`,
+`134b8df73`, `99743b2cf`).
+
 Two further disclosure defects, both stated here rather than repaired in history:
 
-- **Scope switch at `01d9f70f3`.** Commits up to `64e3f9d6a` disclose **combined**
-  core+reference totals (e.g. `74628 -> 77136`); commits from `01d9f70f3` disclose
-  **core-only** totals (e.g. `10415 -> 10893`). Each commit states its own scope in
-  its Method line, so no single commit lies, but the chain cannot be read across
-  the switch without knowing this. From the remediation rounds onward every
-  disclosure names its scope explicitly (core subtotals, reference subtotal,
-  combined total).
+- **Scope switch at `01d9f70f3`.** Commits up to `2b2dbc028` (the last
+  combined-disclosing commit, `64e3f9d6a` among them) disclose **combined**
+  core+reference totals (e.g. `74628 -> 77136`); commits from `01d9f70f3`
+  disclose **core-only** totals (e.g. `10415 -> 10893`). Each commit states its
+  own scope in its Method line, so no single commit lies, but the chain cannot
+  be read across the switch without knowing this. From the remediation rounds
+  onward every disclosure names its scope explicitly (core subtotals, reference
+  subtotal, combined total).
 - **Merge `a8a1ba848` (PR #163) carries no `Production LOC:` line.** Its
   first-parent comparison, recomputed now: `732 -> 732` (delta 0, first parent
   `e6ecb70d1`; the change was documentation).
@@ -407,9 +422,12 @@ remains Stage 6's to take.
 | Symlink target | enforced | ≤ 4,096 bytes, no NUL |
 | Inode serial | enforced | 1 .. `i64::MAX` |
 | Read wave | enforced | ≤ 32 payload objects and ≤ 1,048,576 bytes (`READ_WAVE_OBJECTS × MAXIMUM_CHUNK_BYTES`): the count is enforced as payloads are demanded, and each decoded payload is refused above the chunk maximum, so the byte figure is a bound on what a wave can acquire rather than an estimate. The two constants are asserted equal to the product by the wave's own case |
-| Whole-tree walk entries | enforced | ≤ 4,096 bindings **per walk**, charged once per walk and not once per operation: one build is refused above 4,095 bindings, and a directory whose effective subtree exceeds the ceiling can never be rebound (`MAXIMUM_WALK_ENTRIES`) |
-| Operation scratch | configurable | ≥ 1,024 bytes, default 4 MiB − 1 |
+| Whole-tree walk entries | enforced | ≤ 4,096 bindings **per walk**, charged once per walk and not once per operation: a build stating 4,096 bindings is accepted and 4,097 is the first refused, and a directory whose effective subtree reaches the ceiling can never be rebound, because the base-tree walk charges the rest of the tree beside it first (`MAXIMUM_WALK_ENTRIES`; figures corrected 2026-09-18 from the review's file-count phrasing - see §13.2) |
+| Operation scratch | configurable | ≥ 1,024 bytes, default 4 MiB (`MAXIMUM_OPERATION_SCRATCH_BYTES`, one constant; the unused `4 MiB − 1` twin and its dead accessor were deleted 2026-09-18) |
 | Pending records | configurable | ≥ 1, default 4,096 |
+| Read-wave demands | enforced | ≤ 4,096 ids per wave through `FilesystemObjects::read_batch` (`MAXIMUM_READ_DEMANDS`): 4,096 demands pass the count check and reach the provider, 4,097 is refused by the declared bound (boundary case `filesystem_limits::a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097`) |
+| Ordering tiers | derived, unverified at scale | ≤ 32 (`MAXIMUM_LEVELS`); tiers fill like a binary counter's bits, so all 32 are occupied only after 2³² − 1 spills and the 33rd-tier refusal is not fixture-reachable; the figure bounds the store's retained lookup buffers and is pinned by `filesystem_limits` |
+| Pack group count | enforced at placement and parse | ≤ 256 groups per lane pack (`GROUP_COUNT_LIMIT`): placement starts a new pack at a lane's ceiling and the pack parser refuses counts outside 1..=256; no fixture fills a pack to the ceiling through a real save - derived, unverified at scale, value and per-lane limits pinned by `storage_limits` |
 | Theoretical | not claimed | no unlimited-workspace or constant-RSS claim is made |
 | Verified | measured | 900-entry construction, 400-entry updates, 60-name pagination, 8 directory levels, 303-inode sealed tree |
 
@@ -530,6 +548,16 @@ document state tests, not targets.
    record: cycle check work limit`), and an existing directory whose effective
    subtree exceeds 4,096 entries can never be rebound (a 4,195-entry rename is
    refused the same way).
+
+   *Erratum corrected 2026-09-18:* the figures in this item are the round-2
+   review's own probe outputs, counted in **files inside the built directory**,
+   which excludes the directory's own binding edge. Counted in the bindings the
+   walk charges - the counting the §6 row now uses - a build stating exactly
+   4,096 bindings is accepted and 4,097 is the first refusal, and the rebind
+   refusal begins when the subtree reaches 4,096, because the base-tree walk
+   charges the rest of the tree beside the rebound directory first. A round-4
+   verification probe reproduced both tight figures through the public API
+   (`verify-R2-F7.md`); the ceiling and both consequences are unchanged.
 3. **§2 totals are one production commit stale.** This section is re-derived at
    `b3df5461c`; the reviewed tree is C1 **11,875**, C2 **6,043**, core **18,650**
    (+104 in `eb42c1347`, which discloses its own +35). The reference total is

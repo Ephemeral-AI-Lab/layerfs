@@ -153,17 +153,25 @@ fn an_attribute_domain_and_key_are_accepted_at_their_bounds_and_refused_over() {
 ///
 /// - `MAXIMUM_TREE_LEVEL` (31) is a **format** bound on a page's declared level.
 ///   Reaching a level-31 tree needs at least `MINIMUM_ROOT_ENTRIES^31` summaries,
-///   which no fixture can build; the field is instead refused at the codec by
-///   `a_page_that_declares_an_impossible_level_is_refused`, and `MAXIMUM_TREE_LEVEL`
+///   which no fixture can build; the field is instead refused at the codec - the
+///   level tag is rejected with the role by `inode_leaf::malformed_leaves_are_rejected`
+///   and `filesystem_codec`'s role/level cases - and `MAXIMUM_TREE_LEVEL`
 ///   appears in the profile identity, so moving it moves every identity in the
 ///   frozen profile. Derived, unverified at scale.
+/// - `MAXIMUM_LEVELS` (32) is the ordering run store's tier ceiling. Tiers fill
+///   like a binary counter's bits - tier k holds the rows of 2^k spilled
+///   batches - so all 32 tiers are occupied only after 2^32 - 1 spills, and the
+///   spill-time refusal of a 33rd tier is not reachable by any fixture. The
+///   figure bounds the store's retained lookup buffers (at most
+///   `MAXIMUM_LEVELS` buffers of `merge_buffer_bytes`) and is pinned by value
+///   below. Derived, unverified at scale.
 /// - `MAXIMUM_PAGE_BYTES` (8,192) is enforced by the page encoders; the boundary
 ///   is a function of a page's exact encoded size, and the codec cases in
 ///   `filesystem_codec` assert the boundary through the encoders rather than by
 ///   constructing an 8,193-byte page, which the encoder cannot produce.
 /// - The storage-side group/record/transaction constants live in
-///   `layerfs-storage`; their boundary cases are the ones in that package's
-///   `storage_bounds` suite, not here.
+///   `layerfs-storage`; their boundary cases and derived notes are the ones in
+///   that package's `storage_limits` suite, not here.
 #[test]
 fn the_limits_this_suite_cannot_bound_are_named_with_their_reason() {
     // A case that keeps the notes above part of the target rather than a comment
@@ -171,8 +179,18 @@ fn the_limits_this_suite_cannot_bound_are_named_with_their_reason() {
     // does not probe, and each is asserted here so a reader can tell a
     // deliberately unbounded row from a forgotten one.
     use layerfs_content::filesystem::limits::{MAXIMUM_PAGE_BYTES, MAXIMUM_TREE_LEVEL};
+    use layerfs_content::filesystem::references::runs::MAXIMUM_LEVELS;
     assert_eq!(MAXIMUM_TREE_LEVEL, 31);
     assert_eq!(MAXIMUM_PAGE_BYTES, 8_192);
+    assert_eq!(MAXIMUM_LEVELS, 32);
+    // Occupying every tier needs one spill per binary-counter pattern up to
+    // 2^32 - 1: tier k holds the rows of 2^k batches, so the 33rd-tier refusal
+    // the run store guards against cannot be produced by any fixture.
+    assert_eq!(
+        1_u64.checked_shl(u32::try_from(MAXIMUM_LEVELS).expect("small") - 1),
+        Some(1_u64 << 31),
+        "the tier arithmetic this note relies on"
+    );
     // Reaching a level-31 tree needs at least `MINIMUM_INODE_BRANCH_CHILDREN^30`
     // summaries at the leaves, which is far beyond any fixture; the level field is
     // refused at the codec instead, and `filesystem_profile` pins the identity that
@@ -197,5 +215,46 @@ fn the_limits_this_suite_cannot_bound_are_named_with_their_reason() {
     assert!(
         overflowed || summaries > u128::from(u64::MAX),
         "the arithmetic that rules the level bound out of a fixture: {fan_out}^{levels} = {summaries}"
+    );
+}
+
+#[test]
+fn a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097() {
+    // The wave's own demand ceiling bounds the slice a caller hands the
+    // operation, independent of the payload byte ceiling the read path enforces.
+    // A wave at the ceiling passes the count check and reaches the provider (an
+    // empty store answers MissingObject, which is what proves the wave was not
+    // refused by the count); one demand over the ceiling is refused before the
+    // provider is asked at all.
+    use layerfs_content::filesystem::objects::MAXIMUM_READ_DEMANDS;
+    use layerfs_content::filesystem::FilesystemObjects;
+    use layerfs_content::ObjectId;
+    use support::filesystem::TreeStore;
+
+    assert_eq!(MAXIMUM_READ_DEMANDS, 4_096);
+    let at_limit: Vec<ObjectId> = (0..MAXIMUM_READ_DEMANDS)
+        .map(|index| ObjectId::for_bytes(format!("limits/wave/{index}").as_bytes()))
+        .collect();
+    let over: Vec<ObjectId> = (0..MAXIMUM_READ_DEMANDS + 1)
+        .map(|index| ObjectId::for_bytes(format!("limits/wave/{index}").as_bytes()))
+        .collect();
+
+    let empty = TreeStore::new();
+    let mut sink = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&empty, &mut sink);
+    assert!(
+        matches!(
+            objects.read_batch(&at_limit),
+            Err(ContentError::MissingObject)
+        ),
+        "a wave at the ceiling passes the count check and reaches the provider"
+    );
+    assert!(
+        matches!(
+            objects.read_batch(&over),
+            Err(ContentError::ObjectLimitExceeded { limit, actual })
+                if limit == MAXIMUM_READ_DEMANDS && actual == MAXIMUM_READ_DEMANDS + 1
+        ),
+        "one demand over the ceiling is refused by the declared bound"
     );
 }

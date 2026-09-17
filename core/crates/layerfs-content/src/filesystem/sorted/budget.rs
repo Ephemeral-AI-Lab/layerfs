@@ -10,7 +10,6 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::limits::DEFAULT_OPERATION_SCRATCH_BYTES;
 
 /// Shared reservation state of one operation.
 pub struct Budget {
@@ -27,11 +26,6 @@ impl Budget {
             peak: Cell::new(0),
             limit,
         })
-    }
-
-    /// The default operation ceiling.
-    pub fn default_limit() -> usize {
-        DEFAULT_OPERATION_SCRATCH_BYTES
     }
 
     /// Reserves `bytes`, failing before any allocation happens.

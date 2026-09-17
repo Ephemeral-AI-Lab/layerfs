@@ -290,3 +290,27 @@ are stated at the scope the evidence covers; nothing here promotes a `NOT_RUN` r
 5. Nothing in this continuation implements a Workspace/runtime shape, an Apple or
    APFS codec, an adapter, a plugin registry or a new crate; #165/#171/#172 stay
    open and no release or tag was produced.
+
+## 11. Dated corrections to this report (2026-09-18)
+
+1. **§6's last bullet and §10.4 above quote the superseded comparison's
+   reading.** "Two component cases are faster and one is 10% slower" and "The
+   large-few-changes component case is 10% slower than the reference" describe
+   the superseded `…T073017Z` collection (ratio 1.100 on that case), not the
+   governing `…T143008Z` collection at `eb42c1347`, whose ratio on the same case
+   is **0.480** — under the governing collection the candidate is faster than
+   the reference on all three component cases. The two statements stay as
+   written above (they are the record of what this report said when §5 published
+   the older collection) but must not be read as current: the governing rows are
+   §5's table and
+   [`stage-5-verification-addendum-20260917.md`](stage-5-verification-addendum-20260917.md)
+   §5.1. Consequently §10.4 is **not** an open concern. Found by the round-4
+   verification pass; see
+   [`../evidence/stage-5-terminal-20260918T120000Z/verify-VF5-VF6-F5.md`](../evidence/stage-5-terminal-20260918T120000Z/verify-VF5-VF6-F5.md).
+2. **§8's outstanding independent review has since been superseded by the
+   terminal-handoff verification mechanism.** The round-2 review
+   (`stages-1-5-review-20260917T230700Z.md`) happened after this report; its
+   findings were remediated in rounds 3-4 and each row was verified by a
+   read-only verification subagent on the final tree. See
+   [`stage-5-report.md`](stage-5-report.md) §15-§16 and the round-4 evidence
+   directory.

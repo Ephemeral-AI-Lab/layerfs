@@ -360,3 +360,69 @@ fn an_edit_reads_and_decodes_the_base_root_once() {
     assert!(result.logical_len > 0);
     let _ = result.root;
 }
+
+#[test]
+fn an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once() {
+    // The same single-read contract on the chunked representation: the base is
+    // above the small-file cutoff, so the edit must rebuild the mapping tree
+    // from the view's already-decoded state. The whole-file case above cannot
+    // catch a second read on this route - a wrong implementation was verified
+    // to pass it - so this case is the one that discriminates here.
+    use std::cell::RefCell;
+
+    use layerfs_content::{
+        AuthenticatedObjects, ContentResult, Edit, EditStream, ObjectId, Replacements,
+    };
+
+    struct Counting<'a> {
+        inner: &'a MemoryStore,
+        demands: RefCell<Vec<ObjectId>>,
+    }
+
+    impl AuthenticatedObjects for Counting<'_> {
+        fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+            self.demands.borrow_mut().extend_from_slice(ids);
+            self.inner.read_canonical_batch(ids)
+        }
+    }
+
+    let base = repeat(262_144, 0x51);
+    let (store, constructed) = support::build_file(&base);
+    assert!(
+        constructed.root != layerfs_content::ObjectId::for_bytes(&[]),
+        "a chunked base is really chunked"
+    );
+    let edits =
+        EditStream::new(base.len() as u64, vec![Edit::new(4_000, 4_032, 32)]).expect("stream");
+    let mut replacements = Replacements::new();
+    replacements.push(vec![0x77_u8; 32]);
+    let counter = Counting {
+        inner: &store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let mut consumer = MemoryStore::new();
+    let policy = layerfs_content::ConstructionPolicy::frozen_default();
+    let result = disabled_scope(|scope| {
+        layerfs_content::apply_edits(
+            policy,
+            &policy.capacities(),
+            &counter,
+            layerfs_content::EditRequest {
+                root: constructed.root,
+                edits: &edits,
+                source: &replacements,
+            },
+            &mut consumer,
+            scope.child("edit"),
+        )
+    })
+    .expect("the chunked edit applies");
+
+    let demands = counter.demands.borrow();
+    let root_demands = demands.iter().filter(|id| **id == constructed.root).count();
+    assert_eq!(
+        root_demands, 1,
+        "the chunked route demands the base root exactly once per edit: {demands:?}"
+    );
+    assert!(result.logical_len == base.len() as u64);
+}

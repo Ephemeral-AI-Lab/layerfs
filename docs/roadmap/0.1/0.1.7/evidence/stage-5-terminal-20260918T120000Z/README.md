@@ -55,6 +55,46 @@ comparable to the review's release-profile grid and is not retained as a
 receipt. The release run above is the sample. Work counters were identical in
 both profiles.
 
+## A clipped-run receipt for `measure_components` (R2-F14) cannot exist
+
+The round-2 row asked for "a receipt of a clipped run" proving
+`measure_components` exits non-zero. The verification pass established that no
+legal input can reach the clip path: the demo's timing trees are structurally
+coarse (5 nodes for an 8 MiB C1 input - the largest legal input, which the
+binary itself refuses to exceed; 4 for C2; 59 for the pipeline mode with its
+waves capped at 32 objects), against a node budget of 1,024. The row's evidence
+is therefore the wiring (`measure_components.rs` returns `Err` on
+`is_incomplete()`, and `main` propagates it - empirically exit 1 on every error
+path, the same `require_complete` shape as the Stage-5 pair, which the round-2
+review itself verified by source) plus the telemetry crate's own tests proving
+`is_incomplete()` is true for a clipped report. This is stated here so the
+missing receipt is an established impossibility, not an omission; see
+`verify-R2-F1-F2-F3-F14.md`.
+
+## Verification records
+
+Each row above was verified by a read-only verification subagent with fresh
+context; the `verify-*.md` files in this directory are their reports, with every
+command, exit code and `path:line` citation. Findings they raised that were
+accepted and remediated in the round-4 remedy commit: the FFI inventory omitted
+two called entry points (N-13, both inventories corrected); the completion
+report retained two superseded "10% slower" statements (corrected by its §11
+dated note); `MAXIMUM_LEVELS`, `MAXIMUM_READ_DEMANDS`, the group-count ceiling
+and the scratch default figure had no limits row, derived note or boundary case
+(N-16/VF-4, all remediated); the walk-ceiling figures were one binding
+conservative in the file-count phrasing (R2-F7 erratum, corrected in
+`limits.rs`, §6 and §13.2); two test bodies asserted less than their names
+promised (VF-3, both strengthened); the single-read test never reached the
+chunked route (R2-F20, a chunked-base case added); the N-14 declaration
+attributed the walk ceiling to `FilesystemResources::check` (corrected); and the
+round's own audit found `de648507b`'s disclosed LOC levels were stale
+(`per-commit-loc-reread-2.log`). The tasking prompts contained a mistranscribed
+full commit hash (the tree is `99743b2cff2470e6634874d7ee14b9d37d0ba16e`; every
+verifier identified the 9-character prefix match and verified the actual tree).
+
+No row is marked PASS by this directory. A row flips only when a verification
+subagent reproduces it from these receipts or through the public entry points.
+
 ## Checks
 
 `check-*.log` hold the eight handoff §6 commands, each with its exit code, run on

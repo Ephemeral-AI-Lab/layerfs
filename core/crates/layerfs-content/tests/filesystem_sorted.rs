@@ -5,8 +5,8 @@ mod support;
 use layerfs_content::filesystem::directory::read::lookup;
 use layerfs_content::filesystem::directory::update::{apply_bindings, empty_directory};
 use layerfs_content::filesystem::path::PathName;
-use layerfs_content::filesystem::MAXIMUM_SCRATCH_BYTES;
-use layerfs_content::{ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId};
+use layerfs_content::filesystem::{FilesystemObjects, MAXIMUM_SCRATCH_BYTES};
+use layerfs_content::{ContentError, ContentResult, ObjectId};
 use support::filesystem::{with_objects, TreeStore};
 
 fn name(value: &str) -> PathName {
@@ -235,14 +235,13 @@ fn a_tiny_supported_budget_works_or_refuses_before_allocating() {
 
 #[test]
 fn a_late_source_error_propagates_and_publishes_nothing() {
-    struct Failing;
-    impl FinalizedConsumer for Failing {
-        fn accept(&mut self, _object: FinalizedObject) -> ContentResult<()> {
-            Ok(())
-        }
-    }
-    let mut store = TreeStore::new();
-    let outcome = with_objects(&mut store, |objects| {
+    // Both halves of the name are asserted: the source error is propagated
+    // unchanged, and nothing is published - a merge whose source fails late
+    // emits no object at all, so the sink stays empty.
+    let base = TreeStore::new();
+    let mut sink = TreeStore::new();
+    let outcome = {
+        let mut objects = FilesystemObjects::new(&base, &mut sink);
         let mut none = |_: Option<u64>, _: Option<u64>| Ok(());
         let mut rows = (0..50)
             .map(|index| Ok((name(&format!("k{index:02}")), Some(index as u64 + 1))))
@@ -254,15 +253,18 @@ fn a_late_source_error_propagates_and_publishes_nothing() {
         }
         source.push(Err(ContentError::Io));
         apply_bindings(
-            objects,
+            &mut objects,
             None,
             source.into_iter(),
             MAXIMUM_SCRATCH_BYTES,
             &mut none,
         )
-    });
+    };
     assert!(matches!(outcome, Err(ContentError::Io)));
-    let _ = Failing;
+    assert!(
+        sink.is_empty(),
+        "a failed merge publishes nothing, but {} objects were emitted",
+        sink.len()
+    );
     let _ = lookup;
-    let _ = name("unused");
 }

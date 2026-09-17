@@ -1,0 +1,19 @@
+# Post-review per-commit LOC audit: every commit f288d2af7..HEAD, run 2026-09-17T18:58:07Z
+# columns: commit recomputed-before -> recomputed-after (delta) | the commit message's own disclosure line
+6b7170e05 18650->18650 +0 | NO-LOC-LINE
+5e2a20a0c 18650->18650 +0 | NO-LOC-LINE
+2fe2a4642 18650->18708 +58 | Production LOC: 18650 -> 18708 (delta +58)
+afcb76c0e 18708->18708 +0 | NO-LOC-LINE
+9b58d1a17 18708->18708 +0 | NO-LOC-LINE
+5ca20eb92 18708->18708 +0 | NO-LOC-LINE
+a293c2a75 18708->18708 +0 | NO-LOC-LINE
+de648507b 18708->18708 +0 | NO-LOC-LINE
+b069cb33a 18708->18708 +0 | NO-LOC-LINE
+6c00e0f53 18708->18783 +75 | Production LOC: 18708 -> 18783 (delta +75)
+9327f6695 18783->18797 +14 | Production LOC: 18783 -> 18797 (delta +14)
+134b8df73 18797->18797 +0 | NO-LOC-LINE
+99743b2cf 18797->18797 +0 | NO-LOC-LINE
+
+FINDING: de648507b's disclosed levels (18650 -> 18650) are stale - they copy 2fe2a4642's
+figures instead of de648507b's own first parent (a293c2a75, 18708). The delta (0) is correct.
+Every other commit in the range reproduces exactly. Recorded in stage-5-report.md section 2.

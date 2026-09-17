@@ -455,15 +455,17 @@ and full initialization must consume all supplied entries. No universal O(change
 or constant-RSS claim is established by these diagrams.
 
 **Declared 2026-09-18 (round-2 finding N-14): what the operation's ceilings cover,
-and what the caller owns.** `FilesystemResources::check` enforces every ceiling the
-operation itself owns - scratch, ordering bytes, pending records, merge buffers,
-read waves and the whole-tree walk ceiling. The operation's *input slices*
-(`directories`, `inodes`, `new_inodes` in `FilesystemInput`) are deliberately
-borrowed and unbounded in C1: an input of N bindings costs the caller O(N) memory
-to hold, and one build is still refused above 4,095 bindings by the whole-tree
-walk ceiling. That caller-side bound is an explicit **adapter obligation**, not an
-undeclared gap: a Stage 7 adapter must impose a protocol-level request ceiling,
-enforced by refusal, before native changes reach C1. C1 itself claims no bound on
+and what the caller owns.** `FilesystemResources::check` enforces every ceiling
+the operation declares as a resource - scratch, ordering bytes, pending records,
+merge buffers, read batches - and the whole-tree walk ceiling
+(`MAXIMUM_WALK_ENTRIES`, enforced in the validator, not a resource field) bounds
+each validation walk. The operation's *input slices* (`directories`, `inodes`,
+`new_inodes` in `FilesystemInput`) are deliberately borrowed and unbounded in C1:
+an input of N bindings costs the caller O(N) memory to hold, and one build is
+still refused above 4,096 bindings by the whole-tree walk ceiling. That
+caller-side bound is an explicit **adapter obligation**, not an undeclared gap:
+a Stage 7 adapter must impose a protocol-level request ceiling, enforced by
+refusal, before native changes reach C1. C1 itself claims no bound on
 caller-held input, and a caller that hands C1 an unbounded slice owns the memory
 it costs.
 

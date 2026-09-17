@@ -272,16 +272,27 @@ What the crate does instead, and why it is at least as auditable:
 
 The audited surface at this round's commit is twelve `unsafe` items in
 `encoding/codec.rs`: two numeric-return checks (`ZSTD_isError`,
-`ZSTD_getErrorCode`), two static-context constructors (`ZSTD_initStaticCCtx`,
-`ZSTD_initStaticDCtx`), the encode call sites (`ZSTD_CCtx_reset`,
-`ZSTD_CCtx_setParameter`, `ZSTD_CCtx_setCParams`, `ZSTD_CCtx_setFParams`,
-`ZSTD_CCtx_refPrefix`, `ZSTD_compress2`, `ZSTD_getCParams`), the decode call
-sites (`ZSTD_DCtx_reset`, `ZSTD_DCtx_setParameter`, `ZSTD_DCtx_refPrefix`,
-`ZSTD_decompressDCtx`), the frame validators (`ZSTD_getFrameHeader`,
-`ZSTD_findFrameCompressedSize`) and one `unsafe fn` (`parse_frame_header`) that
-wraps them. No `unsafe` exists in any other module, and the guard keeps it that
-way. No memory-safety proof is claimed: this is an audited boundary, not a
-proof.
+`ZSTD_getErrorCode`), two size-arithmetic helpers called before any allocation
+(`ZSTD_compressBound`, `ZSTD_estimateCCtxSize_usingCParams`), two
+static-context constructors (`ZSTD_initStaticCCtx`, `ZSTD_initStaticDCtx`), the
+encode call sites (`ZSTD_CCtx_reset`, `ZSTD_CCtx_setParameter`,
+`ZSTD_CCtx_setCParams`, `ZSTD_CCtx_setFParams`, `ZSTD_CCtx_refPrefix`,
+`ZSTD_compress2`, `ZSTD_getCParams`), the decode call sites (`ZSTD_DCtx_reset`,
+`ZSTD_DCtx_setParameter`, `ZSTD_DCtx_refPrefix`, `ZSTD_decompressDCtx`), the
+frame validators (`ZSTD_getFrameHeader`, `ZSTD_findFrameCompressedSize`) and
+one `unsafe fn` (`parse_frame_header`) that wraps them. (The first version of
+this note and of the module doc omitted the two size-arithmetic helpers; a
+verification subagent caught the omission on 2026-09-18 and both inventories
+now list every entry point the module imports and calls.) No `unsafe` exists
+in any other module, and the guard keeps it that way. No memory-safety proof
+is claimed: this is an audited boundary, not a proof. The guard's coverage has
+known edges, verified by a round-4 falsification pass: the rule names the three
+existing core crates (a **new** crate under `core/crates/` is not judged until
+the rule is extended), `include!` carriers with a non-`.rs` extension and Cargo
+manifest target paths outside `src/` escape all of the guard's rules, and the
+crate-root attribute check is a substring test. Each of those needs a tracked
+source or manifest edit that review sees, and the guard remains a source-text
+check, not a semantic proof.
 
 ## 5. Capacities and stored formats
 

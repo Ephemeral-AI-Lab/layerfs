@@ -8,7 +8,7 @@
 mod support;
 
 use layerfs_storage::pack::assemble::frame_group;
-use layerfs_storage::pack::layout::record_range;
+use layerfs_storage::pack::layout::{record_range, PackLane};
 use layerfs_storage::policy::{
     GROUP_COUNT_LIMIT, GROUP_LIMIT, RECORD_COUNT_LIMIT, SINGLETON_PACK_LIMIT,
 };
@@ -142,4 +142,26 @@ fn the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins() {
         layerfs_storage::policy::TRANSACTION_CANONICAL_BYTES_LIMIT,
         4 * 1024 * 1024 - 1
     );
+}
+
+#[test]
+fn the_group_count_ceiling_is_named_with_its_derivation() {
+    // `GROUP_COUNT_LIMIT` is enforced in two places - placement starts a new
+    // pack when a lane's open pack would exceed its group-count ceiling
+    // (`LanePlacement::group_count_limit` plus `append_fits`), and the pack
+    // parser refuses a group count outside `1..=GROUP_COUNT_LIMIT` - but no
+    // fixture reaches the ceiling through a real save: filling one pack with
+    // 256 groups needs the lane's grouping to fill every group before the
+    // 257th is offered, which is a full pack's worth of lane traffic, not a
+    // cheap boundary case. The figure is pinned here so the table, the parser
+    // and this note stay the same claim; derived, unverified at scale.
+    assert_eq!(GROUP_COUNT_LIMIT, 256);
+    assert_eq!(PackLane::Ordinary.group_count_limit(), GROUP_COUNT_LIMIT);
+    assert_eq!(PackLane::Native.group_count_limit(), GROUP_COUNT_LIMIT);
+    assert_eq!(PackLane::WholeFile.group_count_limit(), GROUP_COUNT_LIMIT);
+    assert_eq!(
+        PackLane::PooledMetadata.group_count_limit(),
+        GROUP_COUNT_LIMIT
+    );
+    assert_eq!(PackLane::Singleton.group_count_limit(), 1);
 }
