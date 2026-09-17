@@ -738,3 +738,70 @@ fn merge_inputs_and_output_are_covered_by_the_declared_ceiling() {
         resources.ordering_bytes
     );
 }
+
+#[test]
+fn the_cycle_check_work_limit_is_reachable_and_reported() {
+    // The effective-cycle walk is bounded by a declared entry limit, and the
+    // limit is a work bound rather than a property of the tree: it also bounds
+    // how large one build may state a directory to be. Both sides of it are
+    // pinned here, and the entries each walk examined are charged to the
+    // operation. A directory over the limit is refused with the limit's own
+    // message, never reported as a cycle.
+    let limit = layerfs_content::filesystem::validate::MAXIMUM_CYCLE_CHECK_ENTRIES;
+    let scope = layerfs_content::filesystem::scope_for_seed([0x6d; 32]);
+    let temp = TempDir::new("bounds-cycle-limit");
+    let mut backing = RecordingBacking::with_capacity(temp.path(), 64 << 20);
+    let store = TreeStore::new();
+    let mut build_wide = |entries: usize, scope| {
+        let mut changes = Vec::new();
+        let mut inodes = vec![InodeUpdate {
+            serial: 1,
+            value: dir_value(),
+        }];
+        let mut new_inodes = vec![1_u64];
+        for index in 0..entries {
+            let serial = index as u64 + 2;
+            changes.push((name(&format!("f{index:05}")), Some(serial)));
+            inodes.push(InodeUpdate {
+                serial,
+                value: regular(&format!("bounds/cycle-{index}")),
+            });
+            new_inodes.push(serial);
+        }
+        inodes.sort_by_key(|update| update.serial);
+        new_inodes.sort_unstable();
+        let input = FilesystemInput {
+            base: None,
+            scope,
+            root_serial: 1,
+            directories: &[DirectoryUpdate { parent: 1, changes }],
+            inodes: &inodes,
+            new_inodes: &new_inodes,
+            resources: resources(),
+        };
+        let provider = store.clone();
+        let mut sink = TreeStore::new();
+        let mut objects = FilesystemObjects::new(&provider, &mut sink);
+        build_filesystem(&mut objects, &input, Some(&mut backing))
+    };
+    let built = build_wide(limit - 8, scope).expect("a directory just under the limit");
+    assert!(
+        built.counters.validation.entries_examined > 0,
+        "the walk's entries are charged to the build: {:?}",
+        built.counters.validation
+    );
+    let outcome = build_wide(
+        limit + 512,
+        layerfs_content::filesystem::scope_for_seed([0x6e; 32]),
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(layerfs_content::ContentError::InvalidRecord(
+                "cycle check work limit"
+            ))
+        ),
+        "a directory over the entry limit is refused by that limit: {outcome:?}"
+    );
+    let _ = backing.cleanup_failed();
+}

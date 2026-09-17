@@ -152,9 +152,13 @@ fn run_body<'b>(
     phases: &FilesystemPhases<'_>,
     cleanup_attempted: &mut bool,
 ) -> ContentResult<FilesystemResult> {
+    // A directory this batch leaves with no binding is dead on arrival: its
+    // parent already accounted the binding it lost, so there is no final count to
+    // hold it, no page worth building, and no subtree to walk.
+    let unreachable = unreachable_parents(input);
     let mut validation = ValidationWork::default();
     let checked = phases.phase("validate", || {
-        validate::check(objects.reader(), input, &mut validation)
+        validate::check(objects.reader(), input, &unreachable, &mut validation)
     })?;
     let reader = objects.reader();
     let mut counters = FilesystemUpdateCounters {
@@ -169,10 +173,6 @@ fn run_body<'b>(
         input.resources.merge_buffer_bytes,
         input.resources.ordering_bytes,
     );
-    // A directory this batch leaves with no binding at all is dead on arrival:
-    // its parent already accounted the binding it lost, so there is no final
-    // count to hold it and no page worth building.
-    let unreachable = unreachable_parents(input);
     reducer.check_backing_capacity()?;
     register_values(&mut reducer, input, &unreachable)?;
     let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();

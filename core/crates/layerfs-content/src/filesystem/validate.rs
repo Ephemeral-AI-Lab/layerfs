@@ -43,6 +43,13 @@ pub struct ValidationWork {
 }
 
 /// Entries the effective-tree cycle check may inspect before it refuses.
+///
+/// This is a declared work limit, not a property of the tree: a legal rename of a
+/// directory whose effective subtree is larger than this is refused with the same
+/// error a genuine cycle gets, because proving it acyclic would cost more entries
+/// than the operation declared it would walk. The figure is part of the
+/// operation's resource contract, and the entries the walk examines are charged
+/// to `ValidationWork::entries_examined` so a caller can see how close it came.
 pub const MAXIMUM_CYCLE_CHECK_ENTRIES: usize = 4_096;
 /// Serial demands one allocator-precondition wave may make.
 pub const ALLOCATION_CHECK_BATCH: usize = 64;
@@ -116,6 +123,7 @@ pub struct CheckedInput<'a> {
 pub fn check<'a>(
     reader: &dyn AuthenticatedObjects,
     input: &'a FilesystemInput<'a>,
+    unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedInput<'a>> {
     input.check()?;
@@ -199,7 +207,7 @@ pub fn check<'a>(
             }
         }
     }
-    check_parent_aliases(reader, input, &topology, &by_parent, work)?;
+    check_parent_aliases(reader, input, &topology, &by_parent, unreachable, work)?;
     for update in input.directories {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
@@ -225,7 +233,7 @@ pub fn check<'a>(
         removals,
         declared_new,
     };
-    check_effective_cycles(reader, &checked, work)?;
+    check_effective_cycles(reader, &checked, unreachable, work)?;
     Ok(checked)
 }
 
@@ -241,8 +249,16 @@ fn check_parent_aliases(
     input: &FilesystemInput<'_>,
     topology: &FilesystemTopology,
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
+    unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {
+    // A directory the same batch drops is not part of the result, so the bindings
+    // it states are not bindings the result has to satisfy.
+    let by_parent: BTreeMap<u64, Vec<Vec<u8>>> = by_parent
+        .iter()
+        .filter(|(parent, _)| !unreachable.contains_key(parent))
+        .map(|(&parent, names)| (parent, names.clone()))
+        .collect();
     if by_parent.is_empty() {
         return Ok(());
     }
@@ -251,7 +267,7 @@ fn check_parent_aliases(
     };
     // The candidate children this batch binds under a new name.
     let mut candidates: BTreeMap<u64, ()> = BTreeMap::new();
-    for (parent, names) in by_parent {
+    for (parent, names) in &by_parent {
         for name in names {
             if let Some(child) = single_binding(input, parent, name) {
                 candidates.insert(child, ());
@@ -294,11 +310,28 @@ fn check_parent_aliases(
             }
             for (key, serial) in page.entries {
                 // Only a name this batch leaves alone is still bound by the
-                // base: a name it restates or drops is the caller's own edit.
+                // base; a name it restates or drops is the caller's own edit. The
+                // binding it states is this operation's edge either way, so the
+                // walk follows it and it counts against the same ceiling.
                 let restated = by_parent.get(&parent).is_some_and(|names| {
                     names.iter().any(|name| name.as_slice() == key.as_bytes())
                 });
                 if restated {
+                    for name in by_parent.get(&parent).into_iter().flatten() {
+                        let Some(child) = single_binding(input, &parent, name) else {
+                            continue;
+                        };
+                        visited = visited.saturating_add(1);
+                        if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
+                            return Err(ContentError::InvalidRecord("cycle check work limit"));
+                        }
+                        work.entries_examined = work.entries_examined.saturating_add(1);
+                        if lookup_optional(reader, table, child, work)?
+                            .is_some_and(|value| value.kind == InodeKind::Directory)
+                        {
+                            pending.push(child);
+                        }
+                    }
                     continue;
                 }
                 if lookup_optional(reader, table, serial, work)?
@@ -319,7 +352,7 @@ fn check_parent_aliases(
             }
         }
     }
-    for (parent, names) in by_parent {
+    for (parent, names) in &by_parent {
         for name in names {
             let Some(child) = single_binding(input, parent, name) else {
                 continue;
@@ -444,10 +477,11 @@ fn check_root_invariants(input: &FilesystemInput<'_>) -> ContentResult<()> {
 fn check_effective_cycles(
     reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
+    unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {
     if checked.input.base.is_none() {
-        return check_build_reachability(reader, checked, work);
+        return check_build_reachability(reader, checked, unreachable, work);
     }
     let table = checked.topology.table;
     for update in checked.input.directories {
@@ -523,11 +557,14 @@ fn check_effective_cycles(
 fn check_build_reachability(
     _reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
+    unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {
     // A build states its own bindings: the walk reads no base object, and the
-    // entries it counts are the ones the caller supplied.
-    let _ = &work;
+    // entries it counts are the ones the caller supplied. A directory the same
+    // batch drops is not part of the result, so walking it would charge work the
+    // operation does not do - and could refuse a build for a subtree it never
+    // builds.
     // Every directory binding this operation states, as `(parent, child)` pairs.
     // `update_for` answers by parent serial, so the pairs come from the updates
     // themselves rather than from a serial-keyed lookup.
@@ -546,6 +583,7 @@ fn check_build_reachability(
         .new_inodes
         .iter()
         .filter(|serial| **serial != checked.input.root_serial)
+        .filter(|serial| !unreachable.contains_key(serial))
         .filter(|serial| {
             checked
                 .input
@@ -562,8 +600,12 @@ fn check_build_reachability(
         if !seen.insert(serial) {
             continue;
         }
+        if unreachable.contains_key(&serial) {
+            continue;
+        }
         for child in stated.get(&serial).map(Vec::as_slice).unwrap_or(&[]) {
             visited = visited.saturating_add(1);
+            work.entries_examined = work.entries_examined.saturating_add(1);
             if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
                 return Err(ContentError::InvalidRecord("cycle check work limit"));
             }
