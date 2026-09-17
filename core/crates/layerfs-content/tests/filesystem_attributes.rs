@@ -643,3 +643,101 @@ fn an_inode_attribute_tree_is_read_through_a_path() {
         other => panic!("expected the key bound to refuse, got {other:?}"),
     }
 }
+
+/// AT-7: the patch route and a from-scratch build agree on the same final set.
+///
+/// The patch route is a **second feed** into the attribute builder: it reuses the
+/// untouched rows' stored value roots and emits only the values it changed, while a
+/// from-scratch build is handed every row as a supplied root. Nothing compared the
+/// two, so "the patched tree is the tree you would have built" rested on the two
+/// codec round trips, which prove symmetry, not independent construction. This
+/// case patches a base, reads the patched key's own value root back out of the
+/// patched tree, builds that exact final set from scratch in a separate store, and
+/// requires the same root - the identity of the built tree.
+#[test]
+fn the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set() {
+    const COUNT: usize = 24;
+    let mut store = TreeStore::new();
+    let entries = (0..COUNT)
+        .map(|index| {
+            entry(
+                "user.example",
+                format!("key-{index:02}").as_bytes(),
+                &format!("scratch/value-{index:02}"),
+            )
+        })
+        .collect::<Vec<_>>();
+    let (base, _) = with_objects(&mut store, |objects| {
+        build_attribute_tree(objects, entries.iter().cloned().map(Ok))
+    })
+    .expect("base tree");
+    let reader = store.clone();
+    let patches = vec![
+        AttributePatch::Set {
+            key: key("user.example", b"key-01"),
+            value: b"replacement".to_vec(),
+        },
+        AttributePatch::Remove {
+            key: key("user.example", b"key-07"),
+        },
+    ];
+    let (patched, _) = with_objects(&mut store, |objects| {
+        apply_patches(&reader, objects, base, &patches)
+    })
+    .expect("patch applies");
+
+    // The final set, read back from the patched tree itself: every untouched row
+    // keeps its stored root, and the patched row contributes whatever root the
+    // patch emitted for it.
+    let mut read = AttributeReadWork::default();
+    let reader = store.clone();
+    let patched_root = lookup_many(
+        &reader,
+        patched,
+        &[key("user.example", b"key-01")],
+        &mut read,
+    )
+    .unwrap()[0]
+        .as_ref()
+        .expect("the patched key is present")
+        .value_root;
+    let mut final_set = entries
+        .iter()
+        .filter(|entry| entry.key.key() != b"key-01" && entry.key.key() != b"key-07")
+        .cloned()
+        .collect::<Vec<_>>();
+    final_set.push(AttributeEntry {
+        key: key("user.example", b"key-01"),
+        value_root: patched_root,
+    });
+    final_set.sort_by(|left, right| left.key.cmp(&right.key));
+    assert_eq!(
+        final_set.len(),
+        COUNT - 1,
+        "one key was removed, one replaced"
+    );
+
+    // A separate, empty store: nothing the patch retained can be reached by
+    // identity, so an equal root here is construction, not lookup.
+    let mut fresh = TreeStore::new();
+    assert!(
+        fresh.canonical(patched).is_none(),
+        "the from-scratch store starts empty"
+    );
+    let (from_scratch, _) = with_objects(&mut fresh, |objects| {
+        build_attribute_tree(objects, final_set.iter().cloned().map(Ok))
+    })
+    .expect("from-scratch tree");
+    assert_eq!(
+        from_scratch, patched,
+        "the patch route and a from-scratch build of the same final set differ"
+    );
+    // The value the patch emitted is the value a fresh emit produces, so the
+    // identity above is not a coincidence of two different encodings.
+    let mut emitted_store = TreeStore::new();
+    let emitted = with_objects(&mut emitted_store, |objects| {
+        emit_value(objects, b"replacement")
+    })
+    .expect("emit");
+    assert_eq!(emitted, patched_root);
+}
