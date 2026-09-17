@@ -100,7 +100,101 @@ C1 → V1 → V2 → V3            (prerequisites; C1 re-baselines the counters)
   proved bit-identical counter re-runs and a +17.6% same-binary elapsed spread
   on the forced shape). Receipts ride the frozen Phase 0 workload set.
 
-## 4. The risks the implementer must carry
+
+## 4. File plan and LOC estimate (pre-implementation; every commit discloses actuals)
+
+### 4.1 Proposed file/folder structure
+
+No new production module is planned — every product change lands in an existing
+file, split by its existing responsibility. New *files* appear only as tests'
+new cases (inside existing test files), two example additions, and the
+append-only evidence directory.
+
+```text
+core/crates/layerfs-content/
+  src/                                    PRODUCTION (999-line ceiling; lib/mod 200)
+    file/edit/apply.rs        465 lines   P1-7, P1-8, P1-9, P1-14
+    file/edit/compare.rs       87 lines   P1-7 (may shrink toward 0 as its
+                                          per-window loop is absorbed by the
+                                          fused descent)
+    file/edit/tree.rs         895 lines   P1-6 (net-negative; tightest file —
+                                          104 lines of headroom, deletion-only)
+    file/content.rs           266 lines   P1-14
+    filesystem/objects.rs     167 lines   C1 (read_waves double-count fix)
+    filesystem/validate.rs    718 lines   P1-4 (largest single-file addition;
+                                          ~280 headroom)
+    filesystem/update.rs      498 lines   P1-10
+    filesystem/read.rs        275 lines   P1-1 (list_after cursor batching)
+    filesystem/references/runs.rs    595  P1-5, P1-13, P1-15 (combined ~400
+                                          headroom for all three)
+    filesystem/references/merge.rs   260  P1-13, P1-15 (buffers, probe path)
+    filesystem/references/reduce.rs  585  P1-10 (carried state; API change)
+    filesystem/sorted/page.rs        559  C1, P1-1, P1-3, P1-12
+    filesystem/sorted/merge.rs       314  P1-12 (Page.widths running total)
+    filesystem/directory/read.rs     315  P1-1 call site (beside inode/read.rs,
+                                          attributes/patch.rs, validate.rs —
+                                          width plumbing only)
+  tests/                                  NO line ceiling; new cases in place
+    filesystem_bounds.rs      1047 lines  C1 counters, P1-1's authorized pin
+                                          update, P1-3's gate test
+    filesystem_ordering.rs    977 lines   P1-5, P1-10, P1-13 exact-count tests
+    filesystem_ordering_scan.rs 157 lines P1-15's probe assertions
+    edit_* suites                        P1-6..P1-9, P1-14 (counting allocator)
+  examples/                               EXCLUDED from production LOC
+    edit_memory_probe.rs      NEW  ~120-180 lines   V2 (memory peak vehicle)
+    edit_timing_c1.rs         180 lines   V2 (+ --case delete / --case shrink)
+    filesystem_timing_c1.rs   604 lines   V1 (+ counters.validation print)
+
+core/crates/layerfs-storage/
+  src/cas/store.rs           549 lines   V3 (StoreReadCounters + opens), P1-2
+  src/cas/provider.rs        104 lines   P1-2 (per-op ReadSession, RefCell)
+  src/cas/read.rs                       P1-2 (session plumbing, ceiling kept)
+  tests/                                  P1-2's session-visibility test
+
+docs/roadmap/0.1/0.1.7/evidence/phase1-execution-<stamp>/   append-only receipts
+core/docs/architecture/                  same-commit doc updates per item
+                                         (P1-16 names 04-filesystem.md and
+                                         06-limits.md explicitly)
+```
+
+**Contingency:** if any item would push a file past 999 (only `tree.rs` at 895
+is near, and P1-6 only deletes there), the repo rule applies — split by
+responsibility into a focused named file, never numbered parts.
+
+### 4.2 Production LOC estimate range (core, src/ + shipped SQL only)
+
+Baseline: **18,792** (C1 11,917 · C2 6,112 · telemetry 763; reference 65,417
+unchanged by Phase 1). Estimates are the main agent's from the change sketches —
+each commit discloses the audited actual.
+
+| commit | estimate | note |
+| --- | ---: | --- |
+| C1 | 0 ± 5 | two counter fixes, near-net-zero |
+| V1 / V2 | 0 | examples only |
+| V3 | +10..+20 | StoreReadCounters field + plumbing |
+| P1-1 | +20..+45 | width constant + cursor batching |
+| P1-2 | +70..+130 | session type + lifecycle (biggest C2 item) |
+| P1-3 | +25..+50 | reuses P1-1 machinery |
+| P1-4 | +80..+150 | batching + memo (biggest C1 nav item) |
+| P1-5 | +2..+8 | truncate at two sites |
+| P1-6 | −4..−8 | net-negative (deletion) |
+| P1-7 | −30..+40 | may be net-negative as compare.rs is absorbed |
+| P1-8 | +40..+70 | ordered cursor |
+| P1-9 | +3..+8 | a gate |
+| P1-10 | +50..+90 | carried state + the API/divisor change |
+| P1-12 | +20..+40 | Page.widths + running total |
+| P1-13 | +90..+160 | fanout-4 multiway cascade (biggest ordering item) |
+| P1-14 | +35..+65 | pre-sized assembly |
+| P1-15 | +45..+80 | stack probe + restart search |
+| P1-16 | 0 | docs + test only |
+| **net total** | **≈ +450..+950** | dominated by P1-2, P1-4, P1-13 |
+
+Projected end state: core ≈ **19,250..19,750**, C1 carrying nearly all of the
+growth (C2 +80..+150 via V3/P1-2 only). Non-production code outside the LOC
+comparison: ~17–20 new test cases (+300..+550 test lines), V2's example
+(+170..+260 lines across two files), V1/V3 prints (+15..+25), and the receipts.
+
+## 5. The risks the implementer must carry
 
 1. **Anchor honesty:** no `pages_read`/`read_waves` receipt may straddle C1's
    semantics change; the re-baseline is append-only.
