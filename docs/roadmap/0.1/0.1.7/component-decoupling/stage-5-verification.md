@@ -1,8 +1,18 @@
 # Stage 5 verification contract
 
-> **Status:** Frozen campaign definition for
-> [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170); target LayerFS
-> v0.1.7. Companion to the [Stage 5 handoff](stage-5-handoff.md) and the
+> **Status:** Corrected 2026-09-17. This document was published as a frozen
+> campaign while §4 explicitly left performance gates unfrozen; those are two
+> different claims and the banner was wrong. The **correctness, canonical and
+> resource** sections below are frozen as written. The **measurement** sections
+> (§2 sizes, §3 timing boundaries as applied to qualification, §4 gates and §5)
+> are superseded for new rows by the
+> [dated prospective addendum](stage-5-verification-addendum-20260917.md), which
+> names the paired entry points, exclusions, cache state, sample policy, resource
+> limits and numerical gates before any qualified candidate result was collected.
+> Every result recorded before that addendum is preserved unchanged and is
+> labelled a diagnostic, not qualification evidence.
+>
+> Companion to the [Stage 5 handoff](stage-5-handoff.md) and the
 > [filesystem contract](filesystem-tree.md). It states what a measurement must
 > satisfy *before* any collection happens.
 
@@ -97,10 +107,13 @@ readback                  labelled separately, never inside the operation timer
 5. **Composition gate.** A saved tree must reopen with the same root, listing,
    counts, symlink target and portable/generic attribute values.
 
-Performance gates are **not** frozen here. No latency, throughput or memory
+Performance gates were **not** frozen here. No latency, throughput or memory
 superiority is claimed by this document: the owner waivers recorded for #168/#169
-do not waive #170, and this campaign additionally requires a comparative arm that
-this stage has not yet built (see §5).
+do not waive #170. The comparative arm this section said had not been built now
+exists as a component comparison; its contract and collected rows live in the
+[addendum](stage-5-verification-addendum-20260917.md), which is the document that
+governs qualification rows. This section keeps its original text as the record of
+what was frozen when it was written.
 
 ## 5. What is not yet measured
 
