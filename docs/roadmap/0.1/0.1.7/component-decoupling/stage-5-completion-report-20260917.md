@@ -93,7 +93,7 @@ updated table, final root) matched in every case. The candidate is slower on the
 third case; that row is reported as measured.
 
 **C1, C2 and integrated** (one sample each,
-`evidence/stage-5-pipeline-timing-20260917T073500Z/`):
+`evidence/stage-5-pipeline-timing-20260917T073302Z/`):
 
 | Row | Scope | Elapsed |
 | --- | --- | ---: |
