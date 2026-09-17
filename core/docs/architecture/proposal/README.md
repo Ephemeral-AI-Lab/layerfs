@@ -19,56 +19,94 @@ So proposals live here, and each one labels its claims:
 | --- | --- |
 | **holds today** | read from source; true of the current tree |
 | **proposed** | does not exist; a design to be argued with |
-| **open — required** | a prerequisite for something else in the proposal |
+| **open — required** | a prerequisite for something else here |
 | **deferred** | explicitly out of scope, with the issue that owns it |
 
-## Co-design pairs
+## The three co-design pairs
 
-Three pairs, in design order. A pair exists where **neither area's interface is
-complete without the other's decision** — if one contract stays correct after the
-other changes, they are not a pair.
+A pair exists where **neither area's interface is complete without the other's
+decision** — if one contract stays correct after the other changes, they are not a
+pair. Three pass that test; the rest of what has been discussed does not.
 
 ```text
-   PAIR 1 · PROJECTION & RUNTIME                            #179
-     ④ FUSE  ◄── co-designed ──►  ① WORKSPACE / RUNTIME
-        the callback set determines what the accumulator holds;
-        the accumulator's bound determines where flush points go
-                                              │
-                                              │ defines the OPERATION SET
-                                              ▼
-   PAIR 2 · COMMIT & HISTORY                                #180
-     02-init-commit  ◄── co-designed ──►  C5 HISTORY
-        the operations are specified; the SEMANTICS are not.
-        The stage/merge boundary IS the history interface.
-                                              │
-                                              │ defines what the ops MEAN
-                                              ▼
-   PAIR 3 · BOUNDARY & TRUST                                #181
-     ② LINK  ◄── co-designed ──►  AUTHORIZATION  ◄──►  TENANCY
-        the auth choice determines the frame format AND what the owner stores;
-        the tenant count decides whether that state exists at all
+╔═ PAIR 1 · PROJECTION & RUNTIME ════════════════════════════════════════════╗
+║                                                                            ║
+║   ④ FUSE  ◄──────── co-designed ────────►  ① WORKSPACE / RUNTIME           ║
+║                                                                            ║
+║   the callback set determines       the accumulator's bound determines     ║
+║   what the accumulator must hold    where flush points go                  ║
+║                                                                            ║
+║   COUPLING: change the callback granularity (per-call vs batched) and the  ║
+║   accumulator changes. Neither contract is writable alone.                 ║
+║   PRODUCES:  the FUSE op set · overlay ceiling · flush policy ·            ║
+║              where mutable state lives · one mount or N                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+╔═ PAIR 2 · COMMIT & HISTORY ════════════════════════════════════════════════╗
+║                                                                            ║
+║   01-init-commit  ◄──── co-designed ────►  C5 HISTORY                      ║
+║                                                                            ║
+║   describes the OPERATIONS            defines the SEMANTICS                ║
+║   prepare → commit → publish          what a commit IS · the chain ·       ║
+║   → stage → merge                     what a layer IS · discard ·          ║
+║                                       scope_allocator                      ║
+║                                                                            ║
+║   COUPLING: the stage/merge boundary IS the history interface. The doc     ║
+║   already specifies the CAS; history specifies what the thing CASed means. ║
+║   PRODUCES:  commit/layer identity · parent chain · discard semantics ·    ║
+║              inode serial allocation · whether a stage is durable          ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+╔═ PAIR 3 · BOUNDARY & TRUST ════════════════════════════════════════════════╗
+║                                                                            ║
+║   ② LINK  ◄──────── co-designed ────────►  AUTHORIZATION  ◄──► TENANCY     ║
+║                                                                            ║
+║   frame format                      per-connection ∣ root→principal ∣      ║
+║                                     capability token                       ║
+║                                                                            ║
+║   COUPLING: the auth choice determines BOTH what the frame carries (a      ║
+║   token?) AND what the owner must store (a root→principal map). And the    ║
+║   tenant count decides whether the owner needs that state at all.          ║
+║   PRODUCES:  frame header · auth mechanism · whether the owner stays       ║
+║              workspace-agnostic · one store or many                        ║
+╚════════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Why this order is strict:** the link carries what pairs 1 and 2 define. Writing
-history first would invent an interface the projection cannot use — the mistake of
-building a layer whose requirements were guessed.
+### Why this order is strict
 
-**One cross-cutting warning:** the tenancy decision inside pair 3 can invalidate
-pair 2's schema, so it must be **answered directionally before pair 2 freezes a
-schema**, even though pair 3 is designed last.
+```text
+   PAIR 1  defines the OPERATION SET          #179
+              │
+              ▼
+   PAIR 2  defines what the operations MEAN   #180
+              │
+              ▼
+   PAIR 3  the link CARRIES both, under auth  #181
+```
+
+The link carries what pairs 1 and 2 define. Writing history first would invent an
+interface the projection cannot use — the mistake of building a layer whose
+requirements were guessed.
+
+### One cross-cutting warning
+
+**The tenancy decision inside pair 3 can invalidate pair 2's schema.** Per-tenant
+policy rows are not in the four tables core has today. So tenancy must be
+**answered directionally before pair 2 freezes a schema**, even though pair 3 is
+designed last. Schema changes are the expensive kind.
 
 ## Contents
 
 | Document | Pair | State |
 | --- | --- | --- |
-| `01-projection-and-runtime.md` | 1 | **not yet written** |
-| [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | written — the operational half: five phases, every DB operation by phase, shared-versus-private state, three concurrency cases with diagrams, the three prerequisite races, why a stale merge is rejected rather than queued, and the races-versus-conflicts boundary |
-| `03-history.md` | 2 | **not yet written** — the semantic half: commit/layer/stage identity, the parent chain, discard, `scope_allocator`, and the schema |
-| `04-boundary-and-trust.md` | 3 | **not yet written** |
+| [`01-projection-and-runtime.md`](01-projection-and-runtime.md) | 1 | **initialized** — decisions open |
+| [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | written — the operational half |
+| [`03-history.md`](03-history.md) | 2 | **initialized** — decisions open |
+| [`04-boundary-and-trust.md`](04-boundary-and-trust.md) | 3 | **initialized** — decisions open |
 
-**Not a pair, and deliberately absent from this folder:** storage placement. Where
-the owner's index and packs live is owner-internal and invisible to every consumer,
-so it neither constrains nor is constrained by the three pairs.
+**Not a pair, and deliberately absent:** storage placement. Where the owner's index
+and packs live is owner-internal and invisible to every consumer, so it neither
+constrains nor is constrained by the three pairs.
 
 ## Conventions
 
@@ -78,9 +116,9 @@ so it neither constrains nor is constrained by the three pairs.
   concurrency are structural arguments from the current code, not test results.
 - A proposal that is implemented is folded into the descriptive set, and the entry
   here becomes a pointer — it is never silently re-dated.
-- Where a proposal's premise has been measured and disproven, the reasoning stays
-  visible with the disproof recorded beside it. A study that quietly drops a dead
-  premise teaches nothing.
+- Where a premise has been measured and disproven, the reasoning stays visible with
+  the disproof recorded beside it. A study that quietly drops a dead premise
+  teaches nothing.
 
 ## Keeping this current
 
