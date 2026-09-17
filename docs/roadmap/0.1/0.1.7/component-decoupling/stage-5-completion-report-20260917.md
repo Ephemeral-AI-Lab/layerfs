@@ -7,6 +7,16 @@
 > earlier measurements and open items stay as they were written; the corrections
 > to its stale claims are appended there.
 
+> **Closure record (2026-09-17).** [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170)
+> was closed as completed at `2026-09-17T07:58:02Z` with the
+> [closing summary](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170#issuecomment-5711002673),
+> which names `f2de7810e` and this report. That closure is at **component scope**:
+> the complete-operation comparison stays `NOT_RUN` under the frozen
+> [addendum §6](stage-5-verification-addendum-20260917.md) — no waiver, no
+> `NOT_RUN`→`PASS` promotion — and the independent review in §8 has not happened,
+> so a finding from it reopens the issue. The branch carrying this report is 20
+> commits ahead of `main` and not yet pushed; these documents are not on `origin`.
+
 ## 1. Source identity and scope
 
 | Field | Value |
