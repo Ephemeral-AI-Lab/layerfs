@@ -13,9 +13,7 @@ use layerfs_content::filesystem::attributes::keys::AttributeKey;
 use layerfs_content::filesystem::directory::codec::{
     decode_directory_page, encode_directory_page, DirectoryPage,
 };
-use layerfs_content::filesystem::inode::codec::{
-    decode_inode_page, encode_inode_page, InodePage,
-};
+use layerfs_content::filesystem::inode::codec::{decode_inode_page, encode_inode_page, InodePage};
 use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::root::{FilesystemRoot, ROOT_VALUE_BYTES};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
@@ -61,8 +59,14 @@ fn inode_pages_match_the_reference_bytes() {
         page,
         InodePage::Leaf {
             entries: vec![
-                (7, value(InodeKind::RegularFile, 1, "codec/content-a", "codec/meta-a")),
-                (9, value(InodeKind::Directory, 1, "codec/content-b", "codec/meta-b")),
+                (
+                    7,
+                    value(InodeKind::RegularFile, 1, "codec/content-a", "codec/meta-a")
+                ),
+                (
+                    9,
+                    value(InodeKind::Directory, 1, "codec/content-b", "codec/meta-b")
+                ),
             ],
         }
     );
@@ -117,7 +121,10 @@ fn directory_pages_match_the_reference_bytes() {
             ],
         }
     );
-    assert_eq!(encode_directory_page(&branch).expect("encodes"), branch_bytes);
+    assert_eq!(
+        encode_directory_page(&branch).expect("encodes"),
+        branch_bytes
+    );
 }
 
 #[test]
@@ -237,7 +244,10 @@ fn roles_and_identity_are_not_interchangeable() {
         id(manifest::CODEC_DIRECTORY_LEAF.0),
         "different grammars must not share an identity"
     );
-    assert_eq!(InodeScope::from_object(synthetic("scope")).object(), synthetic("scope"));
+    assert_eq!(
+        InodeScope::from_object(synthetic("scope")).object(),
+        synthetic("scope")
+    );
     assert_eq!(
         ObjectRole::InodeLeaf.code(),
         6,

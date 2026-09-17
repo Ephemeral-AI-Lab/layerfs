@@ -105,3 +105,44 @@ impl<'a> FilesystemObjects<'a> {
         self.work.read_waves = self.work.read_waves.saturating_add(1);
     }
 }
+
+/// Coarse phase scopes for one filesystem operation.
+///
+/// A phase is recorded as a child of the caller's running scope, so an enabled
+/// recording reports where a complete operation spent its time without one trace
+/// node per inode. Disabled phases run the identical body and read no clock: the
+/// result, the errors and the algorithm are unchanged either way.
+pub struct FilesystemPhases<'a> {
+    scope: Option<&'a layerfs_telemetry::timer::TimingScope<'a, layerfs_telemetry::timer::Active>>,
+}
+
+impl<'a> FilesystemPhases<'a> {
+    /// Phases that measure nothing.
+    pub const fn disabled() -> Self {
+        Self { scope: None }
+    }
+
+    /// Phases below one running scope.
+    pub const fn new(
+        scope: &'a layerfs_telemetry::timer::TimingScope<'a, layerfs_telemetry::timer::Active>,
+    ) -> Self {
+        Self { scope: Some(scope) }
+    }
+
+    /// True when these phases actually record.
+    pub fn is_recording(&self) -> bool {
+        self.scope.is_some_and(|scope| scope.is_recording())
+    }
+
+    /// Runs one phase, recording it when the caller enabled measurement.
+    pub fn phase<T>(
+        &self,
+        name: &'static str,
+        body: impl FnOnce() -> ContentResult<T>,
+    ) -> ContentResult<T> {
+        match self.scope {
+            Some(scope) => scope.child(name).run(|_| body()),
+            None => body(),
+        }
+    }
+}

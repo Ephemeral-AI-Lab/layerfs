@@ -99,6 +99,9 @@ pub fn check<'a>(
     let topology = FilesystemTopology::load(reader, input.base, input.scope, input.root_serial)?;
     let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
     let removals: BTreeMap<u64, u64> = BTreeMap::new();
+    // The allocator precondition is checked before anything else: a serial the
+    // caller calls new must not already exist in the base it addresses.
+    check_new_identities(reader, input, topology)?;
     for update in input.directories {
         if update.parent == input.root_serial && input.base.is_none() {
             // The root directory of a new filesystem is built by this operation.
@@ -134,24 +137,25 @@ pub fn check<'a>(
             if *child == input.root_serial {
                 return Err(ContentError::InvalidRecord("root directory binding"));
             }
-            if let Some(table) = topology.table {
-                if let Some(previous) = lookup_optional(reader, table, *child)? {
-                    if previous.kind != InodeKind::Directory {
-                        continue;
-                    }
-                }
-            } else if let Some(value) = input.value_for(*child) {
-                if value.kind != InodeKind::Directory {
-                    continue;
-                }
-            } else {
+            // The kind comes from the stored record for an existing inode and
+            // from the caller's typed value for one this operation allocates.
+            let kind = match topology.table {
+                Some(table) => match lookup_optional(reader, table, *child)? {
+                    Some(previous) => Some(previous.kind),
+                    None => input.value_for(*child).map(|value| value.kind),
+                },
+                None => input.value_for(*child).map(|value| value.kind),
+            };
+            let kind = kind.ok_or(ContentError::InvalidRecord("binding kind"))?;
+            if kind == InodeKind::RegularFile {
                 continue;
             }
-            // A directory has exactly one binding outside the root.
+            // A directory or a symlink has exactly one binding outside the root;
+            // only a regular file may carry several.
             let added = additions.entry(*child).or_insert(0);
             *added = added.checked_add(1).ok_or(ContentError::LengthOverflow)?;
             if *added > 1 {
-                return Err(ContentError::InvalidRecord("multiple directory parents"));
+                return Err(ContentError::InvalidRecord("multiple parents"));
             }
         }
     }
@@ -162,7 +166,6 @@ pub fn check<'a>(
             }
         }
     }
-    check_new_identities(reader, input, topology)?;
     check_root_invariants(input)?;
     if input.base.is_none() {
         for update in input.inodes {
@@ -241,8 +244,7 @@ fn check_effective_cycles(
         return Ok(());
     };
     for update in checked.input.directories {
-        for (name, binding) in &update.changes {
-            let _ = name;
+        for (_, binding) in &update.changes {
             let Some(child) = binding else {
                 continue;
             };
@@ -252,35 +254,88 @@ fn check_effective_cycles(
             if record.kind != InodeKind::Directory {
                 continue;
             }
-            let mut budget = MAXIMUM_CYCLE_CHECK_ENTRIES;
-            let mut after = None;
-            let mut root = DirectoryRoot(record.content_root);
-            loop {
-                let page = list_after(
-                    reader,
-                    root,
-                    after.as_ref(),
-                    64,
-                    crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
-                    &mut DirectoryReadWork::default(),
-                )?;
-                for (_, entry_serial) in &page.entries {
-                    if *entry_serial == update.parent {
+            // The walk follows the *effective* bindings: a directory this
+            // operation rebinds still holds every name it already had plus the
+            // changes, so a cycle formed by two changes is visible here.
+            let mut pending = vec![(record.content_root, *child)];
+            let mut visited = 0_usize;
+            while let Some((content_root, serial)) = pending.pop() {
+                let changes = checked
+                    .input
+                    .update_for(serial)
+                    .map(|update| update.changes.as_slice())
+                    .unwrap_or(&[]);
+                for (_, entry_serial) in
+                    effective_entries(reader, content_root, changes, &mut visited)?
+                {
+                    if entry_serial == update.parent {
                         return Err(ContentError::InvalidRecord("effective tree cycle"));
                     }
-                    budget = budget
-                        .checked_sub(1)
-                        .ok_or(ContentError::InvalidRecord("cycle check work limit"))?;
-                }
-                match page.continuation {
-                    Some(next) => after = Some(next),
-                    None => break,
+                    if let Some(entry) = lookup_optional(reader, table, entry_serial)? {
+                        if entry.kind == InodeKind::Directory {
+                            pending.push((entry.content_root, entry_serial));
+                        }
+                    }
                 }
             }
-            let _ = &mut root;
         }
     }
     Ok(())
+}
+
+/// Base entries of one directory with this operation's changes applied.
+fn effective_entries(
+    reader: &dyn AuthenticatedObjects,
+    content_root: ObjectId,
+    changes: &[(crate::filesystem::path::PathName, Option<u64>)],
+    visited: &mut usize,
+) -> ContentResult<Vec<(crate::filesystem::path::PathName, u64)>> {
+    let mut base = Vec::new();
+    let mut after = None;
+    loop {
+        let page = list_after(
+            reader,
+            DirectoryRoot(content_root),
+            after.as_ref(),
+            64,
+            crate::filesystem::limits::MAXIMUM_PAGE_BYTES,
+            &mut DirectoryReadWork::default(),
+        )?;
+        base.extend(page.entries.iter().cloned());
+        *visited = visited.saturating_add(page.entries.len());
+        if *visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
+            return Err(ContentError::InvalidRecord("cycle check work limit"));
+        }
+        match page.continuation {
+            Some(next) => after = Some(next),
+            None => break,
+        }
+    }
+    let mut merged = Vec::with_capacity(base.len() + changes.len());
+    let mut index = 0_usize;
+    for (name, serial) in base {
+        while index < changes.len() && changes[index].0 < name {
+            if let Some(binding) = changes[index].1 {
+                merged.push((changes[index].0.clone(), binding));
+            }
+            index += 1;
+        }
+        if index < changes.len() && changes[index].0 == name {
+            if let Some(binding) = changes[index].1 {
+                merged.push((name, binding));
+            }
+            index += 1;
+        } else {
+            merged.push((name, serial));
+        }
+    }
+    while index < changes.len() {
+        if let Some(binding) = changes[index].1 {
+            merged.push((changes[index].0.clone(), binding));
+        }
+        index += 1;
+    }
+    Ok(merged)
 }
 
 fn lookup_one(

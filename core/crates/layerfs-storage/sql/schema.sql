@@ -48,7 +48,10 @@ CREATE TABLE metadata_value_groups (
 
 CREATE TABLE objects (
     object_id BLOB NOT NULL PRIMARY KEY CHECK (length(object_id) = 32),
-    object_role INTEGER NOT NULL CHECK (object_role BETWEEN 1 AND 6),
+    -- Role codes 1-6 are payload and file-mapping roles; 7-13 are the
+    -- filesystem-tree roles (directory leaf/branch, inode branch, filesystem root,
+    -- attribute leaf/branch, symlink target). A pooled inode leaf keeps role 6.
+    object_role INTEGER NOT NULL CHECK (object_role BETWEEN 1 AND 13),
     canonical_length INTEGER NOT NULL
         CHECK (canonical_length > 0 AND canonical_length <= 16777216),
     base_object_id BLOB

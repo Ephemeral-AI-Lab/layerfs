@@ -203,8 +203,21 @@ pub fn select(
 ) -> StorageResult<EncodedRecord> {
     if matches!(
         role,
-        ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch | ObjectRole::FileState
+        ObjectRole::ExtentLeaf
+            | ObjectRole::ExtentBranch
+            | ObjectRole::FileState
+            | ObjectRole::DirectoryLeaf
+            | ObjectRole::DirectoryBranch
+            | ObjectRole::InodeBranch
+            | ObjectRole::FilesystemRoot
+            | ObjectRole::AttributeLeaf
+            | ObjectRole::AttributeBranch
+            | ObjectRole::Symlink
     ) {
+        // Tree roles are ordinary framed bytes: they are stored whole inside their
+        // group and never choose a payload delta base. The advisory predecessor an
+        // unchanged subtree carries stays a physical placement hint, not a
+        // representation this route may act on.
         return encode_full(canonical, role, input.capacities, encode);
     }
     if role == ObjectRole::InodeLeaf {

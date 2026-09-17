@@ -145,6 +145,7 @@ fn a_recipe_frame_larger_than_its_profile_is_refused() {
 fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
     use layerfs_content::inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, INODE_VALUE_BYTES,
+        LEAF_ROW_BYTES,
     };
     use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
     use support::{create_store, save_one, TempDir};
@@ -161,7 +162,7 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
         metadata_root: ObjectId::for_bytes(&[7_u8; 8]),
     });
     let canonical = InodeLeaf {
-        subtree_bytes: INODE_VALUE_BYTES as u64,
+        subtree_bytes: LEAF_ROW_BYTES as u64,
         rows: vec![InodeLeafRow { serial: 1, value }],
     }
     .encode()

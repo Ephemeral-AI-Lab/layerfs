@@ -20,7 +20,7 @@ pub mod validate;
 
 pub use identity::{InodeIdentity, InodeScope};
 pub use input::{DirectoryUpdate, FilesystemInput, FilesystemResources, InodeUpdate};
-pub use objects::{FilesystemObjects, ObjectWork};
+pub use objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
 pub use path::{LogicalPath, PathName};
 pub use read::{DirectoryListing, FilesystemRead, FilesystemReadWork, Resolved, Stat};
 pub use root::{profile_id, scope_for_seed, FilesystemRoot, FilesystemRootId};

@@ -6,9 +6,7 @@
 
 mod support;
 
-use layerfs_content::filesystem::{
-    DirectoryUpdate, InodeUpdate, LogicalPath, PathName,
-};
+use layerfs_content::filesystem::{DirectoryUpdate, InodeUpdate, LogicalPath, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::ObjectId;
 use support::filesystem::{synthetic, value, Session};
@@ -24,7 +22,10 @@ fn inode(kind: InodeKind, content: &str, metadata: &str) -> InodeValue {
 #[test]
 fn a_tiny_tree_is_created_and_read_back_exactly() {
     let mut session = Session::new(1).expect("empty filesystem");
-    assert!(session.store.len() > 0, "an empty root still emits its pages");
+    assert!(
+        session.store.len() > 0,
+        "an empty root still emits its pages"
+    );
     let directory = session.allocate();
     let file = session.allocate();
     let symlink = session.allocate();
@@ -63,7 +64,9 @@ fn a_tiny_tree_is_created_and_read_back_exactly() {
     let root = read.stat(&LogicalPath::root()).expect("stat root");
     assert_eq!(root.kind, InodeKind::Directory);
     assert_eq!(root.namespace_ref_count, 0);
-    let listing = read.list(&LogicalPath::root(), None, 16, 4096).expect("list");
+    let listing = read
+        .list(&LogicalPath::root(), None, 16, 4096)
+        .expect("list");
     assert_eq!(
         listing
             .entries
@@ -76,11 +79,15 @@ fn a_tiny_tree_is_created_and_read_back_exactly() {
             ("s".to_owned(), symlink)
         ]
     );
-    let stat = read.stat(&LogicalPath::new("f").unwrap()).expect("stat file");
+    let stat = read
+        .stat(&LogicalPath::new("f").unwrap())
+        .expect("stat file");
     assert_eq!(stat.kind, InodeKind::RegularFile);
     assert_eq!(stat.namespace_ref_count, 1);
     assert_eq!(stat.content_root, synthetic("content/f"));
-    let directory_stat = read.stat(&LogicalPath::new("d").unwrap()).expect("stat dir");
+    let directory_stat = read
+        .stat(&LogicalPath::new("d").unwrap())
+        .expect("stat dir");
     assert_eq!(directory_stat.namespace_ref_count, 1);
 }
 
@@ -166,13 +173,17 @@ fn a_same_name_no_op_keeps_the_root_identity() {
     let table = session.value.inode_table();
     if std::env::var("LAYERFS_DEBUG").is_ok() {
         let mut read = session.read().expect("reader");
-        eprintln!("after create rows {:?}", read.lookup_inodes(&[1, file]).unwrap());
-        eprintln!("after create list {:?}", read.list(&LogicalPath::root(), None, 8, 4096).unwrap());
+        eprintln!(
+            "after create rows {:?}",
+            read.lookup_inodes(&[1, file]).unwrap()
+        );
+        eprintln!(
+            "after create list {:?}",
+            read.list(&LogicalPath::root(), None, 8, 4096).unwrap()
+        );
     }
     // The same final bindings and the same final values: nothing may change.
-    let result = session
-        .apply(&updates, &[], &[])
-        .expect("no-op update");
+    let result = session.apply(&updates, &[], &[]).expect("no-op update");
     if std::env::var("LAYERFS_DEBUG").is_ok() {
         let mut read = session.read().expect("reader");
         eprintln!("root table {:?}", session.value.inode_table());
@@ -228,7 +239,9 @@ fn a_type_replacement_replaces_the_binding_and_the_record() {
         )
         .expect("replacement");
     let mut read = session.read().expect("reader");
-    let resolved = read.resolve(&LogicalPath::new("x").unwrap()).expect("resolve");
+    let resolved = read
+        .resolve(&LogicalPath::new("x").unwrap())
+        .expect("resolve");
     assert_eq!(resolved.serial, link);
     assert_eq!(resolved.value.kind, InodeKind::Symlink);
     let _ = result;
@@ -297,9 +310,16 @@ fn an_unsorted_or_duplicate_change_list_is_refused_before_any_write() {
         outcome,
         Err(layerfs_content::ContentError::NonCanonicalOrdering)
     ));
-    assert_eq!(session.root, before, "a refused input leaves the root alone");
+    assert_eq!(
+        session.root, before,
+        "a refused input leaves the root alone"
+    );
     assert!(
-        session.store.order().iter().all(|(id, _)| *id != session.root || true),
+        session
+            .store
+            .order()
+            .iter()
+            .all(|(id, _)| *id != session.root || true),
         "no new root was published"
     );
     let duplicate = [DirectoryUpdate {

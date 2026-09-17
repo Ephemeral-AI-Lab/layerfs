@@ -13,6 +13,7 @@ mod support;
 
 use layerfs_content::inode_leaf::{
     encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeValue, INODE_VALUE_BYTES,
+    LEAF_ROW_BYTES,
 };
 use layerfs_content::{
     AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance,
@@ -46,7 +47,9 @@ fn chained_leaf(rows_count: u64, last_seed: u64) -> (FinalizedObject, u64) {
         })
         .collect::<Vec<_>>();
     let canonical = InodeLeaf {
-        subtree_bytes: rows.len() as u64 * INODE_VALUE_BYTES as u64,
+        // The recorded total is the encoded row width: an 8-byte serial plus the
+        // 73-byte value, exactly as the reference encoder writes it.
+        subtree_bytes: rows.len() as u64 * LEAF_ROW_BYTES as u64,
         rows,
     }
     .encode()

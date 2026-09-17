@@ -212,9 +212,10 @@ struct Overlay<'a> {
 
 impl AuthenticatedObjects for Overlay<'_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        self.emitted.borrow().read_canonical_batch(ids).or_else(|_| {
-            self.base.read_canonical_batch(ids)
-        })
+        self.emitted
+            .borrow()
+            .read_canonical_batch(ids)
+            .or_else(|_| self.base.read_canonical_batch(ids))
     }
 }
 

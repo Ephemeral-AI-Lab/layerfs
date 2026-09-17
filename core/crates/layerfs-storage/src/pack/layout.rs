@@ -92,7 +92,14 @@ impl PackLane {
             ObjectRole::ExtentLeaf
             | ObjectRole::ExtentBranch
             | ObjectRole::FileState
-            | ObjectRole::InodeLeaf => Self::Ordinary,
+            | ObjectRole::InodeLeaf
+            | ObjectRole::DirectoryLeaf
+            | ObjectRole::DirectoryBranch
+            | ObjectRole::InodeBranch
+            | ObjectRole::FilesystemRoot
+            | ObjectRole::AttributeLeaf
+            | ObjectRole::AttributeBranch
+            | ObjectRole::Symlink => Self::Ordinary,
         }
     }
 

@@ -16,7 +16,7 @@ use crate::filesystem::directory::update::apply_bindings;
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::filesystem::inode::update::apply_inode_values;
 use crate::filesystem::input::FilesystemInput;
-use crate::filesystem::objects::{FilesystemObjects, ObjectWork};
+use crate::filesystem::objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
 use crate::filesystem::references::backing::OrderingBacking;
 use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
 use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
@@ -70,7 +70,20 @@ pub fn build_filesystem(
     if input.base.is_some() {
         return Err(ContentError::InvalidRecord("initial build base"));
     }
-    run(objects, input, backing)
+    run(objects, input, backing, &FilesystemPhases::disabled())
+}
+
+/// Builds a new filesystem while recording the caller's coarse phase scopes.
+pub fn build_filesystem_timed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &FilesystemInput<'_>,
+    backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base.is_some() {
+        return Err(ContentError::InvalidRecord("initial build base"));
+    }
+    run(objects, input, backing, phases)
 }
 
 /// Applies one complete update to a checked immutable base root.
@@ -82,15 +95,29 @@ pub fn update_filesystem(
     if input.base.is_none() {
         return Err(ContentError::InvalidRecord("update base root"));
     }
-    run(objects, input, backing)
+    run(objects, input, backing, &FilesystemPhases::disabled())
+}
+
+/// Applies one complete update while recording the caller's coarse phase scopes.
+pub fn update_filesystem_timed(
+    objects: &mut FilesystemObjects<'_>,
+    input: &FilesystemInput<'_>,
+    backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
+) -> ContentResult<FilesystemResult> {
+    if input.base.is_none() {
+        return Err(ContentError::InvalidRecord("update base root"));
+    }
+    run(objects, input, backing, phases)
 }
 
 fn run(
     objects: &mut FilesystemObjects<'_>,
     input: &FilesystemInput<'_>,
     backing: Option<&mut dyn OrderingBacking>,
+    phases: &FilesystemPhases<'_>,
 ) -> ContentResult<FilesystemResult> {
-    let checked = validate::check(objects.reader(), input)?;
+    let checked = phases.phase("validate", || validate::check(objects.reader(), input))?;
     let reader = objects.reader();
     let mut counters = FilesystemUpdateCounters::default();
     let table = checked.topology.table();
@@ -102,91 +129,97 @@ fn run(
     );
     register_values(&mut reducer, input)?;
     let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
-    for update in input.directories {
-        if update.changes.is_empty() {
-            // A directory with no changed name keeps the content root it already
-            // has; a directory in a new filesystem is a real empty page.
-            let content = if input.new_inodes.contains(&update.parent)
-                || checked.topology.table.is_none()
-            {
-                crate::filesystem::directory::update::empty_directory(objects)?.0
+    phases.phase("directories", || -> ContentResult<()> {
+        for update in input.directories {
+            if update.changes.is_empty() {
+                // A directory with no changed name keeps the content root it already
+                // has; a directory in a new filesystem is a real empty page.
+                let content = if input.new_inodes.contains(&update.parent)
+                    || checked.topology.table.is_none()
+                {
+                    crate::filesystem::directory::update::empty_directory(objects)?.0
+                } else {
+                    lookup_base(reader, table, update.parent)?
+                        .ok_or(ContentError::InvalidRecord("directory parent record"))?
+                        .content_root
+                };
+                contents.insert(update.parent, content);
+                continue;
+            }
+            let base_directory = if input.new_inodes.contains(&update.parent) {
+                // A directory this operation allocates has no stored bindings yet.
+                None
+            } else if checked.topology.table.is_some() {
+                let record = lookup_base(reader, table, update.parent)?
+                    .ok_or(ContentError::InvalidRecord("directory parent record"))?;
+                if record.kind != InodeKind::Directory {
+                    return Err(ContentError::InvalidRecord("directory parent kind"));
+                }
+                Some(DirectoryRoot(record.content_root))
             } else {
-                lookup_base(reader, table, update.parent)?
-                    .ok_or(ContentError::InvalidRecord("directory parent record"))?
-                    .content_root
+                None
             };
-            contents.insert(update.parent, content);
-            continue;
-        }
-        let base_directory = if input.new_inodes.contains(&update.parent) {
-            // A directory this operation allocates has no stored bindings yet.
-            None
-        } else if checked.topology.table.is_some() {
-            let record = lookup_base(reader, table, update.parent)?
-                .ok_or(ContentError::InvalidRecord("directory parent record"))?;
-            if record.kind != InodeKind::Directory {
-                return Err(ContentError::InvalidRecord("directory parent kind"));
-            }
-            Some(DirectoryRoot(record.content_root))
-        } else {
-            None
-        };
-        let mut observe = |before: Option<u64>, after: Option<u64>| -> ContentResult<()> {
+            let mut observe = |before: Option<u64>, after: Option<u64>| -> ContentResult<()> {
+                if std::env::var("LAYERFS_TRACE").is_ok() {
+                    eprintln!("edge {:?} -> {:?}", before, after);
+                }
+                if before == after {
+                    return Ok(());
+                }
+                // Additions are accounted before removals, so a move never drops an
+                // inode to a spurious zero between its two bindings.
+                if let Some(next) = after {
+                    reducer.note_retained_binding(next)?;
+                    counters.bindings_added = counters.bindings_added.saturating_add(1);
+                }
+                if let Some(previous) = before {
+                    reducer.note_removed_binding(previous)?;
+                    counters.bindings_removed = counters.bindings_removed.saturating_add(1);
+                }
+                Ok(())
+            };
             if std::env::var("LAYERFS_TRACE").is_ok() {
-                eprintln!("edge {:?} -> {:?}", before, after);
+                eprintln!("stage: directory merge parent {}", update.parent);
             }
-            if before == after {
-                return Ok(());
-            }
-            // Additions are accounted before removals, so a move never drops an
-            // inode to a spurious zero between its two bindings.
-            if let Some(next) = after {
-                reducer.note_retained_binding(next)?;
-                counters.bindings_added = counters.bindings_added.saturating_add(1);
-            }
-            if let Some(previous) = before {
-                reducer.note_removed_binding(previous)?;
-                counters.bindings_removed = counters.bindings_removed.saturating_add(1);
-            }
-            Ok(())
-        };
-        let (root, work) = apply_bindings(
-            objects,
-            base_directory,
-            update
-                .changes
-                .iter()
-                .map(|(name, binding)| Ok((name.clone(), *binding))),
-            input.resources.scratch_bytes,
-            &mut observe,
-        )?;
-        counters.directories.pages_read = counters
-            .directories
-            .pages_read
-            .saturating_add(work.pages_read);
-        counters.directories.pages_created = counters
-            .directories
-            .pages_created
-            .saturating_add(work.pages_created);
-        counters.directories.pages_reused = counters
-            .directories
-            .pages_reused
-            .saturating_add(work.pages_reused);
-        counters.directories.change_keys = counters
-            .directories
-            .change_keys
-            .saturating_add(work.change_keys);
-        counters.directories.untouched_subtrees = counters
-            .directories
-            .untouched_subtrees
-            .saturating_add(work.untouched_subtrees);
-        counters.directories.peak_scratch_bytes = counters
-            .directories
-            .peak_scratch_bytes
-            .max(work.peak_scratch_bytes);
-        counters.directory_updates = counters.directory_updates.saturating_add(1);
-        contents.insert(update.parent, root.0);
-    }
+            let (root, work) = apply_bindings(
+                objects,
+                base_directory,
+                update
+                    .changes
+                    .iter()
+                    .map(|(name, binding)| Ok((name.clone(), *binding))),
+                input.resources.scratch_bytes,
+                &mut observe,
+            )?;
+            counters.directories.pages_read = counters
+                .directories
+                .pages_read
+                .saturating_add(work.pages_read);
+            counters.directories.pages_created = counters
+                .directories
+                .pages_created
+                .saturating_add(work.pages_created);
+            counters.directories.pages_reused = counters
+                .directories
+                .pages_reused
+                .saturating_add(work.pages_reused);
+            counters.directories.change_keys = counters
+                .directories
+                .change_keys
+                .saturating_add(work.change_keys);
+            counters.directories.untouched_subtrees = counters
+                .directories
+                .untouched_subtrees
+                .saturating_add(work.untouched_subtrees);
+            counters.directories.peak_scratch_bytes = counters
+                .directories
+                .peak_scratch_bytes
+                .max(work.peak_scratch_bytes);
+            counters.directory_updates = counters.directory_updates.saturating_add(1);
+            contents.insert(update.parent, root.0);
+        }
+        Ok(())
+    })?;
     // A directory whose bindings this operation merged gets that directory's new
     // root as its content root. Its kind and attribute root come from the caller's
     // typed value when one was supplied, and from the stored record otherwise, so
@@ -242,12 +275,17 @@ fn run(
             },
         )?;
     }
-    let mut rows = reducer.finish(
-        reader,
-        table,
-        input.resources.base_read_batch.max(1),
-        input.root_serial,
-    )?;
+    if std::env::var("LAYERFS_TRACE").is_ok() {
+        eprintln!("stage: reducer finish");
+    }
+    let mut rows = phases.phase("references", || {
+        reducer.finish(
+            reader,
+            table,
+            input.resources.base_read_batch.max(1),
+            input.root_serial,
+        )
+    })?;
     let mut source_error: Option<ContentError> = None;
     let changes = std::iter::from_fn(|| match rows.next_change() {
         Ok(Some(change)) => Some(Ok((change.serial, change.value))),
@@ -257,7 +295,12 @@ fn run(
             None
         }
     });
-    let built = apply_inode_values(objects, base_table, changes, input.resources.scratch_bytes);
+    if std::env::var("LAYERFS_TRACE").is_ok() {
+        eprintln!("stage: inode values");
+    }
+    let built = phases.phase("inodes", || {
+        apply_inode_values(objects, base_table, changes, input.resources.scratch_bytes)
+    });
     if let Some(error) = source_error {
         return Err(error);
     }
@@ -272,9 +315,11 @@ fn run(
         Some(root) => root.with_inode_table(inode_table),
         None => FilesystemRoot::new(profile_id(), input.scope, input.root_serial, inode_table)?,
     };
-    let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode()?)?
-        .with_references(vec![inode_table]);
-    let id = objects.emit(object)?;
+    let id = phases.phase("root.encode", || {
+        let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode()?)?
+            .with_references(vec![inode_table]);
+        objects.emit(object)
+    })?;
     counters.objects = objects.work();
     Ok(FilesystemResult {
         root: FilesystemRootId(id),

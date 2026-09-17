@@ -80,11 +80,7 @@ fn reference_attribute_trees_are_reproduced_exactly() {
         );
         let observed = store.canonical(built).expect("root bytes");
         assert_eq!(observed, sealed, "case {name}: attribute root bytes");
-        let mut observed_objects = store
-            .order()
-            .iter()
-            .map(|(id, _)| *id)
-            .collect::<Vec<_>>();
+        let mut observed_objects = store.order().iter().map(|(id, _)| *id).collect::<Vec<_>>();
         observed_objects.sort();
         observed_objects.dedup();
         let mut expected = objects
@@ -106,7 +102,9 @@ fn generic_domains_are_accepted_without_platform_dispatch() {
     }
     assert!(AttributeKey::new(String::new(), b"k".to_vec()).is_err());
     assert!(AttributeKey::new("a".repeat(MAXIMUM_ATTRIBUTE_DOMAIN_BYTES + 1), Vec::new()).is_err());
-    assert!(AttributeKey::new("d".to_owned(), vec![b'k'; MAXIMUM_ATTRIBUTE_KEY_BYTES + 1]).is_err());
+    assert!(
+        AttributeKey::new("d".to_owned(), vec![b'k'; MAXIMUM_ATTRIBUTE_KEY_BYTES + 1]).is_err()
+    );
     assert!(AttributeKey::new("d".to_owned(), b"a\0b".to_vec()).is_err());
     // The reserved portable domain keeps its typed grammar.
     assert!(AttributeKey::new("portable".to_owned(), b"mode".to_vec()).is_ok());
@@ -148,8 +146,29 @@ fn opaque_values_survive_patches_without_being_decoded() {
     assert_eq!(work.preserved, 22);
     let mut read = AttributeReadWork::default();
     let reader = store.clone();
-    assert_eq!(read_opaque(&reader, updated, &key("user.example", b"key-01"), 64, &mut read).unwrap().unwrap(), b"new-value");
-    assert_eq!(read_opaque(&reader, updated, &key("user.example", b"key-07"), 64, &mut read).unwrap(), None);
+    assert_eq!(
+        read_opaque(
+            &reader,
+            updated,
+            &key("user.example", b"key-01"),
+            64,
+            &mut read
+        )
+        .unwrap()
+        .unwrap(),
+        b"new-value"
+    );
+    assert_eq!(
+        read_opaque(
+            &reader,
+            updated,
+            &key("user.example", b"key-07"),
+            64,
+            &mut read
+        )
+        .unwrap(),
+        None
+    );
     // Every untouched key keeps its exact stored value root, byte for byte, and
     // the patch never had to decode it.
     let untouched = entries
@@ -210,7 +229,10 @@ fn portable_fields_round_trip_and_are_checked() {
         .as_ref()
         .unwrap()
         .value_root;
-    assert_eq!(read_value(&reader, mode_root, 4).expect("mode value"), 0o644_u32.to_be_bytes());
+    assert_eq!(
+        read_value(&reader, mode_root, 4).expect("mode value"),
+        0o644_u32.to_be_bytes()
+    );
     let state = layerfs_content::file::mapping::decode_file_state(
         store.canonical(mode_root).expect("state bytes"),
     )
@@ -288,7 +310,10 @@ fn exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances() {
         .map(|page| page.bytes().expect("size"))
         .collect::<Vec<_>>();
     for (index, size) in sealed.iter().enumerate() {
-        assert!(*size <= MAXIMUM_PAGE_BYTES, "page {index} exceeds the page ceiling");
+        assert!(
+            *size <= MAXIMUM_PAGE_BYTES,
+            "page {index} exceeds the page ceiling"
+        );
         if index + 1 != sealed.len() {
             assert!(
                 *size >= MINIMUM_FILLED_PAGE_BYTES,
@@ -359,7 +384,10 @@ fn values_are_extent_only_at_every_size() {
         let state =
             layerfs_content::file::mapping::decode_file_state(store.canonical(root).unwrap())
                 .expect("state");
-        assert_eq!(state.extent_count, 1, "size {size} must stay an extent rope");
+        assert_eq!(
+            state.extent_count, 1,
+            "size {size} must stay an extent rope"
+        );
         assert_eq!(state.logical_len, size as u64);
     }
     let mut store = TreeStore::new();
@@ -393,7 +421,10 @@ fn a_missing_or_foreign_attribute_tree_fails_explicitly() {
         (store.canonical(root).expect("bytes").to_vec(), root)
     };
     let digest = ObjectId::for_bytes(b"layerfs/not-an-attribute-page");
-    store.insert(layerfs_content::ObjectRole::AttributeLeaf, page_bytes.clone());
+    store.insert(
+        layerfs_content::ObjectRole::AttributeLeaf,
+        page_bytes.clone(),
+    );
     let _ = digest;
     assert!(decode_attribute_page(&page_bytes).is_ok());
     let mut corrupted = page_bytes.clone();

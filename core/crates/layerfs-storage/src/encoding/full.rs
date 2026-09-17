@@ -57,9 +57,16 @@ pub fn raw_payload(canonical: &[u8], role: ObjectRole) -> StorageResult<&[u8]> {
             }
             Ok(decode_chunk_payload(value)?)
         }
-        ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch | ObjectRole::FileState => {
-            Err(StorageError::Integrity("role is stored unframed"))
-        }
+        ObjectRole::ExtentLeaf
+        | ObjectRole::ExtentBranch
+        | ObjectRole::FileState
+        | ObjectRole::DirectoryLeaf
+        | ObjectRole::DirectoryBranch
+        | ObjectRole::InodeBranch
+        | ObjectRole::FilesystemRoot
+        | ObjectRole::AttributeLeaf
+        | ObjectRole::AttributeBranch
+        | ObjectRole::Symlink => Err(StorageError::Integrity("role is stored unframed")),
         ObjectRole::InodeLeaf => Err(StorageError::Integrity(
             "pooled metadata leaf is stored by its own lane",
         )),
