@@ -395,3 +395,122 @@ green (`edit_reference`, `edit_noop`, `edit_single`, `edit_batch`,
 `filesystem_reference`), `cargo +1.85.1 test/clippy/fmt --locked` on
 `core/Cargo.toml` + `python3 core/tools/check_product_boundary.py`, and a
 production LOC before/after line in the commit message.
+
+---
+
+## Correction (2026-09-17): P1-7 comparing cursor, not fused descent
+
+> **Status:** dated correction to §P1-7 above, adjudicated by the main agent
+> before this append. The register's literal mechanism ("fuse comparison into
+> the split descent — comparing-sink") breaks a pinned contract; the corrected
+> design keeps the counter goal with a comparing cursor plus a shared page
+> memo, and reverses the P1-7/P1-8 landing order. The body above is retained
+> unedited; where the two disagree, this section wins.
+
+### Why the literal fused descent breaks a pinned contract
+
+The contract is stated at `apply.rs:8-9` ("a stream whose replacements are all
+byte-identical to their base ranges returns the base root itself") and
+`edit_noop.rs:82` pins its emission half (`assert_eq!(result.order().len(),
+store.order().len(), "no object was emitted")`). A literal interleave of
+comparison into the per-edit split descent cannot honour it:
+
+1. The full verdict is knowable only after **every** edit compares, but edits
+   address **current-result coordinates** (`input.rs:3-15`), so edit i+1's
+   base range exists only after edit i's construction — construction cannot
+   be deferred past the verdict.
+2. Construction publishes payloads immediately: `DeferredSink::accept` routes
+   chunks to `publish_payload` (`tree.rs:477-490`), which calls
+   `consumer.accept` at once (`tree.rs:349-358`).
+3. A byte-identical replacement still re-chunks: `push_chunk`
+   (`mapping/build.rs:119-133`) runs `FastCdc` over the replacement stream,
+   whose boundaries need not match the base extents, so the emitted chunks
+   are new identities — unreachable from the base root the Equal path returns.
+
+Deferring publication instead (the only literal alternative) would move
+payload bytes into the `EDIT_DEFERRED_LIMIT` charge model (`tree.rs:31`,
+`:332-347`) and change `peak_deferred_bytes` semantics. Both rejected.
+
+### The D27 demand trace (derivation from the collected log)
+
+Facts (`../phase0-baseline-20260917T221759Z/logs/D27-edit-timing-c1-nodes-read.log:12-17`):
+base 3,300,000 B; `objects_before` **176**; `nodes_read` **9**;
+`mapping_pages` **3**; `objects_written` 7 / 47,357 B. Derived shape: 176 =
+1 file state + 3 mapping pages + 172 payloads (avg ≈ 19.2 KB, inside the
+frozen chunk band `file/cdc/gear.rs:13/17` = [8, 32] KiB) — one branch
+(level 1) over two leaves of ≈ 86 extents (ceiling `MAX_ENTRIES` 128,
+`policy.rs:212`). The nine demands attribute as:
+
+| # | demand | source | count |
+| --- | --- | --- | ---: |
+| 1 | file state | `FileView::open` (`view.rs:34-36`) | 1 |
+| 2 | root + 2 leaves, first pass | compare traverse (`mapping/read.rs:257-267`, `:303-309`) | 3 |
+| 3 | payloads of the 40 KB range | compare `Wave::flush` (`mapping/read.rs:124-126`) | ~3 |
+| 4 | root + boundary leaf, re-demanded | split descent (`tree.rs:574`) | 2 |
+| | **total** | | **9** |
+
+Split/concat/rightmost demands beyond #4 are served by pages already counted
+or by drafts; the exact per-site split depends on the CDC boundaries near
+1.65 MB and is resolved by the receipts, not static reading. Corroboration:
+the frozen anatomy at `edit_localized.rs:13-20` (an 8 MB overwrite reads 3
+mapping pages total; 24 MB reads 4). Whether D27's concats take the
+height-mismatch branches (`tree.rs:696+`/`:750+`, where P1-6's discarded
+loads sit) — rather than the equal-level merges `tree.rs:667-695` and
+`root_from_extents` `:807-820` — is likewise not statically decidable, so
+P1-6's D27 delta stays **−0..2**, as #178 words it.
+
+### P1-7 (corrected): comparing cursor + shared page memo
+
+- **Verdict location unchanged:** `compare_replacements` still runs before
+  the representation match (`apply.rs:64-77`), procedure intact
+  (`compare.rs:42-48` precheck, `:52-63` windows, `:85` Equal) — **no
+  dispatch reorder**, so `edit_timing.rs:109`'s `edit.compare` pin and `:73`'s
+  chunked-route pins stay green unmodified; the body's "MUST CHANGE … add a
+  pin … inside_the_split_pass" line is obsolete.
+- **The cursor** reuses the `PlanReader` shape (`apply.rs:377-465`):
+  plan-driven over `Plan` (`input.rs:298-390`), lazily advancing, ranges in
+  ascending base order. Differences: it wraps a chunked `FileState` with a
+  resumable frontier (the `Frontier` shape, `mapping/read.rs:68-75`) plus a
+  `Wave` (`:77-190`) instead of a whole-file payload slice, and feeds
+  `COMPARE_WINDOW_BYTES` windows (`compare.rs:19`) to the comparison instead
+  of copying bytes to a sink. One traversal serves every Replace segment, so
+  W windows no longer cost W root-down traversals.
+- **The memo** is the cross-pass half: keyed `ObjectId → canonical bytes`,
+  populated by the cursor's navigation demands, consulted by
+  `EditObjects::load_node` (`tree.rs:153-170`) **before** the `nodes_read`
+  increment (`tree.rs:154`) and the reader demand (`tree.rs:159`) — a hit is
+  neither a read nor a demand, keeping the counter's doc honest ("Stored or
+  owned nodes read", `tree.rs:38-39`). Decode stays per-call with the
+  caller's root context (caching decoded `ExtentNode`s by id alone would
+  break root-context validation, `mapping/types.rs:170-173`). Scope: chunked
+  bases only; consumed by `replace_chunked` (the only re-demanding route —
+  `stream_combined` runs on whole-file bases, `apply.rs:111-116`); lifetime:
+  one `apply_edits`; bound: a page cap (e.g. 2 × `READ_NAVIGATION_WAVE`,
+  `mapping/read.rs:40`) with evict-all on overflow.
+- **Corrected Big-O:** mapping-page provider demands per chunked edit
+  O(W·h + h) → O(h + distinct union-path pages) — the compare's W traversals
+  collapse to one and the compare↔split overlap (demands #4) is memo-served;
+  payload demands unchanged (inherent). Persisted bytes IDENTICAL. D27
+  expectation: 9 → ≈ 7 (with P1-6's −0..2 on top if it fires).
+
+### Corrected dependency: P1-8 first
+
+P1-8 introduces the ordered-cursor machinery (`RetainCursor` over Retain
+ranges); P1-7's comparing cursor then reuses it for Replace ranges and adds
+the memo. Neither item reorders the dispatch, so they remain **logically
+independent** — the order is primitive reuse plus one textual conflict in
+`apply.rs`, not a dependency. Corrected order: **V1 → P1-6 → P1-9 → P1-8 →
+P1-7 → P1-14**, with P1-12 anywhere/parallel.
+
+### P1-8 × memo interaction
+
+Clean separation of concerns: the cursor's retained frontier — the fix for
+`traverse`'s early `finished` break dropping unvisited siblings
+(`mapping/read.rs:299-320`) — already prevents re-demands **within** one
+traversal, so the memo is unnecessary intra-pass; its only job is
+**cross-pass** reuse (compare→split today). For a chunked base with a
+whole-file result, both cursors run in one operation (compare serves Replace
+ranges, `assemble_final` serves Retain ranges); P1-7's memo can also serve
+the assemble cursor's root demand — a one-line wiring at the cursor's demand
+site, done in P1-7's commit or as a labelled follow-up. P1-8 lands
+cursor-only to keep its commit single-variable.
