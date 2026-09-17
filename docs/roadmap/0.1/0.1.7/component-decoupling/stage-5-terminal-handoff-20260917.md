@@ -176,8 +176,8 @@ Each row names the artifact that decides it and the evidence that flips it. Row 
 | `N-16` | path/group/record/transaction/depth limits have no boundary test | FAIL | one boundary case per limit, or an explicit "not boundable in a test" note with the reason and the derived arithmetic |
 | `N-17` | caller string interpolated into SQL | FAIL | same artifact as `R2-F23` |
 | `TR-5` | simultaneous memory and backing costs | INCOMPLETE | a measured or explicitly scoped row: what is held at once, with scope, unit and the counter that produced it |
-| `VF-5` | the required comparison against the pinned reference | PARTIAL | an identity-matched receipt at a commit an ancestor of the final tree, with the campaign contract frozen before collection |
-| `VF-6` | complete-operation comparison | NOT_RUN | **owner disposition required**: either a frozen comparator that produces it, or a written waiver recorded in the completion report and on #170. It must not stay an orphan row |
+| `VF-5` | the required comparison against the pinned reference | **owner-decided, correction done** | **owner decision, 2026-09-17:** the eligible collection at `eb42c1347` governs (0.653 / 0.272 / 0.480, identity MATCH, an ancestor of this tree); addendum §5.1 cites it and §5.2 marks the older collection superseded. Remaining work: confirm no other document still quotes the superseded rows |
+| `VF-6` | complete-operation comparison | **owner-decided: deferred to Stage 6** | **owner decision, 2026-09-17:** *"i think we can defer it to stage 6."* Recorded in addendum §6. It is a deferral with a named owner (#171), **not** a waiver and **not** a PASS: Stage 5 makes no complete-operation claim. Do not re-open it inside Stage 5 and do not promote it |
 | `VF-3` | meaningful assertions | PARTIAL | the non-discriminating cases are made discriminating |
 | `VF-4` | limits evidence | FAIL | the limits table is complete, correct and boundary-tested |
 
@@ -210,20 +210,34 @@ the first parent and on the staged tree, put the result in the message, commit, 
 **re-run the counter on the committed tree** and compare. If they differ, amend the
 message (not the tree) immediately.
 
-### WP-C - Comparison governance (`R2-F5`, `VF-5`, `VF-6`)
+### WP-C - Comparison governance (`R2-F5`, `VF-5`, `VF-6`) — decided
 
-1. Read `stage-5-verification-addendum-20260917.md` §2-§6 and
-   `evidence/stage-5-component-comparison-20260917T143008Z/README.md`.
-2. Decide and record: which collection governs, and at which commit.
-3. If a new collection is taken, freeze the contract **before** collecting, then
-   collect once per case per arm with the identity gate and the budget gate.
-4. Investigate the 1.85x/2.3x spread between the two existing collections before
-   quoting any ratio: the older README attributes the first case's wall time to a
-   cold Cargo build, which would explain the reference-arm drift. Until that is
-   explained, **no ratio is a stable absolute**.
-5. Put `VF-6` to the owner with three explicit dispositions: run it, waive it in
-   writing, or withdraw the requirement from Stage 5 and name the stage that owns
-   it. Do not self-waive.
+**Both rows are owner-decided; the remaining work is bookkeeping, not measurement.**
+
+1. **Governing collection:** the eligible one at
+   `eb42c13477f85612fc864474af4489c2548d688d` — receipt
+   `evidence/stage-5-component-comparison-20260917T143008Z/run-1/receipt.json`,
+   sha256 `43dbd9f440ea9b417278bd78498c33f5ad027901365f4940d00137fe2f014b24`,
+   0.653 / 0.272 / 0.480 with identity MATCH on all six pinned identities.
+   `stage-5-verification-addendum-20260917.md` §5.1 now cites it and §5.2 marks
+   the earlier `073017Z` collection superseded.
+2. **Complete-operation comparison (`VF-6`):** deferred to Stage 6 (#171) by owner
+   decision, recorded in addendum §6. Not a waiver, not a PASS; Stage 5 claims no
+   complete-operation performance.
+3. **Sweep done, 2026-09-17:** `stage-5-verification-addendum-20260917.md` §5.1
+   cites the governing receipt and §5.2 retains the superseded rows;
+   `stage-5-completion-report-20260917.md` §5 and `stage-5-report.md` §13.4 are
+   repointed. Three documents still mention `…T073017Z` and are left as written
+   because they are dated records of the state at their time:
+   `stage-5-remediation-handoff-20260917.md`,
+   `stage-5-remediation-wp4-wp7-handoff-20260917.md` and the round-1 review
+   `stages-1-5-review-20260917T160000Z.md`. Do not rewrite them; if a future
+   reader could mistake one for current guidance, add a dated pointer, not an edit.
+4. **Do not re-collect to chase a better ratio.** The 1.85x/2.3x spread between the
+   two collections is a known open question (the older README attributes its first
+   case's wall to a cold Cargo build); investigate it only if you intend to quote a
+   ratio, and record what you find. Until then, quote the governing receipt's own
+   numbers with its own source identity and no cross-collection comparison.
 
 ### WP-D - Attribute-value limit (`R2-F6`, `AT-4`, `R2-F25`)
 

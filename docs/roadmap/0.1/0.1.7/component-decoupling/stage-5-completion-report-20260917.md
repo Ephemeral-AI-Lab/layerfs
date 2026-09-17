@@ -88,19 +88,33 @@ operation and are counted by their owners, not here.
 
 ## 5. Collected rows
 
+> **Correction, 2026-09-17 (owner decision).** This section used to publish the
+> `3b4941f1e` / `…T073017Z` collection. That collection's candidate arm ran an
+> example name that changed in `b22712844` after it was taken, so under
+> `AGENTS.md` §3.3 the pair is not identity-matched and its rows are **diagnostic
+> only**. The owner has decided that the **eligible** collection governs:
+> `eb42c13477f85612fc864474af4489c2548d688d`, receipt
+> `evidence/stage-5-component-comparison-20260917T143008Z/run-1/receipt.json`,
+> sha256 `43dbd9f440ea9b417278bd78498c33f5ad027901365f4940d00137fe2f014b24`. The
+> rows below are the governing ones; the superseded rows are retained in
+> `stage-5-verification-addendum-20260917.md` §5.2. Nothing else in this report
+> changes, and no complete-operation claim follows from either collection.
+
 **Component primitives** (release, one sample per case per arm, clean tree at
-`3b4941f1e`, receipt
-`evidence/stage-5-component-comparison-20260917T073017Z/run-1/receipt.json`):
+`eb42c1347`, receipt
+`evidence/stage-5-component-comparison-20260917T143008Z/run-1/receipt.json`):
 
 | Case | Reference ns | Candidate ns | Ratio | Identity |
 | --- | ---: | ---: | ---: | --- |
-| small 200 files / 20 change pairs | 436,000 | 141,375 | 0.324 | MATCH |
-| wide 2,000 / 200 | 2,800,292 | 972,125 | 0.347 | MATCH |
-| large-few-changes 20,000 / 20 | 3,895,708 | 4,286,541 | **1.100** | MATCH |
+| small 200 files / 20 change pairs | 235,208 | 153,542 | 0.653 | MATCH |
+| wide 2,000 / 200 | 2,977,625 | 810,792 | **0.272** | MATCH |
+| large-few-changes 20,000 / 20 | 3,829,000 | 1,838,958 | 0.480 | MATCH |
 
 All six identities (base directory, base table, base root, updated directory,
-updated table, final root) matched in every case. The candidate is slower on the
-third case; that row is reported as measured.
+updated table, final root) matched in every case. On these three **component**
+cases the candidate is faster than the matched reference on all three. The two
+collections disagree by up to 2.3x on the candidate arm, which is an open
+investigation and a reason not to quote either set outside its own run.
 
 **C1, C2 and integrated** (one sample each,
 `evidence/stage-5-pipeline-timing-20260917T073302Z/`):

@@ -462,12 +462,17 @@ document state tests, not targets.
    `b3df5461c`; the reviewed tree is C1 **11,875**, C2 **6,043**, core **18,650**
    (+104 in `eb42c1347`, which discloses its own +35). The reference total is
    unchanged at 65,417 and the combined total is 84,067.
-4. **§11.3 overstates the comparison.** The addendum §5 rows it points at come from
+4. **§11.3 overstates the comparison — resolved by owner decision, 2026-09-17.**
+   The addendum §5 rows this section pointed at came from
    `stage-5-component-comparison-20260917T073017Z`, which its own successor
    `…T143008Z/README.md:5-11` declares **not identity-matched and diagnostic only**.
-   The eligible collection at `eb42c1347` reports 0.653 / 0.272 / 0.480
-   candidate/reference with identity MATCH on all six pinned identities; the two
-   collections disagree by up to 2.3x, so neither is a stable absolute.
+   The owner has decided that the **eligible collection at `eb42c1347` governs**
+   (0.653 / 0.272 / 0.480 candidate/reference, identity MATCH on all six pinned
+   identities), that addendum §5 is corrected to cite it, and that the older
+   collection is superseded. Addendum §5.1 now carries the governing rows and §5.2
+   retains the older ones as the record. The two collections disagree by up to 2.3x
+   on the candidate arm; that spread is an open investigation, not a licence to
+   quote either set outside its own run.
 
 ### What the review confirmed as fixed (round-1 R1-R21)
 

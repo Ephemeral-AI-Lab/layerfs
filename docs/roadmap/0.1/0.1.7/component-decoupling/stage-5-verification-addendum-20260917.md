@@ -61,6 +61,51 @@ and neither arm calls the other.
 
 ## 5. Collected rows (`component.primitives`, release, 2026-09-17)
 
+> **Owner decision, 2026-09-17.** *"The eligible collection at `eb42c1347` governs
+> (0.653/0.272/0.480, identity MATCH, an ancestor of this tree) and the addendum §5
+> is corrected to cite it; the older collection is marked superseded."*
+>
+> **The eligible collection governs.** Section 5.1 below is the governing record.
+> The collection this section used to publish is retained, unedited, as §5.2 and is
+> **superseded**: its candidate arm ran an example name that changed in
+> `b22712844` after that collection, so under `AGENTS.md` §3.3 the pair is not
+> identity-matched.
+
+### 5.1 Governing collection
+
+Source `eb42c13477f85612fc864474af4489c2548d688d` — an ancestor of the reviewed
+tree — clean tree, release profile, toolchain `+1.85.1`, one sample per case per
+arm. Receipt
+`docs/roadmap/0.1/0.1.7/evidence/stage-5-component-comparison-20260917T143008Z/run-1/receipt.json`,
+sha256 `43dbd9f440ea9b417278bd78498c33f5ad027901365f4940d00137fe2f014b24`, driver
+transcript exit 0. Its own README states that the earlier receipt is *"not
+identity-matched and its rows are **diagnostic only**"*.
+
+| Case | Reference elapsed ns | Candidate elapsed ns | Candidate / reference | Identity |
+| --- | ---: | ---: | ---: | --- |
+| small (200 files, 20 change pairs) | 235,208 | 153,542 | 0.653 | MATCH |
+| wide (2,000 / 200) | 2,977,625 | 810,792 | 0.272 | MATCH |
+| large-few-changes (20,000 / 20) | 3,829,000 | 1,838,958 | 0.480 | MATCH |
+
+An identity `MATCH` means both arms agreed on all six pinned identities the driver
+compares: `base_directory`, `base_table`, `base_root`, `updated_directory`,
+`table` and `root`. Command wall times were 2.089 s / 0.653 s / 0.668 s
+(reference) and 5.944 s / 0.630 s / 0.638 s (candidate), all inside the ordinary
+complete-command budget; the candidate's `small` wall includes a cold Cargo
+example build for that arm.
+
+Read with §4's gates: on these three **component** cases the candidate is faster
+than the matched reference on all three, and this is still not a complete-operation
+claim, not a cold-cache claim and not a storage claim.
+
+### 5.2 Superseded collection (retained as the record, 2026-09-17)
+
+The rows below were published by an earlier revision of this section. They are kept
+here so the correction is visible rather than silent. **They are diagnostic only**
+and must not be quoted as the qualification comparison; the collection disagrees
+with §5.1 by up to 2.3x on the candidate arm and 1.85x on the reference arm, which
+is itself a reason to treat neither set as a stable absolute outside its own run.
+
 Source `3b4941f1ededc6407504438cfe0bd5059fc159f9`, clean tree, receipt
 `docs/roadmap/0.1/0.1.7/evidence/stage-5-component-comparison-20260917T073017Z/run-1/receipt.json`
 (sha256 `23c923acf114e943223eaea31864f8dd9620a13c8880baa3f350e9ffa7732c45`).
@@ -71,11 +116,11 @@ Source `3b4941f1ededc6407504438cfe0bd5059fc159f9`, clean tree, receipt
 | wide (2,000 / 200) | 2,800,292 | 972,125 | 0.347 | MATCH |
 | large-few-changes (20,000 / 20) | 3,895,708 | 4,286,541 | 1.100 | MATCH |
 
-Read plainly: the candidate is faster on the two change-heavy component cases and
-**10% slower** on the large tree with few changes. The driver's own command wall
-times were 3.938 s / 0.609 s / 0.633 s (reference) and 4.758 s / 0.589 s / 1.061 s
-(candidate), all inside the ordinary budget. One sample per case per arm; the
-first case's wall time includes a cold Cargo example build for that arm.
+That revision read this table as "the candidate is faster on the two change-heavy
+component cases and **10% slower** on the large tree with few changes". The
+superseding §5.1 reads 0.480 on the same case. The difference is worth its own
+investigation before any of these numbers is quoted as a ratio; it is not resolved
+by this correction.
 
 ## 6. Rows this addendum does **not** qualify, and why
 
@@ -88,6 +133,14 @@ first case's wall time includes a cold Cargo example build for that arm.
   only to time a primitive is explicitly out of scope. This row stays **NOT_RUN**
   with that reason; the handoff's component-comparison clause is satisfied by §5
   and no complete-operation speed claim is made.
+
+  **Owner disposition, 2026-09-17:** *"VF-6: i think we can defer it to stage 6."*
+  The complete-operation comparison is **deferred to Stage 6
+  ([#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171))**, which owns
+  whole-core qualification and is the stage that can freeze a comparator, the
+  numerical gates and the cache contract for a complete operation. It is a deferral
+  with a named owner, not a waiver and not a PASS: Stage 5 makes **no**
+  complete-operation performance claim, and Stage 6 inherits the row.
 - **Cold-cache, pack-footprint and simultaneous-memory rows.** The component
   family is a warm in-process fixture; the pipeline family measures real storage
   but was collected for correctness and resource structure, not for a cold claim.
