@@ -1,0 +1,13 @@
+source_commit 3b4941f1ededc6407504438cfe0bd5059fc159f9
+profile release
+working_tree_dirty False
+case small reference elapsed_ns 436000 wall_s 3.938
+case small candidate elapsed_ns 141375 wall_s 4.758
+case small identity MATCH candidate_over_reference 0.324255
+case wide reference elapsed_ns 2800292 wall_s 0.609
+case wide candidate elapsed_ns 972125 wall_s 0.589
+case wide identity MATCH candidate_over_reference 0.347151
+case large-few-changes reference elapsed_ns 3895708 wall_s 0.633
+case large-few-changes candidate elapsed_ns 4286541 wall_s 1.061
+case large-few-changes identity MATCH candidate_over_reference 1.100324
+receipt docs/roadmap/0.1/0.1.7/evidence/stage-5-component-comparison-20260917T073017Z/run-1/receipt.json sha256 23c923acf114e943223eaea31864f8dd9620a13c8880baa3f350e9ffa7732c45

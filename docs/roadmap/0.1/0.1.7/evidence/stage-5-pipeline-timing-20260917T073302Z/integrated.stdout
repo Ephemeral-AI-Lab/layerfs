@@ -1,0 +1,7 @@
+mode pipeline case subtree-remove
+root d5f91c977e13df39384ab747c9a65f665689a11b69ae9892216a987730860fa4
+elapsed_ns 17534000 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 8 reused 0 admitted 8
+readback separately labelled elapsed_ns 90583 result top_level=[d->2] expected_files=200
+prepared_objects 8
+new_inodes 202

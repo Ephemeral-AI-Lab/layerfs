@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "rustup",
+    "run",
+    "1.85.1",
+    "rustc",
+    "--edition=2021",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-ordering-fixes-20260917T063837Z/probe_corrected.rs",
+    "--extern",
+    "layerfs_content=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/liblayerfs_content.rlib",
+    "-L",
+    "dependency=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps",
+    "-o",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-stage5-corrected-zzg5yd1g/probe_corrected"
+  ],
+  "exit": 0
+}

@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "rustup",
+    "run",
+    "1.85.1",
+    "rustc",
+    "--edition=2021",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-blocker-audit-20260917T055334Z/attempt-2/probe.rs",
+    "--extern",
+    "layerfs_content=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/liblayerfs_content.rlib",
+    "-L",
+    "dependency=/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps",
+    "-o",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-stage5-blocker-probe-3nl_5ryo/probe"
+  ],
+  "exit": 0
+}

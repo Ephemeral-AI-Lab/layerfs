@@ -1,0 +1,4 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.66s
+     Running `core/target/debug/examples/measure_filesystem --mode c2 --case inode-update --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/c2-output`

@@ -1,0 +1,9 @@
+{
+  "source_commit": "821ddbe3003e0453d3e9f56f143b10cb8cd2b4df",
+  "scope": "corrected replay of the retained defect probe; required behaviour",
+  "probe_source": "copy of the audit client with its three defect assertions replaced by the required ones",
+  "probe_sha256": "d612069659e0bab1e48787a3222e70dd0ec6cfcdc893c54e5a56fd24747748d9",
+  "library": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/liblayerfs_content.rlib",
+  "library_sha256": "4a2ff8e9530852f8ef94b71d9b606ba1a90a387f6a07a99fa914a37dab7fdb75",
+  "binary_sha256": "903e666d866e03188f07713d61ce9586155b928441f84608e31293c6548e5fc0"
+}

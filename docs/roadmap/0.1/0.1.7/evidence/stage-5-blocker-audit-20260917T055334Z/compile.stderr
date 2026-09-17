@@ -1,0 +1,27 @@
+error[E0463]: can't find crate for `layerfs_content`
+ --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-blocker-audit-20260917T055334Z/probe.rs:7:5
+  |
+7 | use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking, OrderingRun};
+  |     ^^^^^^^^^^^^^^^ can't find crate
+
+error[E0463]: can't find crate for `layerfs_content`
+ --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-blocker-audit-20260917T055334Z/probe.rs:8:5
+  |
+8 | use layerfs_content::filesystem::{
+  |     ^^^^^^^^^^^^^^^ can't find crate
+
+error[E0463]: can't find crate for `layerfs_content`
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-blocker-audit-20260917T055334Z/probe.rs:12:5
+   |
+12 | use layerfs_content::inode_leaf::{InodeKind, InodeValue};
+   |     ^^^^^^^^^^^^^^^ can't find crate
+
+error[E0463]: can't find crate for `layerfs_content`
+  --> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-blocker-audit-20260917T055334Z/probe.rs:13:5
+   |
+13 | use layerfs_content::{
+   |     ^^^^^^^^^^^^^^^ can't find crate
+
+error: aborting due to 4 previous errors
+
+For more information about this error, try `rustc --explain E0463`.

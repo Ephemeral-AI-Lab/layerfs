@@ -1,0 +1,2 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `core/target/debug/examples/measure_filesystem --mode pipeline --case subtree-remove --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/pipeline-output`

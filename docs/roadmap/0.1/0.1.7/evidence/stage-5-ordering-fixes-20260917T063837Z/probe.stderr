@@ -1,0 +1,6 @@
+
+thread 'main' panicked at /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-ordering-fixes-20260917T063837Z/probe.rs:66:5:
+assertion `left == right` failed: observed-defect assertion
+  left: (88, 88)
+ right: (0, 0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

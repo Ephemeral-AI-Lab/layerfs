@@ -1,0 +1,8 @@
+{
+  "source_commit": "979fbd5bcd46352f36dcc5f4a8ffd23786111328",
+  "scope": "public-API correctness diagnostic; no performance claim",
+  "library": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/liblayerfs_content.rlib",
+  "library_sha256": "7a99ce287d1f318e2c6b613453985528c5c6c198605302f28f82edb39e7f5b3b",
+  "binary": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-stage5-blocker-probe-3nl_5ryo/probe",
+  "binary_sha256": "7d3653a9a5a0ba12a1ecfc4198c5b29bbff466cb8c47ac1bd530a163556e9cf8"
+}

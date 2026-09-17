@@ -1,0 +1,80 @@
+{
+  "rows": [
+    {
+      "row": "c1",
+      "argv": [
+        "cargo",
+        "+1.85.1",
+        "run",
+        "--locked",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "-p",
+        "layerfs-content",
+        "--example",
+        "filesystem_timing_c1",
+        "--",
+        "--case",
+        "directory-update",
+        "--output",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/c1-output"
+      ],
+      "exit": 0,
+      "wall_s": 3.652,
+      "output_directory": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/c1-output"
+    },
+    {
+      "row": "c2",
+      "argv": [
+        "cargo",
+        "+1.85.1",
+        "run",
+        "--locked",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "-p",
+        "layerfs-storage",
+        "--example",
+        "measure_filesystem",
+        "--",
+        "--mode",
+        "c2",
+        "--case",
+        "inode-update",
+        "--output",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/c2-output"
+      ],
+      "exit": 0,
+      "wall_s": 2.485,
+      "output_directory": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/c2-output"
+    },
+    {
+      "row": "integrated",
+      "argv": [
+        "cargo",
+        "+1.85.1",
+        "run",
+        "--locked",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "-p",
+        "layerfs-storage",
+        "--example",
+        "measure_filesystem",
+        "--",
+        "--mode",
+        "pipeline",
+        "--case",
+        "subtree-remove",
+        "--output",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/pipeline-output"
+      ],
+      "exit": 0,
+      "wall_s": 0.91,
+      "output_directory": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/pipeline-output"
+    }
+  ],
+  "cache_state": "warm in-process fixtures; no cold-cache claim",
+  "samples": "one per row",
+  "worker_policy": "single producer; the examples add no workers"
+}

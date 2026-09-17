@@ -329,3 +329,30 @@ yet.
 
 These items block a claim that #170 is fully closed. Everything in §3 A–D and the
 parity part of F is implemented, tested and evidenced.
+
+## 11. Dated corrections (2026-09-17)
+
+This section corrects claims in the sections above; it does not rewrite them.
+
+1. **"No demonstrated product defect" was wrong.** The
+   [blocker investigation](stage-5-blocker-investigation-20260917.md) reproduced
+   three defects on the source this report describes: backing held/peak bytes were
+   always zero, the operation never performed its checked cleanup, and the returned
+   ordering counters were zero after real spills. The
+   [completion report](stage-5-completion-report-20260917.md#2-the-confirmed-defects-and-two-more-this-work-found)
+   records their fixes and two further defects found while fixing them.
+2. **"§8 Open criteria" is superseded.** The four missing targets now exist:
+   `filesystem_ordering` (8 cases), `filesystem_failure` (5), `filesystem_bounds`
+   (4) and C2 `filesystem_failure` (4), plus one added pipeline case. The open list
+   is now only the independent review and the complete-operation comparison.
+3. **"No performance claim"** still holds for the complete operation, but a
+   matched component comparison now exists in
+   [stage-5-verification-addendum-20260917.md](stage-5-verification-addendum-20260917.md#5-collected-rows-componentprimitives-release-2026-09-17):
+   two cases faster, one 10% slower, all identities matching.
+4. **Production LOC changed**: C1 11,001 → 11,209 and the core total 17,697 →
+   17,905; see §9 of the completion report.
+5. **The ordering row is 96 bytes, not 88.** The 88-byte layout overlapped its own
+   fields; the grammar now has disjoint fields and one authoritative tally.
+6. **The verification document's "frozen" banner was wrong** about performance
+   gates; it is corrected in place and superseded for new rows by the dated
+   addendum.

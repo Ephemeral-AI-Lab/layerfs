@@ -1,0 +1,3 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.47s
+     Running `core/target/debug/examples/filesystem_timing_c1 --case directory-update --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-pipeline-timing-20260917T073302Z/c1-output`

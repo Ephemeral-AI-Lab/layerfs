@@ -1,0 +1,4 @@
+
+thread 'main' panicked at /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-ordering-corrected-20260917T064057Z/probe_corrected.rs:109:5:
+required: the failed cleanup is visible
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

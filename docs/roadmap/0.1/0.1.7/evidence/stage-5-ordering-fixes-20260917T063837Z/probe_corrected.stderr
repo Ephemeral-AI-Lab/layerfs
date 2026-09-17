@@ -1,0 +1,6 @@
+
+thread 'main' panicked at /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-5-ordering-fixes-20260917T063837Z/probe_corrected.rs:107:5:
+assertion `left == right` failed: required: cleanup is attempted exactly once
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,10 @@
+{
+  "source_commit": "42e21677ac2cf641a6cb3d83b93c714e1f4e7db9",
+  "scope": "replay of the retained defect probe; its defect assertions are expected to fail",
+  "probe_exit": 101,
+  "probe_source": "unmodified copy of stage-5-blocker-audit-20260917T055334Z/attempt-2/probe.rs",
+  "probe_sha256": "9a38e7cc999053dac2497c2aba37d348d97702f1c4a893722167af11c263d686",
+  "library": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/liblayerfs_content.rlib",
+  "library_sha256": "7f54586a1e423d79950310e329b062ae9554e21d2e86f2e8468886d26bb64689",
+  "binary_sha256": "9d0366ba2373286b6135634406d0725bb691829cb6b4f24a4b2e5e66be7bbb78"
+}

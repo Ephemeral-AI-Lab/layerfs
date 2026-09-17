@@ -8,6 +8,11 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
+- [Current Stage 5 continuation](stage-5-continuation-handoff.md): fix reproduced
+  ordering accounting/cleanup defects, complete all four missing matrices, freeze
+  valid comparison boundaries, qualify and finish #170 through explicit gates.
+- [Stage 5 blocker investigation](stage-5-blocker-investigation-20260917.md):
+  public-API diagnostic evidence, reachable reference APIs and recovery rationale.
 - [Stage 5 and complete Stages 1–5 reviewer handoff](stages-1-5-reviewer-handoff.md):
   independent stage and cumulative verdicts, actual structure/LOC, all criteria,
   simplification, performance/memory evidence, capacity limits and exact future
@@ -19,9 +24,10 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   files, existing C1/C2 integration paths, per-file/directory ranges and actual-size
   reporting. No new crate or generic scratch framework.
 - [Stage 5 completion report](stage-5-report.md) and its
-  [frozen verification contract](stage-5-verification.md): the implemented C1/C2
+  [partial verification contract](stage-5-verification.md): the implemented C1/C2
   filesystem scope, the inode-leaf compatibility gate and its evidence, and the
-  criteria that remain open.
+  criteria that remain open. Performance gates are not yet frozen; the current
+  continuation requires prospective correction before qualification.
 - [Stages 3–4 closure record](stages-3-4-completion-round-20260917.md): completed
   stage scopes and explicit unmeasured owner-waived rows; no inherited speed claim.
 - [Prior Stages 3–4 continuation prompts](stages-3-4-continuation-prompt.md):

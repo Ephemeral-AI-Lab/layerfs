@@ -1,0 +1,8 @@
+mode c2 case inode-update
+supplied_objects 8
+elapsed_ns 14604375
+inserted 8 reused 0 packs 2 commits 1 acknowledged true
+full_records 8 prefix_records 0 pooled 202
+report_nodes 19
+prepared_objects 8
+new_inodes 202

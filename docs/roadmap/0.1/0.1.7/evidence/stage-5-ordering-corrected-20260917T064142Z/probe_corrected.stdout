@@ -1,0 +1,2 @@
+direct: actual_bytes=88 run_len=88 held_bytes=88 peak_bytes=88
+operation: success=false runs_created=14 release_calls=1 files_bytes_after_return=0 result=Err(ResourceUnavailable { what: "diagnostic refused cleanup" })

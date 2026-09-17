@@ -2,6 +2,11 @@
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 
+**Current continuation:** [finish the existing Stage 5 implementation](stage-5-continuation-handoff.md)
+using the reproduced-defect regressions, missing test matrices and qualification
+gates. This original handoff retains the complete semantic/acceptance requirements;
+the continuation supplies the remaining execution order.
+
 Complete [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) under
 [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165).
 Exact source/test paths and per-file/directory LOC recommendations:

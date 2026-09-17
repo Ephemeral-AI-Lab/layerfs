@@ -43,6 +43,13 @@ Actual results and misses must be reported, never hidden by weakening correctnes
 
 ## Current handoff: Stage 5
 
+Implementation continues through the [Stage 5 completion prompt](stage-5-continuation-handoff.md).
+The [blocker investigation](stage-5-blocker-investigation-20260917.md) reproduced
+ordering byte-accounting, checked-cleanup and final-counter defects. Finish these
+regressions/fixes and all four missing test matrices before performance collection;
+use the prompt's explicit qualification and completion gates. #170 is not complete
+merely because canonical parity and successful composition have passed.
+
 Use the [Stage 5 and cumulative Stages 1–5 review prompt](stages-1-5-reviewer-handoff.md)
 for independent acceptance review of #170 and the complete C1/C2 implementation.
 It requires actual LOC, all-stage criteria, simplification, speed/resource/safety
