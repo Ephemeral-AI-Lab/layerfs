@@ -493,8 +493,8 @@ of #170.
 
 | | |
 | --- | --- |
-| Tree | `afcb76c0e8b6e1b11e225d67a9b53efcd2e7850a` (branch `main`, pushed) |
-| Commits | `5e2a20a0c` harness case selection + §6 corrections, `2fe2a4642` product bounds/telemetry/C1 contracts, `afcb76c0e` receipts |
+| Tree | `5ca20eb925134fb675eb1451af5f03436a8639bf` (branch `main`, pushed) |
+| Commits | `5e2a20a0c` harness case selection + §6 corrections, `2fe2a4642` product bounds/telemetry/C1 contracts, `afcb76c0e` receipts, `9b58d1a17` this section, `5ca20eb92` the external probe |
 | Evidence | [`../evidence/stage-5-terminal-20260918T020000Z/`](../evidence/stage-5-terminal-20260918T020000Z/) |
 | Production LOC | core 18,650 → **18,708** (+58); C1 11,875 → 11,902 (+27), C2 6,043 → 6,043 (0), telemetry 732 → 763 (+31); reference 65,417 unchanged |
 | Checks | all eight handoff §6 checks exit 0; 62 result blocks, **422 passed / 0 failed** |
@@ -534,3 +534,15 @@ of #170.
   an owner disposition.
 - **`TR-5`**, **`VF-3`**, **`N-13`** — the simultaneous-memory row, the
   non-discriminating cases and the `forbid(unsafe_code)` decision are unchanged.
+
+### Independent review status
+
+**Not obtained.** The handoff requires a fresh reviewer for each round; no
+external agent could be started in this environment (`codex exec` rejects every
+model available to this account with *"not supported when using Codex with a
+ChatGPT account"* / *"requires a newer version of Codex"*, and the `claude` CLI
+fails with *"OAuth access token has been revoked"*). The
+`diagnostics/s5check/` client retained with the round's evidence is an
+**author-run** reproduction of the public-API rows and is labelled as such; it is
+not a substitute for the review, and no row in §14 is marked PASS on its
+strength.
