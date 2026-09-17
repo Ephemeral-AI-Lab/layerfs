@@ -1,0 +1,11 @@
+mode pipeline case attributes
+fixture entries 32
+update: rename 4 names in /d and replace their inode values
+setup untimed elapsed_ns 3189125 inserted 4
+root 622262df37bd1a4ce1da72df3548fca772851a998be7705aec3998c05ad2907f
+elapsed_ns 4540000 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 3 bytes_emitted 3451 saved inserted 3 reused 0 admitted 3
+report_nodes 3
+readback separately labelled elapsed_ns 9447584 result top_level=[d->2] d_first4=[a0000->3,a0001->4,a0002->5,a0003->6] fixture_entries=32
+prepared_objects 4
+new_inodes 34

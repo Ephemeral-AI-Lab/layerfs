@@ -1,0 +1,12 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/storage_limits.rs (core/target/debug/deps/storage_limits-7c4e5d9fe5262c40)
+
+running 4 tests
+test a_group_record_directory_is_accepted_at_its_bound_and_refused_over_it ... ok
+test the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins ... ok
+test a_group_body_is_accepted_at_its_bound_and_refused_over_it ... ok
+test a_group_record_count_is_accepted_at_its_bound_and_refused_over_it ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0

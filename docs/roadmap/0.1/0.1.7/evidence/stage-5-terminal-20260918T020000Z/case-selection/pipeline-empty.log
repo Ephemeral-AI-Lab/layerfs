@@ -1,0 +1,11 @@
+mode pipeline case empty
+fixture entries 0
+update: none; the fixture tree is re-emitted unchanged
+setup untimed elapsed_ns 2519500 inserted 4
+root 91d215210371a649b6d7616359e8d6d01249e3e909f71afba8cda763f11bc4e6
+elapsed_ns 2919417 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 0 reused 1 admitted 1
+report_nodes 3
+readback separately labelled elapsed_ns 7418417 result top_level=[d->2] d_first4=[] fixture_entries=0
+prepared_objects 4
+new_inodes 2

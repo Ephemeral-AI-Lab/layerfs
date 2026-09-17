@@ -1,0 +1,11 @@
+mode c1 case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+root 3cc8eef1b962e53e7e16740f20b27067be60841e65a60b9a80bc8f311610f8c1
+elapsed_ns 552083
+boundary objects_read 5 waves 3 emitted 3 bytes_emitted 4427
+sorted directories pages_read 0 pages_created 0 inodes pages_read 1 pages_created 2
+end-to-end ns 552083
+readback separately labelled: top_level=[d->2] d_first4=[f0000->3,f0001->4,f0002->5,f0003->6] fixture_entries=200
+prepared_objects 8
+new_inodes 202

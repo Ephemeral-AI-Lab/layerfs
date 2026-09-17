@@ -1,0 +1,11 @@
+mode pipeline case subtree-remove
+fixture entries 200
+update: remove 10 bindings from /d (counts released)
+setup untimed elapsed_ns 6423250 inserted 8
+root 4a068563a4ced4da8f72428a7c42df4e3bad8be8bc9c1717e6969e140b88b2d0
+elapsed_ns 5922250 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 4 bytes_emitted 10521 saved inserted 4 reused 0 admitted 4
+report_nodes 3
+readback separately labelled elapsed_ns 14782958 result top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+prepared_objects 8
+new_inodes 202

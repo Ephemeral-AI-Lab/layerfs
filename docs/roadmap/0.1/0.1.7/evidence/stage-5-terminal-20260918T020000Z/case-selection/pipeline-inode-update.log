@@ -1,0 +1,11 @@
+mode pipeline case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+setup untimed elapsed_ns 6531792 inserted 8
+root 3cc8eef1b962e53e7e16740f20b27067be60841e65a60b9a80bc8f311610f8c1
+elapsed_ns 4980916 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 3 bytes_emitted 4427 saved inserted 3 reused 0 admitted 3
+report_nodes 3
+readback separately labelled elapsed_ns 13731625 result top_level=[d->2] d_first4=[f0000->3,f0001->4,f0002->5,f0003->6] fixture_entries=200
+prepared_objects 8
+new_inodes 202

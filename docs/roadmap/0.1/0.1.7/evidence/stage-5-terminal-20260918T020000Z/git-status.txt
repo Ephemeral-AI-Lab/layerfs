@@ -1,0 +1,2 @@
+?? crates/layerfs-workspace/tests/deep_history_diagnostic.rs
+?? docs/roadmap/0.1/0.1.7/evidence/stage-5-terminal-20260918T020000Z/

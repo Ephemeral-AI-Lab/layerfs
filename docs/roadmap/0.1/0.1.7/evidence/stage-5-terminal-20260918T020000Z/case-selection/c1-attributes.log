@@ -1,0 +1,11 @@
+mode c1 case attributes
+fixture entries 32
+update: rename 4 names in /d and replace their inode values
+root 622262df37bd1a4ce1da72df3548fca772851a998be7705aec3998c05ad2907f
+elapsed_ns 603250
+boundary objects_read 2 waves 2 emitted 3 bytes_emitted 3451
+sorted directories pages_read 1 pages_created 1 inodes pages_read 1 pages_created 1
+end-to-end ns 603250
+readback separately labelled: top_level=[d->2] d_first4=[a0000->3,a0001->4,a0002->5,a0003->6] fixture_entries=32
+prepared_objects 4
+new_inodes 34

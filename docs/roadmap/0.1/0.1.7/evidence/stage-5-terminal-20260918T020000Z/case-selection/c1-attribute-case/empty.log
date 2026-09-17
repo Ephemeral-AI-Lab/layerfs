@@ -1,0 +1,17 @@
+case empty
+root 3855544b746bae6afa17d3f30b220dec8a3cdacda7f57f76a574f15e3b7d88b8
+inode_table 24885bf8d820f5343146c777d0914cfc3463e85c866e262be5748522ce755a69
+directories 0 bindings +0 -0
+objects read 0 waves 0 bytes 0 emitted 1 bytes 129
+directories: pages read 0 created 0 reused 0 untouched 0 scratch peak 0 top-level 0
+inodes: pages read 0 created 0 reused 0 scratch peak 0
+references: rows 0 spilled 0 values 0 removals 0 released 0 peak pending 0
+elapsed_ns 149250
+phase validate elapsed_ns 86833
+phase directories elapsed_ns 167
+phase references elapsed_ns 2625
+phase inodes elapsed_ns 2834
+phase cleanup elapsed_ns 1125
+phase root.encode elapsed_ns 15959
+report_nodes 7
+prepared_objects 3

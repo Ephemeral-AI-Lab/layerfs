@@ -1,0 +1,11 @@
+mode c1 case subtree-remove
+fixture entries 200
+update: remove 10 bindings from /d (counts released)
+root 4a068563a4ced4da8f72428a7c42df4e3bad8be8bc9c1717e6969e140b88b2d0
+elapsed_ns 1580583
+boundary objects_read 7 waves 5 emitted 4 bytes_emitted 10521
+sorted directories pages_read 1 pages_created 1 inodes pages_read 2 pages_created 2
+end-to-end ns 1580583
+readback separately labelled: top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+prepared_objects 8
+new_inodes 202

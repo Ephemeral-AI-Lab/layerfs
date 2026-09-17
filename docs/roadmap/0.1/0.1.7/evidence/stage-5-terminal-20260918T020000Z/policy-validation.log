@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running tests/file_complete.rs (core/target/debug/deps/file_complete-ce1f62e083639d43)
+
+running 1 test
+test unsupported_policy_values_are_rejected_before_work ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+EXIT=0

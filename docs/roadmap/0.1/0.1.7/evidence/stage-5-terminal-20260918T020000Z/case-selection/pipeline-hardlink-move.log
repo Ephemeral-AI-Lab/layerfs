@@ -1,0 +1,11 @@
+mode pipeline case hardlink-move
+fixture entries 200
+update: move 10 files from /d to / (additions before removals)
+setup untimed elapsed_ns 6413708 inserted 8
+root 2d81c8c734563197d3fea79b1d8f39f5b3c19d3b68a7e46a34ac8a36bc1494aa
+elapsed_ns 6161167 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 5 bytes_emitted 7526 saved inserted 5 reused 0 admitted 5
+report_nodes 3
+readback separately labelled elapsed_ns 13348459 result top_level=[d->2,m0000->3,m0001->4,m0002->5] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+prepared_objects 8
+new_inodes 202

@@ -1,0 +1,12 @@
+mode c2 case attributes
+fixture entries 32
+update: rename 4 names in /d and replace their inode values
+case_work applied untimed: directories 1 bindings +4 -4 inode updates 4 fixture entries 32
+case_root 622262df37bd1a4ce1da72df3548fca772851a998be7705aec3998c05ad2907f
+elapsed_ns 4606625
+inserted 7 reused 0 packs 2 commits 1
+full_records 7 prefix_records 0 pooled 39
+readback separately labelled: top_level=[d->2] d_first4=[a0000->3,a0001->4,a0002->5,a0003->6] fixture_entries=32
+report_nodes 4
+prepared_objects 4
+new_inodes 34

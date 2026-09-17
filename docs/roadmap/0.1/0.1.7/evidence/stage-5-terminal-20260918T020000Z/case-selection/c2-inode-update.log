@@ -1,0 +1,12 @@
+mode c2 case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+case_work applied untimed: directories 0 bindings +0 -0 inode updates 10 fixture entries 200
+case_root 3cc8eef1b962e53e7e16740f20b27067be60841e65a60b9a80bc8f311610f8c1
+elapsed_ns 8607917
+inserted 11 reused 0 packs 2 commits 1
+full_records 11 prefix_records 0 pooled 212
+readback separately labelled: top_level=[d->2] d_first4=[f0000->3,f0001->4,f0002->5,f0003->6] fixture_entries=200
+report_nodes 4
+prepared_objects 8
+new_inodes 202

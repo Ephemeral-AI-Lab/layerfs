@@ -1,0 +1,29 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running tests/timer.rs (core/target/debug/deps/timer-1aafdebec1672a19)
+
+running 21 tests
+test a_parent_can_recover_from_a_child_error ... ok
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test attached_reports_become_owned_children ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test disabled_and_clipped_reports_are_distinguishable ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test uncalled_operations_have_no_node ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0

@@ -1,0 +1,12 @@
+mode c2 case empty
+fixture entries 0
+update: none; the fixture tree is re-emitted unchanged
+case_work applied untimed: directories 0 bindings +0 -0 inode updates 0 fixture entries 0
+case_root 91d215210371a649b6d7616359e8d6d01249e3e909f71afba8cda763f11bc4e6
+elapsed_ns 3050334
+inserted 4 reused 0 packs 2 commits 1
+full_records 4 prefix_records 0 pooled 2
+readback separately labelled: top_level=[d->2] d_first4=[] fixture_entries=0
+report_nodes 4
+prepared_objects 4
+new_inodes 2
