@@ -4,6 +4,12 @@
 > [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) and
 > [#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172); it decides
 > nothing and measures nothing.
+>
+> **Superseded.** This is the dated snapshot. The maintained version, extended with
+> the round-trip findings and a regression ledger, lives with the product at
+> [`core/docs/architecture/11-optimization-study.md`](../../../../../core/docs/architecture/11-optimization-study.md).
+> Retained append-only as the record of what was concluded on this date; read the
+> core paper for anything current.
 
 Release: [v0.1.7](../README.md). Parent:
 [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165).
