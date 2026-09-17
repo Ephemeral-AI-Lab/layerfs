@@ -152,6 +152,29 @@ rule above governs from `7eca9c369` onward.
   untouched.** No tag, no deployment, no history entity, no Workspace dependency,
   and `tools/preflight.sh` stays retired.
 
+## 7.1 Closure record
+
+The two stage issues were already closed before this round began; this round updated
+their closing summaries so the recorded state matches the tree, and verified the state
+through the GitHub API rather than assuming it.
+
+| Issue | State | Reason | Closed at (UTC) | Closing summary posted | Comment |
+| --- | --- | --- | --- | --- | --- |
+| [#168](https://github.com/Ephemeral-AI-Lab/layerfs/issues/168) Stage 3 | `CLOSED` | `COMPLETED` | 2026-09-17T02:15:04Z | 2026-09-17T04:09:28Z (its `updatedAt`) | [issuecomment-5708332097](https://github.com/Ephemeral-AI-Lab/layerfs/issues/168#issuecomment-5708332097) |
+| [#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169) Stage 4 | `CLOSED` | `COMPLETED` | 2026-09-17T02:15:07Z | 2026-09-17T04:09:34Z (its `updatedAt`) | [issuecomment-5708332838](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169#issuecomment-5708332838) |
+| [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165) the batch | `OPEN` | — | — | **not touched** | — |
+
+Both summaries state the same two things the round's own report states: the acceptance
+items that are backed by an artifact, **and** the items that stay unqualified —
+#168 item 7 and #169 item 6 are `PASS (owner waiver)` and **unmeasured**, no v0.1.6
+comparison is claimed at any n, and #171 carries the qualification if the owner
+re-scopes it. Neither summary upgrades a waived row, and neither reads the batch's
+completeness as evidence for its own qualification requirement. **#165 is deliberately
+untouched**, per the standing constraint that the batch parent and Stages 5–7 stay open.
+
+Branch state at the time of writing: `main` pushed to `origin/main` at `30358b565`
+(`b29f8e4a3..30358b565`, 5 commits), working tree clean.
+
 ## 8. Reproduction
 
 ```text
