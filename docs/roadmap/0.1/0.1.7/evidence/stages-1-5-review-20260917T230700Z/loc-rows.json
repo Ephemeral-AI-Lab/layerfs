@@ -1,0 +1,3092 @@
+[
+ {
+  "path": "core/crates/layerfs-content/src/error.rs",
+  "pre1": 0,
+  "pre5": 120,
+  "rev": 153,
+  "cum": 153,
+  "s5": 33,
+  "phys": 219,
+  "phys_pre5": 174
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/cdc/gear.rs",
+  "pre1": 0,
+  "pre5": 494,
+  "rev": 494,
+  "cum": 494,
+  "s5": 0,
+  "phys": 538,
+  "phys_pre5": 538
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/cdc/mod.rs",
+  "pre1": 0,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 5,
+  "s5": 0,
+  "phys": 10,
+  "phys_pre5": 10
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/content.rs",
+  "pre1": 0,
+  "pre5": 197,
+  "rev": 197,
+  "cum": 197,
+  "s5": 0,
+  "phys": 254,
+  "phys_pre5": 254
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/apply.rs",
+  "pre1": 0,
+  "pre5": 389,
+  "rev": 390,
+  "cum": 390,
+  "s5": 1,
+  "phys": 455,
+  "phys_pre5": 454
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/compare.rs",
+  "pre1": 0,
+  "pre5": 67,
+  "rev": 68,
+  "cum": 68,
+  "s5": 1,
+  "phys": 87,
+  "phys_pre5": 86
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/concat.rs",
+  "pre1": 0,
+  "pre5": 19,
+  "rev": 19,
+  "cum": 19,
+  "s5": 0,
+  "phys": 29,
+  "phys_pre5": 29
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/finish.rs",
+  "pre1": 0,
+  "pre5": 38,
+  "rev": 38,
+  "cum": 38,
+  "s5": 0,
+  "phys": 54,
+  "phys_pre5": 54
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/input.rs",
+  "pre1": 0,
+  "pre5": 286,
+  "rev": 286,
+  "cum": 286,
+  "s5": 0,
+  "phys": 390,
+  "phys_pre5": 390
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/mod.rs",
+  "pre1": 0,
+  "pre5": 15,
+  "rev": 15,
+  "cum": 15,
+  "s5": 0,
+  "phys": 20,
+  "phys_pre5": 20
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/split.rs",
+  "pre1": 0,
+  "pre5": 23,
+  "rev": 23,
+  "cum": 23,
+  "s5": 0,
+  "phys": 32,
+  "phys_pre5": 32
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/edit/tree.rs",
+  "pre1": 0,
+  "pre5": 707,
+  "rev": 707,
+  "cum": 707,
+  "s5": 0,
+  "phys": 913,
+  "phys_pre5": 913
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/mapping/build.rs",
+  "pre1": 0,
+  "pre5": 309,
+  "rev": 309,
+  "cum": 309,
+  "s5": 0,
+  "phys": 391,
+  "phys_pre5": 391
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/mapping/codec.rs",
+  "pre1": 0,
+  "pre5": 303,
+  "rev": 304,
+  "cum": 304,
+  "s5": 1,
+  "phys": 339,
+  "phys_pre5": 334
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/mapping/mod.rs",
+  "pre1": 0,
+  "pre5": 15,
+  "rev": 17,
+  "cum": 17,
+  "s5": 2,
+  "phys": 22,
+  "phys_pre5": 20
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/mapping/read.rs",
+  "pre1": 0,
+  "pre5": 223,
+  "rev": 268,
+  "cum": 268,
+  "s5": 45,
+  "phys": 327,
+  "phys_pre5": 262
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/mapping/types.rs",
+  "pre1": 0,
+  "pre5": 185,
+  "rev": 190,
+  "cum": 190,
+  "s5": 5,
+  "phys": 266,
+  "phys_pre5": 259
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/mod.rs",
+  "pre1": 0,
+  "pre5": 17,
+  "rev": 17,
+  "cum": 17,
+  "s5": 0,
+  "phys": 23,
+  "phys_pre5": 23
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/read.rs",
+  "pre1": 0,
+  "pre5": 111,
+  "rev": 111,
+  "cum": 111,
+  "s5": 0,
+  "phys": 127,
+  "phys_pre5": 127
+ },
+ {
+  "path": "core/crates/layerfs-content/src/file/view.rs",
+  "pre1": 0,
+  "pre5": 86,
+  "rev": 87,
+  "cum": 87,
+  "s5": 1,
+  "phys": 117,
+  "phys_pre5": 112
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/build.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 386,
+  "cum": 386,
+  "s5": 386,
+  "phys": 433,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/codec.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 322,
+  "cum": 322,
+  "s5": 322,
+  "phys": 375,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/keys.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 77,
+  "cum": 77,
+  "s5": 77,
+  "phys": 107,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/mod.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 16,
+  "cum": 16,
+  "s5": 16,
+  "phys": 19,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/patch.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 189,
+  "cum": 189,
+  "s5": 189,
+  "phys": 234,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/portable.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 70,
+  "cum": 70,
+  "s5": 70,
+  "phys": 95,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/read.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 167,
+  "cum": 167,
+  "s5": 167,
+  "phys": 196,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/attributes/value.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 70,
+  "cum": 70,
+  "s5": 70,
+  "phys": 88,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/directory/codec.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 156,
+  "cum": 156,
+  "s5": 156,
+  "phys": 190,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/directory/mod.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 6,
+  "cum": 6,
+  "s5": 6,
+  "phys": 9,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/directory/read.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 272,
+  "cum": 272,
+  "s5": 272,
+  "phys": 315,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/directory/update.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 39,
+  "cum": 39,
+  "s5": 39,
+  "phys": 52,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/identity.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 32,
+  "cum": 32,
+  "s5": 32,
+  "phys": 63,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/inode/codec.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 145,
+  "cum": 145,
+  "s5": 145,
+  "phys": 178,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/inode/mod.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 6,
+  "cum": 6,
+  "s5": 6,
+  "phys": 9,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/inode/read.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 186,
+  "cum": 186,
+  "s5": 186,
+  "phys": 211,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/inode/update.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 72,
+  "cum": 72,
+  "s5": 72,
+  "phys": 97,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/input.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 158,
+  "cum": 158,
+  "s5": 158,
+  "phys": 232,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/limits.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 23,
+  "cum": 23,
+  "s5": 23,
+  "phys": 66,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/mod.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 28,
+  "cum": 28,
+  "s5": 28,
+  "phys": 33,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/objects.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 102,
+  "cum": 102,
+  "s5": 102,
+  "phys": 167,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/path.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 147,
+  "cum": 147,
+  "s5": 147,
+  "phys": 197,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/read.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 212,
+  "cum": 212,
+  "s5": 212,
+  "phys": 275,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/backing.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 246,
+  "cum": 246,
+  "s5": 246,
+  "phys": 360,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/merge.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 154,
+  "cum": 154,
+  "s5": 154,
+  "phys": 204,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/mod.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 15,
+  "cum": 15,
+  "s5": 15,
+  "phys": 18,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/record.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 120,
+  "cum": 120,
+  "s5": 120,
+  "phys": 166,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/reduce.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 469,
+  "cum": 469,
+  "s5": 469,
+  "phys": 585,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/release.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 167,
+  "cum": 167,
+  "s5": 167,
+  "phys": 205,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/references/runs.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 417,
+  "cum": 417,
+  "s5": 417,
+  "phys": 586,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/root.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 119,
+  "cum": 119,
+  "s5": 119,
+  "phys": 160,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/sorted/budget.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 87,
+  "cum": 87,
+  "s5": 87,
+  "phys": 117,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/sorted/finish.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 156,
+  "cum": 156,
+  "s5": 156,
+  "phys": 180,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/sorted/format.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 592,
+  "cum": 592,
+  "s5": 592,
+  "phys": 744,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/sorted/merge.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 282,
+  "cum": 282,
+  "s5": 282,
+  "phys": 314,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/sorted/mod.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 9,
+  "cum": 9,
+  "s5": 9,
+  "phys": 12,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/sorted/page.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 449,
+  "cum": 449,
+  "s5": 449,
+  "phys": 556,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/symlink.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 70,
+  "cum": 70,
+  "s5": 70,
+  "phys": 94,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 405,
+  "cum": 405,
+  "s5": 405,
+  "phys": 498,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 576,
+  "cum": 576,
+  "s5": 576,
+  "phys": 716,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-content/src/lib.rs",
+  "pre1": 0,
+  "pre5": 24,
+  "rev": 31,
+  "cum": 31,
+  "s5": 7,
+  "phys": 48,
+  "phys_pre5": 41
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/access.rs",
+  "pre1": 0,
+  "pre5": 18,
+  "rev": 44,
+  "cum": 44,
+  "s5": 26,
+  "phys": 82,
+  "phys_pre5": 36
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/codec.rs",
+  "pre1": 0,
+  "pre5": 107,
+  "rev": 107,
+  "cum": 107,
+  "s5": 0,
+  "phys": 138,
+  "phys_pre5": 138
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/id.rs",
+  "pre1": 0,
+  "pre5": 77,
+  "rev": 70,
+  "cum": 70,
+  "s5": -7,
+  "phys": 96,
+  "phys_pre5": 105
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/inode_leaf.rs",
+  "pre1": 0,
+  "pre5": 307,
+  "rev": 345,
+  "cum": 345,
+  "s5": 38,
+  "phys": 467,
+  "phys_pre5": 392
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/mod.rs",
+  "pre1": 0,
+  "pre5": 23,
+  "rev": 23,
+  "cum": 23,
+  "s5": 0,
+  "phys": 29,
+  "phys_pre5": 29
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/output.rs",
+  "pre1": 0,
+  "pre5": 121,
+  "rev": 142,
+  "cum": 142,
+  "s5": 21,
+  "phys": 214,
+  "phys_pre5": 187
+ },
+ {
+  "path": "core/crates/layerfs-content/src/object/predecessor.rs",
+  "pre1": 0,
+  "pre5": 64,
+  "rev": 64,
+  "cum": 64,
+  "s5": 0,
+  "phys": 102,
+  "phys_pre5": 102
+ },
+ {
+  "path": "core/crates/layerfs-content/src/policy.rs",
+  "pre1": 0,
+  "pre5": 137,
+  "rev": 137,
+  "cum": 137,
+  "s5": 0,
+  "phys": 237,
+  "phys_pre5": 237
+ },
+ {
+  "path": "core/crates/layerfs-storage/sql/schema.sql",
+  "pre1": 0,
+  "pre5": 48,
+  "rev": 48,
+  "cum": 48,
+  "s5": 0,
+  "phys": 72,
+  "phys_pre5": 69
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/batch.rs",
+  "pre1": 0,
+  "pre5": 58,
+  "rev": 58,
+  "cum": 58,
+  "s5": 0,
+  "phys": 87,
+  "phys_pre5": 87
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/dependencies.rs",
+  "pre1": 0,
+  "pre5": 60,
+  "rev": 60,
+  "cum": 60,
+  "s5": 0,
+  "phys": 86,
+  "phys_pre5": 86
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/finish.rs",
+  "pre1": 0,
+  "pre5": 16,
+  "rev": 16,
+  "cum": 16,
+  "s5": 0,
+  "phys": 25,
+  "phys_pre5": 25
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/membership.rs",
+  "pre1": 0,
+  "pre5": 32,
+  "rev": 32,
+  "cum": 32,
+  "s5": 0,
+  "phys": 47,
+  "phys_pre5": 47
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/mod.rs",
+  "pre1": 0,
+  "pre5": 11,
+  "rev": 13,
+  "cum": 13,
+  "s5": 2,
+  "phys": 18,
+  "phys_pre5": 16
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/owner.rs",
+  "pre1": 0,
+  "pre5": 725,
+  "rev": 728,
+  "cum": 728,
+  "s5": 3,
+  "phys": 957,
+  "phys_pre5": 949
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/provider.rs",
+  "pre1": 0,
+  "pre5": 0,
+  "rev": 39,
+  "cum": 39,
+  "s5": 39,
+  "phys": 69,
+  "phys_pre5": 0
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/read.rs",
+  "pre1": 0,
+  "pre5": 74,
+  "rev": 74,
+  "cum": 74,
+  "s5": 0,
+  "phys": 101,
+  "phys_pre5": 101
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/save.rs",
+  "pre1": 0,
+  "pre5": 52,
+  "rev": 52,
+  "cum": 52,
+  "s5": 0,
+  "phys": 76,
+  "phys_pre5": 76
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/cas/store.rs",
+  "pre1": 0,
+  "pre5": 385,
+  "rev": 385,
+  "cum": 385,
+  "s5": 0,
+  "phys": 549,
+  "phys_pre5": 518
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/codec.rs",
+  "pre1": 0,
+  "pre5": 508,
+  "rev": 515,
+  "cum": 515,
+  "s5": 7,
+  "phys": 647,
+  "phys_pre5": 633
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/decode.rs",
+  "pre1": 0,
+  "pre5": 170,
+  "rev": 170,
+  "cum": 170,
+  "s5": 0,
+  "phys": 192,
+  "phys_pre5": 192
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/delta/candidates.rs",
+  "pre1": 0,
+  "pre5": 126,
+  "rev": 126,
+  "cum": 126,
+  "s5": 0,
+  "phys": 166,
+  "phys_pre5": 166
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/delta/mod.rs",
+  "pre1": 0,
+  "pre5": 4,
+  "rev": 4,
+  "cum": 4,
+  "s5": 0,
+  "phys": 8,
+  "phys_pre5": 8
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+  "pre1": 0,
+  "pre5": 224,
+  "rev": 224,
+  "cum": 224,
+  "s5": 0,
+  "phys": 298,
+  "phys_pre5": 298
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/delta/record.rs",
+  "pre1": 0,
+  "pre5": 201,
+  "rev": 201,
+  "cum": 201,
+  "s5": 0,
+  "phys": 240,
+  "phys_pre5": 240
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/delta/select.rs",
+  "pre1": 0,
+  "pre5": 268,
+  "rev": 277,
+  "cum": 277,
+  "s5": 9,
+  "phys": 390,
+  "phys_pre5": 377
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/full.rs",
+  "pre1": 0,
+  "pre5": 178,
+  "rev": 185,
+  "cum": 185,
+  "s5": 7,
+  "phys": 225,
+  "phys_pre5": 218
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/mod.rs",
+  "pre1": 0,
+  "pre5": 11,
+  "rev": 11,
+  "cum": 11,
+  "s5": 0,
+  "phys": 17,
+  "phys_pre5": 17
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/pool/delta.rs",
+  "pre1": 0,
+  "pre5": 261,
+  "rev": 261,
+  "cum": 261,
+  "s5": 0,
+  "phys": 287,
+  "phys_pre5": 287
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/pool/index.rs",
+  "pre1": 0,
+  "pre5": 199,
+  "rev": 199,
+  "cum": 199,
+  "s5": 0,
+  "phys": 261,
+  "phys_pre5": 261
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/pool/leaf.rs",
+  "pre1": 0,
+  "pre5": 103,
+  "rev": 103,
+  "cum": 103,
+  "s5": 0,
+  "phys": 145,
+  "phys_pre5": 145
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/pool/mod.rs",
+  "pre1": 0,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 9,
+  "s5": 0,
+  "phys": 14,
+  "phys_pre5": 14
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/pool/read.rs",
+  "pre1": 0,
+  "pre5": 309,
+  "rev": 309,
+  "cum": 309,
+  "s5": 0,
+  "phys": 366,
+  "phys_pre5": 366
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/encoding/pool/value_group.rs",
+  "pre1": 0,
+  "pre5": 77,
+  "rev": 77,
+  "cum": 77,
+  "s5": 0,
+  "phys": 103,
+  "phys_pre5": 103
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/error.rs",
+  "pre1": 0,
+  "pre5": 105,
+  "rev": 105,
+  "cum": 105,
+  "s5": 0,
+  "phys": 154,
+  "phys_pre5": 154
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/lib.rs",
+  "pre1": 0,
+  "pre5": 11,
+  "rev": 11,
+  "cum": 11,
+  "s5": 0,
+  "phys": 30,
+  "phys_pre5": 30
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/pack/assemble.rs",
+  "pre1": 0,
+  "pre5": 255,
+  "rev": 261,
+  "cum": 261,
+  "s5": 6,
+  "phys": 319,
+  "phys_pre5": 305
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/pack/layout.rs",
+  "pre1": 0,
+  "pre5": 390,
+  "rev": 397,
+  "cum": 397,
+  "s5": 7,
+  "phys": 488,
+  "phys_pre5": 481
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/pack/mod.rs",
+  "pre1": 0,
+  "pre5": 14,
+  "rev": 14,
+  "cum": 14,
+  "s5": 0,
+  "phys": 19,
+  "phys_pre5": 19
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/pack/placement.rs",
+  "pre1": 0,
+  "pre5": 119,
+  "rev": 119,
+  "cum": 119,
+  "s5": 0,
+  "phys": 162,
+  "phys_pre5": 162
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/policy.rs",
+  "pre1": 0,
+  "pre5": 187,
+  "rev": 191,
+  "cum": 191,
+  "s5": 4,
+  "phys": 344,
+  "phys_pre5": 322
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/cleanup.rs",
+  "pre1": 0,
+  "pre5": 113,
+  "rev": 113,
+  "cum": 113,
+  "s5": 0,
+  "phys": 150,
+  "phys_pre5": 150
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/connection.rs",
+  "pre1": 0,
+  "pre5": 50,
+  "rev": 50,
+  "cum": 50,
+  "s5": 0,
+  "phys": 72,
+  "phys_pre5": 72
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/lookup.rs",
+  "pre1": 0,
+  "pre5": 141,
+  "rev": 138,
+  "cum": 138,
+  "s5": -3,
+  "phys": 172,
+  "phys_pre5": 177
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/mod.rs",
+  "pre1": 0,
+  "pre5": 10,
+  "rev": 10,
+  "cum": 10,
+  "s5": 0,
+  "phys": 15,
+  "phys_pre5": 15
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/pool.rs",
+  "pre1": 0,
+  "pre5": 122,
+  "rev": 122,
+  "cum": 122,
+  "s5": 0,
+  "phys": 177,
+  "phys_pre5": 177
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/schema.rs",
+  "pre1": 0,
+  "pre5": 232,
+  "rev": 253,
+  "cum": 253,
+  "s5": 21,
+  "phys": 296,
+  "phys_pre5": 267
+ },
+ {
+  "path": "core/crates/layerfs-storage/src/sqlite/write.rs",
+  "pre1": 0,
+  "pre5": 83,
+  "rev": 83,
+  "cum": 83,
+  "s5": 0,
+  "phys": 123,
+  "phys_pre5": 117
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/lib.rs",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 16,
+  "phys_pre5": 16
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/timer/format.rs",
+  "pre1": 69,
+  "pre5": 69,
+  "rev": 69,
+  "cum": 0,
+  "s5": 0,
+  "phys": 82,
+  "phys_pre5": 82
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/timer/json.rs",
+  "pre1": 115,
+  "pre5": 115,
+  "rev": 115,
+  "cum": 0,
+  "s5": 0,
+  "phys": 136,
+  "phys_pre5": 136
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/timer/mod.rs",
+  "pre1": 8,
+  "pre5": 8,
+  "rev": 8,
+  "cum": 0,
+  "s5": 0,
+  "phys": 25,
+  "phys_pre5": 25
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/timer/recording.rs",
+  "pre1": 232,
+  "pre5": 232,
+  "rev": 232,
+  "cum": 0,
+  "s5": 0,
+  "phys": 291,
+  "phys_pre5": 291
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/timer/report.rs",
+  "pre1": 170,
+  "pre5": 170,
+  "rev": 170,
+  "cum": 0,
+  "s5": 0,
+  "phys": 249,
+  "phys_pre5": 249
+ },
+ {
+  "path": "core/crates/layerfs-telemetry/src/timer/scope.rs",
+  "pre1": 135,
+  "pre5": 135,
+  "rev": 135,
+  "cum": 0,
+  "s5": 0,
+  "phys": 206,
+  "phys_pre5": 206
+ },
+ {
+  "path": "crates/layerfs-cli/src/bin/layerfs.rs",
+  "pre1": 43,
+  "pre5": 43,
+  "rev": 43,
+  "cum": 0,
+  "s5": 0,
+  "phys": 43,
+  "phys_pre5": 43
+ },
+ {
+  "path": "crates/layerfs-cli/src/lib.rs",
+  "pre1": 791,
+  "pre5": 791,
+  "rev": 791,
+  "cum": 0,
+  "s5": 0,
+  "phys": 834,
+  "phys_pre5": 834
+ },
+ {
+  "path": "crates/layerfs-cli/src/runtime.rs",
+  "pre1": 308,
+  "pre5": 308,
+  "rev": 308,
+  "cum": 0,
+  "s5": 0,
+  "phys": 342,
+  "phys_pre5": 342
+ },
+ {
+  "path": "crates/layerfs-content/src/error.rs",
+  "pre1": 160,
+  "pre5": 160,
+  "rev": 160,
+  "cum": 0,
+  "s5": 0,
+  "phys": 165,
+  "phys_pre5": 165
+ },
+ {
+  "path": "crates/layerfs-content/src/file/cdc/gear.rs",
+  "pre1": 494,
+  "pre5": 494,
+  "rev": 494,
+  "cum": 0,
+  "s5": 0,
+  "phys": 519,
+  "phys_pre5": 519
+ },
+ {
+  "path": "crates/layerfs-content/src/file/cdc/mod.rs",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 133,
+  "phys_pre5": 133
+ },
+ {
+  "path": "crates/layerfs-content/src/file/content.rs",
+  "pre1": 277,
+  "pre5": 277,
+  "rev": 277,
+  "cum": 0,
+  "s5": 0,
+  "phys": 300,
+  "phys_pre5": 300
+ },
+ {
+  "path": "crates/layerfs-content/src/file/extent.rs",
+  "pre1": 153,
+  "pre5": 153,
+  "rev": 153,
+  "cum": 0,
+  "s5": 0,
+  "phys": 161,
+  "phys_pre5": 161
+ },
+ {
+  "path": "crates/layerfs-content/src/file/extent_codec.rs",
+  "pre1": 235,
+  "pre5": 235,
+  "rev": 235,
+  "cum": 0,
+  "s5": 0,
+  "phys": 267,
+  "phys_pre5": 267
+ },
+ {
+  "path": "crates/layerfs-content/src/file/mod.rs",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 5,
+  "phys_pre5": 5
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/build.rs",
+  "pre1": 300,
+  "pre5": 300,
+  "rev": 300,
+  "cum": 0,
+  "s5": 0,
+  "phys": 367,
+  "phys_pre5": 367
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/diff.rs",
+  "pre1": 386,
+  "pre5": 386,
+  "rev": 386,
+  "cum": 0,
+  "s5": 0,
+  "phys": 403,
+  "phys_pre5": 403
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/edit.rs",
+  "pre1": 749,
+  "pre5": 749,
+  "rev": 749,
+  "cum": 0,
+  "s5": 0,
+  "phys": 904,
+  "phys_pre5": 904
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/mod.rs",
+  "pre1": 15,
+  "pre5": 15,
+  "rev": 15,
+  "cum": 0,
+  "s5": 0,
+  "phys": 16,
+  "phys_pre5": 16
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/read.rs",
+  "pre1": 493,
+  "pre5": 493,
+  "rev": 493,
+  "cum": 0,
+  "s5": 0,
+  "phys": 515,
+  "phys_pre5": 515
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/state.rs",
+  "pre1": 225,
+  "pre5": 225,
+  "rev": 225,
+  "cum": 0,
+  "s5": 0,
+  "phys": 245,
+  "phys_pre5": 245
+ },
+ {
+  "path": "crates/layerfs-content/src/file/rope/validate.rs",
+  "pre1": 127,
+  "pre5": 127,
+  "rev": 127,
+  "cum": 0,
+  "s5": 0,
+  "phys": 132,
+  "phys_pre5": 132
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/apply.rs",
+  "pre1": 870,
+  "pre5": 870,
+  "rev": 870,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1411,
+  "phys_pre5": 1411
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/change.rs",
+  "pre1": 409,
+  "pre5": 409,
+  "rev": 409,
+  "cum": 0,
+  "s5": 0,
+  "phys": 571,
+  "phys_pre5": 571
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/diff.rs",
+  "pre1": 433,
+  "pre5": 433,
+  "rev": 433,
+  "cum": 0,
+  "s5": 0,
+  "phys": 452,
+  "phys_pre5": 452
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/mod.rs",
+  "pre1": 27,
+  "pre5": 27,
+  "rev": 27,
+  "cum": 0,
+  "s5": 0,
+  "phys": 28,
+  "phys_pre5": 28
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/read.rs",
+  "pre1": 121,
+  "pre5": 121,
+  "rev": 121,
+  "cum": 0,
+  "s5": 0,
+  "phys": 129,
+  "phys_pre5": 129
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/reconcile.rs",
+  "pre1": 911,
+  "pre5": 911,
+  "rev": 911,
+  "cum": 0,
+  "s5": 0,
+  "phys": 962,
+  "phys_pre5": 962
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/resolve.rs",
+  "pre1": 82,
+  "pre5": 82,
+  "rev": 82,
+  "cum": 0,
+  "s5": 0,
+  "phys": 88,
+  "phys_pre5": 88
+ },
+ {
+  "path": "crates/layerfs-content/src/filesystem/root.rs",
+  "pre1": 46,
+  "pre5": 46,
+  "rev": 46,
+  "cum": 0,
+  "s5": 0,
+  "phys": 47,
+  "phys_pre5": 47
+ },
+ {
+  "path": "crates/layerfs-content/src/lib.rs",
+  "pre1": 17,
+  "pre5": 17,
+  "rev": 17,
+  "cum": 0,
+  "s5": 0,
+  "phys": 22,
+  "phys_pre5": 22
+ },
+ {
+  "path": "crates/layerfs-content/src/limits.rs",
+  "pre1": 8,
+  "pre5": 8,
+  "rev": 8,
+  "cum": 0,
+  "s5": 0,
+  "phys": 8,
+  "phys_pre5": 8
+ },
+ {
+  "path": "crates/layerfs-content/src/object/access.rs",
+  "pre1": 139,
+  "pre5": 139,
+  "rev": 139,
+  "cum": 0,
+  "s5": 0,
+  "phys": 167,
+  "phys_pre5": 167
+ },
+ {
+  "path": "crates/layerfs-content/src/object/canonical.rs",
+  "pre1": 81,
+  "pre5": 81,
+  "rev": 81,
+  "cum": 0,
+  "s5": 0,
+  "phys": 97,
+  "phys_pre5": 97
+ },
+ {
+  "path": "crates/layerfs-content/src/object/codec.rs",
+  "pre1": 428,
+  "pre5": 428,
+  "rev": 428,
+  "cum": 0,
+  "s5": 0,
+  "phys": 779,
+  "phys_pre5": 779
+ },
+ {
+  "path": "crates/layerfs-content/src/object/digest.rs",
+  "pre1": 87,
+  "pre5": 87,
+  "rev": 87,
+  "cum": 0,
+  "s5": 0,
+  "phys": 162,
+  "phys_pre5": 162
+ },
+ {
+  "path": "crates/layerfs-content/src/object/id.rs",
+  "pre1": 66,
+  "pre5": 66,
+  "rev": 66,
+  "cum": 0,
+  "s5": 0,
+  "phys": 106,
+  "phys_pre5": 106
+ },
+ {
+  "path": "crates/layerfs-content/src/object/mod.rs",
+  "pre1": 17,
+  "pre5": 17,
+  "rev": 17,
+  "cum": 0,
+  "s5": 0,
+  "phys": 19,
+  "phys_pre5": 19
+ },
+ {
+  "path": "crates/layerfs-content/src/object/references.rs",
+  "pre1": 93,
+  "pre5": 93,
+  "rev": 93,
+  "cum": 0,
+  "s5": 0,
+  "phys": 173,
+  "phys_pre5": 173
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/batch.rs",
+  "pre1": 1387,
+  "pre5": 1387,
+  "rev": 1387,
+  "cum": 0,
+  "s5": 0,
+  "phys": 2863,
+  "phys_pre5": 2863
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/compact.rs",
+  "pre1": 477,
+  "pre5": 477,
+  "rev": 477,
+  "cum": 0,
+  "s5": 0,
+  "phys": 612,
+  "phys_pre5": 612
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/codec.rs",
+  "pre1": 495,
+  "pre5": 495,
+  "rev": 495,
+  "cum": 0,
+  "s5": 0,
+  "phys": 519,
+  "phys_pre5": 519
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/diff.rs",
+  "pre1": 345,
+  "pre5": 345,
+  "rev": 345,
+  "cum": 0,
+  "s5": 0,
+  "phys": 358,
+  "phys_pre5": 358
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/edit.rs",
+  "pre1": 759,
+  "pre5": 759,
+  "rev": 759,
+  "cum": 0,
+  "s5": 0,
+  "phys": 791,
+  "phys_pre5": 791
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/mod.rs",
+  "pre1": 19,
+  "pre5": 19,
+  "rev": 19,
+  "cum": 0,
+  "s5": 0,
+  "phys": 22,
+  "phys_pre5": 22
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/node.rs",
+  "pre1": 47,
+  "pre5": 47,
+  "rev": 47,
+  "cum": 0,
+  "s5": 0,
+  "phys": 55,
+  "phys_pre5": 55
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/read.rs",
+  "pre1": 771,
+  "pre5": 771,
+  "rev": 771,
+  "cum": 0,
+  "s5": 0,
+  "phys": 891,
+  "phys_pre5": 891
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/directory/validate.rs",
+  "pre1": 211,
+  "pre5": 211,
+  "rev": 211,
+  "cum": 0,
+  "s5": 0,
+  "phys": 343,
+  "phys_pre5": 343
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/inode/codec.rs",
+  "pre1": 121,
+  "pre5": 121,
+  "rev": 121,
+  "cum": 0,
+  "s5": 0,
+  "phys": 126,
+  "phys_pre5": 126
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/inode/cursor.rs",
+  "pre1": 310,
+  "pre5": 310,
+  "rev": 310,
+  "cum": 0,
+  "s5": 0,
+  "phys": 325,
+  "phys_pre5": 325
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/inode/mod.rs",
+  "pre1": 6,
+  "pre5": 6,
+  "rev": 6,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/inode/record.rs",
+  "pre1": 87,
+  "pre5": 87,
+  "rev": 87,
+  "cum": 0,
+  "s5": 0,
+  "phys": 102,
+  "phys_pre5": 102
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/inode/table.rs",
+  "pre1": 1886,
+  "pre5": 1886,
+  "rev": 1886,
+  "cum": 0,
+  "s5": 0,
+  "phys": 2015,
+  "phys_pre5": 2015
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/metadata/apple_acl.rs",
+  "pre1": 83,
+  "pre5": 83,
+  "rev": 83,
+  "cum": 0,
+  "s5": 0,
+  "phys": 88,
+  "phys_pre5": 88
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/metadata/codec.rs",
+  "pre1": 158,
+  "pre5": 158,
+  "rev": 158,
+  "cum": 0,
+  "s5": 0,
+  "phys": 162,
+  "phys_pre5": 162
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/metadata/mod.rs",
+  "pre1": 8,
+  "pre5": 8,
+  "rev": 8,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/metadata/portable.rs",
+  "pre1": 77,
+  "pre5": 77,
+  "rev": 77,
+  "cum": 0,
+  "s5": 0,
+  "phys": 85,
+  "phys_pre5": 85
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/metadata/tree.rs",
+  "pre1": 788,
+  "pre5": 788,
+  "rev": 788,
+  "cum": 0,
+  "s5": 0,
+  "phys": 822,
+  "phys_pre5": 822
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/mod.rs",
+  "pre1": 9,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 0,
+  "s5": 0,
+  "phys": 10,
+  "phys_pre5": 10
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/path.rs",
+  "pre1": 189,
+  "pre5": 189,
+  "rev": 189,
+  "cum": 0,
+  "s5": 0,
+  "phys": 314,
+  "phys_pre5": 314
+ },
+ {
+  "path": "crates/layerfs-content/src/tree/root.rs",
+  "pre1": 9,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 0,
+  "s5": 0,
+  "phys": 11,
+  "phys_pre5": 11
+ },
+ {
+  "path": "crates/layerfs-daemon/src/lib.rs",
+  "pre1": 597,
+  "pre5": 597,
+  "rev": 597,
+  "cum": 0,
+  "s5": 0,
+  "phys": 799,
+  "phys_pre5": 799
+ },
+ {
+  "path": "crates/layerfs-daemon/src/main.rs",
+  "pre1": 1809,
+  "pre5": 1809,
+  "rev": 1809,
+  "cum": 0,
+  "s5": 0,
+  "phys": 2253,
+  "phys_pre5": 2253
+ },
+ {
+  "path": "crates/layerfs-daemon/src/protocol.rs",
+  "pre1": 827,
+  "pre5": 827,
+  "rev": 827,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1127,
+  "phys_pre5": 1127
+ },
+ {
+  "path": "crates/layerfs-fuse/src/adapter.rs",
+  "pre1": 148,
+  "pre5": 148,
+  "rev": 148,
+  "cum": 0,
+  "s5": 0,
+  "phys": 162,
+  "phys_pre5": 162
+ },
+ {
+  "path": "crates/layerfs-fuse/src/bin/layerfs-fuse.rs",
+  "pre1": 161,
+  "pre5": 161,
+  "rev": 161,
+  "cum": 0,
+  "s5": 0,
+  "phys": 174,
+  "phys_pre5": 174
+ },
+ {
+  "path": "crates/layerfs-fuse/src/filesystem.rs",
+  "pre1": 1366,
+  "pre5": 1366,
+  "rev": 1366,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1438,
+  "phys_pre5": 1438
+ },
+ {
+  "path": "crates/layerfs-fuse/src/handles.rs",
+  "pre1": 37,
+  "pre5": 37,
+  "rev": 37,
+  "cum": 0,
+  "s5": 0,
+  "phys": 43,
+  "phys_pre5": 43
+ },
+ {
+  "path": "crates/layerfs-fuse/src/host_mount.rs",
+  "pre1": 103,
+  "pre5": 103,
+  "rev": 103,
+  "cum": 0,
+  "s5": 0,
+  "phys": 112,
+  "phys_pre5": 112
+ },
+ {
+  "path": "crates/layerfs-fuse/src/immutable_read_cache.rs",
+  "pre1": 194,
+  "pre5": 194,
+  "rev": 194,
+  "cum": 0,
+  "s5": 0,
+  "phys": 322,
+  "phys_pre5": 322
+ },
+ {
+  "path": "crates/layerfs-fuse/src/inode_table.rs",
+  "pre1": 15,
+  "pre5": 15,
+  "rev": 15,
+  "cum": 0,
+  "s5": 0,
+  "phys": 18,
+  "phys_pre5": 18
+ },
+ {
+  "path": "crates/layerfs-fuse/src/lib.rs",
+  "pre1": 47,
+  "pre5": 47,
+  "rev": 47,
+  "cum": 0,
+  "s5": 0,
+  "phys": 58,
+  "phys_pre5": 58
+ },
+ {
+  "path": "crates/layerfs-fuse/src/live_owner.rs",
+  "pre1": 2939,
+  "pre5": 2939,
+  "rev": 2939,
+  "cum": 0,
+  "s5": 0,
+  "phys": 4279,
+  "phys_pre5": 4279
+ },
+ {
+  "path": "crates/layerfs-fuse/src/live_runtime.rs",
+  "pre1": 316,
+  "pre5": 316,
+  "rev": 316,
+  "cum": 0,
+  "s5": 0,
+  "phys": 529,
+  "phys_pre5": 529
+ },
+ {
+  "path": "crates/layerfs-fuse/src/live_transport.rs",
+  "pre1": 672,
+  "pre5": 672,
+  "rev": 672,
+  "cum": 0,
+  "s5": 0,
+  "phys": 870,
+  "phys_pre5": 870
+ },
+ {
+  "path": "crates/layerfs-fuse/src/live_wire.rs",
+  "pre1": 653,
+  "pre5": 653,
+  "rev": 653,
+  "cum": 0,
+  "s5": 0,
+  "phys": 896,
+  "phys_pre5": 896
+ },
+ {
+  "path": "crates/layerfs-fuse/src/local_spool.rs",
+  "pre1": 268,
+  "pre5": 268,
+  "rev": 268,
+  "cum": 0,
+  "s5": 0,
+  "phys": 509,
+  "phys_pre5": 509
+ },
+ {
+  "path": "crates/layerfs-fuse/src/port.rs",
+  "pre1": 455,
+  "pre5": 455,
+  "rev": 455,
+  "cum": 0,
+  "s5": 0,
+  "phys": 482,
+  "phys_pre5": 482
+ },
+ {
+  "path": "crates/layerfs-fuse/src/protocol.rs",
+  "pre1": 986,
+  "pre5": 986,
+  "rev": 986,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1357,
+  "phys_pre5": 1357
+ },
+ {
+  "path": "crates/layerfs-fuse/src/proxy_client.rs",
+  "pre1": 1457,
+  "pre5": 1457,
+  "rev": 1457,
+  "cum": 0,
+  "s5": 0,
+  "phys": 2118,
+  "phys_pre5": 2118
+ },
+ {
+  "path": "crates/layerfs-fuse/src/proxy_host.rs",
+  "pre1": 403,
+  "pre5": 403,
+  "rev": 403,
+  "cum": 0,
+  "s5": 0,
+  "phys": 433,
+  "phys_pre5": 433
+ },
+ {
+  "path": "crates/layerfs-fuse/src/write_metrics.rs",
+  "pre1": 766,
+  "pre5": 766,
+  "rev": 766,
+  "cum": 0,
+  "s5": 0,
+  "phys": 869,
+  "phys_pre5": 869
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/contains_commit.sql",
+  "pre1": 10,
+  "pre5": 10,
+  "rev": 10,
+  "cum": 0,
+  "s5": 0,
+  "phys": 14,
+  "phys_pre5": 14
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/get.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/get_by_name.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/get_commit.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/history_page.sql",
+  "pre1": 11,
+  "pre5": 11,
+  "rev": 11,
+  "cum": 0,
+  "s5": 0,
+  "phys": 15,
+  "phys_pre5": 15
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/insert.sql",
+  "pre1": 2,
+  "pre5": 2,
+  "rev": 2,
+  "cum": 0,
+  "s5": 0,
+  "phys": 6,
+  "phys_pre5": 6
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/list.sql",
+  "pre1": 9,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 0,
+  "s5": 0,
+  "phys": 13,
+  "phys_pre5": 13
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/branch/list_commits.sql",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/advance_head.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/current_head.sql",
+  "pre1": 1,
+  "pre5": 1,
+  "rev": 1,
+  "cum": 0,
+  "s5": 0,
+  "phys": 5,
+  "phys_pre5": 5
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/find_layer_by_source.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/get.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/get_by_name.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/get_layer.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/history_page.sql",
+  "pre1": 11,
+  "pre5": 11,
+  "rev": 11,
+  "cum": 0,
+  "s5": 0,
+  "phys": 15,
+  "phys_pre5": 15
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/insert.sql",
+  "pre1": 2,
+  "pre5": 2,
+  "rev": 2,
+  "cum": 0,
+  "s5": 0,
+  "phys": 6,
+  "phys_pre5": 6
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/insert_layer.sql",
+  "pre1": 2,
+  "pre5": 2,
+  "rev": 2,
+  "cum": 0,
+  "s5": 0,
+  "phys": 6,
+  "phys_pre5": 6
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/list.sql",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/list_layers.sql",
+  "pre1": 9,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 0,
+  "s5": 0,
+  "phys": 13,
+  "phys_pre5": 13
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/layerstack/load_add_snapshot.sql",
+  "pre1": 9,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 0,
+  "s5": 0,
+  "phys": 13,
+  "phys_pre5": 13
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/objects/get.sql",
+  "pre1": 1,
+  "pre5": 1,
+  "rev": 1,
+  "cum": 0,
+  "s5": 0,
+  "phys": 5,
+  "phys_pre5": 5
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/objects/get_many_128.sql",
+  "pre1": 13,
+  "pre5": 13,
+  "rev": 13,
+  "cum": 0,
+  "s5": 0,
+  "phys": 17,
+  "phys_pre5": 17
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/objects/insert.sql",
+  "pre1": 2,
+  "pre5": 2,
+  "rev": 2,
+  "cum": 0,
+  "s5": 0,
+  "phys": 6,
+  "phys_pre5": 6
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/objects/membership_128.sql",
+  "pre1": 13,
+  "pre5": 13,
+  "rev": 13,
+  "cum": 0,
+  "s5": 0,
+  "phys": 17,
+  "phys_pre5": 17
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/objects/page.sql",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/query/branch_roots_page.sql",
+  "pre1": 7,
+  "pre5": 7,
+  "rev": 7,
+  "cum": 0,
+  "s5": 0,
+  "phys": 11,
+  "phys_pre5": 11
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/query/canonical_storage.sql",
+  "pre1": 1,
+  "pre5": 1,
+  "rev": 1,
+  "cum": 0,
+  "s5": 0,
+  "phys": 5,
+  "phys_pre5": 5
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/query/commit_roots_page.sql",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/query/layer_roots_page.sql",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/query/store_counts.sql",
+  "pre1": 6,
+  "pre5": 6,
+  "rev": 6,
+  "cum": 0,
+  "s5": 0,
+  "phys": 10,
+  "phys_pre5": 10
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/foreign_key_check.sql",
+  "pre1": 2,
+  "pre5": 2,
+  "rev": 2,
+  "cum": 0,
+  "s5": 0,
+  "phys": 6,
+  "phys_pre5": 6
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/migrate_to_v9.sql",
+  "pre1": 1,
+  "pre5": 1,
+  "rev": 1,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1,
+  "phys_pre5": 1
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/migrate_v4_to_v5.sql",
+  "pre1": 8,
+  "pre5": 8,
+  "rev": 8,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/migrate_v7_to_v8.sql",
+  "pre1": 1,
+  "pre5": 1,
+  "rev": 1,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1,
+  "phys_pre5": 1
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/reserve_inode_serials.sql",
+  "pre1": 4,
+  "pre5": 4,
+  "rev": 4,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/schema_objects.sql",
+  "pre1": 4,
+  "pre5": 4,
+  "rev": 4,
+  "cum": 0,
+  "s5": 0,
+  "phys": 8,
+  "phys_pre5": 8
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/table_columns.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v10.sql",
+  "pre1": 151,
+  "pre5": 151,
+  "rev": 151,
+  "cum": 0,
+  "s5": 0,
+  "phys": 167,
+  "phys_pre5": 167
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v4.sql",
+  "pre1": 124,
+  "pre5": 124,
+  "rev": 124,
+  "cum": 0,
+  "s5": 0,
+  "phys": 136,
+  "phys_pre5": 136
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v5.sql",
+  "pre1": 131,
+  "pre5": 131,
+  "rev": 131,
+  "cum": 0,
+  "s5": 0,
+  "phys": 144,
+  "phys_pre5": 144
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v6.sql",
+  "pre1": 138,
+  "pre5": 138,
+  "rev": 138,
+  "cum": 0,
+  "s5": 0,
+  "phys": 152,
+  "phys_pre5": 152
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v7.sql",
+  "pre1": 138,
+  "pre5": 138,
+  "rev": 138,
+  "cum": 0,
+  "s5": 0,
+  "phys": 152,
+  "phys_pre5": 152
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v8.sql",
+  "pre1": 138,
+  "pre5": 138,
+  "rev": 138,
+  "cum": 0,
+  "s5": 0,
+  "phys": 152,
+  "phys_pre5": 152
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/schema/v9.sql",
+  "pre1": 138,
+  "pre5": 138,
+  "rev": 138,
+  "cum": 0,
+  "s5": 0,
+  "phys": 152,
+  "phys_pre5": 152
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/advance_branch.sql",
+  "pre1": 5,
+  "pre5": 5,
+  "rev": 5,
+  "cum": 0,
+  "s5": 0,
+  "phys": 9,
+  "phys_pre5": 9
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/current_branch.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/delete_stage.sql",
+  "pre1": 4,
+  "pre5": 4,
+  "rev": 4,
+  "cum": 0,
+  "s5": 0,
+  "phys": 8,
+  "phys_pre5": 8
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/get_stage.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/insert_commit.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/insert_stage.sql",
+  "pre1": 3,
+  "pre5": 3,
+  "rev": 3,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7,
+  "phys_pre5": 7
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/sql/workspace/load_snapshot.sql",
+  "pre1": 8,
+  "pre5": 8,
+  "rev": 8,
+  "cum": 0,
+  "s5": 0,
+  "phys": 12,
+  "phys_pre5": 12
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/branch.rs",
+  "pre1": 97,
+  "pre5": 97,
+  "rev": 97,
+  "cum": 0,
+  "s5": 0,
+  "phys": 100,
+  "phys_pre5": 100
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/error.rs",
+  "pre1": 84,
+  "pre5": 84,
+  "rev": 84,
+  "cum": 0,
+  "s5": 0,
+  "phys": 93,
+  "phys_pre5": 93
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/ids.rs",
+  "pre1": 182,
+  "pre5": 182,
+  "rev": 182,
+  "cum": 0,
+  "s5": 0,
+  "phys": 225,
+  "phys_pre5": 225
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/layerstack.rs",
+  "pre1": 2059,
+  "pre5": 2059,
+  "rev": 2059,
+  "cum": 0,
+  "s5": 0,
+  "phys": 4284,
+  "phys_pre5": 4284
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/lib.rs",
+  "pre1": 60,
+  "pre5": 60,
+  "rev": 60,
+  "cum": 0,
+  "s5": 0,
+  "phys": 65,
+  "phys_pre5": 65
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects.rs",
+  "pre1": 3819,
+  "pre5": 3819,
+  "rev": 3819,
+  "cum": 0,
+  "s5": 0,
+  "phys": 7099,
+  "phys_pre5": 7099
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/admission.rs",
+  "pre1": 1742,
+  "pre5": 1742,
+  "rev": 1742,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1940,
+  "phys_pre5": 1940
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/admission/metadata_values.rs",
+  "pre1": 131,
+  "pre5": 131,
+  "rev": 131,
+  "cum": 0,
+  "s5": 0,
+  "phys": 143,
+  "phys_pre5": 143
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/delta.rs",
+  "pre1": 110,
+  "pre5": 110,
+  "rev": 110,
+  "cum": 0,
+  "s5": 0,
+  "phys": 116,
+  "phys_pre5": 116
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/diagnostic.rs",
+  "pre1": 311,
+  "pre5": 311,
+  "rev": 311,
+  "cum": 0,
+  "s5": 0,
+  "phys": 662,
+  "phys_pre5": 662
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/metadata.rs",
+  "pre1": 374,
+  "pre5": 374,
+  "rev": 374,
+  "cum": 0,
+  "s5": 0,
+  "phys": 548,
+  "phys_pre5": 548
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/pack.rs",
+  "pre1": 1399,
+  "pre5": 1399,
+  "rev": 1399,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1953,
+  "phys_pre5": 1953
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/read.rs",
+  "pre1": 1958,
+  "pre5": 1958,
+  "rev": 1958,
+  "cum": 0,
+  "s5": 0,
+  "phys": 2078,
+  "phys_pre5": 2078
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/small_candidates.rs",
+  "pre1": 112,
+  "pre5": 112,
+  "rev": 112,
+  "cum": 0,
+  "s5": 0,
+  "phys": 125,
+  "phys_pre5": 125
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/spill.rs",
+  "pre1": 783,
+  "pre5": 783,
+  "rev": 783,
+  "cum": 0,
+  "s5": 0,
+  "phys": 935,
+  "phys_pre5": 935
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/objects/whole.rs",
+  "pre1": 338,
+  "pre5": 338,
+  "rev": 338,
+  "cum": 0,
+  "s5": 0,
+  "phys": 424,
+  "phys_pre5": 424
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/query.rs",
+  "pre1": 477,
+  "pre5": 477,
+  "rev": 477,
+  "cum": 0,
+  "s5": 0,
+  "phys": 506,
+  "phys_pre5": 506
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/records.rs",
+  "pre1": 383,
+  "pre5": 383,
+  "rev": 383,
+  "cum": 0,
+  "s5": 0,
+  "phys": 422,
+  "phys_pre5": 422
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/schema.rs",
+  "pre1": 685,
+  "pre5": 685,
+  "rev": 685,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1021,
+  "phys_pre5": 1021
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/staging.rs",
+  "pre1": 79,
+  "pre5": 79,
+  "rev": 79,
+  "cum": 0,
+  "s5": 0,
+  "phys": 84,
+  "phys_pre5": 84
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/statements.rs",
+  "pre1": 126,
+  "pre5": 126,
+  "rev": 126,
+  "cum": 0,
+  "s5": 0,
+  "phys": 384,
+  "phys_pre5": 384
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/store.rs",
+  "pre1": 55,
+  "pre5": 55,
+  "rev": 55,
+  "cum": 0,
+  "s5": 0,
+  "phys": 67,
+  "phys_pre5": 67
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/telemetry.rs",
+  "pre1": 906,
+  "pre5": 906,
+  "rev": 906,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1049,
+  "phys_pre5": 1049
+ },
+ {
+  "path": "crates/layerfs-layerstack-store/src/workspace.rs",
+  "pre1": 938,
+  "pre5": 938,
+  "rev": 938,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1206,
+  "phys_pre5": 1206
+ },
+ {
+  "path": "crates/layerfs-materialization/src/capture.rs",
+  "pre1": 84,
+  "pre5": 84,
+  "rev": 84,
+  "cum": 0,
+  "s5": 0,
+  "phys": 87,
+  "phys_pre5": 87
+ },
+ {
+  "path": "crates/layerfs-materialization/src/lib.rs",
+  "pre1": 9,
+  "pre5": 9,
+  "rev": 9,
+  "cum": 0,
+  "s5": 0,
+  "phys": 11,
+  "phys_pre5": 11
+ },
+ {
+  "path": "crates/layerfs-materialization/src/materialize.rs",
+  "pre1": 186,
+  "pre5": 186,
+  "rev": 186,
+  "cum": 0,
+  "s5": 0,
+  "phys": 197,
+  "phys_pre5": 197
+ },
+ {
+  "path": "crates/layerfs-materialization/src/port.rs",
+  "pre1": 79,
+  "pre5": 79,
+  "rev": 79,
+  "cum": 0,
+  "s5": 0,
+  "phys": 91,
+  "phys_pre5": 91
+ },
+ {
+  "path": "crates/layerfs-monitor/src/collector.rs",
+  "pre1": 75,
+  "pre5": 75,
+  "rev": 75,
+  "cum": 0,
+  "s5": 0,
+  "phys": 81,
+  "phys_pre5": 81
+ },
+ {
+  "path": "crates/layerfs-monitor/src/dedup.rs",
+  "pre1": 116,
+  "pre5": 116,
+  "rev": 116,
+  "cum": 0,
+  "s5": 0,
+  "phys": 120,
+  "phys_pre5": 120
+ },
+ {
+  "path": "crates/layerfs-monitor/src/lib.rs",
+  "pre1": 13,
+  "pre5": 13,
+  "rev": 13,
+  "cum": 0,
+  "s5": 0,
+  "phys": 15,
+  "phys_pre5": 15
+ },
+ {
+  "path": "crates/layerfs-monitor/src/operation.rs",
+  "pre1": 164,
+  "pre5": 164,
+  "rev": 164,
+  "cum": 0,
+  "s5": 0,
+  "phys": 179,
+  "phys_pre5": 179
+ },
+ {
+  "path": "crates/layerfs-monitor/src/snapshot.rs",
+  "pre1": 46,
+  "pre5": 46,
+  "rev": 46,
+  "cum": 0,
+  "s5": 0,
+  "phys": 55,
+  "phys_pre5": 55
+ },
+ {
+  "path": "crates/layerfs-sdk/src/client.rs",
+  "pre1": 565,
+  "pre5": 565,
+  "rev": 565,
+  "cum": 0,
+  "s5": 0,
+  "phys": 617,
+  "phys_pre5": 617
+ },
+ {
+  "path": "crates/layerfs-sdk/src/lib.rs",
+  "pre1": 37,
+  "pre5": 37,
+  "rev": 37,
+  "cum": 0,
+  "s5": 0,
+  "phys": 40,
+  "phys_pre5": 40
+ },
+ {
+  "path": "crates/layerfs-sdk/src/query.rs",
+  "pre1": 75,
+  "pre5": 75,
+  "rev": 75,
+  "cum": 0,
+  "s5": 0,
+  "phys": 89,
+  "phys_pre5": 89
+ },
+ {
+  "path": "crates/layerfs-sdk/src/request.rs",
+  "pre1": 268,
+  "pre5": 268,
+  "rev": 268,
+  "cum": 0,
+  "s5": 0,
+  "phys": 287,
+  "phys_pre5": 287
+ },
+ {
+  "path": "crates/layerfs-sdk/src/result.rs",
+  "pre1": 34,
+  "pre5": 34,
+  "rev": 34,
+  "cum": 0,
+  "s5": 0,
+  "phys": 41,
+  "phys_pre5": 41
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/backing.rs",
+  "pre1": 41,
+  "pre5": 41,
+  "rev": 41,
+  "cum": 0,
+  "s5": 0,
+  "phys": 113,
+  "phys_pre5": 113
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/checkpoint.rs",
+  "pre1": 97,
+  "pre5": 97,
+  "rev": 97,
+  "cum": 0,
+  "s5": 0,
+  "phys": 102,
+  "phys_pre5": 102
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/file_edit.rs",
+  "pre1": 1210,
+  "pre5": 1210,
+  "rev": 1210,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1810,
+  "phys_pre5": 1810
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/frozen.rs",
+  "pre1": 173,
+  "pre5": 173,
+  "rev": 173,
+  "cum": 0,
+  "s5": 0,
+  "phys": 462,
+  "phys_pre5": 462
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/lib.rs",
+  "pre1": 271,
+  "pre5": 271,
+  "rev": 271,
+  "cum": 0,
+  "s5": 0,
+  "phys": 538,
+  "phys_pre5": 538
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/limits.rs",
+  "pre1": 30,
+  "pre5": 30,
+  "rev": 30,
+  "cum": 0,
+  "s5": 0,
+  "phys": 52,
+  "phys_pre5": 52
+ },
+ {
+  "path": "crates/layerfs-workspace-core/src/namespace.rs",
+  "pre1": 630,
+  "pre5": 630,
+  "rev": 630,
+  "cum": 0,
+  "s5": 0,
+  "phys": 809,
+  "phys_pre5": 809
+ },
+ {
+  "path": "crates/layerfs-workspace/src/capture.rs",
+  "pre1": 202,
+  "pre5": 202,
+  "rev": 202,
+  "cum": 0,
+  "s5": 0,
+  "phys": 214,
+  "phys_pre5": 214
+ },
+ {
+  "path": "crates/layerfs-workspace/src/changes.rs",
+  "pre1": 3002,
+  "pre5": 3002,
+  "rev": 3002,
+  "cum": 0,
+  "s5": 0,
+  "phys": 5890,
+  "phys_pre5": 5890
+ },
+ {
+  "path": "crates/layerfs-workspace/src/container.rs",
+  "pre1": 354,
+  "pre5": 354,
+  "rev": 354,
+  "cum": 0,
+  "s5": 0,
+  "phys": 410,
+  "phys_pre5": 410
+ },
+ {
+  "path": "crates/layerfs-workspace/src/cow_tree.rs",
+  "pre1": 558,
+  "pre5": 558,
+  "rev": 558,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1027,
+  "phys_pre5": 1027
+ },
+ {
+  "path": "crates/layerfs-workspace/src/daemon.rs",
+  "pre1": 236,
+  "pre5": 236,
+  "rev": 236,
+  "cum": 0,
+  "s5": 0,
+  "phys": 294,
+  "phys_pre5": 294
+ },
+ {
+  "path": "crates/layerfs-workspace/src/docker.rs",
+  "pre1": 594,
+  "pre5": 594,
+  "rev": 594,
+  "cum": 0,
+  "s5": 0,
+  "phys": 624,
+  "phys_pre5": 624
+ },
+ {
+  "path": "crates/layerfs-workspace/src/docker_engine.rs",
+  "pre1": 280,
+  "pre5": 280,
+  "rev": 280,
+  "cum": 0,
+  "s5": 0,
+  "phys": 300,
+  "phys_pre5": 300
+ },
+ {
+  "path": "crates/layerfs-workspace/src/execution.rs",
+  "pre1": 812,
+  "pre5": 812,
+  "rev": 812,
+  "cum": 0,
+  "s5": 0,
+  "phys": 877,
+  "phys_pre5": 877
+ },
+ {
+  "path": "crates/layerfs-workspace/src/file_io.rs",
+  "pre1": 712,
+  "pre5": 712,
+  "rev": 712,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1859,
+  "phys_pre5": 1859
+ },
+ {
+  "path": "crates/layerfs-workspace/src/lib.rs",
+  "pre1": 75,
+  "pre5": 75,
+  "rev": 75,
+  "cum": 0,
+  "s5": 0,
+  "phys": 82,
+  "phys_pre5": 82
+ },
+ {
+  "path": "crates/layerfs-workspace/src/lifecycle.rs",
+  "pre1": 1273,
+  "pre5": 1273,
+  "rev": 1273,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1980,
+  "phys_pre5": 1980
+ },
+ {
+  "path": "crates/layerfs-workspace/src/live_backing.rs",
+  "pre1": 509,
+  "pre5": 509,
+  "rev": 509,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1225,
+  "phys_pre5": 1225
+ },
+ {
+  "path": "crates/layerfs-workspace/src/output.rs",
+  "pre1": 221,
+  "pre5": 221,
+  "rev": 221,
+  "cum": 0,
+  "s5": 0,
+  "phys": 271,
+  "phys_pre5": 271
+ },
+ {
+  "path": "crates/layerfs-workspace/src/projection.rs",
+  "pre1": 965,
+  "pre5": 965,
+  "rev": 965,
+  "cum": 0,
+  "s5": 0,
+  "phys": 1149,
+  "phys_pre5": 1149
+ },
+ {
+  "path": "crates/layerfs-workspace/src/reconcile.rs",
+  "pre1": 381,
+  "pre5": 381,
+  "rev": 381,
+  "cum": 0,
+  "s5": 0,
+  "phys": 443,
+  "phys_pre5": 443
+ },
+ {
+  "path": "crates/layerfs-workspace/src/registry.rs",
+  "pre1": 295,
+  "pre5": 295,
+  "rev": 295,
+  "cum": 0,
+  "s5": 0,
+  "phys": 368,
+  "phys_pre5": 368
+ },
+ {
+  "path": "crates/layerfs-workspace/src/remote_commit.rs",
+  "pre1": 472,
+  "pre5": 472,
+  "rev": 472,
+  "cum": 0,
+  "s5": 0,
+  "phys": 730,
+  "phys_pre5": 730
+ },
+ {
+  "path": "crates/layerfs-workspace/src/session.rs",
+  "pre1": 357,
+  "pre5": 357,
+  "rev": 357,
+  "cum": 0,
+  "s5": 0,
+  "phys": 406,
+  "phys_pre5": 406
+ },
+ {
+  "path": "crates/layerfs-workspace/src/snapshot_input.rs",
+  "pre1": 320,
+  "pre5": 320,
+  "rev": 320,
+  "cum": 0,
+  "s5": 0,
+  "phys": 395,
+  "phys_pre5": 395
+ },
+ {
+  "path": "crates/layerfs-workspace/src/worker.rs",
+  "pre1": 158,
+  "pre5": 158,
+  "rev": 158,
+  "cum": 0,
+  "s5": 0,
+  "phys": 218,
+  "phys_pre5": 218
+ }
+]

@@ -1,0 +1,53 @@
++ cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-content --example filesystem_timing_c1 -- --case hardlink-move --output /tmp/layerfs-review-smoke-20260917T230700Z/c1
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running `core/target/debug/examples/filesystem_timing_c1 --case hardlink-move --output /tmp/layerfs-review-smoke-20260917T230700Z/c1`
+case hardlink-move
+root e21709c54dcfa9b8e122b06e4203e289953d402f983b84cb58e96eab6059ba33
+inode_table a2dbc5de8d969f27771051b56ed84ee90e427a055a633b5c577d3b5c9956e6f8
+directories 1 bindings +1 -0
+objects read 2 waves 2 bytes 423 emitted 3 bytes 567
+directories: pages read 1 created 1 reused 0 untouched 0 scratch peak 873 top-level 2
+inodes: pages read 1 created 1 reused 0 scratch peak 2856
+references: rows 3 spilled 0 values 3 removals 0 released 0 peak pending 3
+elapsed_ns 298625
+phase validate elapsed_ns 88542
+phase directories elapsed_ns 52166
+phase references elapsed_ns 3250
+phase inodes elapsed_ns 76375
+phase cleanup elapsed_ns 1000
+phase root.encode elapsed_ns 10791
+report_nodes 7
+prepared_objects 8
++ echo EXIT_C1=0
+EXIT_C1=0
++ cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_filesystem -- --mode c2 --case inode-update --output /tmp/layerfs-review-smoke-20260917T230700Z/c2
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running `core/target/debug/examples/measure_filesystem --mode c2 --case inode-update --output /tmp/layerfs-review-smoke-20260917T230700Z/c2`
+mode c2 case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+elapsed_ns 6309667
+inserted 8 reused 0 packs 2 commits 1
+full_records 8 prefix_records 0 pooled 202
+report_nodes 4
+prepared_objects 8
+new_inodes 202
++ echo EXIT_C2=0
+EXIT_C2=0
++ cargo +1.85.1 run --manifest-path core/Cargo.toml --locked -p layerfs-storage --example measure_filesystem -- --mode pipeline --case subtree-remove --output /tmp/layerfs-review-smoke-20260917T230700Z/pipeline
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `core/target/debug/examples/measure_filesystem --mode pipeline --case subtree-remove --output /tmp/layerfs-review-smoke-20260917T230700Z/pipeline`
+mode pipeline case subtree-remove
+fixture entries 200
+update: remove 10 bindings from /d (counts released)
+setup untimed elapsed_ns 7126458 inserted 8
+root 4a068563a4ced4da8f72428a7c42df4e3bad8be8bc9c1717e6969e140b88b2d0
+elapsed_ns 6603583 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 4 bytes_emitted 10521 saved inserted 4 reused 0 admitted 4
+report_nodes 3
+readback separately labelled elapsed_ns 14835958 result top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+prepared_objects 8
+new_inodes 202
++ echo EXIT_PIPE=0
+EXIT_PIPE=0

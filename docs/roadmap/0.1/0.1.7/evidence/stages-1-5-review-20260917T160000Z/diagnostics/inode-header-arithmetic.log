@@ -1,0 +1,8 @@
+LEAF_ROW_BYTES=81 INODE_VALUE_BYTES=73 row=serial8+value73
+codec-inode-leaf: {'envelope': 13, 'version': 1, 'role': 7, 'level': 0, 'flags': 0, 'count': 2, 'subtree_count': 2, 'subtree_bytes': 162, 'total': 206}
+  subtree_bytes=162 expected=rows*81=162 -> MATCH
+  rows*73 (the WRONG width) would be 146 -> DIFFERENT, so the two widths are distinguishable
+codec-inode-branch: {'envelope': 13, 'version': 1, 'role': 8, 'level': 1, 'flags': 0, 'count': 2, 'subtree_count': 128, 'subtree_bytes': 10368, 'total': 124}
+  subtree_bytes=10368 expected=rows*81=10368 -> MATCH
+  rows*73 (the WRONG width) would be 9344 -> DIFFERENT, so the two widths are distinguishable
+ALL MATCH

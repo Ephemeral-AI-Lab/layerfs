@@ -1,0 +1,133 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+===== mode=c1 case=empty =====
+mode c1 case empty
+fixture entries 0
+update: none; the fixture tree is re-emitted unchanged
+root 91d215210371a649b6d7616359e8d6d01249e3e909f71afba8cda763f11bc4e6
+elapsed_ns 195209
+boundary objects_read 0 waves 0 emitted 1 bytes_emitted 129
+readback separately labelled: top_level=[d->2] d_first4=[] fixture_entries=0
+===== mode=c2 case=empty =====
+mode c2 case empty
+fixture entries 0
+update: none; the fixture tree is re-emitted unchanged
+elapsed_ns 3194708
+inserted 4 reused 0 packs 2 commits 1
+===== mode=pipeline case=empty =====
+mode pipeline case empty
+fixture entries 0
+update: none; the fixture tree is re-emitted unchanged
+root 91d215210371a649b6d7616359e8d6d01249e3e909f71afba8cda763f11bc4e6
+elapsed_ns 2997917 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 0 reused 1 admitted 1
+readback separately labelled elapsed_ns 7205292 result top_level=[d->2] d_first4=[] fixture_entries=0
+===== mode=c1 case=directory-update =====
+mode c1 case directory-update
+fixture entries 200
+update: rename the first 10 names in /d (directory pages change)
+root 681ab7e59a612a51c7ba5fe8699f7e65e54a18c42c744ddb0a1b230069558598
+elapsed_ns 1981042
+boundary objects_read 6 waves 4 emitted 4 bytes_emitted 7471
+readback separately labelled: top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+===== mode=c2 case=directory-update =====
+mode c2 case directory-update
+fixture entries 200
+update: rename the first 10 names in /d (directory pages change)
+elapsed_ns 6173167
+inserted 8 reused 0 packs 2 commits 1
+===== mode=pipeline case=directory-update =====
+mode pipeline case directory-update
+fixture entries 200
+update: rename the first 10 names in /d (directory pages change)
+root 681ab7e59a612a51c7ba5fe8699f7e65e54a18c42c744ddb0a1b230069558598
+elapsed_ns 6382125 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 4 bytes_emitted 7471 saved inserted 4 reused 0 admitted 4
+readback separately labelled elapsed_ns 12824500 result top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+===== mode=c1 case=inode-update =====
+mode c1 case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+root 3cc8eef1b962e53e7e16740f20b27067be60841e65a60b9a80bc8f311610f8c1
+elapsed_ns 540042
+boundary objects_read 5 waves 3 emitted 3 bytes_emitted 4427
+readback separately labelled: top_level=[d->2] d_first4=[f0000->3,f0001->4,f0002->5,f0003->6] fixture_entries=200
+===== mode=c2 case=inode-update =====
+mode c2 case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+elapsed_ns 6047334
+inserted 8 reused 0 packs 2 commits 1
+===== mode=pipeline case=inode-update =====
+mode pipeline case inode-update
+fixture entries 200
+update: replace 10 inode values under unchanged bindings
+root 3cc8eef1b962e53e7e16740f20b27067be60841e65a60b9a80bc8f311610f8c1
+elapsed_ns 4928417 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 3 bytes_emitted 4427 saved inserted 3 reused 0 admitted 3
+readback separately labelled elapsed_ns 13024250 result top_level=[d->2] d_first4=[f0000->3,f0001->4,f0002->5,f0003->6] fixture_entries=200
+===== mode=c1 case=hardlink-move =====
+mode c1 case hardlink-move
+fixture entries 200
+update: move 10 files from /d to / (additions before removals)
+root 2d81c8c734563197d3fea79b1d8f39f5b3c19d3b68a7e46a34ac8a36bc1494aa
+elapsed_ns 2007750
+boundary objects_read 7 waves 5 emitted 5 bytes_emitted 7526
+readback separately labelled: top_level=[d->2,m0000->3,m0001->4,m0002->5] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+===== mode=c2 case=hardlink-move =====
+mode c2 case hardlink-move
+fixture entries 200
+update: move 10 files from /d to / (additions before removals)
+elapsed_ns 5893708
+inserted 8 reused 0 packs 2 commits 1
+===== mode=pipeline case=hardlink-move =====
+mode pipeline case hardlink-move
+fixture entries 200
+update: move 10 files from /d to / (additions before removals)
+root 2d81c8c734563197d3fea79b1d8f39f5b3c19d3b68a7e46a34ac8a36bc1494aa
+elapsed_ns 6239334 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 5 bytes_emitted 7526 saved inserted 5 reused 0 admitted 5
+readback separately labelled elapsed_ns 12936416 result top_level=[d->2,m0000->3,m0001->4,m0002->5] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+===== mode=c1 case=subtree-remove =====
+mode c1 case subtree-remove
+fixture entries 200
+update: remove 10 bindings from /d (counts released)
+root 4a068563a4ced4da8f72428a7c42df4e3bad8be8bc9c1717e6969e140b88b2d0
+elapsed_ns 1538834
+boundary objects_read 7 waves 5 emitted 4 bytes_emitted 10521
+readback separately labelled: top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+===== mode=c2 case=subtree-remove =====
+mode c2 case subtree-remove
+fixture entries 200
+update: remove 10 bindings from /d (counts released)
+elapsed_ns 6003334
+inserted 8 reused 0 packs 2 commits 1
+===== mode=pipeline case=subtree-remove =====
+mode pipeline case subtree-remove
+fixture entries 200
+update: remove 10 bindings from /d (counts released)
+root 4a068563a4ced4da8f72428a7c42df4e3bad8be8bc9c1717e6969e140b88b2d0
+elapsed_ns 5909792 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 4 bytes_emitted 10521 saved inserted 4 reused 0 admitted 4
+readback separately labelled elapsed_ns 13880000 result top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+===== mode=c1 case=attributes =====
+mode c1 case attributes
+fixture entries 32
+update: rename 4 names in /d and replace their inode values
+root 622262df37bd1a4ce1da72df3548fca772851a998be7705aec3998c05ad2907f
+elapsed_ns 611125
+boundary objects_read 2 waves 2 emitted 3 bytes_emitted 3451
+readback separately labelled: top_level=[d->2] d_first4=[a0000->3,a0001->4,a0002->5,a0003->6] fixture_entries=32
+===== mode=c2 case=attributes =====
+mode c2 case attributes
+fixture entries 32
+update: rename 4 names in /d and replace their inode values
+elapsed_ns 2946708
+inserted 4 reused 0 packs 2 commits 1
+===== mode=pipeline case=attributes =====
+mode pipeline case attributes
+fixture entries 32
+update: rename 4 names in /d and replace their inode values
+root 622262df37bd1a4ce1da72df3548fca772851a998be7705aec3998c05ad2907f
+elapsed_ns 4424041 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 3 bytes_emitted 3451 saved inserted 3 reused 0 admitted 3
+readback separately labelled elapsed_ns 8574334 result top_level=[d->2] d_first4=[a0000->3,a0001->4,a0002->5,a0003->6] fixture_entries=32

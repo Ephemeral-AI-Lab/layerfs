@@ -1,0 +1,31 @@
+{
+  "combined": 76577,
+  "root": "/private/tmp/layerfs-review-snapshots/pre5",
+  "scopes": {
+    "core": {
+      "crates": {
+        "layerfs-content": 4487,
+        "layerfs-storage": 5941,
+        "layerfs-telemetry": 732
+      },
+      "files": 75,
+      "lines": 11160
+    },
+    "reference": {
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      },
+      "files": 193,
+      "lines": 65417
+    }
+  }
+}

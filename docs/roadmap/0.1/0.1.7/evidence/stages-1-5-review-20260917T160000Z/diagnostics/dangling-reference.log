@@ -1,0 +1,8 @@
+RESULT arm=dangling emitted_objects=3 acknowledged=true inserted=3 packs=2 commits=1
+RESULT arm=dangling file_value_roots_present_in_store=0 (of 2)
+RESULT arm=dangling read_of_file_content_root=Err(ObjectMissing(ObjectId("1a07bee668932e2f92c76df10036b0deea4b451c9e1eb8fd7ed73899e98c816d")))
+RESULT arm=dangling root_id=16b8c01d62ef40bb6cc50d376817bac96bd00b904acee5e6261b93b9d4a8b952
+RESULT arm=control-emitted emitted_objects=4 acknowledged=true inserted=4 packs=2 commits=1
+RESULT arm=control-emitted file_value_roots_present_in_store=1 (of 2)
+RESULT arm=control-emitted read_of_file_content_root=Ok(bytes=55)
+RESULT arm=control-emitted root_id=7356db3e365f764d4637280f84185857c4f5109c503c8aee4a124ba3764abfe3

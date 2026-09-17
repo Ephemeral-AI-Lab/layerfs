@@ -128,9 +128,16 @@ remain mandatory. No runtime setting or performance result is claimed here.
 
 ## Plan status
 
-**Current implementation handoff:** [Stage 5](component-decoupling/stage-5-handoff.md),
+**Current implementation handoff:** the
+[Stage 5 terminal handoff](component-decoupling/stage-5-terminal-handoff-20260917.md)
+drives #170 to a terminal pass. The
+[round-2 independent review](component-decoupling/stages-1-5-review-20260917T230700Z.md)
+found Stage 5 **not accepted** (five blocking items) and the cumulative C1/C2 core
+feature-complete at its implemented scope but unqualified; #170 remains open. The
+[Stage 5 handoff](component-decoupling/stage-5-handoff.md),
 with its [exact source/test/LOC plan](component-decoupling/stage-5-file-plan.md),
-completes filesystem trees, inodes, attributes and reference ordering in #170.
+remains the implementation contract for filesystem trees, inodes, attributes and
+reference ordering.
 The [Stages 3–4 closure record](component-decoupling/stages-3-4-completion-round-20260917.md)
 records completed scopes and explicit unmeasured owner waivers; it is not a
 performance baseline claim. Stage 6 qualifies the whole core and Stage 7 integrates

@@ -1,0 +1,23 @@
+### check_product_boundary.py
+PASS: scanned 116 production Rust/SQL files; semantic review still required
+EXIT=0
+### unittest core/tools
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.009s
+
+OK
+EXIT=0
+### unittest tools test_production_loc
+.................
+----------------------------------------------------------------------
+Ran 17 tests in 0.046s
+
+OK
+EXIT=0
+### fmt
+EXIT=0
+### git diff --check
+EXIT=0
+### git diff --cached --check
+EXIT=0

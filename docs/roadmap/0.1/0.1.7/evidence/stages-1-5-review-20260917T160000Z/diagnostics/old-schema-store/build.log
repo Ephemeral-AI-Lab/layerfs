@@ -1,0 +1,5 @@
+OLD_SCHEMA role clause: ['object_role INTEGER NOT NULL CHECK (object_role BETWEEN 1 AND 6),']
+OLD_SCHEMA insert role=1: ACCEPTED
+OLD_SCHEMA insert role=6: ACCEPTED
+OLD_SCHEMA insert role=10: REFUSED (CHECK constraint failed: object_role BETWEEN 1 AND 6)
+OLD_SCHEMA insert role=13: REFUSED (CHECK constraint failed: object_role BETWEEN 1 AND 6)

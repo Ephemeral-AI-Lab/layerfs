@@ -1,0 +1,898 @@
+[
+ {
+  "full": "a8a1ba848429d5f2fbba83c2de22dada8c29def9",
+  "short": "a8a1ba848",
+  "subject": "Merge pull request #163 from Ephemeral-AI-Lab/codex/issue161-timer-usage-guide",
+  "loc": null
+ },
+ {
+  "full": "71b9549e41bdd04028839fc08239491e08dae9e6",
+  "short": "71b9549e4",
+  "subject": "feat(core): #166 #167 real C1/C2 complete-file construction, CAS and FULL storage",
+  "loc": [
+   "69208",
+   "74501",
+   "+5293"
+  ]
+ },
+ {
+  "full": "f485c456bfa3ba059d268b460efc3fa1d0e3b444",
+  "short": "f485c456b",
+  "subject": "docs(core): #166 #167 record the Stages 0-2 LOC comparison and check results",
+  "loc": [
+   "74501",
+   "74501",
+   "0"
+  ]
+ },
+ {
+  "full": "273a6ebb78d355593af1f8dd5a8ad049cbc54e7e",
+  "short": "273a6ebb7",
+  "subject": "fix(core): restore the frozen per-field envelope ceiling in layerfs-content",
+  "loc": [
+   "74501",
+   "74515",
+   "+14"
+  ]
+ },
+ {
+  "full": "1af7b62a9f0ad9b537b192ef22b31f99ce36a0a4",
+  "short": "1af7b62a9",
+  "subject": "docs(core): land the Stages 1-2 review, its evidence and the corrected profile rows",
+  "loc": [
+   "74515",
+   "74515",
+   "0"
+  ]
+ },
+ {
+  "full": "38d47cfd3439433a83156ff09ffcea89ac8b19f2",
+  "short": "38d47cfd3",
+  "subject": "docs(core): verify the F12 fix is equivalent to the reference on a 34-probe corpus",
+  "loc": [
+   "74515",
+   "74515",
+   "0"
+  ]
+ },
+ {
+  "full": "acefc31791c2dbea53d87eb389c9f4bd812943b6",
+  "short": "acefc3179",
+  "subject": "storage: publish only completed saves through a durable watermark",
+  "loc": [
+   "74515",
+   "74586",
+   "+71"
+  ]
+ },
+ {
+  "full": "30f5d0633ee105c8db59838a6c3239877dd363aa",
+  "short": "30f5d0633",
+  "subject": "storage: resolve an identity waiting in an unfinished group on demand",
+  "loc": [
+   "74586",
+   "74628",
+   "+42"
+  ]
+ },
+ {
+  "full": "5e8b8cbc26e15180daf0ad4dbf3fd40901145811",
+  "short": "5e8b8cbc2",
+  "subject": "policy: retire the local preflight gate permanently",
+  "loc": [
+   "74628",
+   "74628",
+   "0"
+  ]
+ },
+ {
+  "full": "c38961f2f4bedbc7afe8826c5d404c6d21b91657",
+  "short": "c38961f2f",
+  "subject": "docs: add the Radish architecture-overview study prompt",
+  "loc": [
+   "74628",
+   "74628",
+   "0"
+  ]
+ },
+ {
+  "full": "64e3f9d6a2ce83f56beacb41b3b3828270d4831b",
+  "short": "64e3f9d6a",
+  "subject": "storage/content: implement Stages 3-4 physical encoding and localized edits",
+  "loc": [
+   "74628",
+   "77136",
+   "+2508"
+  ]
+ },
+ {
+  "full": "0c548c7617418fe871eda334784570e539c3ff62",
+  "short": "0c548c761",
+  "subject": "docs(core): state the Stages 3-4 supported ranges and honest limits",
+  "loc": [
+   "77136",
+   "77136",
+   "0"
+  ]
+ },
+ {
+  "full": "24ef187d4b9d8aca90882219eeacd86f4c594016",
+  "short": "24ef187d4",
+  "subject": "style: apply rustfmt to the measure_edits example",
+  "loc": [
+   "77136",
+   "77136",
+   "0"
+  ]
+ },
+ {
+  "full": "da8ee5769fe13a22768b66f284b44a9341acecdf",
+  "short": "da8ee5769",
+  "subject": "storage/content: implement pooled physical metadata (Stage 3 checkpoint E)",
+  "loc": [
+   "77136",
+   "78875",
+   "+1739"
+  ]
+ },
+ {
+  "full": "b499315706f53f61bebfa714739869bd073b4f19",
+  "short": "b49931570",
+  "subject": "content: establish the sealed reference edit oracle and fix chunked EOF append",
+  "loc": [
+   "78875",
+   "78891",
+   "+16"
+  ]
+ },
+ {
+  "full": "315a339fabe36c55ef91c3a12e5a7541af9b6315",
+  "short": "315a339fa",
+  "subject": "content: add the required edit_model target and record it",
+  "loc": [
+   "78891",
+   "78891",
+   "0"
+  ]
+ },
+ {
+  "full": "2b2dbc028a0e4e330611455348eecd04723b7163",
+  "short": "2b2dbc028",
+  "subject": "docs(core): correct the per-package LOC subtotals and record the core breakdown",
+  "loc": [
+   "78891",
+   "78891",
+   "0"
+  ]
+ },
+ {
+  "full": "01d9f70f36d870d0f410653b2c3a118ded5dc431",
+  "short": "01d9f70f3",
+  "subject": "content: replace the mapping rebuild with stored-tree copy-on-write edits",
+  "loc": [
+   "10415",
+   "10893",
+   "+478"
+  ]
+ },
+ {
+  "full": "5a0fef716ca80d57740ae89fb512ff13ba1d660f",
+  "short": "5a0fef716",
+  "subject": "storage: bound pooled metadata chains at admission and cover the window",
+  "loc": [
+   "10893",
+   "10929",
+   "+36"
+  ]
+ },
+ {
+  "full": "c255dcfaf39d9e813150bf268cb9bbf162852b58",
+  "short": "c255dcfaf",
+  "subject": "docs: declare the Stages 3-4 measurement round before collecting it",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "dfd54fd8e8ee5f633f9ff80de2967c4c25b6f2c2",
+  "short": "dfd54fd8e",
+  "subject": "tools: print the pooled policy and readback identities before collection",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "c99192b166f56325c5f3c1e3822808354d9a1857",
+  "short": "c99192b16",
+  "subject": "content: prove the 80+100 join repartitions to exactly 90+90",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "fba18606ebeb5fa217cb8168063c16a5edc1d61b",
+  "short": "fba18606e",
+  "subject": "docs: record the matched C1 pair and leave the qualification gates open",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "65f2a402d5f9936fa1af6a97bc8be344eea9ba0c",
+  "short": "65f2a402d",
+  "subject": "tools: apply rustfmt to the candidate matched-pair example",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "275c81ab747cad0af44b19df4513df7a99ca8ce2",
+  "short": "275c81ab7",
+  "subject": "docs: commit the in-flight owner Stage 3-4 instruction documents",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "91c3a0741fff64e8161d5c1b6e759f347ffbf757",
+  "short": "91c3a0741",
+  "subject": "docs: state the Stages 3-4 implementation-complete status",
+  "loc": [
+   "10929",
+   "10929",
+   "0"
+  ]
+ },
+ {
+  "full": "97414bac473f0bcaf5a41156c05a13adaca9f939",
+  "short": "97414bac4",
+  "subject": "storage: route CHUNK delta candidates through the eligibility rule",
+  "loc": [
+   "10929",
+   "10938",
+   "+9"
+  ]
+ },
+ {
+  "full": "42f9364c807ec8837a8366a9e6109b3309108ec7",
+  "short": "42f9364c8",
+  "subject": "storage: apply the owner's publication ceiling to every pooled read",
+  "loc": [
+   "10938",
+   "10938",
+   "0"
+  ]
+ },
+ {
+  "full": "df3cdb05bfbcb74eef3a4eb2523040e9292e5569",
+  "short": "df3cdb05b",
+  "subject": "content: hold checkpoint D's frontier decoded and encode it only when final",
+  "loc": [
+   "10938",
+   "11053",
+   "+115"
+  ]
+ },
+ {
+  "full": "7693bf925915f093b39248fec24a3df3e83e3bdd",
+  "short": "7693bf925",
+  "subject": "tests: repair the overclaiming oracles and close the unexercised cases",
+  "loc": [
+   "11053",
+   "11053",
+   "0"
+  ]
+ },
+ {
+  "full": "b9a8a67ff2200da64d32ff122c51a4e26c6be58b",
+  "short": "b9a8a67ff",
+  "subject": "storage/content: bound every owner the review found unbounded",
+  "loc": [
+   "11053",
+   "11166",
+   "+113"
+  ]
+ },
+ {
+  "full": "aa4b5a9e44a985c3019c734fd08896f1859dce30",
+  "short": "aa4b5a9e4",
+  "subject": "storage/content: make an accepted metadata depth usable and delete the dead code",
+  "loc": [
+   "11166",
+   "10983",
+   "-183"
+  ]
+ },
+ {
+  "full": "09c1246a560b7c90e49e4a24eefcb39753ab97f3",
+  "short": "09c1246a5",
+  "subject": "measure: instrument the phase-local heap and close the allocation ledger",
+  "loc": [
+   "10983",
+   "10983",
+   "0"
+  ]
+ },
+ {
+  "full": "6566a95a3762f0a4452f6da752c4127847c43fde",
+  "short": "6566a95a3",
+  "subject": "docs/tools: correct the acceptance report and the LOC counter",
+  "loc": [
+   "10983",
+   "10983",
+   "0"
+  ]
+ },
+ {
+  "full": "c56c28dd154107715873cddc0d3d0f0d7cc95643",
+  "short": "c56c28dd1",
+  "subject": "content/storage: close the limits boundary list and the frontier leak it exposed",
+  "loc": [
+   "10983",
+   "11058",
+   "+75"
+  ]
+ },
+ {
+  "full": "8fb05b4652841e0dfa346ab93da9e2c3ec38bf2c",
+  "short": "8fb05b465",
+  "subject": "tests/docs: close the verification registry and disclose the clipped receipt",
+  "loc": [
+   "11058",
+   "11058",
+   "0"
+  ]
+ },
+ {
+  "full": "4d11de984126ef23610828b1650b77d3816eafe5",
+  "short": "4d11de984",
+  "subject": "docs: add the issue-ready summaries for #168 and #169",
+  "loc": [
+   "11058",
+   "11058",
+   "0"
+  ]
+ },
+ {
+  "full": "2b4f8b47d1366729caf759f75c6646c60b8c8786",
+  "short": "2b4f8b47d",
+  "subject": "docs: state the two open rows and the campaign blocker in the tracker",
+  "loc": [
+   "11058",
+   "11058",
+   "0"
+  ]
+ },
+ {
+  "full": "97c2c7c27af3edcc5f3152bfff87f9c86dc94e33",
+  "short": "97c2c7c27",
+  "subject": "docs: verify the final tip and record the round",
+  "loc": [
+   "11058",
+   "11058",
+   "0"
+  ]
+ },
+ {
+  "full": "b29f8e4a3708a3ece9b67fb719af990bbb0b1cb5",
+  "short": "b29f8e4a3",
+  "subject": "docs: record the owner's waiver of the two qualification rows",
+  "loc": [
+   "11058",
+   "11058",
+   "0"
+  ]
+ },
+ {
+  "full": "7eca9c3693e8a8011c688f598192a83a60de254e",
+  "short": "7eca9c369",
+  "subject": "docs: land the Stages 3\u20134 independent review, its evidence and the closeout prompts",
+  "loc": [
+   "76475",
+   "76475",
+   "0"
+  ]
+ },
+ {
+  "full": "94d6ab8a21cf501a51fc5baf78e441bdc71edc4f",
+  "short": "94d6ab8a2",
+  "subject": "core: bound, charge and check the owners the Stages 3-4 review found open",
+  "loc": [
+   "11058",
+   "11160",
+   "+102"
+  ]
+ },
+ {
+  "full": "841d9d2b1d811745026719096d6b736bfe3fe567",
+  "short": "841d9d2b1",
+  "subject": "core/tests: charge the representation transition's read amplification",
+  "loc": [
+   "11160",
+   "11160",
+   "0"
+  ]
+ },
+ {
+  "full": "eecb3174dabbd7edecc3d96cecc9a1512c224742",
+  "short": "eecb3174d",
+  "subject": "docs/examples: apply the evidence corrections and land the harness prerequisites",
+  "loc": [
+   "76577",
+   "76577",
+   "0"
+  ]
+ },
+ {
+  "full": "30358b565096103448bd51057324663dceb18f16",
+  "short": "30358b565",
+  "subject": "docs: bind each receipt round to the commit that carries it",
+  "loc": [
+   "76577",
+   "76577",
+   "0"
+  ]
+ },
+ {
+  "full": "b6b83162a8f4ca3ddb1a59adf1b1ea0cfb6d3369",
+  "short": "b6b83162a",
+  "subject": "docs: record the Stage 3 and Stage 4 closure and the pushed branch state",
+  "loc": [
+   "76577",
+   "76577",
+   "0"
+  ]
+ },
+ {
+  "full": "429f586dca8a1917a2df74a04d95d863aaefee02",
+  "short": "429f586dc",
+  "subject": "docs: land the Stage 5 handoff and file plan as received",
+  "loc": [
+   "11160",
+   "11160",
+   "0"
+  ]
+ },
+ {
+  "full": "4f1b7d847b706347d39721ba4ff1ba5d0de01034",
+  "short": "4f1b7d847",
+  "subject": "tests: seal reference filesystem fixtures for the Stage 5 core",
+  "loc": [
+   "11160",
+   "11160",
+   "0"
+  ]
+ },
+ {
+  "full": "07f0fe8ebf6f6e1487a4d42a881c1cdc7420d21e",
+  "short": "07f0fe8eb",
+  "subject": "core: build, update and read filesystem trees against the reference grammar",
+  "loc": [
+   "11160",
+   "17497",
+   "+6337"
+  ]
+ },
+ {
+  "full": "5d08d9e83200485f7046d030b20707f1b11d879b",
+  "short": "5d08d9e83",
+  "subject": "core/tests: pin codec, reference, attribute and update behaviour",
+  "loc": [
+   "17497",
+   "17525",
+   "+28"
+  ]
+ },
+ {
+  "full": "bfd7abf2c793f068410c9780137643ef12a778a2",
+  "short": "bfd7abf2c",
+  "subject": "core: compose filesystem trees with real C2 storage and add stage-5 targets",
+  "loc": [
+   "17525",
+   "17730",
+   "+205"
+  ]
+ },
+ {
+  "full": "c17f59bef821bf471f176f7d5c5f2fb5c0d704b9",
+  "short": "c17f59bef",
+  "subject": "docs: record the Stage 5 result, verification contract and open criteria",
+  "loc": [
+   "17730",
+   "17730",
+   "0"
+  ]
+ },
+ {
+  "full": "5fdde161c862923e7e61f1abf090b88c12348562",
+  "short": "5fdde161c",
+  "subject": "tests: seal every final binding in the reference construction cases",
+  "loc": [
+   "17697",
+   "17697",
+   "0"
+  ]
+ },
+ {
+  "full": "979fbd5bcd46352f36dcc5f4a8ffd23786111328",
+  "short": "979fbd5bc",
+  "subject": "docs: add the per-target Stage 5 test results",
+  "loc": [
+   "17697",
+   "17697",
+   "0"
+  ]
+ },
+ {
+  "full": "42e21677ac2cf641a6cb3d83b93c714e1f4e7db9",
+  "short": "42e21677a",
+  "subject": "core: own ordering bytes, check cleanup and report real ordering work",
+  "loc": [
+   "17697",
+   "17909",
+   "+212"
+  ]
+ },
+ {
+  "full": "821ddbe3003e0453d3e9f56f143b10cb8cd2b4df",
+  "short": "821ddbe30",
+  "subject": "core: record the checked completion attempt explicitly",
+  "loc": [
+   "17909",
+   "17913",
+   "+4"
+  ]
+ },
+ {
+  "full": "f723663a58818354ea1d572361c3da31e1f5b478",
+  "short": "f723663a5",
+  "subject": "core/tests: complete the ordering, failure, bounds and C2 failure matrices",
+  "loc": [
+   "17913",
+   "17905",
+   "-8"
+  ]
+ },
+ {
+  "full": "3b4941f1ededc6407504438cfe0bd5059fc159f9",
+  "short": "3b4941f1e",
+  "subject": "stage-5: add the matched component comparison driver and both arms",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "34f75b15b774e428f2e0cca4fc73afca633ec26b",
+  "short": "34f75b15b",
+  "subject": "docs: correct the verification status and freeze the qualified row contract",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "89b40c4c0492ce86914648ffd2413d0f837470ed",
+  "short": "89b40c4c0",
+  "subject": "docs: complete the Stage 5 report and correct the stale claims",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "920b0aefa2607b4f076928ddb42dae0f305ef8df",
+  "short": "920b0aefa",
+  "subject": "docs: bind the pipeline timing rows to their actual evidence directory",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "92b195c06d8fe91ede06562b7e0bd5a5bce48517",
+  "short": "92b195c06",
+  "subject": "docs: record the audited per-commit LOC table and the verified schema boundary",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "e308576510004f75df81cfc08a1c304166ecad7e",
+  "short": "e30857651",
+  "subject": "docs: correct the superseded status bullets in the Stage 5 verification contract",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "13f6160e39ea32b50a20fcb4fd20351a3af6860b",
+  "short": "13f6160e3",
+  "subject": "docs: land the continuation routing edit as received",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "b22712844b5b778279c17b73fd6df86cea550bf4",
+  "short": "b22712844",
+  "subject": "test(examples): name the prepared batches so the clippy gate holds",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "f2de7810e36cb72a5ec7827e20724d29bf86bf96",
+  "short": "f2de7810e",
+  "subject": "docs: map every Stage 5 acceptance bullet to its deciding evidence",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "c99a8d9f9e05a20ecc8e47b11b8f22fa791664e6",
+  "short": "c99a8d9f9",
+  "subject": "docs: record the Stage 5 closure and its scope limits",
+  "loc": [
+   "17905",
+   "17905",
+   "0"
+  ]
+ },
+ {
+  "full": "ef6bab19d3e027870395f0a24cfc0704d1a6c5dd",
+  "short": "ef6bab19d",
+  "subject": "fix(filesystem): close the WP1 correctness gates",
+  "loc": [
+   "17905",
+   "18068",
+   "+163"
+  ]
+ },
+ {
+  "full": "b262ad38c79a7b70be474596f0cd89fe3b50c3fe",
+  "short": "b262ad38c",
+  "subject": "fix(filesystem): match the base binding, not just the base count",
+  "loc": [
+   "18068",
+   "18104",
+   "+36"
+  ]
+ },
+ {
+  "full": "5b138ce643bfb326666082e2771b47eace4faf1c",
+  "short": "5b138ce64",
+  "subject": "fix(storage): pin the caller-authorized value-root exclusion",
+  "loc": [
+   "18104",
+   "18104",
+   "0"
+  ]
+ },
+ {
+  "full": "8964db93ea6db35a469ee5ceec0a598d22736076",
+  "short": "8964db93e",
+  "subject": "fix(filesystem): prove a build's directories are reachable from the root",
+  "loc": [
+   "18104",
+   "18159",
+   "+55"
+  ]
+ },
+ {
+  "full": "a1601b92fd9d0e3927e05c314a7337cd0dd1c116",
+  "short": "a1601b92f",
+  "subject": "test(filesystem): cover a build cycle the root reaches",
+  "loc": [
+   "18159",
+   "18159",
+   "0"
+  ]
+ },
+ {
+  "full": "3914600351356cdd60b19ea28d95923337b18b8d",
+  "short": "391460035",
+  "subject": "docs(evidence): open the Stage 5 remediation evidence directory",
+  "loc": [
+   "18159",
+   "18159",
+   "0"
+  ]
+ },
+ {
+  "full": "8701eae12f8806f9ed41cee3ed4bebd924473cd7",
+  "short": "8701eae12",
+  "subject": "perf(ordering): keep the spilled-run scan position and charge its reads",
+  "loc": [
+   "18159",
+   "18245",
+   "+86"
+  ]
+ },
+ {
+  "full": "cfc6c4ae3db7a8d144cde8b790d95eb77584456d",
+  "short": "cfc6c4ae3",
+  "subject": "fix(ordering): cover what the operation owns and charge what validation reads",
+  "loc": [
+   "18245",
+   "18377",
+   "+132"
+  ]
+ },
+ {
+  "full": "fdff57a7357f656ffcf29cfe064e3a5dbcce7212",
+  "short": "fdff57a73",
+  "subject": "docs(contract): state what the ordering ceiling covers and what validation charges",
+  "loc": [
+   "18377",
+   "18377",
+   "0"
+  ]
+ },
+ {
+  "full": "a376acfee3cb5952b4b813a9b36818891abbf4ea",
+  "short": "a376acfee",
+  "subject": "fix(filesystem): enforce the serial range, the value bound and the page ceiling",
+  "loc": [
+   "18377",
+   "18442",
+   "+65"
+  ]
+ },
+ {
+  "full": "4f2e4ca9a07c749ff428076c3e17a0a34cca06e6",
+  "short": "4f2e4ca9a",
+  "subject": "fix(filesystem): bound the validation walks and charge what they examine",
+  "loc": [
+   "18442",
+   "18470",
+   "+28"
+  ]
+ },
+ {
+  "full": "4c4e9163e22aec25245c4fc12c2dfc1e31cf41d6",
+  "short": "4c4e9163e",
+  "subject": "docs(evidence): inventory the remediation evidence and its reproduction",
+  "loc": [
+   "18470",
+   "18470",
+   "0"
+  ]
+ },
+ {
+  "full": "2c16ed3cf1468405e0c45621993819ca12ce8cc3",
+  "short": "2c16ed3cf",
+  "subject": "docs(handoff): route the remaining WP4-WP7 remediation to one agent",
+  "loc": [
+   "18470",
+   "18470",
+   "0"
+  ]
+ },
+ {
+  "full": "ecec7dbe043be184249200f6a88814d548082cdb",
+  "short": "ecec7dbe0",
+  "subject": "fix(filesystem): one leaf-page grammar, dead surfaces removed, role precondition stated",
+  "loc": [
+   "18470",
+   "18419",
+   "-51"
+  ]
+ },
+ {
+  "full": "ab17a69582f0736d8ad1b1262e4dab2d092f6b06",
+  "short": "ab17a6958",
+  "subject": "feat(content,storage): batch mapping navigation per level, ship the Store bridge",
+  "loc": [
+   "18419",
+   "18549",
+   "+130"
+  ]
+ },
+ {
+  "full": "b3df5461cc6ce62eb6d8007cad2474b254c50348",
+  "short": "b3df5461c",
+  "subject": "fix(storage,content): honest C2 accounting, bounded handles and a harness that selects",
+  "loc": [
+   "18549",
+   "18546",
+   "-3"
+  ]
+ },
+ {
+  "full": "781a73661db5c63d76006e51cf8ce2f8697c128a",
+  "short": "781a73661",
+  "subject": "fix(filesystem,storage): honest backing, bounded reads and the accounting re-derived",
+  "loc": [
+   "18546",
+   "18615",
+   "+69"
+  ]
+ },
+ {
+  "full": "eb42c13477f85612fc864474af4489c2548d688d",
+  "short": "eb42c1347",
+  "subject": "fix(release,oracle,harness): wave the release frontier, gate the seal, prove the integrated body",
+  "loc": [
+   "18615",
+   "18650",
+   "+35"
+  ]
+ },
+ {
+  "full": "a512604f8c2419407775be09c9358f030f0f8cc1",
+  "short": "a512604f8",
+  "subject": "docs(evidence): re-collect the component comparison and re-run the reviewer's client",
+  "loc": [
+   "18650",
+   "18650",
+   "0"
+  ]
+ },
+ {
+  "full": "f1f6cee36d7e1b48cba73d2aec35d007c3f9009c",
+  "short": "f1f6cee36",
+  "subject": "test(attributes): prove the patch route equals a from-scratch build",
+  "loc": [
+   "18650",
+   "18650",
+   "0"
+  ]
+ },
+ {
+  "full": "7b0ff77aac58d95dc7e8bdfff013f58d1f60df0d",
+  "short": "7b0ff77aa",
+  "subject": "docs(matrix): re-derive the reviewer's Stage 5 rows on the remediation tree",
+  "loc": [
+   "18650",
+   "18650",
+   "0"
+  ]
+ },
+ {
+  "full": "53f9ad70a9cf787e25bf8749ded5d036e10460c2",
+  "short": "53f9ad70a",
+  "subject": "docs(matrix): correct the target counts to the final tree's own run",
+  "loc": [
+   "18650",
+   "18650",
+   "0"
+  ]
+ },
+ {
+  "full": "f288d2af7ecdc7e00f7df153073398d333461aa3",
+  "short": "f288d2af7",
+  "subject": "docs(contract): record the owner's answer to R44's three questions",
+  "loc": [
+   "18650",
+   "18650",
+   "0"
+  ]
+ }
+]

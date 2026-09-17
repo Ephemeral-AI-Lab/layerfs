@@ -41,9 +41,26 @@ amendments with the exact source under review. The original recommendation was
 exclude tests/docs/examples/manifests/tooling and are not physical file ceilings.
 Actual results and misses must be reported, never hidden by weakening correctness.
 
-## Current handoff: Stage 5
+## Current handoff: Stage 5 terminal pass
 
-Implementation continues through the [Stage 5 completion prompt](stage-5-continuation-handoff.md).
+**Work continues through the [Stage 5 terminal handoff](stage-5-terminal-handoff-20260917.md).**
+Its terminal condition is every Stage 5 and cumulative criterion passing with no
+FAIL, INCOMPLETE or unowned row, followed by a clean closing review and the closure
+of #170. #170 is **open** and **not accepted**: the
+[round-2 independent review](stages-1-5-review-20260917T230700Z.md) recorded
+64 PASS / 9 FAIL / 8 PARTIAL-INCOMPLETE of 83 Stage-5 rows and 30 PASS / 3 FAIL of
+36 cumulative rows, with five blocking items: harness case selection, six
+per-commit LOC disclosures that do not reproduce, a comparison receipt the
+governing document cites after it was invalidated, a wrong attribute-value limit
+(32,768 bytes, not 1 MiB) and an undeclared 4,096-entry whole-tree operation
+ceiling. The review outcome is recorded on
+[#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170#issuecomment-5717192709)
+and, for the cumulative question, on
+[#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165#issuecomment-5717193454).
+
+The earlier continuation prompt remains the historical record below.
+
+Implementation continued through the [Stage 5 completion prompt](stage-5-continuation-handoff.md).
 The [blocker investigation](stage-5-blocker-investigation-20260917.md) reproduced
 ordering byte-accounting, checked-cleanup and final-counter defects. Finish these
 regressions/fixes and all four missing test matrices before performance collection;

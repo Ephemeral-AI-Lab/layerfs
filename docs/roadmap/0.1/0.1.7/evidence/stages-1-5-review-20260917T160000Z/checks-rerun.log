@@ -1,0 +1,16 @@
+### git diff --check
+[exit=0]
+
+### production_loc.py --files (core rows only)
+     115
+
+### boundary guard (re-run with evidence present)
+PASS: scanned 115 production Rust/SQL files; semantic review still required
+[exit=0]
+
+### fmt (re-run)
+[exit=0]
+
+### clippy (re-run)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+[exit=0]

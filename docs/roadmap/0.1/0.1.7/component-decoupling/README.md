@@ -8,9 +8,18 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
-- [Current Stage 5 continuation](stage-5-continuation-handoff.md): fix reproduced
-  ordering accounting/cleanup defects, complete all four missing matrices, freeze
-  valid comparison boundaries, qualify and finish #170 through explicit gates.
+- [**Stage 5 terminal handoff**](stage-5-terminal-handoff-20260917.md): the active
+  routing. Work iteratively until every Stage 5 and cumulative criterion passes with
+  no FAIL, INCOMPLETE or unowned row, then close #170 through a clean closing review.
+- [Round-2 independent acceptance review](stages-1-5-review-20260917T230700Z.md):
+  Stage 5 **not accepted** (64 PASS / 9 FAIL / 8 PARTIAL of 83) and the cumulative
+  core feature-complete but unqualified. Its evidence is
+  [`../evidence/stages-1-5-review-20260917T230700Z/`](../evidence/stages-1-5-review-20260917T230700Z/).
+- [Round-1 review and remediation](stages-1-5-review-20260917T160000Z.md) with
+  [`stage-5-remediation-handoff-20260917.md`](stage-5-remediation-handoff-20260917.md):
+  the findings the current tree has already closed.
+- [Stage 5 continuation](stage-5-continuation-handoff.md): the earlier continuation
+  routing; historical, superseded by the terminal handoff above.
 - [Stage 5 blocker investigation](stage-5-blocker-investigation-20260917.md):
   public-API diagnostic evidence, reachable reference APIs and recovery rationale.
 - [Stage 5 and complete Stages 1–5 reviewer handoff](stages-1-5-reviewer-handoff.md):

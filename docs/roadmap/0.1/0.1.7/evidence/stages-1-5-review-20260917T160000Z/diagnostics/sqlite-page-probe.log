@@ -1,0 +1,39 @@
+      Adding blake3 v1.8.5 (available: v1.8.7)
+RESULT connection.open(create=true) path=/tmp/lfs-pageprobe/plain.sqlite bytes=0
+  sqlite_version = 3.51.0
+  sqlite_source_id = 2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+  page_size = Integer(4096)
+  page_count = Integer(0)
+  freelist_count = Integer(0)
+  max_page_count = Integer(1073741823)
+  auto_vacuum = Integer(0)
+  cache_size = Integer(2000)
+  mmap_size = Integer(0)
+  journal_mode = Text("memory")
+  synchronous = Integer(0)
+  temp_store = Integer(2)
+  foreign_keys = Integer(1)
+  busy_timeout = Integer(0)
+  application_id = Integer(0)
+  user_version = Integer(0)
+  encoding = Text("UTF-8")
+  file_bytes / page_size = 0.000
+RESULT Store::create path=/tmp/lfs-pageprobe/store.sqlite bytes=32768
+  sqlite_version = 3.51.0
+  sqlite_source_id = 2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl
+  page_size = Integer(4096)
+  page_count = Integer(8)
+  freelist_count = Integer(0)
+  max_page_count = Integer(1073741823)
+  auto_vacuum = Integer(0)
+  cache_size = Integer(2000)
+  mmap_size = Integer(0)
+  journal_mode = Text("memory")
+  synchronous = Integer(0)
+  temp_store = Integer(2)
+  foreign_keys = Integer(1)
+  busy_timeout = Integer(0)
+  application_id = Integer(1279677261)
+  user_version = Integer(4)
+  encoding = Text("UTF-8")
+  file_bytes / page_size = 8.000

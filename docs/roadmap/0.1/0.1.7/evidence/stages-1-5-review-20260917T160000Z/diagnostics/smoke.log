@@ -1,0 +1,75 @@
+### filesystem_timing_c1 --case hardlink-move
+case hardlink-move
+root e21709c54dcfa9b8e122b06e4203e289953d402f983b84cb58e96eab6059ba33
+inode_table a2dbc5de8d969f27771051b56ed84ee90e427a055a633b5c577d3b5c9956e6f8
+directories 1 bindings +1 -0
+objects read 2 waves 2 bytes 423 emitted 3 bytes 567
+directories: pages read 1 created 1 reused 0 untouched 0 scratch peak 873 top-level 2
+inodes: pages read 1 created 1 reused 0 scratch peak 2856
+references: rows 3 spilled 0 values 3 removals 0 released 0 peak pending 3
+elapsed_ns 323750
+phase validate elapsed_ns 77625
+phase directories elapsed_ns 91250
+phase references elapsed_ns 3500
+phase inodes elapsed_ns 80458
+phase cleanup elapsed_ns 666
+phase root.encode elapsed_ns 13084
+report_nodes 7
+prepared_objects 8
+### measure_filesystem --mode c2 --case inode-update
+mode c2 case inode-update
+supplied_objects 8
+elapsed_ns 15681834
+inserted 8 reused 0 packs 2 commits 1 acknowledged true
+full_records 8 prefix_records 0 pooled 202
+report_nodes 19
+prepared_objects 8
+new_inodes 202
+### measure_filesystem --mode pipeline --case subtree-remove
+mode pipeline case subtree-remove
+root d5f91c977e13df39384ab747c9a65f665689a11b69ae9892216a987730860fa4
+elapsed_ns 13051166 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 8 reused 0 admitted 8
+readback separately labelled elapsed_ns 69958 result top_level=[d->2] expected_files=200
+prepared_objects 8
+new_inodes 202
+### case-selection check: four pipeline cases, case name and readback stripped
+--- --case inode-update
+root d5f91c977e13df39384ab747c9a65f665689a11b69ae9892216a987730860fa4
+elapsed_ns 18261000 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 8 reused 0 admitted 8
+prepared_objects 8
+new_inodes 202
+--- --case hardlink-move
+root d5f91c977e13df39384ab747c9a65f665689a11b69ae9892216a987730860fa4
+elapsed_ns 16788459 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 8 reused 0 admitted 8
+prepared_objects 8
+new_inodes 202
+--- --case subtree-remove
+root d5f91c977e13df39384ab747c9a65f665689a11b69ae9892216a987730860fa4
+elapsed_ns 17690750 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 8 reused 0 admitted 8
+prepared_objects 8
+new_inodes 202
+--- --case directory-update
+root d5f91c977e13df39384ab747c9a65f665689a11b69ae9892216a987730860fa4
+elapsed_ns 9188166 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 1 bytes_emitted 129 saved inserted 8 reused 0 admitted 8
+prepared_objects 8
+new_inodes 202
+### storage footprint of the two Store files
+== /tmp/lfs-smoke-review-28078/c2
+   sqlite_file_bytes=45056
+   packs=2 pack_payload_bytes=9966
+   object_rows=8 canonical_bytes_sum=19970 delta_based_rows=0
+   value_groups=4 pooled_values=202
+   roles=[(6, 4), (7, 2), (9, 1), (10, 1)]
+   pack_payload/canonical = 0.4990; sqlite_file/canonical = 2.2562; framing_overhead_bytes = -10004
+== /tmp/lfs-smoke-review-28078/pipeline
+   sqlite_file_bytes=45056
+   packs=2 pack_payload_bytes=9966
+   object_rows=8 canonical_bytes_sum=19970 delta_based_rows=0
+   value_groups=4 pooled_values=202
+   roles=[(6, 4), (7, 2), (9, 1), (10, 1)]
+   pack_payload/canonical = 0.4990; sqlite_file/canonical = 2.2562; framing_overhead_bytes = -10004

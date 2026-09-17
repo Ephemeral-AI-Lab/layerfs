@@ -418,3 +418,58 @@ The Stage 5 report's original "363 passed" figure was taken from a run that
 included the same six empty targets in its target count. Nothing was wrong with
 any individual test; the summary simply counted binaries. Later rows in this
 document state tests, not targets.
+
+## 13. Round-2 independent review outcome, 2026-09-17 (R2)
+
+> **Status: #170 is NOT ACCEPTED.** This section is the outcome of the second
+> independent acceptance review and it corrects four statements this report makes.
+
+| | |
+| --- | --- |
+| Reviewer report | [`stages-1-5-review-20260917T230700Z.md`](stages-1-5-review-20260917T230700Z.md) |
+| Reviewer evidence | `docs/roadmap/0.1/0.1.7/evidence/stages-1-5-review-20260917T230700Z/` (30 files) |
+| Reviewed snapshot | `f288d2af7ecdc7e00f7df153073398d333461aa3`, tracked tree clean, identity re-checked |
+| Stage 5 matrix | 64 PASS / **9 FAIL** / 8 PARTIAL-INCOMPLETE / 1 NOT_RUN / 1 NOT_APPLICABLE of 83 |
+| Cumulative matrix | 30 PASS / **3 FAIL** / 1 PARTIAL / 2 owner-WAIVED of 36 |
+| Issue record | [comment on #170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170#issuecomment-5717192709) |
+
+### Corrections to this document
+
+1. **§6, the attribute-value row is wrong.** The enforced bound is **32,768 bytes**,
+   not 1 MiB: `attributes/value.rs:22-56` emits exactly one chunk object, so the
+   1 MiB branch at `:26-31` is unreachable. Reproduced through the public API: a
+   1 MiB value is refused with `object limit 32768 exceeded by 1048576`. Matrix row
+   `AT-4` was promoted on the wrong figure.
+2. **§6 omits a capacity limit that changes what a Workspace can build.**
+   `MAXIMUM_CYCLE_CHECK_ENTRIES = 4,096` (`filesystem/validate.rs:53`) is enforced
+   per whole-tree walk, so a single `build_filesystem` call is refused above
+   **4,095 directory bindings** (4,095 accepted, 4,096 `BUILD REFUSED invalid
+   record: cycle check work limit`), and an existing directory whose effective
+   subtree exceeds 4,096 entries can never be rebound (a 4,195-entry rename is
+   refused the same way).
+3. **§2 totals are one production commit stale.** This section is re-derived at
+   `b3df5461c`; the reviewed tree is C1 **11,875**, C2 **6,043**, core **18,650**
+   (+104 in `eb42c1347`, which discloses its own +35). The reference total is
+   unchanged at 65,417 and the combined total is 84,067.
+4. **§11.3 overstates the comparison.** The addendum §5 rows it points at come from
+   `stage-5-component-comparison-20260917T073017Z`, which its own successor
+   `…T143008Z/README.md:5-11` declares **not identity-matched and diagnostic only**.
+   The eligible collection at `eb42c1347` reports 0.653 / 0.272 / 0.480
+   candidate/reference with identity MATCH on all six pinned identities; the two
+   collections disagree by up to 2.3x, so neither is a stable absolute.
+
+### What the review confirmed as fixed (round-1 R1-R21)
+
+Second-parent refusal, build reachability, the inode-serial range, the value bound
+moved to the write path, a single leaf grammar, the old-Store role-constraint
+refusal at open, the byte-bound listing refusal, the gated oracle seal, the
+ordering byte owner and the honest expiry counters all stand on the current source,
+and no round-1 HIGH/MEDIUM correctness finding reproduces.
+
+### Blocking work routed to the terminal handoff
+
+The five blocking actions and the non-blocking follow-ups are routed by
+[`stage-5-terminal-handoff-20260917.md`](stage-5-terminal-handoff-20260917.md),
+whose terminal condition is every Stage 5 and cumulative criterion passing with no
+FAIL, INCOMPLETE or unowned row, followed by a clean closing review and the closure
+of #170.

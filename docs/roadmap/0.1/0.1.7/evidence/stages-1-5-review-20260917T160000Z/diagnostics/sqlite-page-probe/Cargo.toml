@@ -1,0 +1,12 @@
+[package]
+name = "sqlite-page-probe"
+version = "0.0.0"
+edition = "2021"
+
+# Its own workspace root; reviewer diagnostic, not product source.
+[workspace]
+
+[dependencies]
+layerfs-storage = { path = "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-telemetry" }
+rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }

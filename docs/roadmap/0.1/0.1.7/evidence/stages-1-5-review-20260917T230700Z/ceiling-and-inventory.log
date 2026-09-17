@@ -1,0 +1,66 @@
+### filesystem/ rollup (Stage 5 subtree)
+files 40 pre1 0 pre5 7214 rev 9156 cum +9156 s5 +1942 phys 0
+
+### physical-line ceilings, core production files (rev)
+OVER-999: path                                                                           scope        prod  physical
+OVER-999: crates/layerfs-content/src/filesystem/apply.rs                                 reference     870      1411
+OVER-999: crates/layerfs-content/src/tree/batch.rs                                       reference    1387      2863
+OVER-999: crates/layerfs-content/src/tree/inode/table.rs                                 reference    1886      2015
+OVER-999: crates/layerfs-daemon/src/main.rs                                              reference    1809      2253
+OVER-999: crates/layerfs-daemon/src/protocol.rs                                          reference     827      1127
+OVER-999: crates/layerfs-fuse/src/filesystem.rs                                          reference    1366      1438
+OVER-999: crates/layerfs-fuse/src/live_owner.rs                                          reference    2939      4279
+OVER-999: crates/layerfs-fuse/src/protocol.rs                                            reference     986      1357
+OVER-999: crates/layerfs-fuse/src/proxy_client.rs                                        reference    1457      2118
+OVER-999: crates/layerfs-layerstack-store/src/layerstack.rs                              reference    2059      4284
+OVER-999: crates/layerfs-layerstack-store/src/objects/admission.rs                       reference    1742      1940
+OVER-999: crates/layerfs-layerstack-store/src/objects/pack.rs                            reference    1399      1953
+OVER-999: crates/layerfs-layerstack-store/src/objects/read.rs                            reference    1958      2078
+OVER-999: crates/layerfs-layerstack-store/src/objects.rs                                 reference    3819      7099
+OVER-999: crates/layerfs-layerstack-store/src/schema.rs                                  reference     685      1021
+OVER-999: crates/layerfs-layerstack-store/src/telemetry.rs                               reference     906      1049
+OVER-999: crates/layerfs-layerstack-store/src/workspace.rs                               reference     938      1206
+OVER-999: crates/layerfs-workspace/src/changes.rs                                        reference    3002      5890
+OVER-999: crates/layerfs-workspace/src/cow_tree.rs                                       reference     558      1027
+OVER-999: crates/layerfs-workspace/src/file_io.rs                                        reference     712      1859
+OVER-999: crates/layerfs-workspace/src/lifecycle.rs                                      reference    1273      1980
+OVER-999: crates/layerfs-workspace/src/live_backing.rs                                   reference     509      1225
+OVER-999: crates/layerfs-workspace/src/projection.rs                                     reference     965      1149
+OVER-999: crates/layerfs-workspace-core/src/file_edit.rs                                 reference    1210      1810
+max physical:
+ core/crates/layerfs-telemetry/src/timer/scope.rs
+ core/crates/layerfs-telemetry/src/timer/report.rs
+ core/crates/layerfs-telemetry/src/timer/recording.rs
+ core/crates/layerfs-telemetry/src/timer/mod.rs
+ core/crates/layerfs-telemetry/src/timer/json.rs
+
+### lib.rs / mod.rs ceiling (max 200)
+ core/crates/layerfs-telemetry/src/timer/mod.rs
+ core/crates/layerfs-telemetry/src/lib.rs
+ core/crates/layerfs-storage/src/sqlite/mod.rs
+ core/crates/layerfs-storage/src/pack/mod.rs
+ core/crates/layerfs-storage/src/lib.rs
+ core/crates/layerfs-storage/src/encoding/pool/mod.rs
+ core/crates/layerfs-storage/src/encoding/mod.rs
+ core/crates/layerfs-storage/src/encoding/delta/mod.rs
+
+### files above their physical-line count 900
+
+### test/example/support LOC in core (non-production, informational)
+   27019 total
+    3549 total
+
+### sealed fixture inventory
+attr-pair.bin
+attr-single.bin
+attr-wide.bin
+codec-directory-branch.bin
+codec-directory-leaf.bin
+codec-inode-branch.bin
+codec-inode-leaf.bin
+codec-metadata-leaf.bin
+codec-root.bin
+codec-symlink.bin
+manifest.rs
+count:       11
+seal lines: 11

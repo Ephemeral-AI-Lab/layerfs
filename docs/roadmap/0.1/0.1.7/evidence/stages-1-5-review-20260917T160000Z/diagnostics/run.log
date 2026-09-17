@@ -1,0 +1,29 @@
+### filesystem diagnostics
+RESULT list.max_bytes=1 status=Ok entries=0 continuation=None
+RESULT list.max_bytes=14 status=Ok entries=0 continuation=None
+RESULT list.max_bytes=15 status=Ok entries=0 continuation=None
+RESULT list.max_bytes=16 status=Ok entries=1 continuation=Some("f00000")
+RESULT list.max_bytes=17 status=Ok entries=1 continuation=Some("f00000")
+RESULT list.max_bytes=4096 status=Ok entries=20 continuation=None
+RESULT list.full_page is_ok=true entries=20 continuation_is_none=true
+RESULT build.disconnected_cycle=ACCEPTED root=889aaec4604ea743e084aa53a632de2fedf12a70e317837b9d0f1dec47d445ec
+RESULT build.disconnected_cycle.reachable_entries=Ok(1)
+RESULT build.orphan_declared_new=REFUSED error=InvalidRecord("new inode without binding")
+RESULT boundary.name_bytes=255 status=ACCEPTED
+RESULT boundary.name_bytes=256 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4095 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4096 status=REFUSED PathLimitExceeded
+RESULT boundary.path_bytes=4097 status=REFUSED PathLimitExceeded
+RESULT boundary.path_components=256 bytes=511 status=ACCEPTED
+RESULT boundary.path_components=257 bytes=513 status=REFUSED PathLimitExceeded
+RESULT boundary.symlink_target_bytes=4096 status=ACCEPTED
+RESULT boundary.symlink_target_bytes=4097 status=REFUSED InvalidRecord("symlink target")
+RESULT boundary.inode_serial=9223372036854775807 status=ACCEPTED
+RESULT boundary.inode_serial=9223372036854775808 status=REFUSED InvalidRecord("inode serial")
+RESULT boundary.inode_serial=0 status=REFUSED InvalidRecord("inode serial")
+RESULT read_work.two_stats directory.pages_read=0 directory.read_waves=0 inode.pages_read=3
+[exit=0]
+
+### old-schema store open
+RESULT store.open.old_schema=ACCEPTED policy=StoragePolicy { format_profile: 1, small_file_threshold_bytes: 1048576, whole_file_delta_max_depth: 50, chunk_delta_max_depth: 50, metadata_delta_max_depth: 50 }
+[exit=0]

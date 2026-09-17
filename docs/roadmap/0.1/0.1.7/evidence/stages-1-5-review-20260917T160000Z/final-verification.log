@@ -1,0 +1,26 @@
+### core/tools unittest
+Ran 5 tests in 0.009s
+
+OK
+[exit=0]
+### tools/test_production_loc.py
+Ran 17 tests in 0.049s
+
+OK
+[exit=0]
+### boundary guard
+PASS: scanned 115 production Rust/SQL files; semantic review still required
+[exit=0]
+### fmt
+[exit=0]
+### production_loc totals
+          layerfs-materialization                              358
+          layerfs-monitor                                      414
+          layerfs-sdk                                          979
+          layerfs-workspace                                  11776
+          layerfs-workspace-core                              2452
+combined    83322 production lines
+### git diff --check
+[exit=0]
+### tree status outside the evidence dir
+?? docs/roadmap/0.1/0.1.7/study/cloudflare-computer/sqlite-placement-and-container-transport.md

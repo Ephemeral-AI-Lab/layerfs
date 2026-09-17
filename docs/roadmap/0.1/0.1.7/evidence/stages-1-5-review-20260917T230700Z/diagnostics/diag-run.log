@@ -1,0 +1,31 @@
+stage15-diag: public-API review diagnostics
+== P1 ordering scaling, maximum_pending_records = 64, base 4000 files ==
+ pairs  spilled    elapsed_ns  rows_read  rows_writ   runs  peak_owned    held_now   peak_back   emitted
+   250      448      15831958       2198       1588     14       66432           0       66432         7
+   500      960      35641708       6684       4328     30      139008           0      139008         8
+  1000     1984      87571000      19960      10896     62      284160           0      284160        10
+  2000     3968     154513875      59007      25760    124      568320           0      568320        14
+== P3 listing byte and count bounds ==
+count  4 max_bytes 4096 -> OK entries 4 continuation true
+count  4 max_bytes   64 -> OK entries 4 continuation true
+count  4 max_bytes   16 -> OK entries 1 continuation true
+count  4 max_bytes   11 -> ERR object limit 11 exceeded by 16
+count  4 max_bytes   10 -> ERR object limit 10 exceeded by 16
+count  4 max_bytes    0 -> ERR invalid record: listing limit
+count  0 max_bytes 4096 -> ERR invalid record: listing limit
+progressive pagination: 2 pages, 8 entries
+== P4 declared resource ceilings ==
+ordering_bytes=81          -> ERR ordering or scratch resource unavailable: ordering bytes
+maximum_pending_records=1  -> OK spills 64 peak_pending 1
+scratch_bytes=1023         -> ERR ordering or scratch resource unavailable: operation scratch
+merge_buffer_bytes=0       -> ERR ordering or scratch resource unavailable: ordering merge buffer
+base_read_batch=0          -> ERR ordering or scratch resource unavailable: base read batch
+== P5 inode serial range ==
+binding serial 9223372036854775807 -> OK
+binding serial 9223372036854775808 -> ERR invalid record: inode serial
+== P6 attribute value bound ==
+value bytes        4 -> OK root 6de6fbec6c0e6903
+value bytes  1048576 -> ERR object limit 32768 exceeded by 1048576
+value bytes  1048577 -> ERR object limit 1048576 exceeded by 1048577
+== P7 restated bindings ==
+restated root equals base: true emitted 1
