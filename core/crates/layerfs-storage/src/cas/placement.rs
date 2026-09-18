@@ -142,7 +142,7 @@ impl MutationOwner {
             } else {
                 self.counters.full_records += 1;
             }
-            write::insert_object(
+            let statements = write::insert_object(
                 &self.connection,
                 &ObjectRow {
                     object_id: member.object_id,
@@ -154,6 +154,7 @@ impl MutationOwner {
                     record_number,
                 },
             )?;
+            self.counters.statements = self.counters.statements.saturating_add(statements);
             availability.inserted(member.object_id);
             self.counters.inserted += 1;
             self.transaction.rows += 1;

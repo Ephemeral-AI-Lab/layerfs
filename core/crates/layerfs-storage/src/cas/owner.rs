@@ -45,6 +45,16 @@ pub struct OutcomeCounters {
     pub full_records: u64,
     /// Record-level objects newly written as a PREFIX representation.
     pub prefix_records: u64,
+    /// `INSERT` statements issued for object rows.
+    ///
+    /// A statement counter, not a row counter: a multi-row `INSERT` of `k` rows
+    /// is **one** statement. It is charged where the statement is issued, by the
+    /// writer's own report, and it counts only the `objects` insert - pack
+    /// writes, value-group inserts and transaction statements are already
+    /// visible as `packs_created`, `pack_appends`, `pool.groups`, `transactions`
+    /// and `commits`. Before batching, `statements == inserted` for a save that
+    /// reuses nothing.
+    pub statements: u64,
     /// Representation selection outcomes.
     pub delta: DeltaCounters,
     /// Work spent acquiring delta bases.

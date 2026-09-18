@@ -97,7 +97,12 @@ pub fn append_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> Stora
 }
 
 /// Inserts one object row inside the open transaction.
-pub fn insert_object(connection: &Connection, row: &ObjectRow) -> StorageResult<()> {
+///
+/// Returns the number of SQL statements it issued, so the caller can charge its
+/// statement counter where the statement is issued instead of inferring it from
+/// a loop somewhere else. One row is one statement today; a batched insert of a
+/// whole group (`P2-2`) is one statement per bound chunk.
+pub fn insert_object(connection: &Connection, row: &ObjectRow) -> StorageResult<u64> {
     let base: Value = match row.base_object_id {
         Some(id) => Value::Blob(id.to_bytes().to_vec()),
         None => Value::Null,
@@ -119,5 +124,5 @@ pub fn insert_object(connection: &Connection, row: &ObjectRow) -> StorageResult<
     if affected != 1 {
         return Err(StorageError::Integrity("object insert cardinality"));
     }
-    Ok(())
+    Ok(1)
 }

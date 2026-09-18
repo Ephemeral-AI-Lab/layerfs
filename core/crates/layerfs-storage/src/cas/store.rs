@@ -47,6 +47,12 @@ pub struct SaveOutcome {
     pub full_records: u64,
     /// Record-level objects newly written as a PREFIX representation.
     pub prefix_records: u64,
+    /// `INSERT` statements issued for object rows.
+    ///
+    /// One per row before batching; one per bound chunk after. It is the counter
+    /// an INSERT-batching change moves, and it is deliberately not a row count:
+    /// `inserted` already is one.
+    pub statements: u64,
     /// Representation selection outcomes.
     pub delta: DeltaCounters,
     /// Work spent acquiring delta bases.
@@ -65,6 +71,7 @@ impl From<OutcomeCounters> for SaveOutcome {
             commits: counters.commits,
             full_records: counters.full_records,
             prefix_records: counters.prefix_records,
+            statements: counters.statements,
             delta: counters.delta,
             chain: counters.chain,
             pool: counters.pool,
