@@ -1,0 +1,43 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits --mode pipeline --case large-to-small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-10/after/output/D23/edits-pipeline-large-to-small
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.014
+--- stdout ---
+mode: pipeline
+case: large-to-small
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 0 replacement bytes
+stream: 1 edit(s), base 262144 -> final 131072 bytes
+base preparation (untimed): root 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d stored as 18 object(s), 3 pack(s)
+edited root: 4148b0a15f376de13e49481270f7025689bd6e61b381e4a8ec296c752ada6813
+edited length: 131072
+save: inserted 2 reused 0 packs 1 prefix records 0 full records 2
+readback bytes: 131072
+readback connection opens: 1
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  665.375us
+  storage.begin  219.750us
+  file.edit  260.875us
+    edit.base  213.917us
+      edit.base_read  212.750us
+    edit.compare  250ns
+    edit.split  33.791us
+    edit.split  2.916us
+    edit.finish  4.750us
+  storage.finish  123.583us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  747.542us
+  content.read  747.000us
+    content.acquire  184.917us
+    content.traverse  561.542us
+      mapping.navigate  30.833us
+        storage.read  30.625us
+      mapping.payload  517.167us
+        storage.read  516.917us
+timings: 10 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-10/after/output/D23/edits-pipeline-large-to-small/pipeline-edit-save.json
+timings: 8 nodes at 5 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-10/after/output/D23/edits-pipeline-large-to-small/pipeline-readback.json
+wall_seconds: 0.009505
+--- stderr ---

@@ -19,6 +19,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |
 | `p1-12` | P1-12 — a page keeps a running width total | collected (`after/`) |
 | `p1-16` | P1-16 — the pending-ceiling dial (docs + boundary test) | collected (`after/`) |
+| `p1-10` | P1-10 — ordering state carried out of `touched_serials` | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 
