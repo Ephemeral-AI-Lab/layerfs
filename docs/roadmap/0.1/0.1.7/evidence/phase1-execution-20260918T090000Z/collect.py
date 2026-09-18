@@ -64,7 +64,7 @@ def main():
     round_name, arm = sys.argv[1], sys.argv[2]
     sets = sys.argv[3:] or ["all"]
     if "all" in sets:
-        sets = ["build", "c1", "fs", "edits", "order", "extra", "c2", "diag"]
+        sets = ["build", "c1", "fs", "edits", "order", "extra", "v2", "c2", "diag"]
     round_dir = HERE / "rounds" / round_name / arm
     round_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,6 +87,7 @@ def main():
             ("measure_filesystem", CORE / "measure_filesystem"),
             ("measure_edits", CORE / "measure_edits"),
             ("edit_timing_c1", CORE / "edit_timing_c1"),
+            ("edit_memory_probe", CORE / "edit_memory_probe"),
         ]
         lines = []
         for label, path in hashed:
@@ -129,6 +130,18 @@ def main():
             if f"order-{size}" in sets:
                 run(round_dir, f"D26x{size}", f"order-forced-64-{size}",
                     [CLIENT, "order", str(size * 2), str(size), "64"])
+
+    if "v2" in sets:
+        # V2's vehicle rows (examples only; not part of the frozen set, which they
+        # extend additively). M1 is the counting-allocator memory probe P1-14 is
+        # gated on; M2/M3 are the two new edit_timing_c1 fixtures (P1-9's and
+        # P1-8's positive anchors).
+        run(round_dir, "M1", "edit-memory-probe",
+            [str(CORE / "edit_memory_probe")])
+        run(round_dir, "M2", "edit-timing-c1-delete",
+            [str(CORE / "edit_timing_c1"), "--case", "delete"])
+        run(round_dir, "M3", "edit-timing-c1-shrink",
+            [str(CORE / "edit_timing_c1"), "--case", "shrink"])
 
     if "extra" in sets:
         run(round_dir, "D27", "edit-timing-c1-nodes-read", [str(CORE / "edit_timing_c1")])
