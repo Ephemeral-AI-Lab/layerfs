@@ -1,0 +1,72 @@
+Stage 6 structural-complexity report
+========================================================================
+run directory      : /tmp/round4b2-full
+source commit      : fd024006eb1f84db5f23a118dd64ec4a4b0c3afd
+dirty tree         : False
+harness binary     : ea2547809fac9a461ca85209ec881a00b784e2b0adcdd4522bf2bb35b2d47a4c
+workers            : 1
+lane               : full
+
+Row statuses
+------------------------------------------------------------------------
+  PASS         217
+  NOT_RUN      3
+  TOTAL        220
+
+Four axes, per family
+------------------------------------------------------------------------
+  family                           rows  pass  heap peak max  time max ms
+  c1.cdc.chunk-count                 12    12         199322       5778.1
+  c1.change-locality                 12    12         189736          7.3
+  c1.construct.chunked                4     4         226597       6534.8
+  c1.construct.whole-file             4     4          95525       6541.0
+  c1.edit.length-changing            32    32         100995       6225.0
+  c1.edit.length-preserving          12    12         101283       5795.3
+  c1.fs.build-scale                   8     8        2525973       8849.9
+  c1.many-tiny                       20    20         250903         20.2
+  c1.transition.boundary              7     7         262623         19.0
+  c1.tree.construct-traverse         12    12         189736         21.1
+  c1.tree.namespace-mutation          4     4         189736          7.0
+  c2.delta.boundaries                21    21        2355064         11.0
+  c2.delta.cdc-locality              20    20        8841079       5974.3
+  c2.delta.small-file                 4     4        2748278         12.3
+  c2.footprint                        6     6        3645566       9644.0
+  c2.lifecycle                        5     5        2221589         16.0
+  c2.pool.cold-warm                   2     2        9325131        411.1
+  c2.read.waves                       4     4        1308160       9577.9
+  c2.reuse.cross-file                10    10        5964365       8736.2
+  c2.reuse.workspace                 14    14        8819902       9952.5
+  component.primitives                3     0              0          4.9
+  pipeline.*                          4     4        4698141        211.2
+
+Scaling ladders (counters, heap and disk decide; time is diagnostic)
+------------------------------------------------------------------------
+  family                           claim       metric                             b                 per-doubling
+  c1.cdc.chunk-count               -           no scaling claim registered
+  c1.change-locality               O(n)        construct.objects                n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c1.construct.chunked             O(1)        heap.peak_incremental_bytes    0.019 1.021 PASS; 1.000 PASS; 1.029 PASS
+  c1.construct.whole-file          O(n)        heap.peak_incremental_bytes    0.045 1.049 FAIL; 1.000 FAIL; 1.073 FAIL
+  c1.edit.length-changing          O(n)        edit.payload_bytes             0.000 n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c1.edit.length-preserving        -           no scaling claim registered
+  c1.fs.build-scale                -           no scaling claim registered
+  c1.many-tiny                     -           no scaling claim registered
+  c1.transition.boundary           -           no scaling claim registered
+  c1.tree.construct-traverse       O(n log n)  construct.objects                n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c1.tree.namespace-mutation       -           no scaling claim registered
+  c2.delta.boundaries              -           no scaling claim registered
+  c2.delta.cdc-locality            -           no scaling claim registered
+  c2.delta.small-file              -           no scaling claim registered
+  c2.footprint                     O(n)        space.allocated_bytes            n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c2.lifecycle                     -           no scaling claim registered
+  c2.pool.cold-warm                -           no scaling claim registered
+  c2.read.waves                    O(1)        heap.peak_incremental_bytes    0.038 1.010 PASS; 1.047 PASS; 1.011 PASS
+  c2.reuse.cross-file              O(1)        reuse.inserted                 0.537 1.000 PASS; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; 0.510 FAIL; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; 0.140 FAIL; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c2.reuse.workspace               -           no scaling claim registered
+  component.primitives             -           no scaling claim registered
+  pipeline.*                       O(n)        construct.objects                n/a                            -
+
+Rows that are not PASS
+------------------------------------------------------------------------
+  NOT_RUN     component-primitives-edit                        
+  NOT_RUN     component-primitives-filesystem                  
+  NOT_RUN     component-primitives-payload                     
