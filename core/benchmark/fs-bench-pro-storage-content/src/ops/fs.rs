@@ -133,9 +133,13 @@ pub fn listings_match(
         .map_err(|error| OpError::Product(format!("{error:?}")))?;
     let mut checked = 0_u64;
     for (path, expected) in &prepared.listings {
-        let logical =
-            LogicalPath::new(path).map_err(|error| OpError::Product(format!("{error:?}")))?;
-        let observed = list_all(&mut read, &logical)?;
+        // Every failure names the directory it happened in. An oracle that reports
+        // "MissingObject" without saying which listing demanded it cannot be acted
+        // on, which is how the first version of the removal oracle read.
+        let logical = LogicalPath::new(path)
+            .map_err(|error| OpError::Product(format!("listing {path:?}: {error:?}")))?;
+        let observed = list_all(&mut read, &logical)
+            .map_err(|error| OpError::Product(format!("listing {path:?}: {error}")))?;
         if observed != *expected {
             return Ok(Err(format!(
                 "directory {path:?}: observed {observed:?}, manifest {expected:?}"
@@ -203,7 +207,7 @@ fn measure_update(
     scope: layerfs_content::InodeScope,
     backing: Option<&mut dyn OrderingBacking>,
     label: &'static str,
-) -> Result<Measured, layerfs_content::ContentError> {
+) -> Result<(Measured, u64, u64), layerfs_content::ContentError> {
     let input = FilesystemInput {
         base: Some(base_root),
         scope,
@@ -213,20 +217,30 @@ fn measure_update(
         new_inodes: &prepared.new_inodes,
         resources: resources(),
     };
+    // The reader is built outside the timer so its own served-from counts are
+    // readable after the closure; it performs no work until the operation demands
+    // an object, and every demand happens inside the timer.
+    let reader = PairProvider::new(emitted, base);
     instruments::heap_begin();
     let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
-        let reader = PairProvider::new(emitted, base);
         let mut objects = FilesystemObjects::new(&reader, &mut consumer);
         let result = update_filesystem(&mut objects, &input, backing)?;
         Ok::<_, layerfs_content::ContentError>((result, objects.work()))
     });
     let heap = instruments::heap_end();
-    outcome.map(|(result, work)| Measured {
-        result,
-        objects: work,
-        report,
-        heap,
+    let (served_result, served_base) = reader.served();
+    outcome.map(|(result, work)| {
+        (
+            Measured {
+                result,
+                objects: work,
+                report,
+                heap,
+            },
+            served_result,
+            served_base,
+        )
     })
 }
 
@@ -286,10 +300,14 @@ fn replay_update(
         let mut objects = FilesystemObjects::new(&reader, &mut shared);
         update_filesystem(&mut objects, &input, backing)
     });
-    // The emitted objects are not returned: the replay is used for its counters,
-    // its root identity and its inode table, all of which the result carries.
+    // The emitted objects **are** returned: an update reads back what it emits, so
+    // a measured phase that discards its own output needs a fixture that already
+    // holds it, and this replay is that fixture. It is unmeasured and byte-identical,
+    // and the row gates the measured root against its root.
+    let mut emitted = TreeStore::new();
+    shared.absorb_into(&mut emitted);
     outcome
-        .map(|result| (TreeStore::new(), result))
+        .map(|result| (emitted, result))
         .map_err(|error| OpError::Product(format!("{error:?}")))
 }
 
@@ -1155,22 +1173,22 @@ fn run_delete_row(
     // retaining store, the read-back is the cause; if it does not, the input is
     // the cause and the row must say that instead of blaming the consumer.
     let mut replay_backing = backing_for(&removal_input, context);
-    let replay = match replay_update(
+    let (fixture, replay) = match replay_update(
         &store,
         base.root,
         &removal_input,
         scope,
         as_backing(replay_backing.as_mut()),
     ) {
-        Ok((_, replay)) => replay,
+        Ok((fixture, replay)) => (fixture, replay),
         Err(error) => return Ok(unmeasured(&error, Vec::new())),
     };
 
     let mut backing = backing_for(&removal_input, context);
-    let measured =
+    let (measured, served_result, served_base) =
         match measure_update(
             &store,
-            &store,
+            &fixture,
             base.root,
             &removal_input,
             scope,
@@ -1179,10 +1197,11 @@ fn run_delete_row(
         ) {
             Ok(measured) => measured,
             Err(layerfs_content::ContentError::MissingObject) => return Ok(unmeasured(
-                &OpError::Unimplemented(
-                    "filesystem-update: the identical input replays into a retaining store, but \
-                     the non-retaining measured phase cannot serve the object the operation \
-                     reads back inside its own operation",
+                &OpError::Product(
+                    "filesystem-update: MissingObject from a discarding measured phase whose \
+                     fixture is the byte-identical unmeasured replay; the replay and the \
+                     measured operation have diverged"
+                        .to_string(),
                 ),
                 Vec::new(),
             )),
@@ -1220,12 +1239,66 @@ fn run_delete_row(
             measured.result.counters.bindings_removed
         ),
     ));
+    // The reading that makes this row falsifiable rather than merely passing. A
+    // filesystem update reads back objects it emitted earlier in the same
+    // operation, so the measured phase is served by a fixture - the byte-identical
+    // unmeasured replay - while its own consumer discards. If a future change
+    // stopped the operation reading back its own output, `served_result` would fall
+    // to zero and this gate would say so, because then the fixture would not be
+    // load-bearing and the row would be describing a different operation than it
+    // claims. A row that quietly stopped needing the fixture is as much a finding
+    // as one that started failing.
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.served_from_result"),
+        served_result as i128,
+        "objects",
+        "PairProvider, objects the measured phase demanded that it had emitted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.served_from_base"),
+        served_base as i128,
+        "objects",
+        "PairProvider, objects the measured phase demanded from the base",
+    )?;
+    // The external oracle for a removal: every directory the removal input empties
+    // must read back empty. The expectation comes from the harness's own removal
+    // input - whose bindings are all absences - and never from the artifact the
+    // operation produced, so this is the one correctness reading on this row that
+    // the product cannot agree with by construction.
+    // **The listing oracle this row does not have, and why.** The obvious O4 for a
+    // removal is "every directory the fixture has reads back empty", but the
+    // removal input unbinds the root's own bindings too, so the derived
+    // directories are *gone* from the namespace and asking for their listings asks
+    // for paths that no longer exist. Detecting that needs the read path to say
+    // "this name is not bound", and `FilesystemRead::resolve` reports an unbound
+    // name as `ContentError::MissingObject`
+    // (`filesystem/read.rs`, `.ok_or(ContentError::MissingObject)`) - the variant
+    // whose own doc reserves it for "the provider does not hold the requested
+    // object" and which `ProviderFailure` exists to be distinguished from. So a
+    // listing oracle here could not tell a removed path from a corrupt provider,
+    // and a gate built on that would be wrong rather than merely weak. The row
+    // therefore carries the replay-identity gates and the mechanism gate below and
+    // no listing oracle; the gap is recorded rather than papered over.
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.reads-back-its-own-output",
+        served_result > 0 && served_base > 0,
+        &format!("{served_result} from the operation's own output, {served_base} from the base"),
+        "the update demands objects it emitted, which is why a discarding consumer \
+         alone cannot serve this row and a fixture must",
+    ));
     Ok(OpOutcome {
         gates,
         notes: vec![
             format!("recipe_entries: {}", prepared.recipe.entries),
             format!("removals: {}", prepared.bindings()),
-            "cache_state: warm-in-process-fixture; the base tree is built before the timed region"
+            "cache_state: warm-in-process-fixture; the base tree and the replayed result are \
+             built before the timed region"
+                .to_string(),
+            "measured_consumer: discarding; the objects the update reads back are served by the \
+             byte-identical unmeasured replay"
                 .to_string(),
             "oracle_phase: separate-unmeasured-replay".to_string(),
         ],

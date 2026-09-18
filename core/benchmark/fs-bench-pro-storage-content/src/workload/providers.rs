@@ -242,6 +242,15 @@ pub struct PairProvider<'a> {
     /// Objects the operation started from.
     pub base: &'a TreeStore,
     demanded: RefCell<Vec<ObjectId>>,
+    /// Objects served by `result`, counted where they are served.
+    ///
+    /// This is the reading that makes a fixture-served update falsifiable: an
+    /// operation that demanded nothing from `result` did not read back what it
+    /// emitted, so the fixture was not load-bearing and the row's whole
+    /// construction would be describing a different operation than it claims.
+    served_result: std::cell::Cell<u64>,
+    /// Objects served by `base`.
+    served_base: std::cell::Cell<u64>,
 }
 
 impl<'a> PairProvider<'a> {
@@ -251,12 +260,19 @@ impl<'a> PairProvider<'a> {
             result,
             base,
             demanded: RefCell::new(Vec::new()),
+            served_result: std::cell::Cell::new(0),
+            served_base: std::cell::Cell::new(0),
         }
     }
 
     /// Every identity demanded, in demand order, with repeats.
     pub fn demanded(&self) -> Vec<ObjectId> {
         self.demanded.borrow().clone()
+    }
+
+    /// Objects served from the result store, and from the base.
+    pub fn served(&self) -> (u64, u64) {
+        (self.served_result.get(), self.served_base.get())
     }
 }
 
@@ -265,9 +281,15 @@ impl AuthenticatedObjects for PairProvider<'_> {
         self.demanded.borrow_mut().extend_from_slice(ids);
         let mut values = Vec::with_capacity(ids.len());
         for id in ids {
-            let found = self.result.object(*id).or_else(|| self.base.object(*id));
+            let from_result = self.result.object(*id);
+            let found = from_result.or_else(|| self.base.object(*id));
             match found {
                 Some(object) if ObjectId::for_bytes(object.canonical()) == *id => {
+                    if from_result.is_some() {
+                        self.served_result.set(self.served_result.get() + 1);
+                    } else {
+                        self.served_base.set(self.served_base.get() + 1);
+                    }
                     values.push(object.canonical().to_vec());
                 }
                 Some(_) => return Err(ContentError::IdentityMismatch),
