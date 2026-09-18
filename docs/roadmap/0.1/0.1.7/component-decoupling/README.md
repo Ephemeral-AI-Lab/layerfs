@@ -15,6 +15,24 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   every remediated row verified by a read-only verification subagent and every
   finding adjudicated. Evidence:
   [`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/).
+- **Stage 5's registers are closed (2026-09-18).** The implementation tracker
+  [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) closed at its
+  implemented scope on 2026-09-17; its two research registers — the complexity and
+  round-trip register
+  [#176](https://github.com/Ephemeral-AI-Lab/layerfs/issues/176) and the
+  parallelism/batching register
+  [#177](https://github.com/Ephemeral-AI-Lab/layerfs/issues/177) — were closed by
+  owner instruction once their execution tracker
+  [#178](https://github.com/Ephemeral-AI-Lab/layerfs/issues/178) finished Phase 2.
+  Every registered opportunity is landed, declined with its measured receipt, or
+  parked for an owner decision; the parked set (branch-row summaries, pack-BLOB
+  chunking, membership single-hash, persisted pool cursor, producer pool, group
+  target) is enumerated in #178's "Parked" section and is **not** open work. The
+  execution evidence is
+  [`../evidence/phase1-execution-20260918T090000Z/`](../evidence/phase1-execution-20260918T090000Z/)
+  and
+  [`../evidence/phase2-execution-20260918T150435Z/`](../evidence/phase2-execution-20260918T150435Z/)
+  (closing audit: its `CLOSING-PASS.md`).
 - [Stage 5 terminal handoff](stage-5-terminal-handoff-20260917.md): the routing
   that drove the closure; now a historical record of the loop, the ledger and
   the terminal checklist.
