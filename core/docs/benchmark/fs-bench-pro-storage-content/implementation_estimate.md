@@ -164,7 +164,7 @@ inline `license = "MIT"` beside `publish = false`.
 ## 6. Build-blocking corrections
 
 1. **The harness crate must declare an empty `[workspace]` table**, or `core/Cargo.toml`
-   must add `exclude = ["benchmark"]`. `core/Cargo.toml:6-11` lists three members and no
+   must add `exclude = ["benchmark"]`. `core/Cargo.toml:9-15` lists three members and no
    exclude, so a package at `core/benchmark/.../` that is neither a member nor excluded
    makes Cargo fail with *"current package believes it's in a workspace when it's not"*.
 2. **Its own workspace means its own `Cargo.lock`** — which can resolve different

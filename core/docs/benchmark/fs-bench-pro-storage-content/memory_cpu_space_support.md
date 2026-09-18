@@ -59,7 +59,7 @@ them. These are read, never extended:
 They are **not** process RSS, and they do not include allocator overhead, page
 cache or SQLite's page allocation."*
 
-`Store::path()` is already public (`cas/store.rs:173`) — which is exactly enough
+`Store::path()` is already public (`cas/store.rs:219`) — which is exactly enough
 for the runner to `stat` the file. A `Store::size()` accessor is therefore **not**
 added; that would be a benchmark-driven API addition.
 
