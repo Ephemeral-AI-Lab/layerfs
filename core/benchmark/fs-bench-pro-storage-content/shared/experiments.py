@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import copyladder
+import invariants
 import receipt
 import residency
 import space
@@ -413,10 +414,120 @@ def e4_tree_fidelity(root: Path) -> Experiment:
     return experiment
 
 
+def _run_child(
+    binary: Path, case_id: str, out: Path, store: Path | None = None
+) -> subprocess.CompletedProcess:
+    """Runs one harness case as its own process."""
+    command = [str(binary), "--case", case_id, "--out", str(out)]
+    if store is not None:
+        command += ["--store", str(store)]
+    environment = dict(os.environ)
+    environment["LAYERFS_CONSTRUCTION_WORKERS"] = "1"
+    return subprocess.run(command, capture_output=True, text=True, check=False, env=environment)
+
+
+def w1_watermark_refusal(root: Path, harness_binary: Path) -> Experiment:
+    """W1: a hand-edited watermark must make `Store::open` refuse.
+
+    External perturbation only. There is no fault injection in product source and
+    none is needed: the watermark is a row in the Store, and a Store whose
+    watermark is ahead of its pack ids is a Store the product must refuse rather
+    than repair. The control arm is the unperturbed copy, which must still open —
+    without it, a refusal would prove nothing about the perturbation.
+    """
+    experiment = Experiment(
+        identifier="W1",
+        question="does a hand-edited watermark make Store::open refuse with Integrity, while an unperturbed copy still opens",
+    )
+    produced = root / "w1-store"
+    result = _run_child(harness_binary, "lifecycle-create", produced)
+    experiment.fields["create_stdout"] = result.stdout.strip()
+    store = produced / "sample.sqlite"
+    if not store.exists():
+        experiment.outcome = "REFUTED"
+        experiment.notes.append(f"no Store was produced at {store}")
+        return experiment
+    control = root / "w1-control.sqlite"
+    perturbed = root / "w1-perturbed.sqlite"
+    shutil.copyfile(store, control)
+    shutil.copyfile(store, perturbed)
+    import sqlite3
+
+    connection = sqlite3.connect(perturbed)
+    connection.execute("UPDATE store_policy SET retained_pack_ceiling = 999999")
+    connection.commit()
+    connection.close()
+
+    control_out = root / "w1-control-run"
+    control_result = _run_child(
+        harness_binary,
+        "lifecycle-open",
+        control_out,
+        store=control,
+    )
+    perturbed_out = root / "w1-perturbed-run"
+    perturbed_result = _run_child(
+        harness_binary,
+        "lifecycle-open",
+        perturbed_out,
+        store=perturbed,
+    )
+    control_trace = (control_out / "trace.jsonl").read_text(encoding="utf-8")
+    perturbed_trace = (perturbed_out / "trace.jsonl").read_text(encoding="utf-8")
+    control_opened = "row.not-run" not in control_trace
+    perturbed_refused = "Integrity" in perturbed_trace or "row.not-run" in perturbed_trace
+    experiment.fields.update(
+        {
+            "control_stdout": control_result.stdout.strip(),
+            "perturbed_stdout": perturbed_result.stdout.strip(),
+            "control_opened": control_opened,
+            "perturbed_refused": perturbed_refused,
+            "perturbed_trace_tail": perturbed_trace.strip().splitlines()[-1][:400],
+        }
+    )
+    experiment.notes.append(
+        "the perturbation is an ordinary UPDATE through sqlite3, outside the product; "
+        "no product source was modified, no hook was added and no fault was injected "
+        "into the crate"
+    )
+    experiment.outcome = "SATISFIED" if control_opened and perturbed_refused else "REFUTED"
+    return experiment
+
+
+def w4_sealed_call_graph() -> Experiment:
+    """W4: the sealed call-graph status and the runtime tripwires.
+
+    The half that cannot be a counter. A scan of every product source file for the
+    tokens that would mean the no-fsync/no-WAL/no-retry contract had been broken,
+    plus the runtime readings that would show it: a journal sidecar, a persisted
+    WAL mode, or more than one watermark row.
+    """
+    experiment = Experiment(
+        identifier="W4",
+        question="is the no-fsync / no-WAL / no-retry contract intact in the sealed product source, and do the runtime tripwires agree",
+    )
+    status = invariants.scan()
+    experiment.fields.update(
+        {
+            "files_scanned": status["files_scanned"],
+            "token_classes": status["checked"],
+            "scan_status": status["status"],
+            "scan_findings": status["findings"],
+        }
+    )
+    experiment.notes.append(
+        "the scan strips Rust comments first, deliberately: the product documents why "
+        "these calls are absent, and a scan that counted the explanation could not be "
+        "kept green"
+    )
+    experiment.outcome = "SATISFIED" if status["status"] == "PASS" else "REFUTED"
+    return experiment
+
+
 def run_all(
     harness_binary: Path, repo_root: Path, work_root: Path | None = None
 ) -> list[Experiment]:
-    """Runs E1-E4 in one directory and returns every outcome, failures included."""
+    """Runs E1-E4 and the two designed WP-9 checks, failures included."""
     results: list[Experiment] = []
     with tempfile.TemporaryDirectory(dir=str(work_root) if work_root else None) as directory:
         root = Path(directory)
@@ -424,6 +535,8 @@ def run_all(
         results.append(e2_clone_residency(root))
         results.append(e3_quiescent_store(root, harness_binary, repo_root))
         results.append(e4_tree_fidelity(root))
+        results.append(w1_watermark_refusal(root, harness_binary))
+        results.append(w4_sealed_call_graph())
     return results
 
 

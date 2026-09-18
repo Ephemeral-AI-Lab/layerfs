@@ -1,0 +1,53 @@
+{
+  "cache_state": "declared per row; never pooled",
+  "declared_exceptions": [],
+  "golden_matches": true,
+  "identity": {
+    "construction_workers": "1",
+    "harness_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "harness_binary_sha256": "df9ce15fa04964707278e3d49df61b504f2e9743ae2f333b07fdc3d97d17a23a",
+    "harness_lock_sha256": "f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e",
+    "harness_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "host": "Yifans-MacBook-Pro-10.local",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "product_lock_sha256": "bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991",
+    "python": "3.14.3",
+    "registry_tsv_sha256": "3f33a2eb6e3db60fc8d619346fe70cddec4b3865ba49f6bc665d0510d60a17d0",
+    "source_commit": "14cf16d8301428577fe698fa08c6cadf731644c1",
+    "source_dirty": true,
+    "source_dirty_files": [
+      "M core/benchmark/fs-bench-pro-storage-content/runner.py",
+      " M core/benchmark/fs-bench-pro-storage-content/shared/experiments.py",
+      " M core/benchmark/fs-bench-pro-storage-content/src/ops/c2.rs",
+      "?? core/benchmark/fs-bench-pro-storage-content/README.md",
+      "?? core/benchmark/fs-bench-pro-storage-content/shared/invariants.py",
+      "?? docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-qualification-plan.md"
+    ],
+    "started_utc": "2026-09-18T17:53:24Z"
+  },
+  "lane": "smoke",
+  "registry_self_check": {
+    "admission rows": "217",
+    "cardinality sum": "217",
+    "diagnostic rows": "3",
+    "exit_code": 0,
+    "frozen cardinality": "[4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 4]",
+    "registered rows": "220",
+    "registry self-check": "PASS",
+    "smoke lane": "20",
+    "status": "PASS"
+  },
+  "rows": 2,
+  "run_dir": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro-storage-content/run-20260919T-wp9",
+  "samples_per_case_per_arm": 1,
+  "schema": "layerfs-core-run-v1",
+  "selection": [
+    "lifecycle-begin-save",
+    "lifecycle-open"
+  ],
+  "selection_size": 2,
+  "tally": {
+    "PASS": 2
+  },
+  "wall_ns": 52961667
+}

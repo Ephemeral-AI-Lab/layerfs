@@ -1,0 +1,173 @@
+Stage 6 structural-complexity report
+========================================================================
+run directory      : /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro-storage-content/run-20260919T-full
+source commit      : 14cf16d8301428577fe698fa08c6cadf731644c1
+dirty tree         : False
+harness binary     : b2c21dbcb5670c39b811c7c4730ad6af15791d5bfdbfb4f0b387135439ed50d8
+workers            : 1
+lane               : full
+
+Row statuses
+------------------------------------------------------------------------
+  PASS         122
+  FAIL         3
+  NOT_RUN      95
+  TOTAL        220
+
+Four axes, per family
+------------------------------------------------------------------------
+  family                           rows  pass  heap peak max  time max ms
+  c1.cdc.chunk-count                 12     9         212793       5835.7
+  c1.change-locality                 12     0              0          4.2
+  c1.construct.chunked                4     4         226597       6494.6
+  c1.construct.whole-file             4     4          95525       6490.6
+  c1.edit.length-changing            32    32         100995       5931.3
+  c1.edit.length-preserving          12    11         101283       5755.5
+  c1.fs.build-scale                   8     0              0          4.2
+  c1.many-tiny                       20     0              0          4.7
+  c1.transition.boundary              7     7         262623         19.6
+  c1.tree.construct-traverse         12     0              0          4.3
+  c1.tree.namespace-mutation          4     0              0          4.1
+  c2.delta.boundaries                21    21        2355064         14.4
+  c2.delta.cdc-locality              20    10        8837592      29620.2
+  c2.delta.small-file                 4     4        2748278         13.9
+  c2.footprint                        6     5        3375410       9821.4
+  c2.lifecycle                        5     5        2221272         17.0
+  c2.pool.cold-warm                   2     0              0          6.3
+  c2.read.waves                       4     4        1308160       9664.3
+  c2.reuse.cross-file                10     6        5800557       9098.8
+  c2.reuse.workspace                 14     0              0          4.9
+  component.primitives                3     0              0          4.4
+  pipeline.*                          4     0              0          5.0
+
+Scaling ladders (counters, heap and disk decide; time is diagnostic)
+------------------------------------------------------------------------
+  family                           claim       metric                             b                 per-doubling
+  c1.cdc.chunk-count               -           no scaling claim registered
+  c1.change-locality               O(n)        construct.objects                n/a                            -
+      12 row(s) contributed no point: workspace-clean-commit-1-mixed-v4=NOT_RUN, workspace-clean-commit-10-mixed-v4=NOT_RUN, workspace-clean-commit-100-compact-v2=NOT_RUN, workspace-clean-commit-500-compact-v2=NOT_RUN
+  c1.construct.chunked             O(1)        heap.peak_incremental_bytes    0.019 1.021 PASS; 1.000 PASS; 1.029 PASS
+  c1.construct.whole-file          O(n)        heap.peak_incremental_bytes    0.045 1.049 FAIL; 1.000 FAIL; 1.073 FAIL
+  c1.edit.length-changing          O(n)        edit.payload_bytes             0.000 n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c1.edit.length-preserving        -           no scaling claim registered
+  c1.fs.build-scale                -           no scaling claim registered
+  c1.many-tiny                     -           no scaling claim registered
+  c1.transition.boundary           -           no scaling claim registered
+  c1.tree.construct-traverse       O(n log n)  construct.objects                n/a                            -
+      12 row(s) contributed no point: directory-construct-1-mixed-v4=NOT_RUN, directory-construct-10-mixed-v4=NOT_RUN, directory-construct-100-compact-v2=NOT_RUN, directory-construct-500-compact-v2=NOT_RUN
+  c1.tree.namespace-mutation       -           no scaling claim registered
+  c2.delta.boundaries              -           no scaling claim registered
+  c2.delta.cdc-locality            -           no scaling claim registered
+  c2.delta.small-file              -           no scaling claim registered
+  c2.footprint                     O(n)        space.allocated_bytes            n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+      1 row(s) contributed no point: store-footprint-large-object-500m=NOT_RUN
+  c2.lifecycle                     -           no scaling claim registered
+  c2.pool.cold-warm                -           no scaling claim registered
+  c2.read.waves                    O(1)        heap.peak_incremental_bytes    0.038 1.010 PASS; 1.047 PASS; 1.011 PASS
+  c2.reuse.cross-file              O(1)        reuse.inserted                 0.727 1.982 FAIL; 0.884 FAIL; INCOMPLETE INCOMPLETE; 0.587 FAIL; INCOMPLETE INCOMPLETE
+      4 row(s) contributed no point: dedup-cross-file-identical-10=NOT_RUN, dedup-cross-file-identical-100=NOT_RUN, dedup-cross-file-identical-500=NOT_RUN, dedup-cross-file-mixed-10=NOT_RUN
+  c2.reuse.workspace               -           no scaling claim registered
+  component.primitives             -           no scaling claim registered
+  pipeline.*                       O(n)        construct.objects                n/a                            -
+      4 row(s) contributed no point: pipeline-edits-chunked=NOT_RUN, pipeline-edits-large-to-small=NOT_RUN, pipeline-edits-small=NOT_RUN, pipeline-filesystem-build=NOT_RUN
+
+Rows that are not PASS
+------------------------------------------------------------------------
+  NOT_RUN     component-primitives-edit                        
+  NOT_RUN     component-primitives-filesystem                  
+  NOT_RUN     component-primitives-payload                     
+  NOT_RUN     dedup-cdc-common-body-500                        budget.complete-command=NOT_RUN (28.658 s)
+  NOT_RUN     dedup-cdc-delete-10                              row.not-run=NOT_RUN (product error: Engine(SqliteFailure(Error { code: ConstraintViolation, extended_code: 1555 }, Some(
+  NOT_RUN     dedup-cdc-delete-100                             row.not-run=NOT_RUN (product error: Engine(SqliteFailure(Error { code: ConstraintViolation, extended_code: 1555 }, Some(
+  NOT_RUN     dedup-cdc-delete-500                             budget.complete-command=NOT_RUN (27.980 s)
+  NOT_RUN     dedup-cdc-insert-1                               
+  NOT_RUN     dedup-cdc-insert-10                              row.not-run=NOT_RUN (product error: Engine(SqliteFailure(Error { code: ConstraintViolation, extended_code: 1555 }, Some(
+  NOT_RUN     dedup-cdc-insert-100                             row.not-run=NOT_RUN (product error: Engine(SqliteFailure(Error { code: ConstraintViolation, extended_code: 1555 }, Some(
+  NOT_RUN     dedup-cdc-insert-500                             row.not-run=NOT_RUN (product error: Engine(SqliteFailure(Error { code: ConstraintViolation, extended_code: 1555 }, Some(
+  NOT_RUN     dedup-cdc-overwrite-500                          budget.complete-command=NOT_RUN (29.620 s)
+  NOT_RUN     dedup-cdc-scattered-500                          budget.complete-command=NOT_RUN (29.273 s)
+  NOT_RUN     dedup-cross-file-identical-10                    row.not-run=NOT_RUN (product error: Integrity("group ordinal"))
+  NOT_RUN     dedup-cross-file-identical-100                   row.not-run=NOT_RUN (product error: Integrity("group ordinal"))
+  NOT_RUN     dedup-cross-file-identical-500                   row.not-run=NOT_RUN (product error: Integrity("group ordinal"))
+  NOT_RUN     dedup-cross-file-mixed-10                        row.not-run=NOT_RUN (product error: Integrity("group ordinal"))
+  NOT_RUN     dedup-workspace-exact-1-compact-v2               
+  NOT_RUN     dedup-workspace-exact-10-compact-v2              
+  NOT_RUN     dedup-workspace-exact-100-compact-v2             
+  NOT_RUN     dedup-workspace-exact-500-compact-v2             
+  NOT_RUN     dedup-workspace-local-1-compact-v2               
+  NOT_RUN     dedup-workspace-local-10-compact-v2              
+  NOT_RUN     dedup-workspace-local-100-compact-v2             
+  NOT_RUN     dedup-workspace-local-500-compact-v2             
+  NOT_RUN     dedup-workspace-unique-1-base128-v3              
+  NOT_RUN     dedup-workspace-unique-1-compact-v2              
+  NOT_RUN     dedup-workspace-unique-10-base128-v3             
+  NOT_RUN     dedup-workspace-unique-10-compact-v2             
+  NOT_RUN     dedup-workspace-unique-100-compact-v2            
+  NOT_RUN     dedup-workspace-unique-500-compact-v2            
+  NOT_RUN     directory-construct-1-mixed-v4                   
+  NOT_RUN     directory-construct-10-mixed-v4                  
+  NOT_RUN     directory-construct-100-compact-v2               
+  NOT_RUN     directory-construct-500-compact-v2               
+  NOT_RUN     directory-content-scan-1-mixed-v4                
+  NOT_RUN     directory-content-scan-10-mixed-v4               
+  NOT_RUN     directory-content-scan-100-compact-v2            
+  NOT_RUN     directory-content-scan-500-compact-v2            
+  NOT_RUN     directory-metadata-scan-1-mixed-v4               
+  NOT_RUN     directory-metadata-scan-10-mixed-v4              
+  NOT_RUN     directory-metadata-scan-100-compact-v2           
+  NOT_RUN     directory-metadata-scan-500-compact-v2           
+  NOT_RUN     namespace-100-compact-v3                         
+  NOT_RUN     namespace-100-text-v1-compact-v3                 
+  NOT_RUN     namespace-1000-compact-v3                        
+  NOT_RUN     namespace-1000-text-v1-compact-v3                
+  NOT_RUN     namespace-10000                                  
+  NOT_RUN     namespace-10000-text-v1                          
+  NOT_RUN     namespace-100000                                 
+  NOT_RUN     namespace-100000-text-v1                         
+  NOT_RUN     namespace-subtree-relocate-delete-1-mixed-v4     
+  NOT_RUN     namespace-subtree-relocate-delete-10-mixed-v4    
+  NOT_RUN     namespace-subtree-relocate-delete-100-compact-v2 
+  NOT_RUN     namespace-subtree-relocate-delete-500-compact-v2 
+  FAIL        overwrite-fixed-64k-chunk-count-decrease-100m    g2.chunk-count-direction=FAIL (5417 -> 5417 extents (opposite direction))
+  FAIL        overwrite-fixed-64k-chunk-count-decrease-10m     g2.chunk-count-direction=FAIL (536 -> 536 extents (opposite direction))
+  FAIL        overwrite-fixed-64k-chunk-count-decrease-500m    g2.chunk-count-direction=FAIL (26972 -> 26972 extents (opposite direction))
+  NOT_RUN     overwrite-tail-4k-500m                           row.not-run=NOT_RUN (product error: InvalidRecord("mapping coverage"))
+  NOT_RUN     pipeline-edits-chunked                           
+  NOT_RUN     pipeline-edits-large-to-small                    
+  NOT_RUN     pipeline-edits-small                             
+  NOT_RUN     pipeline-filesystem-build                        
+  NOT_RUN     pooled-lane-cold                                 
+  NOT_RUN     pooled-lane-warm                                 
+  NOT_RUN     store-footprint-large-object-500m                row.not-run=NOT_RUN (product error: CapacityExceeded { what: "pack.assembled_length", limit: 262144, actual: 262147 })
+  NOT_RUN     tiny-bulk-create-1-mixed-v3                      
+  NOT_RUN     tiny-bulk-create-10-mixed-v3                     
+  NOT_RUN     tiny-bulk-create-100-mixed-v3                    
+  NOT_RUN     tiny-bulk-create-500-mixed-v3                    
+  NOT_RUN     tiny-bulk-delete-1-mixed-v3                      
+  NOT_RUN     tiny-bulk-delete-10-mixed-v3                     
+  NOT_RUN     tiny-bulk-delete-100-mixed-v3                    
+  NOT_RUN     tiny-bulk-delete-500-mixed-v3                    
+  NOT_RUN     tiny-create-1-mixed-v4                           
+  NOT_RUN     tiny-create-10-mixed-v4                          
+  NOT_RUN     tiny-create-100-compact-v2                       
+  NOT_RUN     tiny-create-500-compact-v2                       
+  NOT_RUN     tiny-stat-1-mixed-v4                             
+  NOT_RUN     tiny-stat-10-mixed-v4                            
+  NOT_RUN     tiny-stat-100-compact-v2                         
+  NOT_RUN     tiny-stat-500-compact-v2                         
+  NOT_RUN     tiny-unlink-1-mixed-v4                           
+  NOT_RUN     tiny-unlink-10-mixed-v4                          
+  NOT_RUN     tiny-unlink-100-compact-v2                       
+  NOT_RUN     tiny-unlink-500-compact-v2                       
+  NOT_RUN     workspace-clean-commit-1-mixed-v4                
+  NOT_RUN     workspace-clean-commit-10-mixed-v4               
+  NOT_RUN     workspace-clean-commit-100-compact-v2            
+  NOT_RUN     workspace-clean-commit-500-compact-v2            
+  NOT_RUN     workspace-dense-rewrite-1-mixed-v4               
+  NOT_RUN     workspace-dense-rewrite-10-mixed-v4              
+  NOT_RUN     workspace-dense-rewrite-100-compact-v2           
+  NOT_RUN     workspace-dense-rewrite-500-compact-v2           
+  NOT_RUN     workspace-fixed-move-1-mixed-v4                  
+  NOT_RUN     workspace-fixed-move-10-mixed-v4                 
+  NOT_RUN     workspace-fixed-move-100-compact-v2              
+  NOT_RUN     workspace-fixed-move-500-compact-v2              

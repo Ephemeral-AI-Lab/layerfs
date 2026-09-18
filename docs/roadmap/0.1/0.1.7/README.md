@@ -187,6 +187,39 @@ round-2 review assigned to the Stage 6 owner. No performance claim is made here,
 Stage 6 runs under the measurement contract with one sample per case per arm and no
 fault-injection branch in product source.
 
+**Stage 6 round 1 is recorded (2026-09-18T175400Z), and it does not close #171.**
+The harness runs end to end and published a status for all **220 registered rows**
+(217 admission + 3 diagnostic): **122 PASS / 3 FAIL / 95 NOT_RUN**, one sample per
+case per arm, every non-`PASS` row retaining its measured state and reason. The
+three `FAIL` rows are a harness-fixture defect — the C1-3 `decrease` family's
+replacement does not move the extent count at three tiers — and are recorded as
+findings rather than refitted after the fact. Four budget-overrun rows (27.98 s to
+29.62 s) are `NOT_RUN` on the ≤ 25 s declared-exception limit with their wall times
+rather than shrunk to fit. Twelve rows abort with a product error
+(`UNIQUE constraint failed: objects.object_id` 5, `Integrity("group ordinal")` 4,
+`pack.assembled_length` 2, `InvalidRecord("mapping coverage")` 1); those are
+findings for the owner and are not repaired here. The remaining 79 are
+`driver-unimplemented` — eight families (many-tiny, tree, locality, build-scale,
+namespace mutation, workspace reuse, pooling and the integrated pipeline) have no
+shape driver yet.
+
+E1-E4 ran for the first time and one refuted its own premise: **E2, E3 and E4 are
+satisfied** and **E1 is refuted** — a clone's `st_blocks * 512` equals its apparent
+size on this volume, so `st_blocks` cannot distinguish shared from exclusive
+allocation at all. The prohibition on the reflink rung for allocated-bytes rows
+therefore stands on better evidence than the assumption it rested on. Two of the
+three no-instrument acceptance areas are now designed, implemented and receipted
+**without any product change** (W1 watermark refusal under external perturbation,
+W3 second `begin_save` → `OwnershipUnavailable`, W4 sealed call-graph scan plus
+runtime tripwires); the declared-process-kill arm is not implemented and is
+recorded as `NOT_RUN` with that reason. The four unmeasured rows and the D1
+withdrawal of the comparative claim are stated in one place in the
+[Stage 6 qualification plan](component-decoupling/stage-6-qualification-plan.md).
+Round evidence:
+[stage-6-qualification-20260918T175400Z](evidence/stage-6-qualification-20260918T175400Z/README.md).
+#171 stays **open**: acceptance checkboxes 1, 2, 4 and 5 carry unrun work that is
+recorded rather than waived. Nothing is tagged or released.
+
 Design planning (owner direction, 2026-09-16). The
 [component-decoupling discussion index](component-decoupling/README.md) organizes
 the proposed clusters and their future design documents. The

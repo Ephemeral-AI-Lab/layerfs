@@ -54,6 +54,7 @@ sys.path.insert(0, str(HARNESS_ROOT / "shared"))
 
 import analyze  # noqa: E402
 import copyladder  # noqa: E402
+import invariants  # noqa: E402
 import receipt  # noqa: E402
 import space  # noqa: E402
 import trace as trace_module  # noqa: E402
@@ -371,23 +372,38 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
                 continue
             document = json.loads(receipt_path.read_text(encoding="utf-8"))
             parsed = trace_module.read(trace_path)
-            re_derived = parsed.status()
+            budget = receipt.budget(
+                int(document.get("wall_ns", 0)),
+                case_dir.name in DECLARED_EXCEPTIONS,
+            )
+            # The complete-command budget is a *published* figure too, and it can
+            # override a row: a case whose gates all held but whose command
+            # overran its limit is `NOT_RUN` with the measured wall time. The
+            # re-derivation therefore applies the same rule from the recorded wall
+            # time rather than comparing against the trace's gate set alone — the
+            # first pass of this verifier did exactly that and reported four
+            # budget-overridden rows as disagreements, which is how the omission
+            # was found.
+            trace_status = parsed.status()
+            re_derived = trace_status
+            if budget.status != "PASS" and (
+                trace_module.SEVERITY["NOT_RUN"] > trace_module.SEVERITY.get(trace_status, 5)
+            ):
+                re_derived = "NOT_RUN"
             published = document.get("status")
             record: dict[str, object] = {
                 "case_id": case_dir.name,
                 "published_status": published,
                 "re_derived_status": re_derived,
+                "trace_status": trace_status,
                 "trace_defects": parsed.defects,
                 "gates_re_derived": len(parsed.gates()),
                 "gates_published": len(document.get("gates", [])),
+                "budget_status_re_derived": budget.status,
             }
             if re_derived != published:
                 disagreements += 1
                 record["disagreement"] = f"{published} published, {re_derived} re-derived"
-            budget = receipt.budget(
-                int(document.get("wall_ns", 0)),
-                case_dir.name in DECLARED_EXCEPTIONS,
-            )
             record["budget_status"] = budget.status
             store = case_dir / "sample.sqlite"
             if store.exists():
@@ -396,21 +412,38 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
                 record["pack_accounting"] = reading.pack_accounting()
             record["status"] = "PASS" if not parsed.defects and re_derived == published else "FAIL"
             findings.append(record)
+    # The two halves of the no-retry/no-fsync/no-WAL contract: a sealed
+    # call-graph status over the product source, and the runtime tripwires read off
+    # the Stores this run actually produced. Neither is a counter, and neither is a
+    # fabricated zero.
+    call_graph = invariants.scan()
+    stores = sorted(
+        str(entry) for entry in run_dir.rglob("*.sqlite") if entry.is_file()
+    )
+    tripwire = invariants.tripwires(stores)
     document = {
         "schema": "layerfs-core-verification-v1",
         "run_dir": str(run_dir),
         "cases": len(findings),
         "disagreements": disagreements,
         "findings": findings,
+        "sealed_call_graph": call_graph,
+        "runtime_tripwires": tripwire,
         "wall_ns": time.monotonic_ns() - started,
     }
     document["budget"] = receipt.verification_budget(document["wall_ns"]).as_fields()
-    receipt.write_append_only(run_dir / "verification.json", document)
+    # A verification never overwrites a previous one: a corrected pass is written
+    # beside the one it corrects, and both are retained with their exit codes.
+    receipt.write_append_only(run_dir / arguments.tag, document)
     print(
         f"verify: {len(findings)} case(s), {disagreements} disagreement(s), "
+        f"call-graph {call_graph['status']} over {call_graph['files_scanned']} files, "
+        f"tripwires {tripwire['status']} over {tripwire['stores_checked']} store(s), "
         f"{document['wall_ns'] / 1e9:.2f} s"
     )
-    return 0 if disagreements == 0 else 1
+    for finding in tripwire["findings"]:
+        print(f"  tripwire FINDING: {finding}")
+    return 0 if disagreements == 0 and call_graph["status"] == "PASS" and tripwire["status"] == "PASS" else 1
 
 
 def cmd_report(arguments: argparse.Namespace) -> int:
@@ -441,6 +474,7 @@ def cmd_self_check(_: argparse.Namespace) -> int:
         "receipt": receipt.self_check(),
         "trace": trace_module.self_check(),
         "copyladder": copyladder.self_check(),
+        "invariants": invariants.self_check(),
     }
     for name, found in checks.items():
         if found:
@@ -525,6 +559,7 @@ def main() -> int:
 
     verify = sub.add_parser("verify")
     verify.add_argument("--run", required=True)
+    verify.add_argument("--tag", default="verification.json")
     verify.set_defaults(function=cmd_verify)
 
     report = sub.add_parser("report")

@@ -173,12 +173,26 @@ pub fn lifecycle(
     let sample = context.output.join("sample.sqlite");
     let policy = StoragePolicy::frozen_default();
 
+    let mut master_source = "built-in-process".to_string();
     if step != LifecycleStep::Create {
-        let bytes = fixture::noise(1 << 20, seed_of(case.id));
-        let (objects, _root) = objects_of(&bytes)?;
-        let base = context.output.join("base.sqlite");
-        create_and_save_untimed(&base, &objects)?;
-        let de_warm = prepare_sample(&base, &sample)?;
+        // `--store` hands the row a master the runner produced, which is how a
+        // *perturbed* Store (a hand-edited watermark, for instance) is opened by
+        // the real product instead of being described. Without it the row builds
+        // its own base, and the master is a per-sample byte copy either way.
+        let master = match context.store.clone() {
+            Some(path) => {
+                master_source = format!("runner-supplied:{}", path.display());
+                path
+            }
+            None => {
+                let bytes = fixture::noise(1 << 20, seed_of(case.id));
+                let (objects, _root) = objects_of(&bytes)?;
+                let base = context.output.join("base.sqlite");
+                create_and_save_untimed(&base, &objects)?;
+                base
+            }
+        };
+        let de_warm = prepare_sample(&master, &sample)?;
         gates.push(gates::residency_gate(Some(de_warm.resident_after)));
         gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
     }
@@ -198,9 +212,21 @@ pub fn lifecycle(
                 let store = Store::open(&sample, scope.child("store.open"))?;
                 let operation = store.begin_save(scope.child("storage.begin"))?;
                 let (objects, bytes) = operation.pending();
+                // Concurrency and visibility, observed on a real Store. The busy
+                // timeout is zero, so a second acquisition fails immediately and
+                // deterministically rather than after a wait, which is why this is
+                // observable without a race loop. A second acquisition that
+                // *succeeded* would be the defect: two exclusive owners on one
+                // Store. The outcome is carried out as the second return value so
+                // the gate can assert the exact error class.
+                let second = store.begin_save(scope.child("storage.begin2"));
+                let second_token = match second {
+                    Ok(_) => "ACQUIRED".to_string(),
+                    Err(error) => format!("{error:?}"),
+                };
                 operation.abort(scope.child("storage.abort"))?;
                 Ok::<_, layerfs_storage::StorageError>((
-                    store.path().display().to_string(),
+                    format!("{}|{second_token}", store.path().display()),
                     objects as i128,
                     bytes as i128,
                 ))
@@ -230,7 +256,21 @@ pub fn lifecycle(
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
+    let (store_path, second_begin) = match store_path.split_once('|') {
+        Some((path, second)) => (path.to_string(), Some(second.to_string())),
+        None => (store_path.clone(), None),
+    };
     context.trace.write(Kind::Receipt, "store_path", &store_path, "", "the path the operation used")?;
+    context.trace.write(Kind::Receipt, "master_source", &master_source, "", "where the sample copy came from")?;
+    if let Some(second) = &second_begin {
+        context.trace.write(
+            Kind::Oracle,
+            "second_begin_save",
+            second,
+            "",
+            "a second exclusive acquisition on the same Store",
+        )?;
+    }
     context.trace.write_number(Kind::Counter, "lifecycle.first", first, "count", "objects or inserted, per step")?;
     context.trace.write_number(Kind::Counter, "lifecycle.second", second, "count", "commits or pending bytes, per step")?;
     context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
@@ -245,12 +285,22 @@ pub fn lifecycle(
         "the operation produced a Store at the path it was given",
     ));
     gates.extend(sidecar_gates(Path::new(&store_path)));
+    if let Some(second) = &second_begin {
+        gates.push(gates::require(
+            GateClass::Mechanism,
+            "g2.second-begin-refused",
+            second.contains("OwnershipUnavailable"),
+            second,
+            "a second `begin_save` on one Store fails `OwnershipUnavailable` (busy timeout is zero)",
+        ));
+    }
     gates.push(gates::swap_gate(instruments::swaps()));
 
     Ok(OpOutcome {
         gates,
         notes: vec![
             format!("lifecycle_step: {step:?}"),
+            format!("master_source: {master_source}"),
             format!(
                 "store_state: {}",
                 if step == LifecycleStep::Create { "created-in-sample" } else { "opened-from-copy" }
