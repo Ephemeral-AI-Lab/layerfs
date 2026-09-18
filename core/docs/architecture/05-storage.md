@@ -127,7 +127,7 @@ mechanism is a single integer that only moves in the last transaction.
         │                                 store_policy.retained_pack_ceiling
         ▼
    SaveOutcome { reused, inserted, packs_created, pack_appends, commits,
-                 full_records, prefix_records, delta, chain, pool }
+                 statements, full_records, prefix_records, delta, chain, pool }
 ```
 
 > A pack is visible to an ordinary reader **exactly when** the save that created it
@@ -146,8 +146,9 @@ durability while checking nothing.
 
 Counters in `SaveOutcome` describe work actually done: `reused` (exact existing row
 served the occurrence) vs `inserted` (newly written), `full_records` vs
-`prefix_records`, plus `DeltaCounters` for selection outcomes and `ChainCounters`
-for base acquisition.
+`prefix_records`, `statements` (the `INSERT` statements issued for object rows —
+statements, not rows; added at #178 **V5**), plus `DeltaCounters` for selection
+outcomes and `ChainCounters` for base acquisition.
 
 ### 6.5 The persistence profile
 
@@ -410,9 +411,10 @@ FULL/PREFIX choice. That is a placement decision, not a representation change.
 ```
 
 `StoreReadCounters` reports `objects`, `packs_read`, `pages`, `ceiling`, `edges`,
-`max_depth`, `canonical_bytes`, `opens` — including the **ceiling applied to every
-acquired location**, so a receipt can show which visibility watermark a read
-actually observed, and the connections the wave opened.
+`max_depth`, `canonical_bytes`, `group_decodes`, `opens` — including the **ceiling
+applied to every acquired location**, so a receipt can show which visibility
+watermark a read actually observed, the ordinary-lane group bodies the wave
+decompressed (added at #178 **V6**), and the connections the wave opened.
 
 **Two lifetimes, one wave.** `Store::read_batch` is the wave: it opens its own
 connection, captures the ceiling, decodes and closes. `StoreProvider` — the bridge
