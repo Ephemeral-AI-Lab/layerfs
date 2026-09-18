@@ -171,11 +171,21 @@ impl MutationOwner {
     }
 
     pub(super) fn write_pack(&mut self, write: &SelectedWrite) -> StorageResult<()> {
-        // Writing a pack moves every body in it (the directory grows), so the
-        // pooled reader's pack cache is released whenever this save writes: a body
-        // it cached before the write no longer describes the pack. Its decoded
-        // values survive - an ordinal's value is written once and never moves.
+        // Writing a pack moves every body in it (the directory grows), so every
+        // cache that holds those bytes is invalidated whenever this save writes: a
+        // body cached before the write no longer describes the pack. The pooled
+        // reader's decoded values survive - an ordinal's value is written once and
+        // never moves - but its pack cache does not.
         self.pool_reader.release_packs();
+        // The delta reader's pack cache holds whole pack bytes and is keyed by pack
+        // id, so an append leaves a stale directory behind. Reading a group ordinal
+        // that the append added then asks the *old* directory for it, which has
+        // fewer groups, and `pack::layout::group_view` refuses it with
+        // `Integrity("group ordinal")` -- a stored row that is correct, read
+        // through bytes that are not. Dropping the entry costs one re-read and
+        // cannot be skipped: the pack is append-only, so the cached copy is valid
+        // only until the next append.
+        self.pack_cache.remove(&write.pack_id);
         if write.created {
             write::insert_pack(&self.connection, write.pack_id, &write.bytes)?;
             self.counters.packs_created += 1;
