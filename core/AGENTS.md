@@ -30,9 +30,20 @@ This file adds the owner's product-source and module-structure requirements.
   relying on that codec for filesystem-root equivalence.
   Stage 5 attributes are portable mode/mtime plus bounded generic key/value data;
   do not port Apple-specific codecs/semantics or APFS materialization into core.
-  Continue the existing Stage 5 work through the [completion prompt](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-continuation-handoff.md):
-  verified ordering fixes, missing failure/resource matrices, qualified comparison
-  and final acceptance. Preserve already-established canonical compatibility proofs.
+  **Stage 5 is closed** ([#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170),
+  2026-09-18) at its implemented scope; its
+  [terminal handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-terminal-handoff-20260917.md)
+  and [report §16](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-5-report.md)
+  carry the closure and its qualifications. Do not restart its continuation
+  prompts or re-open a Stage 5 row.
+  For Stage 6 ([#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171)), use the
+  [Stage 6 handoff](../docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-handoff.md)
+  and the frozen case specification under
+  [core/docs/benchmark/fs-bench-pro-storage-content/](docs/benchmark/fs-bench-pro-storage-content/).
+  The harness lives in `core/benchmark/`, is its own Cargo workspace, and is **not**
+  product source: benchmark Python files are exempt from the line ceilings, and the
+  expected production LOC delta is 0. Preserve already-established canonical
+  compatibility proofs.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 

@@ -36,12 +36,12 @@ names the drifted row.
 ## 2. Structure
 
 ```text
-core/benchmark/fs-bench-pro-storage-content/          47 authored files
-├── CONTRACT.md                     250   frozen case spec + claim_kind + the rules below
+core/benchmark/fs-bench-pro-storage-content/          ~44 authored files
+├── CONTRACT.md                     234   frozen case spec + claim_kind + the rules below
 ├── README.md                       120
 ├── Cargo.toml + Cargo.lock + .gitignore  40   see §6
 ├── runner.py                       850   list|prepare|perf|verify|report|self-check|calibrate
-├── src/                                        33 files, ~4,255
+├── src/                                        30 files, ~4,255
 │   ├── lib.rs                       45   re-exports every module — a binary crate cannot be
 │   │                                      imported by tests/*.rs, so without this no seam exists
 │   ├── main.rs                     140   argv -> one op; writes trace.jsonl; prints facts
@@ -57,7 +57,7 @@ core/benchmark/fs-bench-pro-storage-content/          47 authored files
 │   │   ├── instruments.rs          340   counting GlobalAlloc + 10 ms RSS thread + getrusage
 │   │   ├── trace.rs                340   flat JSONL record writer
 │   │   └── window.rs               190   clk(4) brackets, envelope reconstruction, balance
-│   └── families/                             21 files, ~840
+│   └── families/                             18 files, ~840
 │       ├── mod.rs                   60   aggregator + the declared cardinality array
 │       ├── c1_construct.rs          90   2 families, 8 cases
 │       ├── c1_cdc.rs                55   1 family, 12 cases
@@ -67,13 +67,13 @@ core/benchmark/fs-bench-pro-storage-content/          47 authored files
 │       ├── c1_tree.rs              105   2 families, 16 cases
 │       ├── c1_locality.rs           60   1 family, 12 cases
 │       ├── c1_fs_build.rs           55   1 family, 8 cases
-│       ├── c1_read.rs               60   1 family (vehicle does not exist today)
-│       ├── component_primitives.rs  45   the only matched reference pair
+│       ├── component_primitives.rs  45   NOT a family: the 3 diagnostic matched-pair
+│       │                                 cases, excluded from the 217 (CONTRACT.md sec.3)
 │       ├── c2_lifecycle.rs          55   1 family, 5 cases
 │       ├── c2_reuse.rs              95   2 families, 24 cases
 │       ├── c2_delta.rs             110   3 families, 41 cases
 │       ├── c2_footprint.rs          55   1 family, 6 cases
-│       ├── c2_delta_small_file.rs   50   1 family, case list still TBD
+│       ├── c2_delta_small_file.rs   50   1 family, 4 cases (R5: 1024/16384/65536/131071)
 │       ├── c2_read.rs               60   1 family, 4 cases
 │       ├── c2_pool.rs               60   1 family, 2 cases
 │       └── pipeline.rs              75   5 cases
@@ -93,13 +93,13 @@ core/benchmark/fs-bench-pro-storage-content/          47 authored files
 
 | Bucket | LOC |
 | --- | ---: |
-| Rust source (33 files) | 4,255 |
+| Rust source (30 files) | 4,255 |
 | Python (7 files) | 2,470 |
 | Data + docs (`CONTRACT.md`, `README.md`, manifests) | 625 |
 | **Harness authored** | **7,350** — range **6,800 - 8,200** |
 | Harness tests (35 files) | 6,700 |
 | **Total new code** | **~14,050** |
-| *Already committed* | *~1,100* (the five specification docs) |
+| *Already committed* | *~1,400* (the seven specification docs) |
 
 **Test-to-harness ratio ≈ 0.91.** The product's own ratio is 25,203 test lines to
 19,294 implementation lines = **1.31**, so this plan is *below* the repository's
@@ -112,6 +112,11 @@ existing standard, not above it.
 | Harness | 8,000 - 10,500 | **6,800 - 8,200** | the family layer collapses to thin modules over shared drivers; three instrument modules and two Python modules disappear |
 | Analysis path | **absent** | +1,190 | `trace.rs`/`window.rs`/`trace.py`/`analyze.py` — without it there is no way to read the numbers |
 | Test suite | **absent** | +6,700 | 29 Rust targets + 6 Python modules |
+
+**A 21st family (`c1.read.*`) was proposed and then dropped** — there is no C1 read
+family in `c1-families.md`, and C1 is 11 families, not 12. Its module line is gone
+from the structure above, so the family count is 20, not 21, and `families/` is 18
+files. The read wave lives in C2 as `c2.read.waves`.
 
 **The first estimate under-counted by omitting two whole subsystems.** It described a
 harness that collects numbers and never said how they are read or how the collector

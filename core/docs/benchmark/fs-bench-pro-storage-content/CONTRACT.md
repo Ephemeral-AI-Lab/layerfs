@@ -85,6 +85,14 @@ are globally unique and are `c1.*` / `c2.*` / `pipeline.*`.
 Declared cardinality array, checked by `registry::self_check()`:
 `[4,4,12,12,32,7,20,12,4,12,8,5,10,20,21,14,6,4,4,2,4]`.
 
+**`component.primitives` is registered but is not one of the 217.** It is 3 further
+diagnostic cases (the only library-matched reference pair in the tree, from
+`component_primitives.rs`). They run, they are receipted, and they are **excluded
+from admission and from every count in this section** — under `claim_kind =
+structural-complexity` (D1) their receipt is diagnostic and cannot gate. The registry
+therefore holds **220 rows = 217 admission + 3 diagnostic**, and a report that folds
+the 3 into 217 is wrong.
+
 **Selection lanes.** `--smoke` selects one tier per family = **20 cases** (the
 development loop, target <= 60 s). Full = **217** (admission). A lane that cannot fit
 the budget is recorded `NOT_RUN` with its measured wall time, never shrunk.

@@ -8,6 +8,17 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
+- [**Stage 6 handoff (2026-09-19)**](stage-6-handoff.md): the routing for
+  [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) - qualify the
+  complete C1/C2 core for correctness, performance and memory. **One agent, no
+  subagents and no codex**; mechanically reproducible receipts replace the Stage 5
+  verifier-subagent mechanism. Its frozen case specification is
+  [`core/docs/benchmark/fs-bench-pro-storage-content/`](../../../../../core/docs/benchmark/fs-bench-pro-storage-content/)
+  - the contract, the C1 and C2 family registers, the four measurement axes, the
+  cache/copy discipline, the gates and oracles, and the implementation estimate -
+  and the harness is built at `core/benchmark/fs-bench-pro-storage-content/`.
+  Production LOC delta is expected to be **0**; benchmark Python files are exempt
+  from the product line ceilings.
 - [**Stage 5 closure (2026-09-18)**](stage-5-report.md#16-final-matrices-and-the-verification-pass-round-4-2026-09-18):
   the terminal handoff reached its terminal condition - 81 PASS / 0 FAIL /
   0 PARTIAL-INCOMPLETE / 1 NOT_RUN with a written owner disposition / 1

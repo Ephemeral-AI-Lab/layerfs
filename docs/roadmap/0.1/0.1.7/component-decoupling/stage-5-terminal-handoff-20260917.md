@@ -46,12 +46,12 @@
 | Measurement contract | [`stage-5-verification.md`](stage-5-verification.md), [`stage-5-verification-addendum-20260917.md`](stage-5-verification-addendum-20260917.md) |
 
 Read first, in this order: [`AGENTS.md`](../../../../../AGENTS.md),
-[`core/AGENTS.md`](../../../../core/AGENTS.md),
-[`docs/general/benchmark_rules.md`](../../../general/benchmark_rules.md),
+[`core/AGENTS.md`](../../../../../core/AGENTS.md),
+[`docs/general/benchmark_rules.md`](../../../../general/benchmark_rules.md),
 [`benchmark/AGENTS.md`](../../../../../benchmark/AGENTS.md),
 [`benchmark/fs-bench-pro/QUICKSTART.md`](../../../../../benchmark/fs-bench-pro/QUICKSTART.md),
-[`release-policy.md`](../../../general/release-policy.md),
-[`documentation-policy.md`](../../../general/documentation-policy.md), then the
+[`release-policy.md`](../../../../general/release-policy.md),
+[`documentation-policy.md`](../../../../general/documentation-policy.md), then the
 round-2 review's §1 findings and §10 actions.
 
 The round-2 numbers you must move: **Stage 5 — 64 PASS / 9 FAIL / 8

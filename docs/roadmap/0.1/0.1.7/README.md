@@ -163,6 +163,25 @@ Two source-read studies now bound what Stage 6 should measure first: the
 configuration layer is behind, and the end-to-end balance is unmeasured).
 Neither takes a measurement or makes a performance claim.
 
+**Stage 6 is the active stage (2026-09-19).**
+[#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) qualifies the complete
+C1/C2 core for correctness, performance and memory, and its
+[Stage 6 handoff](component-decoupling/stage-6-handoff.md) is the executable
+assignment. The case specification was frozen **before** any harness code or
+collection, as §1 of the measurement contract requires, in
+[`core/docs/benchmark/fs-bench-pro-storage-content/`](../../../../core/docs/benchmark/fs-bench-pro-storage-content/):
+the claim (`structural-complexity`), a 217-case registry over 20 families, the four
+measurement axes (time, memory, CPU, space), the copy ladder and cache discipline,
+the gate and oracle classes, and the implementation estimate. The harness is built at
+`core/benchmark/fs-bench-pro-storage-content/`, which is not product source, so the
+production LOC delta for this stage is expected to be **0** and benchmark Python files
+are exempt from the product line ceilings. Stage 6 inherits Stage 5's deferred
+complete-operation comparison (`VF-6`) and must record, in one place, the owner
+decision that withdraws the comparative claim beside the four unmeasured rows the
+round-2 review assigned to the Stage 6 owner. No performance claim is made here, and
+Stage 6 runs under the measurement contract with one sample per case per arm and no
+fault-injection branch in product source.
+
 Design planning (owner direction, 2026-09-16). The
 [component-decoupling discussion index](component-decoupling/README.md) organizes
 the proposed clusters and their future design documents. The
