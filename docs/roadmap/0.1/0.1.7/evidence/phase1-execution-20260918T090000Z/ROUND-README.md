@@ -18,6 +18,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |
 | `p1-12` | P1-12 — a page keeps a running width total | collected (`after/`) |
+| `p1-16` | P1-16 — the pending-ceiling dial (docs + boundary test) | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 

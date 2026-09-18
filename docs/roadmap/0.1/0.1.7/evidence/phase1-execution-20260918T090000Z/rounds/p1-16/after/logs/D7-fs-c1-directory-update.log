@@ -1,0 +1,17 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_filesystem --mode c1 --case directory-update --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-16/after/output/D7/fs-c1
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.612
+--- stdout ---
+mode c1 case directory-update
+fixture entries 200
+update: rename the first 10 names in /d (directory pages change)
+root 681ab7e59a612a51c7ba5fe8699f7e65e54a18c42c744ddb0a1b230069558598
+elapsed_ns 181250
+boundary objects_read 6 waves 3 emitted 4 bytes_emitted 7471
+sorted directories pages_read 1 pages_created 1 inodes pages_read 5 pages_created 2
+end-to-end ns 181250
+readback separately labelled: top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+prepared_objects 8
+new_inodes 202
+--- stderr ---
