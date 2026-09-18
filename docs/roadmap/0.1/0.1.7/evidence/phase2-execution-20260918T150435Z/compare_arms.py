@@ -24,7 +24,7 @@ TIMING = [
     (re.compile(r"end-to-end ns [0-9]+"), "end-to-end ns <t>"),
     (re.compile(r"\b(ns|us|ms|s) [0-9]+(\.[0-9]+)?"), r"\1 <t>"),
     (re.compile(r"[0-9]+(\.[0-9]+)?(ns|us|ms|s)\b"), "<t>"),
-    (re.compile(r"rounds/[^/]+/(before|after)"), "ARM"),
+    (re.compile(r"rounds/[^/\s]+/[^/\s]+"), "ARM"),
     (re.compile(r"p2-[0-9]+|v[5-7]"), "ROUND"),
 ]
 
