@@ -266,8 +266,16 @@ impl Store {
             let mut workspace = read_scope
                 .child("storage.decode")
                 .run(|_| DecompressionWorkspace::new())?;
+            let mut groups = crate::encoding::GroupCache::new();
             let (values, counters) = read_scope.child("storage.read").run(|_| {
-                read::read_objects(&connection, ids, ceiling, &self.capacities, &mut workspace)
+                read::read_objects(
+                    &connection,
+                    ids,
+                    ceiling,
+                    &self.capacities,
+                    &mut workspace,
+                    &mut groups,
+                )
             })?;
             Ok((
                 values,

@@ -119,12 +119,14 @@ impl MutationOwner {
 
     /// Reads objects inside this owner's transaction, with no ceiling.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
+        let mut groups = crate::encoding::GroupCache::new();
         let (values, _) = crate::cas::read::read_objects(
             &self.connection,
             ids,
             i64::MAX,
             &self.capacities,
             &mut self.decompression,
+            &mut groups,
         )?;
         Ok(values)
     }
@@ -132,11 +134,13 @@ impl MutationOwner {
     /// Reconstructs one stored object, following and authenticating its chain.
     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
         let value = {
+            let mut groups = crate::encoding::GroupCache::new();
             let mut resolver = crate::encoding::delta::read::Resolver::new(
                 &self.connection,
                 i64::MAX,
                 &self.capacities,
                 &mut self.pack_cache,
+                &mut groups,
                 &mut self.decompression,
                 &mut self.chain,
             );

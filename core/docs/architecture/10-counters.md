@@ -80,8 +80,18 @@ decompression happens and surfaced on `ChainCounters`, `ReadCounters`,
 `StoreProvider::group_decodes()`. It is the counter that prices one decode per
 **record** inside a group that is read once: `packs_read` charges one per pack per
 wave and `objects` one per returned object, so neither can see it. Every other lane
-decodes a per-record frame rather than a group body and charges nothing here, and a
-cache in front of the decode (`P2-4`) is not charged for a body it served.
+decodes a per-record frame rather than a group body and charges nothing here.
+
+The decoded-group cache (#178 **P2-4**, 2026-09-18) is what the counter then
+measures: `encoding::GroupCache` retains decoded ordinary-lane bodies keyed by
+`(pack, group)`, owned by the **read operation** (the pooled `ReadSession`), bounded
+by `DECODED_GROUP_CACHE_BYTES` (512 KiB) with the pooled cache's wholesale release,
+and dropped with the session. A hit charges no `group_decodes`, so after P2-4 the
+counter reads the number of **distinct groups** an operation touched: on the frozen
+pipeline readbacks that is 2 → 1. The cache is a reading of work, never a
+visibility shortcut: the resolver checks the location's pack against the wave's
+ceiling *before* consulting it, because the ceiling is re-read per wave while the
+cache outlives a wave.
 
 `statements` (added at #178 **V5**, 2026-09-18) counts the `INSERT` statements
 issued for object rows - **statements, not rows**: a multi-row `INSERT` of `k` rows

@@ -15,7 +15,7 @@ use rusqlite::Connection;
 use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
-use crate::encoding::decode::decode_canonical;
+use crate::encoding::decode::{decode_canonical, GroupCache};
 use crate::encoding::full::raw_payload;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
@@ -50,6 +50,13 @@ pub struct Resolver<'a> {
     ceiling: i64,
     capacities: &'a StorageCapacities,
     packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    /// Decoded ordinary-lane group bodies this **wave** already materialised.
+    ///
+    /// Shared across the resolvers a wave builds - one per requested object - so
+    /// `k` records of one group cost one decompression instead of `k`. The wave
+    /// owns it, so its bound and its lifetime are the wave's, and a fresh wave
+    /// starts empty.
+    groups: &'a mut GroupCache,
     workspace: &'a mut DecompressionWorkspace,
     counters: &'a mut ChainCounters,
     packs_read: u64,
@@ -62,6 +69,7 @@ impl<'a> Resolver<'a> {
         ceiling: i64,
         capacities: &'a StorageCapacities,
         packs: &'a mut BTreeMap<i64, Vec<u8>>,
+        groups: &'a mut GroupCache,
         workspace: &'a mut DecompressionWorkspace,
         counters: &'a mut ChainCounters,
     ) -> Self {
@@ -70,6 +78,7 @@ impl<'a> Resolver<'a> {
             ceiling,
             capacities,
             packs,
+            groups,
             workspace,
             counters,
             packs_read: 0,
@@ -216,6 +225,17 @@ impl<'a> Resolver<'a> {
             }
             self.counters.canonical_bytes = canonical;
         }
+        // Visibility BEFORE any cache consult: a group whose pack is above this
+        // wave's ceiling is refused here, so a body this wave decoded earlier can
+        // never answer for a location the ceiling hides. The pooled reader states
+        // the same order for its own cache, and the ordinary path must not be the
+        // softer door.
+        if location.pack_id > self.ceiling {
+            return Err(StorageError::VisibilityCeiling {
+                pack_id: location.pack_id,
+                ceiling: self.ceiling,
+            });
+        }
         let record_bytes = {
             let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
             if fetched {
@@ -240,6 +260,7 @@ impl<'a> Resolver<'a> {
             self.capacities,
             base,
             self.workspace,
+            self.groups,
             &mut self.counters.group_decodes,
         )
     }

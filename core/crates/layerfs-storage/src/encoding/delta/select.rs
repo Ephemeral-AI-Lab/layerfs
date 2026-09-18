@@ -375,11 +375,13 @@ fn eligible(
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
     let value = {
+        let mut groups = crate::encoding::GroupCache::new();
         let mut resolver = Resolver::new(
             input.connection,
             i64::MAX,
             input.capacities,
             input.packs,
+            &mut groups,
             input.decode,
             input.chain,
         );

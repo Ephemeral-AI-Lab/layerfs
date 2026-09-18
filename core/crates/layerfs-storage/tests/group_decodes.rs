@@ -1,14 +1,14 @@
-//! The ordinary-lane group-decode counter.
+//! The ordinary-lane group-decode counter and the decoded-group cache.
 //!
-//! The ordinary resolver decompresses a group's whole body once per record it
-//! serves out of it (`encoding/decode.rs`, the `GroupCodec::Zstandard` arm), so
-//! `k` records sharing one group cost `k` decompressions. `ReadCounters` had no
-//! counter that could see that: `packs_read` charges one per pack per wave and
-//! `objects` charges one per returned object, which is exactly the number the
-//! defect hides behind. These cases pin the pre-cache behaviour - the decode
-//! count is the number of ordinary records read, and that is strictly more than
-//! the number of distinct groups they came from - against the engine's own
-//! `objects` table, so the decoded-group cache (`P2-4`) has a before-anchor.
+//! The ordinary resolver used to decompress a group's whole body once per record
+//! it served out of it (`encoding/decode.rs`, the `GroupCodec::Zstandard` arm),
+//! so `k` records sharing one group cost `k` decompressions; V6 added the counter
+//! that could see it, and P2-4 added the operation-scoped cache that removes it.
+//! These cases pin the **post-cache** behaviour against the engine's own
+//! `objects` table: the decode count is the number of distinct groups the
+//! operation read, strictly below the number of ordinary records, while the bytes
+//! returned are unchanged. V6's pre-cache reading (one decode per record) is its
+//! own round's record, not a claim here.
 
 mod support;
 
@@ -34,7 +34,7 @@ fn ordinary_shape(path: &std::path::Path) -> (i64, i64) {
 }
 
 #[test]
-fn a_decode_is_charged_once_per_record_and_not_once_per_group() {
+fn a_decode_is_charged_once_per_distinct_group() {
     let dir = TempDir::new("group-decodes");
     let path = dir.store_path("group-decodes");
     // A chunked file: its mapping records are small, so several of them share one
@@ -57,12 +57,12 @@ fn a_decode_is_charged_once_per_record_and_not_once_per_group() {
     assert_eq!(out, bytes, "the readback reproduces the file");
     assert_eq!(
         provider.group_decodes(),
-        u64::try_from(records).unwrap(),
-        "one decode per ordinary record read, not one per distinct group"
+        u64::try_from(groups).unwrap(),
+        "one decode per distinct group, not one per record that shares it"
     );
     assert!(
-        provider.group_decodes() > u64::try_from(groups).unwrap(),
-        "the counter is strictly above the distinct-group count, which is the defect P2-4 removes"
+        provider.group_decodes() < u64::try_from(records).unwrap(),
+        "the counter is strictly below the record count: the cache served the rest"
     );
 }
 
@@ -75,9 +75,10 @@ fn the_decode_charge_is_per_read_and_not_per_store() {
     let store = create_store(&path);
     save_all(&store, &collected).expect("save");
 
-    // Control: a save of the same objects reads them back for membership, but the
-    // read counter belongs to *reads*; a second provider over the same Store
-    // charges its own read again rather than reporting a Store-wide total.
+    // Control: the cache belongs to the **operation**, not to the Store. A second
+    // provider over the same Store charges its own read again rather than
+    // reporting a Store-wide total, so "decodes fell" cannot be a cache that
+    // outlives the read it served.
     let first = StoreProvider::new(&store);
     let mut out = Vec::new();
     disabled(|scope| read_all(&first, root, &mut out, scope.child("content.read"))).unwrap();

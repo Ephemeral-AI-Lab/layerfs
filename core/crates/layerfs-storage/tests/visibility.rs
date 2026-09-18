@@ -483,6 +483,79 @@ fn a_pooled_read_refuses_a_value_group_above_the_captured_ceiling() {
     assert_eq!(served.len(), row.count);
 }
 
+/// An ordinary-lane group above the ceiling is refused **before** the cache.
+///
+/// The decoded-group cache belongs to the read operation, and the ceiling does
+/// not: it is re-read for every wave. So a body decoded under an older, higher
+/// ceiling must never answer for a location the wave's current ceiling hides -
+/// the check has to come first. This drives a resolver directly with one shared
+/// cache: the group is decoded and cached under an unbounded ceiling, then the
+/// same location is resolved under a ceiling below its pack and must be refused.
+#[test]
+fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
+    use layerfs_storage::encoding::delta::read::{ChainCounters, Resolver};
+    use layerfs_storage::encoding::GroupCache;
+    use layerfs_storage::sqlite::lookup;
+
+    let dir = TempDir::new("visibility_group_cache");
+    let path = dir.store_path("visibility_group_cache");
+    let store = create_store(&path);
+    let bytes = noise(200_000);
+    let (collected, root, _) = construct_file(&bytes);
+    save_all(&store, &collected).expect("save");
+
+    // The product's own open path, so the connection carries the declared profile.
+    let connection =
+        layerfs_storage::sqlite::connection::open(&path, false).expect("profile connection");
+    let capacities = store.capacities();
+    let mut workspace = DecompressionWorkspace::new().expect("workspace");
+    let mut packs = std::collections::BTreeMap::new();
+    let mut cache = GroupCache::new();
+    let mut counters = ChainCounters::default();
+    let location = lookup::location(&connection, root, i64::MAX)
+        .expect("location")
+        .expect("the saved root has a locator");
+
+    // Under an unbounded ceiling the object resolves, and its group is retained.
+    let (canonical, verified) = Resolver::new(
+        &connection,
+        i64::MAX,
+        &capacities,
+        &mut packs,
+        &mut cache,
+        &mut workspace,
+        &mut counters,
+    )
+    .resolve_at(location)
+    .expect("the object resolves under an unbounded ceiling");
+    assert_eq!(verified, root);
+    assert!(
+        cache.retained_bytes() > 0,
+        "the resolution retained the group body it decoded"
+    );
+
+    // The same location, the same cache, a ceiling below its pack: the refusal
+    // must come from visibility, not from the cache.
+    let hidden = location.pack_id - 1;
+    let error = Resolver::new(
+        &connection,
+        hidden,
+        &capacities,
+        &mut packs,
+        &mut cache,
+        &mut workspace,
+        &mut counters,
+    )
+    .resolve_at(location)
+    .expect_err("a location above the ceiling is refused");
+    assert!(
+        matches!(error, StorageError::VisibilityCeiling { pack_id, ceiling }
+            if pack_id == location.pack_id && ceiling == hidden),
+        "expected a visibility refusal, got {error}"
+    );
+    assert_eq!(canonical.len(), location.canonical_length);
+}
+
 /// The pooled lane supplies the owner's own ceiling at every read site.
 ///
 /// `MutationOwner::acquire` refuses to start whenever the publication watermark

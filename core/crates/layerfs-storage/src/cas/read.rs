@@ -52,6 +52,7 @@ pub fn read_objects(
     ceiling: i64,
     capacities: &StorageCapacities,
     workspace: &mut DecompressionWorkspace,
+    groups: &mut crate::encoding::GroupCache,
 ) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
     // Locators are collected above the ceiling on purpose: a record that exists
     // but is not yet published must be reported as a visibility refusal, never
@@ -84,7 +85,7 @@ pub fn read_objects(
             .ok_or(StorageError::ObjectMissing(*id))?;
         let ((canonical, verified), packs_fetched) = {
             let mut resolver = Resolver::new(
-                connection, ceiling, capacities, &mut packs, workspace, &mut chain,
+                connection, ceiling, capacities, &mut packs, groups, workspace, &mut chain,
             );
             let resolved = resolver.resolve_at(location)?;
             (resolved, resolver.packs_read())
@@ -142,6 +143,20 @@ pub(crate) fn check_read_demand(ids: &[ObjectId], limit: usize) -> StorageResult
 pub struct ReadSession {
     connection: Connection,
     workspace: DecompressionWorkspace,
+    /// Decoded ordinary-lane group bodies this operation already materialised.
+    ///
+    /// The cache belongs to the **operation**, not to one wave: a group read by
+    /// one wave is served to the next without decompressing it again, which is
+    /// what makes `k` records of one group cost one decompression across an
+    /// operation. It is bounded by [`DECODED_GROUP_CACHE_BYTES`] and released
+    /// wholesale when the bound is crossed, the pooled value cache's discipline.
+    ///
+    /// Its one hazard is stated where it is handled: the ceiling is **not**
+    /// pooled (it is re-read per wave), so a body cached under an older, higher
+    /// ceiling must never answer a location the current ceiling hides. The
+    /// resolver checks the location's pack against its own ceiling *before* the
+    /// cache is consulted.
+    groups: crate::encoding::GroupCache,
 }
 
 impl ReadSession {
@@ -151,6 +166,7 @@ impl ReadSession {
         Ok(Self {
             connection: connection::open(path, false)?,
             workspace: DecompressionWorkspace::new()?,
+            groups: crate::encoding::GroupCache::new(),
         })
     }
 
@@ -168,6 +184,7 @@ impl ReadSession {
             ceiling,
             capacities,
             &mut self.workspace,
+            &mut self.groups,
         )
     }
 }

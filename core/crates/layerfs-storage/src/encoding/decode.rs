@@ -20,6 +20,47 @@ use crate::pack::layout::{group_view, parse_header, record_range, GroupCodec, Pa
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
 use crate::sqlite::lookup::ObjectLocation;
 
+/// Bounded cache of decoded ordinary-lane group bodies, keyed by locator group.
+///
+/// Owner: the read wave that decodes through it. Bound:
+/// [`DECODED_GROUP_CACHE_BYTES`]. Live multiplicity: one cache per wave, one copy
+/// per distinct `(pack, group)`. Lifetime: the wave; dropped with it. Release: the
+/// whole cache is released when the next body would cross the bound, and a body
+/// the bound released is simply decompressed again. A cache hit charges no
+/// `group_decodes`: the counter reports decompressions, not records served.
+#[derive(Debug, Default)]
+pub struct GroupCache {
+    bodies: std::collections::BTreeMap<(i64, usize), Vec<u8>>,
+    retained: usize,
+}
+
+impl GroupCache {
+    /// An empty cache.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The decoded body of one `(pack, group)`, when this wave already decoded it.
+    pub fn get(&self, pack_id: i64, group_number: usize) -> Option<&[u8]> {
+        self.bodies.get(&(pack_id, group_number)).map(Vec::as_slice)
+    }
+
+    /// Retains one decoded body, releasing the whole cache first if it would not fit.
+    pub fn insert(&mut self, pack_id: i64, group_number: usize, body: Vec<u8>) {
+        if self.retained.saturating_add(body.len()) > crate::policy::DECODED_GROUP_CACHE_BYTES {
+            self.bodies.clear();
+            self.retained = 0;
+        }
+        self.retained = self.retained.saturating_add(body.len());
+        self.bodies.insert((pack_id, group_number), body);
+    }
+
+    /// Bytes of decoded bodies this cache currently retains.
+    pub fn retained_bytes(&self) -> usize {
+        self.retained
+    }
+}
+
 /// Rebuilds the canonical object stored at one locator.
 ///
 /// `base` is the exact raw payload of the recorded direct base, already read and
@@ -39,6 +80,7 @@ pub fn decode_canonical(
     capacities: &StorageCapacities,
     base: Option<&[u8]>,
     workspace: &mut DecompressionWorkspace,
+    groups: &mut GroupCache,
     group_decodes: &mut u64,
 ) -> StorageResult<Vec<u8>> {
     let canonical_length = location.canonical_length;
@@ -52,17 +94,31 @@ pub fn decode_canonical(
         .ok_or(StorageError::Integrity("group body range"))?;
     match header.lane {
         PackLane::Ordinary => {
-            let body = match view.codec {
-                GroupCodec::Raw => selected.to_vec(),
+            // A group body cached by this wave is served as it stands; otherwise it
+            // is decompressed once and retained. Either way the length check below
+            // still runs against the body this record is framed in, so a cached
+            // body can never answer for a group whose decoded width differs.
+            let body: &[u8] = match view.codec {
+                GroupCodec::Raw => selected,
                 GroupCodec::Zstandard => {
-                    *group_decodes = group_decodes.saturating_add(1);
-                    workspace.decompress_group(selected, view.decoded_length)?
+                    match groups.get(location.pack_id, location.group_number) {
+                        Some(cached) => cached,
+                        None => {
+                            let decompressed =
+                                workspace.decompress_group(selected, view.decoded_length)?;
+                            *group_decodes = group_decodes.saturating_add(1);
+                            groups.insert(location.pack_id, location.group_number, decompressed);
+                            groups
+                                .get(location.pack_id, location.group_number)
+                                .ok_or(StorageError::Integrity("decoded group cache"))?
+                        }
+                    }
                 }
             };
             if body.len() != view.decoded_length {
                 return Err(StorageError::Integrity("group body length"));
             }
-            let bytes = framed_record(&body, location.record_number)?;
+            let bytes = framed_record(body, location.record_number)?;
             if bytes.first() != Some(&ORDINARY_FULL_TAG) {
                 return Err(StorageError::Integrity("record tag is not FULL"));
             }

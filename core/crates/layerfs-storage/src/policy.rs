@@ -119,6 +119,22 @@ pub const DEPENDENCY_PACK_CACHE_BYTES: usize = 4 * 1024 * 1024;
 /// the bound, or with the reader. Dropping it costs reads and the index window
 /// still finds the group, so the bound costs work and never correctness.
 pub const POOLED_VALUE_CACHE_BYTES: usize = 512 * 1024;
+/// Decoded ordinary-lane group bodies one read wave may retain.
+///
+/// Owner: the read wave that decodes through it - one cache per wave, created by
+/// the caller that owns the wave's pack cache and carried by every resolver in that
+/// wave. Bound: this many decoded body bytes. Live multiplicity: one copy per
+/// distinct `(pack, group)`. Lifetime: the wave; dropped with it. Release: the
+/// whole cache is released when the next body would cross the bound, the
+/// discipline the pooled value cache and the dependency pack cache already use. A
+/// released body is decompressed again if a later record needs it, so the bound
+/// costs work and never correctness.
+///
+/// A group body is immutable once published - a later append reaches a pack's
+/// *new* groups and never rewrites an existing group's bytes - so a retained body
+/// cannot go stale within a wave. Visibility is checked before the cache is
+/// consulted, never after (see `encoding::delta::read::Resolver::decode_at`).
+pub const DECODED_GROUP_CACHE_BYTES: usize = 512 * 1024;
 /// Decoded value-group work one pooled metadata chain may spend.
 pub const METADATA_DECODED_WORK_LIMIT: u64 = 32 * 1024 * 1024;
 /// Default pooled-metadata dependency depth.

@@ -440,6 +440,15 @@ The wave's declared demand bound is enforced on both doors: `read_objects`'s own
 the provider checks it **before** the session exists, so a demand over
 `READ_OBJECT_LIMIT` is refused without opening anything.
 
+A session also carries one `GroupCache` (#178 **P2-4**, 2026-09-18): decoded
+ordinary-lane group bodies keyed by `(pack, group)`, bounded by
+`DECODED_GROUP_CACHE_BYTES` (512 KiB, released wholesale when the bound is crossed)
+and dropped with the session. It is what makes `k` records of one group cost one
+decompression across an operation instead of one per record, and a hit charges no
+`group_decodes`. It is never a visibility shortcut: the ceiling is re-read per wave
+while the cache outlives a wave, so the resolver checks the location's pack against
+its own ceiling **before** the cache is consulted.
+
 What a session deliberately does **not** pool is the ceiling. It is the publication
 watermark, so it is re-read for every wave and a save that completed between two
 waves is visible to the second one; pooling it would turn an operation's later
