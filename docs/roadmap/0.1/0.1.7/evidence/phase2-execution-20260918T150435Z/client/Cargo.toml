@@ -1,0 +1,12 @@
+[package]
+name = "phase0client"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+layerfs-content = { path = "../../../../../../../core/crates/layerfs-content" }
+layerfs-storage = { path = "../../../../../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../../../../../core/crates/layerfs-telemetry" }
+rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }
+
+[workspace]
