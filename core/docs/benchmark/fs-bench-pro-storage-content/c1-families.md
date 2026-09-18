@@ -104,6 +104,12 @@ C1-11      namespace-{100-compact-v3,1000-compact-v3,10000,100000}[-text-v1]
 `-compact-v2` / `-mixed-v3` / `-mixed-v4` are **fixture-profile variants, not
 tiers**. Only the four tier values `{1, 10, 100, 500}` are tiers.
 
+**Cardinality parsing rule (must be frozen in `CONTRACT.md` before the registry
+self-check is written).** A bracketed profile list means the row is **one** case
+rendered with one profile chosen by tier — *not* one case per profile. Read the
+other way, §3.1 parses to 175 IDs while the table sums to 127, and the self-check
+fails on a legitimate reading. Review S5 found exactly this ambiguity.
+
 ### 3.2 Retained fixture — `local_snapshot`
 
 The family drops (R1), the fixture is kept: **25,000 one-byte files**
@@ -119,7 +125,7 @@ Every figure below is enforced by a named check in
 | Surface | Constant | Value |
 | --- | --- | --- |
 | Small-file cutoff | `DEFAULT_SMALL_FILE_THRESHOLD_BYTES` | 131,072 (accepted range 131,072..=1,048,576, power of two only) |
-| Cutoff boundary cases | `BOUNDARY_{BELOW,EXACT,ABOVE}` | **131,071 / 131,072 / 131,073** |
+| Cutoff boundary cases | **harness-declared** (no product constant exists — see the note below) | **131,071 / 131,072 / 131,073** |
 | Chunk grammar | `MINIMUM/TARGET/MAXIMUM_CHUNK_BYTES` | **8,192 / 16,384 / 32,768** |
 | CDC boundary cases | `dedup_cdc_locality::boundaries()` | 0, 1, 8,191, 8,192, 16,384, 32,768, 32,769 |
 | Whole-file canonical | `WHOLE_FILE_CANONICAL_OVERHEAD` | `cutoff − 1 + 23` = 131,094 |
@@ -149,6 +155,14 @@ Every figure below is enforced by a named check in
 `MAXIMUM_PAGE_BYTES` 8,192 (encoders refuse above it, so an 8,193-byte page
 cannot be produced).
 
+**Correction (review S4/S5):** `BOUNDARY_{BELOW,EXACT,ABOVE}` are **not** product
+constants. They appear nowhere under `core/crates/*/src` and there is no `131_071`
+literal — the earlier claim that every figure in this table is "enforced by a named
+check in `limits.rs`" holds for the other constants but **not these three**. They are
+harness-declared boundary points (they come from the v0.1.6 fixture algebra at
+`v016_common.rs:20-22`). The registry must pin them by golden file and mark them
+harness-declared; the constant-parity test cannot anchor them.
+
 ## 5. Inherited measurement contract
 
 Applies verbatim from
@@ -157,7 +171,7 @@ Applies verbatim from
 
 1. **One sample per case per arm.** No best-of, no n3. Repeats are labelled determinism diagnostics.
 2. **Fresh `--output` per run.** Receipts append-only, never overwritten.
-3. **Cache state declared and equal.** Construction families declare *warm in-process fixture; bytes are read before the timed region*, so no file I/O occurs inside the timer. Edit, transition and filesystem families read a **prepared base**, which is acquired as a per-sample byte copy and then **de-warmed** (`msync(MS_INVALIDATE)` + `mincore`, `resident_pages == 0`) before the clock starts. States are never pooled. Full discipline in [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md).
+3. **Cache state declared and equal.** Construction families declare *warm in-process fixture; bytes are read before the timed region*, so no file I/O occurs inside the timer. Edit, transition and filesystem families read a **prepared base**, acquired by a declared copy rung (read-only master / APFS COW clone / byte copy / regenerate) and then **de-warmed** by the ordered `mincore`-first sequence, requiring `resident_pages == 0`. States are never pooled. Note the correction: de-warming is `mincore` → `msync(MS_INVALIDATE)` only if resident → `mincore`, **not** touch-every-page-then-`msync` — the latter is why v0.1.6 paid a measured **18.57 s** for a 100k-file fixture. Full discipline in [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md).
 4. **One worker.** `LAYERFS_CONSTRUCTION_WORKERS=1` exported and asserted in the receipt (today nothing enforces `AGENTS.md` §3.8).
 5. **Budget:** ≤ 15 s complete command; declared exceptions ≤ 25 s; verification ≤ 60 s.
 6. **Counters are the gate; `elapsed_ns` is diagnostic.** Phase 0 proved every work counter bit-identical across runs while wall time moved **+17.6 %** on the same binary and input.
@@ -201,7 +215,7 @@ CDC or read family has nothing to hand off.
 | --- | --- | --- |
 | `measure_components --mode c1` | exists | input-size tier is caller-written; cap 8 MiB |
 | `measure_edits --mode c1` | exists | `nodes_read` **not** printed |
-| `edit_timing_c1` | exists | **only** vehicle exposing `nodes_read`; **no size knob** (fixed 3.3 MB base) |
+| `edit_timing_c1` | exists | **only** vehicle exposing `nodes_read`; **no size knob** (fixed 3.3 MB base). **Do not lift its body:** it wraps *both* regions in `Timing::disabled` (`:224`, `:248`) and calls no completeness check, so it records nothing today. Lifting it verbatim inherits a silent no-op. |
 | `filesystem_timing_c1` | exists | **no `--entries` knob**; fixture sizes hard-coded 0/32/200 |
 | `measure_filesystem` | exists | same; `--entries` **panics** (exit 101) — RUNPLAN's D7–D9 were invalid |
 | `filesystem_primitives_candidate` | exists | `--files/--changes/--samples`; the only matched reference arm |

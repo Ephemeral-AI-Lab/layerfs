@@ -136,6 +136,11 @@ field called `memory`.
   `rss_incremental_peak_bytes`, `rss_final_bytes`.
 - **Fail-closed rule:** a missed boundary or an excessive gap makes the phase peak
   **unavailable** and the row `INELIGIBLE` — never quietly fast.
+- **Coverability limit (review S3).** At a 10 ms nominal interval a phase needs
+  roughly **≥ 200 ms** to contain an interior observation. The whole `{1, 10, 100}` MiB
+  ladder is under that, so **RSS cannot gate the O(1)-memory claim there**. Gate that
+  claim on the **counting allocator** (exact, deterministic, per-phase, zero
+  perturbation) and use RSS as a G4 bound plus an anomaly detector.
 - **Never** report a lifetime high-water (`ru_maxrss`, cgroup `memory.peak`) as an
   incremental figure. Label it.
 
@@ -162,9 +167,11 @@ field called `memory`.
 ### 4.1 In-process, per phase
 
 ```rust
+// The struct MUST be the full 17-field C layout: getrusage writes all of it,
+// so a truncated #[repr(C)] struct is a buffer overrun. See
+// benchmark/fs-bench-pro/src/main.rs:185-218 for the correct declaration.
 #[repr(C)] struct NativeTimeval { tv_sec: i64, tv_usec: i64 }
-#[repr(C)] struct NativeRusage { utime: NativeTimeval, stime: NativeTimeval,
-                                 /* … */ max_rss: i64, /* … */ nswap: i64 }
+#[repr(C)] struct NativeRusage { /* all 17 fields, in order, per <sys/resource.h> */ }
 unsafe extern "C" { fn getrusage(who: i32, usage: *mut NativeRusage) -> i32; }
 ```
 
@@ -271,7 +278,14 @@ Samples falling in no named window are reported as **unattributed**, never dropp
 
 ## 8. Case-result shape
 
-The timing tree is unchanged; resources are a sibling key:
+The timing tree is unchanged, but it **cannot carry a sibling key**: the frozen
+writer emits exactly `name`, `elapsed_ns`, optional `outcome`, optional
+`incomplete`, `children` (`layerfs-telemetry/src/timer/json.rs:29-89`). Any "sibling
+key" shape requires the harness to string-surgery the crate's output, which would
+stop being the crate's output. The harness therefore **wraps**: it writes its own
+`trace.jsonl` and leaves `timing.json` byte-verbatim as the product receipt.
+
+Wrapped shape (see `test_setup_and_cache_discipline.md` and the trace design):
 
 ```json
 "resources": {
@@ -320,7 +334,23 @@ report:
 | C1 filesystem | **two forms**: `build_filesystem` / `update_filesystem` take no scope; the `_timed` variants take `&FilesystemPhases` and record six coarse phases (`validate`, `directories`, `references`, `inodes`, `cleanup`, `root.encode`) — deliberately *"without one trace node per inode"* |
 | C2 | `Store::create` / `open`, `begin_save`, `finish`, `abort`, `read_batch` all take `TimingScope` |
 
-### 10.2 Three clocks, named distinctly
+### 10.2 Two clocks, not three — collapse clock 2 and clock 3
+
+**Correction:** clocks 2 and 3 need not be incomparable. `CLOCK_MONOTONIC_RAW`
+(id **4**) is reachable from both sides — Rust via `clock_gettime(4)` (the pattern
+already used at `benchmark/fs-bench-pro/src/main.rs:3965-3989`) and Python via
+`time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)` (verified on this host:
+`time.CLOCK_MONOTONIC_RAW == 4`). **Never use `Instant` for a trace window** — it is
+opaque and cannot cross a process. `Instant` stays fine inside telemetry (frozen).
+This removes the cross-domain problem entirely; the only remaining quantity is the
+parent's own monitor thread, which is not an axis.
+
+Also note: `Σ self_ns == root.elapsed_ns` is an **algebraic tautology** and must not
+be sold as an `attach()` detector. Attached subtrees cannot be detected numerically;
+enforce the prohibition structurally instead (a grep guard over product `src/` plus a
+declared-tree comparison).
+
+### 10.2b The clock table
 
 | # | Clock | Owner | Answers |
 | --- | --- | --- | --- |

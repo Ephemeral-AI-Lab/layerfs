@@ -157,17 +157,73 @@ materialisation is 0.3-1 s of pure setup repeated across the set. For constructi
 families the residency is declared anyway (`warm-in-process-fixture`), so no cold
 claim is being lost.
 
+### 4.2 The copy ladder (correction, review S2)
+
+The single byte copy above is the **fallback**, not the only rung. `benchmark_rules.md:246`
+permits *"a fresh independent writable copy **or real copy-on-write clone**"*, and
+`clonefile(2)` is measured available on this host (`VOL_CAP_INT_CLONE` is set on the
+volume holding the repository).
+
+| Rung | Mechanism | Per-sample cost | Declared cache state | Legal when |
+| --- | --- | --- | --- | --- |
+| **R0** `read-only-master` | no copy; `mmap(PROT_READ, MAP_SHARED)` the master | de-warm only | `prepared-master-dewarmed` | the timed phase cannot write the artifact — all C1 construction/edit/read families, and every C2 **read** family |
+| **R1** `apfs-clonefile-cow-v1` | `clonefileat` | single-digit ms, size-independent | `clone-fresh-vnode-unresident` (**never called cold**) | mutation cases, **and** `write_fraction_class != large`, **and** the case does **not** gate allocated bytes, **and** hardlink-free, **and** free-space preflight passes |
+| **R2** `closed-quiescent-byte-copy` | `copyfileobj` + one target digest | ~1.1 s at 626 MB | `prepared-master-dewarmed` | default fallback; required wherever R1 is refused |
+| **R3** `regenerated-in-process` | re-run the generator | 26.6 s measured for the 100k tree | `warm-in-process-fixture` | `setup: fresh` and no-master cases only — **not a speed rung** |
+
+**Three constraints on R1, each rule-backed:**
+
+1. **Never name it `--setup clone`.** `AGENTS.md:79` defines that token as *"a byte
+   copy — not an APFS clone"*, and historical receipts stay comparable only if the
+   meaning is stable. Add `--setup reflink` and a default `--setup auto` that
+   resolves, records the rung and its reason, and must resolve **identically for both
+   arms** or the pair is refused.
+2. **A clone's `st_blocks` double-counts blocks shared with the master**, so R1 is
+   **forbidden for `c2.footprint`** and for any row gating `store_allocated_bytes`.
+   The repo states this twice: *"Copies/APFS clones are not allocation controls"*
+   (`0.1.4/issue88-delivery/contract-v1.md:174`) and *"APFS clones/copies preserve
+   content, not allocation equivalence"* (`0.1.4/issue87-analysis:138`). Every row
+   carries `allocation_attribution: exclusive | shared-with-master`.
+3. **ENOSPC is a real hazard R2 does not have.** `clonefile(2)`: *"it is possible for
+   a subsequent overwrite of an existing data block to return ENOSPC."* Require
+   `free_bytes >= 1.05 x master_logical_bytes` before choosing R1.
+
+`copyfile(3)` is **not** an acceptable route: `COPYFILE_CLONE` silently falls back to
+a byte copy (forbidden by the no-silent-fallback stance), and `COPYFILE_CLONE_FORCE`
+refuses directories. Use `clonefileat` per entry, or R2.
+
+**Delete three per-sample full-content passes.** The path this section previously
+lifted from `runtime.py:537-568` reads and SHA-256s the source **twice** and the
+target once, runs `PRAGMA quick_check` per sample, and re-hashes the master after the
+sample — four full passes where `benchmark_rules.md:251-252` says *"repeated source
+rehashing per sample is unnecessary."* At the measured 1.25 GB/s validation rate that
+is **~2-3 s of setup for one 626 MB sample**. Replace with: one bounded identity
+sample (8 deterministic pages), master validation **once per acquisition**, and
+`master_unchanged` by stat-identity — with the master path never released to a sample
+process, recorded as `master_path_released_to_sample: false`.
+
 ## 5. De-warming
 
 A copy is warm the moment it is written. Before the clock starts, the sample's copy
 is invalidated and verified:
 
 ```text
-mmap(PROT_READ, MAP_SHARED)
-  -> msync(addr, len, MS_INVALIDATE | MS_SYNC)
-  -> mincore(addr, len, vec)  ->  resident_pages
-  -> require resident_pages == 0
+open(O_RDONLY) -> mmap(PROT_READ, MAP_SHARED)
+  -> mincore(addr, len, vec)              -> resident_first   # does NOT fault pages in
+  -> if resident_first > 0:
+         msync(addr, len, MS_INVALIDATE)  # no MS_SYNC needed: the copy is clean
+     mincore(addr, len, vec)              -> resident_pages
+  -> require resident_pages == 0 and pages_checked == expected_pages
 ```
+
+**Correction (review S2): `mincore` first, not touch-every-page.** `cold.py:52-54`
+touches every page before invalidating (*"Instantiate shared mappings before
+invalidation"*), which is why the v0.1.6 campaign paid a measured **18.57 s** of
+acquisition for a 100k-file fixture. A non-resident page needs no invalidation —
+`mincore` already proves it. Recording `resident_first != 0` is **not a failure**; it
+is the evidence that the de-warm did work, and the honest way to show the instrument
+is live. The measured per-file cost falls from ~186 microseconds to roughly the cost
+of `open`+`mmap`+`mincore`+`munmap`+`close`.
 
 The primitive is implemented and **self-tested** at
 `benchmark/fs-bench-pro/shared/cold.py:28-80`; `self_check()` (`:65-80`) proves it
@@ -198,7 +254,25 @@ Every case declares exactly one state, and **states are never pooled**:
 | `prepared-master-warm` | copy made, de-warm not applied | no — quarantine |
 | `product-warm` | the timed phase reads packs it wrote in the same sample | impossible (§7) |
 | `verified-cold` | full cold contract: invalidation + residency + digest + metadata (§6.1) | yes |
+| `clone-fresh-vnode-unresident` | R1 clone; residency verified on the clone's own vnode | yes — **but see the E2 caveat below** |
 | `uncontrolled` | none of the above; declared explicitly and never admissible | no |
+
+**Unproven pending experiment E2 (review S2).** A clone is a distinct *vnode* whose
+extents are shared with the master. The claim that its residency is therefore
+independent of the master's — and that `msync(MS_INVALIDATE)` on the clone is
+vnode-scoped and cannot evict the master — is **inference from XNU's UBC design, not
+documentation**. `man 2 msync` says only *"Invalidate all cached data"*, without
+saying whose. **If the cache were keyed by physical extent, a clone would inherit the
+master's residency and `prepared-master-dewarmed` would be a lie for R1.** Until E2
+passes, an R1 row claiming a de-warmed or cold state is reported `INELIGIBLE`, not
+`PASS` — or R1 is restricted to cases that make no such claim.
+
+E2 is cheap and untimed (~2 s): clone a master; `mincore` the clone (expect 0); read
+the master fully (expect its pages resident); `mincore` the clone again — **expect 0,
+and this is the decisive observation**; `msync(MS_INVALIDATE)` the clone; `mincore`
+the master and record whether it dropped. Repeat on a clean and on a freshly-written
+master, because the clone-of-dirty-master path is the one preparation actually
+produces.
 
 ### 6.1 The cold contract, if it is used
 
@@ -256,7 +330,10 @@ command_wall_ns           the whole invocation
 | Generate or acquire fixture bytes | once per compatibility digest | ~0.5 s for 500 MB (xorshift), or a download |
 | Validate the master | once per acquisition | linear in fixture size |
 | Copy the master Store | per sample | ~ms at MB scale; ~0.3-1 s at 500 MB |
-| `msync` + `mincore` de-warm | per sample | page-count linear |
+| `mincore`-first de-warm | per sample | page-count linear but non-faulting; `msync` runs only if `resident_first > 0` |
+| Copy, R1 `clonefileat` | per sample | single-digit ms, size-independent |
+| Copy, R2 byte copy | per sample | ~1.1 s at 626 MB |
+| **Per-sample full-content passes** (source re-hash, `quick_check`, master re-hash) | per sample | **0 — deleted**; replaced by master validation once per acquisition |
 | Materialise into the sample process | per sample | untimed read |
 
 Two things follow. First, **persistence eliminates generation and acquisition, not

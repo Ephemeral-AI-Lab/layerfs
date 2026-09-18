@@ -80,11 +80,16 @@ and the declared operation, never from the mutated Store.
 | **O6 footprint accounting** | allocated vs apparent, `pack_bodies <= database`, freelist, sidecar absence | `tests/memory_bounds.rs` |
 | **O7 SQL invariants** | schema identity, 4 tables, 2 indexes, watermark `I1`, `quick_check` | `sqlite/schema.rs` `validate`, `tests/policy_capacity.rs` |
 
-**The single most reusable asset is the sealed-oracle parity set** — 34 external
+**The single most reusable asset is the sealed-oracle parity set** — **35** external
 tests that already exist and stay green through every change:
-`fixture_seal` 2, `filesystem_reference` 2, `edit_reference` 2,
+`fixture_seal` 2, `filesystem_reference` 2, `edit_reference` **3**,
 `object_identity` 11, `filesystem_codec` 9, `filesystem_updates` 6,
-`filesystem_profile` 2. For families where a per-case oracle would be expensive,
+`filesystem_profile` 2.
+
+*Correction (review S4): an earlier revision said 34 and under-counted
+`edit_reference` at 2. Because this set is the **oracle** for the expensive families,
+the registry must pin the true count and the file list — otherwise the oracle can
+silently shrink when someone deletes a test.* For families where a per-case oracle would be expensive,
 **"the parity set stays green plus the pinned identity constants match" is the
 oracle**, and it is stronger than a spot check because it covers the codec layer too.
 
@@ -95,7 +100,7 @@ oracle**, and it is stronger than a spot check because it covers the codec layer
 | Family | Oracle | G1 gate | G2 mechanism | G3 scaling |
 | --- | --- | --- | --- | --- |
 | `c1.construct.whole-file` | O1 + O2 | expected root matches; readback equals input | representation is whole-file | memory flat in n |
-| `c1.construct.chunked` | O1 + O2 + O3 | root matches; readback equals input; `chunks_emitted` equals the independently computed count | — | **flat memory** in n; time ×2.0 |
+| `c1.construct.chunked` | O1 + O2 + O3 | root matches; readback equals input; `chunks_emitted` equals the independently computed count | — | **flat heap** in n (allocator-gated); RSS is a **G4 bound only**; time is **diagnostic** |
 | `c1.cdc.chunk-count` | **O3 primary** | `initial_count`, `final_count`, `final_sha256`, `file_root`, `map_sha256` all equal the pinned values (`PLAN_SHA256` is already a 12-entry array) | — | — |
 | `c1.edit.length-preserving` | O1 + O2 | root matches; `final_len == base_len` byte-exactly | `payloads_created == 1`, `nodes_created` bounded | local edit cost independent of file size |
 | `c1.edit.length-changing` | O1 + O2 | root matches; byte equation `final = base - removed + replacement` | `nodes_read` bounded; deferred bytes bounded | ×2.0 |
@@ -133,6 +138,8 @@ ratio gate. A family may not acquire a scaling claim after seeing results.
 | `rss_incremental_peak_bytes` | ≤ the declared ceiling |
 | `swaps` | **== 0** (hard failure otherwise) |
 | `resident_pages` | **== 0** wherever the row claims de-warmed or cold |
+| `disk_read_bytes` | **≥ 0.9 × requested** wherever a row claims a de-warmed or cold read — **device attestation** |
+| `allocation_attribution` | `exclusive` for any row gating `store_allocated_bytes`; `shared-with-master` rows are refused |
 | allocation count | **== 0** on the paths already pinned allocation-free (`tests/filesystem_ordering_scan.rs` asserts zero allocations across a full ascending sweep) |
 | codec workspace | 2 MiB encode / 1 MiB decode — declared, not summed with other claims |
 
@@ -158,15 +165,39 @@ rebuilt artifact invalidates its matched arm.
 
 ### G3 — Scaling band
 
-| Claimed growth | Band |
-| --- | --- |
-| O(1) | flat (≈ 1.0) |
-| O(n) | ×2.0 |
-| O(n log n) | ×2.1–2.4 |
-| O(n²) | ×4.0 — the residual to hunt |
+**Time is not a gate (correction, review S3).** With the established **±17.6 %**
+same-binary wall spread, the O(n) *time* band is `[1.60, 2.40]` — which overlaps
+O(n log n) `[1.68, 2.88]` and cannot separate O(n) from O(1) either. A zero-width
+band on a ±17.6 % measurement is a coin flip, not a gate. **Therefore G3 gates on
+counters, heap and disk; `elapsed_ns` is reported `DIAGNOSTIC` and can never produce
+`FAIL`.** Any per-family time band elsewhere in this document is superseded by this
+paragraph.
 
-A missing tier makes the band `INCOMPLETE`, not PASS. A ratio outside the band is a
-**refutation**, reported as one.
+**The exponent.** The byte ladder `{1, 10, 100, 500}` MiB contains **no doublings**,
+so "per-doubling ratio" is undefined as previously written. Freeze these:
+
+```text
+doublings_i    = log2(t_{i+1} / t_i)          # 1→10 = 3.3219 ; 10→100 = 3.3219 ; 100→500 = 2.3219
+per_doubling_i = ratio_i ** (1 / doublings_i)
+b              = least-squares slope of log2(v) on log2(t)   # the actual complexity claim
+```
+
+Report `per_doubling_i` because the spec names it, and report `b` because a claim of
+"O(n)" is a statement about the slope; a four-point ladder supports a slope with a
+residual, a single ratio does not.
+
+| Claimed growth | Counter band | Heap / disk band | Time (diagnostic only) |
+| --- | --- | --- | --- |
+| O(1) | `[0.90, 1.11]` | `[0.90, 1.11]` | `[0.60, 1.67]` |
+| O(n) | `[1.90, 2.10]` | `[1.80, 2.22]` | `[1.60, 2.40]` |
+| O(n log n) | `[1.95, 2.55]` | `[1.90, 2.60]` | `[1.60, 2.90]` |
+| O(n²) | `≥ 3.6` | `≥ 3.4` | `≥ 2.6` (one-sided) |
+
+A missing tier makes the band `INCOMPLETE`, not PASS — with three distinct cases:
+not selected by the lane → `NOT_RUN` (reason `lane=smoke`); selected but absent from
+the results dir → `INCOMPLETE`; cut for budget → `NOT_RUN` (reason `budget-cut`,
+with the measured wall time). A ratio outside the band is a **refutation**, reported
+as one.
 
 ## 7. Claim mapping
 
