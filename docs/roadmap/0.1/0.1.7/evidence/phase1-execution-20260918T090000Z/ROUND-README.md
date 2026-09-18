@@ -13,7 +13,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-1` | P1-1 — branch children in one wave (width 256) | collected (`after/`) |
 | `p1-3` | P1-3 — materialized branch children in one wave | collected (`after/`) |
 | `p1-4` | P1-4 — validation record demands batched behind one memo | collected (`after/`) |
-| `p1-6` | P1-6 — the discarded validation load | **measured-and-declined** (no commit) |
+| `p1-6` | P1-6 — the discarded validation load | **landed as the safe variant** (`after/`; the decline in §1–§5 is superseded by the appended §6) |
 | `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |

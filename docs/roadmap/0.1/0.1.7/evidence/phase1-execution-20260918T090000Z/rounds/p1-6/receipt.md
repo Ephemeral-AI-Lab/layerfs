@@ -81,3 +81,56 @@ Both are owner decisions, so this receipt asks for one rather than choosing.
   same figures.
 * The `nodes_read` figures here are the same ones `../v2/receipt.md` §3 and
   `../p1-4/after/` record for the same rows.
+
+## 6. Correction (appended 2026-09-18): the item **landed**, as the safe variant
+
+Nothing above is edited. The decline was wrong in its evidence, not in its
+reasoning about the check, and this section records both the error and the landing.
+
+### 6.1 What the decline got wrong
+
+§2 measured three shapes — D27, M2, M3 — and concluded "the branch never fires".
+Those three all join **equal heights**, so they never dismantle a taller side and
+never load a boundary child. The plan named the guaranteed shape itself:
+"`edit_reference`'s `unequal-height-join`, `height-growth`, `root-collapse` oracle
+cases". Measured on the oracle fixtures (and with V4's `EditCounters.nodes_read`,
+which is the counter that can see this work — the printed `nodes_read` is the
+provider-demand count and cannot):
+
+| oracle case | with the discarded load | with it removed |
+| --- | ---: | ---: |
+| `interior-multi-level` (400 extents, 40,000-byte mid-file replacement) | **24** | **22** |
+| `unequal-height-join` / `height-growth` / `root-collapse` | 4 / 4 / 4 | 4 / 4 / 4 |
+| `join-80-100` | 9 | 9 |
+
+So the branch fires — twice, on the one shape that reaches an interior join — and
+the item is measurable after all. Two mistakes compounded: the wrong shapes *and*,
+at the time of the first measurement, the wrong counter (V4 did not exist yet).
+
+### 6.2 What the decline got right, and how it was resolved
+
+The discarded load is the only **non-root** context check on that node
+(`validate(false)`'s `count < MIN_ENTRIES`; the join re-decodes with `root = true`,
+which does not enforce it). Deleting it would have traded a validation for the
+saving. The landing therefore keeps the check and removes only the duplicate read:
+`JoinSide` carries a side's summary **plus the node when the caller already has
+it**, so the join reuses the node the boundary check just decoded instead of
+reading and decoding it again.
+
+### 6.3 The landed arm
+
+Commit `360431d10`, one product file (`file/edit/tree.rs` 691 → 736) and one test
+(`edit_reference::an_interior_join_reads_its_boundary_child_once`, which pins the
+interior case at 22 loads and its root `57e0a51c…`, with the four equal-height
+cases as negative controls; it fails on the parent tree at 24). The frozen set is
+unchanged — a counter diff of all 29 D-rows and the three M-rows against the
+`p1-10` arm is **empty**, and D27/M2/M3 keep `nodes_read` 9/4/11 and
+`edit_nodes_read` 10/7/0, exactly as §2 recorded. The sealed-oracle parity set is
+green: `the_candidate_reproduces_the_reference_root_and_partition` covers every
+case with this change in the join.
+
+Production LOC: **+45** against the plan's −4..−8, which assumed the plain
+deletion; the difference is the `JoinSide` type and the call-site rewrites that
+keep the check.
+
+The dispositions §4 asked for are therefore moot: (a) was chosen and implemented.
