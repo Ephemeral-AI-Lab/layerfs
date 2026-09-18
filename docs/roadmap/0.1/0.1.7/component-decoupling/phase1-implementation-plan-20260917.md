@@ -196,6 +196,50 @@ growth (C2 +80..+150 via V3/P1-2 only). Non-production code outside the LOC
 comparison: ~17–20 new test cases (+300..+550 test lines), V2's example
 (+170..+260 lines across two files), V1/V3 prints (+15..+25), and the receipts.
 
+## 4b. Execution status (partial, 2026-09-18)
+
+> **Not the closing pass.** Five P1 boxes are still open and one is declined, so
+> §5's closing self-falsification has **not** been run and nothing below claims it.
+> This section records the landed state for the next driver; every number is a
+> measured counter from a round receipt under
+> [`../evidence/phase1-execution-20260918T090000Z/rounds/`](../evidence/phase1-execution-20260918T090000Z/rounds/).
+
+**Landed** (each its own single-variable commit, receipt and author-verified
+`verify-<item>.md`): C1 `7447f87d9` · V1 `2b5e27e65` · V2 `582dea9dd` ·
+V3 `aefcd95a5` · V4 `8efdd9291` (a plan refinement: the edit vehicle's own
+`EditCounters.nodes_read`) · P1-2 `9ec299f13` · P1-1 `32eda6f29` ·
+P1-3 `ff4d6d328` · P1-4 `bfb01f262` · P1-9 `d42cd969e` · P1-5 `70dc75836` ·
+P1-12 `9b4eff169` · P1-16 `84ca5c851` · P1-10 `8327f87bb`. Tree `45cd798f7`,
+pushed; 451 tests green; the 34-test sealed-oracle set green and unchanged.
+
+| item | counter | before → after |
+| --- | --- | --- |
+| C1 | D2/D5 `objects.read_waves` / `inodes.pages_read` | 4 → 3 / 1 → 5; `order` rows (corrected pair) 11 → 7 waves, 2 → 17 dir pages, 1 → 81 inode pages |
+| P1-2 | D21–D24 `readback connection opens` | 3 → 1 |
+| P1-1 | D25/D26 `read_waves` / `ino_scratch` | 7 → 5 / 349,820 → 709,388 |
+| P1-3 | 13,000-inode fixture provider waves / `inodes.read_waves` | 170 → 107 / 68 → 5 |
+| P1-4 | D2 validation waves / pages (D4) | 42 → 2 / 42 → 2 (6 → 1); `inode_demands` identical |
+| P1-9 | M2 `edit_nodes_read` | 8 → 7 |
+| P1-5 | D26 `runs.rows_read` | 59,007 → 27,777 (residual 33,247 → 2,017) |
+| P1-10 | D26 `runs.rows_read` | 27,777 → 25,809 |
+| P1-12 | no counter; page partition pinned; `peak_scratch_bytes` +8 B/page slot | — |
+| P1-16 | docs + boundary test; nothing moved | — |
+
+**Declined, owner ruling needed:** P1-6 (zero movement on every available row; the
+deletion removes the only non-root context check on that node) —
+[receipt](../evidence/phase1-execution-20260918T090000Z/rounds/p1-6/receipt.md).
+
+**Not started:** P1-8, P1-7, P1-14, P1-13, P1-15 — nothing half-landed, so their
+anchors are intact (P1-13's D26 `rows_written` 25,760 / `merges` 61 are still at
+their pre-item values).
+
+**Plan corrections the receipts produced** (each recorded in its round): the C1
+`order` rows were first measured through a stale probe client (receipt §9, driver
+fixed and `artifacts.txt` added); P1-1's `list_after` half is declined and its
+`patch.rs` half deferred; P1-9's printed `nodes_read` cannot move (V4 added);
+P1-12's `peak_scratch_bytes` does move (+8 B/page slot); P1-5's `truncate(level + 1)`
+sketch is backwards; P1-3/P1-4/P1-16 each corrected an assumption in their sketches.
+
 ## 5. The risks the implementer must carry
 
 1. **Anchor honesty:** no `pages_read`/`read_waves` receipt may straddle C1's
