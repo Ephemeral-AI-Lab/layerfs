@@ -75,7 +75,7 @@ DECLARED_EXCEPTIONS = {
     "overwrite-fixed-64k-chunk-count-preserve-500m",
     "overwrite-fixed-64k-chunk-count-increase-500m",
     "overwrite-fixed-64k-chunk-count-decrease-500m",
-    "payload-random-read-500",
+    "payload-random-read-500m",
 }
 
 
@@ -621,6 +621,17 @@ def cmd_self_check(_: argparse.Namespace) -> int:
     print(f"  registry     {registry.get('status')}")
     if registry.get("status") != "PASS":
         failures.append(f"registry self-check failed: {registry}")
+    # The declared-exception list is hand-maintained and has been wrong about
+    # itself: it carried `payload-random-read-500` for the registered
+    # `payload-random-read-500m`, so the 500 MiB read tier owner decision D4 puts
+    # on the <= 25 s list was silently classified against the 15 s limit and the
+    # entry matched no case at all. An entry that names nothing is a declaration
+    # defect, so every entry is checked against the binary's own registry here.
+    known = {row[0] for row in registry_table()}
+    unknown = sorted(DECLARED_EXCEPTIONS - known)
+    print(f"  exceptions   {'PASS' if not unknown else 'FAIL'} ({len(DECLARED_EXCEPTIONS)} declared)")
+    if unknown:
+        failures.append(f"DECLARED_EXCEPTIONS names no registered case: {unknown}")
     golden = golden_matches()
     print(f"  golden       {'PASS' if golden else 'FAIL'}")
     if not golden:
