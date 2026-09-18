@@ -1323,7 +1323,17 @@ fn a_wide_branch_page_reads_its_children_in_one_wave() {
         report.peak_wave, 80,
         "the widest wave is the branch's own child count"
     );
-    assert_eq!(report.demanded, 119, "the same objects are demanded");
+    // `provider.demands()` is deliberately **not** pinned to a total here: the
+    // provider is shared with validation, whose own lookups are demanded through
+    // it, and P1-4's record memo legitimately lowers that total without touching
+    // the work this test is about. What the operation itself read is charged to
+    // its own counters, pinned on either side of this assertion.
+    assert!(
+        report.demanded >= report.objects_read as usize,
+        "every object the operation read was demanded from the provider: {} demands          for {} objects",
+        report.demanded,
+        report.objects_read
+    );
     assert_eq!(report.objects_read, 96, "and the same objects are read");
     assert_eq!(
         report.pages_read, 15,
@@ -1368,6 +1378,98 @@ fn narrowing_keeps_a_small_scratch_working() {
         narrow.peak_wave,
         narrow.peak_wave * (8_192 + 88)
     );
+}
+
+/// Renames every file of a `k`-entry directory and reports the validation's work.
+fn binding_demands(k: usize) -> (u64, u64, u64, ObjectId) {
+    let Wide {
+        session,
+        directory,
+        serials,
+        ..
+    } = wide(k, 0, 0);
+    let (root, scope) = (session.root, session.scope);
+    let temp = TempDir::new("bounds-binding-demands");
+    let mut backing = RecordingBacking::new(temp.path());
+    let mut changes = serials
+        .iter()
+        .enumerate()
+        .flat_map(|(index, serial)| {
+            [
+                (name(&format!("f{index:04}")), None),
+                (name(&format!("r{index:04}")), Some(*serial)),
+            ]
+        })
+        .collect::<Vec<_>>();
+    changes.sort_by(|left, right| left.0.cmp(&right.0));
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(root)),
+        scope,
+        root_serial: 1,
+        directories: &[DirectoryUpdate {
+            parent: directory,
+            changes,
+        }],
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let result = {
+        let mut objects = FilesystemObjects::new(&provider, &mut sink);
+        update_filesystem(&mut objects, &input, Some(&mut backing)).expect("rename every file")
+    };
+    let validation = result.counters.validation;
+    (
+        validation.inode_demands,
+        validation.read_waves,
+        validation.inode_pages_read,
+        result.root.0,
+    )
+}
+
+#[test]
+fn binding_lookups_are_batched_per_phase() {
+    // An update that binds k stored children demands k base records. Before P1-4
+    // each demand was its own root descent, so the validation's wave count grew
+    // with k (2k on a two-level inode table); now the phase's demands are one
+    // grouped read, so the wave count is the table's height whatever k is — while
+    // `inode_demands` still counts every demand.
+    let (small_demands, small_waves, small_pages, small_root) = binding_demands(500);
+    let (large_demands, large_waves, large_pages, large_root) = binding_demands(1_500);
+    // Each file is renamed: two changes, each naming the same stored child.
+    assert_eq!(
+        small_demands, 1_001,
+        "500 renames demand 1,000 children plus the parent"
+    );
+    assert_eq!(large_demands, 3_001, "the demand count follows k");
+    assert_eq!(
+        small_waves, large_waves,
+        "the wave count does not: {small_waves} against {large_waves}"
+    );
+    assert!(
+        large_waves <= 4,
+        "one descent per inode-table level, not one per binding: {large_waves} waves \
+         for {large_demands} demands"
+    );
+    // Pages follow the pages the demands live in, not the demands themselves:
+    // each distinct inode page is read once per phase however many demands land
+    // on it, where the unbatched path read the whole path per demand.
+    assert!(
+        large_pages * 10 < large_demands,
+        "the grouped read touches each distinct page once: {large_pages} pages for \
+         {large_demands} demands"
+    );
+    assert!(
+        small_pages * 10 < small_demands,
+        "{small_pages} pages for {small_demands} demands"
+    );
+    assert!(
+        small_waves <= small_pages,
+        "each wave reads at least one page: {small_waves} waves, {small_pages} pages"
+    );
+    assert_ne!(small_root, large_root, "two different trees, two roots");
 }
 
 #[test]

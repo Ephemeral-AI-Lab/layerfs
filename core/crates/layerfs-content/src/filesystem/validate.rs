@@ -134,6 +134,27 @@ pub fn check<'a>(
     // The allocator precondition is checked before anything else: a serial the
     // caller calls new must not already exist in the base it addresses.
     check_new_identities(reader, input, topology, work)?;
+    // Every serial this loop will demand is known before it runs: the parents it
+    // must classify and every child it binds. One grouped demand answers them all,
+    // and the loop below then reads the memo — the same verdicts in the same
+    // order, with one descent instead of one per binding.
+    let mut state = ValidationState::new();
+    if let Some(table) = topology.table {
+        let mut demanded: Vec<u64> = Vec::new();
+        for update in input.directories {
+            if update.parent != input.root_serial && !input.new_inodes.contains(&update.parent) {
+                demanded.push(update.parent);
+            }
+            for (_, binding) in &update.changes {
+                if let Some(child) = binding {
+                    if *child != input.root_serial {
+                        demanded.push(*child);
+                    }
+                }
+            }
+        }
+        state.prefetch(reader, table, demanded, work)?;
+    }
     for update in input.directories {
         if update.parent == input.root_serial && input.base.is_none() {
             // The root directory of a new filesystem is built by this operation.
@@ -149,7 +170,7 @@ pub fn check<'a>(
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
         } else if let Some(table) = topology.table {
-            let record = lookup_one(reader, table, update.parent, work)?;
+            let record = state.lookup_one(reader, table, update.parent, work)?;
             if record.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
             }
@@ -172,7 +193,7 @@ pub fn check<'a>(
             // The kind comes from the stored record for an existing inode and
             // from the caller's typed value for one this operation allocates.
             let stored = match topology.table {
-                Some(table) => lookup_optional(reader, table, *child, work)?,
+                Some(table) => state.lookup_optional(reader, table, *child, work)?,
                 None => None,
             };
             let previous = stored.or_else(|| input.value_for(*child));
@@ -204,7 +225,15 @@ pub fn check<'a>(
             }
         }
     }
-    check_parent_aliases(reader, input, &topology, &by_parent, unreachable, work)?;
+    check_parent_aliases(
+        reader,
+        input,
+        &topology,
+        &by_parent,
+        unreachable,
+        work,
+        &mut state,
+    )?;
     for update in input.directories {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
@@ -227,7 +256,7 @@ pub fn check<'a>(
         topology,
         additions,
     };
-    check_effective_cycles(reader, &checked, unreachable, work)?;
+    check_effective_cycles(reader, &checked, unreachable, work, &mut state)?;
     Ok(checked)
 }
 
@@ -245,6 +274,7 @@ fn check_parent_aliases(
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
+    state: &mut ValidationState,
 ) -> ContentResult<()> {
     // A directory the same batch drops is not part of the result, so the bindings
     // it states are not bindings the result has to satisfy.
@@ -282,7 +312,7 @@ fn check_parent_aliases(
         if !seen.insert(parent) {
             continue;
         }
-        let record = lookup_one(reader, table, parent, work)?;
+        let record = state.lookup_one(reader, table, parent, work)?;
         let mut after = None;
         loop {
             let mut directory = DirectoryReadWork::default();
@@ -320,7 +350,8 @@ fn check_parent_aliases(
                             return Err(ContentError::InvalidRecord("cycle check work limit"));
                         }
                         work.entries_examined = work.entries_examined.saturating_add(1);
-                        if lookup_optional(reader, table, child, work)?
+                        if state
+                            .lookup_optional(reader, table, child, work)?
                             .is_some_and(|value| value.kind == InodeKind::Directory)
                         {
                             pending.push(child);
@@ -328,7 +359,8 @@ fn check_parent_aliases(
                     }
                     continue;
                 }
-                if lookup_optional(reader, table, serial, work)?
+                if state
+                    .lookup_optional(reader, table, serial, work)?
                     .is_some_and(|value| value.kind == InodeKind::Directory)
                 {
                     pending.push(serial);
@@ -395,6 +427,101 @@ fn base_binding_survives(
             None => true,
         },
         None => true,
+    }
+}
+
+/// The base records one validation reads, memoized across its three walks.
+///
+/// Validation demands base inode records in three passes — the decision loop, the
+/// alias walk and the effective-cycle walk — and the passes overlap: a serial the
+/// first pass read is demanded again by the second and third. The memo answers a
+/// repeated demand **without a read while still charging the demand**, so
+/// `inode_demands` (the work-limit charge) is unchanged and only the I/O moves.
+///
+/// Absence is deliberately not memoized: a serial with no stored record keeps
+/// today's lookup and today's charge, so an absent serial's accounting is
+/// bit-identical. The memo is bounded by the records the operation actually
+/// demands — one entry per demanded serial, each an `InodeValue` — which is the
+/// same bound the lazy path's own demand set has.
+struct ValidationState {
+    records: BTreeMap<u64, InodeValue>,
+}
+
+impl ValidationState {
+    fn new() -> Self {
+        Self {
+            records: BTreeMap::new(),
+        }
+    }
+
+    /// Reads every not-yet-known serial in one grouped demand.
+    ///
+    /// The batch pays the pages and waves it reads; the **demand** charge is paid
+    /// where the demand is made ([`Self::lookup_optional`]), so `inode_demands`
+    /// stays the number of logical demands rather than the batch size.
+    fn prefetch(
+        &mut self,
+        reader: &dyn AuthenticatedObjects,
+        table: InodeTable,
+        serials: impl IntoIterator<Item = u64>,
+        work: &mut ValidationWork,
+    ) -> ContentResult<()> {
+        let mut missing: Vec<u64> = serials
+            .into_iter()
+            .filter(|serial| !self.records.contains_key(serial))
+            .collect();
+        missing.sort_unstable();
+        missing.dedup();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let mut inode = InodeReadWork::default();
+        let found = lookup_many(reader, table, &missing, &mut inode)?;
+        work.read_waves = work.read_waves.saturating_add(inode.read_waves);
+        work.inode_pages_read = work.inode_pages_read.saturating_add(inode.pages_read);
+        for (serial, value) in missing.into_iter().zip(found) {
+            if let Some(value) = value {
+                self.records.insert(serial, value);
+            }
+        }
+        Ok(())
+    }
+
+    /// One base record, answered from the memo when it is known.
+    fn lookup_optional(
+        &mut self,
+        reader: &dyn AuthenticatedObjects,
+        table: InodeTable,
+        serial: u64,
+        work: &mut ValidationWork,
+    ) -> ContentResult<Option<InodeValue>> {
+        if let Some(value) = self.records.get(&serial) {
+            // A memoized record was found by an earlier demand, so its charge is
+            // the same one `charge_inode` makes for a found serial: one demand.
+            work.objects_read = work.objects_read.saturating_add(1);
+            work.inode_demands = work.inode_demands.saturating_add(1);
+            return Ok(Some(*value));
+        }
+        let mut inode = InodeReadWork::default();
+        let found = lookup_many(reader, table, &[serial], &mut inode)?;
+        charge_inode(work, inode);
+        let value = found.into_iter().next().flatten();
+        if let Some(value) = value {
+            self.records.insert(serial, value);
+        }
+        Ok(value)
+    }
+
+    /// One base record that must exist.
+    fn lookup_one(
+        &mut self,
+        reader: &dyn AuthenticatedObjects,
+        table: InodeTable,
+        serial: u64,
+        work: &mut ValidationWork,
+    ) -> ContentResult<InodeValue> {
+        self.lookup_optional(reader, table, serial, work)?
+            .ok_or(ContentError::InvalidRecord("missing base inode"))
     }
 }
 
@@ -473,6 +600,7 @@ fn check_effective_cycles(
     checked: &CheckedInput<'_>,
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
+    state: &mut ValidationState,
 ) -> ContentResult<()> {
     if checked.input.base.is_none() {
         return check_build_reachability(reader, checked, unreachable, work);
@@ -484,7 +612,7 @@ fn check_effective_cycles(
                 continue;
             };
             let stored = match table {
-                Some(table) => lookup_optional(reader, table, *child, work)?,
+                Some(table) => state.lookup_optional(reader, table, *child, work)?,
                 None => None,
             };
             let kind = match stored {
@@ -526,7 +654,7 @@ fn check_effective_cycles(
                         return Err(ContentError::InvalidRecord("effective tree cycle"));
                     }
                     let entering = match table {
-                        Some(table) => lookup_optional(reader, table, entry_serial, work)?,
+                        Some(table) => state.lookup_optional(reader, table, entry_serial, work)?,
                         None => None,
                     };
                     if let Some(entry) = entering {
@@ -693,26 +821,4 @@ fn effective_entries(
         index += 1;
     }
     Ok(merged)
-}
-
-fn lookup_one(
-    reader: &dyn AuthenticatedObjects,
-    table: InodeTable,
-    serial: u64,
-    work: &mut ValidationWork,
-) -> ContentResult<InodeValue> {
-    lookup_optional(reader, table, serial, work)?
-        .ok_or(ContentError::InvalidRecord("missing base inode"))
-}
-
-fn lookup_optional(
-    reader: &dyn AuthenticatedObjects,
-    table: InodeTable,
-    serial: u64,
-    work: &mut ValidationWork,
-) -> ContentResult<Option<InodeValue>> {
-    let mut inode = InodeReadWork::default();
-    let found = lookup_many(reader, table, &[serial], &mut inode)?;
-    charge_inode(work, inode);
-    Ok(found.into_iter().next().flatten())
 }
