@@ -371,9 +371,20 @@ The two trees do **not** share a connection profile.
    threads      = NOT SET
 ```
 
-Core's `Pragma` enum lists `CacheSize`, `MmapSize` and `PageSize` explicitly as
-*"read for evidence only"*, so the omission is visible in source and is a choice
-rather than an oversight. Three consequences follow:
+Core's `Pragma` enum lists `CacheSize`, `MmapSize`, `PageSize` and `CacheSpill`
+explicitly as read-only, so the omission is visible in source and is a choice
+rather than an oversight. `SaveOperation::connection_profile()` (#178 **V7**,
+2026-09-18) reads those four back **on the save's own connection** and returns
+them as a bounded `SaveConnectionProfile`, so a receipt states the cache profile a
+save actually ran under instead of replaying the row shape on a harness-owned
+connection. What that accessor deliberately does **not** carry is
+`SQLITE_DBSTATUS_CACHE_SPILL`: `rusqlite` 0.40.2 exposes no safe binding for
+`sqlite3_db_status`, and this crate's `#![deny(unsafe_code)]` allows exactly one
+audited FFI module (`encoding::codec`), enforced by the product boundary guard.
+The spill counter is therefore read on a harness-owned connection (a forced
+8-page cache is the live control) and never on the product's - a limitation of
+the profile item `P2-1`'s write-path claim, recorded rather than worked around by
+adding a second FFI site. Three consequences follow:
 
 **(a) The page cache is 16× smaller** — 2 MiB against 32 MiB.
 

@@ -92,6 +92,9 @@ pub enum Pragma {
     CacheSize,
     /// `PRAGMA mmap_size`: the memory-mapped I/O limit, read for evidence only.
     MmapSize,
+    /// `PRAGMA cache_spill`: whether a full page cache may spill; read for
+    /// evidence, set by the profile when the profile declares it.
+    CacheSpill,
 }
 
 impl Pragma {
@@ -107,6 +110,7 @@ impl Pragma {
             Self::PageSize => "PRAGMA page_size",
             Self::CacheSize => "PRAGMA cache_size",
             Self::MmapSize => "PRAGMA mmap_size",
+            Self::CacheSpill => "PRAGMA cache_spill",
         }
     }
 }

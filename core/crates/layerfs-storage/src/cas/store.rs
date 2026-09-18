@@ -108,6 +108,40 @@ pub struct StoreReadCounters {
     pub opens: u64,
 }
 
+/// Cache observables of the connection **one save runs on**.
+///
+/// Owner: the save operation whose connection it describes. Bound: four integers,
+/// fixed size, no allocation and no retained state. Live multiplicity: read on
+/// demand, never stored. Lifetime: the read call. Release: nothing to release.
+/// Every field is the engine's own answer for **that** connection - the pragmas
+/// read back, never the values the profile was configured with - so a receipt can
+/// state the profile a save actually ran under. It is a reading, never a knob: no
+/// product path writes a pragma from it.
+///
+/// **What is deliberately absent: the page-cache spill counter.**
+/// `SQLITE_DBSTATUS_CACHE_SPILL` is the observable that would say whether the
+/// declared cache size is enough for the transaction shape the save produces, and
+/// the product cannot read it: `rusqlite` exposes no safe wrapper (the 0.40.2
+/// source declares no `db_status` binding), and this crate cannot call the FFI
+/// itself - `#![deny(unsafe_code)]` with exactly one audited module
+/// (`encoding::codec`), enforced by `core/tools/check_product_boundary.py`. A
+/// second FFI site is an owner decision, so the field is absent rather than
+/// faked, and the harness reads the status on a connection it owns instead
+/// (recorded in this item's receipt).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SaveConnectionProfile {
+    /// `PRAGMA page_size` of the store.
+    pub page_size: i64,
+    /// `PRAGMA cache_size`, natively signed (negative = KiB).
+    pub cache_size: i64,
+    /// `PRAGMA cache_spill`: 0 when spilling is off, otherwise the page
+    /// threshold at which a full page cache may spill (SQLite's own encoding of
+    /// the flag, not a boolean).
+    pub cache_spill: i64,
+    /// `PRAGMA mmap_size`.
+    pub mmap_size: i64,
+}
+
 /// A content-addressed Store at one filesystem path.
 #[derive(Clone, Debug)]
 pub struct Store {
@@ -301,6 +335,24 @@ impl SaveOperation {
             Ok(None) => Ok(()),
             Err(error) => Err(self.terminate(error)),
         }
+    }
+
+    /// Cache observables of this operation's own connection.
+    ///
+    /// The save owns its connection; a caller outside the crate cannot open it,
+    /// so before this accessor the only way to answer "did this save's page cache
+    /// spill?" was to replay the row shape on a harness-owned connection and
+    /// argue by analogy. Read it before `finish`: the connection is released with
+    /// the operation.
+    pub fn connection_profile(&self) -> StorageResult<SaveConnectionProfile> {
+        let owner = self.owner.as_ref().ok_or(StorageError::Aborted)?;
+        let connection = owner.connection();
+        Ok(SaveConnectionProfile {
+            page_size: connection::pragma_i64(connection, connection::Pragma::PageSize)?,
+            cache_size: connection::pragma_i64(connection, connection::Pragma::CacheSize)?,
+            cache_spill: connection::pragma_i64(connection, connection::Pragma::CacheSpill)?,
+            mmap_size: connection::pragma_i64(connection, connection::Pragma::MmapSize)?,
+        })
     }
 
     /// Flushes one preparation wave and prepares it for storage.
