@@ -150,7 +150,7 @@ pub fn run(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpErro
         Shape::Locality(op) => fs::locality(case, op, context),
         Shape::FsBuild { text } => fs::fs_build(case, text, context),
         Shape::Workspace(op) => c2::workspace(case, op, context),
-        Shape::Pool { .. } => Err(OpError::Unimplemented("pooled-lane")),
+        Shape::Pool { cold } => c2::pool(case, cold, context),
         Shape::Pipeline(_) => Err(OpError::Unimplemented("pipeline")),
         Shape::Primitives(_) => Err(OpError::Unimplemented("component-primitives")),
     }

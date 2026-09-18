@@ -19,7 +19,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use layerfs_content::{
-    construct_bytes, ConstructionPolicy, ConstructionCapacities, ObjectId,
+    construct_bytes, AuthenticatedObjects, ConstructionPolicy, ConstructionCapacities, ObjectId,
 };
 use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope, TimingReport};
@@ -1114,6 +1114,271 @@ pub fn read_wave(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, 
             format!("copy_rung: {COPY_RUNG}"),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
         ],
+    })
+}
+
+/// The pooled metadata lane's fixture: distinct inode leaves, each at the row
+/// ceiling.
+///
+/// `c2-families.md` section 1 excludes C1 file construction from every C2 family
+/// ("C2 families accept canonical objects from the harness directly"), so the
+/// leaves are built with the product's own leaf encoder rather than by running a
+/// filesystem build. Each leaf holds `POOLED_LEAF_ROWS_LIMIT` rows in strictly
+/// increasing serials with a **distinct** value per row, which is what makes the
+/// ordinal equation falsifiable: a cold save must assign one new ordinal per row
+/// and a warm save must reuse every one.
+fn pooled_leaves(
+    leaves: u32,
+    rows: u32,
+    seed: u64,
+    serial_base: u64,
+) -> Result<TreeStore, OpError> {
+    use layerfs_content::inode_leaf::{InodeKind, InodeLeaf, InodeLeafRow, InodeValue};
+    use layerfs_content::{FinalizedObject, ObjectRole};
+
+    let mut store = TreeStore::new();
+    for leaf in 0..leaves {
+        let mut page: Vec<InodeLeafRow> = Vec::with_capacity(rows as usize);
+        for row in 0..rows {
+            let label = format!("layerfs/pool/{seed}/{leaf}/{row}");
+            let value = InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: ObjectId::for_bytes(label.as_bytes()),
+                metadata_root: ObjectId::for_bytes(format!("{label}/metadata").as_bytes()),
+            };
+            page.push(InodeLeafRow {
+                serial: serial_base
+                    + u64::from(leaf) * u64::from(rows)
+                    + u64::from(row),
+                value: layerfs_content::inode_leaf::encode_inode_value(value),
+            });
+        }
+        let canonical = InodeLeaf {
+            subtree_bytes: u64::from(rows) * 81,
+            rows: page,
+        }
+        .encode()
+        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+        let object = FinalizedObject::new(ObjectRole::InodeLeaf, canonical)
+            .map_err(|error| OpError::Product(format!("{error:?}")))?;
+        store.insert_object(object);
+    }
+    Ok(store)
+}
+
+/// Serial base of the measured object set. Distinct from the base Store's, so a
+/// measured leaf is a new canonical object whose values the catalogue may still
+/// know.
+const MEASURED_SERIAL_BASE: u64 = 10_000_001;
+/// Serial base of the warm row's base save.
+const BASE_SERIAL_BASE: u64 = 1;
+
+/// C2-8: the pooled metadata lane, cold against warm.
+///
+/// The two rows are one equation read in both directions. A **cold** row saves
+/// the declared leaves into a Store that holds no pooled values, so every one of
+/// the `leaves x rows` values must receive a new ordinal. A **warm** row saves the
+/// same leaves into a Store that already holds them, so every value must reuse an
+/// existing ordinal. The Store-owned state that decides which happens is the
+/// pooled index, published here as `Store::pool_index_entries` and
+/// `Store::pool_index_bytes`; the catalogue it is synchronized from is
+/// `metadata_value_groups`, counted through `SaveOutcome.pool.groups`. Cold and
+/// warm are reported separately and are never pooled into one number.
+pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let seed = seed_of(case.id);
+    let leaves = case.entries.max(1);
+    let rows = crate::families::c2_pool::ROWS;
+    let declared_values = u64::from(leaves) * u64::from(rows);
+    // The two rows offer the **same** measured object set; only the Store's
+    // pooled-index state differs, which is what makes the pair a controlled
+    // comparison rather than two different workloads. The warm row's base holds
+    // the same values under different serials, so every measured leaf is a new
+    // canonical object that the object-level exact-hit lookup cannot answer and
+    // the pooled lane has to admit: a base that reused the same serials would be
+    // 512 exact hits and would never reach the lane this family measures.
+    let objects = pooled_leaves(leaves, rows, seed, MEASURED_SERIAL_BASE)?;
+    let warm_base = pooled_leaves(leaves, rows, seed, BASE_SERIAL_BASE)?;
+
+    let base = context.output.join("base.sqlite");
+    let sample = context.output.join("sample.sqlite");
+    let empty = TreeStore::new();
+    let prepared: &TreeStore = if cold { &empty } else { &warm_base };
+    create_and_save_untimed(&base, prepared)?;
+    let de_warm = prepare_sample(&base, &sample)?;
+    gates.push(gates::residency_gate(Some(de_warm.resident_after)));
+    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+
+    let store = match open_untimed(&sample) {
+        Ok(store) => store,
+        Err(error) => return Ok(unmeasured(&error, gates)),
+    };
+    let index_before = store.pool_index_entries();
+    instruments::heap_begin();
+    let (result, report) = Timing::record("c2.pool", |scope: &TimingScope<'_, Active>| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        for id in objects.insertion_order() {
+            let object = objects
+                .cloned_object(*id)
+                .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
+            operation.accept(object)?;
+        }
+        operation.finish(scope.child("storage.finish"))
+    });
+    let heap = instruments::heap_end();
+    let timing_bytes = write_timing(context.output, &report)?;
+    let outcome = match result {
+        Ok(outcome) => outcome,
+        Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
+    };
+    // Read after the timer: the index is Store-owned state, and reading it is a
+    // published observation rather than part of the operation.
+    let index_entries = store.pool_index_entries();
+    let index_bytes = store.pool_index_bytes();
+
+    let pool = outcome.pool;
+    context.trace.write_number(Kind::Counter, "pool.leaves", pool.leaves as i128, "leaves", "SaveOutcome.pool.leaves")?;
+    context.trace.write_number(Kind::Counter, "pool.reused_values", pool.reused_values as i128, "values", "SaveOutcome.pool.reused_values")?;
+    context.trace.write_number(Kind::Counter, "pool.new_values", pool.new_values as i128, "values", "SaveOutcome.pool.new_values")?;
+    context.trace.write_number(Kind::Counter, "pool.groups", pool.groups as i128, "groups", "SaveOutcome.pool.groups, the metadata_value_groups catalogue")?;
+    context.trace.write_number(Kind::Counter, "pool.delta_leaves", pool.delta_leaves as i128, "leaves", "SaveOutcome.pool.delta_leaves")?;
+    context.trace.write_number(Kind::Counter, "pool.full_leaves", pool.full_leaves as i128, "leaves", "SaveOutcome.pool.full_leaves")?;
+    context.trace.write_number(Kind::Counter, "pool.trials", pool.trials as i128, "trials", "SaveOutcome.pool.trials")?;
+    context.trace.write_number(Kind::Counter, "pool.work_exceeded", pool.work_exceeded as i128, "leaves", "SaveOutcome.pool.work_exceeded")?;
+    context.trace.write_number(Kind::Counter, "pool.declared_values", declared_values as i128, "values", "case configuration: leaves x rows")?;
+    context.trace.write_number(Kind::Counter, "pool.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
+    context.trace.write_number(Kind::Counter, "pool.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
+    context.trace.write_number(Kind::Counter, "pool.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
+    context.trace.write_number(Kind::Counter, "pool.index_entries_before", index_before as i128, "entries", "Store::pool_index_entries before the measured save")?;
+    context.trace.write_number(Kind::Counter, "pool.index_entries", index_entries as i128, "entries", "Store::pool_index_entries after the measured save")?;
+    context.trace.write_number(Kind::Counter, "pool.index_bytes", index_bytes as i128, "bytes", "Store::pool_index_bytes after the measured save")?;
+    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+
+    gates.push(completeness_gate(&report));
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.pool-leaves",
+        pool.leaves == u64::from(leaves),
+        &format!("{} leaves admitted", pool.leaves),
+        &format!("{leaves} inode leaves offered"),
+    ));
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.pool-ordinal-equation",
+        if cold {
+            pool.new_values == declared_values && pool.reused_values == 0
+        } else {
+            pool.reused_values == declared_values && pool.new_values == 0
+        },
+        &format!(
+            "{} new, {} reused of {declared_values}",
+            pool.new_values, pool.reused_values
+        ),
+        if cold {
+            "cold index: every declared value receives a new ordinal and none is reused"
+        } else {
+            "warm index: every declared value reuses an existing ordinal and none is new"
+        },
+    ));
+    // A reopened Store starts with an empty in-memory index either way: it is
+    // re-synchronized from the catalogue on the first pooled save after a reopen.
+    // What separates the rows is therefore not the index's *starting* count but
+    // whether the catalogue could answer the values, which is `reused_values`.
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.pool-index",
+        index_before == 0 && index_entries as u64 == declared_values && index_bytes > 0,
+        &format!("index {index_before} -> {index_entries} entries, {index_bytes} bytes"),
+        "the reopened index starts empty and the save leaves every declared value retained",
+    ));
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.pool-groups",
+        if cold {
+            pool.groups > 0
+        } else {
+            pool.groups == 0
+        },
+        &format!("{} value groups written", pool.groups),
+        if cold {
+            "a cold save writes the value groups its new ordinals need"
+        } else {
+            "a warm save finds every value in the catalogue and writes no group"
+        },
+    ));
+
+    // Oracle: every leaf read back through the Store's own authenticated read
+    // path and compared byte-for-byte with the canonical object that was offered.
+    // A pooled leaf is stored as a transformed body against a base, so this is
+    // the gate that says the reconstruction is the identity and not merely
+    // something the Store is willing to return.
+    let store = match open_untimed(&sample) {
+        Ok(store) => store,
+        Err(error) => return Ok(unmeasured(&error, gates)),
+    };
+    let provider = StoreProvider::new(&store);
+    let (readback, _) = Timing::disabled("oracle.readback", |_scope: &TimingScope<'_, Active>| {
+        let ids: Vec<ObjectId> = objects.insertion_order().to_vec();
+        provider.read_canonical_batch(&ids)
+    });
+    let mut oracle_ok = true;
+    let mut oracle_note = String::new();
+    match readback {
+        Ok(values) => {
+            for (index, (id, canonical)) in objects.insertion_order().iter().zip(values).enumerate()
+            {
+                let Some(original) = objects.canonical(*id) else {
+                    oracle_ok = false;
+                    oracle_note = format!("leaf {index} is not in the offered set");
+                    break;
+                };
+                if original != canonical.as_slice() {
+                    oracle_ok = false;
+                    oracle_note = format!("leaf {index} read back {} bytes, offered {}", canonical.len(), original.len());
+                    break;
+                }
+            }
+        }
+        Err(error) => {
+            oracle_ok = false;
+            oracle_note = format!("{error:?}");
+        }
+    }
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o1-leaf-readback",
+        oracle_ok,
+        if oracle_note.is_empty() {
+            "every offered leaf read back byte-exact"
+        } else {
+            &oracle_note
+        },
+        "each pooled leaf reconstructs to the exact canonical object that was offered",
+    ));
+    gates.extend(sidecar_gates(&sample));
+    gates.push(gates::swap_gate(instruments::swaps()));
+
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("pool_index_state: {}", if cold { "cold" } else { "warm" }),
+            format!("declared_leaves: {leaves}"),
+            format!("declared_rows_per_leaf: {rows}"),
+            format!("declared_values: {declared_values}"),
+            format!("pool_index_entries_before: {index_before}"),
+            "cold and warm rows are reported separately and are never pooled".to_string(),
+            format!("store_state: opened-from-copy"),
+            format!("copy_rung: {COPY_RUNG}"),
+            format!("allocation_attribution: {ATTRIBUTION}"),
+            format!("heap_charged_bytes: {}", heap.charged_bytes),
+        ],
+    })
+    .map(|outcome| {
+        let _ = case;
+        outcome
     })
 }
 

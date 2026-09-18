@@ -194,3 +194,45 @@ class ReadingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CatalogueTest(unittest.TestCase):
+    """The pooled catalogue is read, never fabricated."""
+
+    def test_an_absent_catalogue_is_incomplete_not_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "store.sqlite"
+            connection = sqlite3.connect(path)
+            connection.execute("CREATE TABLE objects (id INTEGER)")
+            connection.commit()
+            connection.close()
+            with self.assertRaises(space.Incomplete):
+                space.catalogue(path)
+
+    def test_an_empty_catalogue_is_a_legitimate_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "store.sqlite"
+            connection = sqlite3.connect(path)
+            connection.execute(
+                "CREATE TABLE metadata_value_groups (first_ordinal INTEGER, count INTEGER)"
+            )
+            connection.commit()
+            connection.close()
+            self.assertEqual(space.catalogue(path), (0, 0))
+
+    def test_the_catalogue_reports_rows_and_values_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "store.sqlite"
+            connection = sqlite3.connect(path)
+            connection.execute(
+                "CREATE TABLE metadata_value_groups (first_ordinal INTEGER, count INTEGER)"
+            )
+            connection.execute("INSERT INTO metadata_value_groups VALUES (1, 165), (166, 100)")
+            connection.commit()
+            connection.close()
+            self.assertEqual(space.catalogue(path), (2, 265))
+
+    def test_the_executed_catalogue_sql_has_no_default(self) -> None:
+        executed = space.CATALOGUE_SQL.upper()
+        self.assertNotIn("COALESCE", executed)
+        self.assertNotIn("IFNULL", executed)

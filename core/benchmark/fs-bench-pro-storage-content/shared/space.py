@@ -40,6 +40,11 @@ SIDECARS = ("-wal", "-shm", "-journal")
 PACK_SUM_SQL = "SELECT SUM(length(data)) FROM object_packs"
 TABLE_EXISTS_SQL = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
 OBJECT_ROWS_SQL = "SELECT COUNT(*) FROM objects"
+# The pooled metadata catalogue. Two readings, never one: a *row* is a value
+# group and a *value* is a pooled inode value the group carries. The table is
+# asserted to exist first, so an absent table is `INCOMPLETE` and a legitimately
+# empty one is a zero.
+CATALOGUE_SQL = "SELECT COUNT(*), SUM(count) FROM metadata_value_groups"
 
 
 class Incomplete(Exception):
@@ -152,6 +157,23 @@ def object_rows(path: str | Path) -> int:
         connection.close()
 
 
+def catalogue(path: str | Path) -> tuple[int, int]:
+    """`(groups, values)` of the `metadata_value_groups` catalogue.
+
+    Raises `Incomplete` when the table is absent rather than returning zeros: the
+    pooled lane's whole claim is that these rows exist.
+    """
+    if not table_exists(path, "metadata_value_groups"):
+        raise Incomplete("metadata_value_groups table is absent")
+    connection = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
+    try:
+        groups, values = connection.execute(CATALOGUE_SQL).fetchone()
+        groups = int(groups)
+        return (groups, 0 if groups == 0 else int(values))
+    finally:
+        connection.close()
+
+
 def schema_shape(path: str | Path) -> dict[str, list[str]]:
     """Tables and indexes the Store actually has, by name."""
     connection = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
@@ -211,6 +233,8 @@ class Footprint:
     sqlite: SqliteSpace | None = None
     pack_bodies: int | None = None
     objects: int | None = None
+    catalogue_groups: int | None = None
+    catalogue_values: int | None = None
     quick_check: str | None = None
     schema_shape: dict[str, list[str]] = field(default_factory=dict)
     sidecars: list[str] = field(default_factory=list)
@@ -232,6 +256,9 @@ class Footprint:
             fields["pack_bodies_bytes"] = self.pack_bodies
         if self.objects is not None:
             fields["object_rows"] = self.objects
+        if self.catalogue_groups is not None:
+            fields["catalogue_groups"] = self.catalogue_groups
+            fields["catalogue_values"] = self.catalogue_values
         if self.quick_check is not None:
             fields["quick_check"] = self.quick_check
         if self.schema_shape:
@@ -292,6 +319,10 @@ def footprint(store_path: str | Path, attribution: str = "exclusive") -> Footpri
     except (Incomplete, sqlite3.Error) as error:
         reading.incomplete.append(f"object rows: {error}")
     try:
+        reading.catalogue_groups, reading.catalogue_values = catalogue(store_path)
+    except (Incomplete, sqlite3.Error) as error:
+        reading.incomplete.append(f"pooled catalogue: {error}")
+    try:
         reading.quick_check = quick_check(store_path)
     except sqlite3.Error as error:
         reading.incomplete.append(f"quick_check: {error}")
@@ -342,7 +373,28 @@ def self_check() -> list[str]:
         connection.close()
         if footprint(empty).pack_accounting()["status"] != "INCOMPLETE":
             failures.append("a zero pack sum over a non-empty store was not INCOMPLETE")
-    executed = (PACK_SUM_SQL + " " + TABLE_EXISTS_SQL + " " + OBJECT_ROWS_SQL).upper()
+        # The pooled catalogue is read the same way: an absent table is
+        # INCOMPLETE, and a table that exists with no rows is a legitimate zero.
+        try:
+            groups, values = catalogue(absent)
+            failures.append(f"a missing catalogue produced {groups} groups / {values} values")
+        except Incomplete:
+            pass
+        connection = sqlite3.connect(empty)
+        connection.execute("CREATE TABLE metadata_value_groups (first_ordinal INTEGER, count INTEGER)")
+        connection.commit()
+        connection.close()
+        if catalogue(empty) != (0, 0):
+            failures.append(f"an empty catalogue read {catalogue(empty)}, expected (0, 0)")
+        connection = sqlite3.connect(empty)
+        connection.execute("INSERT INTO metadata_value_groups VALUES (1, 165), (166, 100)")
+        connection.commit()
+        connection.close()
+        if catalogue(empty) != (2, 265):
+            failures.append(f"a real catalogue read {catalogue(empty)}, expected (2, 265)")
+    executed = (
+        PACK_SUM_SQL + " " + TABLE_EXISTS_SQL + " " + OBJECT_ROWS_SQL + " " + CATALOGUE_SQL
+    ).upper()
     if "COALESCE" in executed:
         failures.append("the executed pack SQL uses COALESCE: the fabricated-zero hazard is back")
     if "IFNULL" in executed:
