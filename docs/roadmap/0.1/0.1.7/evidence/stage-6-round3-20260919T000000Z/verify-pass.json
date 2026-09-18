@@ -1,0 +1,5824 @@
+{
+  "budget": {
+    "declared_exception": false,
+    "limit_ns": 60000000000,
+    "reason": "1.253 s",
+    "status": "PASS",
+    "wall_ns": 1253087375
+  },
+  "cases": 220,
+  "disagreements": 0,
+  "findings": [
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "append-tail-4k-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "append-tail-4k-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "append-tail-4k-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "append-tail-4k-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "component-primitives-edit",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: component-primitives'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: component-primitives'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "component-primitives-filesystem",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: component-primitives'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: component-primitives'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "component-primitives-payload",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: component-primitives'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: component-primitives'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-0-s1",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 2,
+        "pack_bodies_bytes": 166,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-0-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "166 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-0-s2",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 2,
+        "pack_bodies_bytes": 166,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-0-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "166 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-0-s3",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 2,
+        "pack_bodies_bytes": 166,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-0-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "166 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-1-s1",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 35,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-1-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "35 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-1-s2",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 35,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-1-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "35 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-1-s3",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 35,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-1-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "35 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-16384-s1",
+      "footprint": {
+        "allocated_bytes": 49152,
+        "apparent_bytes": 49152,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 49152,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 16419,
+        "page_count": 12,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-16384-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "16419 <= 49152",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-16384-s2",
+      "footprint": {
+        "allocated_bytes": 49152,
+        "apparent_bytes": 49152,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 49152,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 16419,
+        "page_count": 12,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-16384-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "16419 <= 49152",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-16384-s3",
+      "footprint": {
+        "allocated_bytes": 49152,
+        "apparent_bytes": 49152,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 49152,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 16419,
+        "page_count": 12,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-16384-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "16419 <= 49152",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-32768-s1",
+      "footprint": {
+        "allocated_bytes": 65536,
+        "apparent_bytes": 65536,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 65536,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 32803,
+        "page_count": 16,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-32768-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "32803 <= 65536",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-32768-s2",
+      "footprint": {
+        "allocated_bytes": 65536,
+        "apparent_bytes": 65536,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 65536,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 32803,
+        "page_count": 16,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-32768-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "32803 <= 65536",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-32768-s3",
+      "footprint": {
+        "allocated_bytes": 65536,
+        "apparent_bytes": 65536,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 65536,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 32803,
+        "page_count": 16,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-32768-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "32803 <= 65536",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-32769-s1",
+      "footprint": {
+        "allocated_bytes": 65536,
+        "apparent_bytes": 65536,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 65536,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 32804,
+        "page_count": 16,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-32769-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "32804 <= 65536",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-32769-s2",
+      "footprint": {
+        "allocated_bytes": 65536,
+        "apparent_bytes": 65536,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 65536,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 32804,
+        "page_count": 16,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-32769-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "32804 <= 65536",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-32769-s3",
+      "footprint": {
+        "allocated_bytes": 65536,
+        "apparent_bytes": 65536,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 65536,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 32804,
+        "page_count": 16,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-32769-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "32804 <= 65536",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-8191-s1",
+      "footprint": {
+        "allocated_bytes": 40960,
+        "apparent_bytes": 40960,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 40960,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 8226,
+        "page_count": 10,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-8191-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "8226 <= 40960",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-8191-s2",
+      "footprint": {
+        "allocated_bytes": 40960,
+        "apparent_bytes": 40960,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 40960,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 8226,
+        "page_count": 10,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-8191-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "8226 <= 40960",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-8191-s3",
+      "footprint": {
+        "allocated_bytes": 40960,
+        "apparent_bytes": 40960,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 40960,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 8226,
+        "page_count": 10,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-8191-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "8226 <= 40960",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-8192-s1",
+      "footprint": {
+        "allocated_bytes": 40960,
+        "apparent_bytes": 40960,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 40960,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 8227,
+        "page_count": 10,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-8192-s1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "8227 <= 40960",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-8192-s2",
+      "footprint": {
+        "allocated_bytes": 40960,
+        "apparent_bytes": 40960,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 40960,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 8227,
+        "page_count": 10,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-8192-s2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "8227 <= 40960",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-boundary-8192-s3",
+      "footprint": {
+        "allocated_bytes": 40960,
+        "apparent_bytes": 40960,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 40960,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 8227,
+        "page_count": 10,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-boundary-8192-s3/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "8227 <= 40960",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-common-body-1",
+      "footprint": {
+        "allocated_bytes": 4399104,
+        "apparent_bytes": 4399104,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4399104,
+        "freelist_count": 18,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 222,
+        "pack_bodies_bytes": 4230945,
+        "page_count": 1074,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-common-body-1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4230945 <= 4399104",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-common-body-10",
+      "footprint": {
+        "allocated_bytes": 4759552,
+        "apparent_bytes": 4759552,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4759552,
+        "freelist_count": 49,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 262,
+        "pack_bodies_bytes": 4467731,
+        "page_count": 1162,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-common-body-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4467731 <= 4759552",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-common-body-100",
+      "footprint": {
+        "allocated_bytes": 6320128,
+        "apparent_bytes": 6320128,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 6320128,
+        "freelist_count": 25,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 626,
+        "pack_bodies_bytes": 6067792,
+        "page_count": 1543,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-common-body-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "6067792 <= 6320128",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "NOT_RUN",
+      "budget_status_re_derived": "NOT_RUN",
+      "case_id": "dedup-cdc-common-body-500",
+      "footprint": {
+        "allocated_bytes": 14565376,
+        "apparent_bytes": 14327808,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 14327808,
+        "freelist_count": 35,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 2221,
+        "pack_bodies_bytes": 13859300,
+        "page_count": 3498,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-common-body-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "13859300 <= 14327808",
+        "status": "PASS"
+      },
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-delete-1",
+      "footprint": {
+        "allocated_bytes": 4374528,
+        "apparent_bytes": 4374528,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4374528,
+        "freelist_count": 8,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 222,
+        "pack_bodies_bytes": 4250810,
+        "page_count": 1068,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-delete-1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4250810 <= 4374528",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-delete-10",
+      "footprint": {
+        "allocated_bytes": 4464640,
+        "apparent_bytes": 4464640,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4464640,
+        "freelist_count": 31,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 223,
+        "pack_bodies_bytes": 4239113,
+        "page_count": 1090,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-delete-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4239113 <= 4464640",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-delete-100",
+      "footprint": {
+        "allocated_bytes": 4460544,
+        "apparent_bytes": 4460544,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4460544,
+        "freelist_count": 28,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 222,
+        "pack_bodies_bytes": 4256172,
+        "page_count": 1089,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-delete-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4256172 <= 4460544",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "NOT_RUN",
+      "budget_status_re_derived": "NOT_RUN",
+      "case_id": "dedup-cdc-delete-500",
+      "footprint": {
+        "allocated_bytes": 4427776,
+        "apparent_bytes": 4427776,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4427776,
+        "freelist_count": 24,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 221,
+        "pack_bodies_bytes": 4230552,
+        "page_count": 1081,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-delete-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4230552 <= 4427776",
+        "status": "PASS"
+      },
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-insert-1",
+      "footprint": {
+        "allocated_bytes": 4485120,
+        "apparent_bytes": 4485120,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4485120,
+        "freelist_count": 19,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 233,
+        "pack_bodies_bytes": 4318725,
+        "page_count": 1095,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-insert-1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4318725 <= 4485120",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-insert-10",
+      "footprint": {
+        "allocated_bytes": 5222400,
+        "apparent_bytes": 5222400,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 5222400,
+        "freelist_count": 44,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 290,
+        "pack_bodies_bytes": 4937341,
+        "page_count": 1275,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-insert-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4937341 <= 5222400",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-insert-100",
+      "footprint": {
+        "allocated_bytes": 14716928,
+        "apparent_bytes": 14487552,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 14487552,
+        "freelist_count": 37,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 997,
+        "pack_bodies_bytes": 14086779,
+        "page_count": 3537,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-insert-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "14086779 <= 14487552",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "NOT_RUN",
+      "budget_status_re_derived": "NOT_RUN",
+      "case_id": "dedup-cdc-insert-500",
+      "footprint": {
+        "allocated_bytes": 55197696,
+        "apparent_bytes": 55054336,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 55054336,
+        "freelist_count": 42,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 4136,
+        "pack_bodies_bytes": 54005610,
+        "page_count": 13441,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-insert-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "54005610 <= 55054336",
+        "status": "PASS"
+      },
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-overwrite-1",
+      "footprint": {
+        "allocated_bytes": 4505600,
+        "apparent_bytes": 4505600,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4505600,
+        "freelist_count": 19,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 231,
+        "pack_bodies_bytes": 4327296,
+        "page_count": 1100,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-overwrite-1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4327296 <= 4505600",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-overwrite-10",
+      "footprint": {
+        "allocated_bytes": 5197824,
+        "apparent_bytes": 5197824,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 5197824,
+        "freelist_count": 18,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 293,
+        "pack_bodies_bytes": 5031272,
+        "page_count": 1269,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-overwrite-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "5031272 <= 5197824",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-overwrite-100",
+      "footprint": {
+        "allocated_bytes": 12931072,
+        "apparent_bytes": 12931072,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 12931072,
+        "freelist_count": 44,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 929,
+        "pack_bodies_bytes": 12514667,
+        "page_count": 3157,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-overwrite-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "12514667 <= 12931072",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "NOT_RUN",
+      "budget_status_re_derived": "NOT_RUN",
+      "case_id": "dedup-cdc-overwrite-500",
+      "footprint": {
+        "allocated_bytes": 47980544,
+        "apparent_bytes": 47730688,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 47730688,
+        "freelist_count": 28,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 3886,
+        "pack_bodies_bytes": 46836709,
+        "page_count": 11653,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-overwrite-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "46836709 <= 47730688",
+        "status": "PASS"
+      },
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-scattered-1",
+      "footprint": {
+        "allocated_bytes": 4702208,
+        "apparent_bytes": 4702208,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 4702208,
+        "freelist_count": 32,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 233,
+        "pack_bodies_bytes": 4487919,
+        "page_count": 1148,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-scattered-1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "4487919 <= 4702208",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-scattered-10",
+      "footprint": {
+        "allocated_bytes": 6189056,
+        "apparent_bytes": 6189056,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 6189056,
+        "freelist_count": 36,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 350,
+        "pack_bodies_bytes": 5920507,
+        "page_count": 1511,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-scattered-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "5920507 <= 6189056",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cdc-scattered-100",
+      "footprint": {
+        "allocated_bytes": 24592384,
+        "apparent_bytes": 24096768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 24096768,
+        "freelist_count": 39,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1474,
+        "pack_bodies_bytes": 23559636,
+        "page_count": 5883,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-scattered-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "23559636 <= 24096768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "NOT_RUN",
+      "budget_status_re_derived": "NOT_RUN",
+      "case_id": "dedup-cdc-scattered-500",
+      "footprint": {
+        "allocated_bytes": 117780480,
+        "apparent_bytes": 112111616,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 112111616,
+        "freelist_count": 41,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 7172,
+        "pack_bodies_bytes": 110256175,
+        "page_count": 27371,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cdc-scattered-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "110256175 <= 112111616",
+        "status": "PASS"
+      },
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-anchor-1",
+      "footprint": {
+        "allocated_bytes": 1212416,
+        "apparent_bytes": 1212416,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1212416,
+        "freelist_count": 29,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 57,
+        "pack_bodies_bytes": 1052633,
+        "page_count": 296,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-anchor-1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1052633 <= 1212416",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-identical-10",
+      "footprint": {
+        "allocated_bytes": 1224704,
+        "apparent_bytes": 1224704,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1224704,
+        "freelist_count": 32,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 57,
+        "pack_bodies_bytes": 1052635,
+        "page_count": 299,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-identical-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1052635 <= 1224704",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-identical-100",
+      "footprint": {
+        "allocated_bytes": 1220608,
+        "apparent_bytes": 1220608,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1220608,
+        "freelist_count": 31,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 59,
+        "pack_bodies_bytes": 1052734,
+        "page_count": 298,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-identical-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1052734 <= 1220608",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-identical-500",
+      "footprint": {
+        "allocated_bytes": 2228224,
+        "apparent_bytes": 1249280,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1249280,
+        "freelist_count": 38,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 59,
+        "pack_bodies_bytes": 1052744,
+        "page_count": 305,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-identical-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1052744 <= 1249280",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-mixed-10",
+      "footprint": {
+        "allocated_bytes": 1732608,
+        "apparent_bytes": 1732608,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1732608,
+        "freelist_count": 51,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 93,
+        "pack_bodies_bytes": 1467994,
+        "page_count": 423,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-mixed-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1467994 <= 1732608",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-mixed-100",
+      "footprint": {
+        "allocated_bytes": 3268608,
+        "apparent_bytes": 3268608,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 3268608,
+        "freelist_count": 43,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 367,
+        "pack_bodies_bytes": 2991771,
+        "page_count": 798,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-mixed-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "2991771 <= 3268608",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-mixed-500",
+      "footprint": {
+        "allocated_bytes": 13398016,
+        "apparent_bytes": 13320192,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 13320192,
+        "freelist_count": 36,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1633,
+        "pack_bodies_bytes": 12826500,
+        "page_count": 3252,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-mixed-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "12826500 <= 13320192",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-unique-10",
+      "footprint": {
+        "allocated_bytes": 10874880,
+        "apparent_bytes": 10874880,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 10874880,
+        "freelist_count": 45,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 553,
+        "pack_bodies_bytes": 10523185,
+        "page_count": 2655,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-unique-10/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "10523185 <= 10874880",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-unique-100",
+      "footprint": {
+        "allocated_bytes": 106778624,
+        "apparent_bytes": 106778624,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 106778624,
+        "freelist_count": 34,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 5637,
+        "pack_bodies_bytes": 105237417,
+        "page_count": 26069,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-unique-100/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "105237417 <= 106778624",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-cross-file-unique-500",
+      "footprint": {
+        "allocated_bytes": 537636864,
+        "apparent_bytes": 533532672,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 533532672,
+        "freelist_count": 48,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 28278,
+        "pack_bodies_bytes": 526191922,
+        "page_count": 130257,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/dedup-cross-file-unique-500/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "526191922 <= 533532672",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-exact-1-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-exact-10-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-exact-100-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-exact-500-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-local-1-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-local-10-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-local-100-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-local-500-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-unique-1-base128-v3",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-unique-1-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-unique-10-base128-v3",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-unique-10-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-unique-100-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "dedup-workspace-unique-500-compact-v2",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: workspace-reuse'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "delete-middle-4k-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "delete-middle-4k-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "delete-middle-4k-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "delete-middle-4k-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-construct-1-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-construct-10-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-construct-100-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-construct-500-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-content-scan-1-mixed-v4",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-content-scan-10-mixed-v4",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-content-scan-100-compact-v2",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-content-scan-500-compact-v2",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-metadata-scan-1-mixed-v4",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-metadata-scan-10-mixed-v4",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-metadata-scan-100-compact-v2",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "directory-metadata-scan-500-compact-v2",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "grow-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "grow-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "grow-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "grow-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "insert-middle-4k-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "insert-middle-4k-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "insert-middle-4k-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "insert-middle-4k-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "lifecycle-abort",
+      "footprint": {
+        "allocated_bytes": 1179648,
+        "apparent_bytes": 1179648,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1179648,
+        "freelist_count": 21,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 60,
+        "pack_bodies_bytes": 1052813,
+        "page_count": 288,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/lifecycle-abort/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 8,
+      "gates_re_derived": 8,
+      "pack_accounting": {
+        "detail": "1052813 <= 1179648",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "lifecycle-begin-save",
+      "footprint": {
+        "allocated_bytes": 1224704,
+        "apparent_bytes": 1224704,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1224704,
+        "freelist_count": 32,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 55,
+        "pack_bodies_bytes": 1052528,
+        "page_count": 299,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/lifecycle-begin-save/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1052528 <= 1224704",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "lifecycle-create",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [
+          "pack bodies: object_packs holds no rows to sum; the pack sum is unknown"
+        ],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 0,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/lifecycle-create/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "pack_accounting": {
+        "detail": "pack bodies: object_packs holds no rows to sum; the pack sum is unknown",
+        "status": "INCOMPLETE"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "lifecycle-finish-empty",
+      "footprint": {
+        "allocated_bytes": 1220608,
+        "apparent_bytes": 1220608,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1220608,
+        "freelist_count": 31,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 57,
+        "pack_bodies_bytes": 1052600,
+        "page_count": 298,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/lifecycle-finish-empty/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 8,
+      "gates_re_derived": 8,
+      "pack_accounting": {
+        "detail": "1052600 <= 1220608",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "lifecycle-open",
+      "footprint": {
+        "allocated_bytes": 1212416,
+        "apparent_bytes": 1212416,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1212416,
+        "freelist_count": 29,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 56,
+        "pack_bodies_bytes": 1052570,
+        "page_count": 296,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/lifecycle-open/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 8,
+      "gates_re_derived": 8,
+      "pack_accounting": {
+        "detail": "1052570 <= 1212416",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-100-compact-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-100-text-v1-compact-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-1000-compact-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-1000-text-v1-compact-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-10000",
+      "gates_published": 2,
+      "gates_re_derived": 2,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-10000-text-v1",
+      "gates_published": 2,
+      "gates_re_derived": 2,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-100000",
+      "gates_published": 2,
+      "gates_re_derived": 2,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-100000-text-v1",
+      "gates_published": 2,
+      "gates_re_derived": 2,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-subtree-relocate-delete-1-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-subtree-relocate-delete-10-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-subtree-relocate-delete-100-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "namespace-subtree-relocate-delete-500-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-decrease-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-decrease-10m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-decrease-1m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-decrease-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-increase-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-increase-10m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-increase-1m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-increase-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-preserve-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-preserve-10m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-preserve-1m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-fixed-64k-chunk-count-preserve-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-head-4k-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-head-4k-10m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-head-4k-1m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-head-4k-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-middle-4k-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-middle-4k-10m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-middle-4k-1m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-middle-4k-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-tail-4k-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-tail-4k-10m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-tail-4k-1m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "overwrite-tail-4k-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-10m-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-1m-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-chunked-100m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-chunked-10m-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-chunked-1m-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-create-chunked-500m",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-random-read-100m",
+      "footprint": {
+        "allocated_bytes": 106860544,
+        "apparent_bytes": 106860544,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 106860544,
+        "freelist_count": 51,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 5434,
+        "pack_bodies_bytes": 105231403,
+        "page_count": 26089,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/payload-random-read-100m/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 10,
+      "pack_accounting": {
+        "detail": "105231403 <= 106860544",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-random-read-10m-compact-v2",
+      "footprint": {
+        "allocated_bytes": 10772480,
+        "apparent_bytes": 10772480,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 10772480,
+        "freelist_count": 18,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 546,
+        "pack_bodies_bytes": 10523429,
+        "page_count": 2630,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/payload-random-read-10m-compact-v2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 10,
+      "pack_accounting": {
+        "detail": "10523429 <= 10772480",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-random-read-1m-compact-v2",
+      "footprint": {
+        "allocated_bytes": 1212416,
+        "apparent_bytes": 1212416,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 1212416,
+        "freelist_count": 27,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 56,
+        "pack_bodies_bytes": 1052600,
+        "page_count": 296,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/payload-random-read-1m-compact-v2/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 10,
+      "pack_accounting": {
+        "detail": "1052600 <= 1212416",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "payload-random-read-500m",
+      "footprint": {
+        "allocated_bytes": 533241856,
+        "apparent_bytes": 533241856,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 533241856,
+        "freelist_count": 38,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 27210,
+        "pack_bodies_bytes": 526157002,
+        "page_count": 130186,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/payload-random-read-500m/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 10,
+      "gates_re_derived": 10,
+      "pack_accounting": {
+        "detail": "526157002 <= 533241856",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "pipeline-edits-chunked",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "pipeline-edits-large-to-small",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "pipeline-edits-small",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "pipeline-filesystem-build",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pipeline'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "pooled-lane-cold",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pooled-lane'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pooled-lane'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "pooled-lane-warm",
+      "gates_published": 0,
+      "gates_re_derived": 0,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "FAIL",
+      "trace_defects": [
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pooled-lane'",
+        "gate 'row.not-run' is not 'status|measured|limit': 'driver unimplemented: pooled-lane'"
+      ],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "prepend-head-4k-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "prepend-head-4k-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "prepend-head-4k-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "prepend-head-4k-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "shrink-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "shrink-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "shrink-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "shrink-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "small-file-delta-1024",
+      "footprint": {
+        "allocated_bytes": 32768,
+        "apparent_bytes": 32768,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 32768,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 1059,
+        "page_count": 8,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/small-file-delta-1024/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "1059 <= 32768",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "small-file-delta-131071",
+      "footprint": {
+        "allocated_bytes": 163840,
+        "apparent_bytes": 163840,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 163840,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 131108,
+        "page_count": 40,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/small-file-delta-131071/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "131108 <= 163840",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "small-file-delta-16384",
+      "footprint": {
+        "allocated_bytes": 49152,
+        "apparent_bytes": 49152,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 49152,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 16419,
+        "page_count": 12,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/small-file-delta-16384/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "16419 <= 49152",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "small-file-delta-65536",
+      "footprint": {
+        "allocated_bytes": 98304,
+        "apparent_bytes": 98304,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 98304,
+        "freelist_count": 0,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 1,
+        "pack_bodies_bytes": 65571,
+        "page_count": 24,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/small-file-delta-65536/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "65571 <= 98304",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "store-footprint-large-object-10m-low-v1",
+      "footprint": {
+        "allocated_bytes": 10768384,
+        "apparent_bytes": 10768384,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 10768384,
+        "freelist_count": 20,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 544,
+        "pack_bodies_bytes": 10523208,
+        "page_count": 2629,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/store-footprint-large-object-10m-low-v1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "10523208 <= 10768384",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "store-footprint-large-object-500m",
+      "footprint": {
+        "allocated_bytes": 549957632,
+        "apparent_bytes": 533368832,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 533368832,
+        "freelist_count": 39,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 27198,
+        "pack_bodies_bytes": 526158496,
+        "page_count": 130217,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/store-footprint-large-object-500m/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "526158496 <= 533368832",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "store-footprint-metadata-cardinality-100-low-v1",
+      "footprint": {
+        "allocated_bytes": 5529600,
+        "apparent_bytes": 5529600,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 5529600,
+        "freelist_count": 38,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 100,
+        "pack_bodies_bytes": 5245100,
+        "page_count": 1350,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/store-footprint-metadata-cardinality-100-low-v1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "5245100 <= 5529600",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "store-footprint-metadata-cardinality-100000",
+      "footprint": {
+        "allocated_bytes": 554340352,
+        "apparent_bytes": 541278208,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 541278208,
+        "freelist_count": 50,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 100000,
+        "pack_bodies_bytes": 526132656,
+        "page_count": 132148,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/store-footprint-metadata-cardinality-100000/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "526132656 <= 541278208",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "store-footprint-unique-100-low-v1",
+      "footprint": {
+        "allocated_bytes": 5529600,
+        "apparent_bytes": 5529600,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 5529600,
+        "freelist_count": 38,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 100,
+        "pack_bodies_bytes": 5245100,
+        "page_count": 1350,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/store-footprint-unique-100-low-v1/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "5245100 <= 5529600",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "store-footprint-unique-100000",
+      "footprint": {
+        "allocated_bytes": 554958848,
+        "apparent_bytes": 541253632,
+        "application_id": 1279677261,
+        "attribution": "exclusive",
+        "database_bytes": 541253632,
+        "freelist_count": 50,
+        "incomplete": [],
+        "indexes": [
+          "objects_bases",
+          "objects_locations",
+          "sqlite_autoindex_metadata_value_groups_1"
+        ],
+        "object_rows": 100000,
+        "pack_bodies_bytes": 526132656,
+        "page_count": 132142,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "schema_version": 6,
+        "sidecars": [],
+        "store_path": "/tmp/r3-full/store-footprint-unique-100000/sample.sqlite",
+        "tables": [
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "store_policy"
+        ]
+      },
+      "gates_published": 9,
+      "gates_re_derived": 9,
+      "pack_accounting": {
+        "detail": "526132656 <= 541253632",
+        "status": "PASS"
+      },
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-create-1-mixed-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-create-10-mixed-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-create-100-mixed-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-create-500-mixed-v3",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-delete-1-mixed-v3",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-delete-10-mixed-v3",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-delete-100-mixed-v3",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-bulk-delete-500-mixed-v3",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-create-1-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-create-10-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-create-100-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-create-500-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-stat-1-mixed-v4",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-stat-10-mixed-v4",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-stat-100-compact-v2",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-stat-500-compact-v2",
+      "gates_published": 4,
+      "gates_re_derived": 4,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-unlink-1-mixed-v4",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-unlink-10-mixed-v4",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-unlink-100-compact-v2",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "tiny-unlink-500-compact-v2",
+      "gates_published": 1,
+      "gates_re_derived": 1,
+      "published_status": "NOT_RUN",
+      "re_derived_status": "NOT_RUN",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "NOT_RUN"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "truncate-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "truncate-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "truncate-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "truncate-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-above-v1",
+      "gates_published": 5,
+      "gates_re_derived": 5,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-alias-roundtrip-v1",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-below-v1",
+      "gates_published": 5,
+      "gates_re_derived": 5,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-exact-v1",
+      "gates_published": 5,
+      "gates_re_derived": 5,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-large-control-v1",
+      "gates_published": 5,
+      "gates_re_derived": 5,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-roundtrip-v1",
+      "gates_published": 5,
+      "gates_re_derived": 5,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "v016-boundary-small-control-v1",
+      "gates_published": 5,
+      "gates_re_derived": 5,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-clean-commit-1-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-clean-commit-10-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-clean-commit-100-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-clean-commit-500-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-dense-rewrite-1-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-dense-rewrite-10-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-dense-rewrite-100-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-dense-rewrite-500-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-fixed-move-1-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-fixed-move-10-mixed-v4",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-fixed-move-100-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "workspace-fixed-move-500-compact-v2",
+      "gates_published": 7,
+      "gates_re_derived": 7,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "zero-extend-100m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "zero-extend-10m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "zero-extend-1m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    },
+    {
+      "budget_status": "PASS",
+      "budget_status_re_derived": "PASS",
+      "case_id": "zero-extend-500m",
+      "gates_published": 6,
+      "gates_re_derived": 6,
+      "published_status": "PASS",
+      "re_derived_status": "PASS",
+      "status": "PASS",
+      "trace_defects": [],
+      "trace_status": "PASS"
+    }
+  ],
+  "run_dir": "/tmp/r3-full",
+  "runtime_tripwires": {
+    "findings": [],
+    "status": "PASS",
+    "stores": [
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-0-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-0-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-0-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-0-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-0-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-0-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-1-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-1-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-1-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-1-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-1-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-1-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-16384-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-16384-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-16384-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-16384-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-16384-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-16384-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32768-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32768-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32768-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32768-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32768-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32768-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32769-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32769-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32769-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32769-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32769-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-32769-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8191-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8191-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8191-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8191-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8191-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8191-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8192-s1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8192-s1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8192-s2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8192-s2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8192-s3/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-boundary-8192-s3/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-common-body-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-delete-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-insert-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-overwrite-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cdc-scattered-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-anchor-1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-anchor-1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-identical-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-identical-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-identical-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-identical-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-identical-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-identical-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-mixed-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-mixed-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-mixed-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-mixed-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-mixed-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-mixed-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-unique-10/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-unique-10/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-unique-100/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-unique-100/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-unique-500/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/dedup-cross-file-unique-500/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-abort/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-abort/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-begin-save/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-begin-save/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-create/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-finish-empty/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-finish-empty/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-open/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/lifecycle-open/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-100m/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-100m/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-10m-compact-v2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-10m-compact-v2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-1m-compact-v2/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-1m-compact-v2/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-500m/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/payload-random-read-500m/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-1024/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-1024/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-131071/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-131071/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-16384/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-16384/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-65536/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/small-file-delta-65536/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-large-object-10m-low-v1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-large-object-10m-low-v1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-large-object-500m/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-large-object-500m/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-metadata-cardinality-100-low-v1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-metadata-cardinality-100-low-v1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-metadata-cardinality-100000/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-metadata-cardinality-100000/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-unique-100-low-v1/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-unique-100-low-v1/sample.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-unique-100000/base.sqlite",
+        "store_policy_rows": 1
+      },
+      {
+        "journal_mode_persisted": "delete",
+        "sidecars": [],
+        "store": "/tmp/r3-full/store-footprint-unique-100000/sample.sqlite",
+        "store_policy_rows": 1
+      }
+    ],
+    "stores_checked": 139
+  },
+  "schema": "layerfs-core-verification-v1",
+  "sealed_call_graph": {
+    "checked": [
+      "backoff_call",
+      "fdatasync",
+      "fsync",
+      "non_zero_busy_timeout",
+      "resend_call",
+      "retry_call",
+      "sync_all",
+      "sync_data",
+      "wal_mode_literal",
+      "wal_string_literal"
+    ],
+    "files_scanned": 120,
+    "findings": {},
+    "status": "PASS"
+  },
+  "wall_ns": 1253087375
+}

@@ -1,0 +1,110 @@
+Stage 6 structural-complexity report
+========================================================================
+run directory      : /tmp/r3-full
+source commit      : 1ae8dd374e8adfe19270e73dae5950ce3b7bcb2e
+dirty tree         : False
+harness binary     : 32888e705b8cbccd2156ae812604d563245b890efb0a803b8564a24b4728dbe7
+workers            : 1
+lane               : full
+
+Row statuses
+------------------------------------------------------------------------
+  PASS         180
+  NOT_RUN      40
+  TOTAL        220
+
+Four axes, per family
+------------------------------------------------------------------------
+  family                           rows  pass  heap peak max  time max ms
+  c1.cdc.chunk-count                 12    12         199322       5976.2
+  c1.change-locality                 12    12         189736          7.1
+  c1.construct.chunked                4     4         226597       6503.7
+  c1.construct.whole-file             4     4          95525       6754.7
+  c1.edit.length-changing            32    32         100995       6031.1
+  c1.edit.length-preserving          12    12         101283       6101.7
+  c1.fs.build-scale                   8     4         372000        190.4
+  c1.many-tiny                       20    12         189736         21.9
+  c1.transition.boundary              7     7         262623         20.6
+  c1.tree.construct-traverse         12    12         189736         21.0
+  c1.tree.namespace-mutation          4     4         189736          7.1
+  c2.delta.boundaries                21    21        2355064         38.7
+  c2.delta.cdc-locality              20    15        8854167      29553.1
+  c2.delta.small-file                 4     4        2748278         10.8
+  c2.footprint                        6     6        3645566       9582.1
+  c2.lifecycle                        5     5        2221583         16.2
+  c2.pool.cold-warm                   2     0              0          6.1
+  c2.read.waves                       4     4        1308160       9337.8
+  c2.reuse.cross-file                10    10        5964365       9401.1
+  c2.reuse.workspace                 14     0              0          4.0
+  component.primitives                3     0              0          3.9
+  pipeline.*                          4     0              0          4.1
+
+Scaling ladders (counters, heap and disk decide; time is diagnostic)
+------------------------------------------------------------------------
+  family                           claim       metric                             b                 per-doubling
+  c1.cdc.chunk-count               -           no scaling claim registered
+  c1.change-locality               O(n)        construct.objects                n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c1.construct.chunked             O(1)        heap.peak_incremental_bytes    0.019 1.021 PASS; 1.000 PASS; 1.029 PASS
+  c1.construct.whole-file          O(n)        heap.peak_incremental_bytes    0.045 1.049 FAIL; 1.000 FAIL; 1.073 FAIL
+  c1.edit.length-changing          O(n)        edit.payload_bytes             0.000 n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c1.edit.length-preserving        -           no scaling claim registered
+  c1.fs.build-scale                -           no scaling claim registered
+  c1.many-tiny                     -           no scaling claim registered
+  c1.transition.boundary           -           no scaling claim registered
+  c1.tree.construct-traverse       O(n log n)  construct.objects                n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c1.tree.namespace-mutation       -           no scaling claim registered
+  c2.delta.boundaries              -           no scaling claim registered
+  c2.delta.cdc-locality            -           no scaling claim registered
+  c2.delta.small-file              -           no scaling claim registered
+  c2.footprint                     O(n)        space.allocated_bytes            n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c2.lifecycle                     -           no scaling claim registered
+  c2.pool.cold-warm                -           no scaling claim registered
+  c2.read.waves                    O(1)        heap.peak_incremental_bytes    0.038 1.010 PASS; 1.047 PASS; 1.011 PASS
+  c2.reuse.cross-file              O(1)        reuse.inserted                 0.537 1.000 PASS; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; 0.510 FAIL; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; 0.140 FAIL; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c2.reuse.workspace               -           no scaling claim registered
+  component.primitives             -           no scaling claim registered
+  pipeline.*                       O(n)        construct.objects                n/a                            -
+      4 row(s) contributed no point: pipeline-edits-chunked=NOT_RUN, pipeline-edits-large-to-small=NOT_RUN, pipeline-edits-small=NOT_RUN, pipeline-filesystem-build=NOT_RUN
+
+Rows that are not PASS
+------------------------------------------------------------------------
+  NOT_RUN     component-primitives-edit                        
+  NOT_RUN     component-primitives-filesystem                  
+  NOT_RUN     component-primitives-payload                     
+  NOT_RUN     dedup-cdc-common-body-500                        budget.complete-command=NOT_RUN (29.475 s)
+  NOT_RUN     dedup-cdc-delete-500                             budget.complete-command=NOT_RUN (28.231 s)
+  NOT_RUN     dedup-cdc-insert-500                             budget.complete-command=NOT_RUN (29.517 s)
+  NOT_RUN     dedup-cdc-overwrite-500                          budget.complete-command=NOT_RUN (29.054 s)
+  NOT_RUN     dedup-cdc-scattered-500                          budget.complete-command=NOT_RUN (29.553 s)
+  NOT_RUN     dedup-workspace-exact-1-compact-v2               
+  NOT_RUN     dedup-workspace-exact-10-compact-v2              
+  NOT_RUN     dedup-workspace-exact-100-compact-v2             
+  NOT_RUN     dedup-workspace-exact-500-compact-v2             
+  NOT_RUN     dedup-workspace-local-1-compact-v2               
+  NOT_RUN     dedup-workspace-local-10-compact-v2              
+  NOT_RUN     dedup-workspace-local-100-compact-v2             
+  NOT_RUN     dedup-workspace-local-500-compact-v2             
+  NOT_RUN     dedup-workspace-unique-1-base128-v3              
+  NOT_RUN     dedup-workspace-unique-1-compact-v2              
+  NOT_RUN     dedup-workspace-unique-10-base128-v3             
+  NOT_RUN     dedup-workspace-unique-10-compact-v2             
+  NOT_RUN     dedup-workspace-unique-100-compact-v2            
+  NOT_RUN     dedup-workspace-unique-500-compact-v2            
+  NOT_RUN     namespace-10000                                  row.not-run=NOT_RUN (product error: InvalidRecord("cycle check work limit"))
+  NOT_RUN     namespace-10000-text-v1                          row.not-run=NOT_RUN (product error: InvalidRecord("cycle check work limit"))
+  NOT_RUN     namespace-100000                                 row.not-run=NOT_RUN (product error: InvalidRecord("cycle check work limit"))
+  NOT_RUN     namespace-100000-text-v1                         row.not-run=NOT_RUN (product error: InvalidRecord("cycle check work limit"))
+  NOT_RUN     pipeline-edits-chunked                           
+  NOT_RUN     pipeline-edits-large-to-small                    
+  NOT_RUN     pipeline-edits-small                             
+  NOT_RUN     pipeline-filesystem-build                        
+  NOT_RUN     pooled-lane-cold                                 
+  NOT_RUN     pooled-lane-warm                                 
+  NOT_RUN     tiny-bulk-delete-1-mixed-v3                      row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-bulk-delete-10-mixed-v3                     row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-bulk-delete-100-mixed-v3                    row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-bulk-delete-500-mixed-v3                    row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-unlink-1-mixed-v4                           row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-unlink-10-mixed-v4                          row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-unlink-100-compact-v2                       row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
+  NOT_RUN     tiny-unlink-500-compact-v2                       row.not-run=NOT_RUN (driver unimplemented: filesystem-update: the identical input replays into a retaining store, but th
