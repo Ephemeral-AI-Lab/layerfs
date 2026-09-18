@@ -209,8 +209,9 @@ comparison: ~17–20 new test cases (+300..+550 test lines), V2's example
 V3 `aefcd95a5` · V4 `8efdd9291` (a plan refinement: the edit vehicle's own
 `EditCounters.nodes_read`) · P1-2 `9ec299f13` · P1-1 `32eda6f29` ·
 P1-3 `ff4d6d328` · P1-4 `bfb01f262` · P1-9 `d42cd969e` · P1-5 `70dc75836` ·
-P1-12 `9b4eff169` · P1-16 `84ca5c851` · P1-10 `8327f87bb`. Tree `45cd798f7`,
-pushed; 451 tests green; the 34-test sealed-oracle set green and unchanged.
+P1-12 `9b4eff169` · P1-16 `84ca5c851` · P1-10 `8327f87bb` · P1-6 `360431d10` ·
+P1-8 `e9b4d1510`. Tree `4eb2e78aa`, pushed; 454 tests green; the 34-test
+sealed-oracle set green and unchanged.
 
 | item | counter | before → after |
 | --- | --- | --- |
@@ -223,15 +224,16 @@ pushed; 451 tests green; the 34-test sealed-oracle set green and unchanged.
 | P1-5 | D26 `runs.rows_read` | 59,007 → 27,777 (residual 33,247 → 2,017) |
 | P1-10 | D26 `runs.rows_read` | 27,777 → 25,809 |
 | P1-12 | no counter; page partition pinned; `peak_scratch_bytes` +8 B/page slot | — |
+| P1-8 | M4 (`edit_timing_c1 --case split`, new) `nodes_read` | 16 → 13 |
 | P1-16 | docs + boundary test; nothing moved | — |
 
 **Declined, owner ruling needed:** P1-6 (zero movement on every available row; the
 deletion removes the only non-root context check on that node) —
 [receipt](../evidence/phase1-execution-20260918T090000Z/rounds/p1-6/receipt.md).
 
-**Not started:** P1-8, P1-7, P1-14, P1-13, P1-15 — nothing half-landed, so their
-anchors are intact (P1-13's D26 `rows_written` 25,760 / `merges` 61 are still at
-their pre-item values). **The executable assignment for those five is
+**Not started:** P1-7, P1-14, P1-13, P1-15 — nothing half-landed, so their anchors
+are intact (P1-13's D26 `rows_written` 25,760 / `merges` 61 are still at their
+pre-item values). **The executable assignment for those five is
 [`phase1-continuation-handoff-20260918.md`](phase1-continuation-handoff-20260918.md)**,
 which carries each one's anchor, file, sketch, corrected design, tests and risks.
 
@@ -240,7 +242,12 @@ which carries each one's anchor, file, sketch, corrected design, tests and risks
 fixed and `artifacts.txt` added); P1-1's `list_after` half is declined and its
 `patch.rs` half deferred; P1-9's printed `nodes_read` cannot move (V4 added);
 P1-12's `peak_scratch_bytes` does move (+8 B/page slot); P1-5's `truncate(level + 1)`
-sketch is backwards; P1-3/P1-4/P1-16 each corrected an assumption in their sketches.
+sketch is backwards; P1-3/P1-4/P1-16 each corrected an assumption in their sketches;
+P1-8's retained-frontier sketch was replaced by a bounded page cache (the same
+Big-O target, the traversal untouched) and **two of its targets are refuted**: M3
+is a single retained run so it cannot move, and payload demands are unchanged
+because each retained run is served exactly and independently —
+[receipt](../evidence/phase1-execution-20260918T090000Z/rounds/p1-8/receipt.md) §2/§3.2.
 
 ## 5. The risks the implementer must carry
 
