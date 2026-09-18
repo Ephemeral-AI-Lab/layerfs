@@ -155,3 +155,84 @@ outside the two statements C1 authorizes, and fixing it here would bundle a
 second variable into C1's commit. It is reported on #178 for an owner ruling
 (same treatment as C1, or `measured-and-declined`); no later Phase 1 receipt may
 quote an absolute `pages_read` total as complete until it is settled.
+
+## 9. Correction (appended 2026-09-18, before any Phase 1 box was ticked)
+
+**A measurement-identity defect invalidated this receipt's `order` rows in §3.2,
+and this section supersedes that table's `order.default`/`order.forced64` line.**
+Nothing above is edited: the old values stay, and the correction is this dated
+section, as [`../../CONTRACT.md`](../../CONTRACT.md) §3 requires.
+
+### 9.1 What was wrong
+
+`collect.py`'s `CLIENT` constant pointed at
+`/tmp/layerfs-phase1-target/release/phase0client`, and **no step of the driver
+rebuilt that path**: the build step `B2` writes
+`client/target/release/phase0client`. The probe client links `layerfs-content`/
+`layerfs-storage` statically, so the `/tmp` copy was frozen at the tree it was
+first built from — the pre-C1 tree. Both of C1's arms ran that same stale binary,
+so §3.2's "all identical" reading was self-consistent but **blind to C1's own
+product change**; it was not evidence that C1 leaves the `order` rows alone.
+
+### 9.2 The corrected pair (both clients built from their own tree)
+
+Each arm's client was built in a **fresh `git archive` of its own commit**, into
+its own target directory; `artifacts.txt` in each arm records the commit and the
+binary's sha256. Collections:
+[`order-rows-correction-20260918/`](order-rows-correction-20260918/)
+(`before/` = `4a86107fc`, client `a7325329a6961b47…`; `after/` = `7447f87d9`,
+client `c41d9a3658d25229…`), five commands per arm, exit codes in each
+`commands.tsv`.
+
+| Row | counter | stale pair (§3.2) | **corrected before** | **corrected after** | Δ |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `order.default` (D25) | `directories.pages_read` | 2 → 2 | **2** | **17** | +15 |
+| `order.default` (D25) | `inodes.pages_read` | 1 → 1 | **1** | **81** | +80 |
+| `order.default` (D25) | `objects.read_waves` | 11 → 11 | **11** | **7** | −4 |
+| `order.forced64` (D26) | `directories.pages_read` | 2 → 2 | **2** | **17** | +15 |
+| `order.forced64` (D26) | `inodes.pages_read` | 1 → 1 | **1** | **81** | +80 |
+| `order.forced64` (D26) | `objects.read_waves` | 11 → 11 | **11** | **7** | −4 |
+
+Both rows move in the direction C1's own two statements predict, and for the same
+reason as D2/D5: the batched decode was invisible (`pages_read` rises) and the
+grouped demand was charged twice (waves fall). Every other field of both rows is
+identical between the corrected arms — `spilled`, `rows_read` 59,007,
+`rows_written` 25,760, `runs_created` 124, `merges` 61, `peak_run_bytes`,
+`peak_live_runs`, `peak_pending`, `peak_backing`, `emitted` 14,
+`dir_pages_created` 11, `dir_scratch`, `ino_pages_created` 2, `ino_pages_reused`
+40, `ino_scratch`, `objects_read` 98, `bytes_read` 400,354, `rows_touched`,
+`final_values`, `final_removals`. The labelled repeat (`X1`) is bit-identical to
+its arm's gate sample on every work counter.
+
+### 9.3 The `c2` rows are confirmed, not assumed
+
+§3.2 also claimed D28/D29 unchanged. That claim was re-measured with correctly
+built clients: `c2.ceiling` (8,191 rows) and `c2.small` (1,023 rows) are
+**identical in every work counter** in both arms (`inserted`, `reused`,
+`packs_created` 33/5, `pack_appends`, `commits` 31/4, `full_records`,
+`prefix_records`, `pool_*`); only `elapsed_ns` moved (diagnostic). C1's two
+statements live in C1's boundary and the sorted page batch, and the C2 save route
+reaches neither — now measured rather than argued.
+
+### 9.4 Consequence for the Phase 1 anchors
+
+* The plan's P1-1 before-anchor "D25 `order.default` 98 objects / **11 waves**
+  (post-C1 arithmetic)" is **superseded**: on the C1 tree the same row reads
+  **7 waves**, 17 directory pages and 81 inode pages. P1-1's receipt must use the
+  corrected C1-tree row as its before value.
+* Phase 0's published D25/D26 values (2 pages / 1 page / 11 waves) remain valid
+  **for the Phase 0 tree**: Phase 0 built its own client from its own tree. They
+  are not comparable with any post-C1 row, which is exactly the straddle
+  [`../../CONTRACT.md`](../../CONTRACT.md) §4.1 forbids.
+* §3.1's rows (D2/D5/D7) and §3.3's root identities are unaffected: those rows
+  come from the core examples, which `B1` rebuilds in `core/target` every arm.
+
+### 9.5 The driver fix
+
+`collect.py`'s `CLIENT` now names the artifact `B2` builds
+(`client/target/release/phase0client`), and every `build` arm writes an
+`artifacts.txt` with the sha256 of each binary it will run, so a stale artifact
+is visible in the round directory rather than invisible. Recorded as driver
+correction 2 in [`../../ROUND-README.md`](../../ROUND-README.md). The `v1` round
+is the first round collected with the corrected driver; its `after/artifacts.txt`
+records client `b0866eb1a9060618…` and the four example hashes.

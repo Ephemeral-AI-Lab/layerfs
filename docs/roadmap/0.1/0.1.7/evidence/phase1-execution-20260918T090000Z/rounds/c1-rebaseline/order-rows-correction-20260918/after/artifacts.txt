@@ -1,0 +1,3 @@
+commit	7447f87d9
+client	/tmp/phase1-c1fix/target-at-c1/release/phase0client
+sha256	c41d9a3658d252297c12ec14535c71f0df41ed1c29cbb6d7ce2ce9dd13d51769

@@ -5,7 +5,8 @@ under [`CONTRACT.md`](CONTRACT.md).
 
 | Round | Item | Status |
 | --- | --- | --- |
-| `c1-rebaseline` | C1 counter correctness + the pre-C1 Phase 1 baseline | collected (`before/`) |
+| `c1-rebaseline` | C1 counter correctness + the pre-C1 Phase 1 baseline | collected (`before/`, `after/`) |
+| `v1` | V1 — `filesystem_timing_c1` prints `counters.validation` | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 
@@ -19,6 +20,24 @@ under [`CONTRACT.md`](CONTRACT.md).
    passed). `collect.py` was corrected to the successful command shape and D7–D9
    were re-collected; the failed attempts and their logs are retained beside the
    successful ones, exactly as Phase 0 retained its own.
+
+2. **The probe client was a stale binary (found and fixed 2026-09-18, before any
+   Phase 1 box was ticked).** `collect.py`'s `CLIENT` constant pointed at
+   `/tmp/layerfs-phase1-target/release/phase0client`, which **no step rebuilt**;
+   the build step `B2` writes `client/target/release/phase0client` instead. The
+   probe client links `layerfs-content`/`layerfs-storage` statically, so the
+   `/tmp` copy was frozen at the tree it was first built from. The C1 round's
+   `D25`/`D26` (`order`) rows and its `D28`/`D29` (`c2`) rows were therefore
+   collected through a binary that did not contain C1's own product change, and
+   C1's receipt §3.2 claim that the `order` rows are unchanged is **refuted** by
+   the corrected artifact: rebuilt from the same tree, `order.default` reads
+   `dir_pages_read 17`/`ino_pages_read 81`/`read_waves 7` where the stale binary
+   read `2`/`1`/`11`. The correction is appended to
+   `rounds/c1-rebaseline/receipt.md` (§9) with both artifacts' hashes; the rows
+   the fix touches are re-measured there on the parent tree with a client built
+   from that tree. From this entry on, `CLIENT` is the artifact `B2` builds, each
+   round records its `artifacts.txt` (sha256 per binary it ran), and a round whose
+   client hash does not match the tree under test is invalid.
 
 ## What each round directory holds
 

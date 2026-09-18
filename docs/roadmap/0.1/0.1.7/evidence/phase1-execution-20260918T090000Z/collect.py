@@ -23,7 +23,11 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[5].resolve()
 TOOLCHAIN = "+1.85.1"
-CLIENT = "/tmp/layerfs-phase1-target/release/phase0client"
+# The probe client links layerfs-content/ layerfs-storage statically, so it MUST
+# be the artifact built from the tree under test. The original constant pointed
+# at a /tmp copy that no step rebuilt; a stale binary measures the wrong tree
+# (correction 2026-09-18, ROUND-README.md). B2 below builds exactly this path.
+CLIENT = str(HERE / "client/target/release/phase0client")
 CORE = REPO / "core/target/release/examples"
 
 EDIT_CASES = ["small", "chunked", "small-to-large", "large-to-small", "batch"]
@@ -71,6 +75,25 @@ def main():
         run(round_dir, "B2", "client",
             ["cargo", TOOLCHAIN, "build", "--release", "--offline", "--locked"],
             cwd=HERE / "client")
+
+    if "build" in sets:
+        # Artifact identity for this arm: the reader must be able to see which
+        # binaries produced the rows. The client is the one that used to go stale.
+        import hashlib
+
+        hashed = [
+            ("client", pathlib.Path(CLIENT)),
+            ("filesystem_timing_c1", CORE / "filesystem_timing_c1"),
+            ("measure_filesystem", CORE / "measure_filesystem"),
+            ("measure_edits", CORE / "measure_edits"),
+            ("edit_timing_c1", CORE / "edit_timing_c1"),
+        ]
+        lines = []
+        for label, path in hashed:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else "MISSING"
+            lines.append(f"{label}\t{digest}\t{path}")
+        (round_dir / "artifacts.txt").write_text("\n".join(lines) + "\n")
+        print("\n".join(lines), flush=True)
 
     if "c1" in sets:
         for step, case in zip(["D1", "D2", "D3", "D4", "D5", "D6"],
