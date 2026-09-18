@@ -1,0 +1,188 @@
+//! `layerfs-trace-v1`: a flat JSONL record writer.
+//!
+//! **Why the resource axes live here and not in the product's tree.** The frozen
+//! product telemetry writer cannot carry a sibling `resources` key
+//! (`timer/json.rs:29-89`): it emits `name`, `elapsed_ns`, optional `outcome`,
+//! optional `incomplete` and `children`, and nothing else. So the time axis is
+//! emitted by the product, unmodified, into `timing.json`, and every resource
+//! reading is written here as a **flat** record keyed to the product receipt by
+//! monotonic clock rather than by tree nesting.
+//!
+//! Flat means flat: one JSON object per line, every value a scalar, no nested
+//! object anywhere. A reader can therefore parse this file with a line splitter,
+//! which is what makes the Python side able to re-derive every published figure
+//! independently of the process that produced it.
+
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+/// Schema tag of every record this writer emits.
+pub const SCHEMA: &str = "layerfs-trace-v1";
+
+/// What one record is about.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Kind {
+    /// Run identity: source commit, seals, case, lane, worker count.
+    Run,
+    /// A timed window: label, parent, open and close stamps.
+    Window,
+    /// A work counter reported by the product or by the oracle.
+    Counter,
+    /// A resource reading from one named instrument.
+    Resource,
+    /// A gate outcome.
+    Gate,
+    /// An oracle outcome.
+    Oracle,
+    /// A free-form receipt field the runner publishes.
+    Receipt,
+}
+
+impl Kind {
+    fn token(self) -> &'static str {
+        match self {
+            Self::Run => "run",
+            Self::Window => "window",
+            Self::Counter => "counter",
+            Self::Resource => "resource",
+            Self::Gate => "gate",
+            Self::Oracle => "oracle",
+            Self::Receipt => "receipt",
+        }
+    }
+}
+
+/// Append-only JSONL writer.
+pub struct TraceWriter {
+    path: PathBuf,
+    handle: std::fs::File,
+    sequence: u64,
+    bytes: u64,
+}
+
+impl TraceWriter {
+    /// Creates a trace file. It refuses to overwrite one: a rerun that overwrites
+    /// the evidence destroys the only witness there is.
+    pub fn create(path: &Path) -> std::io::Result<Self> {
+        if path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} already exists; traces are append-only", path.display()),
+            ));
+        }
+        let handle = std::fs::OpenOptions::new()
+            .create_new(true)
+            .append(true)
+            .open(path)?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            handle,
+            sequence: 0,
+            bytes: 0,
+        })
+    }
+
+    /// Path this writer owns.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Bytes written so far.
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+
+    /// Writes one flat record.
+    pub fn write(
+        &mut self,
+        kind: Kind,
+        key: &str,
+        value: &str,
+        unit: &str,
+        basis: &str,
+    ) -> std::io::Result<()> {
+        let record = format!(
+            "{{\"schema\":\"{SCHEMA}\",\"seq\":{},\"kind\":\"{}\",\"key\":\"{}\",\"value\":\"{}\",\"unit\":\"{}\",\"basis\":\"{}\"}}\n",
+            self.sequence,
+            kind.token(),
+            escape(key),
+            escape(value),
+            escape(unit),
+            escape(basis),
+        );
+        self.handle.write_all(record.as_bytes())?;
+        self.sequence += 1;
+        self.bytes += record.len() as u64;
+        Ok(())
+    }
+
+    /// Writes one record whose value is a number, so a reader needs no string
+    /// parsing to re-derive a figure.
+    pub fn write_number(
+        &mut self,
+        kind: Kind,
+        key: &str,
+        value: i128,
+        unit: &str,
+        basis: &str,
+    ) -> std::io::Result<()> {
+        let record = format!(
+            "{{\"schema\":\"{SCHEMA}\",\"seq\":{},\"kind\":\"{}\",\"key\":\"{}\",\"value\":{},\"numeric\":true,\"unit\":\"{}\",\"basis\":\"{}\"}}\n",
+            self.sequence,
+            kind.token(),
+            escape(key),
+            value,
+            escape(unit),
+            escape(basis),
+        );
+        self.handle.write_all(record.as_bytes())?;
+        self.sequence += 1;
+        self.bytes += record.len() as u64;
+        Ok(())
+    }
+
+    /// Writes one window record from a bracket.
+    pub fn write_window(
+        &mut self,
+        label: &str,
+        parent: i64,
+        open_ns: u64,
+        close_ns: u64,
+    ) -> std::io::Result<()> {
+        let record = format!(
+            "{{\"schema\":\"{SCHEMA}\",\"seq\":{},\"kind\":\"window\",\"key\":\"{}\",\"value\":{},\"parent\":{},\"open_ns\":{},\"close_ns\":{},\"elapsed_ns\":{},\"unit\":\"ns\",\"basis\":\"clock-monotonic-raw-4\"}}\n",
+            self.sequence,
+            escape(label),
+            close_ns.saturating_sub(open_ns),
+            parent,
+            open_ns,
+            close_ns,
+            close_ns.saturating_sub(open_ns),
+        );
+        self.handle.write_all(record.as_bytes())?;
+        self.sequence += 1;
+        self.bytes += record.len() as u64;
+        Ok(())
+    }
+
+    /// Flushes without syncing. There is no `fsync` anywhere in this harness.
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.handle.flush()
+    }
+}
+
+/// Escapes the two characters that would break a flat JSON line.
+fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other => out.push(other),
+        }
+    }
+    out
+}

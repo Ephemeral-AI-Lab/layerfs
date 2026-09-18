@@ -1,0 +1,39 @@
+# Stage 6 measurement harness for the C1/C2 replacement core (#171).
+#
+# This is an independent Cargo workspace, per owner decision D3 in
+# core/docs/benchmark/fs-bench-pro-storage-content/CONTRACT.md section 5. The
+# empty `[workspace]` table is mandatory: core/Cargo.toml lists three members and
+# no `exclude`, so without it Cargo fails with "current package believes it's in
+# a workspace when it's not". `license` is inlined beside `publish = false`
+# because `license.workspace = true` does not resolve outside a workspace.
+#
+# The harness is NOT product source. core/tools/check_product_boundary.py scans
+# only core/crates/*/src and core/crates/*/sql, so nothing here counts toward
+# production LOC and the source-text guard does not apply to it.
+
+[package]
+name = "fs-bench-pro-storage-content"
+description = "Stage 6 structural-complexity harness for layerfs-content (C1) and layerfs-storage (C2)."
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+name = "fs_bench_storage_content"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fs-bench-storage-content"
+path = "src/main.rs"
+
+[dependencies]
+# Path dependencies into the product workspace. The versions of every package
+# that also appears in core/Cargo.lock are compared by shared/test_lock_parity.py
+# before any receipt is written (owner decision D3, mandatory mitigation).
+layerfs-content = { path = "../../crates/layerfs-content" }
+layerfs-storage = { path = "../../crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../crates/layerfs-telemetry" }
