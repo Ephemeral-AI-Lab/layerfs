@@ -8,18 +8,20 @@ the eight checks are inherited from
 
 | Round | Item | Status |
 | --- | --- | --- |
-| `p2-0` | P2-0 — the `cas/owner.rs` responsibility split | pending |
-| `v5` | V5 — the statement counter | pending |
-| `v6` | V6 — the group-decode counter | pending |
-| `v7` | V7 — save-connection cache observability | pending |
-| `p2-8` | P2-8 — `append_fits` running total | pending |
-| `p2-6` | P2-6 — hash the requested object once per wave | pending |
-| `p2-7` | P2-7 — drop `copy_run` | pending |
-| `p2-4` | P2-4 — decoded-group cache on the ordinary path | pending |
-| `p2-5` | P2-5 — batched presence + one reader per save | pending |
-| `p2-2` | P2-2 — multi-row INSERT | pending |
-| `p2-1` | P2-1 — `cache_size` + `cache_spill` | pending |
-| `p2-3` | P2-3 — `locking_mode = EXCLUSIVE` | pending |
+| `p2-0` | P2-0 — the `cas/owner.rs` responsibility split | **landed with a correction** (`ed5ab5d95`; one guard path) |
+| `v5` | V5 — the statement counter | **landed with a correction** (`464807178`; counter scope) |
+| `v6` | V6 — the group-decode counter | **landed** (`3e7b3db80`) |
+| `v7` | V7 — save-connection cache observability | **blocked on the spill half**, profile half landed (`8f0fda297`) |
+| `p2-8` | P2-8 — `append_fits` running total | **landed** (`6a4abb256`) |
+| `p2-6` | P2-6 — hash the requested object once per wave | **landed** (`57c4cf3bd`) |
+| `p2-7` | P2-7 — drop `copy_run` | **landed** (`b2abb6455`) |
+| `p2-4` | P2-4 — decoded-group cache on the ordinary path | **landed with a correction** (`3ce5f409e`; cache scope) |
+| `v8` | V8 — the presence-query counter (added: P2-5's gate did not exist) | **landed** (`12527f477`) |
+| `p2-5` | P2-5 — batched presence + one reader per save | **landed** (`7db87bb8b`) |
+| `p2-2` | P2-2 — multi-row INSERT | **landed** (`0a593084c`; 72, not 64) |
+| `p2-1` | P2-1 — `cache_size` + `cache_spill` | **measured-and-declined** (candidate patch on disk) |
+| `p2-3` | P2-3 — `locking_mode = EXCLUSIVE` | **measured-and-declined** (breaks the reader contract) |
+| `closing-pass` | the completion audit | [`CLOSING-PASS.md`](CLOSING-PASS.md), arm [`rounds/closing-pass/final/`](rounds/closing-pass/final/) |
 
 ## Driver provenance (recorded, not silent)
 
