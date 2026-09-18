@@ -64,7 +64,7 @@ def main():
     round_name, arm = sys.argv[1], sys.argv[2]
     sets = sys.argv[3:] or ["all"]
     if "all" in sets:
-        sets = ["build", "c1", "fs", "edits", "order", "c2-control", "extra", "v2", "c2", "diag"]
+        sets = ["build", "c1", "fs", "edits", "order", "c2-control", "c2-refs", "extra", "v2", "c2", "diag"]
     round_dir = HERE / "rounds" / round_name / arm
     round_dir.mkdir(parents=True, exist_ok=True)
 
@@ -156,6 +156,14 @@ def main():
         # never a gate sample (P0-2's `spillcontrol`, re-run here because the
         # product cannot read SQLITE_DBSTATUS itself).
         run(round_dir, "Y1", "c2-spill-control", [CLIENT, "c2", "20000", "diagnostic-small-cache"])
+
+    if "c2-refs" in sets:
+        # Y2/Y3/Y4 are the nominated rows for P2-5's wave-level presence batch:
+        # `rows` dependent objects, each naming a stored object the wave does not
+        # offer, so the availability check has to ask about each of them. 64 and
+        # 512 fit one wave (BATCH_OBJECT_LIMIT is 512); 4,096 is eight.
+        for step, rows in [("Y2", 64), ("Y3", 512), ("Y4", 4096)]:
+            run(round_dir, step, f"c2-references-{rows}", [CLIENT, "c2-references", str(rows)])
 
     if "extra" in sets:
         run(round_dir, "D27", "edit-timing-c1-nodes-read", [str(CORE / "edit_timing_c1")])

@@ -1,0 +1,1 @@
+c2-references rows 64 elapsed_ns 14878250 targets inserted 64 targets presence_queries 0 dependents inserted 64 dependents presence_queries 64 | note the dependent wave names 64 stored objects it does not offer, so the availability check must ask about each of them

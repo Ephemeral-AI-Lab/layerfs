@@ -1,0 +1,1 @@
+c2-references rows 4096 elapsed_ns 252868875 targets inserted 4096 targets presence_queries 0 dependents inserted 4096 dependents presence_queries 4096 | note the dependent wave names 4096 stored objects it does not offer, so the availability check must ask about each of them

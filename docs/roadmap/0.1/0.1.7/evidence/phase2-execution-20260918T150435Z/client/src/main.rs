@@ -246,7 +246,7 @@ fn probe_order(files: usize, pairs: usize, pending: usize) {
 /// One canonical pooled-metadata leaf object: one inode value with a unique
 /// content root, so `rows` of them are `rows` distinct canonical objects that all
 /// land in the ordinary lane.
-fn leaf_object(index: usize) -> FinalizedObject {
+fn leaf_canonical(index: usize) -> Vec<u8> {
     let mut bytes = [0_u8; 32];
     bytes[..8].copy_from_slice(&(index as u64).to_be_bytes());
     let leaf = layerfs_content::object::inode_leaf::InodeLeaf {
@@ -263,8 +263,12 @@ fn leaf_object(index: usize) -> FinalizedObject {
             ),
         }],
     };
-    let canonical = leaf.encode().expect("leaf encode");
-    FinalizedObject::new(ObjectRole::InodeLeaf, canonical).expect("finalized object")
+    leaf.encode().expect("leaf encode")
+}
+
+/// One finalized synthetic inode leaf with a distinct canonical body.
+fn leaf_object(index: usize) -> FinalizedObject {
+    FinalizedObject::new(ObjectRole::InodeLeaf, leaf_canonical(index)).expect("finalized object")
 }
 
 /// Reads the reachable SQLite observables on `connection`.
@@ -430,7 +434,7 @@ fn probe_c2(rows: usize, cache: &str) {
     let _ = &store;
     let elapsed = started.elapsed().as_nanos();
     println!(
-        "c2 rows {} canonical_bytes {} cache_arm {} elapsed_ns {} inserted {} reused {} packs_created {} pack_appends {} commits {} statements {} full_records {} prefix_records {} pool_leaves {} pool_new_values {} pool_groups {} pool_delta_leaves {} pool_trials {}",
+        "c2 rows {} canonical_bytes {} cache_arm {} elapsed_ns {} inserted {} reused {} packs_created {} pack_appends {} commits {} statements {} presence_queries {} full_records {} prefix_records {} pool_leaves {} pool_new_values {} pool_groups {} pool_delta_leaves {} pool_trials {}",
         rows,
         total_bytes,
         cache,
@@ -441,6 +445,7 @@ fn probe_c2(rows: usize, cache: &str) {
         outcome.pack_appends,
         outcome.commits,
         outcome.statements,
+        outcome.presence_queries,
         outcome.full_records,
         outcome.prefix_records,
         outcome.pool.leaves,
@@ -460,6 +465,57 @@ fn probe_c2(rows: usize, cache: &str) {
     );
 }
 
+/// `c2-references <rows>`: two saves that price the wave-level presence batch
+/// (`P2-5`).
+///
+/// The first save stores `rows` leaves. The second offers `rows` *different*
+/// leaves, each naming one of those stored leaves as a direct reference - an
+/// identity the wave did not offer and has not resolved, which is exactly what the
+/// availability check has to ask the engine about. Per-object presence queries
+/// price one question per dependent; a wave-level batch prices one for the wave.
+fn probe_references(rows: usize) {
+    let dir = backing_dir(&format!("c2-references-{rows}"));
+    let store_path = dir.join("store.sqlite");
+    let targets: Vec<FinalizedObject> = (0..rows).map(leaf_object).collect();
+    let target_ids: Vec<ObjectId> = targets.iter().map(|object| object.id()).collect();
+
+    let started = Instant::now();
+    let saved = layerfs_telemetry::timer::Timing::disabled("c2.references", |scope| {
+        let store = Store::create(
+            &store_path,
+            StoragePolicy::frozen_default(),
+            scope.child("store.create"),
+        )?;
+        let mut operation = store.begin_save(scope.child("targets.begin"))?;
+        for object in targets {
+            operation.accept(object)?;
+        }
+        let targets_outcome = operation.finish(scope.child("targets.finish"))?;
+        let mut operation = store.begin_save(scope.child("dependents.begin"))?;
+        for (index, target) in target_ids.iter().enumerate() {
+            let dependent =
+                FinalizedObject::new(ObjectRole::InodeLeaf, leaf_canonical(index + rows))?
+                    .with_references(vec![*target]);
+            operation.accept(dependent)?;
+        }
+        let dependents_outcome = operation.finish(scope.child("dependents.finish"))?;
+        Ok::<_, layerfs_storage::StorageError>((store, targets_outcome, dependents_outcome))
+    });
+    let (store, targets_outcome, dependents_outcome) = saved.0.expect("save");
+    let _ = &store;
+    let elapsed = started.elapsed().as_nanos();
+    println!(
+        "c2-references rows {} elapsed_ns {} targets inserted {} targets presence_queries {} dependents inserted {} dependents presence_queries {} | note the dependent wave names {} stored objects it does not offer, so the availability check must ask about each of them",
+        rows,
+        elapsed,
+        targets_outcome.inserted,
+        targets_outcome.presence_queries,
+        dependents_outcome.inserted,
+        dependents_outcome.presence_queries,
+        target_ids.len(),
+    );
+}
+
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     match arguments.first().map(String::as_str) {
@@ -473,6 +529,10 @@ fn main() {
             let rows: usize = arguments[1].parse().expect("rows");
             let cache = arguments.get(2).map(String::as_str).unwrap_or("default");
             probe_c2(rows, cache);
+        }
+        Some("c2-references") => {
+            let rows: usize = arguments[1].parse().expect("rows");
+            probe_references(rows);
         }
         other => panic!("unsupported probe {other:?}: expected `order` or `c2`"),
     }
