@@ -550,6 +550,21 @@ fn main() {
         result.counters.release.released,
         result.counters.references.peak_pending
     ));
+    // Validation reads the base the change starts from: parent records, the
+    // bindings of the directories it walks, and the entries of every directory it
+    // inspects for a cycle. Phase 0 recorded these counts `NOT_EXPOSED` in every
+    // frozen vehicle, so P1-4's anchor did not exist; this line is that exposure,
+    // and it adds a printed field without renaming or removing one.
+    let validation = result.counters.validation;
+    text.push_str(&format!(
+        "validation: objects {} waves {} inode_demands {} inode_pages {} directory_pages {} entries_examined {}\n",
+        validation.objects_read,
+        validation.read_waves,
+        validation.inode_demands,
+        validation.inode_pages_read,
+        validation.directory_pages_read,
+        validation.entries_examined
+    ));
     if let Some(attribute) = &run.attribute {
         // Every canonical read this case performed: the inode page the root inode
         // is looked up in, and the attribute page the patch addressed. Without
