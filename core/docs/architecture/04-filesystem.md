@@ -122,7 +122,17 @@ threshold admits **one row more than the page can hold**.
 
 An unfinished page this operation built stays **decoded and private** until the
 merge proves it final. Children are read in bounded authenticated batches
-(`BATCH_CHILDREN = 32`), and the accumulating right spine holds private pages.
+(`BATCH_CHILDREN = 256`), and the accumulating right spine holds private pages.
+
+The width is the widest real demand, not the demand ceiling: one branch page's
+children are bounded by the directory format at 232 (1-byte names), so 256 covers
+every legal page in one wave. A full-width reservation is `256 x (8,192 + 88)`
+plus one decode slot — about 2.08 MiB against the 4 MiB operation lease — where
+the 4,096-id demand ceiling would reserve 33.9 MiB and the narrowing loop would
+clamp it on every call. A parent's batch is held while the merge descends into its
+children, so an inner batch **narrows** to what the remaining lease affords
+instead of refusing; `peak_scratch_bytes` rises with the width and stays inside
+the declared lease.
 
 `SortedWork` reports what one operation did:
 

@@ -216,7 +216,7 @@ fn an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings() {
         "one inode leaf holds this tree"
     );
     assert!(
-        provider.peak_wave() <= 32,
+        provider.peak_wave() <= 256,
         "demand waves stay inside the grouped width"
     );
     assert!(
@@ -1086,6 +1086,10 @@ struct WideRename {
     boundary_waves: u64,
     waves: Vec<usize>,
     demanded: usize,
+    /// Root the operation emitted.
+    root: ObjectId,
+    /// Widest demand wave the provider served.
+    peak_wave: usize,
 }
 
 impl WideRename {
@@ -1101,10 +1105,16 @@ impl WideRename {
     }
 }
 
-/// Runs the three-name rename over a 4,000-entry directory (the wide shape) and
-/// reports what the boundary charged, so a counter test can read both the page
-/// count and the provider's own demand shapes.
+/// Runs the three-name rename over a 4,000-entry directory (the wide shape) under
+/// the default resource ceilings.
 fn wide_rename_charges() -> WideRename {
+    wide_rename_charges_with(resources())
+}
+
+/// The same rename under caller-supplied ceilings, reporting what the boundary
+/// charged so a counter test can read the page count and the provider's own
+/// demand shapes.
+fn wide_rename_charges_with(ceilings: FilesystemResources) -> WideRename {
     let Wide {
         session,
         directory,
@@ -1130,7 +1140,7 @@ fn wide_rename_charges() -> WideRename {
         directories: &directories,
         inodes: &[],
         new_inodes: &[],
-        resources: resources(),
+        resources: ceilings,
     };
     let provider = CountingProvider::new(&session.store);
     let mut sink = TreeStore::new();
@@ -1140,6 +1150,8 @@ fn wide_rename_charges() -> WideRename {
         boundary_waves: 0,
         waves: Vec::new(),
         demanded: 0,
+        root: ObjectId::for_bytes(b"unset"),
+        peak_wave: 0,
     };
     {
         let mut objects = FilesystemObjects::new(&provider, &mut sink);
@@ -1148,10 +1160,119 @@ fn wide_rename_charges() -> WideRename {
         report.pages_read = result.counters.directories.pages_read;
         report.objects_read = result.counters.objects.objects_read;
         report.boundary_waves = result.counters.objects.read_waves;
+        report.root = result.root.0;
     }
     report.waves = provider.waves();
     report.demanded = provider.demands();
+    report.peak_wave = provider.peak_wave();
     report
+}
+
+#[test]
+fn a_wide_branch_page_reads_its_children_in_one_wave() {
+    // A 4,000-entry tree's inode branch has more than 32 children, so the width
+    // decides how many waves its children cost. Measured on this fixture:
+    //
+    //   width 32  (before P1-1)  ... 32, 32, 16   -> 29 waves, boundary 6
+    //   width 256 (this commit)  ... 80           -> 27 waves, boundary 4
+    //
+    // and the work itself is unchanged: the same 119 objects are demanded, 96 are
+    // read and the directory engine decodes the same 15 pages. Only the grouping
+    // moved, which is what makes this a wave-width change and not a work change.
+    let report = wide_rename_charges();
+    let wide: Vec<usize> = report
+        .waves
+        .iter()
+        .copied()
+        .filter(|width| *width > 32)
+        .collect();
+    assert_eq!(
+        wide,
+        vec![80],
+        "the 80-child branch is one wave, not ceil(80/32): {:?}",
+        report.waves
+    );
+    assert_eq!(
+        report.peak_wave, 80,
+        "the widest wave is the branch's own child count"
+    );
+    assert_eq!(report.demanded, 119, "the same objects are demanded");
+    assert_eq!(report.objects_read, 96, "and the same objects are read");
+    assert_eq!(
+        report.pages_read, 15,
+        "and the same directory pages are decoded"
+    );
+    assert_eq!(
+        report.boundary_waves, 4,
+        "four charged waves where the 32-wide batch charged six"
+    );
+}
+
+#[test]
+fn narrowing_keeps_a_small_scratch_working() {
+    // A width the operation cannot afford must narrow, never refuse. Under a
+    // 512 KiB scratch lease the 80-child branch cannot be reserved at once, so
+    // the batch narrows to what fits — and the operation still produces the same
+    // root. The reservation arithmetic is one child slot of
+    // `MAXIMUM_PAGE_BYTES + associations` (8,280 B) plus one decode slot, so a
+    // wave that fits the lease cannot reserve more than `scratch / 8,280` slots.
+    let narrow = wide_rename_charges_with(FilesystemResources {
+        scratch_bytes: 512 * 1024,
+        ..resources()
+    });
+    let wide = wide_rename_charges();
+    assert_eq!(
+        narrow.root, wide.root,
+        "narrowing changes the reservation, never the result"
+    );
+    assert_eq!(
+        narrow.demanded, wide.demanded,
+        "and never the objects demanded"
+    );
+    assert!(
+        narrow.peak_wave < wide.peak_wave,
+        "the batch narrowed: {} against {}",
+        narrow.peak_wave,
+        wide.peak_wave
+    );
+    assert!(
+        narrow.peak_wave * (8_192 + 88) <= 512 * 1024,
+        "a wave of {} children cannot reserve {} bytes inside a 512 KiB lease",
+        narrow.peak_wave,
+        narrow.peak_wave * (8_192 + 88)
+    );
+}
+
+#[test]
+fn one_grouped_demand_is_one_charged_wave() {
+    // The counter semantics C1 fixed, pinned on single calls: a grouped demand is
+    // one wave, a point read is one wave, and neither is charged twice. The
+    // operation-level test beside this one cannot pin an exact total, because a
+    // whole operation's wave count also includes the merge's batches, whose number
+    // is `ceil(children / BATCH_CHILDREN)` — a function of the width P1-1 raised.
+    let session = Session::new(1).expect("empty tree");
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&provider, &mut sink);
+    let root = session.root;
+
+    objects.read_batch(&[root, root]).expect("grouped demand");
+    assert_eq!(objects.work().objects_read, 2);
+    assert_eq!(
+        objects.work().read_waves,
+        1,
+        "one grouped demand is one wave, not two"
+    );
+    assert_eq!(provider.waves(), vec![2], "and one provider call");
+
+    objects.read(root).expect("point read");
+    assert_eq!(objects.work().objects_read, 3);
+    assert_eq!(
+        objects.work().read_waves,
+        2,
+        "a point read is one more wave"
+    );
+    assert_eq!(provider.waves(), vec![2, 1]);
 }
 
 #[test]
@@ -1180,9 +1301,18 @@ fn a_grouped_demand_is_one_wave_and_every_page_it_decoded() {
         report.demanded,
         "every demand the provider served is either point or grouped"
     );
-    assert_eq!(
-        report.boundary_waves, 6,
-        "5 point reads and 1 grouped demand are 6 waves, not 9",
+    // The boundary charges at most one wave per provider call it makes, so its
+    // own count can never exceed the provider's call count. Before C1 a grouped
+    // demand was charged twice and the same run reported 10 charged waves against
+    // 6 provider calls. The exact per-call semantics are pinned on single calls by
+    // `one_grouped_demand_is_one_charged_wave`: an operation-level total also
+    // counts the merge's batches, whose number is `ceil(children / BATCH_CHILDREN)`
+    // and therefore a function of the width P1-1 raises.
+    assert!(
+        report.boundary_waves <= report.waves.len() as u64,
+        "the boundary charged {} waves for {} provider calls",
+        report.boundary_waves,
+        report.waves.len()
     );
     assert!(
         report.boundary_waves < report.objects_read + 2,

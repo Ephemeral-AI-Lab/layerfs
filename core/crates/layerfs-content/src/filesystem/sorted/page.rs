@@ -25,7 +25,16 @@ use crate::object::{FinalizedObject, ObjectId, ObjectRole};
 /// copy of it: `limits` owns the number and every enforcement site names it.
 pub const MAXIMUM_SCRATCH_BYTES: usize = crate::filesystem::limits::MAXIMUM_OPERATION_SCRATCH_BYTES;
 /// Children read in one bounded authenticated batch.
-pub const BATCH_CHILDREN: usize = 32;
+///
+/// The widest real demand is one branch page's children, which the directory
+/// format bounds at 232 (1-byte names, `format.rs`), so 256 covers every legal
+/// branch page in one wave. It is not the 4,096-id demand ceiling: a full-width
+/// reserve of 256 x 8,280 B plus one decode slot is about 2.08 MiB against the
+/// 4 MiB operation lease, while 4,096 x 8,280 B would be 33.9 MiB and the
+/// narrowing loop below would clamp it on every call. A parent's batch is held
+/// while the merge descends into its children, so a child's own batch narrows
+/// instead of doubling the reservation.
+pub const BATCH_CHILDREN: usize = 256;
 
 /// One slot of the accumulating right spine: a private page, if one exists.
 pub(crate) type PageSlot<K, V> = Option<Box<Page<K, V>>>;
