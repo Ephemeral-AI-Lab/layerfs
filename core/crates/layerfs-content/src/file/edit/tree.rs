@@ -652,25 +652,67 @@ pub fn concat(
     left: NodeSummary,
     right: NodeSummary,
 ) -> ContentResult<NodeSummary> {
-    concat_inner(objects, left, right, 0)
+    concat_inner(
+        objects,
+        JoinSide::summary(left),
+        JoinSide::summary(right),
+        0,
+    )
+}
+
+/// One side of a join: its summary, and the node when the caller already has it.
+///
+/// A caller that has just decoded a node under its **non-root** context can hand
+/// it here instead of letting the join decode it again under the weaker root
+/// context. The stricter check is kept and the duplicate read disappears; a side
+/// without a node is loaded exactly as before.
+struct JoinSide {
+    summary: NodeSummary,
+    node: Option<ExtentNode>,
+}
+
+impl JoinSide {
+    /// A side that has not been decoded yet.
+    const fn summary(summary: NodeSummary) -> Self {
+        Self {
+            summary,
+            node: None,
+        }
+    }
+
+    /// A side the caller already decoded and checked.
+    const fn decoded(summary: NodeSummary, node: ExtentNode) -> Self {
+        Self {
+            summary,
+            node: Some(node),
+        }
+    }
+
+    /// The decoded node, from the caller when it has one.
+    fn take(&mut self, objects: &mut EditObjects<'_>, root: bool) -> ContentResult<ExtentNode> {
+        match self.node.take() {
+            Some(node) => Ok(node),
+            None => objects.load_node(self.summary, root),
+        }
+    }
 }
 
 fn concat_inner(
     objects: &mut EditObjects<'_>,
-    left: NodeSummary,
-    right: NodeSummary,
+    mut left: JoinSide,
+    mut right: JoinSide,
     depth: u8,
 ) -> ContentResult<NodeSummary> {
     if depth > MAX_LEVEL {
         return Err(ContentError::MappingDepthExceeded);
     }
-    if left.level == right.level {
-        let left_node = objects.load_node(left, true)?;
-        let right_node = objects.load_node(right, true)?;
+    if left.summary.level == right.summary.level {
+        let left_node = left.take(objects, true)?;
+        let right_node = right.take(objects, true)?;
         // A join replaces both inputs: a merged page when they are leaves, and a
         // rebuilt page when they are branches. Their children stay live.
-        objects.release(left.id);
-        objects.release(right.id);
+        objects.release(left.summary.id);
+        objects.release(right.summary.id);
         return match (left_node, right_node) {
             (ExtentNode::Leaf { mut extents, .. }, ExtentNode::Leaf { extents: other, .. }) => {
                 extents.extend(other);
@@ -693,29 +735,40 @@ fn concat_inner(
             _ => Err(ContentError::WrongLogicalRole),
         };
     }
-    if left.level > right.level {
+    if left.summary.level > right.summary.level {
         let ExtentNode::Branch {
             level, children, ..
-        } = objects.load_node(left, true)?
+        } = left.take(objects, true)?
         else {
             return Err(ContentError::WrongLogicalRole);
         };
         let summaries = child_summaries(&children, level - 1)?;
         // The taller side is dismantled into a rebuilt prefix and one descending
         // boundary; every child it held stays live in one of the two.
-        objects.release(left.id);
+        objects.release(left.summary.id);
         let (last, prefix) = summaries
             .split_last()
             .ok_or(ContentError::InvalidRecord("empty branch"))?;
         let last = *last;
-        objects.load_node(last, false)?;
+        // The boundary child is checked under its **non-root** context, the
+        // stricter one, and the decoded node travels into the join instead of
+        // being read and decoded a second time.
+        let last_node = objects.load_node(last, false)?;
         let prefix = root_from_children(objects, prefix.to_vec())?;
-        let boundary = concat_inner(objects, last, right, depth + 1)?;
+        let boundary = concat_inner(
+            objects,
+            JoinSide::decoded(last, last_node),
+            right,
+            depth + 1,
+        )?;
         return match prefix {
             None => Ok(boundary),
-            Some(prefix) if prefix.level == boundary.level => {
-                concat_inner(objects, prefix, boundary, depth + 1)
-            }
+            Some(prefix) if prefix.level == boundary.level => concat_inner(
+                objects,
+                JoinSide::summary(prefix),
+                JoinSide::summary(boundary),
+                depth + 1,
+            ),
             Some(prefix) if prefix.level.checked_add(1) == Some(boundary.level) => {
                 let ExtentNode::Branch {
                     level, children, ..
@@ -749,26 +802,35 @@ fn concat_inner(
     }
     let ExtentNode::Branch {
         level, children, ..
-    } = objects.load_node(right, true)?
+    } = right.take(objects, true)?
     else {
         return Err(ContentError::WrongLogicalRole);
     };
     let summaries = child_summaries(&children, level - 1)?;
     // Mirror of the taller-left case: the taller side is dismantled into a
     // descending boundary and one rebuilt suffix.
-    objects.release(right.id);
+    objects.release(right.summary.id);
     let (first, suffix) = summaries
         .split_first()
         .ok_or(ContentError::InvalidRecord("empty branch"))?;
     let first = *first;
-    objects.load_node(first, false)?;
-    let boundary = concat_inner(objects, left, first, depth + 1)?;
+    // As above: the stricter non-root check stays, and the join reuses the node.
+    let first_node = objects.load_node(first, false)?;
+    let boundary = concat_inner(
+        objects,
+        left,
+        JoinSide::decoded(first, first_node),
+        depth + 1,
+    )?;
     let suffix = root_from_children(objects, suffix.to_vec())?;
     match suffix {
         None => Ok(boundary),
-        Some(suffix) if suffix.level == boundary.level => {
-            concat_inner(objects, boundary, suffix, depth + 1)
-        }
+        Some(suffix) if suffix.level == boundary.level => concat_inner(
+            objects,
+            JoinSide::summary(boundary),
+            JoinSide::summary(suffix),
+            depth + 1,
+        ),
         Some(suffix) if suffix.level.checked_add(1) == Some(boundary.level) => {
             let ExtentNode::Branch {
                 level, children, ..

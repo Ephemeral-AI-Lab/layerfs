@@ -651,3 +651,72 @@ fn the_oracle_fixtures_are_the_sealed_reference_revision() {
         );
     }
 }
+
+/// Builds one oracle case's base and applies its edit, reporting the operation's
+/// own node-load count beside the root it emitted.
+fn edited_nodes(case: &str) -> (u64, String) {
+    let policy = ConstructionPolicy::frozen_default();
+    let (base, edits, source) = fixture_inputs(case);
+    let mut base_store = MemoryStore::new();
+    let constructed = disabled_scope(|scope| {
+        construct_bytes(
+            policy,
+            &policy.capacities(),
+            &base,
+            &mut base_store,
+            scope.child("content"),
+        )
+    })
+    .expect("base construction");
+    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let mut result_store = base_store.merged_clone();
+    let edited = disabled_scope(|scope| {
+        apply_edits(
+            policy,
+            &policy.capacities(),
+            &base_store,
+            EditRequest {
+                root: constructed.root,
+                edits: &stream,
+                source: &source,
+            },
+            &mut result_store,
+            scope.child("edit"),
+        )
+    })
+    .expect("edit succeeds");
+    (edited.counters.nodes_read, format!("{}", edited.root))
+}
+
+#[test]
+fn an_interior_join_reads_its_boundary_child_once() {
+    // P1-6: the join's taller side is dismantled and its boundary child is checked
+    // under the **non-root** context before the join descends into it. That check
+    // stays; what used to follow it was a second read and decode of the same node
+    // under the weaker root context, which is what this test pins away.
+    //
+    // The shape is the sealed oracle's `interior-multi-level` case — a 400-extent
+    // base with a 40,000-byte replacement at its middle — because it is the case
+    // that actually takes the height-mismatched branch: the append-only and
+    // root-collapse cases below join equal heights and never load a boundary child.
+    let (nodes, root) = edited_nodes("interior-multi-level");
+    assert_eq!(
+        nodes, 22,
+        "the boundary child is decoded once per join, not twice"
+    );
+    assert_eq!(
+        root, "57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0",
+        "the emitted root is the pre-change value"
+    );
+
+    // The negative controls: shapes whose joins are equal-height are untouched.
+    for (case, expected) in [
+        ("unequal-height-join", 4_u64),
+        ("height-growth", 4),
+        ("root-collapse", 4),
+        ("join-80-100", 9),
+    ] {
+        let (nodes, _) = edited_nodes(case);
+        assert_eq!(nodes, expected, "{case} must not change");
+    }
+}
