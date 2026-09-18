@@ -1,0 +1,24 @@
+{
+  "name": "edit.save",
+  "elapsed_ns": 2781500,
+  "children": [
+    {"name": "storage.begin", "elapsed_ns": 243375, "children": []},
+    {
+      "name": "file.edit",
+      "elapsed_ns": 1003416,
+      "children": [
+        {
+          "name": "edit.base",
+          "elapsed_ns": 599042,
+          "children": [
+            {"name": "edit.base_read", "elapsed_ns": 598083, "children": []}
+          ]
+        },
+        {"name": "edit.compare", "elapsed_ns": 542, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 389375, "children": []},
+        {"name": "edit.finish", "elapsed_ns": 8375, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 1163917, "children": []}
+  ]
+}

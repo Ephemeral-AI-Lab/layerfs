@@ -1,0 +1,40 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits --mode pipeline --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-14/after/output/D20/edits-pipeline-small
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.013
+--- stdout ---
+mode: pipeline
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+base preparation (untimed): root 950a13bc1eb6c354370bdf5971770706139f7caf29021e6ee0ffdfb489428603 stored as 1 object(s), 1 pack(s)
+edited root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+edited length: 65536
+save: inserted 1 reused 0 packs 1 prefix records 1 full records 0
+readback bytes: 65536
+readback connection opens: 1
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  1.431ms
+  storage.begin  255.834us
+  file.edit  615.708us
+    edit.base  552.166us
+      edit.base_read  551.208us
+    edit.compare  4.917us
+      edit.compare.window  3.500us
+    edit.assemble  3.375us
+    content.identify  47.625us
+    content.emit  666ns
+  storage.finish  453.500us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  494.375us
+  content.read  492.875us
+    content.acquire  489.875us
+    content.emit  1.667us
+timings: 11 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-14/after/output/D20/edits-pipeline-small/pipeline-edit-save.json
+timings: 4 nodes at 3 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-14/after/output/D20/edits-pipeline-small/pipeline-readback.json
+wall_seconds: 0.007646
+--- stderr ---

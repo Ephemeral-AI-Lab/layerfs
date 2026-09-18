@@ -1,0 +1,18 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/edit_memory_probe
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.592
+--- stdout ---
+probe: whole-file edit peak live requested bytes
+cutoff_bytes: 131072
+base_bytes: 65536
+edit: overwrite [32768, 33280)
+final_bytes: 65536
+edited_root: 8ddfe36cd5449f2b720590cb05da552290acaa5546ed065881c832703c650798
+objects_written: 1
+objects_written_bytes: 65559
+nodes_read: 1
+baseline_live_bytes: 132175
+peak_live_bytes: 264001
+peak_delta_bytes: 131826
+--- stderr ---
