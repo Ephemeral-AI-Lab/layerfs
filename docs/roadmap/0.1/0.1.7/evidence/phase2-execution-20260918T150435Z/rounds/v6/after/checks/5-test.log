@@ -1,0 +1,864 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.76s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_content-e7711c3a6c56da6c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_batch.rs (core/target/debug/deps/edit_batch-242f78b2ce0726f3)
+
+running 7 tests
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test repeated_length_changes_accumulate ... ok
+test adjacent_edits_stay_separate_segments ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test several_separated_edits_apply_in_order ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-dd6eea6df3feca78)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+test the_edit_stream_ceiling_is_enforced_before_any_work ... ok
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.22s
+
+     Running tests/edit_localized.rs (core/target/debug/deps/edit_localized-748286c03ed6a3f8)
+
+running 8 tests
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.53s
+
+     Running tests/edit_model.rs (core/target/debug/deps/edit_model-2639bf39cae29b1c)
+
+running 6 tests
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+test a_chunked_update_matches_the_model ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/edit_noop.rs (core/target/debug/deps/edit_noop-8bd80d27c9c55da7)
+
+running 7 tests
+test an_out_of_range_replacement_length_is_an_error ... ok
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test several_equal_replacements_are_all_recognised ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/edit_reference.rs (core/target/debug/deps/edit_reference-f38ba3eae1451849)
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+test an_interior_join_reads_its_boundary_child_once ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.16s
+
+     Running tests/edit_single.rs (core/target/debug/deps/edit_single-b987ceb21bfefc32)
+
+running 11 tests
+test an_inapplicable_range_is_rejected_before_any_work ... ok
+test a_declared_length_that_does_not_match_its_bytes_fails ... ok
+test complete_deletion_returns_the_empty_representation ... ok
+test the_base_objects_are_never_rewritten ... ok
+test an_edit_reads_and_decodes_the_base_root_once ... ok
+test append_at_end_of_file ... ok
+test overwrite_in_the_middle ... ok
+test insert_and_delete_change_the_length_exactly ... ok
+test overwrite_at_the_head_and_the_tail ... ok
+test an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once ... ok
+test a_chunked_base_reads_and_edits_without_a_full_pass ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/edit_timing.rs (core/target/debug/deps/edit_timing-7965e787631671aa)
+
+running 4 tests
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/edit_transitions.rs (core/target/debug/deps/edit_transitions-c47a00f97272e149)
+
+running 10 tests
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+test whole_file_edit_emits_the_reference_bytes ... ok
+test known_and_streamed_complete_lengths_agree ... ok
+test a_whole_file_result_reports_no_counters_and_that_is_recorded ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test retained_segments_share_one_descent ... ok
+test straddling_payload_demanded_once_across_segments ... ok
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+test the_transition_reads_only_what_it_keeps_and_charges_it ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+
+     Running tests/file_complete.rs (core/target/debug/deps/file_complete-d361d4d3486c44c5)
+
+running 14 tests
+test representation_boundaries_are_exact_and_exclusive ... ok
+test unsupported_policy_values_are_rejected_before_work ... ok
+test empty_file_uses_the_defined_file_state_form ... ok
+test one_byte_file_is_a_whole_file_object ... ok
+test whole_file_payload_is_classified_without_a_db ... ok
+test chunk_partition_is_frozen_for_the_reference_input ... ok
+test late_input_failure_after_early_output_is_returned_once ... ok
+test below_cutoff_uses_one_whole_file_object_and_reads_back_exactly ... ok
+test streamed_source_requests_stay_bounded ... ok
+test construction_is_deterministic_for_the_same_input ... ok
+test chunks_respect_the_frozen_size_window ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test at_and_above_cutoff_uses_a_chunked_tree ... ok
+test known_length_and_streaming_inputs_agree_exactly ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/file_read.rs (core/target/debug/deps/file_read-349677dd17761237)
+
+running 15 tests
+test a_short_page_is_accepted_as_a_root_and_refused_as_a_non_root ... ok
+test whole_file_root_rejects_a_range_beyond_its_payload ... ok
+test out_of_bounds_and_inverted_ranges_fail ... ok
+test full_read_returns_exact_bytes_for_every_representation ... ok
+test a_provider_failure_is_returned_once_and_stops_the_read ... ok
+test empty_range_at_end_of_file_is_empty_and_at_eof_bound_is_allowed ... ok
+test repeated_demands_of_one_payload_read_it_once_and_emit_it_every_time ... ok
+test a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode ... ok
+test a_state_that_contradicts_its_root_page_is_refused_before_the_walk ... ok
+test the_payload_wave_enforces_both_its_object_and_its_byte_ceiling ... ok
+test ranges_cross_extents_and_page_boundaries ... ok
+test a_wave_is_released_before_the_next_one_is_read ... ok
+test a_state_that_overstates_its_mapping_is_refused_not_partly_served ... ok
+test navigation_acquires_a_whole_level_per_provider_call ... ok
+test a_large_read_acquires_payloads_in_bounded_batches ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.50s
+
+     Running tests/filesystem_attributes.rs (core/target/debug/deps/filesystem_attributes-337d88225d9250b0)
+
+running 11 tests
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test values_are_extent_only_at_every_size ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/filesystem_bounds.rs (core/target/debug/deps/filesystem_bounds-6bbb40f430791c7d)
+
+running 17 tests
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test the_cycle_check_work_limit_is_reachable_and_reported ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.92s
+
+     Running tests/filesystem_codec.rs (core/target/debug/deps/filesystem_codec-6db45541bb13406e)
+
+running 9 tests
+test roles_and_identity_are_not_interchangeable ... ok
+test attribute_pages_match_the_reference_bytes ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test roots_and_symlinks_match_the_reference_bytes ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-3258c9e23e27a29e)
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/filesystem_hardlinks.rs (core/target/debug/deps/filesystem_hardlinks-1622472a566489a6)
+
+running 6 tests
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test two_aliases_reach_one_derived_count ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_limits.rs (core/target/debug/deps/filesystem_limits-21109c14d1ea7162)
+
+running 7 tests
+test the_limits_this_suite_cannot_bound_are_named_with_their_reason ... ok
+test a_symlink_target_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_component_name_is_accepted_at_255_bytes_and_refused_at_256 ... ok
+test an_attribute_domain_and_key_are_accepted_at_their_bounds_and_refused_over ... ok
+test a_path_is_accepted_at_256_components_and_refused_at_257 ... ok
+test a_path_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/filesystem_ordering.rs (core/target/debug/deps/filesystem_ordering-57e17c2a0d779732)
+
+running 15 tests
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/filesystem_ordering_scan.rs (core/target/debug/deps/filesystem_ordering_scan-8075b97c8c48e2db)
+
+running 2 tests
+test a_restarted_scan_returns_the_same_rows_as_a_fresh_one ... ok
+test lookups_allocate_nothing_after_the_tiers_are_built ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_profile.rs (core/target/debug/deps/filesystem_profile-d396d378a4827845)
+
+running 2 tests
+test the_profile_text_names_the_bounds_it_is_hashed_with ... ok
+test a_foreign_profile_is_refused_before_a_root_exists ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_read.rs (core/target/debug/deps/filesystem_read-cef3cc0569c588c8)
+
+running 4 tests
+test a_symlink_reads_back_its_exact_stored_target ... ok
+test resolve_stat_and_list_agree_on_the_same_tree ... ok
+test repeated_and_shared_demands_keep_order_and_cardinality ... ok
+test listing_is_bounded_by_bytes_as_well_as_count ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_reference.rs (core/target/debug/deps/filesystem_reference-eb8f0d19bf1be52d)
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.94s
+
+     Running tests/filesystem_sorted.rs (core/target/debug/deps/filesystem_sorted-2ec221eba02adbe9)
+
+running 7 tests
+test a_late_source_error_propagates_and_publishes_nothing ... ok
+test an_unsorted_duplicate_or_repeating_change_is_refused_once ... ok
+test a_genuinely_empty_directory_is_emitted_once ... ok
+test a_tiny_supported_budget_works_or_refuses_before_allocating ... ok
+test initial_construction_needs_no_provisional_seed ... ok
+test page_widths_running_total_matches_the_recorded_partition ... ok
+test leaf_and_branch_boundaries_are_partitioned_canonically ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/filesystem_timing.rs (core/target/debug/deps/filesystem_timing-5dc895cc1ac19e28)
+
+running 2 tests
+test a_recorded_construction_reports_its_phases ... ok
+test a_recorded_update_reports_coarse_phases_and_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_topology.rs (core/target/debug/deps/filesystem_topology-1c13171355146252)
+
+running 17 tests
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test the_root_stays_a_zero_count_directory ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_self_binding_is_refused ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test a_reused_identity_is_refused ... ok
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_updates.rs (core/target/debug/deps/filesystem_updates-bf48199d4db2de46)
+
+running 6 tests
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fixture_seal.rs (core/target/debug/deps/fixture_seal-51fbf12a2d2d0cc9)
+
+running 2 tests
+test the_generator_cannot_reseal_during_an_ordinary_test_run ... ok
+test the_sealed_fixtures_are_exactly_the_frozen_ones ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/inode_leaf.rs (core/target/debug/deps/inode_leaf-d078093e6ac8cc84)
+
+running 6 tests
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test malformed_leaves_are_rejected ... ok
+test a_leaf_round_trips_with_its_exact_layout ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/object_identity.rs (core/target/debug/deps/object_identity-ed02be24e612d861)
+
+running 11 tests
+test identity_of_a_damaged_canonical_object_changes ... ok
+test malformed_envelopes_are_rejected_exactly ... ok
+test identity_is_domain_separated_and_not_a_raw_digest ... ok
+test small_fixture_bytes_and_identity_are_frozen ... ok
+test identity_has_no_variable_width_or_text_shortcuts ... ok
+test writing_to_a_sink_matches_the_single_allocation_encoder ... ok
+test mapping_profile_and_empty_form_identities_are_frozen ... ok
+test moving_an_objects_pieces_keeps_its_advisory_predecessors ... ok
+test chunk_fixture_bytes_and_identity_are_frozen ... ok
+test the_envelope_ceiling_is_enforced_at_plus_or_minus_one ... ok
+test the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/streaming.rs (core/target/debug/deps/streaming-ccd1c33401fd2dae)
+
+running 9 tests
+test a_short_source_is_a_definitive_whole_file_result ... ok
+test a_late_input_failure_is_returned_once_after_early_output ... ok
+test a_discarding_consumer_never_allocates_a_payload_copy ... ok
+test root_identity_is_stable_across_repeated_streaming_runs ... ok
+test children_are_emitted_before_their_parents ... ok
+test input_requests_stay_bounded_by_the_declared_windows ... ok
+test unknown_length_and_known_length_agree_object_by_object ... ok
+test many_files_do_not_retain_the_whole_workload ... ok
+test the_builder_retains_a_bounded_number_of_entries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s
+
+     Running tests/timing.rs (core/target/debug/deps/timing-2a89629f025853ed)
+
+running 7 tests
+test small_construction_reports_its_real_scopes ... ok
+test a_discarding_consumer_still_runs_the_real_constructor ... ok
+test a_construction_failure_keeps_its_completed_timing ... ok
+test repeated_labels_stay_distinct_and_ordered ... ok
+test chunked_construction_reports_the_chunk_scope ... ok
+test a_read_reports_its_own_scopes_without_storage ... ok
+test recording_and_disabled_execution_produce_identical_results ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_storage-cb1fdfca4fcb51a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cas_reuse.rs (core/target/debug/deps/cas_reuse-29574ef8e1a592cb)
+
+running 9 tests
+test a_directory_is_never_treated_as_a_store ... ok
+test a_stored_row_with_a_short_length_is_rejected_without_reading_it ... ok
+test resaving_the_same_object_reuses_its_row_without_a_new_pack ... ok
+test a_corrupted_stored_record_is_refused_before_its_identity_is_trusted ... ok
+test repeated_identity_across_batches_reuses_without_rewriting ... ok
+test repeated_identities_inside_one_batch_insert_once_and_reuse_the_rest ... ok
+test a_batch_lookup_is_bounded_by_the_declared_read_ceiling ... ok
+test one_operation_can_save_two_files_into_shared_packs ... ok
+test a_repetitive_file_spanning_waves_inserts_once_per_distinct_identity ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/cas_roundtrip.rs (core/target/debug/deps/cas_roundtrip-05ccd2b48100dfe3)
+
+running 13 tests
+test fresh_store_writes_the_declared_schema_identity ... ok
+test malformed_store_identity_is_rejected ... ok
+test a_read_wave_is_bounded_by_the_declared_ceiling ... ok
+test an_oversized_provider_demand_is_refused_before_the_session_opens ... ok
+test missing_object_is_a_definite_failure ... ok
+test an_old_same_version_store_is_refused_at_open ... ok
+test a_disagreeing_role_declaration_is_refused_by_its_own_decoder ... ok
+test whole_file_object_survives_close_and_reopen ... ok
+test a_pooled_session_opens_one_connection_for_every_wave ... ok
+test a_read_wave_reports_the_connection_it_opened ... ok
+test a_pooled_session_sees_a_save_that_completed_between_its_waves ... ok
+test compressible_and_incompressible_payloads_round_trip ... ok
+test every_initial_role_round_trips ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/codec_frames.rs (core/target/debug/deps/codec_frames-466213e659021382)
+
+running 7 tests
+test a_declared_length_that_contradicts_the_frame_is_refused ... ok
+test a_forged_declared_length_inside_the_header_is_refused_by_the_call_itself ... ok
+test a_frame_whose_checksum_no_longer_matches_is_refused ... ok
+test the_decode_arena_is_charged_only_when_a_frame_needs_it ... ok
+test a_valid_frame_round_trips_through_both_decode_entry_points ... ok
+test a_frame_beyond_the_profiles_window_is_refused ... ok
+test every_truncation_of_a_valid_frame_is_refused_without_panicking ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+
+     Running tests/connection_profile.rs (core/target/debug/deps/connection_profile-3f4a956c1b4dc928)
+
+running 4 tests
+test an_unconfigured_connection_is_refused_by_profile_verification ... ok
+test a_connection_with_a_busy_timeout_is_refused_by_profile_verification ... ok
+test a_degraded_connection_is_refused_by_profile_verification ... ok
+test a_configured_connection_passes_profile_verification ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/core_pipeline.rs (core/target/debug/deps/core_pipeline-43683d4cc4d6612b)
+
+running 6 tests
+test a_pipeline_input_failure_keeps_the_original_error_and_cleans_up ... ok
+test integrated_and_independent_runs_produce_the_same_roots ... ok
+test a_streamed_file_survives_construction_storage_and_readback ... ok
+test many_files_stream_through_one_save_with_bounded_batches ... ok
+test many_distinct_compressible_records_share_groups_and_read_back_identically ... ok
+test a_file_larger_than_five_mebibytes_survives_a_real_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+
+     Running tests/delta_chains.rs (core/target/debug/deps/delta_chains-f35fbf213b29e438)
+
+running 9 tests
+test an_unsupported_depth_is_rejected_before_any_store_exists ... ok
+test the_default_depths_are_the_documented_ones ... ok
+test a_cyclic_dependency_is_refused_by_chronology ... ok
+test a_wrong_role_dependency_is_rejected ... ok
+test the_save_reports_every_chain_it_acquired_not_only_the_last ... ok
+test a_corrupt_intermediate_is_rejected_during_reconstruction ... ok
+test a_reduced_depth_stops_at_its_own_boundary ... ok
+test an_increased_depth_is_honoured_up_to_its_boundary ... ok
+test a_chain_that_would_exceed_its_work_budget_is_never_stored ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/delta_payload.rs (core/target/debug/deps/delta_payload-3a690eab668b7ad1)
+
+running 15 tests
+test the_c1_handoff_reports_the_same_selection_as_a_direct_save ... ok
+test an_absent_chunk_candidate_selects_full ... ok
+test depth_zero_disables_prospective_delta_entirely ... ok
+test an_ineligible_chunk_candidate_selects_full ... ok
+test an_unrelated_candidate_loses_the_cost_comparison ... ok
+test the_admitted_full_cache_supplies_a_candidate_within_one_save ... ok
+test an_absent_or_ineligible_candidate_selects_full ... ok
+test a_corrupt_base_fails_the_save_instead_of_selecting_full ... ok
+test exact_reuse_is_decided_before_any_trial ... ok
+test native_delta_uses_the_first_supplied_eligible_candidate_only ... ok
+test an_explicit_predecessor_produces_a_readable_prefix_record ... ok
+test the_chunk_lane_honours_its_own_depth_cap ... ok
+test a_same_save_unsealed_chunk_predecessor_selects_full ... ok
+test a_delta_chain_is_resolved_iteratively_and_reaches_every_step ... ok
+test a_fifty_link_chunk_chain_is_admitted_and_read ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-64a9908979aab1ab)
+
+running 6 tests
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+test a_transition_charges_only_the_retained_base_at_the_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-18fd53c08a07f8b4)
+
+running 4 tests
+test a_corrupted_pack_fails_the_read_without_touching_retained_state ... ok
+test a_tree_failure_inside_a_save_aborts_this_attempt_only ... ok
+test a_private_attempt_is_invisible_until_acknowledgement_and_absent_after_failure ... ok
+test a_late_external_constraint_fails_once_without_moving_the_watermark ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/filesystem_pipeline.rs (core/target/debug/deps/filesystem_pipeline-94d1ff562846fd8c)
+
+running 6 tests
+test a_caller_authorized_value_root_is_not_an_object_dependency ... ok
+test a_real_tree_saves_reopens_and_reads_back_exactly ... ok
+test a_reopened_store_serves_an_update_of_the_saved_tree ... ok
+test a_patch_saved_to_the_store_keeps_untouched_attribute_roots ... ok
+test the_integrated_body_agrees_with_itself_when_recording_is_disabled ... ok
+test the_saved_tree_reports_its_physical_footprint_and_reuses_it_unchanged ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/group_decodes.rs (core/target/debug/deps/group_decodes-d2f86df8bdb6dbb2)
+
+running 2 tests
+test the_decode_charge_is_per_read_and_not_per_store ... ok
+test a_decode_is_charged_once_per_record_and_not_once_per_group ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/memory_bounds.rs (core/target/debug/deps/memory_bounds-3d38d7437a97e163)
+
+running 8 tests
+test a_store_created_with_an_unsupported_policy_is_rejected_before_work ... ok
+test an_oversized_chunk_record_is_rejected_against_its_declared_limit ... ok
+test an_oversized_whole_file_record_is_rejected_against_its_declared_limit ... ok
+test a_complete_file_singleton_never_creates_a_payload_file ... ok
+test the_supported_incompressible_singletons_are_stored_and_read_back ... ok
+test a_large_input_is_reachable_only_through_its_own_singleton_path ... ok
+test the_retained_footprint_reports_pack_bodies_and_database_bytes ... ok
+test pending_ownership_stays_inside_the_declared_batch_bounds ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/metadata_chain.rs (core/target/debug/deps/metadata_chain-52d8e83b759a9ee7)
+
+running 2 tests
+test small_records_reach_the_depth_cap_and_the_next_edge_is_stored_in_full ... ok
+test maximal_records_hit_the_canonical_budget_before_the_depth_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/metadata_fingerprint_collision.rs (core/target/debug/deps/metadata_fingerprint_collision-38734eed3122edf0)
+
+running 2 tests
+test the_searched_pair_is_a_real_collision_of_valid_values ... ok
+test colliding_values_are_never_confused_through_the_store ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 15 tests
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-81e562c5a128a311)
+
+running 8 tests
+test the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason ... ok
+test the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero ... ok
+test one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by ... ok
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_failed_save_leaves_no_usable_state_in_the_set ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-9afe5b60552d1c24)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.05s
+
+     Running tests/pack_locator.rs (core/target/debug/deps/pack_locator-8fee9b2b5e6ab6f1)
+
+running 8 tests
+test append_reuses_a_pack_without_changing_record_ordinals ... ok
+test a_locator_outside_the_group_directory_is_rejected ... ok
+test same_save_reads_see_accepted_objects_before_the_finish_barrier ... ok
+test a_corrupt_pack_body_is_rejected_on_read ... ok
+test a_whole_file_record_is_stored_in_its_own_compact_pack ... ok
+test a_full_lane_starts_a_new_pack_and_keeps_existing_locators ... ok
+test the_placement_fit_probe_agrees_with_the_canonical_assembled_length ... ok
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-2500f92d7c396546)
+
+running 8 tests
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test a_second_save_cannot_acquire_ownership_while_the_first_holds_it ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/physical_formats.rs (core/target/debug/deps/physical_formats-dce48c851f47630a)
+
+running 8 tests
+test the_lane_table_names_one_limit_per_lane ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+test an_ordinary_group_seals_on_the_framed_length_it_writes ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/policy_capacity.rs (core/target/debug/deps/policy_capacity-0c494ceb3d49140b)
+
+running 9 tests
+test a_larger_cutoff_keeps_the_chain_and_live_budgets_unchanged ... ok
+test a_deeper_configured_depth_never_widens_a_work_or_live_budget ... ok
+test the_minimum_supported_cutoff_is_the_published_minimum ... ok
+test the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts ... ok
+test the_pooled_metadata_depth_is_persisted_and_checked_separately ... ok
+test an_unsupported_or_conflicting_policy_is_rejected_before_mutation ... ok
+test every_supported_cutoff_is_persisted_and_reopened_unchanged ... ok
+test a_larger_incompressible_whole_file_record_uses_the_singleton_lane ... ok
+test boundaries_follow_the_configured_cutoff_not_a_frozen_one ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/provider_errors.rs (core/target/debug/deps/provider_errors-bf3f290b9fdad8ff)
+
+running 3 tests
+test an_object_the_store_does_not_hold_is_absence ... ok
+test a_corrupt_pack_is_not_reported_as_absence ... ok
+test a_record_above_the_publication_watermark_is_not_reported_as_absence ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/statement_batching.rs (core/target/debug/deps/statement_batching-a01284eb74de0297)
+
+running 2 tests
+test a_save_charges_one_statement_per_inserted_row ... ok
+test the_statement_count_tracks_the_rows_and_not_a_constant ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/storage_limits.rs (core/target/debug/deps/storage_limits-7c4e5d9fe5262c40)
+
+running 5 tests
+test a_group_body_is_accepted_at_its_bound_and_refused_over_it ... ok
+test a_group_record_directory_is_accepted_at_its_bound_and_refused_over_it ... ok
+test the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins ... ok
+test the_group_count_ceiling_is_named_with_its_derivation ... ok
+test a_group_record_count_is_accepted_at_its_bound_and_refused_over_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/timing.rs (core/target/debug/deps/timing-ababb24fa3a1b65c)
+
+running 6 tests
+test a_failed_save_returns_the_original_error_with_a_recorded_tree ... ok
+test a_save_of_many_objects_records_regions_not_objects ... ok
+test an_independent_save_reports_its_real_scopes ... ok
+test recording_and_disabled_storage_execution_agree_exactly ... ok
+test a_bounded_report_stays_inside_the_recorder_limits ... ok
+test a_content_read_attributes_its_mapping_waves_inside_the_callers_span ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/visibility.rs (core/target/debug/deps/visibility-4510e3f48dbad30c)
+
+running 8 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test an_interrupted_save_leaves_the_store_readable_until_an_operator_decides ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_telemetry-af032707017e7435)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer.rs (core/target/debug/deps/timer-1aafdebec1672a19)
+
+running 21 tests
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test a_parent_can_recover_from_a_child_error ... ok
+test attached_reports_become_owned_children ... ok
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test disabled_and_clipped_reports_are_distinguishable ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test uncalled_operations_have_no_node ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_compile_fail.rs (core/target/debug/deps/timer_compile_fail-937a041ba6c966da)
+
+running 1 test
+test external_compile_fail_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+     Running tests/timer_format.rs (core/target/debug/deps/timer_format-adb4938a162b0ca2)
+
+running 6 tests
+test disabled_report_is_explicit ... ok
+test markers_show_error_and_missing_detail ... ok
+test labels_are_escaped_for_display ... ok
+test text_renders_a_readable_tree ... ok
+test a_real_recording_renders_its_structure ... ok
+test writer_failures_propagate ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_json.rs (core/target/debug/deps/timer_json-35e15913ffce77df)
+
+running 10 tests
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test writer_failures_propagate ... ok
+test a_flush_failure_is_surfaced ... ok
+test json_matches_the_documented_shape ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+test a_real_recording_round_trips_through_json ... ok
+test a_disabled_report_serializes_to_null ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.69s
+
+   Doc-tests layerfs_content
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_telemetry
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
