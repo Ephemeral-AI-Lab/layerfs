@@ -155,7 +155,7 @@ point takes a scope, so an operation cannot be moved to another thread, and work
 a worker thread could not be a labelled child of the operation's span. A receipt
 would omit the parallel work or measure it by a mechanism `core/AGENTS.md` forbids.
 
-**(b) Storage layout would stop being reproducible.** In `cas/owner.rs`:
+**(b) Storage layout would stop being reproducible.** In `cas/selection.rs`:
 
 ```rust
 // the seal decision reads the ACCUMULATED group state
@@ -251,7 +251,7 @@ records per group — a measurement, not a reading.
                 .min(sql_limit.saturating_sub(256) / row_bytes)  // SQLITE_LIMIT_SQL_LENGTH
         }
 
-   CORE — cas/owner.rs
+   CORE — cas/placement.rs (the owner split moved this loop there at P2-0)
         for (record_number, member) in pending.members.iter().enumerate() {
             write::insert_object(&self.connection, &ObjectRow { … })?;   // ONE ROW
         }

@@ -496,7 +496,7 @@ fn a_pooled_read_refuses_a_value_group_above_the_captured_ceiling() {
 #[test]
 fn the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site() {
     let source = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cas/owner.rs"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cas/pool_lane.rs"),
     )
     .expect("owner source");
     let selection = source.find("fn select_pooled(").expect("pooled selection");

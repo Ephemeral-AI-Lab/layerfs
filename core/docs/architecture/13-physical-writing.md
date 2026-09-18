@@ -177,7 +177,8 @@ framed lengths.
 pub fn framed_group_length(records: usize, payload: usize) -> StorageResult<usize>
 ```
 
-The seal decision in `cas/owner.rs` calls this projection rather than summing
+The seal decision in `cas/selection.rs` (moved there from `cas/owner.rs` by #178
+**P2-0**, 2026-09-18) calls this projection rather than summing
 per-record lengths:
 
 ```rust

@@ -52,7 +52,7 @@ pub struct SaveOutcome {
     /// Work spent acquiring delta bases.
     pub chain: ChainCounters,
     /// Pooled metadata lane outcomes.
-    pub pool: crate::cas::owner::PoolCounters,
+    pub pool: crate::cas::PoolCounters,
 }
 
 impl From<OutcomeCounters> for SaveOutcome {
@@ -436,7 +436,7 @@ impl SaveOperation {
     }
 
     /// Pooled metadata lane outcomes so far.
-    pub fn pool_counters(&self) -> crate::cas::owner::PoolCounters {
+    pub fn pool_counters(&self) -> crate::cas::PoolCounters {
         self.owner
             .as_ref()
             .map(MutationOwner::pool_counters)
