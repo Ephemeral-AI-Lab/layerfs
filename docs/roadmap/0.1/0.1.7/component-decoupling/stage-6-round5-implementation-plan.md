@@ -589,3 +589,71 @@ cases move it again. Therefore:
   was taken against;
 - the round-5 closure lane is compared to a **round-4 closure baseline on the same
   composition**, not to 394.57 s.
+
+
+## 15. Re-based on round 4, and the golden number
+
+### 15.1 Round 4 closed #171, which changes what this plan is for
+
+Owner ruling: **Route 3 accepted**, so Stage 6's acceptance is met and
+[#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) is closed. Round 4c
+measured **217 of 217 admission rows `PASS`, 0 `FAIL`**, lane **415.821 s**, all nine
+acceptance checkboxes satisfied, W1/W2/W3/W4 green.
+
+**(a) The budget justification is gone.** `c2.delta.cdc-locality`'s family maximum fell
+from **29,553 ms** (round 3b) to **5,556 ms** (round 4c), and the largest complete
+command in the run is **9.952 s** against a 15 s limit. So T8 in §12.2 is already
+satisfied and **Phase 3 — the budget formula — is downgraded from required to
+optional**: it is an honesty improvement, not a fit requirement, and still needs the
+§7.1 `CONTRACT.md` ruling.
+
+**(b) The baseline is 415.821 s, and this plan is now about honesty and cost.** Still
+true: the report's `time max ms` is the wall, **56 of 217** rows publish no
+`timing.json`, the raw receipts are gitignored so **the repository cannot show where
+415.821 s went**, and the fast loop has no `--reuse-pass` and no quick mode.
+
+**Confirmed order:** Phase 0 (four phases, honest numbers) → verification
+simplification (§13) → prepared masters (§6, §7) → quick mode (§13.3), with the budget
+formula deferred to the §7.1 ruling.
+
+### 15.2 `operation_ns` is the golden benchmark number
+
+`operation_ns` — the product's own telemetry root for the row's declared operation — is
+the headline figure: the report's primary axis, the number compared across rows and
+tracked round to round, and the one number that must not improve for the wrong reason
+(T4).
+
+Four conditions, three of them new work:
+
+1. **Same scope per case shape** — `test_setup_and_cache_discipline.md` §2.2 already
+   fixes what is inside the timer, so this is inherited.
+2. **Harness work inside the timer must be visible, not absorbed.** Measured: the
+   harness's `cloned_object` handoff is **0.162 s of a 4.997 s measured phase** (3.2%)
+   for `dedup-cdc-overwrite-500`, inside the root node because it happens inside the
+   timed closure. Publish **`handoff_ns`** beside `operation_ns`, and prefer removing
+   the per-object clone so the golden number needs no adjustment. Family-specific: in
+   `pipeline.*` the handoff is the product's own `SaveHandoff` adapter and is genuinely
+   product work.
+3. **It stays diagnostic for gates.** D1's rationale is a **+17.6%** same-binary
+   spread, which cannot separate O(n) from O(log n), so `elapsed_ns` never
+   gate-decides. The golden number is reported and trended; counters, heap and disk
+   keep deciding. **Making it gate is a contract change and needs an owner ruling.**
+4. **A single row is not the campaign.** Publish `sum(operation_ns)` for the lane, so a
+   row that got faster at another row's expense is visible.
+
+### 15.3 Targets, re-based
+
+| component | round-4c | round-5 target |
+| --- | ---: | ---: |
+| preparation | ~180 s [D, unknown] | **<= 25 s lane, <= 1.0 s per row** |
+| **operation (golden)** | **unknown** | **published, and must not fall** |
+| verification | ~180 s [D]; largest single 12.7 s [M] | **<= 60% of today** |
+| cleanup | not measured | **<= 0.5 s per row, published** |
+| **lane, warm** | **415.821 s** [M] | **<= 200 s** |
+| lane, warm + quick | — | <= 70 s, every row `INCOMPLETE` |
+| budgets | already pass (max 9.952 s) | keep passing, no tier shrunk |
+
+Sum check: 25 + ~50 + ~108 + 4 = **~187 s**, so <= 200 s is defensible — **conditional
+on the operation total being published**, because the ~180 s / ~180 s split is derived
+from a 50/50 assumption anchored on one round-3b row and the round-4c lane has ten new
+rows in it. **Judge round 5 on the per-row targets**, which are the robust ones.
