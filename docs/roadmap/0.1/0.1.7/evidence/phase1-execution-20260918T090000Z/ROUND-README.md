@@ -14,6 +14,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-3` | P1-3 — materialized branch children in one wave | collected (`after/`) |
 | `p1-4` | P1-4 — validation record demands batched behind one memo | collected (`after/`) |
 | `p1-6` | P1-6 — the discarded validation load | **measured-and-declined** (no commit) |
+| `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 
