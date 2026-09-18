@@ -171,6 +171,20 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   [`../evidence/stage5-complexity-research-20260917T211600Z/`](../evidence/stage5-complexity-research-20260917T211600Z/),
   tracked by [#176](https://github.com/Ephemeral-AI-Lab/layerfs/issues/176).
   Same rule: source reads only, no measurement — Stage 6 decides what to act on.
+- [Phase 1 implementation plan (2026-09-17)](phase1-implementation-plan-20260917.md):
+  the executable checklist for Phase 1 of [#178](https://github.com/Ephemeral-AI-Lab/layerfs/issues/178)
+  — Big-O targets, before anchors, landing order, file/LOC plan and the Phase 0
+  rulings. **Closed by owner ruling 2026-09-18**: 14 of 16 items landed plus the
+  prerequisites, core production LOC 18,792 → 19,264 (+472), no new production
+  files; `P1-13`/`P1-15` are recorded incomplete and carried by
+  [`phase1-continuation-handoff-20260918.md`](phase1-continuation-handoff-20260918.md).
+- [Phase 2 implementation plan (2026-09-18)](phase2-implementation-plan-20260918.md):
+  the DB/engine phase — eight items from #176's Tier 0 and #177's SQLite findings,
+  plus the instrument prerequisites those items need and a pure-relocation split
+  of `cas/owner.rs` (962 of 999 physical lines) so the write-path items have room.
+  States the expected file/folder structure, the LOC estimate band against the
+  measured 19,264 baseline, the verification protocol and the six owner questions.
+  Sites are `path:line`-verified in the core tree; no measurement was taken.
 
 
 The proposal has been saved here for discussion before implementation. Owner
