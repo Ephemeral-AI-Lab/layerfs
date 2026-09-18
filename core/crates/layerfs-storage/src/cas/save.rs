@@ -23,6 +23,12 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     if objects.is_empty() {
         return Ok(());
     }
+    // The membership snapshot below is taken once, before any of this wave's own
+    // writes, so a group sealed during the wave publishes rows the snapshot cannot
+    // know about. Identities sealed earlier in this wave are therefore consulted
+    // beside it: an identity whose row this wave already wrote must not reach
+    // `offer` again, or the `objects` primary key refuses the second row.
+    owner.sealed_rows.clear();
     let ids: Vec<ObjectId> = objects.iter().map(|object| object.id()).collect();
     let locations = lookup::locations(owner.connection(), &ids, i64::MAX)?;
     let mut by_id: BTreeMap<ObjectId, lookup::ObjectLocation> = BTreeMap::new();
@@ -70,18 +76,30 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
                 membership::reuse_or_collide(owner, object, location)?;
                 owner.note_reuse();
             }
-            None if owner.pending_member(object.id()) => {
-                owner.seal_pending(std::slice::from_ref(&object.id()))?;
-                let location = lookup::locations(owner.connection(), &[object.id()], i64::MAX)?
-                    .into_iter()
-                    .next()
-                    .ok_or(StorageError::Integrity("sealed identity has no row"))?;
-                membership::reuse_or_collide(owner, object, location)?;
-                owner.note_reuse();
-            }
             None => {
-                let advisory: Vec<ObjectId> = object.predecessors().ids().collect();
-                owner.offer(object, &advisory, &mut availability)?
+                // An identity with no row at the snapshot is one of two things: a
+                // member still waiting in an open group, whose group is sealed on
+                // demand, or a member a seal earlier in this same wave already wrote.
+                // Both are answered from the row that now exists, through the same
+                // exact byte comparison as any other reuse; only an identity that has
+                // no row at all is offered for storage.
+                let sealed = if owner.pending_member(object.id()) {
+                    owner.seal_pending(std::slice::from_ref(&object.id()))?;
+                    true
+                } else {
+                    owner.sealed_rows.contains(&object.id())
+                };
+                if sealed {
+                    let location = lookup::locations(owner.connection(), &[object.id()], i64::MAX)?
+                        .into_iter()
+                        .next()
+                        .ok_or(StorageError::Integrity("sealed identity has no row"))?;
+                    membership::reuse_or_collide(owner, object, location)?;
+                    owner.note_reuse();
+                } else {
+                    let advisory: Vec<ObjectId> = object.predecessors().ids().collect();
+                    owner.offer(object, &advisory, &mut availability)?
+                }
             }
         }
     }

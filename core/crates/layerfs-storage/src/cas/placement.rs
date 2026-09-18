@@ -162,6 +162,9 @@ impl MutationOwner {
                 self.counters.full_records += 1;
             }
             availability.inserted(member.object_id);
+            // The wave's membership snapshot predates this seal, so the row just
+            // written is recorded for the rest of the wave; see `sealed_rows`.
+            self.sealed_rows.push(member.object_id);
             self.counters.inserted += 1;
             self.transaction.rows += 1;
             self.transaction.bytes += member.canonical_length as u64;

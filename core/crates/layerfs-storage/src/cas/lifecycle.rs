@@ -75,6 +75,7 @@ impl MutationOwner {
                 PendingGroup::default(),
                 PendingGroup::default(),
             ],
+            sealed_rows: Vec::new(),
             transaction: TransactionState { rows: 1, bytes: 0 },
             transaction_open: true,
             compression,

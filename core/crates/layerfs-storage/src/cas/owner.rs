@@ -80,6 +80,18 @@ pub struct MutationOwner {
     pub(super) ceiling: i64,
     pub(super) placement: [LanePlacement; 5],
     pub(super) groups: [PendingGroup; 5],
+    /// Identities whose row this preparation wave has already written.
+    ///
+    /// A group is framed and placed as a whole, so one seal publishes rows for
+    /// every member it holds - including members that arrived in earlier waves and
+    /// are still waiting. The wave's membership snapshot is taken before any of
+    /// that, so a member the seal just wrote would otherwise look absent for the
+    /// rest of the wave and be offered a second time, which the `objects` primary
+    /// key refuses. The lifetime is one wave: [`crate::cas::save::flush_batch`]
+    /// clears it, and a row written in an earlier wave is already answered by that
+    /// wave's own lookup. Bounded by the members one wave can seal, never by the
+    /// size of the operation.
+    pub(super) sealed_rows: Vec<ObjectId>,
     pub(super) transaction: TransactionState,
     pub(super) transaction_open: bool,
     pub(super) compression: CompressionWorkspace,

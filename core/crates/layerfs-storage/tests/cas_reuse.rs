@@ -2,7 +2,7 @@
 
 mod support;
 
-use layerfs_content::{ObjectId, ObjectRole};
+use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::{StorageError, Store};
 use support::{
     construct_file, create_store, disabled, noise, open_store, patterned, read_objects, repeat,
@@ -468,4 +468,56 @@ fn a_presence_query_is_charged_for_a_reference_outside_the_wave() {
     })
     .expect("third save");
     assert_eq!(third.presence_queries, 1, "the reference is still outside");
+}
+
+/// A canonical chunk object whose payload is highly compressible and distinct per
+/// `marker`.
+///
+/// Compressibility is the point: the encoded record is small, so a group stays
+/// under its framed target and remains open across a preparation wave boundary.
+fn compressible_chunk(marker: u32) -> FinalizedObject {
+    let mut payload = vec![0u8; 8 * 1024];
+    payload[..4].copy_from_slice(&marker.to_be_bytes());
+    FinalizedObject::new(
+        ObjectRole::Chunk,
+        layerfs_content::file::mapping::encode_chunk_object(&payload).expect("canonical chunk"),
+    )
+    .expect("finalized chunk")
+}
+
+#[test]
+fn a_group_sealed_mid_wave_answers_its_other_members_from_that_wave() {
+    let dir = TempDir::new("sealed_mid_wave");
+    let path = dir.store_path("sealed_mid_wave");
+    let a = compressible_chunk(1);
+    let b = compressible_chunk(2);
+    assert_ne!(a.id(), b.id());
+
+    // Two distinct identities, offered alternately, span several preparation
+    // waves. Because their records compress, both sit in one open group when the
+    // first wave ends. The next wave re-offers the first of them, which seals that
+    // group and writes a row for each member; the second member must then be
+    // answered from the row that seal wrote. Before the fix it was treated as
+    // absent for the rest of the wave and offered a second time, and the `objects`
+    // primary key refused the row.
+    let store = create_store(&path);
+    let outcome = disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        for index in 0..200u32 {
+            operation.accept(if index % 2 == 0 { a.clone() } else { b.clone() })?;
+        }
+        operation.finish(scope.child("storage.finish"))
+    })
+    .expect("a wave that seals a group must not offer its members twice");
+
+    assert_eq!(outcome.inserted, 2, "one row per distinct identity");
+    assert_eq!(
+        outcome.reused, 198,
+        "every other occurrence is served by the row that exists"
+    );
+    assert_eq!(outcome.packs_created, 1, "both members share one pack");
+
+    let (values, _) = read_objects(&store, &[a.id(), b.id()]).unwrap();
+    assert_eq!(values[0], a.canonical());
+    assert_eq!(values[1], b.canonical());
 }
