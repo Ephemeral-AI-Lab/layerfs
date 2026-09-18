@@ -1,0 +1,6 @@
+client	3747d8e7c63e73f3d23225a0dfb42018e2c28a4486a2c4efc033a494b7014384	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/client/target/release/phase0client
+filesystem_timing_c1	ad10e62b01c3827dfdf505ff6ba86bca3c56cb529ef78f2b3d59cabccf90a702	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/filesystem_timing_c1
+measure_filesystem	72cf6ee1f33de69111500c0fc21cb355caa57564f8de7ef01caf470b875b9e85	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_filesystem
+measure_edits	e5720f2d8461cd7d077afc209eddc98da07bd1bc026167d8633e640c4df64f9c	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits
+edit_timing_c1	da00ff44336a8a7aa30360a894374bfcbe401c8b177a4a3de8e1b595c36b0168	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/edit_timing_c1
+edit_memory_probe	a8b94935b986056c305df4d1c8d021be02e04ae772b3682e263909470f7079e9	/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/edit_memory_probe
