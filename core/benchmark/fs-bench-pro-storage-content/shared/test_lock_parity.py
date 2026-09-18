@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import sys
 import tomllib
+import unittest
 from pathlib import Path
 
 HARNESS_ROOT = Path(__file__).resolve().parent.parent
@@ -197,7 +198,7 @@ def main() -> int:
 
 
 def test_lock_parity() -> None:
-    """`python3 -m unittest` entry point for this file."""
+    """The parity assertion, callable without the unittest machinery."""
     product = load_lock(PRODUCT_LOCK)
     harness = load_lock(HARNESS_LOCK)
     result = compare(product, harness)
@@ -205,5 +206,23 @@ def test_lock_parity() -> None:
     assert result["shared_entries"] > 0, "no shared packages: the comparison is vacuous"
 
 
+class LockParityTest(unittest.TestCase):
+    """Makes the mandatory mitigation discoverable by `unittest discover`.
+
+    A module-level `test_*` function is not collected by the unittest loader, so
+    the check above was previously reachable only by running this file directly —
+    and the rule is that parity is re-checked after *any* manifest change.
+    """
+
+    def test_product_and_harness_locks_agree(self) -> None:
+        test_lock_parity()
+
+    def test_the_comparison_is_not_vacuous(self) -> None:
+        result = compare(load_lock(PRODUCT_LOCK), load_lock(HARNESS_LOCK))
+        self.assertGreater(result["shared_entries"], 0)
+        self.assertEqual(result["mismatches"], [])
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
+
