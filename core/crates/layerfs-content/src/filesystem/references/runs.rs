@@ -115,10 +115,26 @@ impl<'r, 'b> RunStore<'r, 'b> {
 
     /// Drops every tier's scan, keeping the tiers themselves.
     ///
-    /// Called whenever a tier's run is replaced: the position and the retained
-    /// buffer belong to the run that was scanned, not to the tier.
+    /// Called when **every** tier's run is replaced (consolidation, a take, a
+    /// release): the position and the retained buffer belong to the run that was
+    /// scanned, not to the tier.
     fn reset_scans(&mut self) {
         self.scans.clear();
+    }
+
+    /// Drops the scans of the tiers a spill at `level` replaces.
+    ///
+    /// A spill into `level` takes the runs of tiers `[0, level]` and writes the
+    /// merged run back into `level`; every tier above `level` keeps the run it
+    /// had, so its scan is still the scan of that run and is kept. The invariant
+    /// is index-parallel: `scans[i]` exists only while `levels[i]` holds the run
+    /// it scanned, and a tier's run changes only in a spill at level ≥ `i`, which
+    /// truncates `scans[0..=level]` ⊇ `scans[i]`.
+    fn reset_scans_through(&mut self, level: usize) {
+        let replaced = self.scans.len().min(level.saturating_add(1));
+        for slot in &mut self.scans[..replaced] {
+            *slot = None;
+        }
     }
 
     /// Bytes of the pending rows currently charged to this operation.
@@ -228,7 +244,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
         if level == self.levels.len() {
             self.levels.push(None);
         }
-        self.reset_scans();
+        self.reset_scans_through(level);
         self.work.peak_level = self.work.peak_level.max(level);
         let mut handle = self.backing()?.create_run()?;
         self.work.runs_created = self.work.runs_created.saturating_add(1);
@@ -296,7 +312,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
             *slot = None;
         }
         self.levels[level] = Some(run);
-        self.reset_scans();
+        self.reset_scans_through(level);
         self.pending_bytes = 0;
         self.work.peak_live_runs = self.work.peak_live_runs.max(self.live_runs());
         self.work.peak_run_bytes = self

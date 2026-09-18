@@ -975,3 +975,67 @@ fn a_stale_run_file_does_not_block_a_later_backing() {
     );
     assert!(!live.exists());
 }
+
+/// One effect row for the scan-retention case.
+fn scan_row(serial: u64) -> Row {
+    Row::Effect {
+        serial,
+        value: Some(value(
+            InodeKind::RegularFile,
+            synthetic(&format!("scan/{serial}")),
+            synthetic("scan/meta"),
+        )),
+        delta: 1,
+    }
+}
+
+#[test]
+fn a_spill_keeps_the_scans_of_tiers_above_its_level() {
+    // A spill into level k replaces the runs of tiers `[0, k]` and writes the
+    // merged run back into k; every tier above k keeps the run it had, so it must
+    // keep the scan of that run too. The reset used to clear all of them, so the
+    // next demand on a higher tier restarted from the front of its run and paid
+    // the rows the cursor had already passed — the residual P1-5 removes.
+    let temp = TempDir::new("ordering-scan-keep");
+    let mut backing = RecordingBacking::new(temp.path());
+    let mut store = RunStore::new(Some(&mut backing), 4096, 8 * 1024 * 1024);
+
+    const ROWS: u64 = 64;
+    // Twelve spills in ascending serial order: the top tier holds serials
+    // 1..=512 and the next one 513..=768.
+    for batch in 0..12_u64 {
+        let mut pending = BTreeMap::new();
+        for serial in batch * ROWS + 1..=(batch + 1) * ROWS {
+            pending.insert(serial, scan_row(serial));
+        }
+        store.spill(&pending).expect("spill");
+    }
+    // An ascending sweep to the middle of the top tier: its cursor is at row 256.
+    for serial in 1..=256 {
+        assert!(store.find(serial).expect("find").is_some());
+    }
+
+    // A thirteenth spill lands at level 0 without cascading: only this batch is
+    // written, and the tiers above keep their runs.
+    let mut pending = BTreeMap::new();
+    for serial in 12 * ROWS + 1..=13 * ROWS {
+        pending.insert(serial, scan_row(serial));
+    }
+    let written_before = store.work().rows_written;
+    store.spill(&pending).expect("spill");
+    assert_eq!(
+        store.work().rows_written - written_before,
+        ROWS,
+        "a level-0 spill writes only its own batch"
+    );
+
+    // The demand continues past the sweep's end, inside the top tier: a kept scan
+    // answers it from the cursor, a cleared one re-reads the tier from row 0.
+    let read_before = store.work().rows_read;
+    assert!(store.find(257).expect("find").is_some());
+    let resumed = store.work().rows_read - read_before;
+    assert!(
+        resumed <= 4,
+        "a kept scan resumes at its cursor: {resumed} rows read for one row"
+    );
+}

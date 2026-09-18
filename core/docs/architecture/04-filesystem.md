@@ -210,6 +210,17 @@ Nothing here is free memory or free disk: one explicit account owns the bytes,
 growth is reserved **before** it happens, obsolete runs give their bytes back when
 dropped, and the finishing cleanup is **checked, not hidden in a destructor**.
 
+**Tiers and their scans.** A spilled run lives in a tier (`levels[i]`), and each
+tier keeps one buffered reader (`scans[i]`) whose cursor lets an ascending sweep
+read that tier's rows exactly once. The two are index-parallel: `scans[i]` exists
+only while `levels[i]` holds the run it scanned. A spill into level `k` replaces
+the runs of tiers `[0, k]` and writes the merged run back into `k`, so it drops
+**only those scans** — a tier above `k` keeps its run and therefore keeps its
+cursor. Clearing every tier's scan on every spill is what made a lookup restart
+from the front of a higher tier's run and re-read the rows its cursor had already
+passed; the ascending-sweep property is what a receipt on this subsystem has to
+show.
+
 ### 5.6 The operation boundary
 
 `core/crates/layerfs-content/src/filesystem/objects.rs`
