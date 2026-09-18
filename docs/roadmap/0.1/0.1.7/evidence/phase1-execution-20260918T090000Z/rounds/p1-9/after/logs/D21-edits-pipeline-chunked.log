@@ -1,0 +1,50 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits --mode pipeline --case chunked --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-9/after/output/D21/edits-pipeline-chunked
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.016
+--- stdout ---
+mode: pipeline
+case: chunked
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 4096 replacement bytes
+stream: 1 edit(s), base 262144 -> final 262144 bytes
+base preparation (untimed): root 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d stored as 18 object(s), 3 pack(s)
+edited root: ca6c30a4355c63c3e3df39a478482cd57f80b5271885e48a573bbe34a031d6b7
+edited length: 262144
+save: inserted 3 reused 0 packs 2 prefix records 0 full records 3
+readback bytes: 262144
+readback connection opens: 1
+readback: verified byte-for-byte against the independent model
+scope: edit-to-save acknowledgement is edit.save; verification and readback are timed separately
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+edit.save  1.321ms
+  storage.begin  265.500us
+  file.edit  611.291us
+    edit.base  258.500us
+      edit.base_read  257.458us
+    edit.compare  290.500us
+      edit.compare.window  287.125us
+        mapping.navigate  31.583us
+          storage.read  31.125us
+        mapping.payload  250.875us
+          storage.read  250.709us
+    edit.split  36.625us
+    edit.split  3.583us
+    edit.split  417ns
+    content.chunk  11.875us
+    edit.finish  3.042us
+  storage.finish  364.958us
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+verify.readback  956.042us
+  content.read  955.333us
+    content.acquire  193.334us
+    content.traverse  761.167us
+      mapping.navigate  36.000us
+        storage.read  35.875us
+      mapping.payload  711.417us
+        storage.read  711.250us
+timings: 17 nodes at 6 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-9/after/output/D21/edits-pipeline-chunked/pipeline-edit-save.json
+timings: 8 nodes at 5 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-9/after/output/D21/edits-pipeline-chunked/pipeline-readback.json
+wall_seconds: 0.011373
+--- stderr ---

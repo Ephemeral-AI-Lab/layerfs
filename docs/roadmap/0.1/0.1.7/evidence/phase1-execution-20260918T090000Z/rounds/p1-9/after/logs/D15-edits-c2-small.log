@@ -1,0 +1,28 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits --mode c2 --case small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-9/after/output/D15/edits-c2-small
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.017
+--- stdout ---
+mode: c2
+case: small
+threshold-bytes: 131072
+timing: on
+fixture: base 65536 bytes, 1 edit(s), 512 replacement bytes
+stream: 1 edit(s), base 65536 -> final 65536 bytes
+c2 lane: supplied-object wiring probe - --case selects the fixture only; the stored workload is a fixed truncation to the whole-file limit plus one fixed patch, so it is not a per-case comparison
+stored workload: base 65559 canonical bytes, patched 256 bytes at offset 16384, dependent 65559 canonical bytes
+preparation untimed: two whole-file objects encoded in 183792 ns; only their admission is timed below
+save: inserted 2 reused 0 prefix records 1 full records 1 trials 1
+store: /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-9/after/output/D15/edits-c2-small/store.sqlite
+readback connection opens: 1
+readback separately labelled elapsed_ns 550208
+readback: verified 65559 canonical bytes through an independent read wave
+exclusions: no C1 file construction and no full-file object collection is timed; `storage.save` covers Store creation, the begin/accept/finish calls and nothing else
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+storage.save  8.505ms
+  store.create  5.933ms
+  storage.begin  727.333us
+  storage.finish  1.601ms
+timings: 4 nodes at 2 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-9/after/output/D15/edits-c2-small/c2-save.json
+wall_seconds: 0.010341
+--- stderr ---
