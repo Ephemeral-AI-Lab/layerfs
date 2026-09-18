@@ -657,3 +657,79 @@ Sum check: 25 + ~50 + ~108 + 4 = **~187 s**, so <= 200 s is defensible — **con
 on the operation total being published**, because the ~180 s / ~180 s split is derived
 from a 50/50 assumption anchored on one round-3b row and the round-4c lane has ten new
 rows in it. **Judge round 5 on the per-row targets**, which are the robust ones.
+
+
+## 16. How to simplify, the breakdown, and the target
+
+The paste-ready entry point is
+[`stage-6-round5-prompt.md`](stage-6-round5-prompt.md); this section is the reference
+form of its simplification guidance.
+
+### 16.1 How to simplify — three mechanisms, in order
+
+**S1. Verify what the frozen oracle requires, and not more.** Four C2 families do a
+byte-exact read-back their oracle does not ask for (`c2.delta.cdc-locality` is O1 + O3,
+`c2.reuse.workspace` O1 + O5, `c2.footprint` O6 + O1, `c2.pool.cold-warm` O1 + O3).
+Families whose oracle **does** include O2 — `c1.construct.*`, `c1.edit.*`, `pipeline.*`,
+`c2.read.waves` — keep it; `c1.many-tiny` already uses the frozen `TreeSample`.
+Removing the unrequired read-back is **compliance, not relaxation**: no contract change,
+no new stamp, no sampling. It requires the oracle those families *do* need, which may be
+missing — O1 is currently "replay root == measured root" (self-consistency) rather than
+a **pinned expected root**, and the delta counters are written without a gate against
+**pinned** values, which is what O3 means.
+
+**S2. Where O2 is required, verify each distinct object once.** 110,022 occurrences sit
+behind ~3,665 distinct objects. Split the read-back into *store integrity* (each
+distinct object decoded once and re-identified) and *traversal correctness* (per member,
+the mapping tree resolves to the right `(object, offset, length)` sequence, with the
+digest assembled from the verified payload cache). Complete, and about a fifth of the
+cost — against a 10% sample that proves 10%.
+
+**S3. Stop hashing what the harness already owns.** `Expectation::of` hashes fixture
+bytes in `delta_members` (preparation) and again in `workspace`'s oracle loop (2.10 GB
+per row). `artifact.rs` already persists expectations for one family; extend it.
+
+Then **S4** `--reuse-pass` removes the phase for an unchanged case, and **S5** the
+deterministic 10% quick mode makes iteration cheap while proving only 10%.
+
+### 16.2 The breakdown
+
+| # | item | depends on | acceptance |
+| --- | --- | --- | --- |
+| V1 | Publish the six phase fields; `verify` re-derives them | — | every receipt carries all six; reconciliation fails closed |
+| V2 | Pin the expected result root per case (O1) | V1 | the gate compares a pinned constant, not a replay |
+| V3 | Pin the counts (O3) | V1 | counts gated against pinned values |
+| V4 | Remove the unrequired O2 from the four families | V2, V3 | every counter identical to round 4c |
+| V5 | Deduplicate the required O2 by distinct object | V4 | every counter identical; <= 5 s for the big rows |
+| V6 | Persist expectation digests for every family | V1 | no `Expectation::of` over fixture bytes in any phase |
+| V7 | `--reuse-pass` | V1 | fails closed on schema/identity/hard-limit/wall mismatch |
+| V8 | Mode ladder `full` / `sample` / `none`, deterministic 10% | V1–V7 | sampled and omitted rows are `INCOMPLETE` |
+| V9 | Prepared masters for the remaining fixture-heavy families | V1 | acquire once per digest; `prepare --lane full <= 90 s` |
+| V10 | Pack the object set into one file | V9 | load `<= 1.0 s` per row |
+| V11 | Remove the per-member base clone and double allocation | V9 | preparation `<= 1.0 s` per row |
+| V12 | Digest key = product identity + fixture-recipe version | V9 | a plumbing-only harness change does not invalidate a master |
+| V13 | Remove the per-object `cloned_object` handoff, or declare `handoff_ns` | V1 | the golden number is product work, or the tax is published |
+
+**Order: V1 first.** It is mechanical, needs no cache, and produces the number that
+shows whether everything else worked. Then V2–V6 (the oracle), then V9–V13
+(preparation), then V7–V8 (the modes).
+
+### 16.3 The simplification target
+
+| line | round-4c | target | verified by |
+| --- | ---: | ---: | --- |
+| per-row preparation | 0.03–11.95 s | **<= 1.0 s** | `preparation_wall_ns` |
+| lane preparation | ~180 s [D] | **<= 25 s** | `sum(preparation_wall_ns)` |
+| `prepare --lane full`, once per digest | ~180 s+ [D] | **<= 90 s** | the prepare manifest |
+| largest single verification invocation | 12.7 s [M] | **<= 5 s** | `verification_wall_ns` |
+| lane verification | ~180 s [D] | **<= 108 s** (60%) | `sum(verification_wall_ns)` |
+| per-row cleanup | not measured | **<= 0.5 s** | `cleanup_wall_ns` |
+| **lane, warm, full verification** | **415.821 s** [M] | **<= 200 s** | the run wall |
+| lane, warm, quick mode | — | **<= 70 s** | the run wall |
+| **operation (golden)** | **unknown** | **published, and must not fall** | `sum(operation_ns)` |
+| budgets | already pass (max 9.952 s) | keep passing | no tier shrunk |
+
+The lane numbers are conditional on publishing the operation total. **Judge the round
+on the per-row targets**, which are the robust ones: preparation `<= 1.0 s` at every
+tier (tight for the C1 edit 500 MiB rows), cleanup `<= 0.5 s`, and the golden number
+unchanged.
