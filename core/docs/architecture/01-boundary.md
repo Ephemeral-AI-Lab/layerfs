@@ -96,6 +96,22 @@ That last distinction is load-bearing for the no-fallback rule: "the object is n
 here" and "the provider broke" must not collapse into one error, because only the
 first is a legitimate reason for a caller to choose a different representation.
 
+**Amended after the pin: there are three classes, not two.** The two above are both
+about the *provider*. A **logical** read has a third, and it is neither: a name no
+directory binds. The tree was read successfully and the name is not in it, so
+nothing was missing from the provider and no record was malformed. That is
+`ContentError::PathNotFound` ("path does not exist"), and the reference tree keeps
+the same class as `CoreError::PathNotFound` — used at the analogous sites,
+`tree/directory/edit.rs` for a name and `tree/inode/table.rs` for an inode record.
+
+`FilesystemRead::resolve` used to report an unbound name as `MissingObject`, which
+collapsed the logical class into the provider class and made "this path does not
+exist" indistinguishable from "the provider does not hold an object this tree
+names" — the conflation this section forbids. Fixed in the same change as this
+paragraph; `filesystem_read.rs::an_unbound_name_is_not_provider_absence` holds the
+two apart, and `PathNotFound` is what lets a caller walk a tree without treating a
+removed path as a broken Store.
+
 A batch is a **real grouped demand**, not a loop of point calls. It returns values
 in demand order with exact cardinality.
 

@@ -121,14 +121,60 @@ fn resolve_stat_and_list_agree_on_the_same_tree() {
         read.list(&LogicalPath::new("d/e0000").unwrap(), None, 3, 8192),
         Err(ContentError::WrongLogicalRole)
     ));
+    // An unbound name is a *logical* absence and never provider absence: the
+    // tree was read successfully and the name is not in it. `MissingObject` here
+    // would collapse "this path does not exist" into "the provider does not hold
+    // an object this tree names", which the provider contract forbids.
     assert!(matches!(
         read.stat(&LogicalPath::new("d/absent").unwrap()),
-        Err(ContentError::MissingObject)
+        Err(ContentError::PathNotFound)
     ));
     assert!(matches!(
         read.stat(&LogicalPath::new("d/e0000/deeper").unwrap()),
         Err(ContentError::InvalidRecord(_))
     ));
+}
+
+/// The two absences are different answers, and this is the test that says so.
+///
+/// A name no directory binds is a **logical** absence: the tree was read
+/// successfully and the name is not in it. A provider that does not hold an
+/// object the tree names is a **provider** absence. `object::access`,
+/// `cas::provider`, `error::MissingObject` and `architecture/01-boundary.md` all
+/// state that these must stay distinguishable - "the object is not here" and
+/// "this path does not exist" must not collapse into one error, because only the
+/// first is a legitimate reason for a caller to choose a different
+/// representation. Before this test, `FilesystemRead::resolve` answered both with
+/// `MissingObject`.
+#[test]
+fn an_unbound_name_is_not_provider_absence() {
+    let (session, _d, _serials) = wide(3);
+
+    // The tree reads fine and the name is simply not bound.
+    let mut read = session.read().expect("reader");
+    let unbound = read
+        .stat(&LogicalPath::new("d/absent").unwrap())
+        .expect_err("an unbound name must not resolve");
+    assert_eq!(unbound, ContentError::PathNotFound);
+
+    // A provider that does not hold the tree's own root object is the other
+    // class, and it is not the answer above.
+    let empty = support::filesystem::TreeStore::new();
+    // Matched rather than `expect_err`: `FilesystemRead` is deliberately not
+    // `Debug`, and a reader that printed its own state would be a second way to
+    // read the tree.
+    let missing = match layerfs_content::filesystem::FilesystemRead::new(
+        &empty,
+        layerfs_content::filesystem::FilesystemRootId(session.root),
+    ) {
+        Ok(_) => panic!("an empty provider cannot serve the root"),
+        Err(error) => error,
+    };
+    assert_eq!(missing, ContentError::MissingObject);
+    assert_ne!(
+        missing, unbound,
+        "provider absence and an unbound name must not be the same answer"
+    );
 }
 
 #[test]

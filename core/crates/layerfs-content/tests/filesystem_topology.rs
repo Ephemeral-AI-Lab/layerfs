@@ -553,7 +553,7 @@ fn a_dropped_directory_emits_no_page_of_its_own() {
     assert!(read.stat(&LogicalPath::new("f").unwrap()).is_ok());
     assert!(matches!(
         read.stat(&LogicalPath::new("dead").unwrap()),
-        Err(ContentError::MissingObject)
+        Err(ContentError::PathNotFound)
     ));
 }
 

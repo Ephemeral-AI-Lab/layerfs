@@ -117,6 +117,11 @@ impl<'a> FilesystemRead<'a> {
             // directory work, and the uncounted `lookup` wrapper used to throw its
             // `DirectoryReadWork` away, so a reader could stat a whole path and
             // report `directory.pages_read = 0`.
+            // A name no directory binds is a **logical** absence, not a provider
+            // one. Reporting it as `MissingObject` made "this path does not
+            // exist" and "the provider does not hold an object this tree names"
+            // the same answer, which `object::access`, `cas::provider` and
+            // `error::MissingObject` all say they must not be.
             serial = directory_lookup_counted(
                 self.reader,
                 crate::filesystem::sorted::finish::DirectoryRoot(value.content_root),
@@ -124,7 +129,7 @@ impl<'a> FilesystemRead<'a> {
                 &mut self.work.directory,
             )?
             .map(|(_, serial)| serial)
-            .ok_or(ContentError::MissingObject)?;
+            .ok_or(ContentError::PathNotFound)?;
             value = self.inode(table, serial)?;
         }
         Ok(Resolved { serial, value })

@@ -46,7 +46,27 @@ pub enum ContentError {
     /// The bytes do not hash to the ID they were supplied under.
     IdentityMismatch,
     /// The provider does not hold the requested object.
+    ///
+    /// This is a **provider** absence: the read path asked for an identity and
+    /// the provider could not produce it. It is not the answer for a name that
+    /// is simply not bound in a directory - that is
+    /// [`ContentError::PathNotFound`] - because a caller that must tell "this
+    /// Store does not hold this root" from "this name is not in this tree"
+    /// cannot do so if the two collapse. The reference tree keeps the same two
+    /// classes apart as `CoreError::PathNotFound` and its own missing-object
+    /// error.
     MissingObject,
+    /// A logical path names a component no directory binds.
+    ///
+    /// The tree was read successfully and the name is not in it. Nothing was
+    /// missing from the provider, so this is never [`ContentError::MissingObject`];
+    /// nothing was structurally wrong with a record, so it is never
+    /// [`ContentError::InvalidRecord`]. A caller distinguishing "this path does
+    /// not exist" from "this Store is broken" needs exactly this variant, and
+    /// before it existed `FilesystemRead::resolve` reported an unbound name as
+    /// provider absence, which is the conflation `object::access` and
+    /// `cas::provider` both document as forbidden.
+    PathNotFound,
     /// The provider holds state for the request but cannot serve it.
     ///
     /// This is the corrupt-or-refused class: stored bytes failed an integrity
@@ -165,6 +185,7 @@ impl fmt::Display for ContentError {
             }
             Self::IdentityMismatch => formatter.write_str("object identity mismatch"),
             Self::MissingObject => formatter.write_str("object not available"),
+            Self::PathNotFound => formatter.write_str("path does not exist"),
             Self::ProviderFailure { what } => {
                 write!(formatter, "provider failure: {what}")
             }

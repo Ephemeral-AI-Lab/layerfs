@@ -482,9 +482,12 @@ fn a_reopened_store_serves_an_update_of_the_saved_tree() {
     let mut read = FilesystemRead::new(&merged, FilesystemRootId(updated.root.0)).expect("reader");
     let stat = read.stat(&LogicalPath::new("f").unwrap()).expect("stat");
     assert_eq!(stat.namespace_ref_count, 1, "the removed alias is gone");
+    // The alias is *gone*, not unheld: the tree read fine and the name is not in
+    // it, which is `PathNotFound`. `MissingObject` here would collapse a logical
+    // absence into provider absence, which the provider contract forbids.
     assert!(matches!(
         read.stat(&LogicalPath::new("alias").unwrap()),
-        Err(ContentError::MissingObject)
+        Err(ContentError::PathNotFound)
     ));
 }
 

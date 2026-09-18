@@ -279,7 +279,7 @@ fn removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable() {
     let mut read = session.read().expect("reader");
     assert!(matches!(
         read.stat(&LogicalPath::new("gone").unwrap()),
-        Err(layerfs_content::ContentError::MissingObject)
+        Err(layerfs_content::ContentError::PathNotFound)
     ));
     assert_eq!(
         read.stat(&LogicalPath::root()).expect("root").kind,

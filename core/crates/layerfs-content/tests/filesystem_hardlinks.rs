@@ -173,7 +173,7 @@ fn a_move_across_directories_keeps_the_count_and_the_inode() {
     let mut read = session.read().expect("reader");
     assert!(matches!(
         read.stat(&LogicalPath::new("a/x").unwrap()),
-        Err(layerfs_content::ContentError::MissingObject)
+        Err(layerfs_content::ContentError::PathNotFound)
     ));
     let moved = read
         .resolve(&LogicalPath::new("b/moved").unwrap())
