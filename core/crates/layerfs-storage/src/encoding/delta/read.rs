@@ -35,6 +35,13 @@ pub struct ChainCounters {
     pub canonical_bytes: u64,
     /// Longest chain reconstructed.
     pub max_depth: u64,
+    /// Ordinary-lane group bodies decompressed while rebuilding these objects.
+    ///
+    /// One per record that had to decompress its group, so `k` records sharing a
+    /// group charge `k` before the decoded-group cache (`P2-4`) and `1` after. It
+    /// counts group bodies, not record frames: every other lane decodes a
+    /// per-record frame and charges nothing here.
+    pub group_decodes: u64,
 }
 
 /// One read wave's chain resolver: shared pack cache, ceiling and counters.
@@ -220,7 +227,14 @@ impl<'a> Resolver<'a> {
         if fetched {
             self.packs_read = self.packs_read.saturating_add(1);
         }
-        decode_canonical(pack, location, self.capacities, base, self.workspace)
+        decode_canonical(
+            pack,
+            location,
+            self.capacities,
+            base,
+            self.workspace,
+            &mut self.counters.group_decodes,
+        )
     }
 }
 
@@ -235,6 +249,7 @@ pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
     total.encoded_bytes = total.encoded_bytes.saturating_add(chain.encoded_bytes);
     total.canonical_bytes = total.canonical_bytes.saturating_add(chain.canonical_bytes);
     total.max_depth = total.max_depth.max(chain.max_depth);
+    total.group_decodes = total.group_decodes.saturating_add(chain.group_decodes);
 }
 
 /// Reads one pack body through the operation's shared cache.

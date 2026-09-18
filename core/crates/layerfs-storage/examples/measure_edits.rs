@@ -501,6 +501,7 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     )
     .0?;
     println!("readback connection opens: {}", reader.connection_opens());
+    println!("readback group decodes: {}", reader.group_decodes());
     println!(
         "readback separately labelled elapsed_ns {}",
         read_started.elapsed().as_nanos()
@@ -600,6 +601,7 @@ fn run_pipeline(
     let bytes = verify.map_err(|error| format!("readback failed: {error}"))?;
     println!("readback bytes: {}", bytes.len());
     println!("readback connection opens: {}", reader.connection_opens());
+    println!("readback group decodes: {}", reader.group_decodes());
     let expected: Vec<u8> = {
         let mut model = fixture.base.clone();
         for (index, edit) in fixture.edits.iter().enumerate() {

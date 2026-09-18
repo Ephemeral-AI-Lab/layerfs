@@ -25,12 +25,21 @@ use crate::sqlite::lookup::ObjectLocation;
 /// `base` is the exact raw payload of the recorded direct base, already read and
 /// authenticated by the caller, or `None` when the locator records no base. The
 /// presence of the base must agree with the record's own tag.
+///
+/// `group_decodes` is charged once for every group **body** this reconstruction
+/// actually decompresses, which is the ordinary lane's compressed group. Every
+/// other lane decompresses a record frame or copies a raw body, so it leaves the
+/// counter alone. The charge is here, where the decompression happens, rather
+/// than at the caller: a caller that guessed from the header would count a
+/// decompression it did not perform, and a cache added in front of this call
+/// (`P2-4`) must not be charged for a body it served.
 pub fn decode_canonical(
     pack: &[u8],
     location: &ObjectLocation,
     capacities: &StorageCapacities,
     base: Option<&[u8]>,
     workspace: &mut DecompressionWorkspace,
+    group_decodes: &mut u64,
 ) -> StorageResult<Vec<u8>> {
     let canonical_length = location.canonical_length;
     if canonical_length == 0 || canonical_length > CANONICAL_LIMIT {
@@ -46,6 +55,7 @@ pub fn decode_canonical(
             let body = match view.codec {
                 GroupCodec::Raw => selected.to_vec(),
                 GroupCodec::Zstandard => {
+                    *group_decodes = group_decodes.saturating_add(1);
                     workspace.decompress_group(selected, view.decoded_length)?
                 }
             };

@@ -37,6 +37,12 @@ pub struct ReadCounters {
     pub max_depth: u64,
     /// Canonical bytes reconstructed, including dependencies.
     pub canonical_bytes: u64,
+    /// Ordinary-lane group bodies decompressed by this wave.
+    ///
+    /// The wave's decode work, distinct from `packs_read` (one per pack per wave)
+    /// and from `objects`: the defect this counter exists to price is one group
+    /// decompression per **record** inside a pack that is read once.
+    pub group_decodes: u64,
 }
 
 /// Reads every requested object in demand order under one ceiling.
@@ -88,6 +94,7 @@ pub fn read_objects(
         totals.encoded_bytes = totals.encoded_bytes.saturating_add(chain.encoded_bytes);
         totals.canonical_bytes = totals.canonical_bytes.saturating_add(chain.canonical_bytes);
         totals.max_depth = totals.max_depth.max(chain.max_depth);
+        totals.group_decodes = totals.group_decodes.saturating_add(chain.group_decodes);
         counters.packs_read += packs_fetched;
         if ObjectId::for_bytes(&canonical) != *id {
             return Err(StorageError::Integrity("read identity"));
@@ -98,6 +105,7 @@ pub fn read_objects(
     counters.edges = totals.edges;
     counters.max_depth = totals.max_depth;
     counters.canonical_bytes = totals.canonical_bytes;
+    counters.group_decodes = totals.group_decodes;
     Ok((values, counters))
 }
 

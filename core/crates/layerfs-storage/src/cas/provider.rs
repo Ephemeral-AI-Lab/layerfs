@@ -71,6 +71,12 @@ pub struct StoreProvider<'a> {
     /// that drives a whole operation through one provider reads the sum here
     /// instead of threading counters through every call.
     opens: Cell<u64>,
+    /// Ordinary-lane group bodies every wave through this provider decompressed.
+    ///
+    /// The same shape as `opens`, for the same reason: a wave reports its own
+    /// count, and an operation that issues many waves reads the sum here. It is
+    /// the figure a decoded-group cache is measured against.
+    group_decodes: Cell<u64>,
 }
 
 impl<'a> StoreProvider<'a> {
@@ -80,12 +86,18 @@ impl<'a> StoreProvider<'a> {
             store,
             session: RefCell::new(None),
             opens: Cell::new(0),
+            group_decodes: Cell::new(0),
         }
     }
 
     /// Connections every wave this provider issued opened.
     pub fn connection_opens(&self) -> u64 {
         self.opens.get()
+    }
+
+    /// Ordinary-lane group bodies every wave this provider issued decompressed.
+    pub fn group_decodes(&self) -> u64 {
+        self.group_decodes.get()
     }
 
     /// Reads one wave through the operation's session.
@@ -115,6 +127,8 @@ impl<'a> StoreProvider<'a> {
             if opened {
                 self.opens.set(self.opens.get() + 1);
             }
+            self.group_decodes
+                .set(self.group_decodes.get() + counters.group_decodes);
             Ok((
                 values,
                 StoreReadCounters {
@@ -125,6 +139,7 @@ impl<'a> StoreProvider<'a> {
                     edges: counters.edges,
                     max_depth: counters.max_depth,
                     canonical_bytes: counters.canonical_bytes,
+                    group_decodes: counters.group_decodes,
                     opens: u64::from(opened),
                 },
             ))

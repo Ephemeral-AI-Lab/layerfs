@@ -8,7 +8,8 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 (2026-09-18) and the `opens` counter added by #178 **V3** (2026-09-18) are marked
 in place and carry their own commits, as is the `PoolCounters` home moved from
 `cas/owner.rs` to `cas/pool_lane.rs` by #178 **P2-0** (2026-09-18) and the
-`statements` counter added by #178 **V5** (2026-09-18). Scope, method,
+`statements` counter added by #178 **V5** (2026-09-18) and the `group_decodes`
+counter added by #178 **V6** (2026-09-18). Scope, method,
 measurement status and upkeep are stated in the [index](README.md).
 
 Chapter numbers are global to the set: this paper holds **chapter 15**.
@@ -64,13 +65,23 @@ collect. Until now the set cited them ad hoc with no single inventory.
 | --- | --- | --- |
 | `SaveOutcome` | `cas/store.rs` | `reused`, `inserted`, `packs_created`, `pack_appends`, `commits`, `statements`, `full_records`, `prefix_records`, `delta`, `chain`, `pool` |
 | `DeltaCounters` | `encoding/delta/select.rs` | `prepared_full`, `trials`, `prefix_selected`, `full_losses`, `no_candidate`, `absent_candidates`, `ineligible_candidates`, `work_exceeded` |
-| `ChainCounters` | `encoding/delta/read.rs` | `objects`, `edges`, `encoded_bytes`, `canonical_bytes`, `max_depth` |
+| `ChainCounters` | `encoding/delta/read.rs` | `objects`, `edges`, `encoded_bytes`, `canonical_bytes`, `max_depth`, `group_decodes` |
 | `PoolCounters` | `cas/pool_lane.rs` | `leaves`, `reused_values`, `new_values`, `groups`, `delta_leaves`, `full_leaves`, `trials`, `work_exceeded` |
-| `StoreReadCounters` | `cas/store.rs` | `objects`, `packs_read`, `pages`, `ceiling`, `edges`, `max_depth`, `canonical_bytes`, `opens` |
+| `StoreReadCounters` | `cas/store.rs` | `objects`, `packs_read`, `pages`, `ceiling`, `edges`, `max_depth`, `canonical_bytes`, `group_decodes`, `opens` |
 | `CleanupReport` | `sqlite/cleanup.rs` | `objects`, `packs`, `pages` |
 
 `OutcomeCounters` is the internal form `SaveOutcome` is built from; it carries
 `transactions` and `commits` separately, which `SaveOutcome` collapses to `commits`.
+
+`group_decodes` (added at #178 **V6**, 2026-09-18) counts the ordinary-lane group
+**bodies** a read actually decompressed, charged in `encoding/decode.rs` where the
+decompression happens and surfaced on `ChainCounters`, `ReadCounters`,
+`StoreReadCounters` and - summed over an operation's waves - on
+`StoreProvider::group_decodes()`. It is the counter that prices one decode per
+**record** inside a group that is read once: `packs_read` charges one per pack per
+wave and `objects` one per returned object, so neither can see it. Every other lane
+decodes a per-record frame rather than a group body and charges nothing here, and a
+cache in front of the decode (`P2-4`) is not charged for a body it served.
 
 `statements` (added at #178 **V5**, 2026-09-18) counts the `INSERT` statements
 issued for object rows - **statements, not rows**: a multi-row `INSERT` of `k` rows

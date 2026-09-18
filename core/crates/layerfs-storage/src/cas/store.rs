@@ -96,6 +96,8 @@ pub struct StoreReadCounters {
     pub max_depth: u64,
     /// Canonical bytes reconstructed, including dependencies.
     pub canonical_bytes: u64,
+    /// Ordinary-lane group bodies decompressed by this wave.
+    pub group_decodes: u64,
     /// Connections this read opened.
     ///
     /// One `read_batch` call is one wave and opens one connection; a demand
@@ -243,6 +245,7 @@ impl Store {
                     edges: counters.edges,
                     max_depth: counters.max_depth,
                     canonical_bytes: counters.canonical_bytes,
+                    group_decodes: counters.group_decodes,
                     opens: 1,
                 },
             ))
