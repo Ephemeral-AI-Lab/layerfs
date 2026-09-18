@@ -1,6 +1,10 @@
 # Stage 6 handoff: qualify the complete C1/C2 core
 
-> **Status:** Active implementation routing, 2026-09-19. This is the executable
+> **Status:** Active implementation routing, 2026-09-19. **Round 1 is complete and
+> this document's "starting from an empty directory" premise is no longer true:
+> the executable assignment for the successor is
+> [`stage-6-continuation-handoff-20260919.md`](stage-6-continuation-handoff-20260919.md).
+> The rules below still bind.** This is the executable
 > assignment for the Stage 6 agent. It supersedes stage-level routing in
 > [`stage-5-handoff.md`](stage-5-handoff.md),
 > [`stage-5-continuation-handoff.md`](stage-5-continuation-handoff.md) and

@@ -217,6 +217,11 @@ withdrawal of the comparative claim are stated in one place in the
 [Stage 6 qualification plan](component-decoupling/stage-6-qualification-plan.md).
 Round evidence:
 [stage-6-qualification-20260918T175400Z](evidence/stage-6-qualification-20260918T175400Z/README.md).
+The successor's executable assignment is the
+[Stage 6 continuation handoff](component-decoupling/stage-6-continuation-handoff-20260919.md):
+the tree's actual state, the measured matrices, the one owner decision that gates
+twelve rows, the ordered work plan (test suite first, then the six filesystem
+families and the pipeline), and the sixteen traps round 1 hit.
 #171 stays **open**: acceptance checkboxes 1, 2, 4 and 5 carry unrun work that is
 recorded rather than waived. Nothing is tagged or released.
 
