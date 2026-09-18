@@ -1,0 +1,18 @@
+diff --git a/core/crates/layerfs-storage/src/cas/lifecycle.rs b/tmp/p23-lock/core/crates/layerfs-storage/src/cas/lifecycle.rs
+index ef1be5a2f..85e714751 100644
+--- a/core/crates/layerfs-storage/src/cas/lifecycle.rs
++++ b/tmp/p23-lock/core/crates/layerfs-storage/src/cas/lifecycle.rs
+@@ -37,6 +37,13 @@ impl MutationOwner {
+         // connection with another journal mode, synchronous setting,
+         // foreign-key enforcement or busy timeout than the declared one.
+         crate::sqlite::connection::verify_profile(&connection)?;
++        // P2-3 candidate: the save owner's connection takes EXCLUSIVE locking, and
++        // a read connection never does.
++        connection.execute_batch("PRAGMA locking_mode = EXCLUSIVE")?;
++        let mode: String = connection.query_row("PRAGMA locking_mode", [], |row| row.get(0))?;
++        if !mode.eq_ignore_ascii_case("exclusive") {
++            return Err(StorageError::Integrity("locking mode"));
++        }
+         // Ownership first: the baseline and cursor are only meaningful when no
+         // other writer can publish a pack between reading them and using them.
+         write::begin_immediate(&connection)?;

@@ -1,0 +1,22 @@
+diff --git a/core/crates/layerfs-storage/src/sqlite/connection.rs b/tmp/p21-profile/core/crates/layerfs-storage/src/sqlite/connection.rs
+index 21a45ddd5..13999b5ea 100644
+--- a/core/crates/layerfs-storage/src/sqlite/connection.rs
++++ b/tmp/p21-profile/core/crates/layerfs-storage/src/sqlite/connection.rs
+@@ -35,6 +35,17 @@ pub fn configure(connection: &Connection) -> StorageResult<()> {
+         return Err(StorageError::Integrity("journal mode"));
+     }
+     connection.execute_batch("PRAGMA synchronous = OFF; PRAGMA temp_store = MEMORY;")?;
++    // P2-1 candidate profile: the reference's 32 MiB page cache with spilling OFF,
++    // so dirty pages stay resident to COMMIT.
++    connection.execute_batch("PRAGMA cache_size = -32768; PRAGMA cache_spill = OFF;")?;
++    let cache_size: i64 = connection.query_row("PRAGMA cache_size", [], |row| row.get(0))?;
++    if cache_size != -32768 {
++        return Err(StorageError::Integrity("cache size"));
++    }
++    let cache_spill: i64 = connection.query_row("PRAGMA cache_spill", [], |row| row.get(0))?;
++    if cache_spill != 0 {
++        return Err(StorageError::Integrity("cache spill"));
++    }
+     connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+     let foreign_keys: i64 = connection.query_row("PRAGMA foreign_keys", [], |row| row.get(0))?;
+     if foreign_keys != 1 {

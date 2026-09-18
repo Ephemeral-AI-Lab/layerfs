@@ -1,0 +1,43 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/visibility.rs (core/target/debug/deps/visibility-4510e3f48dbad30c)
+
+running 9 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test an_interrupted_save_leaves_the_store_readable_until_an_operator_decides ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... FAILED
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... FAILED
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... FAILED
+
+failures:
+
+---- an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement stdout ----
+
+thread 'an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement' panicked at crates/layerfs-storage/tests/visibility.rs:84:10:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: DatabaseBusy, extended_code: 5 }, Some("database is locked"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_pooled_read_refuses_a_value_group_above_the_captured_ceiling stdout ----
+
+thread 'a_pooled_read_refuses_a_value_group_above_the_captured_ceiling' panicked at crates/layerfs-storage/tests/visibility.rs:84:10:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: DatabaseBusy, extended_code: 5 }, Some("database is locked"))
+
+---- the_watermark_survives_reopen_and_still_hides_a_later_open_save stdout ----
+
+thread 'the_watermark_survives_reopen_and_still_hides_a_later_open_save' panicked at crates/layerfs-storage/tests/visibility.rs:84:10:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: DatabaseBusy, extended_code: 5 }, Some("database is locked"))
+
+
+failures:
+    a_pooled_read_refuses_a_value_group_above_the_captured_ceiling
+    an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement
+    the_watermark_survives_reopen_and_still_hides_a_later_open_save
+
+test result: FAILED. 6 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.87s
+
+error: test failed, to rerun pass `-p layerfs-storage --test visibility`
+error: 1 target failed:
+    `-p layerfs-storage --test visibility`
