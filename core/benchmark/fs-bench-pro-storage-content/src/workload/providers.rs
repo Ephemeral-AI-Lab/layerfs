@@ -12,10 +12,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
 
 use layerfs_content::{
-    AuthenticatedObjects, ContentError, ContentResult, FinalizedConsumer, FinalizedObject,
-    ObjectId,
+    AuthenticatedObjects, ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId,
 };
 
 /// In-memory canonical objects, authenticated on every read.
@@ -156,10 +156,9 @@ impl TreeStore {
             // store instead.
             match stem.parse::<ObjectId>() {
                 Ok(expected) if expected == ObjectId::for_bytes(&canonical) => {
-                    if let Ok(object) = FinalizedObject::new(
-                        layerfs_content::ObjectRole::Chunk,
-                        canonical,
-                    ) {
+                    if let Ok(object) =
+                        FinalizedObject::new(layerfs_content::ObjectRole::Chunk, canonical)
+                    {
                         store.insert_object(object);
                     } else {
                         refused += 1;
@@ -266,10 +265,7 @@ impl AuthenticatedObjects for PairProvider<'_> {
         self.demanded.borrow_mut().extend_from_slice(ids);
         let mut values = Vec::with_capacity(ids.len());
         for id in ids {
-            let found = self
-                .result
-                .object(*id)
-                .or_else(|| self.base.object(*id));
+            let found = self.result.object(*id).or_else(|| self.base.object(*id));
             match found {
                 Some(object) if ObjectId::for_bytes(object.canonical()) == *id => {
                     values.push(object.canonical().to_vec());
@@ -279,5 +275,71 @@ impl AuthenticatedObjects for PairProvider<'_> {
             }
         }
         Ok(values)
+    }
+}
+
+/// A consumer and a reader over the **same** in-flight objects.
+///
+/// A filesystem *update* reads back objects it emitted earlier in the same
+/// operation, so a reader that only sees the base cannot serve it. The product's
+/// own external tests solve this with an overlay: the reader checks what the
+/// operation has emitted so far, then falls back to the base. This is that
+/// overlay, and it is why an update-shaped row cannot use a purely discarding
+/// measured phase.
+pub struct SharedStore {
+    inner: Rc<RefCell<TreeStore>>,
+}
+
+impl SharedStore {
+    /// A fresh shared store.
+    pub fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(TreeStore::new())),
+        }
+    }
+
+    /// A reader that sees this store's objects before `base`.
+    pub fn reader<'a>(&self, base: &'a TreeStore) -> SharedReader<'a> {
+        SharedReader {
+            emitted: Rc::clone(&self.inner),
+            base,
+        }
+    }
+
+    /// Number of objects emitted so far.
+    pub fn len(&self) -> usize {
+        self.inner.borrow().len()
+    }
+
+    /// Whether nothing has been emitted.
+    pub fn is_empty(&self) -> bool {
+        self.inner.borrow().is_empty()
+    }
+}
+
+impl Default for SharedStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FinalizedConsumer for SharedStore {
+    fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        self.inner.borrow_mut().accept(object)
+    }
+}
+
+/// A reader over the in-flight objects first, then the base they were built from.
+pub struct SharedReader<'a> {
+    emitted: Rc<RefCell<TreeStore>>,
+    base: &'a TreeStore,
+}
+
+impl AuthenticatedObjects for SharedReader<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        self.emitted
+            .borrow()
+            .read_canonical_batch(ids)
+            .or_else(|_| self.base.read_canonical_batch(ids))
     }
 }

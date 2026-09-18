@@ -32,7 +32,7 @@ use crate::gates::{self, Gate, GateClass};
 use crate::registry::{Case, LocalityOp, TinyOp, TreeOp};
 use crate::support::instruments::{self, HeapWindow};
 use crate::support::trace::Kind;
-use crate::workload::providers::{PairProvider, TreeStore};
+use crate::workload::providers::{PairProvider, SharedStore, TreeStore};
 
 /// Entries per listing page the O4 oracle reads.
 const LISTING_PAGE: usize = 64;
@@ -258,9 +258,14 @@ fn replay_build(
 }
 
 /// Replays the same update into a store that authenticates every read.
+///
+/// The reader is an **overlay**: the in-flight objects the operation has already
+/// emitted, then the base. A filesystem update reads back what it emits, so a
+/// reader that only saw the base would refuse it with `MissingObject` — which is
+/// exactly what the first version of this function did, and why the measured
+/// phase and the replay failed identically until the overlay was added.
 fn replay_update(
     base: &TreeStore,
-    emitted: &TreeStore,
     base_root: FilesystemRootId,
     prepared: &PreparedTree,
     scope: layerfs_content::InodeScope,
@@ -275,14 +280,16 @@ fn replay_update(
         new_inodes: &prepared.new_inodes,
         resources: resources(),
     };
-    let mut store = TreeStore::new();
+    let mut shared = SharedStore::new();
     let (outcome, _) = Timing::disabled("oracle.replay", |_scope: &TimingScope<'_, Active>| {
-        let reader = PairProvider::new(emitted, base);
-        let mut objects = FilesystemObjects::new(&reader, &mut store);
+        let reader = shared.reader(base);
+        let mut objects = FilesystemObjects::new(&reader, &mut shared);
         update_filesystem(&mut objects, &input, backing)
     });
+    // The emitted objects are not returned: the replay is used for its counters,
+    // its root identity and its inode table, all of which the result carries.
     outcome
-        .map(|result| (store, result))
+        .map(|result| (TreeStore::new(), result))
         .map_err(|error| OpError::Product(format!("{error:?}")))
 }
 
@@ -850,21 +857,23 @@ fn run_delete_row(
         return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
     }
 
-    // **Measured finding, round 2.** A *build* runs to completion against a
-    // non-retaining consumer and an empty provider; an *update* does not. The
-    // removal below is refused with `MissingObject` because the operation demands
-    // an object it emitted earlier in the same operation, and a
-    // `DiscardingConsumer` has already discarded it. That is a property of the
-    // operation's read-back, not a defect in the fixture: the same inputs replay
-    // successfully into a retaining `TreeStore`, which is how `replay_update`
-    // below runs them.
-    //
-    // The row therefore closes `NOT_RUN` with that reason rather than reporting a
-    // product error it did not observe, and rather than switching the measured
-    // phase to a retaining consumer — which would charge the harness's own
-    // bookkeeping to the product and break the one rule every driver here obeys.
-    // A successor that wants these eight rows must first decide, with the owner,
-    // whether a retaining measured phase is admissible for an update-shaped row.
+    // **The order here is load-bearing.** The replay runs *first*, because it is
+    // unmeasured and because running it first is what makes the measured phase's
+    // `MissingObject` attributable. If the identical input replays into a
+    // retaining store, the read-back is the cause; if it does not, the input is
+    // the cause and the row must say that instead of blaming the consumer.
+    let mut replay_backing = backing_for(&removal_input, context);
+    let replay = match replay_update(
+        &store,
+        base.root,
+        &removal_input,
+        scope,
+        as_backing(replay_backing.as_mut()),
+    ) {
+        Ok((_, replay)) => replay,
+        Err(error) => return Ok(unmeasured(&error, Vec::new())),
+    };
+
     let mut backing = backing_for(&removal_input, context);
     let measured =
         match measure_update(
@@ -879,8 +888,9 @@ fn run_delete_row(
             Ok(measured) => measured,
             Err(layerfs_content::ContentError::MissingObject) => return Ok(unmeasured(
                 &OpError::Unimplemented(
-                    "filesystem-update: the operation reads back an object it emitted in the same \
-                     operation, so the non-retaining measured phase cannot serve it",
+                    "filesystem-update: the identical input replays into a retaining store, but \
+                     the non-retaining measured phase cannot serve the object the operation \
+                     reads back inside its own operation",
                 ),
                 Vec::new(),
             )),
@@ -891,20 +901,12 @@ fn run_delete_row(
                 ))
             }
         };
+
     record_counters(context, &measured, label)?;
 
-    // Oracle: a second, unmeasured, byte-identical removal into an authenticating
-    // store. Without it the replay-identity gate would compare the measured result
-    // with itself, which is not a gate at all.
-    let mut replay_backing = backing_for(&removal_input, context);
-    let (_, replay) = replay_update(
-        &store,
-        &store,
-        base.root,
-        &removal_input,
-        scope,
-        as_backing(replay_backing.as_mut()),
-    )?;
+    // The replay above is the oracle: it is a second, unmeasured, byte-identical
+    // removal into an authenticating store. Without it the replay-identity gate
+    // would compare the measured result with itself, which is not a gate at all.
     let mut gates = common_gates(&measured, &replay, label);
     gates.push(gates::require(
         GateClass::Correctness,
