@@ -210,8 +210,8 @@ V3 `aefcd95a5` · V4 `8efdd9291` (a plan refinement: the edit vehicle's own
 `EditCounters.nodes_read`) · P1-2 `9ec299f13` · P1-1 `32eda6f29` ·
 P1-3 `ff4d6d328` · P1-4 `bfb01f262` · P1-9 `d42cd969e` · P1-5 `70dc75836` ·
 P1-12 `9b4eff169` · P1-16 `84ca5c851` · P1-10 `8327f87bb` · P1-6 `360431d10` ·
-P1-8 `e9b4d1510`. Tree `4eb2e78aa`, pushed; 454 tests green; the 34-test
-sealed-oracle set green and unchanged.
+P1-8 `e9b4d1510` · P1-7 `974b525be` · P1-14 `d6bc1404a`. Tree `7981d03f2`,
+pushed; 456 tests green; the 34-test sealed-oracle set green and unchanged.
 
 | item | counter | before → after |
 | --- | --- | --- |
@@ -225,15 +225,26 @@ sealed-oracle set green and unchanged.
 | P1-10 | D26 `runs.rows_read` | 27,777 → 25,809 |
 | P1-12 | no counter; page partition pinned; `peak_scratch_bytes` +8 B/page slot | — |
 | P1-8 | M4 (`edit_timing_c1 --case split`, new) `nodes_read` | 16 → 13 |
+| P1-7 | D27 `nodes_read` / `edit_nodes_read` | 9 → 7 / 10 → 8 |
+| P1-14 | M1 `peak_delta_bytes` | 262,328 → 131,826 |
 | P1-16 | docs + boundary test; nothing moved | — |
 
 **Declined, owner ruling needed:** P1-6 (zero movement on every available row; the
 deletion removes the only non-root context check on that node) —
 [receipt](../evidence/phase1-execution-20260918T090000Z/rounds/p1-6/receipt.md).
 
-**Not started:** P1-7, P1-14, P1-13, P1-15 — nothing half-landed, so their anchors
-are intact (P1-13's D26 `rows_written` 25,760 / `merges` 61 are still at their
-pre-item values). **The executable assignment for those five is
+**Blocked:** P1-13 (merge fanout 4) — the multiway cascade was built, hit one real
+selection bug and then three **data-correctness** failures (the spilling and
+non-spilling runs produced different filesystem roots), and was reverted in full;
+the tree is clean and D26's anchors are untouched. The question the owner has to
+rule on — whether a serial carried by more than two tiers may keep the newest row
+alone — is recorded in
+[`rounds/p1-13/receipt.md`](../evidence/phase1-execution-20260918T090000Z/rounds/p1-13/receipt.md).
+
+**Not started:** P1-15 — the restart lookup half of the ordering pair. P1-13's
+blocker blocks it by its own dependency note ("restart pattern and run lengths
+follow the cascade policy"), and the assignment's landing order puts it after
+P1-13. **The executable assignment for those five is
 [`phase1-continuation-handoff-20260918.md`](phase1-continuation-handoff-20260918.md)**,
 which carries each one's anchor, file, sketch, corrected design, tests and risks.
 
