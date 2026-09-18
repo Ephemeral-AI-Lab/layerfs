@@ -608,3 +608,115 @@ fn many_localized_edits_keep_each_edit_on_its_own_path() {
         base.len()
     );
 }
+
+/// Applies one edit and reports its own node-load count, the demanded objects and
+/// the resulting root.
+fn edit_counters(
+    store: &MemoryStore,
+    root: ObjectId,
+    len: u64,
+    edit: Edit,
+    source_len: u64,
+) -> (u64, usize, ObjectId) {
+    let recorder = Recorder {
+        inner: store,
+        demanded: RefCell::new(Vec::new()),
+    };
+    let mut ledger = Ledger::default();
+    let policy = ConstructionPolicy::frozen_default();
+    let mut replacements = Replacements::new();
+    if source_len > 0 {
+        replacements.push(noise(source_len as usize));
+    }
+    let stream = EditStream::new(len, vec![edit]).expect("valid edit stream");
+    let edited = disabled_scope(|scope| {
+        apply_edits(
+            policy,
+            &policy.capacities(),
+            &recorder,
+            EditRequest {
+                root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut ledger,
+            scope.child("edit"),
+        )
+    })
+    .expect("edit succeeds");
+    (
+        edited.counters.nodes_read,
+        recorder.demanded.into_inner().len(),
+        edited.root,
+    )
+}
+
+/// The two shapes P1-9 distinguishes: the same extent-aligned range, deleted or
+/// overwritten, on one 262,144-byte chunked base.
+fn aligned_pair() -> ((u64, usize, ObjectId), (u64, usize, ObjectId)) {
+    let bytes = noise(262_144);
+    let (store, root) = build(&bytes);
+    let inventory = inventory_of(&store, root);
+    let (start, end) = aligned_shape(&inventory);
+    let removed = end - start;
+    (
+        edit_counters(
+            &store,
+            root,
+            bytes.len() as u64,
+            Edit::delete(start, end),
+            0,
+        ),
+        edit_counters(
+            &store,
+            root,
+            bytes.len() as u64,
+            Edit::overwrite(start, end),
+            removed,
+        ),
+    )
+}
+
+#[test]
+fn a_pure_deletion_never_walks_the_rightmost_path() {
+    // P1-9: the predecessor hint is consumed only by the replacement scan, which a
+    // pure deletion does not run, so the O(h) rightmost walk must not happen. The
+    // walk costs one `load_node` on this shape — and it is served by a node the
+    // split already built, so it never reaches the provider: the deletion's
+    // provider-demand count is the same with and without the walk, and only
+    // `EditCounters::nodes_read` sees it.
+    let (deletion, overwrite) = aligned_pair();
+    assert_eq!(
+        deletion.0, 4,
+        "the split's own loads, with no rightmost walk"
+    );
+    assert_eq!(
+        deletion.1, 2,
+        "and two provider demands: the file state and the mapping path"
+    );
+    assert!(
+        overwrite.0 > deletion.0,
+        "the overwrite does walk: {} against {}",
+        overwrite.0,
+        deletion.0
+    );
+}
+
+#[test]
+fn an_overwrite_still_demands_the_predecessor_path() {
+    // The negative pin against over-gating: an overwrite's replacement scan still
+    // consumes the rightmost payload hint, so its walk and its scan remain.
+    let (deletion, overwrite) = aligned_pair();
+    assert_eq!(
+        overwrite.0, 7,
+        "the split, the rightmost walk and the replacement scan"
+    );
+    assert_eq!(
+        overwrite.1, 6,
+        "and the payloads the scan demands, which the deletion never touches"
+    );
+    assert_ne!(
+        overwrite.2, deletion.2,
+        "two different results from the same base"
+    );
+}

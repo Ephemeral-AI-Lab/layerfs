@@ -250,16 +250,6 @@ fn replace_chunked(
         // The replaced range is dropped from the result, so the unfinished node
         // the split built for it is released here and never encoded.
         crate::file::edit::tree::discard(&mut objects, removed);
-        // The replacement is scanned into its own subtree through the same
-        // canonical builder complete construction uses. Its first payload may
-        // continue the retained payload immediately before the insert position,
-        // which is a physical hint only.
-        let predecessor = match left {
-            Some(left) => edit
-                .child("edit.split")
-                .run(|_| rightmost_payload(&mut objects, left))?,
-            None => None,
-        };
         // The declared replacement length is checked against the source before any
         // work: a source that cannot serve the declared bytes is a caller error, not
         // an I/O failure to be interpreted.
@@ -271,6 +261,17 @@ fn replace_chunked(
         let middle = if replacement_len == 0 {
             None
         } else {
+            // The replacement is scanned into its own subtree through the same
+            // canonical builder complete construction uses. Its first payload may
+            // continue the retained payload immediately before the insert position,
+            // which is a physical hint only — and only the scan consumes it, so a
+            // pure deletion never pays the rightmost walk that computes it.
+            let predecessor = match left {
+                Some(left) => edit
+                    .child("edit.split")
+                    .run(|_| rightmost_payload(&mut objects, left))?,
+                None => None,
+            };
             edit.child("content.chunk").run(|_| {
                 let mut builder = crate::file::mapping::ExtentBuilder::new(capacities);
                 let mut sink = crate::file::edit::tree::DeferredSink::new(&mut objects);
