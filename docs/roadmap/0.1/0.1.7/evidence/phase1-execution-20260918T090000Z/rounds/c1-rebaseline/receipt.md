@@ -236,3 +236,22 @@ is visible in the round directory rather than invisible. Recorded as driver
 correction 2 in [`../../ROUND-README.md`](../../ROUND-README.md). The `v1` round
 is the first round collected with the corrected driver; its `after/artifacts.txt`
 records client `b0866eb1a9060618…` and the four example hashes.
+
+## 10. Correction (appended 2026-09-18, by P1-1's commit)
+
+P1-1 (`32eda6f29`) generalized one assertion of §4's test. Nothing above is
+edited; this section records what changed and why.
+
+`a_grouped_demand_is_one_wave_and_every_page_it_decoded` asserted
+`boundary_waves == 6` on the 4,000-entry fixture. That total is
+`point reads + Σ ceil(children / BATCH_CHILDREN)`, so it is a function of the
+batch width P1-1 is authorized to raise — with the width at 256 the same run
+reports 4, and the assertion could not survive while remaining true. It is
+replaced by `boundary_waves <= provider wave count`, which is **still false before
+C1** (10 charged waves against 6 provider calls) and independent of the width, and
+the exact per-call semantics move to the new
+`one_grouped_demand_is_one_charged_wave`. That test was run against the pre-C1
+tree `4a86107fc` with only the test file copied in and fails there with
+`left: 2, right: 1` — a grouped demand charged twice — so §4's pin is preserved in
+substance, not weakened to accommodate a later item. The `pages_read >= 15`
+assertion is untouched and still holds at both widths.

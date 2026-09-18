@@ -10,6 +10,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `v2` | V2 — `edit_memory_probe` + `edit_timing_c1 --case delete/shrink` | collected (`after/`) |
 | `v3` | V3 — `StoreReadCounters.opens` + the vehicle print | collected (`after/`) |
 | `p1-2` | P1-2 — pooled per-operation read session | collected (`after/`) |
+| `p1-1` | P1-1 — branch children in one wave (width 256) | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 

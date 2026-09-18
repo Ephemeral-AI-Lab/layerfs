@@ -1,0 +1,17 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_filesystem --mode pipeline --case directory-update --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-1/after/output/D9/fs-pipeline
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.026
+--- stdout ---
+mode pipeline case directory-update
+fixture entries 200
+update: rename the first 10 names in /d (directory pages change)
+setup untimed elapsed_ns 2501458 inserted 8
+root 681ab7e59a612a51c7ba5fe8699f7e65e54a18c42c744ddb0a1b230069558598
+elapsed_ns 1722833 (construction, bounded handoff and save acknowledgement)
+constructed objects_emitted 4 bytes_emitted 7471 saved inserted 4 reused 0 admitted 4
+report_nodes 3
+readback separately labelled elapsed_ns 1570750 result top_level=[d->2] d_first4=[f0010->13,f0011->14,f0012->15,f0013->16] fixture_entries=200
+prepared_objects 8
+new_inodes 202
+--- stderr ---
