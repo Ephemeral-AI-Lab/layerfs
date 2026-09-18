@@ -231,7 +231,9 @@ deletion removes the only non-root context check on that node) —
 
 **Not started:** P1-8, P1-7, P1-14, P1-13, P1-15 — nothing half-landed, so their
 anchors are intact (P1-13's D26 `rows_written` 25,760 / `merges` 61 are still at
-their pre-item values).
+their pre-item values). **The executable assignment for those five is
+[`phase1-continuation-handoff-20260918.md`](phase1-continuation-handoff-20260918.md)**,
+which carries each one's anchor, file, sketch, corrected design, tests and risks.
 
 **Plan corrections the receipts produced** (each recorded in its round): the C1
 `order` rows were first measured through a stale probe client (receipt §9, driver
