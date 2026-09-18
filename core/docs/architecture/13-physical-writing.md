@@ -4,8 +4,9 @@
 > not a product contract.
 
 Part of the [replacement-core architecture](README.md) set. Source pin
-`ce2d738ff`; scope, method, measurement status and upkeep are stated in the
-[index](README.md).
+`ce2d738ff`; the placement running total added by #178 **P2-8** (2026-09-18) is
+marked in place and carries its own commit. Scope, method, measurement status and
+upkeep are stated in the [index](README.md).
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -202,13 +203,16 @@ copied, for the case where the retained tail is about to be replaced (§18.5).
 
 ```text
    struct LanePlacement { open: Option<OpenPack> }        ONE open pack per lane
+   struct OpenPack { pack_id, groups, assembled }         assembled = the tail's
+                                                          running total (#178 P2-8)
 
    select_many(lane, groups, next_pack_id) -> Vec<SelectedWrite>
 
         for each group, in order:
              │
-             ├── append_fits(lane, open.groups, &group)?
-             │     EXACT assembled length + group count, MEASURED
+             ├── append_fits(lane, open.assembled, open.groups.len(), &group)?
+             │     EXACT assembled length + group count
+             │     the running total is READ, not re-measured (P2-8)
              │     the open tail and the incoming group are never copied
              │     the LANE'S OWN limits apply, not another lane's maxima
              │
@@ -286,9 +290,10 @@ placed in one call, `W` = packs receiving groups in that call.
 | `compress` / `decompress` | O(B) | **O(1)** — the 2 MiB / 1 MiB region | static context, charged up front |
 | `frame_group` | O(R + B) | O(B) — the body | `4 + 4R` framing |
 | `framed_group_length` | **O(1)** | O(1) | pure arithmetic on two numbers |
-| `assembled_length` | **O(groups)** | O(1) | loops summing `body_size` |
-| `append_fits` | **O(open groups)** ≤ O(256) | O(1) | measured, never copied |
-| `select_many` | O(G · open groups) | O(G) decisions + the open tail | one write per pack, not per group |
+| `assembled_length` | **O(groups)** | O(1) | loops summing `body_size`; the canonical predicate |
+| `append_fits` | **O(1)** | O(1) | reads the open state's running total + one `body_size` (P2-8) |
+| `retained_bytes` | **O(1)** | O(1) | the same running total (P2-8) |
+| `select_many` | O(G) | O(G) decisions + the open tail | one write per pack, not per group |
 | `assemble` | O(P) | O(P) | borrows bodies |
 | `assemble_consuming` | O(P) | **O(P) with bodies released** | avoids holding two pack copies |
 
@@ -297,12 +302,18 @@ Three rows are worth noting, and one of them corrects an easy assumption.
 **`framed_group_length` is O(1)** — pure arithmetic over `(records, payload)` — which
 is what makes a *seal* decision free.
 
-**`append_fits` is not O(1).** It calls `assembled_length`, which loops over the
-open pack's groups summing `body_size`. So a fit decision costs **O(open groups)**,
-bounded by `GROUP_COUNT_LIMIT = 256`. "Measured, never copied" is a statement about
-*bodies* — no body is copied to decide fit — not about constant time. Across one
-`select_many` call the open pack grows to its cap and is replaced, so the worst
-case is O(G · 256): bounded, but not constant per group.
+**`append_fits` is O(1) as of #178 P2-8 (2026-09-18).** It used to call
+`assembled_length`, which loops over the open pack's groups summing `body_size`,
+so a fit decision cost **O(open groups)** and one `select_many` call cost up to
+O(G · 256). The open-lane state now carries the tail's assembled length
+(`OpenPack::assembled`, maintained as groups land and reset when a closing
+assembly consumes the tail), so a fit decision is one read plus one `body_size`
+for the incoming group. "Measured, never copied" remains true in both forms: no
+body is copied to decide fit. `assembled_length` stays the canonical predicate,
+and the placement case in `crates/layerfs-storage/tests/pack_locator.rs`
+recomputes the running total from it at every boundary probe, so a drift between
+the maintained total and the canonical length fails there rather than in a stored
+pack.
 
 **The codec is O(1) in memory**, which is what makes a payload's peak independent
 of its size.

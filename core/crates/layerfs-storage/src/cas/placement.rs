@@ -65,7 +65,7 @@ impl MutationOwner {
     pub fn retained_tail_bytes(&self) -> StorageResult<usize> {
         PackLane::ALL.iter().try_fold(0usize, |total, lane| {
             total
-                .checked_add(self.placement[lane.index()].retained_bytes(*lane)?)
+                .checked_add(self.placement[lane.index()].retained_bytes()?)
                 .ok_or(StorageError::Integrity("retained tail accounting"))
         })
     }

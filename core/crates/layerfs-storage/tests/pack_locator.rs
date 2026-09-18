@@ -300,12 +300,18 @@ fn a_whole_file_record_is_stored_in_its_own_compact_pack() {
 
 /// The placement fit probe agrees with the canonical assembled length.
 ///
-/// Placement decides whether a group joins the open pack from the open tail plus
-/// the incoming group, without materialising a candidate pack. That decision must
-/// be exactly the one the canonical predicate makes: compare it with
+/// Placement decides whether a group joins the open pack from the running total it
+/// keeps for the open tail plus the incoming group, without materialising a
+/// candidate pack and without re-measuring the tail. That decision must be exactly
+/// the one the canonical predicate makes: compare it with
 /// `assembled_length(groups + [group]) <= pack_limit` around the boundary, for a
 /// lane whose directory entry width differs from the ordinary one, and check the
 /// group-count limit is respected separately.
+///
+/// This is also the boundary case for the running total: an off-by-one there would
+/// move pack boundaries on disk. The total is recomputed from `assembled_length`
+/// at every probe, so a drift between the state placement maintains and the
+/// canonical length fails here rather than in a stored pack.
 #[test]
 fn the_placement_fit_probe_agrees_with_the_canonical_assembled_length() {
     let mut workspace = layerfs_storage::encoding::codec::CompressionWorkspace::new()
@@ -341,8 +347,16 @@ fn the_placement_fit_probe_agrees_with_the_canonical_assembled_length() {
                 layerfs_storage::pack::assembled_length(lane, &with)
                     .is_ok_and(|length| length <= lane.pack_limit())
             };
+            // The running total the placement state maintains, recomputed here from
+            // the canonical predicate so the two are compared at every probe.
+            let open_total = if groups.is_empty() {
+                0
+            } else {
+                layerfs_storage::pack::assembled_length(lane, &groups).expect("open tail")
+            };
             let observed =
-                layerfs_storage::pack::append_fits(lane, &groups, &candidate).expect("fit probe");
+                layerfs_storage::pack::append_fits(lane, open_total, groups.len(), &candidate)
+                    .expect("fit probe");
             assert_eq!(
                 observed,
                 expected,

@@ -8,13 +8,21 @@
 
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::{assemble, assemble_consuming};
-use crate::pack::layout::{append_fits, assembled_length, EncodedGroup, PackLane};
+use crate::pack::layout::{append_fits, directory_entry_len, EncodedGroup, PackLane};
 
 /// One pack this save created and may still append to.
+///
+/// `assembled` is the running total of what `groups` would assemble to - the
+/// header, one directory entry per group and every body - maintained as groups
+/// land. It is the state the fit decision reads, so appending does not re-measure
+/// the tail; `assembled_length` is the canonical predicate it agrees with, and
+/// the placement case in `tests/pack_locator.rs` checks the two against each
+/// other at every boundary probe.
 #[derive(Clone, Debug)]
 struct OpenPack {
     pack_id: i64,
     groups: Vec<EncodedGroup>,
+    assembled: usize,
 }
 
 /// The exact write selected for one pack.
@@ -51,12 +59,13 @@ impl LanePlacement {
         Self { open: None }
     }
 
-    /// Bytes retained by the open tail for this lane.
-    pub fn retained_bytes(&self, lane: PackLane) -> StorageResult<usize> {
-        match &self.open {
-            Some(open) => assembled_length(lane, &open.groups),
-            None => Ok(0),
-        }
+    /// Bytes retained by this lane's open tail.
+    ///
+    /// The open state already carries the assembled length of its groups, so this
+    /// is a read rather than a re-measurement; the lane is the state's own, which
+    /// is why the caller no longer passes one.
+    pub fn retained_bytes(&self) -> StorageResult<usize> {
+        Ok(self.open.as_ref().map_or(0, |open| open.assembled))
     }
 
     /// Places `groups`, deciding append or new pack for each one in order.
@@ -76,7 +85,7 @@ impl LanePlacement {
             // incoming group are measured, never copied, and the lane's own group
             // and pack limits decide - not the maxima of any other lane.
             let fits_open = match &self.open {
-                Some(open) => append_fits(lane, &open.groups, &group)?,
+                Some(open) => append_fits(lane, open.assembled, open.groups.len(), &group)?,
                 None => false,
             };
             if !fits_open {
@@ -96,6 +105,7 @@ impl LanePlacement {
                 self.open = Some(OpenPack {
                     pack_id,
                     groups: Vec::new(),
+                    assembled: 0,
                 });
                 pending = Some((pack_id, true, Vec::new()));
             }
@@ -114,6 +124,12 @@ impl LanePlacement {
                 .ok_or(StorageError::Integrity("placement state"))?;
             let group_number = open.groups.len();
             let records = group.records;
+            let body = group.body_size(lane)?;
+            open.assembled = open
+                .assembled
+                .checked_add(directory_entry_len(lane))
+                .and_then(|total| total.checked_add(body))
+                .ok_or(StorageError::Integrity("pack size"))?;
             open.groups.push(group);
             let entry = pending
                 .as_mut()
@@ -148,6 +164,9 @@ impl LanePlacement {
             return Err(StorageError::Integrity("placement pack identity"));
         }
         let bytes = if closing {
+            // The tail is consumed, so its running total goes with it: the caller
+            // replaces the open pack immediately after a closing assembly.
+            open.assembled = 0;
             assemble_consuming(lane, std::mem::take(&mut open.groups))?
         } else {
             assemble(lane, &open.groups)?

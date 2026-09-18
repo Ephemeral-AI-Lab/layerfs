@@ -189,23 +189,29 @@ pub const fn directory_entry_len(lane: PackLane) -> usize {
     }
 }
 
-/// True when `group` still fits the pack `groups` already describes.
+/// True when a pack that already assembles to `assembled` still fits `group`.
 ///
-/// The decision is exact and allocates nothing: `assembled_length` already counts
-/// the header and one directory entry per group, so the incoming group adds one
-/// more directory entry and its body. Placement uses this instead of materialising
-/// a candidate pack, and the result is identical to comparing the assembled length
-/// of `groups` plus the group with the lane's pack limit.
+/// `assembled` is the caller's **running total** for the open pack - header, one
+/// directory entry per existing group and every body - so the decision costs one
+/// `body_size` and no pass over the groups. Re-summing them per candidate was
+/// O(g²) over a placement wave, g bounded only by the lane's group count.
+///
+/// The decision is exact and identical to comparing the assembled length of the
+/// existing groups plus `group` with the lane's pack limit; the caller owns the
+/// total because it is the state that changes as groups land, and
+/// `assembled_length` remains the canonical predicate the running total is
+/// checked against.
 pub fn append_fits(
     lane: PackLane,
-    groups: &[EncodedGroup],
+    assembled: usize,
+    group_count: usize,
     group: &EncodedGroup,
 ) -> StorageResult<bool> {
-    if groups.is_empty() || groups.len() >= lane.group_count_limit() {
+    if group_count == 0 || group_count >= lane.group_count_limit() {
         return Ok(false);
     }
     let body = group.body_size(lane)?;
-    let total = assembled_length(lane, groups)?
+    let total = assembled
         .checked_add(directory_entry_len(lane))
         .and_then(|total| total.checked_add(body))
         .ok_or(StorageError::Integrity("pack size"))?;
