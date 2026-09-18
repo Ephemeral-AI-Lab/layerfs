@@ -465,6 +465,219 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
     })
 }
 
+/// Declared base file count of a C2-4 row.
+///
+/// The reference family fixes this: a `compact-v2` row at the 1 and 10 tiers holds
+/// as many base files as the tier declares, every other row holds 128. The base is
+/// the content the workspace already has, and the additions are derived from it, so
+/// this figure decides the whole reuse equation.
+fn workspace_base_files(case: &Case, members: u32) -> u32 {
+    if case.tier <= 1 && case.profile == "compact-v2" {
+        members
+    } else {
+        crate::families::c2_reuse::BASE128_FILES
+    }
+}
+
+/// Seed of base file `index`: a domain of its own, so no base file shares an object
+/// with another base file or with a `unique` addition.
+fn base_file_seed(seed: u64, index: u32) -> u64 {
+    seed ^ 0xb45e_0000_0000_0000 ^ u64::from(index)
+}
+
+/// C2-4: exact reuse against the base the workspace already holds.
+///
+/// C2-2 measures reuse inside one offered set against an empty Store. This family
+/// measures the other half: the Store already holds `base_files` files, and each
+/// addition is derived from the base file its ordinal maps to, so an `exact`
+/// addition is an existing identity for every object it carries and a `unique` one
+/// shares nothing. That is why the equations differ from C2-2's — an `exact` save
+/// here must reuse *every* accepted object, not every duplicate after the first.
+pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let seed = seed_of(case.id);
+    let members = case.entries.max(1);
+    let member_bytes = if case.bytes > 0 { case.bytes } else { 1 << 20 };
+    let base_files = workspace_base_files(case, members);
+
+    // The base the workspace already holds. Built before the timed region, and
+    // saved into the base Store before it is copied: the measured phase must pay
+    // for the additions, not for the content that was already there.
+    let mut base_store = TreeStore::new();
+    let mut base_bytes: Vec<Vec<u8>> = Vec::with_capacity(base_files as usize);
+    for index in 0..base_files {
+        let bytes = fixture::noise(member_bytes, base_file_seed(seed, index));
+        let (store, _root) = objects_of(&bytes)?;
+        base_store.absorb(&store);
+        base_bytes.push(bytes);
+    }
+
+    let mut offered: Vec<(Vec<u8>, TreeStore, ObjectId)> = Vec::with_capacity(members as usize);
+    for index in 0..members {
+        let base = &base_bytes[(index % base_files) as usize];
+        let bytes = match op {
+            ReuseOp::Identical => base.clone(),
+            ReuseOp::Local => {
+                let mut bytes = base.clone();
+                let at = bytes.len() / 2;
+                let end = (at + 4096).min(bytes.len());
+                let patch =
+                    fixture::noise((end - at) as u64, seed ^ (u64::from(index) << 16) ^ 0x10c4);
+                bytes[at..end].copy_from_slice(&patch);
+                bytes
+            }
+            ReuseOp::Unique | ReuseOp::Base128 => {
+                fixture::noise(member_bytes, seed ^ (u64::from(index) << 8) ^ 0x0d1d)
+            }
+        };
+        let (store, root) = objects_of(&bytes)?;
+        offered.push((bytes, store, root));
+    }
+    let mut accepted: u64 = 0;
+    let mut distinct: Vec<ObjectId> = Vec::new();
+    for (_, store, _) in &offered {
+        for id in store.insertion_order() {
+            accepted += 1;
+            if !distinct.contains(id) {
+                distinct.push(*id);
+            }
+        }
+    }
+
+    let base = context.output.join("base.sqlite");
+    let sample = context.output.join("sample.sqlite");
+    create_and_save_untimed(&base, &base_store)?;
+    let de_warm = prepare_sample(&base, &sample)?;
+    gates.push(gates::residency_gate(Some(de_warm.resident_after)));
+    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+
+    let store = match open_untimed(&sample) {
+        Ok(store) => store,
+        Err(error) => return Ok(unmeasured(&error, gates)),
+    };
+    instruments::heap_begin();
+    let (result, report) = Timing::record("c2.workspace", |scope: &TimingScope<'_, Active>| {
+        let mut operation = store.begin_save(scope.child("storage.begin"))?;
+        for (_, member, _) in &offered {
+            for id in member.insertion_order() {
+                let object = member
+                    .cloned_object(*id)
+                    .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
+                operation.accept(object)?;
+            }
+        }
+        operation.finish(scope.child("storage.finish"))
+    });
+    let heap = instruments::heap_end();
+    let timing_bytes = write_timing(context.output, &report)?;
+    let outcome = match result {
+        Ok(outcome) => outcome,
+        Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
+    };
+
+    context.trace.write_number(Kind::Counter, "workspace.base_files", i128::from(base_files), "files", "harness-declared base file count")?;
+    context.trace.write_number(Kind::Counter, "workspace.base_objects", base_store.len() as i128, "objects", "objects the base Store already held")?;
+    context.trace.write_number(Kind::Counter, "workspace.accepted", accepted as i128, "objects", "harness-declared addition set")?;
+    context.trace.write_number(Kind::Counter, "workspace.distinct", distinct.len() as i128, "objects", "harness-declared addition set")?;
+    context.trace.write_number(Kind::Counter, "workspace.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
+    context.trace.write_number(Kind::Counter, "workspace.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
+    context.trace.write_number(Kind::Counter, "workspace.packs_created", i128::from(outcome.packs_created), "packs", "SaveOutcome.packs_created")?;
+    context.trace.write_number(Kind::Counter, "workspace.statements", i128::from(outcome.statements), "statements", "SaveOutcome.statements")?;
+    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+
+    gates.push(completeness_gate(&report));
+    // The declared equation, per kind. An `exact` addition carries only identities
+    // the base already holds, so every accepted object is reused and nothing is
+    // written; a `local` addition shares its unchanged body with the base and adds
+    // the patched region; a `unique` addition shares nothing.
+    let equation = match op {
+        ReuseOp::Identical => outcome.reused == accepted && outcome.inserted == 0,
+        ReuseOp::Unique | ReuseOp::Base128 => outcome.reused == 0,
+        ReuseOp::Local => outcome.reused > 0 && outcome.reused < accepted,
+    };
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.reuse-equation",
+        equation,
+        &format!(
+            "reused {} of {accepted} accepted, {} inserted ({} base files, {} base objects)",
+            outcome.reused,
+            outcome.inserted,
+            base_files,
+            base_store.len()
+        ),
+        match op {
+            ReuseOp::Identical => {
+                "exact profile: every accepted object is an identity the base already holds"
+            }
+            ReuseOp::Unique | ReuseOp::Base128 => {
+                "unique profile: nothing in the base is reused"
+            }
+            ReuseOp::Local => "local profile: some objects are reused, not all",
+        },
+    ));
+    if matches!(op, ReuseOp::Identical) {
+        gates.push(gates::require(
+            GateClass::Mechanism,
+            "g2.exact-hit-writes-nothing",
+            outcome.packs_created == 0 && outcome.pack_appends == 0,
+            &format!(
+                "{} packs created, {} appends",
+                outcome.packs_created, outcome.pack_appends
+            ),
+            "an exact-hit save resolves by lookup and writes no pack",
+        ));
+    }
+
+    // Oracle: read every addition's root back through the Store it was saved into.
+    let store = match open_untimed(&sample) {
+        Ok(store) => store,
+        Err(error) => return Ok(unmeasured(&error, gates)),
+    };
+    let mut oracle_ok = true;
+    let mut oracle_note = String::new();
+    for (index, (bytes, _member, root)) in offered.iter().enumerate() {
+        let expectation = Expectation::of(bytes);
+        match read_back_through_store(&store, *root, &expectation) {
+            Ok(back) => {
+                if !back.matches() {
+                    oracle_ok = false;
+                    oracle_note = format!("addition {index} read-back mismatch");
+                }
+            }
+            Err(error) => {
+                oracle_ok = false;
+                oracle_note = format!("addition {index}: {error}");
+            }
+        }
+    }
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o1-member-readback",
+        oracle_ok,
+        if oracle_note.is_empty() { "every addition root read back byte-exact" } else { &oracle_note },
+        "each addition's root object is readable and byte-exact after the save",
+    ));
+    gates.extend(sidecar_gates(&sample));
+    gates.push(gates::swap_gate(instruments::swaps()));
+
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("workspace_profile: {op:?}"),
+            format!("members: {members}"),
+            format!("base_files: {base_files} (declared by the row's tier and profile)"),
+            format!("member_bytes: {member_bytes}"),
+            format!("store_state: opened-from-copy"),
+            format!("copy_rung: {COPY_RUNG}"),
+            format!("allocation_attribution: {ATTRIBUTION}"),
+            format!("heap_charged_bytes: {}", heap.charged_bytes),
+        ],
+    })
+}
+
 /// The object set one delta row saves, and the recipe its oracle uses.
 fn delta_members(
     op: DeltaOp,
