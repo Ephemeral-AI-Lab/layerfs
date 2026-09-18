@@ -225,6 +225,17 @@ copied, for the case where the retained tail is about to be replaced (§18.5).
                               • the new pack's write is marked CREATED
 ```
 
+**A sealed group is written with one statement per bound chunk (#178 P2-2,
+2026-09-18).** The group's rows are inserted together, `k` at a time, with `k`
+derived from the connection's own `SQLITE_LIMIT_VARIABLE_NUMBER` and
+`SQLITE_LIMIT_SQL_LENGTH` and capped at 128 - read back from the engine, never
+copied as a constant - and SQLite applies each multi-row `INSERT` atomically, so a
+chunk's rows all land or none do. The statement text differs only in how many
+placeholder groups it carries, so the prepared-statement cache holds one entry per
+chunk size and every later chunk is a cache hit. `SaveOutcome::statements` counts
+the statements, not the rows; `sqlite_master` is untouched, so the pinned schema
+identity is unchanged.
+
 Two properties the source states and the code enforces:
 
 **"Every pack that receives a group in this call produces exactly one write,

@@ -109,7 +109,15 @@ scopes to the `objects` insert alone: pack writes, value-group inserts and
 transaction statements are already `pack_appends`/`packs_created`,
 `pool.groups`, `transactions` and `commits`. A save that reuses everything issues
 none. It exists so that an INSERT-batching change has a counter that moves while
-`inserted` stays exactly the same.
+`inserted` stays exactly the same - and that change landed as #178 **P2-2**
+(2026-09-18): a sealed group's rows are inserted together, `k` rows per statement
+with `k` derived from the connection's own `SQLITE_LIMIT_VARIABLE_NUMBER` and
+`SQLITE_LIMIT_SQL_LENGTH` (capped at 128, never hardcoded), so the counter reads
+`ceil(rows_g / k)` per sealed group instead of one per row. On `c2.ceiling` that
+is 8,191 rows in **72** statements where the single-row writer issued 8,191; the
+ideal `ceil(8191 / 128) = 64` is not reachable without deferring a group's rows
+past the group that sealed them, which is a transaction-accounting change and not
+this item.
 
 ### 15.3 The counters that make claims checkable
 

@@ -11,7 +11,7 @@
 
 mod support;
 
-use support::{construct_file, create_store, patterned, save_all, TempDir};
+use support::{construct_file, create_store, noise, patterned, save_all, TempDir};
 
 /// Rows actually present in the `objects` table, read on an external connection.
 fn stored_rows(path: &std::path::Path) -> i64 {
@@ -22,26 +22,37 @@ fn stored_rows(path: &std::path::Path) -> i64 {
 }
 
 #[test]
-fn a_save_charges_one_statement_per_inserted_row() {
+fn a_save_inserts_its_rows_in_bounded_statements() {
     let dir = TempDir::new("statements");
     let path = dir.store_path("statements");
-    let bytes = patterned(300_000);
+    let bytes = noise(8_000_000);
     let (collected, _root, _) = construct_file(&bytes);
     let store = create_store(&path);
 
     let outcome = save_all(&store, &collected).expect("save");
     assert!(
-        outcome.inserted > 1,
-        "the fixture must insert several rows to be a measurement"
+        outcome.inserted > 200,
+        "the fixture must insert many rows to be a measurement"
     );
     assert_eq!(
-        outcome.statements, outcome.inserted,
-        "before batching every inserted row is its own INSERT statement"
-    );
-    assert_eq!(
-        i64::try_from(outcome.statements).unwrap(),
+        i64::try_from(outcome.inserted).unwrap(),
         stored_rows(&path),
-        "the charge agrees with the engine's own row count"
+        "every row is present, however few statements carried it"
+    );
+    assert!(
+        outcome.statements < outcome.inserted,
+        "rows are batched: {} statements for {} rows",
+        outcome.statements,
+        outcome.inserted
+    );
+    // `k` is derived from the engine's limits and capped at 128, and rows are
+    // inserted one sealed group at a time, so the total is at least the ideal
+    // ceil(rows / 128) and never more than one statement per row.
+    assert!(
+        outcome.statements >= outcome.inserted.div_ceil(128),
+        "{} statements cannot carry {} rows at a chunk of at most 128",
+        outcome.statements,
+        outcome.inserted
     );
 }
 
@@ -54,7 +65,8 @@ fn the_statement_count_tracks_the_rows_and_not_a_constant() {
     let store = create_store(&path);
 
     let first = save_all(&store, &small_objects).expect("first save");
-    assert_eq!(first.statements, first.inserted);
+    assert_eq!(i64::try_from(first.inserted).unwrap(), stored_rows(&path));
+    assert!(first.statements >= 1);
 
     // Control 1: a second save of the same objects inserts nothing and issues no
     // object statement at all, so the counter is not a per-save constant.
@@ -62,16 +74,42 @@ fn the_statement_count_tracks_the_rows_and_not_a_constant() {
     assert_eq!(repeat.inserted, 0);
     assert_eq!(repeat.statements, 0);
 
-    // Control 2: a strictly larger file charges strictly more statements, and
-    // exactly as many more as the rows it added.
+    // Control 2: a strictly larger file charges strictly more statements, and the
+    // engine holds every row those statements claimed to insert.
     let large = patterned(900_000);
     let (large_objects, _root, _) = construct_file(&large);
     let second = save_all(&store, &large_objects).expect("second save");
     assert!(second.inserted > 0);
-    assert_eq!(second.statements, second.inserted);
+    assert!(second.statements < second.inserted);
     assert_eq!(
-        i64::try_from(first.statements + second.statements).unwrap(),
+        i64::try_from(first.inserted + second.inserted).unwrap(),
         stored_rows(&path),
-        "every charged statement is a row the engine holds"
+        "every charged statement's rows are rows the engine holds"
+    );
+}
+
+/// The chunk size is derived from the connection's own limits.
+///
+/// A hardcoded chunk would be a copied constant with no relationship to the SQLite
+/// this build links: a deployment with a smaller `SQLITE_LIMIT_VARIABLE_NUMBER`
+/// would fail every insert, and one with a larger limit would leave the win on the
+/// table. The case pins the derivation where it lives - the writer's own reader of
+/// the engine's limits - and that it stays inside the cache-bounding cap.
+#[test]
+fn the_insert_chunk_is_derived_from_the_engine_limits() {
+    let dir = TempDir::new("chunk-derivation");
+    let path = dir.store_path("chunk-derivation");
+    create_store(&path);
+    let connection =
+        layerfs_storage::sqlite::connection::open(&path, false).expect("profile connection");
+    let chunk = layerfs_storage::sqlite::write::insert_chunk_rows(&connection).expect("chunk");
+    assert!(chunk >= 1, "a chunk must hold at least one row");
+    assert!(chunk <= 128, "the cap bounds the prepared-statement cache");
+    let variables = connection
+        .limit(rusqlite::limits::Limit::SQLITE_LIMIT_VARIABLE_NUMBER)
+        .expect("variable limit");
+    assert!(
+        chunk <= usize::try_from(variables).unwrap() / 7,
+        "the chunk must fit the engine's bind-variable limit"
     );
 }

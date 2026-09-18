@@ -136,25 +136,31 @@ impl MutationOwner {
             return Err(StorageError::Integrity("placed record count"));
         }
         self.write_pack(write)?;
-        for (record_number, member) in pending.members.iter().enumerate() {
+        // The group's rows are inserted together: one statement per chunk the
+        // engine's own limits allow, not one statement per row (P2-2). The same
+        // rows, in the same order, with the same counters charged.
+        let rows: Vec<ObjectRow> = pending
+            .members
+            .iter()
+            .enumerate()
+            .map(|(record_number, member)| ObjectRow {
+                object_id: member.object_id,
+                role: member.role.code(),
+                canonical_length: member.canonical_length,
+                base_object_id: member.base_object_id,
+                pack_id: write.pack_id,
+                group_number: placed.group_number,
+                record_number,
+            })
+            .collect();
+        let statements = write::insert_objects(&self.connection, &rows)?;
+        self.counters.statements = self.counters.statements.saturating_add(statements);
+        for member in &pending.members {
             if member.base_object_id.is_some() {
                 self.counters.prefix_records += 1;
             } else {
                 self.counters.full_records += 1;
             }
-            let statements = write::insert_object(
-                &self.connection,
-                &ObjectRow {
-                    object_id: member.object_id,
-                    role: member.role.code(),
-                    canonical_length: member.canonical_length,
-                    base_object_id: member.base_object_id,
-                    pack_id: write.pack_id,
-                    group_number: placed.group_number,
-                    record_number,
-                },
-            )?;
-            self.counters.statements = self.counters.statements.saturating_add(statements);
             availability.inserted(member.object_id);
             self.counters.inserted += 1;
             self.transaction.rows += 1;
