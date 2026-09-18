@@ -1,0 +1,24 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/filesystem_timing_c1 --case subtree-remove --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/rounds/p2-0/after/output/D5/c1-subtree-remove
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.006
+--- stdout ---
+case subtree-remove
+root 3855544b746bae6afa17d3f30b220dec8a3cdacda7f57f76a574f15e3b7d88b8
+inode_table 24885bf8d820f5343146c777d0914cfc3463e85c866e262be5748522ce755a69
+directories 1 bindings +0 -1
+objects read 6 waves 3 bytes 16797 emitted 3 bytes 298
+directories: pages read 1 created 1 reused 0 untouched 0 scratch peak 613 top-level 0
+inodes: pages read 5 created 1 reused 0 scratch peak 67652
+references: rows 202 spilled 0 values 1 removals 201 released 200 peak pending 202
+validation: objects 0 waves 0 inode_demands 0 inode_pages 0 directory_pages 0 entries_examined 0
+elapsed_ns 272792
+phase validate elapsed_ns 3166
+phase directories elapsed_ns 9875
+phase references elapsed_ns 3708
+phase inodes elapsed_ns 74292
+phase cleanup elapsed_ns 167
+phase root.encode elapsed_ns 709
+report_nodes 7
+prepared_objects 11
+--- stderr ---

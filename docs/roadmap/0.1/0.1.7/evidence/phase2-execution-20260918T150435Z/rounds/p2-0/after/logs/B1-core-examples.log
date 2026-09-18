@@ -1,0 +1,8 @@
+$ cargo +1.85.1 build --release --offline --locked --manifest-path core/Cargo.toml --examples
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 3.396
+--- stdout ---
+--- stderr ---
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+    Finished `release` profile [optimized] target(s) in 3.25s
