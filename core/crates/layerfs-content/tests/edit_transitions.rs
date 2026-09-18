@@ -589,6 +589,46 @@ impl Measured {
     }
 }
 
+/// A whole-file edit emits the reference object, byte for byte.
+///
+/// The whole-file route assembles directly into the canonical object's own
+/// allocation, so this is the oracle that keeps the two encodings the same object:
+/// the assembled object must equal what the complete encoder (`encode_whole_file`)
+/// produces for the same result bytes. It compares the raw canonical bytes, not
+/// just the identity, so a framing mistake that happened to hash the same way could
+/// not pass.
+#[test]
+fn whole_file_edit_emits_the_reference_bytes() {
+    let policy = ConstructionPolicy::frozen_default();
+    let cutoff = policy.small_file_threshold_bytes();
+    let base = noise(cutoff as usize / 2);
+    let (store, root) = build(policy, &base);
+    let start = cutoff as usize / 4;
+    let replacement = noise(512);
+    let mut expected = base.clone();
+    expected[start..start + replacement.len()].copy_from_slice(&replacement);
+    let mut replacements = Replacements::new();
+    replacements.push(replacement);
+    let (result, edited_root, _) = measure(
+        policy,
+        &store,
+        root,
+        vec![Edit::overwrite(start as u64, start as u64 + 512)],
+        &replacements,
+        expected.len() as u64,
+        None,
+    );
+    assert_eq!(read_back(&result, edited_root).expect("read"), expected);
+    let emitted = result.canonical(edited_root).expect("emitted object");
+    let reference = layerfs_content::file::encode_whole_file(&policy.capacities(), &expected)
+        .expect("reference encoding");
+    assert_eq!(
+        emitted,
+        reference.as_slice(),
+        "the assembled object is the reference object"
+    );
+}
+
 /// Base bytes, the deletions and the expected result of the retained-run fixture.
 ///
 /// A chunked base with a two-level mapping tree whose result is one whole-file

@@ -13,7 +13,7 @@ use std::io::Read;
 use layerfs_telemetry::timer::{Active, TimingScope};
 
 use crate::error::{ContentError, ContentResult};
-use crate::file::content::{encode_whole_file, ConstructedFile};
+use crate::file::content::{begin_whole_file_object, ConstructedFile, WHOLE_VALUE_HEADER};
 use crate::file::edit::compare::{compare_replacements, NoOpVerdict};
 use crate::file::edit::finish::{emit_empty_representation, emit_file_state};
 use crate::file::edit::input::{EditSource, EditStream, Plan, ReplacementReader, Segment};
@@ -90,18 +90,33 @@ pub fn apply_edits(
                 })
             }
             crate::policy::Representation::WholeFile => {
-                let bytes = assemble_final(
+                // The canonical object is the sink: its envelope and value header
+                // are written first and its payload area is reserved exactly, so
+                // the assembly appends into the object that is emitted instead of
+                // building a payload, a value and a canonical copy of it.
+                let mut canonical = begin_whole_file_object(capacities, final_len)?;
+                let logical_len = assemble_into(
                     &view,
                     reader,
                     request.edits,
                     request.source,
                     &mut pages,
+                    &mut canonical,
                     edit.child("edit.assemble"),
                 )?;
-                let canonical = edit
-                    .child("content.encode")
-                    .run(|_| encode_whole_file(capacities, &bytes))?;
-                let mut object = FinalizedObject::new(ObjectRole::WholeFile, canonical)?;
+                let payload = crate::object::HEADER_LEN
+                    + crate::object::VALUE_LEN_BYTES
+                    + WHOLE_VALUE_HEADER
+                    + logical_len as usize;
+                if final_len != logical_len || canonical.len() != payload {
+                    return Err(ContentError::LengthMismatch {
+                        expected: final_len,
+                        actual: logical_len,
+                    });
+                }
+                let mut object = edit
+                    .child("content.identify")
+                    .run(|_| FinalizedObject::new(ObjectRole::WholeFile, canonical))?;
                 if view.root() != object.id() {
                     object = object.with_predecessors(AdvisoryPredecessors::explicit(view.root())?);
                 }
@@ -110,7 +125,7 @@ pub fn apply_edits(
                     .run(|_| consumer.accept(object))?;
                 Ok(ConstructedFile {
                     root,
-                    logical_len: bytes.len() as u64,
+                    logical_len,
                     counters: crate::file::edit::EditCounters::default(),
                 })
             }
@@ -127,37 +142,37 @@ pub fn apply_edits(
     })
 }
 
-/// Assembles the whole result into one allocation, from retained ranges and
-/// replacements, without reading any discarded range.
+/// Assembles the whole result into `out`, from retained ranges and replacements,
+/// without reading any discarded range.
+///
+/// `out` is the caller's buffer: on the whole-file route it is the canonical
+/// object's own pre-sized allocation, and its current length is where the payload
+/// begins. The returned value is the payload length this assembly emitted, which
+/// the caller checks against the declared final length.
 #[allow(clippy::too_many_arguments)]
-fn assemble_final(
+fn assemble_into(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
     pages: &mut crate::file::mapping::PageCache,
+    out: &mut Vec<u8>,
     scope: TimingScope<'_, layerfs_telemetry::timer::Pending>,
-) -> ContentResult<Vec<u8>> {
-    scope.run(|assemble| assemble_inner(view, reader, stream, source, pages, assemble))
+) -> ContentResult<u64> {
+    scope.run(|assemble| assemble_inner(view, reader, stream, source, pages, out, assemble))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn assemble_inner(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
     pages: &mut crate::file::mapping::PageCache,
+    out: &mut Vec<u8>,
     scope: &TimingScope<'_, layerfs_telemetry::timer::Active>,
-) -> ContentResult<Vec<u8>> {
-    let final_len = stream.final_len();
-    let mut out: Vec<u8> = Vec::new();
-    out.try_reserve_exact(final_len as usize).map_err(|_| {
-        ContentError::BoundedCapacityExceeded {
-            what: "edit.assembly",
-            limit: final_len,
-            actual: final_len,
-        }
-    })?;
+) -> ContentResult<u64> {
+    let payload_start = out.len();
     // The plan is read once, into the segment list the assembly walks: a chunked
     // base then assembles through one cursor, so a mapping page two retained runs
     // share is demanded once for the whole assembly instead of once per run.
@@ -178,10 +193,10 @@ fn assemble_inner(
                 if base.1 > base.0 {
                     match &mut cursor {
                         Some(cursor) => {
-                            cursor.read_segment(base.0..base.1, &mut out, pages)?;
+                            cursor.read_segment(base.0..base.1, out, pages)?;
                         }
                         None => {
-                            view.read_range(reader, base.0..base.1, &mut out, scope)?;
+                            view.read_range(reader, base.0..base.1, out, scope)?;
                         }
                     }
                 }
@@ -189,17 +204,11 @@ fn assemble_inner(
             Segment::Replace { index, len, .. } => {
                 // The replaced base range is deliberately not read: only the
                 // replacement bytes enter the assembled result.
-                append_replacement(source, index, len, &mut out)?;
+                append_replacement(source, index, len, out)?;
             }
         }
     }
-    if out.len() as u64 != final_len {
-        return Err(ContentError::LengthMismatch {
-            expected: final_len,
-            actual: out.len() as u64,
-        });
-    }
-    Ok(out)
+    Ok(out.len() as u64 - payload_start as u64)
 }
 
 fn append_replacement(

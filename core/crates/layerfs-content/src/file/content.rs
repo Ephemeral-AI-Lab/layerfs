@@ -23,7 +23,8 @@ use crate::policy::{ConstructionCapacities, ConstructionPolicy, Representation};
 
 const WHOLE_MAGIC: &[u8; 8] = b"LFS5SML\0";
 const WHOLE_VERSION: u16 = 1;
-const WHOLE_VALUE_HEADER: usize = 10;
+/// Bytes the whole-file value header occupies before its payload.
+pub const WHOLE_VALUE_HEADER: usize = 10;
 /// Root of a constructed file plus the logical length it opens.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConstructedFile {
@@ -83,11 +84,14 @@ pub fn encode_whole_file(
     capacities: &ConstructionCapacities,
     bytes: &[u8],
 ) -> ContentResult<Vec<u8>> {
-    // The cut this comment used to claim is not implemented: the value is built
-    // in its own allocation and `encode_bytes_object` allocates the canonical
-    // object around it, so the peak is roughly twice the value plus its framing.
-    // The memory ledger states that figure; the comment no longer claims
-    // otherwise.
+    // Complete construction still builds the value in its own allocation and
+    // `encode_bytes_object` allocates the canonical object around it, so this
+    // route's peak is roughly twice the value plus its framing. The whole-file
+    // *edit* route does not use this function: it assembles into the canonical
+    // object's own pre-sized allocation
+    // ([`begin_whole_file_object`] + the assembled payload), which is the cut this
+    // comment used to claim for construction. The memory ledger states that
+    // figure; the comment no longer claims otherwise.
     if bytes.is_empty() || bytes.len() > capacities.whole_file_raw_limit {
         return Err(ContentError::BoundedCapacityExceeded {
             what: "construction.whole_file",
@@ -107,6 +111,59 @@ pub fn encode_whole_file(
             actual: canonical.len() as u64,
         });
     }
+    Ok(canonical)
+}
+
+/// Starts a whole-file canonical object with room for `payload_len` payload bytes.
+///
+/// The returned buffer is the canonical object: its envelope and value header are
+/// written, its payload area is reserved exactly, and the caller appends exactly
+/// `payload_len` bytes to it. That is one allocation for the whole object instead
+/// of a payload, a value and a canonical copy, and the reserve is exact, so no
+/// append can reallocate. Both capacity checks run before anything is written, so
+/// an over-large object is refused with the same error the complete encoder
+/// raises.
+pub fn begin_whole_file_object(
+    capacities: &ConstructionCapacities,
+    payload_len: u64,
+) -> ContentResult<Vec<u8>> {
+    if payload_len == 0 || payload_len > capacities.whole_file_raw_limit as u64 {
+        return Err(ContentError::BoundedCapacityExceeded {
+            what: "construction.whole_file",
+            limit: capacities.whole_file_raw_limit as u64,
+            actual: payload_len,
+        });
+    }
+    let payload_len = usize::try_from(payload_len).map_err(|_| ContentError::LengthOverflow)?;
+    let value_len = payload_len
+        .checked_add(WHOLE_VALUE_HEADER)
+        .ok_or(ContentError::LengthOverflow)?;
+    let total = crate::object::canonical_len(value_len)?;
+    if total > capacities.whole_file_canonical_limit {
+        return Err(ContentError::BoundedCapacityExceeded {
+            what: "construction.whole_file_canonical",
+            limit: capacities.whole_file_canonical_limit as u64,
+            actual: total as u64,
+        });
+    }
+    let mut canonical: Vec<u8> = Vec::new();
+    canonical
+        .try_reserve_exact(total)
+        .map_err(|_| ContentError::BoundedCapacityExceeded {
+            what: "construction.whole_file_canonical",
+            limit: capacities.whole_file_canonical_limit as u64,
+            actual: total as u64,
+        })?;
+    canonical.extend_from_slice(&crate::object::OBJECT_MAGIC);
+    canonical.push(crate::object::BYTES_KIND);
+    let value_len_u32 = u32::try_from(value_len).map_err(|_| ContentError::LengthOverflow)?;
+    let payload_len_u32 = u32::try_from(value_len + crate::object::VALUE_LEN_BYTES)
+        .map_err(|_| ContentError::LengthOverflow)?;
+    canonical.extend_from_slice(&payload_len_u32.to_be_bytes());
+    canonical.extend_from_slice(&value_len_u32.to_be_bytes());
+    canonical.extend_from_slice(WHOLE_MAGIC);
+    canonical.extend_from_slice(&WHOLE_VERSION.to_be_bytes());
+    debug_assert_eq!(canonical.len(), total - payload_len);
     Ok(canonical)
 }
 

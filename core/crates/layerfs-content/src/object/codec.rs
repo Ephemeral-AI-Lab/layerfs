@@ -20,7 +20,8 @@ pub const HEADER_LEN: usize = 9;
 /// Largest accepted payload, `16 MiB` minus the envelope header.
 pub const MAX_PAYLOAD_BYTES: usize = MAX_CANONICAL_OBJECT_BYTES - HEADER_LEN;
 
-const VALUE_LEN_BYTES: usize = 4;
+/// Length prefix the canonical value carries, in bytes.
+pub const VALUE_LEN_BYTES: usize = 4;
 
 /// Canonical object width for a value of `value_len` bytes.
 pub const fn canonical_len(value_len: usize) -> ContentResult<usize> {

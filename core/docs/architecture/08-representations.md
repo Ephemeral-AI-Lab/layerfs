@@ -246,9 +246,9 @@ than it first appears:
 | Transition | Time | Peak memory | Storage added |
 | --- | --- | --- | --- |
 | small → large (`stream_combined`) | **O(n_result)** | O(T) resident base + 32 KiB chunk buffer | O(k_result + k_result/F) |
-| large → small (`assemble_final`) | **O(n_result) ≤ O(T)** | O(n_result) ≤ O(T) | O(n_result) |
+| large → small (`assemble_into`) | **O(n_result) ≤ O(T)** | one buffer of `n_result + 23` — the object itself | O(n_result) |
 
-`assemble_final` reads only *retained* ranges and allocates only `final_len`:
+`assemble_into` reads only *retained* ranges and allocates only the object:
 
 ```rust
 out.try_reserve_exact(final_len as usize)?;
@@ -265,6 +265,16 @@ for segment in &segments {
     }
 }
 ```
+
+`begin_whole_file_object(capacities, final_len)` sizes that one buffer — the
+canonical envelope, the value header and `final_len` payload bytes reserved
+exactly, so no append reallocates — and writes the framing; the assembly appends
+into it and `FinalizedObject::new` **moves** it. There is no separate payload, no
+separate value and no canonical copy of either, so the whole-file route's peak is
+`final_len + 23` rather than the `4n + 184` a measured probe showed while the
+payload, the value and the canonical object were three live allocations at once.
+`encode_whole_file` remains the complete-construction encoder and the reference
+the edit's bytes are checked against.
 
 So shrinking a 1 GiB file to 128 KiB reads **128 KiB**, not 1 GiB. The discarded
 range is never touched. Because a whole-file result is definitionally below `T`,
