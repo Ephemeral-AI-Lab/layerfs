@@ -48,8 +48,11 @@ A master round-tripped through this path would store different bytes and produce
 different counters than a built one — a silent fixture change, which is exactly
 what the preparation rules exist to prevent.
 
-**Therefore Phase 1 must add a lossless object-set serializer.** This is the single
-largest piece of new code in the plan.
+**Therefore a lossless object-set serializer is required.** Round 4 has since
+written one — `src/workload/artifact.rs`, whose header states this exact finding
+(*"The older `TreeStore::write_to_dir` round trip keeps only the bytes and re-wraps
+them as chunks, which is why a C2 replay could not use it"*) — so this is no longer
+new code to write. See §12.2.
 
 ### 3.2 Everything the serializer needs is already public
 
@@ -151,19 +154,29 @@ still `NOT_RUN` at 15 s — Phase 0 changes what is *published*, not what is
 
 ## 6. Phase 1 — the prepared cache
 
-**1.1 — the lossless object-set serializer** (new `src/workload/prepared.rs`).
-One directory per object set:
+**1.1 — the lossless object-set serializer already exists.** Round 4 wrote
+`src/workload/artifact.rs`: it records the persisted role code beside each object,
+persists each member's `Expectation`, and provides `copy_store`, `directory` and
+`seal`. **Do not rewrite it.** The round-5 work here is to (a) confirm it
+round-trips references and advisory predecessors — the role is handled, the
+predecessor list is not visible in its header — and (b) extend its use to every
+fixture-heavy family, since today only `c2.delta.cdc-locality` declares
+`oracle_phase: verify-invocation`.
+
+One deliberate divergence from the layout this plan first proposed: the frozen
+specification already fixes the artifact layout in
+`test_setup_and_cache_discipline.md` §3 —
 
 ```text
-objects/<hex-id>.bin        canonical bytes, exactly as today
-index.tsv                   id \t role_code \t ref0,ref1,... \t pred_id:provenance,...
-expectation.json            verification-only: logical_len, sha256   (separate file, never read by mutation)
+prepared/<compatibility-digest>/
+  manifest.json   {compatibility, producer, created_ns, files{path -> {bytes, sha256}}, data_bytes}
+  inputs/         fixture bytes
+  objects/        canonical object set (C1-only cases)
+  store.sqlite    base Store (C2 cases)
 ```
 
-Load re-wraps each object through `FinalizedObject::new` + `with_references` +
-`with_predecessors`, re-identifies every object against its file name, and
-recomputes the derived views. A mismatch is a refusal, counted and reported, never
-a silently smaller store — the same discipline `load_from_dir` already documents.
+— with `seal: chmod removes 0o222` to make the master immutable. **Follow the spec,
+not this document.**
 
 **1.2 — one flag pair, family-agnostic.** Generalise `--emit-input`/`--load-input`
 into `--emit-prepared DIR` / `--load-prepared DIR`. Each driver writes or reads
@@ -272,3 +285,96 @@ Round 4 may land the phase split (its WP-1) first; if it does, Phase 3's
 verification half is already done and this plan reduces to Phases 0, 1, 2 and 4.
 Check what round 4 actually committed before starting — do not implement the phase
 boundary twice.
+
+
+## 12. The four measurement phases, and round-5 targets (owner directives)
+
+### 12.1 Four phases, six published numbers
+
+| | phase | what | published as | budgeted |
+| --- | --- | --- | --- | --- |
+| a | preparation | acquire the fixture (copy or load the master) + de-warm | `preparation_wall_ns`, and the copy/de-warm part also as `acquisition_wall_ns` (D2) | no — published only |
+| b | **work** | the operation the row claims | `operation_ns` (telemetry root) | **yes — the performance claim** |
+| c | verification | the oracle: replay + byte-exact read-back | `verification_wall_ns` | its own 60 s budget |
+| d | cleanup | destroy the per-case copy, close | `cleanup_wall_ns` | inside the complete-command wall |
+| | | process wall | `complete_command_ns` | the lifecycle/cleanup ceiling |
+
+Phase 0 must publish all six and have `verify` re-derive them and fail closed on a
+reconciliation failure. Note that **(d) does not exist today**, because nothing is
+copied per case yet: the moment a master is copied per case, cleanup becomes real
+work and must be timed and bounded like the rest.
+
+### 12.2 Targets
+
+Baseline: round-3b, 394.57 s lane, 39.15 s of operation over the 150 rows that
+publish a timing receipt. Preparation and verification are each estimated at ~165 s;
+the split is *measured* at 49.6% preparation on `dedup-cdc-overwrite-500` and assumed
+elsewhere, which Phase 0 replaces with a measurement.
+
+| # | target | from |
+| --- | --- | --- |
+| T1 | `preparation_wall_ns <= 1.0 s` for every row at every tier | 0.03–11.95 s |
+| T2 | lane `sum(preparation_wall_ns) <= 25 s` | ~165 s |
+| T3 | `prepare --lane full <= 90 s`, once per compatibility digest | ~165 s plus bookkeeping |
+| T4 | `sum(operation_ns)` **unchanged** at 39.15 s; the five 500-tier delta rows stay 4.77–5.23 s | 39.15 s |
+| T5 | lane `sum(verification_wall_ns) <= 100 s` | ~166 s |
+| T6 | an unchanged case with an identity-matched receipt: `verification_wall_ns = 0` | ~166 s |
+| T7 | `cleanup_wall_ns <= 0.5 s` per row, published for the first time | unmeasured |
+| T8 | every row `complete_command_ns <= 15 s`, no tier shrunk | 28.4–29.6 s on five rows |
+| T9 | all six fields in every receipt, re-derived by `verify` | none |
+
+**T4 is a falsifier, not a goal.** The operation time must not fall. If it does,
+measured work has been moved into setup and the change is rejected — which is
+exactly the failure mode this whole plan exists to prevent.
+
+Worst-row decomposition for T8: work 5.0 s + preparation 1.0 s + cleanup 0.5 s +
+lifecycle ≈ 0.3 s = **6.8 s** against 15 s, with the 12.1 s verification charged to
+its own 60 s budget. No tier is shrunk to reach any of these.
+
+### 12.3 Skipping verification for fast iteration
+
+1. **`--reuse-pass <verification.json>`** — mandated by `AGENTS.md` §2 and absent
+   from this harness. Accepts one identity-matched `status=PASS`, cleanup-`PASS`
+   receipt instead of re-running verification; fails closed on schema, identity,
+   hard-limit or wall mismatch; records `reused_proof_identities` plus an explicit
+   omission. This is the **sanctioned** fast path and the row can still be `PASS`.
+2. **`--skip-verification`** (development only) — **every row it touches is
+   `INCOMPLETE`, never `PASS`**, with `verification: omitted` in the receipt and the
+   report. Useful for iteration, useless for evidence.
+
+### 12.4 Reducing verification time
+
+1. **Stop re-hashing what the harness already owns.** `Expectation::of` hashes the
+   fixture bytes; `delta_members` does it in preparation and `workspace`'s oracle
+   loop repeats it over the same 2.10 GB. `artifact.rs` already persists
+   expectations — extend that to every family that builds one.
+2. **Share the oracle's page cache across a case's members.**
+   `read_back_through_store` builds a fresh provider and cache per member, and
+   consecutive members share almost all their chunks, so the same packs are read and
+   decoded 500 times.
+3. **Do not re-derive what the artifact holds.**
+4. **`--reuse-pass`** (§12.3) removes the phase entirely for an unchanged case.
+
+Not proposed: parallel verification, or skipping the byte-exact read-back for a
+changed case. The read-back **is** the proof.
+
+### 12.5 What round 4 already landed — do not rebuild it
+
+| Done | Where |
+| --- | --- |
+| The lossless artifact format | `src/workload/artifact.rs` |
+| `--phase prepare\|verify`, the second invocation, `VERIFICATION_BUDGET_NS = 60 s` | `src/main.rs`, `runner.py` |
+| Fail-closed acquisition (an unsealed artifact is refused) | `runner.py` |
+| `acquisition_wall_ns` | `runner.py` acquisition record |
+| The integrated C1→C2 family | `ops/pipeline.rs` |
+| The declared-exception list corrected against the registry | `runner.py` |
+
+| Still absent — round 5's scope | Evidence |
+| --- | --- |
+| `operation_ns` and the other phase fields | `runner.py:360` still calls `receipt.budget(wall_ns, ...)` |
+| Split coverage beyond one family | `PHASE_SPLIT_FAMILIES = {"c2.delta.cdc-locality"}`; `verify-invocation` in one driver |
+| `--reuse-pass` | grep over the harness returns nothing |
+| Operation time for 44 rows | `grep -c write_timing ops/fs.rs` is **0** |
+| The report's time axis | `shared/analyze.py:245` still uses `row.wall_ns` |
+| Cleanup as a phase | nothing copied per case yet |
+| Verification reduction | the oracle still re-hashes per member with a fresh cache per member |
