@@ -107,12 +107,58 @@ than `MERGE_FANOUT - 1` (the fallback grouping is the half that only runs on the
 deep cascades the failing fixtures exercise; the flat probes that passed never
 entered it).
 
-**What is still not done:** the fix itself. The next step is now unambiguous —
-drain `older_runs` **newest-group-first into the accumulator** and assert the
-invariant directly (after every spill, for every live tier pair, no serial may
-appear in a lower tier when a higher tier also holds it). I did not get there before
-running out of budget, so the item is **incomplete with a diagnosed cause**, not
-blocked.
+### 3.2 The fix attempt (2026-09-18, third pass): one real bug found and fixed,
+the failure still standing
+
+Two things were built and measured in a scratch worktree (removed afterwards):
+
+1. **The invariant test.** `every_tier_read_path_agrees_after_every_spill`
+   (`filesystem_ordering_scan.rs`): after every spill, for every serial, the
+   `find` answer and the newest-first scan answer must be equal. It passes on the
+   unmodified tree, so it is a valid guard rather than a restatement of the bug.
+2. **The fanout-4 cascade rewritten cleanly** (multiway `merge_runs` over up to 4
+   inputs plus the drain below).
+
+**The real bug, found by the first version of that rewrite.** The drain grouped the
+older runs by indexing a vector it was draining:
+
+```rust
+let group = &older_runs[cursor..cursor + take];   // WRONG: the queue shrinks
+```
+
+`older_runs.drain(..take)` in the merge loop removes the group just consumed, so the
+next index slice is taken from **wrong offsets** — an *older* group becomes
+`inputs[0]` and therefore "newer" than the accumulator, and a superseded row wins.
+The trace shows it directly: at a spill into level 6 the merge
+`inputs=[(8,18,25), (8,10,17), (16,2,40), (32,1,32)]` produced `(40,1,40)` with
+serial 26 at **`count=0`**, and that run was installed at the newest tier. Fixed by
+taking each group out of the queue (`older_runs.drain(..take).collect()`) instead of
+indexing it. This is a genuine defect in the code I had written, and it is exactly
+the class §3.1 predicted.
+
+**The failure still stands after that fix.** The stale row remains, and the third
+pass narrowed its *origin* one step further:
+
+```text
+PROBE entry serial=26 about to spill the map (pending has it: false)
+PROBE spill pending serial26 count=Some(0) level=1
+PROBE retained_binding serial=26 (pending has it: false)
+PROBE entry serial=26 find=Some(0)
+PROBE retained_binding serial=26 before increment count=Some(0)
+```
+
+A spill that **does not hold serial 26 in its pending map** nevertheless writes a
+`Count count=0` row for it, and the reducer then adopts that zero back from the run
+when the binding is retained. So the stale row is *entering the store through the
+spill path* from a source I did not identify — most likely an entry that the
+reducer inserts into (or fails to remove from) the map outside the
+`entry()`/`note_retained_binding()` path I instrumented. That is where the next pass
+should look first, and it is a narrower place than "the merge".
+
+**What is still not done:** the fix. Two candidate sites are now excluded (the merge
+selection and the group offsets — the latter fixed), and the spill's input set is
+the remaining suspect. The item stays **incomplete with a diagnosed cause and one
+defect fixed in the attempt**, not blocked.
 
 Consequences for the disposition:
 
