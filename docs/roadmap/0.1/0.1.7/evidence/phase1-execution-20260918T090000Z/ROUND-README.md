@@ -8,6 +8,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `c1-rebaseline` | C1 counter correctness + the pre-C1 Phase 1 baseline | collected (`before/`, `after/`) |
 | `v1` | V1 — `filesystem_timing_c1` prints `counters.validation` | collected (`after/`) |
 | `v2` | V2 — `edit_memory_probe` + `edit_timing_c1 --case delete/shrink` | collected (`after/`) |
+| `v3` | V3 — `StoreReadCounters.opens` + the vehicle print | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 
