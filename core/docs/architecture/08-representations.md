@@ -252,11 +252,16 @@ than it first appears:
 
 ```rust
 out.try_reserve_exact(final_len as usize)?;
-match segment {
-    Segment::Retain { base } => view.read_range(reader, base.0..base.1, &mut out, …)?,
-    Segment::Replace { index, len, .. } => {
-        // The replaced base range is deliberately not read
-        append_replacement(source, index, len, &mut out)?;
+// A chunked base assembles through ONE ordered cursor, so a mapping page two
+// retained runs share is demanded once for the whole assembly.
+let mut cursor = view.file_state()?.map(|state| RangeCursor::new(reader, state, scope));
+for segment in &segments {
+    match segment {
+        Segment::Retain { base } => cursor.read_segment(base.0..base.1, &mut out)?,
+        Segment::Replace { index, len, .. } => {
+            // The replaced base range is deliberately not read
+            append_replacement(source, index, len, &mut out)?;
+        }
     }
 }
 ```
@@ -264,6 +269,13 @@ match segment {
 So shrinking a 1 GiB file to 128 KiB reads **128 KiB**, not 1 GiB. The discarded
 range is never touched. Because a whole-file result is definitionally below `T`,
 **large → small is bounded by the cutoff regardless of how large the base was.**
+
+The cursor changes the *provider demands* of that read, never its bytes: R retained
+runs pay `O(R·h)` mapping-page demands without it — one root-down traversal each,
+even for the root they all share — and `O(h + shared)` with it. Payload demands are
+unchanged: a chunk that straddles two retained runs is still read once per run,
+because a run is served exactly and independently. Emission order and the emitted
+object are untouched.
 
 Growing across the boundary is the expensive direction: `stream_combined` must
 chunk the entire result. That is inherent — the base was a whole file, so there

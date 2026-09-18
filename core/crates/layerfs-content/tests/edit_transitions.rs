@@ -589,6 +589,164 @@ impl Measured {
     }
 }
 
+/// Base bytes, the deletions and the expected result of the retained-run fixture.
+///
+/// A chunked base with a two-level mapping tree whose result is one whole-file
+/// object, reached through three retained runs: the head, the middle run and the
+/// tail. Each deletion discards its range without replacing it, so every retained
+/// run is its own `Segment::Retain` and the whole-file arm assembles them: an
+/// assembly that descends from the mapping root once per run pays for that root
+/// three times. The kept ranges are the source of truth; the deletions between
+/// them are derived in current-result coordinates, which is why each range is
+/// shifted by what the earlier deletions removed.
+const RETAINED_BASE: usize = 3_000_000;
+const RETAINED_KEEP: [(u64, u64); 3] =
+    [(0, 40_000), (1_500_000, 1_540_000), (2_960_000, 3_000_000)];
+
+/// Base bytes, the deletions and the expected result of the retained-run fixture.
+fn retained_segment_fixture(policy: ConstructionPolicy) -> (Vec<u8>, Vec<Edit>, Vec<u8>) {
+    let base = noise(RETAINED_BASE);
+    let mut expected = base.clone();
+    let mut edits = Vec::new();
+    let mut cursor = 0_u64;
+    let mut removed = 0_u64;
+    for (start, end) in RETAINED_KEEP
+        .iter()
+        .copied()
+        .chain([(RETAINED_BASE as u64, RETAINED_BASE as u64)])
+    {
+        if start > cursor {
+            edits.push(Edit::delete(cursor - removed, start - removed));
+            expected.drain(cursor as usize - removed as usize..start as usize - removed as usize);
+            removed += start - cursor;
+        }
+        cursor = end;
+    }
+    assert!(
+        (expected.len() as u64) < policy.small_file_threshold_bytes(),
+        "the fixture must assemble a whole-file result"
+    );
+    (base, edits, expected)
+}
+
+/// Mapping page identities of a chunked base, in logical order.
+fn tree_pages(store: &MemoryStore, root: ObjectId) -> Vec<ObjectId> {
+    let mut pages = vec![root];
+    if let FileContent::Chunked(state) = representation(store, root) {
+        pages.push(state.mapping_root);
+        collect_nodes(store, state.mapping_root, true, &mut pages);
+    }
+    pages
+}
+
+fn collect_nodes(store: &MemoryStore, id: ObjectId, root: bool, pages: &mut Vec<ObjectId>) {
+    if let ExtentNode::Branch { children, .. } =
+        decode_node_with_context(store.canonical(id).expect("stored page"), root).expect("page")
+    {
+        for child in children {
+            pages.push(child.child_object_id);
+            collect_nodes(store, child.child_object_id, false, pages);
+        }
+    }
+}
+
+/// One retained run pays for a mapping page once for the whole assembly.
+///
+/// The three runs of the fixture sit on different mapping leaves, so an assembly
+/// that descends from the mapping root once per run demands that root three times.
+/// The ordered cursor demands it once: a page shared by several ascending ranges of
+/// one operation is one demand, which is the whole difference the item buys.
+#[test]
+fn retained_segments_share_one_descent() {
+    let policy = ConstructionPolicy::frozen_default();
+    let (base, edits, expected) = retained_segment_fixture(policy);
+    let (store, root) = build(policy, &base);
+    let replacements = Replacements::new();
+    let (result, edited_root, measured) = measure(
+        policy,
+        &store,
+        root,
+        edits,
+        &replacements,
+        expected.len() as u64,
+        None,
+    );
+    assert_eq!(read_back(&result, edited_root).expect("read"), expected);
+    let demands: Vec<ObjectId> = measured.acquired.iter().map(|(id, _)| *id).collect();
+    let pages = tree_pages(&store, root);
+    let mut page_demands: Vec<(ObjectId, usize)> = Vec::new();
+    for page in &pages {
+        let count = demands.iter().filter(|id| *id == page).count();
+        page_demands.push((*page, count));
+    }
+    assert_eq!(
+        page_demands[1].1, 1,
+        "the mapping root is demanded once for the whole assembly: {page_demands:?}"
+    );
+    assert!(
+        page_demands.len() > 2,
+        "the fixture must carry a multi-page mapping tree: {page_demands:?}"
+    );
+    // Every mapping page is one demand, and each retained run is a distinct leaf,
+    // so the demand count is the size of the union of the runs' paths - the head,
+    // the middle run and the tail do not share one leaf.
+    for (page, count) in &page_demands {
+        assert!(
+            *count <= 1,
+            "mapping page {page} was demanded {count} times: {page_demands:?}"
+        );
+    }
+    let file_state = root;
+    assert_eq!(
+        demands.iter().filter(|id| **id == file_state).count(),
+        1,
+        "the file state is demanded once"
+    );
+}
+
+/// A payload two retained runs both reach is demanded once, not once per run.
+///
+/// The ranges are consecutive retained runs of one assembly, so a payload that
+/// straddles the boundary between them is reached by both. The demand census is
+/// per object identity, so the assertion is exact: every payload of the base is
+/// demanded once for the whole assembly, whatever the run boundaries do to its
+/// slices.
+#[test]
+fn straddling_payload_demanded_once_across_segments() {
+    let policy = ConstructionPolicy::frozen_default();
+    let (base, edits, expected) = retained_segment_fixture(policy);
+    let (store, root) = build(policy, &base);
+    let replacements = Replacements::new();
+    let (result, edited_root, measured) = measure(
+        policy,
+        &store,
+        root,
+        edits,
+        &replacements,
+        expected.len() as u64,
+        None,
+    );
+    assert_eq!(read_back(&result, edited_root).expect("read"), expected);
+    let demands: Vec<ObjectId> = measured.acquired.iter().map(|(id, _)| *id).collect();
+    let payloads = coverage(&store, root);
+    // A payload the runs between them reach more than once would appear twice.
+    let mut straddling = 0_usize;
+    for id in payloads.keys() {
+        let count = demands.iter().filter(|candidate| *candidate == id).count();
+        assert!(
+            count <= 1,
+            "payload {id} was demanded {count} times by one assembly"
+        );
+        if count == 1 {
+            straddling += 1;
+        }
+    }
+    assert!(
+        straddling > 3,
+        "the fixture must demand several payloads: {straddling}"
+    );
+}
+
 #[test]
 fn the_transition_reads_only_what_it_keeps_and_charges_it() {
     for cutoff in CUTOFFS {

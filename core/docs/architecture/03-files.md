@@ -329,6 +329,15 @@ published and the largest frontier it held.
 - Bytes reach the sink **in logical order**, whether a range crosses extents or
   mapping pages.
 - `read_range` reads a logical sub-range under the same discipline.
+- `RangeCursor` (`mapping/read.rs`) serves a sequence of ascending sub-ranges of
+  one chunked file through the same traversal, keeping the mapping pages it has
+  already acquired. A page two ranges share — the root of every one of them, and
+  every other ancestor of their union path — is one provider demand and one
+  `nodes_read` charge for the whole sequence instead of one per range. The cache
+  holds at most `READ_NAVIGATION_CACHE_PAGES` (2 × `READ_NAVIGATION_WAVE` = 64)
+  pages and is emptied wholesale when it would exceed that, so a long operation's
+  retained pages stay inside a declared ceiling; a whole-file base never builds a
+  cursor at all, because its retained ranges are slices of the one payload.
 
 `read_all_bounded` is the form that takes a caller-declared maximum; `read_all` is
 the unbounded convenience wrapper. A caller that must bound its work uses the

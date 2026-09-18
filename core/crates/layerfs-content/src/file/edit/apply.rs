@@ -148,12 +148,32 @@ fn assemble_inner(
             actual: final_len,
         }
     })?;
+    // The plan is read once, into the segment list the assembly walks: a chunked
+    // base then assembles through one cursor, so a mapping page two retained runs
+    // share is demanded once for the whole assembly instead of once per run.
     let mut plan = Plan::new(stream);
+    let mut segments: Vec<Segment> = Vec::new();
     while let Some(segment) = plan.advance()? {
-        match segment {
+        segments.push(segment);
+    }
+    let mut cursor = match view.file_state()? {
+        Some(state) => Some(crate::file::mapping::RangeCursor::new(
+            reader, state, scope,
+        )?),
+        None => None,
+    };
+    for segment in &segments {
+        match *segment {
             Segment::Retain { base } => {
                 if base.1 > base.0 {
-                    view.read_range(reader, base.0..base.1, &mut out, scope)?;
+                    match &mut cursor {
+                        Some(cursor) => {
+                            cursor.read_segment(base.0..base.1, &mut out)?;
+                        }
+                        None => {
+                            view.read_range(reader, base.0..base.1, &mut out, scope)?;
+                        }
+                    }
                 }
             }
             Segment::Replace { index, len, .. } => {

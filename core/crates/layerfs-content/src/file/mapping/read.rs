@@ -8,6 +8,13 @@
 //! the wave in logical order. A payload demanded more than once is read once and
 //! borrowed; it is never cloned per demand. The wave is released before the next
 //! one, so a long read never holds the whole file payload.
+//!
+//! A caller that reads several ascending ranges of the same file - the retained
+//! runs of one known edit are the case this exists for - uses [`RangeCursor`]
+//! instead of calling [`read_range`] once per range. The cursor keeps the mapping
+//! pages it has already acquired, so a page shared by several ranges is demanded
+//! once for the whole sequence instead of once per range; every other part of the
+//! traversal is the bounded one above, unchanged.
 
 use std::io::Write;
 use std::ops::Range;
@@ -74,10 +81,24 @@ struct Frontier {
     expected_root: Option<(u64, u64)>,
 }
 
+/// Mapping pages one traversal has already acquired, keyed by identity.
+///
+/// A page is navigation state, not payload: the same page reached again by a
+/// later range of the same operation is served from here, so the provider demand
+/// (and the `nodes_read` charge that goes with it) happens once. The cache is
+/// bounded by [`READ_NAVIGATION_CACHE_PAGES`] and emptied wholesale when it
+/// overflows, which keeps a long operation's retained pages inside a declared
+/// ceiling instead of growing with the file.
+pub type PageCache = std::collections::HashMap<(ObjectId, bool), Vec<u8>>;
+
+/// Pages one cursor may retain.
+pub const READ_NAVIGATION_CACHE_PAGES: usize = 2 * READ_NAVIGATION_WAVE;
+
 struct Wave<'a, 'r, 's> {
     reader: &'a dyn AuthenticatedObjects,
     sink: &'a mut dyn Write,
     scope: &'s TimingScope<'r, Active>,
+    cache: &'a mut PageCache,
     demands: Vec<Demand>,
     distinct: Vec<ObjectId>,
     counters: ReadCounters,
@@ -88,15 +109,71 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
         reader: &'a dyn AuthenticatedObjects,
         sink: &'a mut dyn Write,
         scope: &'s TimingScope<'r, Active>,
+        cache: &'a mut PageCache,
     ) -> Self {
         Self {
             reader,
             sink,
             scope,
+            cache,
             demands: Vec::with_capacity(READ_WAVE_OBJECTS * 2),
             distinct: Vec::with_capacity(READ_WAVE_OBJECTS),
             counters: ReadCounters::default(),
         }
+    }
+
+    /// Acquires one level's pages, serving what the cache already holds.
+    ///
+    /// The returned pages are in demand order; each is either a cache hit or a
+    /// page this call read, and only the read ones are charged - the same order
+    /// and the same grouping one uncached navigation wave produces. A page is
+    /// cached as it is decoded, so a later range of the same cursor never asks
+    /// the provider for it again; the cache is emptied wholesale rather than
+    /// page by page once it would exceed [`READ_NAVIGATION_CACHE_PAGES`].
+    fn pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<Vec<u8>>> {
+        let mut wanted: Vec<(ObjectId, bool)> = Vec::new();
+        for node in nodes {
+            let key = (node.id, node.root);
+            if !wanted.contains(&key) {
+                wanted.push(key);
+            }
+        }
+        let mut missing: Vec<(ObjectId, bool)> = Vec::new();
+        for key in &wanted {
+            if !self.cache.contains_key(key) {
+                missing.push(*key);
+            }
+        }
+        if !missing.is_empty() {
+            if self.cache.len() + missing.len() > READ_NAVIGATION_CACHE_PAGES {
+                self.cache.clear();
+            }
+            let ids: Vec<ObjectId> = missing.iter().map(|(id, _)| *id).collect();
+            let values = self
+                .reader
+                .read_canonical_batch_scoped(&ids, self.scope.child("mapping.navigate"))?;
+            if values.len() != ids.len() {
+                return Err(ContentError::BatchCardinality {
+                    requested: ids.len(),
+                    returned: values.len(),
+                });
+            }
+            for (index, key) in missing.iter().enumerate() {
+                self.cache.insert(*key, values[index].clone());
+            }
+            self.counters.nodes_read = self.counters.nodes_read.saturating_add(ids.len() as u64);
+            self.counters.node_batches_read = self.counters.node_batches_read.saturating_add(1);
+            self.counters.max_node_batch = self.counters.max_node_batch.max(ids.len() as u64);
+        }
+        nodes
+            .iter()
+            .map(|node| {
+                self.cache
+                    .get(&(node.id, node.root))
+                    .cloned()
+                    .ok_or(ContentError::MissingObject)
+            })
+            .collect()
     }
 
     fn push(&mut self, id: ObjectId, source_offset: u32, length: u32) -> ContentResult<()> {
@@ -214,13 +291,103 @@ pub fn read_range(
         return Ok(ReadCounters::default());
     }
     let requested = range.end - range.start;
-    let mut wave = Wave::new(reader, sink, scope);
+    let mut cache = PageCache::new();
+    let mut wave = Wave::new(reader, sink, scope, &mut cache);
     traverse(state, &range, &mut wave)?;
     wave.flush()?;
     if wave.counters.payload_bytes_read != requested {
         return Err(ContentError::InvalidRecord("mapping coverage"));
     }
     Ok(wave.counters)
+}
+
+/// Ordered reader of ascending ranges of one chunked file.
+///
+/// Each range is served by the same bounded traversal [`read_range`] uses, but the
+/// pages that traversal acquires are retained: a mapping page two ranges share is
+/// demanded once for the whole sequence instead of once per range, so a caller
+/// reading R retained runs pays for the union of their paths rather than R paths.
+/// Ranges must be ascending and inside the file, and each one is served exactly or
+/// refused - never partly served under an `Ok`.
+pub struct RangeCursor<'a, 'r, 's> {
+    reader: &'a dyn AuthenticatedObjects,
+    state: FileState,
+    scope: &'s TimingScope<'r, Active>,
+    cache: PageCache,
+    counters: ReadCounters,
+    /// Position the range before the active one ended at.
+    segment_start: u64,
+}
+
+impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
+    /// Opens a cursor over `state`.
+    pub fn new(
+        reader: &'a dyn AuthenticatedObjects,
+        state: FileState,
+        scope: &'s TimingScope<'r, Active>,
+    ) -> ContentResult<Self> {
+        Ok(Self {
+            reader,
+            state,
+            scope,
+            cache: PageCache::new(),
+            counters: ReadCounters::default(),
+            segment_start: 0,
+        })
+    }
+
+    /// Reads the next range, appending it to `sink`.
+    ///
+    /// The range must start at or after the previous one's end. The sink is a
+    /// parameter rather than a field so the caller can read what it has collected
+    /// between two ranges without the cursor holding a borrow across both.
+    pub fn read_segment(
+        &mut self,
+        range: Range<u64>,
+        sink: &mut dyn Write,
+    ) -> ContentResult<ReadCounters> {
+        if range.start > range.end
+            || range.end > self.state.logical_len
+            || range.start < self.segment_start
+        {
+            return Err(ContentError::InvalidRange {
+                start: range.start,
+                end: range.end,
+                length: self.state.logical_len,
+            });
+        }
+        self.segment_start = range.end;
+        if range.start == range.end {
+            return Ok(self.counters);
+        }
+        let requested = range.end - range.start;
+        let mut wave = Wave::new(self.reader, sink, self.scope, &mut self.cache);
+        traverse(self.state, &range, &mut wave)?;
+        wave.flush()?;
+        let segment = wave.counters;
+        if segment.payload_bytes_read != requested {
+            return Err(ContentError::InvalidRecord("mapping coverage"));
+        }
+        merge(&mut self.counters, segment);
+        Ok(self.counters)
+    }
+}
+
+/// Adds one traversal's work to a cursor's running totals.
+fn merge(total: &mut ReadCounters, wave: ReadCounters) {
+    total.nodes_read = total.nodes_read.saturating_add(wave.nodes_read);
+    total.node_batches_read = total
+        .node_batches_read
+        .saturating_add(wave.node_batches_read);
+    total.max_node_batch = total.max_node_batch.max(wave.max_node_batch);
+    total.payload_ids_read = total.payload_ids_read.saturating_add(wave.payload_ids_read);
+    total.payload_batches_read = total
+        .payload_batches_read
+        .saturating_add(wave.payload_batches_read);
+    total.max_payload_batch = total.max_payload_batch.max(wave.max_payload_batch);
+    total.payload_bytes_read = total
+        .payload_bytes_read
+        .saturating_add(wave.payload_bytes_read);
 }
 
 /// Walks the mapping tree one level per bounded navigation wave.
@@ -237,8 +404,6 @@ fn traverse(
     range: &Range<u64>,
     wave: &mut Wave<'_, '_, '_>,
 ) -> ContentResult<()> {
-    let reader = wave.reader;
-    let scope = wave.scope;
     let mut level = vec![Frontier {
         id: state.mapping_root,
         root: true,
@@ -255,19 +420,9 @@ fn traverse(
         let mut next: Vec<Frontier> = Vec::new();
         let mut finished = false;
         for chunk in level.chunks(READ_NAVIGATION_WAVE) {
-            let ids: Vec<ObjectId> = chunk.iter().map(|node| node.id).collect();
-            let pages =
-                reader.read_canonical_batch_scoped(&ids, scope.child("mapping.navigate"))?;
-            if pages.len() != ids.len() {
-                return Err(ContentError::BatchCardinality {
-                    requested: ids.len(),
-                    returned: pages.len(),
-                });
-            }
-            wave.counters.nodes_read = wave.counters.nodes_read.saturating_add(ids.len() as u64);
-            wave.counters.node_batches_read = wave.counters.node_batches_read.saturating_add(1);
-            wave.counters.max_node_batch = wave.counters.max_node_batch.max(ids.len() as u64);
-            for (node, canonical) in chunk.iter().zip(&pages) {
+            let nodes: Vec<&Frontier> = chunk.iter().collect();
+            let pages = wave.pages(&nodes)?;
+            for (node, canonical) in chunk.iter().zip(pages.iter()) {
                 let page = decode_node_with_context(canonical, node.root)?;
                 if page.level() != node.level {
                     return Err(ContentError::InvalidRecord("mapping level"));

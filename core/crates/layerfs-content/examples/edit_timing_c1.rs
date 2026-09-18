@@ -9,14 +9,17 @@
 //! fields, so the two arms are comparable as separate processes.
 //!
 //! Usage: `cargo +1.85.1 run --release --locked -p layerfs-content --example edit_timing_c1`
-//!        `… --example edit_timing_c1 -- --case delete|shrink`
+//!        `… --example edit_timing_c1 -- --case delete|shrink|split`
 //!
 //! Cases: the no-argument shape is the frozen one (3.3 MB chunked base, 40,000-byte
 //! overwrite in the middle; the D27 row). `delete` is the same base with the same
 //! range deleted instead of overwritten, and `shrink` deletes everything above
 //! 131,000 bytes so the result falls below the 131,072 cutoff: a **chunked base with
-//! a whole-file result**, the shape P1-8's ordered cursor is measured on. Every case
-//! prints the same fields; the added `case:` line is additive.
+//! a whole-file result**, the shape P1-8's ordered cursor is measured on. `split`
+//! reaches the same whole-file arm through **three** retained runs — two deletions
+//! separated by kept bytes — which is the shape that pays one root-down traversal
+//! per retained run unless the assembly keeps one cursor. Every case prints the same
+//! fields; the added `case:` line is additive.
 //!
 //! Cache state: the base is constructed by this process immediately before the timed
 //! scope, so no warm-cache credit is claimed for the edit itself.
@@ -105,6 +108,10 @@ enum Case {
     /// the 131,072 cutoff, so a chunked base is read and a whole-file object is
     /// assembled. P1-8's positive anchor.
     Shrink,
+    /// Two deletions separated by kept bytes: the same whole-file result length as
+    /// `shrink` but reached through three retained runs, so an assembly that
+    /// re-descends per run pays its mapping pages once per run.
+    Split,
 }
 
 impl Case {
@@ -113,6 +120,7 @@ impl Case {
             "default" => Ok(Self::Default),
             "delete" => Ok(Self::Delete),
             "shrink" => Ok(Self::Shrink),
+            "split" => Ok(Self::Split),
             other => Err(format!("unsupported case {other}")),
         }
     }
@@ -122,38 +130,72 @@ impl Case {
             Self::Default => "default",
             Self::Delete => "delete",
             Self::Shrink => "shrink",
+            Self::Split => "split",
         }
     }
 
-    /// Base bytes, the edit, its replacement bytes and the printed edit line.
-    fn fixture(self) -> (Vec<u8>, Edit, Vec<u8>, String) {
+    /// Base bytes, the edits, their replacement bytes and the printed edit line.
+    fn fixture(self) -> (Vec<u8>, Vec<Edit>, Vec<u8>, String) {
         const BASE: usize = 3_300_000;
         const START: u64 = 1_650_000;
         const END: u64 = START + 40_000;
         match self {
             Self::Default => (
                 noise(BASE),
-                Edit::overwrite(START, END),
+                vec![Edit::overwrite(START, END)],
                 noise(40_000),
                 format!("replace [{START}, {END})"),
             ),
             Self::Delete => (
                 noise(BASE),
-                Edit::delete(START, END),
+                vec![Edit::delete(START, END)],
                 Vec::new(),
                 format!("delete [{START}, {END})"),
             ),
             Self::Shrink => (
                 noise(BASE),
-                Edit::delete(131_000, BASE as u64),
+                vec![Edit::delete(131_000, BASE as u64)],
                 Vec::new(),
                 format!("delete [131000, {BASE})"),
             ),
+            Self::Split => split_fixture(),
         }
     }
 }
 
-/// Parses `--case <default|delete|shrink>`; no argument means the frozen shape.
+/// The retained-run fixture: three kept runs of a chunked base and a whole-file
+/// result.
+///
+/// The base is long enough for a two-level mapping tree while the kept runs stay
+/// short, so the three runs fall on different leaves and the result still falls
+/// under the cutoff. The kept ranges are the source of truth; the deletions
+/// between them are derived, in current-result coordinates, which is why each
+/// range is shifted by what the earlier deletions removed. The result is
+/// 120,000 bytes.
+fn split_fixture() -> (Vec<u8>, Vec<Edit>, Vec<u8>, String) {
+    const BASE: usize = 3_000_000;
+    const KEEP: [(u64, u64); 3] = [(0, 40_000), (1_500_000, 1_540_000), (2_960_000, 3_000_000)];
+    // Walk the base once: every gap between kept runs is one deletion, already
+    // shifted into current-result coordinates by the bytes removed before it.
+    let mut edits = Vec::new();
+    let mut cursor = 0_u64;
+    let mut removed = 0_u64;
+    for (start, end) in KEEP.iter().copied().chain([(BASE as u64, BASE as u64)]) {
+        if start > cursor {
+            edits.push(Edit::delete(cursor - removed, start - removed));
+            removed += start - cursor;
+        }
+        cursor = end;
+    }
+    (
+        noise(BASE),
+        edits,
+        Vec::new(),
+        format!("keep {KEEP:?} of {BASE}; result 120000"),
+    )
+}
+
+/// Parses `--case <default|delete|shrink|split>`; no argument means the frozen shape.
 fn parse_case(args: &[String]) -> Result<Case, String> {
     let mut case = Case::Default;
     let mut index = 0;
@@ -176,7 +218,7 @@ fn main() {
         eprintln!("edit_timing_c1: {error}");
         std::process::exit(2);
     });
-    let (base, edit, replacement, description) = case.fixture();
+    let (base, edits, replacement, description) = case.fixture();
     let policy = ConstructionPolicy::frozen_default();
     let mut provider = Provider::default();
     let constructed = Timing::disabled("build", |scope| {
@@ -200,7 +242,7 @@ fn main() {
     if !replacement.is_empty() {
         replacements.push(replacement);
     }
-    let stream = EditStream::new(length, vec![edit]).expect("valid stream");
+    let stream = EditStream::new(length, edits).expect("valid stream");
     let mut collector = Collector::default();
     let started = Instant::now();
     let edited = Timing::disabled("edit", |scope| {
