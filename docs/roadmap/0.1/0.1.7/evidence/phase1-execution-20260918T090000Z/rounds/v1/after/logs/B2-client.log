@@ -1,0 +1,7 @@
+$ cargo +1.85.1 build --release --offline --locked
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/client
+exit_code 0
+wall_s 0.078
+--- stdout ---
+--- stderr ---
+    Finished `release` profile [optimized] target(s) in 0.04s
