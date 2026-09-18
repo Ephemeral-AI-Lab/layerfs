@@ -118,6 +118,11 @@ pub struct MutationOwner {
 }
 
 impl MutationOwner {
+    /// Charges the presence queries a wave's availability check issued.
+    pub fn note_presence_queries(&mut self, queries: u64) {
+        self.counters.presence_queries = self.counters.presence_queries.saturating_add(queries);
+    }
+
     /// Records one exact reuse occurrence.
     pub fn note_reuse(&mut self) {
         self.counters.reused += 1;

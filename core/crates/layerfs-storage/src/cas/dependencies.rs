@@ -39,6 +39,36 @@ impl Availability {
         self.known.contains(&id)
     }
 
+    /// Seeds the wave's references with one paged presence query.
+    ///
+    /// The wave knows every reference its offered objects carry before it offers
+    /// any of them, so asking once for all of them is one query instead of one per
+    /// object. Returns the presence queries issued: one, or none when every
+    /// reference is already known. What it does **not** do is decide availability -
+    /// a reference the query does not find stays unknown, and `validate` still
+    /// refuses the object that needs it.
+    pub fn seed(
+        &mut self,
+        connection: &Connection,
+        references: impl IntoIterator<Item = ObjectId>,
+        ceiling: i64,
+    ) -> StorageResult<u64> {
+        let mut missing: BTreeSet<ObjectId> = BTreeSet::new();
+        for reference in references {
+            if !self.known(reference) {
+                missing.insert(reference);
+            }
+        }
+        if missing.is_empty() {
+            return Ok(0);
+        }
+        let missing: Vec<ObjectId> = missing.into_iter().collect();
+        for found in lookup::present(connection, &missing, ceiling)? {
+            self.known.insert(found);
+        }
+        Ok(1)
+    }
+
     /// Verifies every direct reference of `object`.
     ///
     /// `pending` reports identities this owner has accepted into an unfinished

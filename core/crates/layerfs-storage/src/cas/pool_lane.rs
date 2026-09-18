@@ -340,15 +340,25 @@ impl MutationOwner {
                 self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
                 continue;
             }
-            let mut reader = crate::encoding::pool::PoolReader::new();
-            let body = reader.leaf_body(
-                &self.connection,
-                &self.capacities,
+            // The owner's own reader, not a fresh one per trial: its pack and
+            // value caches are the point (a trial used to re-materialise the same
+            // base packs), and its `chain_encoded_bytes` is the same charge a read
+            // of the dependent will pay. What it must not do is serve a pack body
+            // this save has since appended to, so every pack write releases the
+            // reader's pack cache (see `write_pack`).
+            let connection = &self.connection;
+            let capacities = &self.capacities;
+            let body = self.pool_reader.leaf_body(
+                connection,
+                capacities,
                 self.ceiling,
                 &mut self.decompression,
                 location,
             )?;
-            let encoded = reader.chain_encoded_bytes().saturating_add(target_encoded);
+            let encoded = self
+                .pool_reader
+                .chain_encoded_bytes()
+                .saturating_add(target_encoded);
             if encoded > self.capacities.metadata_chain_encoded_limit {
                 self.pool.work_exceeded = self.pool.work_exceeded.saturating_add(1);
                 continue;

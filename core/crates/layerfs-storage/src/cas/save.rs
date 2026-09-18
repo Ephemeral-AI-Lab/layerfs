@@ -30,6 +30,19 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
         by_id.insert(location.object_id, location);
     }
     let mut availability = Availability::new(by_id.keys().copied());
+    // One presence query for the whole wave (P2-5). Every direct reference its
+    // offered objects carry is asked about together - the lookup pages its own
+    // identifiers - so the check costs one query set per wave instead of one per
+    // object that happens to name something outside it.
+    availability
+        .seed(
+            owner.connection(),
+            objects
+                .iter()
+                .flat_map(|object| object.references().iter().copied()),
+            i64::MAX,
+        )
+        .map(|queries| owner.note_presence_queries(queries))?;
     // A wave may carry the same identity several times. The first occurrence
     // decides the row; every later occurrence still receives the required exact
     // comparison against the bytes that were actually prepared for this identity.

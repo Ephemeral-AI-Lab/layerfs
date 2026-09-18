@@ -47,6 +47,19 @@ impl PoolReader {
         self.decoded_work = 0;
     }
 
+    /// Releases every cached pack body.
+    ///
+    /// A pack body is **not** immutable while a save runs: placing a group into a
+    /// pack rewrites that pack's blob - the directory grows, so every body moves -
+    /// and a body read before the write no longer describes the pack after it. A
+    /// reader shared across a save's trials must therefore be told when the save
+    /// writes, or a later trial would decode a pack as it was before the write and
+    /// never find the group that write added. The decoded-value cache survives: an
+    /// ordinal's value is written once and never moves.
+    pub fn release_packs(&mut self) {
+        self.packs.clear();
+    }
+
     /// Decoded value bytes currently retained.
     pub fn retained_bytes(&self) -> usize {
         self.retained_bytes

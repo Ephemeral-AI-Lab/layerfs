@@ -165,6 +165,11 @@ impl MutationOwner {
     }
 
     pub(super) fn write_pack(&mut self, write: &SelectedWrite) -> StorageResult<()> {
+        // Writing a pack moves every body in it (the directory grows), so the
+        // pooled reader's pack cache is released whenever this save writes: a body
+        // it cached before the write no longer describes the pack. Its decoded
+        // values survive - an ordinal's value is written once and never moves.
+        self.pool_reader.release_packs();
         if write.created {
             write::insert_pack(&self.connection, write.pack_id, &write.bytes)?;
             self.counters.packs_created += 1;
