@@ -150,6 +150,24 @@ makes a save page-cache/malloc work, so a growing file and a fast save are not
 contradictory — pooling them reproduces the #151 B2 error (19 GB/s
 cache-credited vs 2.1 GiB/s from storage).
 
+### Selection lanes (new)
+
+A full C2 run is **~86 cases × one sample each**. Two lanes:
+
+| Lane | Selection | Size | Use |
+| --- | --- | ---: | --- |
+| `--smoke` | the smallest legal tier of each family | ~8 | the ordinary development loop |
+| full | every registered case | ~86 | admission |
+
+**Pipeline is five cases, not a layer.** Integrated timing is required by #171's
+acceptance, but it only means something where the C1→C2 handoff *is* the question —
+the five `measure_edits` shapes plus one filesystem case. It is not applied to
+`c2.read.*`, `c2.pool.*` or `c2.footprint`.
+
+**Tier policy.** The 100k-file / 500 MB `store_footprint` controls are the clearest
+case: cut from the default set or declared on the ≤ 25 s exception list, never
+shrunk to fit.
+
 ## 6. Vehicles: what exists, what must be built
 
 | Vehicle | Status | Gap |
@@ -171,6 +189,22 @@ describe a profile that is about to change."* The families above exist so that
 Phase 1 (algorithm/call pattern) and Phase 2 (DB/engine) can each be measured
 against a stable profile. Read-path engine tuning (`cache_size`) **waits for
 connection pooling** (P1-2) — the `opens` counter is its prerequisite.
+
+**One measurable cost with no item against it.** Reading the whole #178 register
+(P1-1..P1-16, P2-1..P2-8 and the parked list), `Store::create` has **no entry**.
+Phase 0 recorded it as a fixed cost — a diagnostic single sample puts
+`store.create` at **4,606 µs of a 6,952 µs small save** — covering DDL for four
+tables and two indexes, `sqlite_master` scans, `PRAGMA table_info`, and watermark
+validation. Any workload creating Stores at a moderate rate pays it in full, and it
+is bounded, single-variable and measurable. Worth a Phase 2 item.
+
+Two smaller findings these families are likely to surface, also absent from the
+register. **No `VACUUM` exists anywhere in `core/`**, so the `.sqlite` never shrinks
+after `abandon` — a space finding rather than a speed one. And the two known
+counter-attribution defects — `SortedWork.pages_read` undercounting, and the inner
+engine inside `Engine::apply_root` returning its work to nobody — must be **fixed
+before counters can gate anything**, because a wrong counter invalidates every row
+that cites it.
 
 ## 8. Explicit non-claims
 

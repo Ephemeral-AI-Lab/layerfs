@@ -146,6 +146,16 @@ already exists at `benchmark/fs-bench-pro/shared/runtime.py:537-568`
 After the sample, the master is **re-verified byte-for-byte** and `master_unchanged`
 is recorded.
 
+### 4.1 Where a copy is not required
+
+Copying is for the **Store**, which the sample mutates. A read-only fixture needs no
+copy at all: `mmap` the prepared file and hand the product a slice. That removes the
+per-sample materialisation cost entirely — which matters because one process per
+case means the fixture would otherwise be re-read every sample, and a 500 MB
+materialisation is 0.3-1 s of pure setup repeated across the set. For construction
+families the residency is declared anyway (`warm-in-process-fixture`), so no cold
+claim is being lost.
+
 ## 5. De-warming
 
 A copy is warm the moment it is written. Before the clock starts, the sample's copy
@@ -171,8 +181,10 @@ After de-warming, a measured base read pays a **real storage read**. That is the
 honest price: the #151 ledger's **2.1 GiB/s from storage**, not the **19 GB/s**
 cache-credited figure for the same bytes.
 
-**Cost:** page-count linear. Negligible at MB scale; at 500 MB it is real work, so
-run it only where the timed phase actually reads a file.
+**Cost:** `msync` is O(file size) and `mincore` is page-count linear. Negligible at
+MB scale; at 500 MB both are real work. **De-warm only the cases whose timed phase
+actually reads the file** — running it on a construction case that never opens the
+artifact is pure waste and adds nothing.
 
 ## 6. Cache-state taxonomy
 
@@ -217,7 +229,7 @@ This is the same resolution v0.1.6 reached: declare the state, and refuse to poo
 
 1. **Residency gate.** Any row claiming `verified-cold` or `prepared-master-dewarmed` must show `resident_pages == 0` and `pages_checked == expected_pages`.
 2. **Distinct setup identity.** `prepared-master-copy` and `fresh-input` carry different `setup_identity` values and are never pooled. This is what stops "reused" from silently becoming "fast".
-3. **Cache-leak diagnostic.** Run the case twice back-to-back as a **labelled diagnostic whose purpose is to refuse warm credit**: if the second run is materially faster, the case has a cache leak and the row is not admissible. Diagnostic only — the first run stays the gate sample; this is not a best-of selection. The precedent is stark: L19 recorded a control create at **8.02 s cold vs 0.90 s back-to-back — a 4.7x artifact**.
+3. **Cache-leak diagnostic, sampled.** Run **one representative read-bearing case per family** twice back-to-back — not all cases; doubling every case's cost to catch a leak is waste. It is a **labelled diagnostic whose purpose is to refuse warm credit**: if the second run is materially faster, the case has a cache leak and the row is not admissible. Diagnostic only — the first run stays the gate sample; this is not a best-of selection. The precedent is stark: L19 recorded a control create at **8.02 s cold vs 0.90 s back-to-back — a 4.7x artifact**.
 4. **Both arms equal.** If one arm is prepared and the other fresh, or one is invalidated and the other is not, the pair is void. Cache state is declared and enforced *equally*.
 
 ## 9. Receipt fields
@@ -258,6 +270,7 @@ ran at 0.004-1.7 s per command, so the budget is comfortable at these sizes; a
 - **Fresh `--output` per run**; receipts are append-only and are never overwritten. Every example already refuses an existing `--output` (`measure_pooled.rs:76`, `measure_edits.rs:160-167`, `measure_components.rs:97-104`).
 - **The sample Store is disposable**, because cleanup mutates the artifact: `cleanup.rs:65,120` issue paged `DELETE`s. This is why **arms can never share a Store**.
 - **Sample cleanup must not delete the master.**
+- **The measurement lock is held per `perf`/`verify` invocation**, not across a family run, so preparation can proceed independently while measurement stays exclusive.
 - **Failed and discarded attempts stay on disk** with their exit codes.
 - Deferred packs of a failed save stay unreadable by design (the watermark does not advance), so a discarded sample proves nothing about durability and must not be cited as if it did.
 

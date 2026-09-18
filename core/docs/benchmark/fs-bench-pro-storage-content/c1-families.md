@@ -174,6 +174,26 @@ gate is the **per-doubling ratio**, not an absolute time:
 | O(n log n) — tiered ordering merge | ×2.1–2.4 |
 | O(n²) — the residual to hunt | ×4.0 |
 
+### Selection lanes (new)
+
+A full C1 run is **~127 cases × one sample each**, which is neither required nor
+useful for every edit. Two lanes, mirroring the v0.1.6 `--smoke` flag:
+
+| Lane | Selection | Size | Use |
+| --- | --- | ---: | --- |
+| `--smoke` | the smallest legal tier of each family | ~11 | the ordinary development loop |
+| full | every registered case | ~127 | admission |
+
+**Tier policy.** Four tiers is the working ladder for byte-size families — redundancy
+against the established ±17.6 % elapsed spread; three is enough where the axis is
+discrete. Top tiers that cannot fit the 15 s budget (500 MB payloads, 100k-file
+trees) are **cut from the default set or declared on the ≤ 25 s exception list,
+never shrunk to fit.**
+
+**Pipeline is not a C1 lane.** Integrated C1→C2 timing is five cases (see
+[`c2-families.md`](c2-families.md)), not a mode applied to every C1 family: a pure
+CDC or read family has nothing to hand off.
+
 ## 6. Vehicles: what exists, what must be built
 
 | Vehicle | Status | Gap |

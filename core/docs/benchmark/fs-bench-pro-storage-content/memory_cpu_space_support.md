@@ -8,6 +8,9 @@
 > [`c2-families.md`](c2-families.md)). Preparation and cache-state
 > discipline live in [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md).
 >
+> Time is the **fourth observation axis** and it already exists: `layerfs-telemetry`,
+> used unmodified. It is covered in §10.
+>
 > **No figure in this document is a measurement.** Every number is a declared
 > constant, a syscall's semantics, or a case configuration. Measured values are
 > quoted only where cited to an existing receipt and labelled diagnostic.
@@ -24,7 +27,8 @@ siblings when implemented; unsupported observations are unavailable, not zero."*
 
 The timing tree is emitted **unmodified**. The resource record rides as a sibling
 key in the same case-result JSON, correlated to phases by monotonic clock rather
-than by tree nesting.
+than by tree nesting. The time axis itself — three clocks, the tree shape, and the
+usage rules that keep the recorder honest — is §10.
 
 ### Why not product code
 
@@ -299,7 +303,101 @@ boundary therefore has to be written down and reviewed, not merely scanned.
 instrumentation in `core/crates/*/src`; the harness adds none"* — verified by diff
 inspection at each landing commit.
 
-## 10. Non-goals
+## 10. Time — the axis that already exists
+
+Memory, CPU and space are additions. Time is already implemented by
+`layerfs-telemetry` and is used **unmodified**.
+
+### 10.1 The scope is in the API
+
+The harness never writes its own product timers. It builds a tree and reads the
+report:
+
+| Layer | Form |
+| --- | --- |
+| C1 file | **every** entry point takes `TimingScope` — `construct_bytes`, `construct_stream`, `apply_edits`, `read_all` / `read_range`, `FileView::open` |
+| C1 filesystem | **two forms**: `build_filesystem` / `update_filesystem` take no scope; the `_timed` variants take `&FilesystemPhases` and record six coarse phases (`validate`, `directories`, `references`, `inodes`, `cleanup`, `root.encode`) — deliberately *"without one trace node per inode"* |
+| C2 | `Store::create` / `open`, `begin_save`, `finish`, `abort`, `read_batch` all take `TimingScope` |
+
+### 10.2 Three clocks, named distinctly
+
+| # | Clock | Owner | Answers |
+| --- | --- | --- | --- |
+| 1 | product phase tree | `layerfs-telemetry`, inside the child | where time went inside the operation |
+| 2 | harness phase boundaries | `Instant` in the bench binary, at the scopes **it** creates | resource correlation |
+| 3 | command wall | `runner.py`, `time.monotonic()` around the whole invocation | did the complete command fit 15 s |
+
+Clock 2 is required because the tree carries **durations, not absolute timestamps** —
+a resource sample cannot be sliced by it. Clock 3 must be **labelled external** and
+never substituted for an inner operation metric, and the two monotonic epochs are
+different clock domains that must not be compared as one.
+
+### 10.3 Tree shape
+
+The harness names the coarse phases; product-internal children appear beneath them
+automatically:
+
+```text
+c1.edit.length-changing.insert-middle-4k      <- harness root, one per case
+  content.edit                                 <- harness-owned
+    edit.base_read / edit.compare / edit.split / edit.finish
+  storage.save                                 <- harness-owned
+    storage.begin / storage.accept / storage.finish
+  storage.read                                 <- harness-owned
+    mapping.navigate / mapping.payload
+```
+
+### 10.4 Three usage rules
+
+**(a) Do not use `attach()`.** It grafts a *completed* report, so the attached
+subtree's work happened at a different wall time and its window is not
+reconstructible; it also consumes the assembled tree's remaining node budget. It
+was built for a future adapter/transport integration that does not exist here.
+
+**(b) Nodes scale with phases, not with work units.** `MAX_NODES = 1024` is global
+per report. A 500 MB read is roughly 1,000 payload waves — one node per wave blows
+the budget. The product already behaves correctly (`SaveOperation::accept` creates
+no node; `tests/timing.rs:57-94` pins a 600-object save under 16 nodes) and the
+harness must follow it.
+
+**(c) `MAX_LABEL_BYTES = 128`.** A clipped label marks the row incomplete, so keep
+labels short and static and put the case ID in the root only.
+
+### 10.5 Clipping is silent — convert it to a hard failure
+
+Clipping marks the affected node **and all ancestors** incomplete but **never fails
+the operation**. The harness must therefore check `report.is_incomplete()` and fail
+the row itself. All four existing vehicles already do
+(`measure_components.rs:145-158`, `measure_edits.rs:299-312`,
+`measure_pooled.rs:193-203`, `measure_filesystem.rs:316-326`).
+
+### 10.6 Control arm
+
+`--timing on|off` — `Timing::record` versus `Timing::disabled`. Disabled reads no
+clock and creates no nodes, and `tests/timing.rs:193-229` already proves the two
+produce **identical roots, counters and bytes**, so the arm is free. Report both.
+
+### 10.7 Saving is the caller's job
+
+`Timing::record` returns `(result, TimingReport)`. The harness writes
+`timing.json` with `create_new` (no clobber), flushes explicitly, and keeps the
+save result separate from the product result.
+
+### 10.8 Verdict: do not extend the crate
+
+The crate is sound and its limits are contract, not defects: `!Send`/`!Sync` scopes
+with compile-fail fixtures make the parent/child lifetime a *type* guarantee;
+`Inner::collect` emits `Unknown` + `Duration::ZERO` for a slot still running, so a
+panic cannot serialize as success; `disabled` is truly inert; clipping marks
+ancestors rather than truncating silently; a duration beyond `u64` nanoseconds is
+a writer error, not a saturating number.
+
+One future coupling is worth naming rather than fixing: `!Send` is load-bearing for
+a *future* architectural decision. #178 records O4 (producer pool) as *"Blocked by:
+`TimingScope` being `!Send`, locator determinism, and the `AGENTS.md` rule — all
+three, not one."* That is a Stage 7 question, not this campaign's.
+
+## 11. Non-goals
 
 - No change to `layerfs-telemetry`; no second axis type; no new node fields.
 - No instrumentation, hook, counter or accessor in product `src/`.
