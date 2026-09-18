@@ -1,0 +1,7 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/client/target/release/phase0client c2 20000 diagnostic-small-cache
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.084
+--- stdout ---
+c2 rows 20000 canonical_bytes 2500000 cache_arm diagnostic-small-cache elapsed_ns 62351625 commits 1 | pragma cache_size 8 cache_spill 8 page_size 4096 journal_mode memory | dbstatus cache_spill ok=true value=15588 | cache_write ok=true value=15621 | cache_used ok=true value=136192 | note diagnostic: harness-owned connection, same single-row INSERT shape and one transaction; the two diagnostic arms differ ONLY in cache_size/cache_spill
+--- stderr ---
