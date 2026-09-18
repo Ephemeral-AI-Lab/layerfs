@@ -130,6 +130,13 @@ wanted, the acquisition is an **event with provenance**, not an untracked step:
 - seal the result with the same manifest and compatibility digest;
 - report the acquisition wall separately as `preparation_wall_ns` — never folded into either the timed phase or the command total.
 
+**Decided (owner R2/D2):** per-sample acquisition is reported as its own field
+(`acquisition_wall_ns`), **outside** every operation timer and **outside** the row's
+admission decision; the complete-command status is reported separately. v0.1.6's
+18.57 s acquisition was excluded as "one-time validation" — that exclusion is *not*
+precedent for omitting the number, so the `mincore`-first de-warm below is
+**required**, and the campaign's real acquisition cost stays visible.
+
 ## 4. Per-sample acquisition
 
 Each sample gets an **independent writable byte copy** of the master. The mechanism

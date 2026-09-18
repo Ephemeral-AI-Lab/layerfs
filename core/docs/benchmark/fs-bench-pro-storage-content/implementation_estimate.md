@@ -173,15 +173,19 @@ inline `license = "MIT"` beside `publish = false`.
    cross workspaces — share via `CARGO_TARGET_DIR` and record it as
    `dependency_reuse`, or accept a full rebuild per seal change.
 
-## 7. Open rulings
+## 7. Owner decisions (frozen)
 
-| # | Ruling | Consequence |
-| --- | --- | --- |
-| R1 | Does a case-table row satisfy `benchmark_rules.md` §7's "canonical definition **module**"? | **Default: no** — family modules are in the structure. A waiver saves ~840 lines and 19 files but contradicts §7 and makes the per-family test exports unwritable |
-| R2 | Does per-sample cache acquisition count against the <= 15 s complete command? | v0.1.6 excluded an 18.57 s acquisition as "one-time validation". If it counts, `mincore`-first is mandatory and the 100k tier must be cut or declared |
-| R3 | Own workspace + lock-parity test, or a member of the core workspace? | See §6.2. A third option removes the hazard entirely: make the child an example target of `layerfs-storage` — no new crate, no second lock, `core/Cargo.lock` diff empty; cost is that a benchmark-only compile error fails a core build |
-| R4 | Cut the over-budget tiers (500 MB, 100k files), or declare them as <= 25 s exceptions? | Changes the declared cardinality array |
-| R5 | `c2.delta.small-file`'s case list is still `TBD` | The registry cannot freeze its cardinality until this is written |
+Ruled on 2026-09-18, before any harness code. The normative record is
+[`CONTRACT.md`](CONTRACT.md) §5; this table is the local restatement. None of these
+changes the shape described above except where noted.
+
+| # | Question | Decision | Effect on this estimate |
+| --- | --- | --- | --- |
+| **R1** | Does a case-table row satisfy `benchmark_rules.md` §7's "canonical definition **module**"? | **No — family modules stay.** §7 requires one canonical definition module and one thin runner per family; a TSV source of truth would need an owner waiver and would also make the per-family test exports unwritable. Bodies live in the shared shape drivers (`ops.rs`, `fixture.rs`, `workload/oracle.rs`); each family module is ~40-60 lines of rows plus its runner. The row table is checked in as a **generated golden** `tests/golden/registry.tsv` instead of being the source. | Structure unchanged (+~840 lines, 19 files, already counted) |
+| **R2** | Does per-sample cache acquisition count against the <= 15 s complete command? | **It is reported, not counted as a failure.** `acquisition_wall_ns` is its own field, outside every operation timer and outside the row's admission decision; the command status is reported separately. v0.1.6's 18.57 s exclusion is *not* precedent for hiding it, so the `mincore`-first de-warm is now **required** rather than merely recommended | Makes the `de-warm` module load-bearing; no cardinality change |
+| **R3** | Own workspace + lock-parity test, or a member of the core workspace? | **Own workspace (the path the owner gave), with `shared/test_lock_parity.py` mandatory before the first receipt.** `Cargo.toml` carries an empty `[workspace]` table so it is not absorbed as a core member. Declined alternative: making the child an example target of `layerfs-storage` (no second lock, `core/Cargo.lock` diff empty) — it is the smaller hazard, but a benchmark-only compile error would fail a core build | +~60 lines for the parity test; own `target/` (see §6.2) |
+| **R4** | Cut the over-budget tiers (500 MB, 100k files), or declare them as <= 25 s exceptions? | **Declared, on the <= 25 s exception list, with measured wall times.** Cutting them would remove the tier where the O(1) claim is most convincing and the 100k controls that are the point of `c2.footprint`. Shrinking a workload to fit a budget remains forbidden | Cardinality unchanged; adds the exception list to the group report |
+| **R5** | `c2.delta.small-file`'s case list is still `TBD` | **Defined, not deferred** — 4 cases, one per size tier below the cutoff. `benchmark_rules.md` §7 forbids accepting favourable members while moving unfavourable siblings to a later release, and dropping the family would do exactly that. Cost is four rows and one shape driver | C2 **86 -> 90**; total **213 -> 217** |
 
 ## 8. Experiments to run before collection
 

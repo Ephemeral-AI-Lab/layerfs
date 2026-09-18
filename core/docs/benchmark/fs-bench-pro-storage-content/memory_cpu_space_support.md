@@ -72,8 +72,9 @@ core/benchmark/fs-bench-pro-storage-content/
   CONTRACT.md          frozen case specification, written before any receipt
   README.md            how to run; what each verb guarantees
   runner.py            list | prepare | perf | verify | self-check
-  Cargo.toml           the harness crate (publish = false)
-  Cargo.lock
+  Cargo.toml           the harness crate (publish = false), with an empty [workspace] table
+  Cargo.lock           NOT core/Cargo.lock — guarded by shared/test_lock_parity.py
+  target/              its own; share with core only via CARGO_TARGET_DIR
   src/                 Rust — all resource observation lives here
     main.rs            dispatch by --case
     registry.rs        Case rows, cardinality self-check, TSV-hash pin
@@ -85,6 +86,7 @@ core/benchmark/fs-bench-pro-storage-content/
       result.rs        case-result JSON writer
     families/          c1_*.rs, c2_*.rs, pipeline.rs
   shared/              Python — space, external cross-checks, receipts
+    test_lock_parity.py  every package in both locks must match version and checksum
     space.py           st_blocks, pragmas, pack SQL, sidecars
     sampler.py         getrusage(RUSAGE_CHILDREN), deadline, measurement lock
     receipt.py         identity record, append-only write, budget status

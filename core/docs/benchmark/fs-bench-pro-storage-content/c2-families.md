@@ -70,7 +70,7 @@ Reason codes: **R1** Workspace/lifecycle · **R2** Branch/history/LayerStack ·
 | C2-3 | `c2.delta.cdc-locality` | `dedup_cdc_locality` (delta half) | 20 + boundary set | 5 kinds × 4 tiers; boundaries `[0,1,8191,8192,16384,32768,32769]` | base-chain walk = pack BLOB reads (4 MiB cache) |
 | C2-4 | `c2.reuse.workspace` | `dedup_workspace_reuse` (dedup half) | 14 | 3 kinds × 4 tiers + 2 `base128` controls | exact-hit lookup, no pack read |
 | C2-5 | `c2.footprint` | `store_footprint` | 6 | 3 controls @100k f/500 MB, 3 low-v1 @100 f/5 MB and 10 f/10 MB | `object_packs.data`, `objects` rows, DB file size |
-| C2-6 | `c2.delta.small-file` | `small_file_delta_smoke` | re-spec needed | small sizes | policy outcome only |
+| C2-6 | `c2.delta.small-file` | `small_file_delta_smoke` | 4 | 1024 / 16384 / 65536 / **131071** bytes | policy outcome only; no pack read claim |
 | C2-7 | `c2.read.waves` | `payload_create_read` (read half) | 4 | 1 / 10 / 100 / 500 MiB | ceiling + paged locators + chain resolve |
 | C2-8 | `c2.pool.cold-warm` | `pooled lane` | 2 | 24 / 128 / 512 leaves × 100 rows | `metadata_value_groups` catalogue; `Store.pool_index` |
 | C2-9 | `c2.pipeline.*` | `measure_edits`/`measure_filesystem --mode pipeline` | 4 | fixed cases | C1 construction + handoff + save ack |
@@ -84,6 +84,7 @@ C2-3  dedup-cdc-{overwrite,insert,delete,common-body,scattered}-{1,10,100,500}
       + boundaries(): lengths {0,1,8191,8192,16384,32768,32769} × seeds 1..3
 C2-4  dedup-workspace-{exact,local,unique}-{1,10,100,500}[-compact-v2],
       dedup-workspace-unique-{1,10}-base128-v3        (base_file_count = 128)
+C2-6  small-file-delta-{1024,16384,65536,131071}
 C2-5  store-footprint-unique-100000,
       store-footprint-metadata-cardinality-100000,
       store-footprint-large-object-500m,
@@ -189,21 +190,26 @@ cache-credited vs 2.1 GiB/s from storage).
 
 ### Selection lanes (new)
 
-A full C2 run is **~86 cases × one sample each**. Two lanes:
+A full C2 run is **90 cases × one sample each** (86 before owner decision R5 added the
+four `c2.delta.small-file` rows). Two lanes:
 
 | Lane | Selection | Size | Use |
 | --- | --- | ---: | --- |
-| `--smoke` | the smallest legal tier of each family | ~8 | the ordinary development loop |
-| full | every registered case | ~86 | admission |
+| `--smoke` | the smallest legal tier of each family | ~9 | the ordinary development loop |
+| full | every registered case | ~90 | admission |
 
 **Pipeline is five cases, not a layer.** Integrated timing is required by #171's
 acceptance, but it only means something where the C1→C2 handoff *is* the question —
 the five `measure_edits` shapes plus one filesystem case. It is not applied to
 `c2.read.*`, `c2.pool.*` or `c2.footprint`.
 
-**Tier policy.** The 100k-file / 500 MB `store_footprint` controls are the clearest
-case: cut from the default set or declared on the ≤ 25 s exception list, never
-shrunk to fit.
+**Tier policy (decided).** The 100k-file / 500 MB `store_footprint` controls and the
+500 MiB `c2.read.waves` tier are **declared on the ≤ 25 s exception list with their
+measured wall times**, not cut and never shrunk to fit (owner decision R4). Cutting
+them would remove the tier where the O(1) footprint claim is most convincing.
+
+**Cardinality is frozen at 90** by [`CONTRACT.md`](CONTRACT.md) §3, including the four
+`c2.delta.small-file` rows added by decision R5. A change needs a new contract stamp.
 
 ## 6. Vehicles: what exists, what must be built
 

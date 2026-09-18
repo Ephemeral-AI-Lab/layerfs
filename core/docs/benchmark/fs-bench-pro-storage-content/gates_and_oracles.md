@@ -12,10 +12,11 @@
 > **No figure in this document is a measurement.** Every number is a declared
 > constant, a bound already pinned by an existing test, or a case configuration.
 
-## 1. The claim kind this document assumes
+## 1. The claim kind (frozen)
 
 `benchmark_rules.md` §1 requires the question and the exact claim a family is
-allowed to support to be frozen *before* implementation. This document assumes:
+allowed to support to be frozen *before* implementation. It was frozen in
+[`CONTRACT.md`](CONTRACT.md) §1 by owner decision **D1**:
 
 ```text
 claim_kind = structural-complexity
@@ -23,9 +24,10 @@ claim_kind = structural-complexity
 
 That is: **"is the C1/C2 architecture algorithmically sound"** — scaling ratios,
 mechanism counters, declared resource bounds — and **not** "is v0.1.7 faster than
-v0.1.6". Under this assumption every gate below is an **absolute, single-arm** gate.
+v0.1.6". Every gate below is therefore an **absolute, single-arm** gate.
 
-**If the owner rules the other way** (`empirical-performance`), then:
+**Reopening is a scenario change, not a re-label.** If the owner later commissions
+a reference-tree entry point and rules `empirical-performance`, then:
 
 - only `component.primitives` (3 cases) can carry a number, because it is the only
   library-matched pair that exists — `pipeline.filesystem` and `pipeline.c2` are
@@ -35,7 +37,9 @@ v0.1.6". Under this assumption every gate below is an **absolute, single-arm** g
   non-comparative rows**, so no C1/C2 family can be paired with a v0.1.6 family;
 - every comparative section of this document becomes `NOT_APPLICABLE`.
 
-Nothing else in this document changes under either ruling.
+Nothing else in this document changes under either ruling. Re-opening needs a new
+scenario identity and new receipts: historical rows are never re-labelled
+(`benchmark_rules.md`, and `AGENTS.md` §3.2).
 
 ## 2. Status vocabulary
 
