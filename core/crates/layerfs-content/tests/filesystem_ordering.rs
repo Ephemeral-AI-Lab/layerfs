@@ -1039,3 +1039,157 @@ fn a_spill_keeps_the_scans_of_tiers_above_its_level() {
         "a kept scan resumes at its cursor: {resumed} rows read for one row"
     );
 }
+
+/// Builds one operation over `count` files in one directory under `resources` and
+/// reports what the reference reducer charged.
+fn pending_ceiling_arm(
+    count: usize,
+    resources: FilesystemResources,
+) -> (
+    layerfs_content::ContentResult<layerfs_content::filesystem::FilesystemResult>,
+    TreeStore,
+) {
+    let directory_serial = 2_u64;
+    let serials = (3..3 + count as u64).collect::<Vec<_>>();
+    let directories = vec![
+        DirectoryUpdate {
+            parent: 1,
+            changes: vec![(name("d"), Some(directory_serial))],
+        },
+        DirectoryUpdate {
+            parent: directory_serial,
+            changes: serials
+                .iter()
+                .enumerate()
+                .map(|(index, serial)| (name(&format!("f{index:04}")), Some(*serial)))
+                .collect(),
+        },
+    ];
+    let inodes = std::iter::once(InodeUpdate {
+        serial: 1,
+        value: directory(),
+    })
+    .chain(std::iter::once(InodeUpdate {
+        serial: directory_serial,
+        value: directory(),
+    }))
+    .chain(
+        serials
+            .iter()
+            .enumerate()
+            .map(|(index, serial)| InodeUpdate {
+                serial: *serial,
+                value: regular(&format!("ordering/content-{index:04}")),
+            }),
+    )
+    .collect::<Vec<_>>();
+    let mut new_inodes = vec![1_u64, directory_serial];
+    new_inodes.extend(serials.iter().copied());
+    new_inodes.sort_unstable();
+    let input = FilesystemInput {
+        base: None,
+        scope: layerfs_content::filesystem::scope_for_seed([0x62; 32]),
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources,
+    };
+    let reader = TreeStore::new();
+    let mut sink = TreeStore::new();
+    let temp = TempDir::new("ordering-pending-ceiling");
+    let mut backing = RecordingBacking::new(temp.path());
+    let result = {
+        let mut objects = FilesystemObjects::new(&reader, &mut sink);
+        build_filesystem(&mut objects, &input, Some(&mut backing))
+    };
+    (result, sink)
+}
+
+#[test]
+fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
+    // The pending ceiling's spill-free bound is the ordering ceiling divided by the
+    // x2 charge the account applies (a pending row plus the run it becomes), i.e.
+    // `floor(ordering_bytes / (2 * ROW_BYTES))`. The shape's own row count is
+    // calibrated first, so the arithmetic is exercised exactly rather than guessed:
+    // the same operation is built under a generous ceiling, and that many rows at
+    // the x2 charge is the bound the next three arms sit on.
+    const ROW_BYTES: u64 = 96;
+    const FILES: usize = 100;
+    let (calibrated, _) = pending_ceiling_arm(
+        FILES,
+        FilesystemResources {
+            ordering_bytes: 64 << 20,
+            maximum_pending_records: 4_096,
+            ..resources()
+        },
+    );
+    let calibrated = calibrated.expect("calibrated build");
+    let rows = calibrated.counters.references.peak_pending as u64;
+    assert_eq!(
+        calibrated.counters.references.rows_spilled, 0,
+        "the calibration arm must not spill"
+    );
+    assert!(rows >= FILES as u64, "{rows} rows for {FILES} files");
+    let bound = 2 * ROW_BYTES * rows;
+
+    // Exactly at the bound: every row fits, so nothing spills.
+    let (spill_free, _) = pending_ceiling_arm(
+        FILES,
+        FilesystemResources {
+            ordering_bytes: bound,
+            maximum_pending_records: rows as usize,
+            ..resources()
+        },
+    );
+    let spill_free = spill_free.expect("a spill-free build");
+    assert_eq!(
+        spill_free.counters.references.rows_spilled, 0,
+        "the byte bound is inclusive"
+    );
+    assert_eq!(spill_free.counters.references.runs.runs_created, 0);
+    assert_eq!(spill_free.counters.references.peak_pending as u64, rows);
+    assert_eq!(spill_free.root, calibrated.root);
+
+    // One row less of pending map: the same operation spills. The ceiling is
+    // widened for this arm because a spill reserves the run it becomes *and* the
+    // merge output it may produce, which the tight bound above deliberately cannot
+    // hold; the point here is the verdict, not the bytes.
+    let (spilled, _) = pending_ceiling_arm(
+        FILES,
+        FilesystemResources {
+            ordering_bytes: 4 * bound,
+            maximum_pending_records: rows as usize - 1,
+            ..resources()
+        },
+    );
+    let spilled = spilled.expect("a spilling build");
+    assert!(
+        spilled.counters.references.rows_spilled > 0,
+        "one row under the ceiling crosses it"
+    );
+    assert_eq!(
+        spilled.root, spill_free.root,
+        "spilling is planned work, not a different result"
+    );
+
+    // The same map at the tight ceiling is refused at its first spill: the spill
+    // reserves the run it becomes and the merge output it may produce, and a
+    // ceiling that cannot hold them fails closed instead of allocating past the
+    // declared bound. This is the arm that pins the arithmetic: the map is the
+    // same, only the ceiling differs from the arm above.
+    let (refused, _) = pending_ceiling_arm(
+        FILES,
+        FilesystemResources {
+            ordering_bytes: bound,
+            maximum_pending_records: rows as usize - 1,
+            ..resources()
+        },
+    );
+    match refused {
+        Err(ContentError::ObjectLimitExceeded { limit, .. }) => {
+            assert_eq!(limit, bound as usize);
+        }
+        other => panic!("a map beyond the byte bound must be refused: {other:?}"),
+    }
+}

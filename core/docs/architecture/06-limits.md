@@ -125,6 +125,9 @@ one component rather than split across both.
         │        └── observes every original → final binding edge
         ├── reference reduce          ──► ReferenceReducer → FinalRows
         │        └── spill to runs when pending exceeds 4,096
+        │             (the dial: `FilesystemResources.maximum_pending_records`;
+        │              spill-free while `touched <= ordering_bytes / (2 x 96)`,
+        │              i.e. 349,525 rows under the default 64 MiB ceiling)
         ├── release_zero_count        ──► bounded traversal of zeroed descendants
         ├── inode table rebuild       ──► sorted engine (LFS6INT), ONE pass
         └── FilesystemRoot emission   ──► new 116-byte root object

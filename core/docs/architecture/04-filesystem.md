@@ -218,6 +218,21 @@ Nothing here is free memory or free disk: one explicit account owns the bytes,
 growth is reserved **before** it happens, obsolete runs give their bytes back when
 dropped, and the finishing cleanup is **checked, not hidden in a destructor**.
 
+**The pending ceiling is a dial, and its spill-free bound is arithmetic.** The
+pending map holds at most `FilesystemResources.maximum_pending_records` rows
+(`DEFAULT_MAXIMUM_PENDING = 4,096`); when it is full the reducer spills to a run.
+The ownership account charges a pending row **twice** its encoded width — the row
+plus the run it becomes — so the spill-free bound is
+`floor(ordering_bytes / (2 x ROW_BYTES))`. Under the default 64 MiB ordering
+ceiling and `ROW_BYTES = 96` that is **349,525 rows**; below it the operation does
+no spill, merge, consolidation or backing I/O at all, and above it the
+`O(r log(r / P))` regime applies unchanged. Two honest caveats: the account owns
+*encoded-row equivalents*, not heap, so at the top of the dial roughly 42 MiB of
+real `BTreeMap` heap is invisible to it; and `maximum_touched_serials`
+(`ordering_bytes / 8`) does not bind before the pending bound. **The default is
+not changed by this description** — widening it is an owner decision, and a
+re-default would erase the anchor shape the ordering receipts are measured on.
+
 **Tiers and their scans.** A spilled run lives in a tier (`levels[i]`), and each
 tier keeps one buffered reader (`scans[i]`) whose cursor lets an ascending sweep
 read that tier's rows exactly once. The two are index-parallel: `scans[i]` exists
