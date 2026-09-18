@@ -86,7 +86,11 @@ impl<'a> Resolver<'a> {
     }
 
     /// Reconstructs and authenticates one stored canonical object.
-    pub fn resolve(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
+    ///
+    /// The identity is returned with the bytes: it is the hash this resolution
+    /// already computed and checked against the locator, so a caller comparing
+    /// identities does not have to hash the same bytes again (P2-6).
+    pub fn resolve(&mut self, id: ObjectId) -> StorageResult<(Vec<u8>, ObjectId)> {
         let root = lookup::location(self.connection, id, self.ceiling)?
             .ok_or(StorageError::ObjectMissing(id))?;
         self.resolve_at(root)
@@ -97,7 +101,7 @@ impl<'a> Resolver<'a> {
     /// The dependency bytes are charged to the chain budget including the object
     /// itself, so a selection can refuse to build a chain that a later read could
     /// not reconstruct.
-    pub fn resolve_dependency(&mut self, id: ObjectId) -> StorageResult<Vec<u8>> {
+    pub fn resolve_dependency(&mut self, id: ObjectId) -> StorageResult<(Vec<u8>, ObjectId)> {
         let root = lookup::location(self.connection, id, self.ceiling)?
             .ok_or(StorageError::ObjectMissing(id))?;
         self.resolve_charged(root, true)
@@ -109,7 +113,7 @@ impl<'a> Resolver<'a> {
     /// decoded budgets are charged per chain and restart here, so a wave that
     /// reads many independent objects cannot spend a sibling's allowance and a
     /// single deep chain cannot hide behind a shallow neighbour.
-    pub fn resolve_at(&mut self, root: ObjectLocation) -> StorageResult<Vec<u8>> {
+    pub fn resolve_at(&mut self, root: ObjectLocation) -> StorageResult<(Vec<u8>, ObjectId)> {
         self.resolve_charged(root, false)
     }
 
@@ -117,7 +121,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         root: ObjectLocation,
         charge_self: bool,
-    ) -> StorageResult<Vec<u8>> {
+    ) -> StorageResult<(Vec<u8>, ObjectId)> {
         *self.counters = ChainCounters::default();
         self.packs_read = 0;
         let id = root.object_id;
@@ -141,7 +145,7 @@ impl<'a> Resolver<'a> {
                 .counters
                 .canonical_bytes
                 .saturating_add(canonical.len() as u64);
-            return Ok(canonical);
+            return Ok((canonical, id));
         }
         let role_depth = self.capacities.delta_depth_for_role(root.role);
         let mut chain: Vec<ObjectLocation> = Vec::with_capacity(usize::from(role_depth) + 1);
@@ -167,7 +171,7 @@ impl<'a> Resolver<'a> {
         let depth = (chain.len() - 1) as u64;
         self.counters.edges = depth;
         self.counters.max_depth = depth;
-        let mut canonical: Option<Vec<u8>> = None;
+        let mut canonical: Option<(Vec<u8>, ObjectId)> = None;
         for (position, location) in chain.iter().rev().enumerate() {
             // Every object except the requested one is a dependency and is charged
             // to the chain budget; the requested object is bounded by the canonical
@@ -175,18 +179,21 @@ impl<'a> Resolver<'a> {
             let charged = charge_self || position + 1 != chain.len();
             let decoded = {
                 let base_bytes = match &canonical {
-                    Some(bytes) => Some(raw_payload(bytes, location.role)?),
+                    Some((bytes, _)) => Some(raw_payload(bytes, location.role)?),
                     None => None,
                 };
                 self.decode_at(location, base_bytes, charged)?
             };
-            if ObjectId::for_bytes(&decoded) != location.object_id {
+            // The one hash of these bytes: it authenticates the record against
+            // the locator that named it, and it is handed back to the caller
+            // instead of being recomputed over the same bytes.
+            let verified = ObjectId::for_bytes(&decoded);
+            if verified != location.object_id {
                 return Err(StorageError::Integrity("dependency identity"));
             }
-            canonical = Some(decoded);
+            canonical = Some((decoded, verified));
         }
-        let canonical = canonical.ok_or(StorageError::ObjectMissing(id))?;
-        Ok(canonical)
+        canonical.ok_or(StorageError::ObjectMissing(id))
     }
 
     fn decode_at(

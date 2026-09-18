@@ -82,12 +82,12 @@ pub fn read_objects(
             .get(id)
             .copied()
             .ok_or(StorageError::ObjectMissing(*id))?;
-        let (canonical, packs_fetched) = {
+        let ((canonical, verified), packs_fetched) = {
             let mut resolver = Resolver::new(
                 connection, ceiling, capacities, &mut packs, workspace, &mut chain,
             );
-            let canonical = resolver.resolve_at(location)?;
-            (canonical, resolver.packs_read())
+            let resolved = resolver.resolve_at(location)?;
+            (resolved, resolver.packs_read())
         };
         totals.objects = totals.objects.saturating_add(chain.objects);
         totals.edges = totals.edges.saturating_add(chain.edges);
@@ -96,7 +96,10 @@ pub fn read_objects(
         totals.max_depth = totals.max_depth.max(chain.max_depth);
         totals.group_decodes = totals.group_decodes.saturating_add(chain.group_decodes);
         counters.packs_read += packs_fetched;
-        if ObjectId::for_bytes(&canonical) != *id {
+        // The resolver already hashed these bytes to authenticate them against
+        // the locator, and returned that identity (P2-6). Comparing identities
+        // is the same check without a second pass over the object.
+        if verified != *id {
             return Err(StorageError::Integrity("read identity"));
         }
         counters.objects += 1;

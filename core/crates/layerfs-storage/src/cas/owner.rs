@@ -140,7 +140,7 @@ impl MutationOwner {
                 &mut self.decompression,
                 &mut self.chain,
             );
-            resolver.resolve_at(location)?
+            resolver.resolve_at(location)?.0
         };
         crate::encoding::delta::read::accumulate(&mut self.chain_total, self.chain);
         Ok(value)

@@ -383,7 +383,7 @@ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> 
             input.decode,
             input.chain,
         );
-        resolver.resolve_dependency(id)?
+        resolver.resolve_dependency(id)?.0
     };
     crate::encoding::delta::read::accumulate(input.chain_total, *input.chain);
     Ok(value)

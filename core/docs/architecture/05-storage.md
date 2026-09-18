@@ -361,6 +361,16 @@ instance of the one-owner-one-figure discipline.
 > is decoded only against the exact base payload the resolver reconstructed and
 > authenticated; **there is no trial decode and no fallback.**
 
+The identity check is **one hash per resolved record** (#178 **P2-6**, 2026-09-18).
+The resolver computes `ObjectId::for_bytes` over each decoded record to
+authenticate it against the locator that named it and **returns the identity it
+authenticated** with the bytes; a wave then compares identities instead of hashing
+the same bytes a second time. Before the change the requested object of every wave
+was hashed twice — once by the resolver, once by `cas/read.rs` — which the register
+recorded as RT-08. The check itself is unchanged in kind and in strength: a record
+whose bytes hash to another identity is still refused with an integrity error, and
+a case that rewrites a locator to claim a different identity is what pins it.
+
 ```text
    decode_canonical(pack, location, capacities, base, workspace)
         │

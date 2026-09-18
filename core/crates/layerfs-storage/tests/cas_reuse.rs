@@ -327,3 +327,77 @@ fn a_batch_lookup_is_bounded_by_the_declared_read_ceiling() {
         other => panic!("expected a capacity refusal, got {other}"),
     }
 }
+
+/// The read wave does not hash what the resolver authenticated.
+///
+/// "One hash per requested object" has no counter - a hash is not charged
+/// anywhere - so the property is pinned where it lives: the wave compares the
+/// identity the resolver returned instead of recomputing it over the same bytes.
+/// A second `ObjectId::for_bytes` in this file is the defect returning, and this
+/// case fails closed on it, the same shape the pooled-lane ceiling guard uses.
+#[test]
+fn the_read_wave_does_not_hash_what_the_resolver_authenticated() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cas/read.rs"),
+    )
+    .expect("read wave source");
+    assert!(
+        !source.contains("for_bytes"),
+        "the wave hashes resolved bytes again instead of using the identity the resolver authenticated"
+    );
+    assert!(
+        source.contains("verified != *id"),
+        "the wave still checks the resolved identity, one comparison instead of one hash"
+    );
+}
+
+/// A locator whose identity does not match its bytes is still refused.
+///
+/// The requested object is hashed once per wave (P2-6): the resolver computes the
+/// identity to authenticate the record against the locator and hands it back, and
+/// the wave compares identities instead of hashing the same bytes again. This case
+/// is the tamper detection that must not weaken - a row whose `object_id` names
+/// bytes that hash to something else is refused - plus its control, the same
+/// object read successfully before the row is rewritten.
+#[test]
+fn a_locator_whose_identity_does_not_match_its_bytes_is_refused() {
+    let dir = TempDir::new("identity");
+    let path = dir.store_path("identity");
+    let bytes = patterned(40_000);
+    let (collected, root, _) = construct_file(&bytes);
+    let store = create_store(&path);
+    save_all(&store, &collected).expect("save");
+
+    let (values, _) = read_objects(&store, &[root]).expect("the stored object reads");
+    assert_eq!(values.len(), 1);
+    assert_eq!(
+        layerfs_content::ObjectId::for_bytes(&values[0]),
+        root,
+        "the control reads the object the locator names"
+    );
+
+    // Rewrite the locator so it claims an identity whose bytes are different; the
+    // record itself is untouched, so only the identity check can catch it.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let claimed = layerfs_content::ObjectId::for_bytes(b"layerfs/phase2/p2-6/claimed");
+    let affected = connection
+        .execute(
+            "UPDATE objects SET object_id = ?1 WHERE object_id = ?2",
+            rusqlite::params![claimed.to_bytes().to_vec(), root.to_bytes().to_vec()],
+        )
+        .expect("external rewrite");
+    assert_eq!(affected, 1, "the locator was rewritten");
+    drop(connection);
+
+    let reopened = open_store(&path);
+    match read_objects(&reopened, &[claimed]) {
+        Err(StorageError::Integrity(what)) => {
+            assert!(
+                what.contains("identity"),
+                "an identity mismatch is reported as one, got {what}"
+            );
+        }
+        Err(other) => panic!("expected an identity refusal, got {other}"),
+        Ok(_) => panic!("a locator whose bytes hash to another identity was accepted"),
+    }
+}
