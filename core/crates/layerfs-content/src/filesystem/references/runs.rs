@@ -432,12 +432,15 @@ impl<'r, 'b> RunStore<'r, 'b> {
                     what: "ordering backing",
                 })?;
             combined = match combined {
-                None => Some(Run {
-                    handle: copy_run(backing, &run, self.merge_buffer, &mut self.work)?,
-                    count: run.count,
-                    first: run.first,
-                    last: run.last,
-                }),
+                // The newest input is adopted, not copied. A merge reads both of
+                // its inputs and appends only to a run it created, so the handle
+                // that survives consolidation is never written into; the copy
+                // that used to stand here rewrote the whole newest run to guard
+                // against aliasing that the merge cannot produce. The property is
+                // pinned by `consolidation_never_writes_into_a_run_it_merges`
+                // (P2-7), which seals every input before the merge and fails if
+                // any append reaches one.
+                None => Some(run),
                 Some(newer) => Some(merge_runs(
                     backing,
                     &run,
@@ -576,25 +579,6 @@ impl LookupScan {
             resume: None,
         }
     }
-}
-
-/// Copies one run into a fresh handle so a merge never aliases its own input.
-fn copy_run(
-    backing: &mut dyn OrderingBacking,
-    run: &Run,
-    buffer_bytes: usize,
-    work: &mut MergeWork,
-) -> ContentResult<Box<dyn crate::filesystem::references::backing::OrderingRun>> {
-    let mut handle = backing.create_run()?;
-    work.runs_created = work.runs_created.saturating_add(1);
-    let mut reader = RunReader::new(run, buffer_bytes);
-    work.rows_read = work.rows_read.saturating_add(run.count);
-    while let Some(row) = reader.next()? {
-        handle.append(&row.encode()?)?;
-        work.rows_written = work.rows_written.saturating_add(1);
-    }
-    handle.flush()?;
-    Ok(handle)
 }
 
 /// Reads every row of one run in serial order.

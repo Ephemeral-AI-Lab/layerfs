@@ -417,6 +417,12 @@ pub struct RecordingBacking {
     pub fail_flush_at: Option<u64>,
     /// Refuse the finishing release.
     pub refuse_release: bool,
+    /// Next run identifier this backing will hand out.
+    runs_issued: std::rc::Rc<std::cell::Cell<u64>>,
+    /// Runs created before this identifier are **sealed**: an append into one is
+    /// an error. It is how a test states "this run is an input to what comes
+    /// next" and gets a failure instead of a rewrite.
+    sealed_before: std::rc::Rc<std::cell::Cell<u64>>,
 }
 
 impl RecordingBacking {
@@ -429,6 +435,8 @@ impl RecordingBacking {
             fail_read_at: None,
             fail_flush_at: None,
             refuse_release: false,
+            runs_issued: std::rc::Rc::new(std::cell::Cell::new(0)),
+            sealed_before: std::rc::Rc::new(std::cell::Cell::new(0)),
         }
     }
 
@@ -443,6 +451,8 @@ impl RecordingBacking {
             fail_read_at: None,
             fail_flush_at: None,
             refuse_release: false,
+            runs_issued: std::rc::Rc::new(std::cell::Cell::new(0)),
+            sealed_before: std::rc::Rc::new(std::cell::Cell::new(0)),
         }
     }
 
@@ -475,6 +485,36 @@ impl RecordingBacking {
     pub fn cleanup_failed(&self) -> bool {
         self.inner.cleanup_failed()
     }
+
+    /// A handle to this backing's alias detector.
+    ///
+    /// A store borrows its backing mutably for its whole lifetime, so a test that
+    /// wants to seal runs while the store is alive goes through this handle
+    /// instead.
+    pub fn alias_probe(&self) -> AliasProbe {
+        AliasProbe {
+            issued: self.runs_issued.clone(),
+            sealed_before: self.sealed_before.clone(),
+        }
+    }
+}
+
+/// A recording backing's alias detector, usable while a store borrows it.
+#[derive(Clone)]
+pub struct AliasProbe {
+    issued: std::rc::Rc<std::cell::Cell<u64>>,
+    sealed_before: std::rc::Rc<std::cell::Cell<u64>>,
+}
+
+impl AliasProbe {
+    /// Seals every run created so far: an append into one is now an error.
+    ///
+    /// A test uses this to state that the runs it holds are **inputs**: if the
+    /// operation under test writes into one, the append fails and the operation
+    /// fails with it, instead of the test having to notice a changed byte.
+    pub fn seal(&self) {
+        self.sealed_before.set(self.issued.get());
+    }
 }
 
 impl layerfs_content::filesystem::references::backing::OrderingBacking for RecordingBacking {
@@ -490,12 +530,16 @@ impl layerfs_content::filesystem::references::backing::OrderingBacking for Recor
         counters.live_runs = counters.live_runs.saturating_add(1);
         counters.peak_live_runs = counters.peak_live_runs.max(counters.live_runs);
         drop(counters);
+        let run_id = self.runs_issued.get();
+        self.runs_issued.set(run_id.saturating_add(1));
         Ok(Box::new(RecordingRun {
             inner,
             shared: self.shared.clone(),
             fail_append_at: self.fail_append_at,
             fail_read_at: self.fail_read_at,
             fail_flush_at: self.fail_flush_at,
+            run_id,
+            sealed_before: self.sealed_before.clone(),
         }))
     }
 
@@ -536,10 +580,18 @@ struct RecordingRun {
     fail_append_at: Option<u64>,
     fail_read_at: Option<u64>,
     fail_flush_at: Option<u64>,
+    run_id: u64,
+    /// Runs created before this identifier are sealed; append refuses them.
+    sealed_before: std::rc::Rc<std::cell::Cell<u64>>,
 }
 
 impl layerfs_content::filesystem::references::backing::OrderingRun for RecordingRun {
     fn append(&mut self, bytes: &[u8]) -> ContentResult<()> {
+        if self.run_id < self.sealed_before.get() {
+            // This run was an input: the operation wrote into storage it was
+            // only supposed to read.
+            return Err(ContentError::Io);
+        }
         let ordinal = {
             let mut counters = self.shared.borrow_mut();
             counters.appends = counters.appends.saturating_add(1);

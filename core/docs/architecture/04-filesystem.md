@@ -233,6 +233,18 @@ real `BTreeMap` heap is invisible to it; and `maximum_touched_serials`
 not changed by this description** — widening it is an owner decision, and a
 re-default would erase the anchor shape the ordering receipts are measured on.
 
+**Consolidation adopts its newest input (#178 P2-7, 2026-09-18).** `consolidate()`
+merges every live run into one. It used to copy the newest run into a fresh handle
+first, "so a merge never aliases its own input" — a whole run re-read and re-written
+per consolidation, guarding against a merge that writes where it reads.
+`merge_runs` appends only to a run it creates, so the guard was removable once the
+property was **proved** rather than assumed: a case seals every run that exists
+before the consolidation (an append into a sealed run is an error) and requires the
+consolidation to succeed with the row stream unchanged, with a control showing the
+seal refuses an append. On the forced-64 ordering probe this removes one run and
+128 rows of rewriting per consolidation (`runs_created` 124 → 123,
+`rows_written` 25,760 → 25,632).
+
 **Tiers and their scans.** A spilled run lives in a tier (`levels[i]`), and each
 tier keeps one buffered reader (`scans[i]`) whose cursor lets an ascending sweep
 read that tier's rows exactly once. The two are index-parallel: `scans[i]` exists
