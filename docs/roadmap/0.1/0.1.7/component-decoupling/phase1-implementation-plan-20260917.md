@@ -233,15 +233,18 @@ pushed; 456 tests green; the 34-test sealed-oracle set green and unchanged.
 deletion removes the only non-root context check on that node) —
 [receipt](../evidence/phase1-execution-20260918T090000Z/rounds/p1-6/receipt.md).
 
-**Incomplete:** P1-13 (merge fanout 4) — the multiway cascade was built, hit one
-real selection bug and then **data-correctness** failures (the spilling and
-non-spilling runs produced different filesystem roots), and was reverted in full;
-the tree is clean and D26's anchors are untouched. The failure is narrowed to one
-serial: the merged stream emits a **superseded** `count=0` row for a serial the
-store holds at `count=1`, so the merge is not newest-wins there. A probe of
-`merge_runs` alone is correct, so the cause is in the spill/merge/read interaction
-and is **not** isolated; the receipt records the trace, the three candidates and
-the next concrete step. No claim that the item is unfinishable.
+**Incomplete, cause diagnosed:** P1-13 (merge fanout 4) — the multiway cascade was
+built, hit one real selection bug and then **data-correctness** failures (the
+spilling and non-spilling runs produced different filesystem roots), and was
+reverted in full; the tree is clean and D26's anchors are untouched. The cause is
+found: my grouped cascade leaves a **stale duplicate of a serial in a
+higher-indexed (newer) tier than the current row**, so `find` (first tier that
+holds the key) and the newest-first final stream (highest tier wins) disagree — for
+serial 26 the probe reads `count=1` from tier 5 and `count=0` from tier 6, both
+live. That is an ordering bug in my cascade, **not** a property of the fanout-4
+design and **not** the design question the first receipt named. The fix
+(newest-group-first draining plus the tier-ordering invariant as a test) is
+identified but not written; the receipt records it.
 
 **Not started:** P1-15 — the restart lookup half of the ordering pair. P1-13's
 blocker blocks it by its own dependency note ("restart pattern and run lengths

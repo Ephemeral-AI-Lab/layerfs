@@ -3,12 +3,12 @@
 > **Status:** **Incomplete and reverted, not landed.** No commit for this item; the
 > tree is clean at `92f2350e3` and the full workspace is green.
 >
-> **"Blocked" was my label and it was too strong.** What is established is that my
-> implementation produces wrong rows and I did not find the mechanism. It is *not*
-> established that the fanout-4 design cannot be finished, and this receipt does not
-> claim it. The owner's question in §4 is a real design question, but it is not
-> proven to be *the* cause — see §3.1, which narrows the failure to a stale row
-> winning in the merged stream.
+> **"Blocked" was my label and it was too strong.** The mechanism is now diagnosed
+> (§3.1): my grouped cascade leaves a stale duplicate of a serial in a
+> higher-indexed tier than the current row, so `find` and the newest-first final
+> stream disagree. That is an ordering bug in my cascade, **not** a property of the
+> fanout-4 design, and it is **not** the owner's design question. The item is
+> incomplete with a known cause and a known next step — not blocked.
 
 ## 1. The item, as planned
 
@@ -78,16 +78,41 @@ serial. That is a correctness violation of the merge's own contract
 (`merge.rs`: "a newer row already incorporates the older effects"), and it is the
 mechanism that reaches the reducer as "new inode without binding".
 
-**What I could not determine.** Whether the stale row comes from (a) a
-tier-ordering error in my grouped cascade (the accumulator not being newer than the
-group it is merged with), (b) the read path (`find` / `visit_newest_first`)
-answering from a stale tier for a serial the merged output already covers, or
-(c) something else in the merge. A controlled probe of `merge_runs` alone — twelve
-spills of eight rows with **every serial carried by every batch**, so every merge
-is a genuine three-way collision — came out **correct** (`live_runs=2`, every serial
-holding its newest write). That probe passing while the end-to-end fixture fails is
-the state I stopped at: the bug is real, reproducible and localized to the
-spill/merge/read interaction, but I have not isolated which of the three it is.
+**Root cause found (2026-09-18, second derivation).** The tier contents at the
+moment of failure, read directly out of each live run by the probe:
+
+```text
+tiers = [ ..., None, None,
+          Some((32, 1, 40, Some(1))),   <- tier 5: serial 26 present, count = 1
+          Some((40, 1, 40, Some(0))) ]  <- tier 6: serial 26 present, count = 0
+```
+
+Both tiers are live. `find(serial 26)` walks the tiers in index order, so it stops
+at tier 5 and answers **count = 1**. The final row stream reads newest-first, which
+for a tiered store means the **highest occupied tier wins**, so it answers from
+tier 6 and emits **count = 0** — the superseded row.
+
+That is the bug, stated exactly: the grouped cascade left a **stale duplicate of a
+serial in a higher-indexed (newer) tier than the current row**. The store's own
+contract is that a lower tier can never hold an older row for a serial than a
+higher one does; my cascade broke it. The consequence is two read paths that
+disagree — `find`'s "first tier that holds the key" against
+`visit_newest_first`'s "highest tier wins" — and whichever one the reducer uses, the
+other is wrong.
+
+It is an ordering bug **in my cascade**, not a property of the fanout-4 design: the
+grouped loop must leave the accumulator holding the newest data and install it at
+the tier the batch targeted, and mine evidently does not when `older_runs` is longer
+than `MERGE_FANOUT - 1` (the fallback grouping is the half that only runs on the
+deep cascades the failing fixtures exercise; the flat probes that passed never
+entered it).
+
+**What is still not done:** the fix itself. The next step is now unambiguous —
+drain `older_runs` **newest-group-first into the accumulator** and assert the
+invariant directly (after every spill, for every live tier pair, no serial may
+appear in a lower tier when a higher tier also holds it). I did not get there before
+running out of budget, so the item is **incomplete with a diagnosed cause**, not
+blocked.
 
 Consequences for the disposition:
 
@@ -103,11 +128,11 @@ The change was reverted in full (`git checkout -- merge.rs runs.rs`); the tree a
 failed**. The item is **blocked**, and the honest state is that its premise is
 untested:
 
-* **What would unblock it (the next concrete step, not an owner ruling):** isolate
-  §3.1's three candidates with the existing `visit_newest_first` probe — read the
-  store after each spill and assert, per serial, that the newest spilled row is the
-  one that comes back. The moment that assertion fails, the tier index and merge
-  group are visible together, which is what distinguishes (a) from (b).
+* **The fix, and its guard (the next concrete step):** drain the older runs
+  newest-group-first into the accumulator and install the result at the tier the
+  batch targeted, then add the invariant as a test: after every spill, no serial may
+  appear in a lower-indexed tier when a higher-indexed tier holds it too. That is
+  the assertion §3.1 shows failing.
 * **What the owner may still want to rule on, independently:** whether the union of
   a three-tier absorption may keep the newest row alone (what I implemented and what
   the plan's §P1-13 text assumes: "newest-wins-on-tie reproduced exactly"), or
