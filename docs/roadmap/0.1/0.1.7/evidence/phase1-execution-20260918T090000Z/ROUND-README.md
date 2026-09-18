@@ -15,6 +15,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-4` | P1-4 — validation record demands batched behind one memo | collected (`after/`) |
 | `p1-6` | P1-6 — the discarded validation load | **landed as the safe variant** (`after/`; the decline in §1–§5 is superseded by the appended §6) |
 | `p1-8` | P1-8 — one ordered cursor for an assembly's retained runs | collected (`after/`, `parent-m4/`) |
+| `p1-7` | P1-7 — one shared page memo between the two edit passes | collected (`after/`, `parent-test/`) |
 | `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |

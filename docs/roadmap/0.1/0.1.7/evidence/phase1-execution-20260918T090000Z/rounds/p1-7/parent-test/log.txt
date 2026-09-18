@@ -1,0 +1,12 @@
+
+thread 'a_page_two_passes_reach_is_demanded_once_for_the_operation' panicked at crates/layerfs-content/tests/edit_localized.rs:698:9:
+object ab3c5c6f43e64491751499fb5404e8a3c080968670ad5e1c9332ba1efecb38b3 was demanded 2 times by one operation: {ObjectId("3c9a2c0e8b5153e468e449ab7b3e4c2a3c9eb00aa0af19eb808febadab4c70e1"): 1, ObjectId("3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d"): 1, ObjectId("4e2542dbbb7c286023a0ba287e1f73f676c18e32005c4cc92a6bfc8edaea14bd"): 1, ObjectId("8aa343a346796bb6d06f71a9cea5e46781ebc55f63ca6019fa5cc40bec29504e"): 1, ObjectId("ab3c5c6f43e64491751499fb5404e8a3c080968670ad5e1c9332ba1efecb38b3"): 2}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_page_two_passes_reach_is_demanded_once_for_the_operation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-content --test edit_localized`
