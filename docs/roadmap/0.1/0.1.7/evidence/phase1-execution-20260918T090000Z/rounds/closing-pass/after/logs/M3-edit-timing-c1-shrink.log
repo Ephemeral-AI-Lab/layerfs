@@ -1,0 +1,20 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/edit_timing_c1 --case shrink
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.027
+--- stdout ---
+implementation: candidate stored-tree edit
+case: shrink
+base_bytes: 3300000
+logical_length: 3300000
+edit: delete [131000, 3300000)
+elapsed_ns: 187750
+edited_root: 4a45d246028fe1edb5f3d7868ca81e39ae1d915733a53b866fe62f8af43ba313
+objects_before: 176
+objects_written: 1
+objects_written_bytes: 131023
+nodes_created: 1
+nodes_read: 11
+edit_nodes_read: 0
+mapping_pages: 3
+--- stderr ---
