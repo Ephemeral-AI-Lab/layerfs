@@ -115,7 +115,7 @@ pub fn construct(
     let mut gates = Vec::new();
 
     instruments::heap_begin();
-    let (measured, report) = Timing::record("c1.construct", |scope: &TimingScope<'_, Active>| {
+    let (measured, report) = super::measure("c1.construct", |scope: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         match route {
             Route::Bytes => construct_bytes(
@@ -137,7 +137,7 @@ pub fn construct(
         }
     });
     let heap = instruments::heap_end();
-    let timing_bytes = write_timing(context.output, &report)?;
+    let timing_bytes = crate::support::phases::timing_json_bytes();
     let (measured_file, measured_consumer) = match measured {
         Ok(value) => value,
         Err(error) => {
@@ -217,6 +217,10 @@ pub fn construct(
         Ok(file) => file,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
+    // O1 for real: the measured root is published so the pinned-constant gate in
+    // `main` can compare it with `tests/golden/expected.tsv`. The replay gate below
+    // is self-consistency and stays as a second, weaker check.
+    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o1-replay-root",
@@ -389,7 +393,7 @@ pub fn chunk_count(
     let expectation = Expectation::spliced(&base, start, end, &replacement);
 
     instruments::heap_begin();
-    let (measured, report) = Timing::record("c1.chunk-count", |scope: &TimingScope<'_, Active>| {
+    let (measured, report) = super::measure("c1.chunk-count", |scope: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         let request = EditRequest {
             root: base_file.root,
@@ -407,7 +411,7 @@ pub fn chunk_count(
         .map(|file| (file, consumer))
     });
     let heap = instruments::heap_end();
-    let timing_bytes = write_timing(context.output, &report)?;
+    let timing_bytes = crate::support::phases::timing_json_bytes();
     let (measured_file, measured_consumer) = match measured {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
@@ -451,6 +455,10 @@ pub fn chunk_count(
     context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
 
     gates.push(completeness_gate(&report, "g7.tree-complete"));
+    // O1 for real: the measured root is published so the pinned-constant gate in
+    // `main` can compare it with `tests/golden/expected.tsv`. The replay gate below
+    // is self-consistency and stays as a second, weaker check.
+    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o1-replay-root",
@@ -561,14 +569,14 @@ pub fn edit(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOu
     let expectation = Expectation::spliced(&base, start, end, &replacement);
 
     instruments::heap_begin();
-    let (measured, report) = Timing::record("c1.edit", |scope: &TimingScope<'_, Active>| {
+    let (measured, report) = super::measure("c1.edit", |scope: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         let request = EditRequest { root: base_file.root, edits: &stream, source: &source };
         apply_edits(policy, &capacities, &store, request, &mut consumer, scope.child("edit"))
             .map(|file| (file, consumer))
     });
     let heap = instruments::heap_end();
-    let timing_bytes = write_timing(context.output, &report)?;
+    let timing_bytes = crate::support::phases::timing_json_bytes();
     let (measured_file, measured_consumer) = match measured {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
@@ -602,6 +610,10 @@ pub fn edit(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOu
     context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
 
     gates.push(completeness_gate(&report, "g7.tree-complete"));
+    // O1 for real: the measured root is published so the pinned-constant gate in
+    // `main` can compare it with `tests/golden/expected.tsv`. The replay gate below
+    // is self-consistency and stays as a second, weaker check.
+    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o1-replay-root",
@@ -691,13 +703,13 @@ pub fn transition(
     let mut store = TreeStore::new();
 
     instruments::heap_begin();
-    let (measured, report) = Timing::record("c1.transition", |scope: &TimingScope<'_, Active>| {
+    let (measured, report) = super::measure("c1.transition", |scope: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         construct_bytes(policy, &capacities, &bytes, &mut consumer, scope.child("content"))
             .map(|file| (file, consumer))
     });
     let heap = instruments::heap_end();
-    let timing_bytes = write_timing(context.output, &report)?;
+    let timing_bytes = crate::support::phases::timing_json_bytes();
     let (measured_file, measured_consumer) = match measured {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
@@ -772,6 +784,7 @@ pub fn transition(
     context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
 
     gates.push(completeness_gate(&report, "g7.tree-complete"));
+    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o1-replay-root",

@@ -24,6 +24,8 @@ pub mod pipeline;
 
 use std::path::{Path, PathBuf};
 
+use layerfs_telemetry::timer::{Active, Timing, TimingReport, TimingScope};
+
 use crate::gates::{aggregate, Gate, Status};
 use crate::registry::{Case, Shape};
 use crate::support::trace::TraceWriter;
@@ -96,8 +98,30 @@ pub struct OpContext<'a> {
     pub phase: Phase,
     /// Declared wait state, when a calibration arm asked for one.
     pub hold: Option<Hold>,
+    /// `--verify-sample N`: verify a deterministic sample of `N` units, or declare
+    /// the unit count and take the declared 10% when `N` is zero.
+    ///
+    /// This is harness argv, like `--hold-save`: it selects how much of the oracle
+    /// runs, and a row that sampled is `INCOMPLETE` in the receipt, never `PASS`.
+    pub verify_sample: Option<usize>,
     /// Trace writer for this case.
     pub trace: &'a mut TraceWriter,
+}
+
+/// The declared sampling rule: `max(1, ceil(units/10))` units, selected by
+/// `index % 10 == 0` in declaration order.
+///
+/// One rule, stated once and applied wherever a row declares a countable
+/// verification unit. It is never "the first ten": a prefix sample and a strided
+/// sample are different claims, and the strided one is the one that spreads across
+/// the whole input.
+pub fn sampled_indices(units: usize, requested: usize) -> Vec<usize> {
+    let selected = if requested == 0 {
+        units.div_ceil(10).max(1)
+    } else {
+        requested.min(units.max(1))
+    };
+    (0..units).filter(|index| index % 10 == 0).take(selected).collect()
 }
 
 impl OpContext<'_> {
@@ -205,9 +229,41 @@ impl std::fmt::Display for OpError {
     }
 }
 
+/// Runs a row's measured region, closing the preparation phase before it opens.
+///
+/// Every driver's measured region is a `Timing::record` closure, so this is the one
+/// choke point where the boundary between preparation and the measured operation is
+/// known rather than declared: everything before it is setup, everything inside it
+/// is the operation the row claims, and everything after it is the oracle. It also
+/// writes the product's own timing tree as `timing.json` for **every** row that
+/// measured something — `ops/fs.rs` never called `write_timing`, so 56 of the 217
+/// passing rows published no operation time at all.
+pub fn measure<T, E, F>(
+    name: impl Into<std::borrow::Cow<'static, str>>,
+    operation: F,
+) -> (Result<T, E>, TimingReport)
+where
+    F: FnOnce(&TimingScope<'_, Active>) -> Result<T, E>,
+{
+    crate::support::phases::prepared();
+    let (result, report) = Timing::record(name, operation);
+    let operation_ns = report
+        .root()
+        .map(|root| root.elapsed().as_nanos() as u64)
+        .unwrap_or(0);
+    let directory = crate::support::phases::output();
+    let timing_json_bytes = if directory.as_os_str().is_empty() {
+        0
+    } else {
+        c1::write_timing(&directory, &report).unwrap_or(0)
+    };
+    crate::support::phases::measured(operation_ns, timing_json_bytes);
+    (result, report)
+}
+
 /// Runs the one case it is handed.
 pub fn run(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    match case.shape {
+    let outcome = match case.shape {
         Shape::Construct(route) => c1::construct(case, route, context),
         Shape::ChunkCount(op) => c1::chunk_count(case, op, context),
         Shape::Edit(op) => c1::edit(case, op, context),
@@ -228,7 +284,12 @@ pub fn run(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpErro
         Shape::Pool { cold } => c2::pool(case, cold, context),
         Shape::Pipeline(op) => pipeline::run(case, op, context),
         Shape::Primitives(_) => Err(OpError::Unimplemented("component-primitives")),
-    }
+    };
+    // The oracle is the last thing every driver does before it returns its
+    // outcome, so this is where verification ends. Gate assembly is a few
+    // microseconds of harness bookkeeping and is charged here rather than hidden.
+    crate::support::phases::verified();
+    outcome
 }
 
 /// Stable 64-bit seed for a case, derived from its ID.

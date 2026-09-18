@@ -7,5 +7,6 @@
 
 pub mod artifact;
 pub mod digest;
+pub mod expected;
 pub mod oracle;
 pub mod providers;

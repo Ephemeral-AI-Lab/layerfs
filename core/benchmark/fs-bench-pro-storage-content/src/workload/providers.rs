@@ -83,8 +83,14 @@ impl TreeStore {
     }
 
     /// A copy of the finalized object, for a Store's `accept`.
+    ///
+    /// `Store::accept` takes the object by value, so offering one costs a copy of
+    /// its canonical bytes. When this happens inside a measured region it is
+    /// harness work inside the product's timer, and the phase clock records the span
+    /// so it is published as `handoff_ns` rather than absorbed into the golden
+    /// number.
     pub fn cloned_object(&self, id: ObjectId) -> Option<FinalizedObject> {
-        self.objects.get(&id).cloned()
+        crate::support::phases::handoff(|| self.objects.get(&id).cloned())
     }
 
     /// Merges every object of `other` into this store.

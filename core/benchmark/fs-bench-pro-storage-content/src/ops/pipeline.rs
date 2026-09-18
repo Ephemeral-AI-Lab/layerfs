@@ -187,7 +187,7 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
 
     let mut emitted = 0_u64;
     instruments::heap_begin();
-    let (measured, report) = Timing::record("pipeline", |scope: &TimingScope<'_, Active>| {
+    let (measured, report) = super::measure("pipeline", |scope: &TimingScope<'_, Active>| {
         let store = Store::open(&sample, scope.child("store.open"))?;
         let provider = StoreProvider::new(&store);
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
@@ -217,7 +217,7 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
         Ok::<_, PipelineFailure>((file, outcome))
     });
     let heap = instruments::heap_end();
-    let timing_bytes = c1::write_timing(context.output, &report)?;
+    let timing_bytes = crate::support::phases::timing_json_bytes();
     let (file, outcome) = match measured {
         Ok(value) => value,
         Err(error) => {
@@ -271,6 +271,7 @@ fn edit(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOu
     context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
 
     gates.push(c1::completeness_gate(&report, "g7.tree-complete"));
+    crate::workload::expected::publish(context.trace, "file_root", &file.root.to_string())?;
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o1-replay-root",
@@ -412,7 +413,7 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     let empty = TreeStore::new();
     let mut emitted = 0_u64;
     instruments::heap_begin();
-    let (measured, report) = Timing::record("pipeline", |timing: &TimingScope<'_, Active>| {
+    let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         let store = Store::open(&sample, timing.child("store.open"))?;
         let mut operation = store.begin_save(timing.child("storage.begin"))?;
         let result = {
@@ -428,7 +429,7 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
         Ok::<_, PipelineFailure>((result, outcome))
     });
     let heap = instruments::heap_end();
-    let timing_bytes = c1::write_timing(context.output, &report)?;
+    let timing_bytes = crate::support::phases::timing_json_bytes();
     let (result, outcome) = match measured {
         Ok(value) => value,
         Err(error) => {
@@ -455,6 +456,11 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
 
     gates.push(c1::completeness_gate(&report, "g7.tree-complete"));
+    crate::workload::expected::publish(
+        context.trace,
+        "filesystem_root",
+        &result.root.0.to_string(),
+    )?;
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o1-replay-root",

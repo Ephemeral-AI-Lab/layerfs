@@ -10,6 +10,8 @@ use std::process::ExitCode;
 
 use fs_bench_storage_content::ops::{self, Hold, HoldPoint, OpContext, Phase};
 use fs_bench_storage_content::registry::{self, Admission};
+use fs_bench_storage_content::support::phases;
+use fs_bench_storage_content::workload::expected::Expected;
 use fs_bench_storage_content::support::trace::{Kind, TraceWriter};
 
 /// Parsed command line. Unknown arguments are refused, never ignored: a typo that
@@ -29,6 +31,7 @@ struct Args {
     load_input: bool,
     phase: Phase,
     hold: Option<Hold>,
+    verify_sample: Option<usize>,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
@@ -46,6 +49,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         load_input: false,
         phase: Phase::Perf,
         hold: None,
+        verify_sample: None,
     };
     let mut index = 0;
     while index < args.len() {
@@ -154,6 +158,15 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 let nanos = parsed.hold.as_ref().map(|hold| hold.nanos).unwrap_or(0);
                 parsed.hold = Some(Hold { marker, nanos, point });
             }
+            "--verify-sample" => {
+                index += 1;
+                let units: usize = args
+                    .get(index)
+                    .ok_or("--verify-sample expects a number")?
+                    .parse()
+                    .map_err(|_| "--verify-sample expects a number".to_string())?;
+                parsed.verify_sample = Some(units);
+            }
             "--phase" => {
                 index += 1;
                 parsed.phase = match args.get(index).map(String::as_str) {
@@ -213,6 +226,22 @@ fn self_check() -> ExitCode {
     println!("admission rows     : {}", registry::admission_cases().len());
     println!("diagnostic rows    : {}", registry::cases().len() - registry::admission_cases().len());
     println!("smoke lane         : {}", registry::smoke_cases().len());
+    if let Ok(expected) = Expected::load() {
+        let with_digest = registry::admission_cases()
+            .iter()
+            .filter(|case| expected.digest(case.id, "file_root").is_some()
+                || expected.digest(case.id, "filesystem_root").is_some()
+                || expected.digest(case.id, "members").is_some()
+                || expected.digest(case.id, "additions").is_some()
+                || expected.digest(case.id, "leaves").is_some()
+                || expected.digest(case.id, "supplied").is_some())
+            .count();
+        println!(
+            "pinned constants   : {} row(s); O1 identity pinned for {with_digest} of {} admission case(s)",
+            expected.len(),
+            registry::admission_cases().len()
+        );
+    }
     if problems.is_empty() {
         println!("registry self-check: PASS");
         return ExitCode::SUCCESS;
@@ -256,6 +285,17 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
     if let Err(error) = std::fs::create_dir_all(&output) {
         eprintln!("fs-bench-storage-content: {}: {error}", output.display());
         return ExitCode::from(2);
+    }
+    // The declared phase clock starts here, before anything the child does, so the
+    // four phases it publishes are spans of this invocation and the reconciliation
+    // against the runner's process wall is a real inequality rather than a
+    // tautology.
+    phases::begin(&output);
+    if parsed.phase == Phase::Prepare {
+        // The acquisition invocation measures nothing: its whole wall is
+        // preparation, and saying so is what keeps `preparation_wall_ns` a
+        // measurement rather than a remainder.
+        phases::preparation_is_the_invocation();
     }
     let trace_path = output.join("trace.jsonl");
     // A verification invocation continues the performance invocation's trace. A
@@ -308,9 +348,34 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         load_input: parsed.load_input,
         phase: parsed.phase,
         hold: parsed.hold.clone(),
+        verify_sample: parsed.verify_sample,
         trace: &mut trace,
     };
-    let outcome = match ops::run(case, &mut context) {
+    let outcome = ops::run(case, &mut context);
+    // The phase snapshot is taken after the driver has returned and before the
+    // trace is flushed, so `cleanup_ns` is the teardown the child performed and not
+    // the cost of writing its own evidence. It is published even when the row is
+    // `NOT_RUN`: a phase that was paid for is a phase that is reported.
+    let snapshot = phases::snapshot();
+    let invocation = match parsed.phase {
+        Phase::Prepare => "prepare",
+        Phase::Perf => "perf",
+        Phase::Verify => "verify",
+    };
+    let phases_path = output.join(format!("phases-{invocation}.json"));
+    if let Err(error) = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&phases_path)
+        .and_then(|mut file| {
+            use std::io::Write;
+            file.write_all(phases::render(invocation, &snapshot).as_bytes())
+        })
+    {
+        eprintln!("fs-bench-storage-content: {}: {error}", phases_path.display());
+        return ExitCode::from(2);
+    }
+    let outcome = match outcome {
         Ok(outcome) => outcome,
         Err(error) => {
             let _ = trace.write(Kind::Gate, "row.not-run", &error.to_string(), "", "driver");
@@ -319,7 +384,34 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
             return ExitCode::SUCCESS;
         }
     };
+    // The pinned-constant gates: O3 against `tests/golden/expected.tsv` and O1
+    // against its pinned identity digests. They are applied here rather than in a
+    // driver so that no family can omit them, and they read the trace back off disk
+    // so what they gate is what the evidence carries.
+    let pinned = if parsed.phase == Phase::Perf {
+        match pinned_gates(case.id, &mut trace) {
+            Ok(gates) => gates,
+            Err(error) => {
+                eprintln!("fs-bench-storage-content: {error}");
+                return ExitCode::from(2);
+            }
+        }
+    } else {
+        Vec::new()
+    };
     for gate in &outcome.gates {
+        if let Err(error) = trace.write(
+            Kind::Gate,
+            gate.id,
+            &format!("{}|{}|{}", gate.status.token(), gate.measured, gate.limit),
+            "",
+            gate.class.token(),
+        ) {
+            eprintln!("fs-bench-storage-content: {error}");
+            return ExitCode::from(2);
+        }
+    }
+    for gate in &pinned {
         if let Err(error) = trace.write(
             Kind::Gate,
             gate.id,
@@ -349,6 +441,38 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         trace.bytes()
     );
     ExitCode::SUCCESS
+}
+
+/// Applies the frozen oracle's pinned constants to what the row published.
+///
+/// The counters come from the trace itself, so the gate is a statement about the
+/// published evidence; the identity digests come from the driver's `oracle`
+/// records, which is where a row declares the roots it produced.
+fn pinned_gates(
+    case_id: &str,
+    trace: &mut TraceWriter,
+) -> Result<Vec<fs_bench_storage_content::gates::Gate>, String> {
+    trace.flush().map_err(|error| error.to_string())?;
+    let expected = Expected::load()?;
+    let records = fs_bench_storage_content::support::trace::read_flat(trace.path())?;
+    let counters: Vec<(String, i128)> = records
+        .iter()
+        .filter(|record| record.kind == "counter" && record.numeric)
+        .filter_map(|record| record.value.parse::<i128>().ok().map(|value| (record.key.clone(), value)))
+        .collect();
+    let mut gates = expected.counter_gates(case_id, &counters);
+    for record in records.iter().filter(|record| record.kind == "oracle") {
+        let Some(name) = record.key.strip_prefix("identity.") else {
+            continue;
+        };
+        gates.push(expected.digest_gate(
+            case_id,
+            name,
+            "g1.o1-pinned-identity",
+            &record.value,
+        ));
+    }
+    Ok(gates)
 }
 
 fn main() -> ExitCode {

@@ -91,6 +91,16 @@ class Row:
     resources: dict[str, int] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     gates: list[dict[str, str]] = field(default_factory=list)
+    phases: dict[str, object] = field(default_factory=dict)
+
+    def phase(self, field: str) -> int:
+        """One published phase field, or zero when the row published none."""
+        value = self.phases.get(field)
+        return int(value) if isinstance(value, int) else 0
+
+    def non_operation_ns(self) -> int:
+        """Everything the complete command paid that was not the measured work."""
+        return max(0, self.wall_ns - self.phase("operation_ns"))
 
     def size_axis(self) -> float | None:
         """The x axis a ladder is plotted against: bytes first, then entries."""
@@ -123,6 +133,7 @@ def load_run(run_dir: str | Path) -> list[Row]:
                 resources=document.get("resources", {}) or {},
                 notes=document.get("notes", []) or [],
                 gates=document.get("gates", []) or [],
+                phases=document.get("phases", {}) or {},
             )
         )
     return rows
@@ -216,6 +227,18 @@ def render(rows: list[Row], run_identity: dict[str, object] | None = None) -> st
         out.append(f"harness binary     : {run_identity.get('harness_binary_sha256', '')}")
         out.append(f"workers            : {run_identity.get('construction_workers', '')}")
         out.append(f"lane               : {run_identity.get('lane', '')}")
+        mode = run_identity.get("verification_mode", "")
+        out.append(f"verification mode  : {mode or '(unpublished)'}")
+        if mode == "sample":
+            out.append(f"sample rule        : {run_identity.get('verification_sample_rule', '')}")
+        if mode and mode != "full":
+            out.append(
+                "  every row in a non-full mode is INCOMPLETE: an iteration run is never "
+                "admission evidence"
+            )
+        if run_identity.get("reused_proof"):
+            out.append(f"reused proof       : {run_identity.get('reused_proof')}")
+            out.append("  the deferred verification invocation was not re-run where the proof covers the row")
     out.append("")
     out.append("Row statuses")
     out.append("-" * 72)
@@ -229,10 +252,72 @@ def render(rows: list[Row], run_identity: dict[str, object] | None = None) -> st
             out.append(f"  {status:<12} {tally[status]}")
     out.append(f"  {'TOTAL':<12} {len(rows)}")
     out.append("")
+    out.append("The four phases, for the lane")
+    out.append("-" * 72)
+    out.append(
+        "  operation_ns is the golden benchmark number: the product's own telemetry root "
+        "for the row's"
+    )
+    out.append(
+        "  declared operation. The complete-command wall is what the budget classifies, and "
+        "the"
+    )
+    out.append(
+        "  non-operation share is what the campaign pays for preparation, verification and "
+        "cleanup."
+    )
+    out.append(
+        f"  {'status':<11} {'rows':>4} {'preparation s':>14} {'operation s':>12} "
+        f"{'verification s':>15} {'cleanup s':>10} {'acquisition s':>14} {'wall s':>10}"
+    )
+    phase_fields = (
+        "preparation_wall_ns",
+        "operation_ns",
+        "verification_wall_ns",
+        "cleanup_wall_ns",
+        "acquisition_wall_ns",
+    )
+    lane_totals: dict[str, int] = {field: 0 for field in phase_fields}
+    lane_wall = 0
+    for status in ("PASS", "FAIL", "TARGET_MISS", "INCOMPLETE", "INELIGIBLE", "NOT_RUN"):
+        bucket = [row for row in rows if row.status == status]
+        if not bucket:
+            continue
+        sums = {field: sum(row.phase(field) for row in bucket) for field in phase_fields}
+        wall = sum(row.wall_ns for row in bucket)
+        for field in phase_fields:
+            lane_totals[field] += sums[field]
+        lane_wall += wall
+        out.append(
+            f"  {status:<11} {len(bucket):>4} {sums['preparation_wall_ns'] / 1e9:>14.3f} "
+            f"{sums['operation_ns'] / 1e9:>12.3f} {sums['verification_wall_ns'] / 1e9:>15.3f} "
+            f"{sums['cleanup_wall_ns'] / 1e9:>10.3f} "
+            f"{sums['acquisition_wall_ns'] / 1e9:>14.3f} {wall / 1e9:>10.3f}"
+        )
+    if lane_wall:
+        non_operation = max(0, lane_wall - lane_totals["operation_ns"])
+        out.append(
+            f"  {'TOTAL':<11} {len(rows):>4} "
+            f"{lane_totals['preparation_wall_ns'] / 1e9:>14.3f} "
+            f"{lane_totals['operation_ns'] / 1e9:>12.3f} "
+            f"{lane_totals['verification_wall_ns'] / 1e9:>15.3f} "
+            f"{lane_totals['cleanup_wall_ns'] / 1e9:>10.3f} "
+            f"{lane_totals['acquisition_wall_ns'] / 1e9:>14.3f} {lane_wall / 1e9:>10.3f}"
+        )
+        out.append(
+            f"  non-operation share: {non_operation / 1e9:.3f} s of {lane_wall / 1e9:.3f} s "
+            f"= {100.0 * non_operation / lane_wall:.1f}%"
+        )
+        out.append(
+            f"  sum(operation_ns) = {lane_totals['operation_ns'] / 1e9:.3f} s "
+            "(the golden number; it must not fall)"
+        )
+    out.append("")
     out.append("Four axes, per family")
     out.append("-" * 72)
     out.append(
-        f"  {'family':<32} {'rows':>4} {'pass':>5} {'heap peak max':>14} {'time max ms':>12}"
+        f"  {'family':<32} {'rows':>4} {'pass':>5} {'heap peak max':>14} "
+        f"{'operation max ms':>17} {'wall max ms':>12} {'non-op %':>9}"
     )
     for family in sorted(by_family):
         family_rows = by_family[family]
@@ -241,8 +326,15 @@ def render(rows: list[Row], run_identity: dict[str, object] | None = None) -> st
             (row.resources.get("heap.peak_incremental_bytes", 0) for row in family_rows),
             default=0,
         )
-        wall = max((row.wall_ns for row in family_rows), default=0) / 1e6
-        out.append(f"  {family:<32} {len(family_rows):>4} {passes:>5} {heap:>14} {wall:>12.1f}")
+        operation = max((row.phase("operation_ns") for row in family_rows), default=0) / 1e6
+        wall_ns = max((row.wall_ns for row in family_rows), default=0)
+        non_operation = sum(row.non_operation_ns() for row in family_rows)
+        total_wall = sum(row.wall_ns for row in family_rows)
+        share = 100.0 * non_operation / total_wall if total_wall else 0.0
+        out.append(
+            f"  {family:<32} {len(family_rows):>4} {passes:>5} {heap:>14} "
+            f"{operation:>17.1f} {wall_ns / 1e6:>12.1f} {share:>8.1f}%"
+        )
     out.append("")
     out.append("Scaling ladders (counters, heap and disk decide; time is diagnostic)")
     out.append("-" * 72)

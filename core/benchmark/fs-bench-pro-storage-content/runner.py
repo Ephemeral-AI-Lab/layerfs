@@ -55,6 +55,7 @@ sys.path.insert(0, str(HARNESS_ROOT / "shared"))
 import analyze  # noqa: E402
 import copyladder  # noqa: E402
 import invariants  # noqa: E402
+import phases as phases_module  # noqa: E402
 import receipt  # noqa: E402
 import space  # noqa: E402
 import trace as trace_module  # noqa: E402
@@ -88,6 +89,41 @@ PHASE_SPLIT_FAMILIES = {"c2.delta.cdc-locality"}
 # Verification budget, separate from the complete-command budget (benchmark_rules
 # section 11: performance and verifier timeouts MUST be separate and reported).
 VERIFICATION_BUDGET_NS = 60 * 1_000_000_000
+
+# The verification modes. `full` is the only mode whose rows can be admission
+# evidence: a sampled or omitted row is `INCOMPLETE`, never `PASS`, so an iteration
+# run cannot be mistaken for a campaign.
+VERIFICATION_MODES = ("full", "sample", "none")
+
+# The deterministic sample: `max(1, ceil(n/10))` of the row's declared verification
+# unit, selected by `index % 10 == 0` in declaration order. One rule, stated once,
+# applied wherever a row declares a countable unit - never "the first ten".
+SAMPLE_DIVISOR = 10
+SAMPLE_RULE = "index % 10 == 0 in declaration order, max(1, ceil(units/10)) units"
+
+
+def sample_size(units: int) -> int:
+    """The deterministic 10% sample of a declared verification unit count."""
+    if units <= 0:
+        return 1
+    return max(1, (units + SAMPLE_DIVISOR - 1) // SAMPLE_DIVISOR)
+
+
+# Fields a reused proof must agree on. The pair is only comparable when the tree,
+# the product, the harness and the registry are the same: a rebuilt artifact
+# invalidates its matched arm, and a harness change invalidates the pair.
+REUSED_PROOF_IDENTITY_FIELDS = (
+    "source_commit",
+    "harness_binary_sha256",
+    "product_lock_sha256",
+    "harness_lock_sha256",
+    "registry_tsv_sha256",
+    "construction_workers",
+)
+
+
+class ReuseRefused(Exception):
+    """A reused proof was offered and refused, with the reason."""
 
 
 class RunnerError(Exception):
@@ -252,6 +288,104 @@ def acquire(case_id: str, root: Path, harness_sha: str) -> dict[str, object]:
     return record
 
 
+def load_reused_proof(path: str, identity: receipt.Identity, selection: list[str]) -> dict[str, object]:
+    """Validates a verification receipt offered in place of re-running verification.
+
+    Fails closed on every way the offer can be wrong, and each check exists because
+    accepting without it would let one tree's proof admit another tree's row:
+
+    * **schema** — it must be a `layerfs-core-verification-v1` document;
+    * **identity** — source commit, harness binary, both lockfiles, the registry
+      table and the worker count must all match the run about to be admitted;
+    * **hard limits** — the proof must record zero disagreements, a sealed
+      call-graph `PASS`, runtime tripwires `PASS` and a verification wall inside its
+      own 60 s budget;
+    * **coverage** — every selected case must appear with `status == PASS` and a
+      published status of `PASS`. A case the proof does not cover is not covered by
+      the omission either.
+
+    The caller records `reused_proof_identities` and the omission on every row it
+    covers, so the reuse is visible in the receipt rather than inferred from a
+    shorter wall time.
+    """
+    document = json.loads(Path(path).read_text(encoding="utf-8"))
+    if document.get("schema") != "layerfs-core-verification-v1":
+        raise ReuseRefused(f"{path}: schema {document.get('schema')!r} is not a verification receipt")
+    previous_run = Path(str(document.get("run_dir", ""))) / "run.json"
+    if not previous_run.exists():
+        raise ReuseRefused(f"{path}: the run it verified ({previous_run}) is not on disk")
+    previous = json.loads(previous_run.read_text(encoding="utf-8"))
+    previous_identity = dict(previous.get("identity", {}))
+    mismatched = [
+        field
+        for field in REUSED_PROOF_IDENTITY_FIELDS
+        if str(previous_identity.get(field)) != str(identity.as_fields().get(field))
+    ]
+    if mismatched:
+        raise ReuseRefused(
+            "the offered proof was produced on a different pair: "
+            + ", ".join(
+                f"{field} {previous_identity.get(field)!r} != {identity.as_fields().get(field)!r}"
+                for field in mismatched
+            )
+        )
+    if int(document.get("disagreements", 1)) != 0:
+        raise ReuseRefused(f"{path}: {document.get('disagreements')} disagreement(s) recorded")
+    call_graph = document.get("sealed_call_graph", {}) or {}
+    tripwires = document.get("runtime_tripwires", {}) or {}
+    if call_graph.get("status") != "PASS":
+        raise ReuseRefused(f"{path}: sealed call-graph is {call_graph.get('status')!r}")
+    if tripwires.get("status") != "PASS":
+        raise ReuseRefused(f"{path}: runtime tripwires are {tripwires.get('status')!r}")
+    wall_ns = int(document.get("wall_ns", 0))
+    if receipt.verification_budget(wall_ns).status != "PASS":
+        raise ReuseRefused(f"{path}: its own verification wall {wall_ns / 1e9:.3f} s exceeds the 60 s budget")
+    proofs: dict[str, dict[str, object]] = {}
+    for finding in document.get("findings", []) or []:
+        case_id = str(finding.get("case_id", ""))
+        if not case_id:
+            continue
+        if finding.get("status") != "PASS" or finding.get("published_status") != "PASS":
+            continue
+        phases = finding.get("phases", {}) or {}
+        if phases.get("status") != "PASS":
+            continue
+        proofs[case_id] = {
+            "proof": str(path),
+            "identities": {
+                field: previous_identity.get(field) for field in REUSED_PROOF_IDENTITY_FIELDS
+            },
+        }
+    # Coverage is required for every selected case the verified run actually ran. A
+    # row whose driver does not exist is `NOT_RUN` in both runs: it has no oracle to
+    # reuse, and requiring a proof for it would make `--reuse-pass` unusable on any
+    # lane that contains one.
+    previous_rows = previous_run.parent
+    measured = [
+        case_id
+        for case_id in selection
+        if (previous_rows / case_id / "receipt.json").exists()
+        and json.loads((previous_rows / case_id / "receipt.json").read_text(encoding="utf-8")).get(
+            "status"
+        )
+        != "NOT_RUN"
+    ]
+    uncovered = [case_id for case_id in measured if case_id not in proofs]
+    if uncovered:
+        raise ReuseRefused(
+            f"{path} covers no passing proof for {len(uncovered)} measured case(s): "
+            + ", ".join(uncovered[:5])
+        )
+    return {
+        "path": str(path),
+        "identities": {
+            field: previous_identity.get(field) for field in REUSED_PROOF_IDENTITY_FIELDS
+        },
+        "verified_run": str(previous_run.parent),
+        "cases": proofs,
+    }
+
+
 def cmd_prepare(arguments: argparse.Namespace) -> int:
     """Acquires the prepared artifacts a selection needs, once."""
     root = Path(arguments.out) if arguments.out else artifact_root()
@@ -303,7 +437,13 @@ def registry_table() -> list[list[str]]:
     return [line.split("\t") for line in result.stdout.splitlines() if "\t" in line][1:]
 
 
-def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[str, object]:
+def run_case(
+    case_id: str,
+    run_dir: Path,
+    identity: receipt.Identity,
+    verification_mode: str = "full",
+    reused_proof: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Runs one case, enforces the budget, and writes its derived receipt."""
     case_dir = run_dir / case_id
     if case_dir.exists():
@@ -331,17 +471,49 @@ def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[st
     # timing scope. It appends its gates to the same trace, so the row's status and
     # the verifier's re-derivation both see one record set.
     verification: dict[str, object] = {}
+    sample_units = 0
+    sample_selected = 0
     # The driver is the authority on whether this row has a deferred oracle: the
     # trace it just wrote says so, and nothing here decides it from a family list.
     trace_path = case_dir / "trace.jsonl"
     deferred = trace_path.exists() and "oracle_phase: verify-invocation" in trace_path.read_text(
         encoding="utf-8", errors="replace"
     )
+    if verification_mode == "none":
+        # The mode ladder's `none` rung: the deferred oracle is not run at all, and
+        # the row says so rather than reporting a verification it did not perform.
+        deferred = False
+    reused_row = (reused_proof or {}).get("cases", {}).get(case_id) if reused_proof else None
+    if deferred and reused_row is not None:
+        # `--reuse-pass`: this row's deferred verification is an identity-matched
+        # `PASS` receipt already on disk, so the phase is not re-run. The omission is
+        # recorded on the row, never implied.
+        verification = {
+            "phase": "verify",
+            "status": "REUSED",
+            "reused_proof": reused_row["proof"],
+            "reused_proof_identities": reused_row["identities"],
+            "omission": (
+                "the deferred verification invocation was not re-run; an identity-matched "
+                "PASS receipt was accepted instead"
+            ),
+            "wall_ns": 0,
+        }
+        deferred = False
     if deferred:
         verification_started = time.monotonic_ns()
+        verify_command = [
+            str(BINARY), "--case", case_id, "--phase", "verify",
+            "--load-input", str(artifact_root() / case_id), "--out", str(case_dir),
+        ]
+        if verification_mode == "sample":
+            # The declared unit is the row's own: the runner does not know how many
+            # members a delta row holds until the child says so, and the child reads
+            # it from the artifact. `--verify-sample 0` asks the child to declare the
+            # unit and take the deterministic 10% of it.
+            verify_command += ["--verify-sample", "0"]
         verified = subprocess.run(
-            [str(BINARY), "--case", case_id, "--phase", "verify",
-             "--load-input", str(artifact_root() / case_id), "--out", str(case_dir)],
+            verify_command,
             capture_output=True,
             text=True,
             check=False,
@@ -354,11 +526,35 @@ def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[st
             "wall_ns": verification_ns,
             "budget_ns": VERIFICATION_BUDGET_NS,
             "status": "PASS" if verification_ns <= VERIFICATION_BUDGET_NS else "FAIL",
+            "sample_units": sample_units,
+            "sample_selected": sample_selected,
+            "sample_rule": SAMPLE_RULE if sample_units else "",
             "stdout": verified.stdout.strip()[-500:],
             "stderr": verified.stderr.strip()[-500:],
         }
-    budget = receipt.budget(wall_ns, declared_exception)
+    # The four declared phases, composed from the child's own publication and the
+    # runner's process wall for each invocation. `complete_command_ns` stays the
+    # performance invocation's wall, which is what the complete-command budget
+    # classifies; the deferred verification invocation keeps its own 60 s budget.
+    walls = {"perf": wall_ns}
+    if verification:
+        walls["verify"] = int(verification["wall_ns"])
     parsed = trace_module.read(case_dir / "trace.jsonl")
+    # A row whose driver does not exist ran nothing, so it is not required to
+    # publish an operation. Every row that did run a driver is.
+    declared_phases = phases_module.compose(
+        case_dir, walls, expects_operation=parsed.status() != "NOT_RUN"
+    )
+    budget = receipt.budget(wall_ns, declared_exception)
+    if verification.get("phase") == "verify":
+        # The child declares the verification unit and the sample it took; the
+        # runner does not guess either from a family name.
+        observed = parsed.counters()
+        sample_units = int(observed.get("verify.units", 0))
+        sample_selected = int(observed.get("verify.sampled", 0))
+        verification["sample_units"] = sample_units
+        verification["sample_selected"] = sample_selected
+        verification["sample_rule"] = SAMPLE_RULE if sample_units else ""
     status = parsed.status()
     identity_fields = parsed.identity()
     gates = [
@@ -382,6 +578,38 @@ def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[st
                 "limit": f"<= {budget.limit_ns / 1e9:.0f} s",
             }
         )
+    # The phase reconciliation fails closed: a row whose declared phases do not
+    # account for its wall is `INCOMPLETE`, never a quietly passing row. A row that
+    # is already worse than `INCOMPLETE` keeps its own status, because a `NOT_RUN`
+    # row has no measurement to reconcile.
+    if verification_mode != "full" and trace_module.SEVERITY["INCOMPLETE"] > trace_module.SEVERITY.get(status, 5):
+        # A sampled or omitted row is `INCOMPLETE`, never `PASS`. An iteration run
+        # therefore cannot be mistaken for admission evidence, which is the whole
+        # reason the mode is published in the receipt as well as in the report.
+        gates.append(
+            {
+                "class": "G7",
+                "id": "g7.verification-mode",
+                "status": "INCOMPLETE",
+                "measured": f"verification mode {verification_mode}",
+                "limit": "admission evidence requires verification mode full",
+            }
+        )
+        status = "INCOMPLETE"
+    reconciliation = declared_phases["reconciliation"]
+    if reconciliation["status"] != "PASS":
+        gates.append(
+            {
+                "class": "G7",
+                "id": "g7.phase-reconciliation",
+                "status": "INCOMPLETE",
+                "measured": "; ".join(reconciliation["problems"]) or "unreconciled",
+                "limit": "preparation + operation + verification + cleanup <= the wall, "
+                "within the declared tolerance",
+            }
+        )
+        if trace_module.SEVERITY["INCOMPLETE"] > trace_module.SEVERITY.get(status, 5):
+            status = "INCOMPLETE"
     document: dict[str, object] = {
         "schema": receipt.SCHEMA,
         "case_id": case_id,
@@ -404,6 +632,8 @@ def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[st
             "stderr": result.stderr.strip()[-2000:],
         },
         "wall_ns": wall_ns,
+        "phases": declared_phases,
+        "verification_mode": verification_mode,
         "budget": budget.as_fields(),
         "acquisition": acquisition,
         "verification": verification,
@@ -424,6 +654,12 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
     identity = receipt.identify(REPO_ROOT, HARNESS_ROOT, BINARY)
     assert_workers(identity)
     selection = arguments.case or registry_rows("--lane", arguments.lane)
+    reused_proof = None
+    if arguments.reuse_pass:
+        try:
+            reused_proof = load_reused_proof(arguments.reuse_pass, identity, selection)
+        except (ReuseRefused, OSError, json.JSONDecodeError) as error:
+            raise RunnerError(f"--reuse-pass refused: {error}") from error
     run_document = {
         "schema": "layerfs-core-run-v1",
         "run_dir": str(run_dir),
@@ -433,6 +669,16 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
         "cache_state": "declared per row; never pooled",
         "samples_per_case_per_arm": 1,
         "declared_exceptions": sorted(DECLARED_EXCEPTIONS & set(selection)),
+        "verification_mode": arguments.verify,
+        "verification_sample_rule": SAMPLE_RULE if arguments.verify == "sample" else "",
+        "reused_proof_identities": (reused_proof or {}).get("identities"),
+        "reused_proof": (reused_proof or {}).get("path"),
+        "reused_proof_omission": (
+            "the deferred verification invocation was not re-run for the rows the accepted "
+            "proof covers; each such row records `reused_proof_identities` and the omission"
+            if reused_proof
+            else None
+        ),
         "registry_self_check": registry_self_check(),
         "golden_matches": golden_matches(),
         "identity": identity.as_fields(),
@@ -442,7 +688,15 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
     with receipt.measurement_lock(LOCK_PATH):
         for case_id in selection:
             try:
-                rows.append(run_case(case_id, run_dir, identity))
+                rows.append(
+                    run_case(
+                        case_id,
+                        run_dir,
+                        identity,
+                        verification_mode=arguments.verify,
+                        reused_proof=reused_proof,
+                    )
+                )
             except RunnerError as error:
                 rows.append(
                     {
@@ -453,6 +707,7 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
                 )
     run_document["wall_ns"] = time.monotonic_ns() - started
     run_document["rows"] = len(rows)
+    run_document["phases"] = lane_phase_totals(rows)
     tally: dict[str, int] = {}
     for row in rows:
         tally[row["status"]] = tally.get(row["status"], 0) + 1
@@ -463,6 +718,46 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
         print(f"  {key:<12} {tally[key]}")
     print(f"perf: {len(rows)} case(s) in {run_document['wall_ns'] / 1e9:.1f} s -> {run_dir}")
     return 0
+
+
+def lane_phase_totals(rows: list[dict[str, object]]) -> dict[str, object]:
+    """The lane's published phase totals, per status.
+
+    `sum(operation_ns)` is published beside the per-row numbers so a row that got
+    faster at another row's expense is visible rather than averaged away. It is
+    also the round's falsifier: if the golden total falls, measured work moved into
+    setup and the change is rejected.
+    """
+    fields = (
+        "preparation_wall_ns",
+        "acquisition_wall_ns",
+        "operation_ns",
+        "verification_wall_ns",
+        "cleanup_wall_ns",
+        "handoff_ns",
+        "complete_command_ns",
+        "verification_invocation_ns",
+    )
+    totals: dict[str, object] = {"schema": "layerfs-lane-phases-v1", "by_status": {}}
+    by_status: dict[str, dict[str, int]] = {}
+    for row in rows:
+        declared = row.get("phases")
+        if not isinstance(declared, dict):
+            continue
+        bucket = by_status.setdefault(str(row.get("status", "")), {"rows": 0, **{f: 0 for f in fields}})
+        bucket["rows"] += 1
+        for field in fields:
+            bucket[field] += int(declared.get(field, 0) or 0)
+    totals["by_status"] = by_status
+    admitted = by_status.get("PASS", {})
+    totals["admission"] = {field: admitted.get(field, 0) for field in fields}
+    totals["unreconciled_rows"] = sorted(
+        str(row.get("case_id"))
+        for row in rows
+        if isinstance(row.get("phases"), dict)
+        and row["phases"].get("reconciliation", {}).get("status") != "PASS"
+    )
+    return totals
 
 
 def write_manifest(run_dir: Path) -> Path:
@@ -488,6 +783,56 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
     if not run_dir.is_dir():
         raise RunnerError(f"{run_dir} is not a run directory")
     started = time.monotonic_ns()
+    if arguments.reuse_pass:
+        # `--reuse-pass` accepts an identity-matched `PASS` receipt **instead of**
+        # re-running verification, as `AGENTS.md` section 2 requires. The accepted
+        # receipt is written beside the run with `reused_proof_identities` and an
+        # explicit omission, so a reader can always tell a re-derivation from a
+        # reuse. It never claims to have re-derived anything.
+        # The pair that must match is the one the **run** recorded, not this
+        # process's environment: `verify` re-derives a run that already exists, and
+        # comparing against the verifier's own shell would refuse a valid proof for
+        # a worker count the verifier does not export.
+        run_json = run_dir / "run.json"
+        if run_json.exists():
+            identity = receipt.Identity(**{
+                field: json.loads(run_json.read_text(encoding="utf-8"))
+                .get("identity", {})
+                .get(field, "")
+                for field in receipt.Identity.__dataclass_fields__
+            })
+        else:
+            identity = receipt.identify(REPO_ROOT, HARNESS_ROOT, BINARY)
+        cases = sorted(entry.name for entry in run_dir.iterdir() if entry.is_dir())
+        try:
+            accepted = load_reused_proof(arguments.reuse_pass, identity, cases)
+        except (ReuseRefused, OSError, json.JSONDecodeError) as error:
+            raise RunnerError(f"--reuse-pass refused: {error}") from error
+        document = {
+            "schema": "layerfs-core-verification-v1",
+            "run_dir": str(run_dir),
+            "cases": len(cases),
+            "disagreements": 0,
+            "findings": [],
+            "sealed_call_graph": {"status": "REUSED", "files_scanned": 0},
+            "runtime_tripwires": {"status": "REUSED", "stores_checked": 0},
+            "wall_ns": time.monotonic_ns() - started,
+            "reused_proof": accepted["path"],
+            "reused_proof_identities": accepted["identities"],
+            "reused_proof_verified_run": accepted["verified_run"],
+            "omission": (
+                "verification was not re-derived: an identity-matched PASS receipt was "
+                "accepted instead, for every case in this run"
+            ),
+            "mode": "reused",
+        }
+        document["budget"] = receipt.verification_budget(document["wall_ns"]).as_fields()
+        receipt.write_append_only(run_dir / arguments.tag, document)
+        print(
+            f"verify: reused {accepted['path']} for {len(cases)} case(s), "
+            f"0 re-derived, {document['wall_ns'] / 1e9:.2f} s"
+        )
+        return 0
     findings: list[dict[str, object]] = []
     disagreements = 0
     with receipt.measurement_lock(LOCK_PATH):
@@ -532,12 +877,27 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
                 disagreements += 1
                 record["disagreement"] = f"{published} published, {re_derived} re-derived"
             record["budget_status"] = budget.status
+            record["phases"] = re_derive_phases(case_dir, document)
+            if record["phases"]["status"] != "PASS":
+                record["phases_disagreement"] = record["phases"]["reason"]
+                disagreements += 1
+            record["pins"] = re_derive_pins(case_dir, document)
+            if record["pins"]["status"] != "PASS":
+                record["pins_disagreement"] = record["pins"]["reason"]
+                disagreements += 1
             store = case_dir / "sample.sqlite"
             if store.exists():
                 reading = space.footprint(store, document.get("attribution", "exclusive"))
                 record["footprint"] = reading.as_fields()
                 record["pack_accounting"] = reading.pack_accounting()
-            record["status"] = "PASS" if not parsed.defects and re_derived == published else "FAIL"
+            record["status"] = (
+                "PASS"
+                if not parsed.defects
+                and re_derived == published
+                and record["phases"]["status"] == "PASS"
+                and record["pins"]["status"] == "PASS"
+                else "FAIL"
+            )
             findings.append(record)
     # The two halves of the no-retry/no-fsync/no-WAL contract: a sealed
     # call-graph status over the product source, and the runtime tripwires read off
@@ -573,6 +933,132 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
     return 0 if disagreements == 0 and call_graph["status"] == "PASS" and tripwire["status"] == "PASS" else 1
 
 
+def pinned_counters() -> dict[str, dict[str, int]]:
+    """The pinned O3 constants, read from the table the binary compiled in.
+
+    Read from the file rather than asked of the binary, so the re-derivation does
+    not depend on the process it is re-deriving. `tests/golden/expected.tsv` is the
+    same file `include_str!` embedded, and the receipt's `harness_binary_sha256`
+    covers the compiled copy.
+    """
+    table: dict[str, dict[str, int]] = {}
+    path = HARNESS_ROOT / "tests" / "golden" / "expected.tsv"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        case_id, label, value = line.split("\t")
+        if not label.startswith("counter:"):
+            continue
+        table.setdefault(case_id, {})[label[len("counter:") :]] = int(value)
+    return table
+
+
+def re_derive_pins(case_dir: Path, document: dict[str, object]) -> dict[str, object]:
+    """Requires every pinned counter of a row to appear somewhere in its trace.
+
+    The child gates the counters **its own invocation** published; this check sees
+    the whole record set, both invocations, so a pinned constant that no invocation
+    publishes is caught here. It also re-checks the values against the receipt's
+    published counters, so a gate that passed on a number the receipt does not carry
+    is caught rather than trusted.
+    """
+    table = pinned_counters()
+    case_id = str(document.get("case_id", case_dir.name))
+    pinned = table.get(case_id)
+    observed = dict(document.get("counters") or {})
+    if not pinned:
+        if not observed and trace_module.read(case_dir / "trace.jsonl").status() == "NOT_RUN":
+            # A row whose driver does not exist ran nothing, so it has no oracle to
+            # gate and no counter to pin. That is a declared gap, not an ungated
+            # row, and reporting it as a disagreement would make the verification
+            # pass count the harness's own unimplemented rows.
+            return {
+                "status": "PASS",
+                "reason": "the row ran no driver, so it published no counters and pinned none",
+                "pinned": 0,
+            }
+        return {
+            "status": "FAIL",
+            "reason": f"{case_id} has no pinned O3 constant; the oracle cannot have been gated",
+        }
+    missing = sorted(key for key in pinned if key not in observed)
+    if missing:
+        return {
+            "status": "FAIL",
+            "reason": f"pinned counters the row never published: {', '.join(missing[:5])}",
+        }
+    drifted = sorted(
+        f"{key} {pinned[key]} -> {observed[key]}"
+        for key in pinned
+        if int(observed[key]) != pinned[key]
+    )
+    if drifted:
+        return {"status": "FAIL", "reason": "; ".join(drifted[:5])}
+    return {
+        "status": "PASS",
+        "reason": f"{len(pinned)} pinned counter(s) reproduced",
+        "pinned": len(pinned),
+    }
+
+
+def re_derive_phases(case_dir: Path, document: dict[str, object]) -> dict[str, object]:
+    """Re-reads the raw phase artifacts and recomposes the six published fields.
+
+    Nothing here trusts the receipt: the invocation walls come from the receipt
+    only because they are the runner's own measurement of a process it started, and
+    every phase span is re-read from the child's `phases-<invocation>.json` and the
+    product's `timing.json`.
+    """
+    published = document.get("phases")
+    if not isinstance(published, dict):
+        return {"status": "FAIL", "reason": "the receipt publishes no phases"}
+    walls: dict[str, int] = {}
+    for record in published.get("invocations", []) or []:
+        if not isinstance(record, dict):
+            return {"status": "FAIL", "reason": "an invocation record is not an object"}
+        walls[str(record.get("invocation"))] = int(record.get("wall_ns", 0) or 0)
+    if not walls:
+        return {"status": "FAIL", "reason": "the receipt records no invocation wall"}
+    try:
+        recomposed = phases_module.compose(
+            case_dir,
+            walls,
+            expects_operation=trace_module.read(case_dir / "trace.jsonl").status() != "NOT_RUN",
+        )
+    except phases_module.PhaseError as error:
+        return {"status": "FAIL", "reason": str(error)}
+    for field in (
+        "preparation_wall_ns",
+        "acquisition_wall_ns",
+        "operation_ns",
+        "verification_wall_ns",
+        "cleanup_wall_ns",
+        "handoff_ns",
+        "complete_command_ns",
+    ):
+        if int(recomposed.get(field, 0)) != int(published.get(field, 0) or 0):
+            return {
+                "status": "FAIL",
+                "reason": (
+                    f"{field} published as {published.get(field)} but re-derived as "
+                    f"{recomposed.get(field)}"
+                ),
+            }
+    if recomposed["reconciliation"]["status"] != "PASS":
+        return {"status": "FAIL", "reason": recomposed["reconciliation"]["reason"]}
+    return {
+        "status": "PASS",
+        "reason": recomposed["reconciliation"]["reason"],
+        "operation_ns": recomposed["operation_ns"],
+        "preparation_wall_ns": recomposed["preparation_wall_ns"],
+        "verification_wall_ns": recomposed["verification_wall_ns"],
+        "cleanup_wall_ns": recomposed["cleanup_wall_ns"],
+        "acquisition_wall_ns": recomposed["acquisition_wall_ns"],
+        "handoff_ns": recomposed["handoff_ns"],
+        "complete_command_ns": recomposed["complete_command_ns"],
+    }
+
+
 def cmd_report(arguments: argparse.Namespace) -> int:
     run_dir = Path(arguments.run)
     identity = None
@@ -583,6 +1069,10 @@ def cmd_report(arguments: argparse.Namespace) -> int:
         identity["run_dir"] = str(run_dir)
         identity["lane"] = document.get("lane", "")
         identity["rows"] = document.get("rows", 0)
+        identity["verification_mode"] = document.get("verification_mode", "")
+        identity["verification_sample_rule"] = document.get("verification_sample_rule", "")
+        identity["reused_proof"] = document.get("reused_proof")
+        identity["reused_proof_identities"] = document.get("reused_proof_identities")
     rendered = analyze.render(analyze.load_run(run_dir), identity)
     target = Path(arguments.out) if arguments.out else run_dir / "report.txt"
     receipt.write_text_append_only(target, rendered)
@@ -601,6 +1091,7 @@ def cmd_self_check(_: argparse.Namespace) -> int:
         "receipt": receipt.self_check(),
         "trace": trace_module.self_check(),
         "copyladder": copyladder.self_check(),
+        "phases": phases_module.self_check(),
         "invariants": invariants.self_check(),
     }
     for name, found in checks.items():
@@ -693,11 +1184,14 @@ def main() -> int:
     perf.add_argument("--out", required=True)
     perf.add_argument("--case", action="append")
     perf.add_argument("--no-build", action="store_true")
+    perf.add_argument("--verify", choices=list(VERIFICATION_MODES), default="full")
+    perf.add_argument("--reuse-pass")
     perf.set_defaults(function=cmd_perf)
 
     verify = sub.add_parser("verify")
     verify.add_argument("--run", required=True)
     verify.add_argument("--tag", default="verification.json")
+    verify.add_argument("--reuse-pass")
     verify.set_defaults(function=cmd_verify)
 
     report = sub.add_parser("report")

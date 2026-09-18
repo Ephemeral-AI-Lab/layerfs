@@ -176,7 +176,7 @@ fn measure_build(
     };
     let empty = TreeStore::new();
     instruments::heap_begin();
-    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+    let (outcome, report) = super::measure(label, |_timing: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         let reader = PairProvider::new(&empty, &empty);
         let mut objects = FilesystemObjects::new(&reader, &mut consumer);
@@ -222,7 +222,7 @@ fn measure_update(
     // an object, and every demand happens inside the timer.
     let reader = PairProvider::new(emitted, base);
     instruments::heap_begin();
-    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+    let (outcome, report) = super::measure(label, |_timing: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         let mut objects = FilesystemObjects::new(&reader, &mut consumer);
         let result = update_filesystem(&mut objects, &input, backing)?;
@@ -317,6 +317,13 @@ fn record_counters(
     measured: &Measured,
     label: &str,
 ) -> Result<(), OpError> {
+    // O1: the measured filesystem root, published so the pinned-constant gate in
+    // `main` can compare it with `tests/golden/expected.tsv`.
+    crate::workload::expected::publish(
+        context.trace,
+        "filesystem_root",
+        &measured.result.root.0.to_string(),
+    )?;
     let counters = measured.result.counters;
     context.trace.write_number(
         Kind::Counter,
@@ -763,7 +770,7 @@ fn run_batched_build_row(
     let mut counters = layerfs_content::filesystem::FilesystemUpdateCounters::default();
     let mut last: Option<layerfs_content::FilesystemResult> = None;
     instruments::heap_begin();
-    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+    let (outcome, report) = super::measure(label, |_timing: &TimingScope<'_, Active>| {
         let mut base = None;
         for (index, batch) in batches.iter().enumerate() {
             let measured = measure_batch(batch, base, scope, &fixture, &mut backings[index])?;
@@ -1015,7 +1022,7 @@ fn run_traverse_row(
     let mut visits = 0_u64;
     let mut digest = crate::workload::digest::Sha256::new();
     instruments::heap_begin();
-    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+    let (outcome, report) = super::measure(label, |_timing: &TimingScope<'_, Active>| {
         let mut read = FilesystemRead::new(&store, base.root)?;
         for (path, serial) in &prepared.files {
             let logical = LogicalPath::new(path)?;
@@ -1096,6 +1103,11 @@ fn run_traverse_row(
             &format!("{} files in the fixture manifest", prepared.files.len()),
         ),
     ];
+    crate::workload::expected::publish(
+        context.trace,
+        "filesystem_root",
+        &base.root.0.to_string(),
+    )?;
     let listing = listings_match(&store, base.root, prepared)?;
     match listing {
         Ok(directories) => gates.push(gates::require(

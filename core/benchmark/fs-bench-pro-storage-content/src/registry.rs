@@ -417,6 +417,28 @@ pub struct Mismatch {
 pub fn self_check() -> Vec<Mismatch> {
     let mut problems = Vec::new();
     let rows = cases();
+    // The pinned-constant table is the frozen oracle's O1 and O3. A case that
+    // carries no pinned counter is a case whose oracle silently shrank, which is
+    // the failure the sealed-oracle parity set already records once: an earlier
+    // revision under-counted `edit_reference` and the oracle could have shrunk with
+    // it. The coverage is asserted here so it cannot.
+    match crate::workload::expected::Expected::load() {
+        Err(error) => problems.push(Mismatch {
+            what: "pinned expectation table",
+            expected: "a parsable tests/golden/expected.tsv".to_string(),
+            actual: error,
+        }),
+        Ok(expected) => {
+            let uncovered = expected.coverage(rows);
+            if !uncovered.is_empty() {
+                problems.push(Mismatch {
+                    what: "admission cases with no pinned O3 constant",
+                    expected: "0".to_string(),
+                    actual: format!("{} ({})", uncovered.len(), uncovered.join(", ")),
+                });
+            }
+        }
+    }
     let counts = cardinality();
     if counts != FROZEN_CARDINALITY {
         problems.push(Mismatch {

@@ -209,6 +209,107 @@ impl TraceWriter {
     }
 }
 
+/// One record read back off disk, as the gate layer needs it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FlatRecord {
+    /// Record kind: `counter`, `oracle`, `gate`, ...
+    pub kind: String,
+    /// Record key.
+    pub key: String,
+    /// Record value, as text.
+    pub value: String,
+    /// Whether the writer emitted it as a JSON number.
+    pub numeric: bool,
+}
+
+/// Reads a flat trace back, so a gate is decided by the published evidence.
+///
+/// The pinned-constant gates are applied by `main` **after** the driver has
+/// published its counters, and they read what was actually written rather than an
+/// in-memory side channel: a figure the trace does not carry is a figure no reader
+/// can re-derive, and a gate that accepted one would be deciding on a number the
+/// evidence does not contain.
+pub fn read_flat(path: &Path) -> Result<Vec<FlatRecord>, String> {
+    let text = std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let mut records = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let kind = field(line, "kind").ok_or_else(|| format!("line {}: no kind", number + 1))?;
+        let key = field(line, "key").ok_or_else(|| format!("line {}: no key", number + 1))?;
+        let raw = raw_field(line, "value")
+            .ok_or_else(|| format!("line {}: no value", number + 1))?;
+        let numeric = !raw.starts_with('"');
+        let value = if numeric {
+            raw.to_string()
+        } else {
+            unescape(raw.trim_matches('"'))
+        };
+        records.push(FlatRecord {
+            kind,
+            key,
+            value,
+            numeric,
+        });
+    }
+    Ok(records)
+}
+
+/// Extracts one quoted string field from a flat record.
+fn field(line: &str, name: &str) -> Option<String> {
+    let raw = raw_field(line, name)?;
+    raw.strip_prefix('"').map(|rest| {
+        unescape(rest.trim_end_matches('"'))
+    })
+}
+
+/// Extracts one field's raw text, quoted or not.
+fn raw_field(line: &str, name: &str) -> Option<String> {
+    let needle = format!("\"{name}\":");
+    let start = line.find(&needle)? + needle.len();
+    let rest = &line[start..];
+    if let Some(body) = rest.strip_prefix('"') {
+        let mut out = String::new();
+        let mut escaped = false;
+        for character in body.chars() {
+            if escaped {
+                out.push(character);
+                escaped = false;
+                continue;
+            }
+            match character {
+                '\\' => escaped = true,
+                '"' => return Some(format!("\"{out}\"")),
+                other => out.push(other),
+            }
+        }
+        return None;
+    }
+    let end = rest.find(',').unwrap_or(rest.len());
+    Some(rest[..end].trim_end_matches('}').to_string())
+}
+
+/// Reverses [`escape`].
+fn unescape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut characters = text.chars();
+    while let Some(character) = characters.next() {
+        if character != '\\' {
+            out.push(character);
+            continue;
+        }
+        match characters.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
 /// Escapes the two characters that would break a flat JSON line.
 fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());

@@ -6,5 +6,6 @@
 //! assertion, so it is not evidence (`core/docs/architecture/10-counters.md`).
 
 pub mod instruments;
+pub mod phases;
 pub mod trace;
 pub mod window;
