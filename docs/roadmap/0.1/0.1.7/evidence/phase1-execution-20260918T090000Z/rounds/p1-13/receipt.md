@@ -1,10 +1,14 @@
 # P1-13 receipt — **blocked** (merge fanout 4, multiway cascade)
 
-> **Status:** **Blocked, reverted, not landed.** No commit for this item; the tree
-> is clean at `92f2350e3` and the full workspace is green.
-> This receipt records the attempt, the exact failing artifacts and the
-> dispositions the owner needs. It is not a decline of the item's premise: the
-> premise holds, the implementation has a correctness bug I did not resolve.
+> **Status:** **Incomplete and reverted, not landed.** No commit for this item; the
+> tree is clean at `92f2350e3` and the full workspace is green.
+>
+> **"Blocked" was my label and it was too strong.** What is established is that my
+> implementation produces wrong rows and I did not find the mechanism. It is *not*
+> established that the fanout-4 design cannot be finished, and this receipt does not
+> claim it. The owner's question in §4 is a real design question, but it is not
+> proven to be *the* cause — see §3.1, which narrows the failure to a stale row
+> winning in the merged stream.
 
 ## 1. The item, as planned
 
@@ -46,14 +50,51 @@ serial, so an older input's superseded row was written after the newer one and a
 current row carries the winning serial removed that specific failure (7 tests → 3)
 but did not restore result equality.
 
-**The remaining failure is a real difference in the merged row set, not a counter
-difference.** The old cascade merges the batch with the *nearest* occupied tier
-first and walks upward; grouping three tiers at once changes which row wins when a
-serial appears in more than two inputs, and the reducer's "a newer row already
-incorporates the older effects" invariant is evidently not preserved by
-first-input-wins alone across a three-way absorption. That is a genuine design
-question about the merged representation (which rows the union must carry when
-three tiers carry the same serial), not a coding slip.
+### 3.1 The failure, narrowed to one serial (2026-09-18, after the revert)
+
+Re-deriving the attempt in a scratch worktree (later removed) and instrumenting the
+row path for the failing fixture:
+
+`the_pending_threshold_changes_only_where_the_rows_live` builds with
+`maximum_pending_records: 1`, so every row spills. The reducer then fails on
+**serial 26** — a newly allocated inode whose retained-binding tally reaches it as
+**0**. The instrumented trace of that serial, in order:
+
+```text
+spill                              Count count=0     <- the inode exists, not yet bound
+merge winner from input 0/2/3      Count count=0
+spill                              Count count=1     <- its binding is retained
+merge winner from input 1/2/3      Count count=1
+spill                              Count count=1
+merge winner from input 1/2/3/0    Count count=1     <- still 1 here
+merge winner from input 0          Count count=1
+merge winner from input 0          Count count=1
+merge winner from input 0          Count count=0     <- a STALE row wins
+```
+
+So the merge stream emits, for a serial the store already holds at `count=1`, a
+**superseded `count=0` row** — i.e. the merged stream is not newest-wins for that
+serial. That is a correctness violation of the merge's own contract
+(`merge.rs`: "a newer row already incorporates the older effects"), and it is the
+mechanism that reaches the reducer as "new inode without binding".
+
+**What I could not determine.** Whether the stale row comes from (a) a
+tier-ordering error in my grouped cascade (the accumulator not being newer than the
+group it is merged with), (b) the read path (`find` / `visit_newest_first`)
+answering from a stale tier for a serial the merged output already covers, or
+(c) something else in the merge. A controlled probe of `merge_runs` alone — twelve
+spills of eight rows with **every serial carried by every batch**, so every merge
+is a genuine three-way collision — came out **correct** (`live_runs=2`, every serial
+holding its newest write). That probe passing while the end-to-end fixture fails is
+the state I stopped at: the bug is real, reproducible and localized to the
+spill/merge/read interaction, but I have not isolated which of the three it is.
+
+Consequences for the disposition:
+
+* The §4 owner question is **not proven to be the cause**. It may still be worth
+  ruling on, but it should not be read as the blocker.
+* Neither is the item proven finishable. The honest label is **incomplete**: a
+  reproducing fixture, an instrumented trace, and no root cause.
 
 ## 4. Disposition
 
@@ -62,12 +103,18 @@ The change was reverted in full (`git checkout -- merge.rs runs.rs`); the tree a
 failed**. The item is **blocked**, and the honest state is that its premise is
 untested:
 
-* **What the owner needs to rule on:** whether the union of a three-tier absorption
-  may keep the newest row alone (what I implemented and what the plan's §P1-13 text
-  assumes: "newest-wins-on-tie reproduced exactly"), or whether the reducer's
-  invariant requires the *per-tier* row to survive a multiway merge. The former is
-  what `log4` participations buy; if the latter is required, the win is smaller and
-  design (b) is the honest form.
+* **What would unblock it (the next concrete step, not an owner ruling):** isolate
+  §3.1's three candidates with the existing `visit_newest_first` probe — read the
+  store after each spill and assert, per serial, that the newest spilled row is the
+  one that comes back. The moment that assertion fails, the tier index and merge
+  group are visible together, which is what distinguishes (a) from (b).
+* **What the owner may still want to rule on, independently:** whether the union of
+  a three-tier absorption may keep the newest row alone (what I implemented and what
+  the plan's §P1-13 text assumes: "newest-wins-on-tie reproduced exactly"), or
+  whether the reducer's invariant requires the *per-tier* row to survive a multiway
+  merge. The former is what `log4` participations buy; if the latter is required, the
+  win is smaller and design (b) is the honest form. **This is a design preference
+  question, not the diagnosed cause.**
 * **What is not claimed:** nothing about `rows_written`, `merges` or `runs_created`.
   D26's anchors (`rows_written` 25,760, `merges` 61, `runs_created` 124) are intact
   because no part of this attempt was committed.

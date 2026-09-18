@@ -233,13 +233,15 @@ pushed; 456 tests green; the 34-test sealed-oracle set green and unchanged.
 deletion removes the only non-root context check on that node) —
 [receipt](../evidence/phase1-execution-20260918T090000Z/rounds/p1-6/receipt.md).
 
-**Blocked:** P1-13 (merge fanout 4) — the multiway cascade was built, hit one real
-selection bug and then three **data-correctness** failures (the spilling and
+**Incomplete:** P1-13 (merge fanout 4) — the multiway cascade was built, hit one
+real selection bug and then **data-correctness** failures (the spilling and
 non-spilling runs produced different filesystem roots), and was reverted in full;
-the tree is clean and D26's anchors are untouched. The question the owner has to
-rule on — whether a serial carried by more than two tiers may keep the newest row
-alone — is recorded in
-[`rounds/p1-13/receipt.md`](../evidence/phase1-execution-20260918T090000Z/rounds/p1-13/receipt.md).
+the tree is clean and D26's anchors are untouched. The failure is narrowed to one
+serial: the merged stream emits a **superseded** `count=0` row for a serial the
+store holds at `count=1`, so the merge is not newest-wins there. A probe of
+`merge_runs` alone is correct, so the cause is in the spill/merge/read interaction
+and is **not** isolated; the receipt records the trace, the three candidates and
+the next concrete step. No claim that the item is unfinishable.
 
 **Not started:** P1-15 — the restart lookup half of the ordering pair. P1-13's
 blocker blocks it by its own dependency note ("restart pattern and run lengths
