@@ -459,6 +459,17 @@ different from production LOC: do not use one as the other. Enforced by
 
 ### 5.3 Rules that can never be relaxed
 
+- **Single worker, and the `init_namespace` exception does not reach you.** `AGENTS.md`
+  §3.8 and `benchmark/AGENTS.md` allow `init_namespace` to keep its multi-worker
+  initialization path. That rule governs the **root `crates/` reference tree**:
+  `LAYERFS_CONSTRUCTION_WORKERS` appears in `core/` only as a string a v0.1.6-era
+  example prints, and `initialize_layerstack` / `prepare_parallel_root_directories`
+  do not exist in `core/` at all. Do **not** import the carve-out into a C1/C2 case —
+  `c1.fs.build-scale` derives from `init_namespace`'s C1 half but applies a serialized
+  `FilesystemInput`, so its timed phase is single-threaded like every other case.
+  **The measurement process is not single-threaded** and must not pretend to be: the
+  10 ms RSS sampler is its own thread. One *worker* on the product's work is the rule;
+  one thread in the process is not.
 - **No retry, no busy handler, no error-driven fallback, no alternate backend.**
   One operation, one attempt. An unknown persistence outcome is a failed result —
   never resend, never delete on a guess.
