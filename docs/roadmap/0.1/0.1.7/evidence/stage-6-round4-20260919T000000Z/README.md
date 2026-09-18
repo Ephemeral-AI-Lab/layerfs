@@ -266,17 +266,35 @@ update-shaped row?* The eight `tiny-unlink` / `tiny-bulk-delete` rows close on t
 answer and on nothing else. They are retained as `NOT_RUN` with their measured state
 and this reason, which is what the definition of done requires and what round 3 did.
 
-Two candidate answers and their consequences, so the ruling is a choice rather than
-a discovery:
+Three candidate answers and their consequences, so the ruling is a choice rather
+than a discovery. The third only became visible this round, and it is the reason
+the question is worth re-asking rather than inheriting:
 
-1. **Admissible, with a declared bound.** The retaining window is one operation's
-   emitted objects. For `tiny-*-500` that is bounded by the 500-binding batch, so
-   the heap reading would be reported as "product work plus a declared one-operation
-   harness window" and the row's O(1)-memory claim would move to a family that can
-   still make it. Eight rows close.
+1. **A retaining measured phase, with a declared bound.** The retaining window is
+   one operation's emitted objects. For `tiny-*-500` that is bounded by the
+   500-binding batch, so the heap reading would be reported as "product work plus a
+   declared one-operation harness window" and the row's O(1)-memory claim would move
+   to a family that can still make it. Eight rows close. This is the option the
+   handoff names, and `AGENTS.md` §1's "a timed phase never retains" is absolute
+   against it as written.
 2. **Not admissible.** The rows stay `NOT_RUN` and acceptance checkbox 1 stays
    partial for `c1.many-tiny`, or the family is re-scoped by the owner with a new
    contract stamp.
+3. **A discarding measured phase whose reader is a prepared fixture chain** — the
+   shape this round already shipped for the four walk-ceiling tiers (§3), where an
+   update reads back objects it emitted and a `DiscardingConsumer` cannot serve
+   them. There, each batch's base is a **declared input** (`FilesystemInput::base`)
+   supplied from a chain built before the timer by a byte-identical unmeasured
+   replay, and the row gates **every intermediate root** against that chain. For
+   `tiny-unlink` / `tiny-bulk-delete` the same construction would supply the object
+   the removal reads back from a chain built by the identical unmeasured removal,
+   with a `DiscardingConsumer` and the same per-step root gate.
+
+Option 3 is the one this round cannot decide alone, because the object it supplies
+is one the measured call emitted **within the same call**, not a base handed to it.
+Whether a fixture may serve an operation's own in-flight read is the owner's call,
+not the driver's, and the round-4 prompt reserves exactly this question. It is
+recorded as an available route rather than taken.
 
 This round does not decide it. It is recorded here as asked, and it is the only
 thing standing between this round and a closed [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171).
