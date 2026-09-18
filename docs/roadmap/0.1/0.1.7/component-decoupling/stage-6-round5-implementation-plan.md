@@ -478,3 +478,114 @@ not change. A new Phase 2.5 sits between them: remove the unrequired read-back,
 implement pinned O1 and pinned O3, and deduplicate the required O2 — all before any
 sampling is added, so that "quick" never becomes a substitute for doing the required
 oracle correctly.
+
+
+## 14. Time expectations
+
+Labels: **[M]** measured, **[D]** derived from a measurement, **[P]** projected.
+
+### 14.1 Headline
+
+| lane, full selection | wall | factor |
+| --- | ---: | ---: |
+| today | **394.57 s** [M] | 1.0x |
+| cold run (digest changed) + full verification | ~205 s [P] | 1.9x |
+| warm + full verification | ~115 s [P] | 3.4x |
+| **warm + quick (deterministic 10% sample)** — iteration default | **~70 s** [P] | 5.6x |
+| warm + `--reuse-pass` | ~63 s [P] | 6.3x |
+
+**Operation 39.15 s [M] must not move.** That is the measurement; T4 makes it a falsifier.
+
+### 14.2 Per row — the two shapes
+
+`dedup-cdc-overwrite-500`, frozen oracle O1 + O3, so no read-back is required:
+
+| | today | warm full | warm sample | reused |
+| --- | ---: | ---: | ---: | ---: |
+| preparation | 11.951 s [M] | ~0.2 s [P] | ~0.2 s | ~0.2 s |
+| **work** | **4.997 s** [M] | 4.997 s | 4.997 s | 4.997 s |
+| cleanup | not measured | ~0.03 s [P] | ~0.03 s | ~0.03 s |
+| **budgeted command** | **28.4 s** [M] | **~5.2 s** | ~5.2 s | ~5.2 s |
+| verification (own invocation) | 12.125 s [M] | ~0.01 s [P] | ~0.2 s | 0 |
+| **total** | **28.4 s** | **~5.2 s** | **~5.4 s** | **~5.2 s** |
+
+`append-tail-4k-500m`, frozen oracle **includes** O2:
+
+| | today | warm full | warm sample |
+| --- | ---: | ---: | ---: |
+| preparation | ~2.8 s [D] | ~0.8 s [P] | ~0.8 s |
+| **work** | **0.00013 s** [M] | 0.00013 s | 0.00013 s |
+| cleanup | not measured | ~0.03 s | ~0.03 s |
+| **budgeted command** | **5.72 s** [M] | **~0.83 s** | ~0.83 s |
+| verification | ~2.9 s [D] | ~2.9 s | ~0.3 s (50 MiB) |
+
+### 14.3 Lane composition
+
+| component | today | warm full | warm quick |
+| --- | ---: | ---: | ---: |
+| preparation | ~165 s [D] | ~20 s [P] | ~20 s |
+| **work** | **39.15 s** [M] | **39.15 s** | **39.15 s** |
+| cleanup | not measured | ~4 s [P] | ~4 s |
+| verification | ~166 s [D] | ~50 s [P] | ~5 s |
+| **total** | **394.57 s** [M] | **~113 s** | **~68 s** |
+
+Verification falls for two independent reasons and the order matters: **~30 s** from
+removing the read-back the frozen oracle never asked for (§13.1), **~80 s** from
+deduplicating it where it is required (§13.4). A 10% sample is worth a further ~45 s
+but proves 10%, so **quick mode is a convenience, not the main saving**.
+
+### 14.4 Iteration
+
+| command | today | after |
+| --- | ---: | ---: |
+| `--lane smoke` (20 smallest cases) | 0.5 s [M] | ~1 s [P] — already fast |
+| `--case dedup-cdc-overwrite-500` | 28.4 s [M] | **~5.4 s** [P] warm quick (5.3x) |
+| `--case append-tail-4k-500m` | 5.72 s [M] | **~1.1 s** [P] warm quick (5.2x) |
+
+### 14.5 The floors, and the one thin number
+
+1. **Operation 39.15 s is irreducible.** It is the workload.
+2. **A fully verified warm lane cannot go below ~110 s**: ~39 s work + ~50 s of
+   oracle the frozen contract requires. The ~68 s figure *requires* sampling or
+   reuse — a lane in which most rows are `INCOMPLETE`.
+3. **Warm preparation is floored by "read the object set and hash it."**
+   `FinalizedObject::new` hashes every object on load and lazy loading would break the
+   declared `warm-in-process-fixture` cache state. T1 is comfortable for the delta rows
+   (measured artifacts 14.9–119.9 MB) and **tight for the C1 edit 500 MiB rows**
+   (~0.7–1.0 s) — the one target expected to be marginal.
+4. **A cold run is not faster than today.** It pays the ~90 s build once per digest.
+   Hence the digest key must not include the producer binary.
+5. **The one thin number.** The ~165 s / ~166 s preparation-versus-verification split
+   is **[D]**, not [M] — a 50/50 assumption over 331 s of non-operation, anchored on
+   **one** measured row (49.6% preparation). Everything downstream inherits it.
+   Phase 0's phase fields replace it with a measurement: **publish the four phases and
+   re-read this section before committing to the targets.**
+
+### 14.6 The baseline is about to move, because the lane is changing
+
+The 394.57 s baseline and the 39.15 s operation total are for **the round-3 lane**, and
+that is not the round-5 lane. At `5e8a7f0ae` the registry is still **220 rows** with the
+cardinality array unchanged, and round 4's `families/pipeline.rs` edit is a *declaration*
+correction rather than new rows — it moves the four `pipeline.*` rows from
+`created-in-sample` / `created-in-sample` to `prepared-dewarmed` / `opened-from-copy`,
+which also makes them candidates for the prepared-master mechanism.
+
+But round 4 is **enabling drivers for ten rows that round 3 returned `NOT_RUN` in
+~0.01 s**: `pipeline.*` (4), `c2.pool.cold-warm` (2), `namespace-{10000,100000}[-text-v1]`
+(4). Those will consume real time for the first time:
+
+- `namespace-100000` carries **500 MB of content across 101,000 bindings**, and
+  `namespace-10000` 300 MB across 10,100 — the two largest fixtures in the registry;
+- `pooled-lane-{cold,warm}` are declared **512 leaves x 100 rows**;
+- `pipeline.*` is the integrated C1-to-C2 family.
+
+So the lane total can **rise** even after every optimisation here, and any further new
+cases move it again. Therefore:
+
+- the **per-row** expectations in §14.2 are the robust ones and are what the targets
+  should be judged on;
+- **T2, T3 and T5 must be restated against a named lane composition** once round 4's
+  rows land and are measured, and the round-5 evidence must name the composition it
+  was taken against;
+- the round-5 closure lane is compared to a **round-4 closure baseline on the same
+  composition**, not to 394.57 s.
