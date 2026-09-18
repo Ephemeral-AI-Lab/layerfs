@@ -185,6 +185,11 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   States the expected file/folder structure, the LOC estimate band against the
   measured 19,264 baseline, the verification protocol and the six owner questions.
   Sites are `path:line`-verified in the core tree; no measurement was taken.
+- [Phase 2 implementation handoff (2026-09-18)](phase2-implementation-handoff-20260918.md):
+  the executable assignment for the agent that drives Phase 2 — the landing order,
+  the single-agent verification protocol, per-item acceptance gates, the checks for
+  every commit, the nine owner rulings already made, the anti-patterns, and the
+  closing pass. Carries the plan; starts nothing by itself.
 
 
 The proposal has been saved here for discussion before implementation. Owner

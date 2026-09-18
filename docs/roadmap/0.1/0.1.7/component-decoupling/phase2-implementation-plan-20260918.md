@@ -167,6 +167,29 @@ profile. This is an instrument, not a behaviour change, and it is the gate for
 
 ## 3. Item detail: sites verified in the core tree
 
+### 3.1 Implementation shape at a glance
+
+What each item creates, modifies, and must leave alone. "Shape" is the
+function-level form of the change, not its motivation; the verification column of
+§1 is its gate.
+
+| id | creates | modifies | implementation shape | must not change |
+| --- | --- | --- | --- | --- |
+| **P2-0** | `cas/pool_lane.rs`, `cas/placement.rs`, `cas/lifecycle.rs`, `cas/selection.rs` | `cas/owner.rs`, `cas/mod.rs`, two `PoolCounters` paths in `cas/store.rs` | verbatim span moves into sibling `impl MutationOwner` blocks; private fields and cross-module methods widened to `pub(super)` | behaviour, every counter, every test file, emitted bytes |
+| **V5** | — | `cas/owner.rs`, `cas/store.rs`, one vehicle | `statements: u64` on `OutcomeCounters`, charged at the insert entry points, surfaced on `SaveOutcome`, printed | the existing row/commit counters |
+| **V6** | — | `cas/read.rs`, `encoding/decode.rs`, one vehicle | `groups_decoded: u64` on `ReadCounters`, charged in the ordinary decode arm | the existing read counters |
+| **V7** | — | save accessor + one vehicle | a bounded accessor (or recorded acquisition profile) exposing the pragma values and `SQLITE_DBSTATUS_CACHE_SPILL` | the profile itself |
+| **P2-1** | — | `sqlite/connection.rs` | two pragmas with the same read-back verification the existing ones use | the other pragmas; no runtime knob (§4f) |
+| **P2-2** | — | `cas/placement.rs`, `sqlite/write.rs` | a chunked multi-row INSERT whose chunk size is derived from SQLite's own limits | per-row error attribution, `sqlite_master`, row semantics |
+| **P2-3** | — | `sqlite/connection.rs` | one pragma, on the save owner's connection only | read connections; `busy_timeout = 0` |
+| **P2-4** | — | `encoding/decode.rs`, `encoding/delta/read.rs`, `cas/read.rs` | a bounded decoded-group cache, consulted **after** the ceiling check | the check order; the existing counters |
+| **P2-5** | — | `cas/dependencies.rs`, `cas/pool_lane.rs` | one presence query per wave; the owner's reader instead of a fresh one | dependency error semantics |
+| **P2-6** | — | `encoding/delta/read.rs`, `cas/read.rs` | return the verified hash instead of recomputing it | tamper detection |
+| **P2-7** | — | `filesystem/references/runs.rs` | delete `copy_run` and its call, after the aliasing proof | output bytes |
+| **P2-8** | — | `pack/layout.rs`, `pack/placement.rs` | assembled length carried in the open-lane state | the fit decision, pack boundaries |
+
+### 3.2 Sites
+
 - **P2-1 / P2-3 — `sqlite/connection.rs` (138 lines).** Today's profile sets
   `journal_mode = MEMORY` (read-back verified), `synchronous = OFF` (verified),
   `temp_store = MEMORY`, `foreign_keys = ON` (verified), `busy_timeout = 0`
@@ -287,97 +310,110 @@ tuning knobs. An item that adds a cache (`P2-4`) must declare its owner, bound,
 multiplicity, lifetime and release in the same style the pooled cache already
 documents.
 
-## 5. Expected file and folder structure
+## 5. Final file and folder structure
 
-**Before (`2137c8487`):**
-
-```text
-core/crates/layerfs-storage/src/
-  cas/   owner.rs 962 · store.rs 543 · read.rs 162 · dependencies.rs 86
-         save.rs 76 · batch.rs · membership.rs 47 · finish.rs · provider.rs 160 · mod.rs 18
-  sqlite/  connection.rs 138 · write.rs 123 · lookup.rs 172 · schema.rs
-  encoding/  decode.rs 192 · delta/read.rs 298 · pool/read.rs 366 · codec.rs
-  pack/  layout.rs 488 · placement.rs · assemble.rs · mod.rs
-core/crates/layerfs-content/src/filesystem/references/
-  runs.rs 611 · merge.rs 284 · reduce.rs · backing.rs · record.rs
-```
-
-**After Phase 2 (sizes in physical lines; post-move figures are estimates):**
+The tree as it stands when the phase closes. Every path below is either
+unchanged, extended, or one of the four new modules; nothing else moves.
 
 ```text
 core/crates/layerfs-storage/src/
   cas/
-    mod.rs          18   ->   ~23      four module declarations + split re-export [P2-0]
-    owner.rs        962  ->   ~105-140 state + OutcomeCounters + demands [P2-0]
-    pool_lane.rs    new  ->   ~350-370 pooled lane [P2-0], then P2-5's reader reuse
-    placement.rs    new  ->   ~175-190 framing/sealing [P2-0], then P2-2's batched insert
-    lifecycle.rs    new  ->   ~220-235 acquisition/commit/terminate [P2-0]
-    selection.rs    new  ->   ~130-145 representation selection [P2-0]
-    read.rs         162  ->   ~170-200 ReadCounters.groups_decoded + charge [V6, P2-4]
-    dependencies.rs 86   ->   ~110-130 wave-level presence query [P2-5]
-    store.rs        543  ->   ~555-565 SaveOutcome.statements [V5]
-    save.rs · batch.rs · membership.rs · finish.rs · provider.rs   unchanged
+    mod.rs          declarations + re-exports only      [P2-0: +4 mod lines, split re-export]
+    owner.rs        state struct, OutcomeCounters, the demand path        [P2-0]
+    pool_lane.rs    NEW  pooled metadata lane: ordinals, value groups,
+                         index sync, pooled bases                         [P2-0, P2-5]
+    placement.rs    NEW  framing, lane placement, group sealing, tails    [P2-0, P2-2]
+    lifecycle.rs    NEW  acquisition, commit cadence, acknowledgement     [P2-0]
+    selection.rs    NEW  representation selection and its counters        [P2-0]
+    read.rs         batched reads + ReadCounters.groups_decoded           [V6, P2-4]
+    dependencies.rs dependency availability; wave-level presence query    [P2-5]
+    store.rs        Store / SaveOperation / SaveOutcome.statements        [V5]
+    save.rs · batch.rs · membership.rs · finish.rs · provider.rs          unchanged
   sqlite/
-    connection.rs   138  ->   ~165-195 cache/spill/locking pragmas + read-back [P2-1, P2-3]
-    write.rs        123  ->   ~165-205 multi-row insert + statement charge [P2-2, V5]
+    connection.rs   connection profile pragmas                            [P2-1, P2-3]
+    write.rs        insert entry points + multi-row INSERT                [V5, P2-2]
+    lookup.rs · schema.rs                                                 unchanged
   encoding/
-    decode.rs       192  ->   ~200-230 cache consultation + decode charge [P2-4, V6]
-    delta/read.rs   298  ->   ~305-330 reader reuse, single hash [P2-5, P2-6]
-    pool/read.rs    366  unchanged (the pattern source)
+    decode.rs       ordinary-lane decode + decode charge                  [V6, P2-4]
+    delta/read.rs   resolver: cache call site, reader reuse, single hash  [P2-4, P2-5, P2-6]
+    pool/read.rs    unchanged - the cache discipline P2-4 ports
+    codec.rs · delta/select.rs · delta/candidates.rs · pool/index.rs · pool/mod.rs  unchanged
   pack/
-    layout.rs       488  ->   ~500     running-total helper [P2-8]
-    placement.rs         ->   +10-20   open-lane assembled length [P2-8]
+    layout.rs       assembled-length helpers + running total              [P2-8]
+    placement.rs    open-lane state                                       [P2-8]
+    assemble.rs · mod.rs                                                  unchanged
 core/crates/layerfs-content/src/filesystem/references/
-    runs.rs         611  ->   ~590     copy_run deleted [P2-7]
-```
+    runs.rs         consolidate() without copy_run                        [P2-7]
 
-**Tests stay outside `src/`** (the boundary checker rejects test-only attributes
-in product source). Existing files are extended where the subject already exists:
-`core/crates/layerfs-storage/tests/connection_profile.rs` (P2-1/P2-3),
-`visibility.rs` (P2-4's ceiling-before-cache pin), `metadata_pool.rs` and
-`cas_reuse.rs` (P2-5), `pack_locator.rs` (P2-8's boundary decision),
-`core/crates/layerfs-content/tests/filesystem_ordering_scan.rs` (P2-7). New files
-are limited to the two counters that need their own subject:
-`tests/statement_batching.rs` (V5 + P2-2) and `tests/group_decodes.rs` (V6 +
-P2-4). **P2-0 changes no test file** — that absence is its evidence.
+core/crates/layerfs-storage/tests/           (never inside src/)
+    statement_batching.rs   NEW  V5's counter + P2-2's statement count
+    group_decodes.rs        NEW  V6's counter + P2-4's distinct-group count
+    connection_profile.rs · visibility.rs · metadata_pool.rs ·
+    cas_reuse.rs · pack_locator.rs            extended, not replaced
+core/crates/layerfs-content/tests/
+    filesystem_ordering_scan.rs               extended (P2-7)
 
-**Evidence tree** (append-only, mirrors Phase 1):
-
-```text
 docs/roadmap/0.1/0.1.7/evidence/phase2-execution-<UTCstamp>/
-  CONTRACT.md                  written and frozen before any collection
-  commands.tsv                 every command, exit code, wall time
-  logs/                        including retained failures
-  rounds/p2-0/{receipt.md,verify-p2-0.md}
-  rounds/v5|v6|v7/{receipt.md,verify-*.md}
-  rounds/p2-1 .. p2-8/{receipt.md,verify-p2-N.md}
+    CONTRACT.md · commands.tsv · logs/ · rounds/<item>/{receipt.md, verify-<item>.md}
 ```
+
+**Physical-line budget** (the 999 ceiling; entry files 200, and `mod.rs` takes no
+`impl` at all — the boundary checker fails it). Post-move figures are estimates;
+the measured figures belong in each receipt.
+
+| file | before | after (est.) | owner item |
+| --- | ---: | ---: | --- |
+| `cas/owner.rs` | 962 | ~105-140 | P2-0 |
+| `cas/pool_lane.rs` | — | ~350-370 | P2-0, P2-5 |
+| `cas/placement.rs` | — | ~175-190 | P2-0, P2-2 |
+| `cas/lifecycle.rs` | — | ~220-235 | P2-0 |
+| `cas/selection.rs` | — | ~130-145 | P2-0 |
+| `cas/mod.rs` | 18 | ~23 | P2-0 |
+| `cas/read.rs` | 162 | ~170-200 | V6, P2-4 |
+| `cas/dependencies.rs` | 86 | ~110-130 | P2-5 |
+| `cas/store.rs` | 543 | ~555-565 | V5 |
+| `sqlite/connection.rs` | 138 | ~165-195 | P2-1, P2-3 |
+| `sqlite/write.rs` | 123 | ~165-205 | V5, P2-2 |
+| `encoding/decode.rs` | 192 | ~200-230 | V6, P2-4 |
+| `encoding/delta/read.rs` | 298 | ~305-330 | P2-4, P2-5, P2-6 |
+| `pack/layout.rs` | 488 | ~500 | P2-8 |
+| `pack/placement.rs` | — | +10-20 | P2-8 |
+| `filesystem/references/runs.rs` | 611 | ~590 | P2-7 |
+
+No file approaches the ceiling after the split; `cas/owner.rs`'s 37-line window is
+the reason P2-0 exists.
 
 ## 6. Production LOC
 
-**Measured before** (method: `python3 tools/production_loc.py --detail`, working
-tree `2137c8487`): core **19,264 production lines in 116 files**; reference
-`crates/` **65,417**; combined **84,681**. Per-crate core: `layerfs-content`
+**Measured before** — method: `python3 tools/production_loc.py --detail`, working
+tree `2137c8487`. Core **19,264 production lines in 116 files**; reference
+`crates/` **65,417**; combined **84,681**. Per core crate: `layerfs-content`
 12,320 · `layerfs-storage` 6,181 · `layerfs-telemetry` 763.
 
-**Estimate bands** (estimates from the shapes above, not predictions; per-commit
-actuals are disclosed as the rule requires):
+**Estimate bands per item** — what each delta *is*, not just its size. These are
+estimates from the shapes in §3.1; every commit discloses its measured actual, and
+a commit whose delta falls outside its band explains why in its receipt.
 
-| item | estimate | item | estimate |
-| --- | ---: | --- | ---: |
-| P2-0 split (imports + `pub(super)`) | +25..60 | P2-3 locking mode | +5..15 |
-| V5 statement counter | +15..25 | P2-4 group cache | +50..100 |
-| V6 decode counter | +15..30 | P2-5 presence + reader reuse | +20..45 |
-| V7 cache observability | +15..30 | P2-6 single hash | +10..25 |
-| P2-1 cache profile | +10..25 | P2-7 delete `copy_run` | −15..0 |
-| P2-2 multi-row INSERT | +40..80 | P2-8 running total | +10..25 |
+| item | estimate | what the delta is |
+| --- | ---: | --- |
+| P2-0 | +25..60 | `use` lines in four new files plus `pub(super)` markers; the moved code itself is unchanged, so this is a **relocation** and must be labelled one |
+| V5 | +15..25 | one counter field, its charge, its surfacing, its print |
+| V6 | +15..30 | the same shape in the read path |
+| V7 | +15..30 | an accessor or a recorded profile plus its print |
+| P2-1 | +10..25 | two pragmas and their read-back checks |
+| P2-2 | +40..80 | the chunk derivation, the row-binding loop, the statement charge |
+| P2-3 | +5..15 | one pragma plus the write-owner-only guard |
+| P2-4 | +50..100 | the cache, its bound, its charge and its release |
+| P2-5 | +20..45 | the wave-level query and the reader-reuse state handling |
+| P2-6 | +10..25 | threading one hash through two call sites |
+| P2-7 | −15..0 | the deleted copy and its call |
+| P2-8 | +10..25 | the running total in the open-lane state |
 
-**Total: core ≈ +200..+460**, i.e. ≈ 19,464..19,724 if every item lands — before
-any measured-and-declined outcome. For calibration: Phase 1's plan estimated
-+450..+950 and the phase closed at **+472**, so the band above is deliberately
-narrow and the low end is the likelier landing. Tests, examples and docs do not
-enter this number. `P2-0` is a **relocation**: its delta is imports and visibility
-markers, and it must be labelled relocation — never called a simplification.
+**Expected total: core ≈ +200..+460** → ≈ 19,464..19,724 if every item lands, and
+lower if any ends measured-and-declined. Calibration: Phase 1 estimated +450..+950
+and closed at **+472**, so the low end is the likelier landing. Tests, examples,
+evidence and these documents never enter the number; a docs- or test-only commit
+reports the unchanged total with delta 0.
 
 ## 7. Landing order
 
@@ -425,43 +461,28 @@ Every item, without exception:
 8. **Production LOC** before → after with the signed delta and the counting
    method, per commit; `P2-0` labelled relocation.
 
-## 9. Open owner questions
+## 9. Rulings (answered by the owner, 2026-09-18)
 
-Questions 2, 4, 6 and 7 are
-[`phase2-entry-handoff-20260918.md`](phase2-entry-handoff-20260918.md) §2.1–§2.4 in
-this plan's terms; the rest are this plan's additions. **No Phase 2 item starts
-before they are answered on #178 and recorded here.**
+Recorded on the issue: [#178 comment](https://github.com/Ephemeral-AI-Lab/layerfs/issues/178#issuecomment-5731834780).
+These are decisions, not defaults — the handoff
+([`phase2-implementation-handoff-20260918.md`](phase2-implementation-handoff-20260918.md))
+carries them and does not re-litigate them.
 
-1. **Authorise `P2-0`?** It is a production-file change with a non-zero LOC delta
-   (imports and visibility markers) for zero behaviour change — Phase 1's precedent
-   was "no new production files". Without it, `P2-2` and `P2-5` are written into a
-   file with 37 lines of headroom.
-2. **Is `P2-1` authorised at all, and on which measured shape?** It is a
-   cache-policy change, and cache policy is named in Phase 1's out-of-scope list;
-   P0-2 already undercut its write-path premise. Proceed, defer, or close it as
-   **measured-and-declined**? The read-path half is now measurable (P1-2 landed);
-   the write-path half needs `V7` first.
-3. **Authorise `V5`–`V7`?** Each is product telemetry plus a vehicle print — the
-   same class Phase 1 approved as `V1`–`V4`.
-4. **`P2-3`'s scope**: is an exclusive write lock compatible with the one-save-owner
-   contract, and is the item scoped to the write owner only, or is the contract
-   amended?
-5. **Does Phase 2 start before the two Phase 1 closure rulings are settled**
-   (P1-7's third pinned test, P1-10's architecture-document gap)? Both are contract
-   deviations Phase 2 would otherwise inherit silently.
-6. **What is the standing of `P1-13` and `P1-15`?** Closed as not delivered,
-   deferred into Phase 2, or carried as debt with their receipts? `P2-7` rebases
-   cleanly on today's cascade, but both attempts **found latent correctness defects**
-   in the ordering store (`find` and the newest-first scan disagreeing about a
-   serial; a stale row crossing tiers) — unfinished verification of existing
-   behaviour, which should be recorded as an open question about the ordering store
-   rather than dropped.
-7. **Confirm the single-worker rule still governs Phase 2's measurements**, so
-   `P2-2`'s A/B stays a batching change and does not quietly become a parallelism
-   change, and so the parked `O4` pool stays parked.
-8. **Confirm the parked register stays parked** (producer pool, group target,
-   branch-row summaries, pack-BLOB chunking, membership single-hash, persisted pool
-   cursor) and the pending-ceiling default stays as P1-16 documented it.
+| # | question | ruling |
+| --- | --- | --- |
+| 1 | Authorise `P2-0`? | **Yes — split it.** The full responsibility split (§2.1); `owner.rs` reduces to the state struct, its counters and its demand path |
+| 2 | Authorise `V5`–`V7`? | **Yes — add them.** The two missing counters and the save-connection cache observability, as instrument-only commits before their dependents |
+| 3 | Is `P2-1` authorised? | **Yes — 32 MiB is fine.** The reference profile (`cache_size` 32 MiB, `cache_spill` OFF) is accepted; the read-path half is measured first, `V7` gates the write-path claim |
+| 4 | `P2-3`'s scope | **Decided by this plan's analysis:** the conservative form — `locking_mode = EXCLUSIVE` on the save owner's connection only, never on a read connection — with the reconciliation recorded in the item's receipt |
+| 5 | Standing of `P1-13` / `P1-15` | **Ignored as not-big-impact.** Recorded as closed-as-not-delivered on that ruling; their receipts keep the latent ordering-store defects on the record and are not deleted; `P2-7` rebases on today's cascade |
+| 6 | Single worker for Phase 2 measurements? | **Confirmed.** `P2-2` stays a batching change, not a parallelism change; the parked producer pool stays parked |
+| 7 | Parked register and pending-ceiling default? | **Confirmed parked**; the pending-ceiling default stays as P1-16 documented it |
+| 8 | `P1-7`'s third pinned test | **Accepted** as a deviation (each was tightened with its old value kept as an upper bound) |
+| 9 | `P1-10`'s missing architecture-document update | **Not answered.** Defaulted to the rule-compliant action — the `ordering_bytes / 16` bound gets its `core/docs/architecture/` update — and flagged for correction if that default is wrong |
+
+**Still open, and only these:** ruling 9's default, and the measured disposition of
+`P2-1` (ruling 3 authorises it; the A/B may still close it as
+measured-and-declined) and of `P2-7` (the aliasing proof may fail).
 
 ## 10. Non-goals and prohibitions
 
