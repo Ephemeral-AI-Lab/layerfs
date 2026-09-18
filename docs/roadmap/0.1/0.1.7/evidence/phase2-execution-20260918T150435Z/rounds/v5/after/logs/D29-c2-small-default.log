@@ -1,0 +1,8 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/client/target/release/phase0client c2 1023 default
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.039
+--- stdout ---
+c2 rows 1023 canonical_bytes 127875 cache_arm default elapsed_ns 32157875 inserted 1023 reused 0 packs_created 5 pack_appends 1020 commits 4 statements 1023 full_records 1023 prefix_records 0 pool_leaves 1023 pool_new_values 1023 pool_groups 1023 pool_delta_leaves 0 pool_trials 0
+c2 inspection-connection pragma cache_size 2000 cache_spill 20000 page_size 4096 journal_mode delete | dbstatus cache_spill ok=true value=0 | cache_write ok=true value=0 | cache_used ok=true value=9984 | note the spill counter below belongs to THIS connection, not the save's: the product exposes no public surface for the save connection, so a nonzero value here is not the save's spill count
+--- stderr ---

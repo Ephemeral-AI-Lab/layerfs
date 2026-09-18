@@ -1,0 +1,9 @@
+{
+  "name": "storage.save",
+  "elapsed_ns": 5106791,
+  "children": [
+    {"name": "store.create", "elapsed_ns": 2393250, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 355625, "children": []},
+    {"name": "storage.finish", "elapsed_ns": 1992875, "children": []}
+  ]
+}

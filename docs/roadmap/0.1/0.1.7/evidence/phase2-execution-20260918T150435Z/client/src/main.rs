@@ -416,7 +416,7 @@ fn probe_c2(rows: usize, cache: &str) {
     let _ = &store;
     let elapsed = started.elapsed().as_nanos();
     println!(
-        "c2 rows {} canonical_bytes {} cache_arm {} elapsed_ns {} inserted {} reused {} packs_created {} pack_appends {} commits {} full_records {} prefix_records {} pool_leaves {} pool_new_values {} pool_groups {} pool_delta_leaves {} pool_trials {}",
+        "c2 rows {} canonical_bytes {} cache_arm {} elapsed_ns {} inserted {} reused {} packs_created {} pack_appends {} commits {} statements {} full_records {} prefix_records {} pool_leaves {} pool_new_values {} pool_groups {} pool_delta_leaves {} pool_trials {}",
         rows,
         total_bytes,
         cache,
@@ -426,6 +426,7 @@ fn probe_c2(rows: usize, cache: &str) {
         outcome.packs_created,
         outcome.pack_appends,
         outcome.commits,
+        outcome.statements,
         outcome.full_records,
         outcome.prefix_records,
         outcome.pool.leaves,

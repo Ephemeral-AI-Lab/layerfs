@@ -152,9 +152,15 @@ def main():
     if "extra" in sets:
         run(round_dir, "D27", "edit-timing-c1-nodes-read", [str(CORE / "edit_timing_c1")])
 
-    if "c2" in sets:
-        run(round_dir, "D28", "c2-ceiling-default", [CLIENT, "c2", "8191", "default"])
-        run(round_dir, "D29", "c2-small-default", [CLIENT, "c2", "1023", "default"])
+    if "c2" in sets or "c2-repeat" in sets:
+        if "c2-repeat" not in sets:
+            run(round_dir, "D28", "c2-ceiling-default", [CLIENT, "c2", "8191", "default"])
+            run(round_dir, "D29", "c2-small-default", [CLIENT, "c2", "1023", "default"])
+        # X3 is D28's labelled determinism re-run: the write-path rows (D28/D29)
+        # had no repeat in the Phase 0/1 sets, and CONTRACT.md §2.4 requires one
+        # per round for the primary row. Added with V5's round (ROUND-README.md
+        # correction 1); every other frozen row is untouched.
+        run(round_dir, "X3", "c2-ceiling-repeat", [CLIENT, "c2", "8191", "default"])
 
     if "diag" in sets or "X2" in sets:
         if "diag" in sets:

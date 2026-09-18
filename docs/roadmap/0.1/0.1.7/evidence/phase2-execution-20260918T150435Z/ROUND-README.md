@@ -36,6 +36,19 @@ the eight checks are inherited from
    (`B2`) and records its sha256 in `artifacts.txt`. `target/` is ignored by the
    repository `.gitignore` and is never quoted as evidence.
 
+## Driver corrections (recorded, not silent)
+
+1. **`X3` added to `collect.py` (2026-09-18, with V5's round).** `CONTRACT.md` §2.4
+   requires one labelled determinism re-run per round for the round's primary row.
+   The write-path rows `D28`/`D29` had none in the Phase 0/1 sets (`X1` repeats
+   `D26`, `X2` repeats `D5`), so `c2-repeat` runs `c2 8191 default` a second time
+   as `X3`. Additive: no frozen row, case, parameter or printed field changes.
+2. **`compare_arms.py` added (2026-09-18, with P2-0's round).** Strips every timing
+   field and each arm's own output path, then compares all measurement steps.
+   `elapsed` is diagnostic-grade (`CONTRACT.md` §2.4), so a before/after claim is a
+   counter claim. It excludes the two build steps by name and is proven live by a
+   perturbed-copy control in P2-0's receipt §2.
+
 ## What each round directory holds
 
 ```text
