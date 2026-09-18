@@ -410,6 +410,26 @@ FULL/PREFIX choice. That is a placement decision, not a representation change.
 ```
 
 `StoreReadCounters` reports `objects`, `packs_read`, `pages`, `ceiling`, `edges`,
-`max_depth`, `canonical_bytes` — including the **ceiling applied to every acquired
-location**, so a receipt can show which visibility watermark a read actually
-observed.
+`max_depth`, `canonical_bytes`, `opens` — including the **ceiling applied to every
+acquired location**, so a receipt can show which visibility watermark a read
+actually observed, and the connections the wave opened.
+
+**Two lifetimes, one wave.** `Store::read_batch` is the wave: it opens its own
+connection, captures the ceiling, decodes and closes. `StoreProvider` — the bridge
+C1 reads through — is an **operation**: its first wave opens a `ReadSession` (one
+connection with the declared profile plus one decode arena) and every later wave of
+that operation reuses both, so an operation's connection cost is `O(1)` rather than
+`O(waves)`. The session lives behind a `RefCell` in the provider, never in the
+`Store`: the Store is shared and `Sync`, while a session is one operation's private
+state, and the provider is therefore `!Sync` by construction.
+
+The wave's declared demand bound is enforced on both doors: `read_objects`'s own
+`check_read_demand` runs in the Store's entry point and in `ReadSession::read`, and
+the provider checks it **before** the session exists, so a demand over
+`READ_OBJECT_LIMIT` is refused without opening anything.
+
+What a session deliberately does **not** pool is the ceiling. It is the publication
+watermark, so it is re-read for every wave and a save that completed between two
+waves is visible to the second one; pooling it would turn an operation's later
+waves into a snapshot of its first. `opens` reports `1` on the wave that opened the
+session and `0` on the waves that reused it.

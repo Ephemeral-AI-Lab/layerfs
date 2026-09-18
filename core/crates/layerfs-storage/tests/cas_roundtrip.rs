@@ -237,6 +237,112 @@ fn a_read_wave_is_bounded_by_the_declared_ceiling() {
 }
 
 #[test]
+fn a_pooled_session_opens_one_connection_for_every_wave() {
+    // P1-2: the operation's session, not the wave, owns the connection and the
+    // decode arena. Three waves through one provider are one open, and the
+    // per-wave counter reports the open only on the wave that made it.
+    let dir = TempDir::new("pooled-session");
+    let path = dir.store_path("pooled-session");
+    let store = create_store(&path);
+    let (collected, root, _) = construct_file(&patterned(64));
+    save_all(&store, &collected).unwrap();
+
+    let provider = layerfs_storage::StoreProvider::new(&store);
+    let mut opens = Vec::new();
+    for _ in 0..3 {
+        let (values, counters) =
+            disabled(|scope| provider.read_wave(&[root], scope.child("storage.read")))
+                .expect("wave");
+        assert_eq!(values.len(), 1);
+        opens.push(counters.opens);
+    }
+    assert_eq!(opens, vec![1, 0, 0], "only the first wave opens");
+    assert_eq!(
+        provider.connection_opens(),
+        1,
+        "one session, one connection"
+    );
+
+    // The Store's own call is unchanged: a direct `read_batch` still opens its
+    // own connection per call, because pooling is the provider's per-operation
+    // state and not a property of the shared Store.
+    let (_values, counters) = read_objects(&store, &[root]).expect("direct read");
+    assert_eq!(counters.opens, 1, "a direct read wave still opens its own");
+}
+
+#[test]
+fn an_oversized_provider_demand_is_refused_before_the_session_opens() {
+    // The wave's declared bound survives the pooling: a demand over
+    // `read_objects` is refused, and it is refused **before** the session exists,
+    // so a refused call opens no connection. Without this check the pooled path
+    // would reach `read_objects` without the Store's own entry-point guard.
+    let dir = TempDir::new("provider-demand");
+    let path = dir.store_path("provider-demand");
+    let store = create_store(&path);
+    let (collected, root, _) = construct_file(&patterned(64));
+    save_all(&store, &collected).unwrap();
+    let limit = store.capacities().read_objects;
+    let provider = layerfs_storage::StoreProvider::new(&store);
+    let over = vec![ObjectId::for_bytes(b"not-stored"); limit + 1];
+    match disabled(|scope| provider.read_wave(&over, scope.child("storage.read"))) {
+        Err(StorageError::CapacityExceeded { what, .. }) => {
+            assert_eq!(what, "storage.read_objects");
+        }
+        other => panic!("an oversized provider demand must be refused: {other:?}"),
+    }
+    assert_eq!(
+        provider.connection_opens(),
+        0,
+        "the refusal happens before any connection is opened"
+    );
+    // And a served demand still goes through the session.
+    let (values, counters) =
+        disabled(|scope| provider.read_wave(&[root], scope.child("storage.read")))
+            .expect("a demand at the ceiling is served");
+    assert_eq!(values.len(), 1);
+    assert_eq!(counters.opens, 1);
+    assert_eq!(provider.connection_opens(), 1);
+}
+
+#[test]
+fn a_pooled_session_sees_a_save_that_completed_between_its_waves() {
+    // The one thing a session must NOT pool: the visibility ceiling. It is the
+    // publication watermark, so a save that completed between two waves is
+    // visible to the second one. A session that captured the ceiling once would
+    // refuse this read with a visibility error.
+    let dir = TempDir::new("session-ceiling");
+    let path = dir.store_path("session-ceiling");
+    let store = create_store(&path);
+    let (first, first_root, _) = construct_file(&patterned(2_048));
+    save_all(&store, &first).unwrap();
+
+    let provider = layerfs_storage::StoreProvider::new(&store);
+    let (values, counters) =
+        disabled(|scope| provider.read_wave(&[first_root], scope.child("storage.read")))
+            .expect("first wave");
+    assert_eq!(values.len(), 1);
+    let first_ceiling = counters.ceiling;
+
+    let (second, second_root, _) = construct_file(&patterned(4_096));
+    save_all(&store, &second).unwrap();
+
+    let (values, counters) =
+        disabled(|scope| provider.read_wave(&[second_root], scope.child("storage.read")))
+            .expect("a save between the waves is visible to the second one");
+    assert_eq!(values.len(), 1);
+    assert!(
+        counters.ceiling > first_ceiling,
+        "the ceiling advanced across the save: {first_ceiling} -> {}",
+        counters.ceiling
+    );
+    assert_eq!(
+        provider.connection_opens(),
+        1,
+        "both waves still share the session's connection"
+    );
+}
+
+#[test]
 fn a_read_wave_reports_the_connection_it_opened() {
     // The read wave's own connection counter (#178 V3): one `read_batch` call is
     // one wave and opens exactly one connection, whether it carries one id or a

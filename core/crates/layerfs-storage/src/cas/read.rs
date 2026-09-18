@@ -8,6 +8,7 @@
 //! identity it was stored under.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use rusqlite::Connection;
 
@@ -17,7 +18,7 @@ use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::delta::read::{ChainCounters, Resolver};
 use crate::error::{StorageError, StorageResult};
 use crate::policy::StorageCapacities;
-use crate::sqlite::lookup;
+use crate::sqlite::{connection, lookup, schema};
 
 /// Work performed by one bounded read wave.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -98,4 +99,64 @@ pub fn read_objects(
     counters.max_depth = totals.max_depth;
     counters.canonical_bytes = totals.canonical_bytes;
     Ok((values, counters))
+}
+
+/// Refuses a demand larger than the declared read ceiling.
+///
+/// The ceiling is a caller-declared resource, not a trigger: a wave that exceeds
+/// it fails before it reads anything. It is checked here as well as at the Store's
+/// own entry point because the pooled session is a second way into
+/// [`read_objects`], and a bound that only one of two doors enforces is not a
+/// bound.
+pub(crate) fn check_read_demand(ids: &[ObjectId], limit: usize) -> StorageResult<()> {
+    if ids.len() > limit {
+        return Err(StorageError::CapacityExceeded {
+            what: "storage.read_objects",
+            limit: limit as u64,
+            actual: ids.len() as u64,
+        });
+    }
+    Ok(())
+}
+
+/// One operation's pooled read session.
+///
+/// A wave pays two fixed costs before it reads anything: a connection (with the
+/// declared pragma profile) and a decode arena. Both belong to the **operation**
+/// rather than to the wave, so a session opens them once and every wave of that
+/// operation reuses them. What is deliberately **not** pooled is the visibility
+/// ceiling: it is the publication watermark, it is re-read for every wave, and a
+/// save that completed between two waves is visible to the second one. Pooling it
+/// would turn one operation's later waves into a snapshot of its first.
+pub struct ReadSession {
+    connection: Connection,
+    workspace: DecompressionWorkspace,
+}
+
+impl ReadSession {
+    /// Opens one session over `path`: a connection with the declared profile and
+    /// an empty decode arena, which materialises on the first decompression.
+    pub fn open(path: &Path) -> StorageResult<Self> {
+        Ok(Self {
+            connection: connection::open(path, false)?,
+            workspace: DecompressionWorkspace::new()?,
+        })
+    }
+
+    /// Reads one wave under a ceiling captured for this wave alone.
+    pub fn read(
+        &mut self,
+        ids: &[ObjectId],
+        capacities: &StorageCapacities,
+    ) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
+        check_read_demand(ids, capacities.read_objects)?;
+        let ceiling = schema::retained_pack_ceiling(&self.connection)?;
+        read_objects(
+            &self.connection,
+            ids,
+            ceiling,
+            capacities,
+            &mut self.workspace,
+        )
+    }
 }

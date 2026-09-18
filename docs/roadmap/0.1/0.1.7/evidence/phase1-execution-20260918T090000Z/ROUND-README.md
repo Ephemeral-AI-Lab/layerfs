@@ -9,6 +9,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `v1` | V1 — `filesystem_timing_c1` prints `counters.validation` | collected (`after/`) |
 | `v2` | V2 — `edit_memory_probe` + `edit_timing_c1 --case delete/shrink` | collected (`after/`) |
 | `v3` | V3 — `StoreReadCounters.opens` + the vehicle print | collected (`after/`) |
+| `p1-2` | P1-2 — pooled per-operation read session | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 

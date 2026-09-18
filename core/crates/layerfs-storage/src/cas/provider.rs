@@ -8,12 +8,13 @@
 //! nothing - the values it returns are the canonical bytes the Store
 //! reconstructed and authenticated.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use layerfs_content::object::{AuthenticatedObjects, ObjectId};
 use layerfs_content::{ContentError, ContentResult};
 use layerfs_telemetry::timer::{Timing, TimingScope};
 
+use crate::cas::read::{check_read_demand, ReadSession};
 use crate::cas::store::{Store, StoreReadCounters};
 use crate::error::{StorageError, StorageResult};
 
@@ -53,23 +54,31 @@ fn provider_error(error: StorageError) -> ContentError {
 }
 
 /// A Store presented as C1's authenticated canonical-object provider.
+///
+/// The provider is one **operation's** adapter, and it carries that operation's
+/// pooled read session: the first wave opens the connection and the decode arena,
+/// every later wave reuses them, and the visibility ceiling is re-read per wave.
+/// The session lives behind a [`RefCell`] in the provider and not in the [`Store`],
+/// because the Store is shared and `Sync` while a session is one operation's
+/// private state. The provider is therefore `!Sync`, which is the honest shape.
 pub struct StoreProvider<'a> {
     store: &'a Store,
+    /// The operation's session, opened by its first wave.
+    session: RefCell<Option<ReadSession>>,
     /// Connections this provider's waves opened.
     ///
-    /// A wave reports its own open through [`StoreReadCounters::opens`]; a
-    /// caller that drives a whole operation through one provider reads the sum
-    /// here instead of threading counters through every call. The cell makes the
-    /// provider `!Sync`, which is the honest shape: it is one operation's
-    /// adapter, not a shared one.
+    /// A wave reports its own open through [`StoreReadCounters::opens`]; a caller
+    /// that drives a whole operation through one provider reads the sum here
+    /// instead of threading counters through every call.
     opens: Cell<u64>,
 }
 
 impl<'a> StoreProvider<'a> {
-    /// Wraps one Store as a provider.
+    /// Wraps one Store as a provider with no session yet.
     pub const fn new(store: &'a Store) -> Self {
         Self {
             store,
+            session: RefCell::new(None),
             opens: Cell::new(0),
         }
     }
@@ -79,7 +88,7 @@ impl<'a> StoreProvider<'a> {
         self.opens.get()
     }
 
-    /// Reads one wave and returns the Store's own counters beside the values.
+    /// Reads one wave through the operation's session.
     ///
     /// This is the form an adapter with a timing tree of its own uses: the
     /// caller's scope becomes the wave's node, so the connection, the ceiling
@@ -90,9 +99,36 @@ impl<'a> StoreProvider<'a> {
         ids: &[ObjectId],
         scope: TimingScope<'_>,
     ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
-        let (values, counters) = self.store.read_batch(ids, scope)?;
-        self.opens.set(self.opens.get() + counters.opens);
-        Ok((values, counters))
+        scope.run(|read_scope| {
+            // The wave's declared bound is checked before the session exists, so a
+            // refused demand opens nothing.
+            check_read_demand(ids, self.store.capacities().read_objects)?;
+            let mut slot = self.session.borrow_mut();
+            let opened = slot.is_none();
+            if opened {
+                *slot = Some(ReadSession::open(self.store.path())?);
+            }
+            let session = slot.as_mut().expect("the session was just opened");
+            let (values, counters) = read_scope
+                .child("storage.read")
+                .run(|_| session.read(ids, &self.store.capacities()))?;
+            if opened {
+                self.opens.set(self.opens.get() + 1);
+            }
+            Ok((
+                values,
+                StoreReadCounters {
+                    objects: counters.objects,
+                    packs_read: counters.packs_read,
+                    pages: counters.pages,
+                    ceiling: counters.ceiling,
+                    edges: counters.edges,
+                    max_depth: counters.max_depth,
+                    canonical_bytes: counters.canonical_bytes,
+                    opens: u64::from(opened),
+                },
+            ))
+        })
     }
 }
 

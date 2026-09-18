@@ -14,6 +14,7 @@ use layerfs_telemetry::timer::TimingScope;
 
 use crate::cas::batch::PendingBatch;
 use crate::cas::owner::{MutationOwner, OutcomeCounters};
+use crate::cas::read::check_read_demand;
 use crate::cas::{finish, read, save};
 use crate::encoding::delta::read::ChainCounters;
 use crate::encoding::delta::select::DeltaCounters;
@@ -258,22 +259,6 @@ impl Store {
             lookup::present(&connection, ids, ceiling)
         })
     }
-}
-
-/// Refuses a demand larger than the declared read ceiling.
-///
-/// The ceiling is a caller-declared resource, not a trigger: a wave that exceeds
-/// it fails before a connection is opened, so a caller cannot turn one query into
-/// unbounded decode work by passing a longer slice.
-fn check_read_demand(ids: &[ObjectId], limit: usize) -> StorageResult<()> {
-    if ids.len() > limit {
-        return Err(StorageError::CapacityExceeded {
-            what: "storage.read_objects",
-            limit: limit as u64,
-            actual: ids.len() as u64,
-        });
-    }
-    Ok(())
 }
 
 /// One exclusive save operation with bounded acceptance.
