@@ -8,6 +8,8 @@
 //! nothing - the values it returns are the canonical bytes the Store
 //! reconstructed and authenticated.
 
+use std::cell::Cell;
+
 use layerfs_content::object::{AuthenticatedObjects, ObjectId};
 use layerfs_content::{ContentError, ContentResult};
 use layerfs_telemetry::timer::{Timing, TimingScope};
@@ -53,12 +55,28 @@ fn provider_error(error: StorageError) -> ContentError {
 /// A Store presented as C1's authenticated canonical-object provider.
 pub struct StoreProvider<'a> {
     store: &'a Store,
+    /// Connections this provider's waves opened.
+    ///
+    /// A wave reports its own open through [`StoreReadCounters::opens`]; a
+    /// caller that drives a whole operation through one provider reads the sum
+    /// here instead of threading counters through every call. The cell makes the
+    /// provider `!Sync`, which is the honest shape: it is one operation's
+    /// adapter, not a shared one.
+    opens: Cell<u64>,
 }
 
 impl<'a> StoreProvider<'a> {
     /// Wraps one Store as a provider.
     pub const fn new(store: &'a Store) -> Self {
-        Self { store }
+        Self {
+            store,
+            opens: Cell::new(0),
+        }
+    }
+
+    /// Connections every wave this provider issued opened.
+    pub fn connection_opens(&self) -> u64 {
+        self.opens.get()
     }
 
     /// Reads one wave and returns the Store's own counters beside the values.
@@ -72,7 +90,9 @@ impl<'a> StoreProvider<'a> {
         ids: &[ObjectId],
         scope: TimingScope<'_>,
     ) -> StorageResult<(Vec<Vec<u8>>, StoreReadCounters)> {
-        self.store.read_batch(ids, scope)
+        let (values, counters) = self.store.read_batch(ids, scope)?;
+        self.opens.set(self.opens.get() + counters.opens);
+        Ok((values, counters))
     }
 }
 

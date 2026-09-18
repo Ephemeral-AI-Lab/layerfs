@@ -237,6 +237,46 @@ fn a_read_wave_is_bounded_by_the_declared_ceiling() {
 }
 
 #[test]
+fn a_read_wave_reports_the_connection_it_opened() {
+    // The read wave's own connection counter (#178 V3): one `read_batch` call is
+    // one wave and opens exactly one connection, whether it carries one id or a
+    // grouped demand. The counter exists so P1-2's pooled session has a before
+    // value: today an operation's connections are the sum over its waves.
+    let dir = TempDir::new("read-opens");
+    let path = dir.store_path("read-opens");
+    let store = create_store(&path);
+    let (collected, root, _) = construct_file(&patterned(64));
+    save_all(&store, &collected).unwrap();
+
+    let (values, counters) = read_objects(&store, &[root]).expect("read");
+    assert_eq!(values.len(), 1);
+    assert_eq!(counters.opens, 1, "one wave opens one connection");
+
+    // A grouped demand is still one wave: many ids, one call, one open.
+    let grouped = vec![root; 8];
+    let (values, counters) = read_objects(&store, &grouped).expect("grouped read");
+    assert_eq!(values.len(), 8);
+    assert_eq!(counters.opens, 1, "a grouped demand is one connection");
+
+    // The product bridge carries the same figure, summed over the waves it
+    // issued. The assertion is a BOUND, not an equality, on purpose: today two
+    // waves are two connections, and P1-2 is authorized to pool them into one, so
+    // an equality here would have to be re-pinned by that item. What must hold
+    // both before and after pooling is that the counter is not zero (a wave that
+    // read something opened a connection) and never exceeds the waves issued.
+    let provider = layerfs_storage::StoreProvider::new(&store);
+    assert_eq!(provider.connection_opens(), 0, "no wave yet, no connection");
+    for _ in 0..2 {
+        disabled(|scope| provider.read_wave(&[root], scope.child("storage.read"))).expect("wave");
+    }
+    let opens = provider.connection_opens();
+    assert!(
+        (1..=2).contains(&opens),
+        "two waves open one or two connections, not {opens}"
+    );
+}
+
+#[test]
 fn an_old_same_version_store_is_refused_at_open() {
     // The role ceiling is the one constraint that changes without changing the
     // column shape. A Store written with a narrower one was accepted at open and

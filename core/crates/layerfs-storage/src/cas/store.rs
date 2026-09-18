@@ -88,6 +88,14 @@ pub struct StoreReadCounters {
     pub max_depth: u64,
     /// Canonical bytes reconstructed, including dependencies.
     pub canonical_bytes: u64,
+    /// Connections this read opened.
+    ///
+    /// One `read_batch` call is one wave and opens one connection; a demand
+    /// refused before the open reports nothing because the call returns an
+    /// error. The figure is per wave, so an operation's connection lifetime is
+    /// the sum over the waves it issued, which is what a caller that holds a
+    /// provider across an operation reads back.
+    pub opens: u64,
 }
 
 /// A content-addressed Store at one filesystem path.
@@ -227,6 +235,7 @@ impl Store {
                     edges: counters.edges,
                     max_depth: counters.max_depth,
                     canonical_bytes: counters.canonical_bytes,
+                    opens: 1,
                 },
             ))
         })

@@ -5,7 +5,8 @@
 
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; the two `15.6` counter readings corrected by #178 **C1**
-(2026-09-18) are marked in place and carry their own commit. Scope, method,
+(2026-09-18) and the `opens` counter added by #178 **V3** (2026-09-18) are marked
+in place and carry their own commits. Scope, method,
 measurement status and upkeep are stated in the [index](README.md).
 
 Chapter numbers are global to the set: this paper holds **chapter 15**.
@@ -63,7 +64,7 @@ collect. Until now the set cited them ad hoc with no single inventory.
 | `DeltaCounters` | `encoding/delta/select.rs` | `prepared_full`, `trials`, `prefix_selected`, `full_losses`, `no_candidate`, `absent_candidates`, `ineligible_candidates`, `work_exceeded` |
 | `ChainCounters` | `encoding/delta/read.rs` | `objects`, `edges`, `encoded_bytes`, `canonical_bytes`, `max_depth` |
 | `PoolCounters` | `cas/owner.rs` | `leaves`, `reused_values`, `new_values`, `groups`, `delta_leaves`, `full_leaves`, `trials`, `work_exceeded` |
-| `StoreReadCounters` | `cas/store.rs` | `objects`, `packs_read`, `pages`, `ceiling`, `edges`, `max_depth`, `canonical_bytes` |
+| `StoreReadCounters` | `cas/store.rs` | `objects`, `packs_read`, `pages`, `ceiling`, `edges`, `max_depth`, `canonical_bytes`, `opens` |
 | `CleanupReport` | `sqlite/cleanup.rs` | `objects`, `packs`, `pages` |
 
 `OutcomeCounters` is the internal form `SaveOutcome` is built from; it carries
@@ -178,6 +179,7 @@ with batching; `filesystem_limits.rs` pins it that way
 | `ValidationWork.entries_examined` | tree size | entries **charged to the walk**, which is per-walk scoped |
 | `PoolCounters.reused_values` | deduped values | values that reused an existing ordinal in the bounded window |
 | `StoreReadCounters.ceiling` | a limit | the watermark **applied** to every acquired location |
+| `StoreReadCounters.opens` | connections per operation | connections **this wave** opened (added at V3): one `read_batch` call is one wave and opens one connection, so an operation's connection lifetime is the **sum over the waves it issued** — `StoreProvider::connection_opens()` carries that sum, and P1-2 is the item that lowers it |
 | `ObjectWork.read_waves` | one per object | one per **provider call**: a grouped demand of *n* objects is **one** wave (corrected at C1; it was charged twice) |
 | `SortedWork.pages_read` | stored pages requested | pages **decoded**, including the children a grouped fetch returned (corrected at C1; batched decodes charged nothing) |
 

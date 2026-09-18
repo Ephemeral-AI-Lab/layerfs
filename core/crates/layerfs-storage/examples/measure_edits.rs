@@ -489,14 +489,18 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
     // save: `storage.save` above says what it excluded, so the read cannot sit
     // inside it.
     let read_started = std::time::Instant::now();
+    // Through the product's own provider bridge, so the connection the wave
+    // opened is the one the counter below reports.
+    let reader = StoreReader::new(&store);
     let values = layerfs_telemetry::timer::Timing::disabled(
         "measure.readback",
         |scope| -> Result<Vec<Vec<u8>>, StorageError> {
-            let (values, _) = store.read_batch(&[dependent_id], scope.child("storage.read"))?;
+            let (values, _) = reader.read_wave(&[dependent_id], scope.child("storage.read"))?;
             Ok(values)
         },
     )
     .0?;
+    println!("readback connection opens: {}", reader.connection_opens());
     println!(
         "readback separately labelled elapsed_ns {}",
         read_started.elapsed().as_nanos()
@@ -584,15 +588,18 @@ fn run_pipeline(
         outcome.prefix_records,
         outcome.full_records
     );
+    // One provider across the whole readback: the counter it carries is the
+    // operation's connection lifetime, which is the figure P1-2 pools.
+    let reader = StoreReader::new(&store);
     let (verify, verify_report): (Result<Vec<u8>, ContentError>, TimingReport) =
         timed(options, "verify.readback", |read| {
-            let reader = StoreReader::new(&store);
             let mut out = Vec::new();
             read_all(&reader, edited_root, &mut out, read.child("content.read"))?;
             Ok(out)
         });
     let bytes = verify.map_err(|error| format!("readback failed: {error}"))?;
     println!("readback bytes: {}", bytes.len());
+    println!("readback connection opens: {}", reader.connection_opens());
     let expected: Vec<u8> = {
         let mut model = fixture.base.clone();
         for (index, edit) in fixture.edits.iter().enumerate() {
