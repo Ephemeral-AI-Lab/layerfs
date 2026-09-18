@@ -187,8 +187,13 @@ Recorded here so a reader is not misled by the sections above:
   evidence.
 - **The report's `time max ms` column is the complete-command wall**, not the operation.
   Read `timing.json` for operation time.
-- **44 of 194 passing rows publish no `timing.json`** at all, because `ops/fs.rs` does
-  not call `write_timing`.
+- **56 of 217 passing rows publish no `timing.json`** at all, because `ops/fs.rs` does
+  not call `write_timing`: `c1.many-tiny` 20, `c1.tree.construct-traverse` 12,
+  `c1.change-locality` 12, `c1.fs.build-scale` 8, `c1.tree.namespace-mutation` 4.
+  The figure was 44 of 194 when this section was written; round 4b closed twelve more
+  rows that publish none (the eight `tiny-unlink`/`tiny-bulk-delete` and the four
+  `namespace-*` walk-ceiling tiers), so the gap grew with the pass count rather than
+  shrinking.
 - **The oracle over-verifies and may also under-verify.** Four C2 families do a
   byte-exact read-back their frozen oracle does not require (`c2.delta.cdc-locality` is
   O1 + O3), while the drivers gate "replay root == measured root" — self-consistency,
