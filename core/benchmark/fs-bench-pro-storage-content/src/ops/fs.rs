@@ -567,23 +567,315 @@ pub fn fs_build(
     }
     let scope = scope_of(seed);
 
-    // The walk ceiling is two-sided and is the family's mechanism evidence: a
-    // single build stating exactly 4,096 bindings is accepted and 4,097 is the
-    // first refusal. The probe is a separate, unmeasured operation.
-    let mut gates = Vec::new();
-    if case.entries >= WALK_CEILING as u32 {
-        gates.push(gates::require(
+    // The walk ceiling is two-sided and is the family's mechanism evidence. A tier
+    // whose tree fits one build states it in one operation and declares that it
+    // fits; a tier above the ceiling is grown by successive operations, and
+    // `run_batched_build_row` carries the gate that says so with the batch sizes
+    // it actually used. Exactly one gate owns the identifier per row.
+    if prepared.bindings() > WALK_CEILING {
+        return run_batched_build_row(case, &prepared, scope, context, "fs_build");
+    }
+    let gates = if case.entries >= WALK_CEILING as u32 {
+        vec![gates::require(
             GateClass::Mechanism,
             "g2.walk-ceiling",
-            prepared.bindings() > WALK_CEILING,
+            prepared.bindings() <= WALK_CEILING,
             &format!("{} bindings in one build", prepared.bindings()),
-            &format!("more than {WALK_CEILING}: the tier is grown by successive operations"),
-        ));
-    }
-
+            &format!("at most {WALK_CEILING}: one build states its own bindings"),
+        )]
+    } else {
+        Vec::new()
+    };
     let mut outcome = run_build_row(case, &prepared, scope, context, "fs_build")?;
     outcome.gates.extend(gates);
     Ok(outcome)
+}
+
+/// One completed batch, with the counters and root it produced.
+struct BatchOutcome {
+    result: layerfs_content::FilesystemResult,
+    objects: layerfs_content::ObjectWork,
+}
+
+/// The scratch directory one phase's batch writes its ordering runs into.
+///
+/// One directory per phase per batch, and it is created before the timer: a
+/// `FileBacking` scans its directory for the highest run token it already owns,
+/// and that scan is harness work rather than product work.
+fn batch_directory(context: &OpContext<'_>, phase: &str, index: usize) -> PathBuf {
+    context
+        .output
+        .join("ordering")
+        .join(format!("{phase}-{index:05}"))
+}
+
+/// Creates the scratch directories a batched row needs and returns one backing
+/// per batch, in batch order.
+fn batch_backings(
+    context: &OpContext<'_>,
+    phase: &str,
+    batches: usize,
+) -> Result<Vec<FileBacking>, OpError> {
+    let mut out = Vec::with_capacity(batches);
+    for index in 0..batches {
+        let directory = batch_directory(context, phase, index);
+        std::fs::create_dir_all(&directory)
+            .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+        out.push(FileBacking::new(directory));
+    }
+    Ok(out)
+}
+
+/// Runs one batch inside the timed region with a non-retaining consumer.
+///
+/// `base` selects the entry point: `None` is `build_filesystem`, `Some` is
+/// `update_filesystem` against the root the previous batch produced. The reader
+/// is the fixture chain, which already holds every object any batch's base names
+/// — including one an operation reads back after emitting it, which is why the
+/// chain has to be built before the timer rather than carried through it.
+fn measure_batch(
+    batch: &crate::ops::fs_fixture::Batch,
+    base: Option<FilesystemRootId>,
+    scope: layerfs_content::InodeScope,
+    fixture: &TreeStore,
+    backing: &mut FileBacking,
+) -> Result<BatchOutcome, layerfs_content::ContentError> {
+    let input = FilesystemInput {
+        base,
+        scope,
+        root_serial: ROOT_SERIAL,
+        directories: &batch.directories,
+        inodes: &batch.inodes,
+        new_inodes: &batch.new_inodes,
+        resources: resources(),
+    };
+    let mut consumer = DiscardingConsumer::new();
+    let reader = PairProvider::new(fixture, fixture);
+    let mut objects = FilesystemObjects::new(&reader, &mut consumer);
+    let backing = as_backing(Some(backing));
+    let result = match base {
+        None => build_filesystem(&mut objects, &input, backing)?,
+        Some(_) => update_filesystem(&mut objects, &input, backing)?,
+    };
+    Ok(BatchOutcome {
+        result,
+        objects: objects.work(),
+    })
+}
+
+/// Builds the fixture chain: the same batches into an authenticating store.
+///
+/// This is the oracle as well as the fixture. It is unmeasured, it runs the same
+/// product entry points over the same inputs, and it returns every batch's root
+/// so the measured chain can be compared against it step by step rather than
+/// only at the end. Its reader is the in-flight overlay, because a filesystem
+/// update reads back objects it emitted earlier in the same operation; the
+/// objects it retains live outside the timed region, so nothing here is charged
+/// to the product's heap window.
+fn fixture_chain(
+    batches: &[crate::ops::fs_fixture::Batch],
+    scope: layerfs_content::InodeScope,
+    context: &OpContext<'_>,
+) -> Result<(TreeStore, Vec<FilesystemRootId>), OpError> {
+    let mut fixture = TreeStore::new();
+    let mut backings = batch_backings(context, "fixture", batches.len())?;
+    let mut roots: Vec<FilesystemRootId> = Vec::with_capacity(batches.len());
+    let mut base = None;
+    for (index, batch) in batches.iter().enumerate() {
+        let input = FilesystemInput {
+            base,
+            scope,
+            root_serial: ROOT_SERIAL,
+            directories: &batch.directories,
+            inodes: &batch.inodes,
+            new_inodes: &batch.new_inodes,
+            resources: resources(),
+        };
+        let mut shared = SharedStore::new();
+        let (outcome, _) = Timing::disabled("oracle.replay", |_scope: &TimingScope<'_, Active>| {
+            let reader = shared.reader(&fixture);
+            let mut objects = FilesystemObjects::new(&reader, &mut shared);
+            let backing = as_backing(Some(&mut backings[index]));
+            let result = match base {
+                None => build_filesystem(&mut objects, &input, backing),
+                Some(_) => update_filesystem(&mut objects, &input, backing),
+            };
+            result.map(|result| result.root)
+        });
+        let root = outcome.map_err(|error| OpError::Product(format!("{error:?}")))?;
+        shared.absorb_into(&mut fixture);
+        roots.push(root);
+        base = Some(root);
+    }
+    Ok((fixture, roots))
+}
+
+/// A row whose measured phase builds a tree larger than one walk may charge.
+///
+/// `MAXIMUM_WALK_ENTRIES` is charged once per whole-tree walk and a build states
+/// its own bindings, so the product refuses one build above the ceiling and the
+/// declared route for a larger tree is several operations that each stay under
+/// it. The row measures **all** of them inside one timer: the tier's tree is the
+/// subject, and splitting the timer per batch would hide the chain's own cost.
+/// The batch structure is declared in the row's notes rather than inferred.
+fn run_batched_build_row(
+    case: &Case,
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    context: &mut OpContext<'_>,
+    label: &'static str,
+) -> Result<OpOutcome, OpError> {
+    let batches = match prepared.batches(WALK_CEILING) {
+        Ok(batches) => batches,
+        Err(defect) => return Ok(unmeasured(&OpError::Io(defect), Vec::new())),
+    };
+    let (fixture, fixture_roots) = fixture_chain(&batches, scope, context)?;
+    let Some(fixture_root) = fixture_roots.last().copied() else {
+        return Ok(unmeasured(
+            &OpError::Io("the batch plan is empty".to_string()),
+            Vec::new(),
+        ));
+    };
+    // Every backing is created before the timer, so the measured phase performs
+    // no harness directory scan and owns no harness allocation it did not earn.
+    let mut backings = batch_backings(context, "measured", batches.len())?;
+
+    let mut roots: Vec<FilesystemRootId> = Vec::with_capacity(batches.len());
+    let mut objects = layerfs_content::ObjectWork::default();
+    let mut counters = layerfs_content::filesystem::FilesystemUpdateCounters::default();
+    let mut last: Option<layerfs_content::FilesystemResult> = None;
+    instruments::heap_begin();
+    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+        let mut base = None;
+        for (index, batch) in batches.iter().enumerate() {
+            let measured = measure_batch(batch, base, scope, &fixture, &mut backings[index])?;
+            roots.push(measured.result.root);
+            objects.objects_read += measured.objects.objects_read;
+            objects.read_waves += measured.objects.read_waves;
+            objects.bytes_read += measured.objects.bytes_read;
+            objects.objects_emitted += measured.objects.objects_emitted;
+            objects.bytes_emitted += measured.objects.bytes_emitted;
+            counters.bindings_added += measured.result.counters.bindings_added;
+            counters.bindings_removed += measured.result.counters.bindings_removed;
+            counters.directory_updates += measured.result.counters.directory_updates;
+            counters.base_records_read += measured.result.counters.base_records_read;
+            counters.validation.entries_examined +=
+                measured.result.counters.validation.entries_examined;
+            counters.directories.pages_read += measured.result.counters.directories.pages_read;
+            counters.inodes.pages_read += measured.result.counters.inodes.pages_read;
+            last = Some(measured.result);
+            base = Some(measured.result.root);
+        }
+        Ok::<_, layerfs_content::ContentError>(())
+    });
+    let heap = instruments::heap_end();
+    if let Err(error) = outcome {
+        return Ok(unmeasured(
+            &OpError::Product(format!("{error:?}")),
+            Vec::new(),
+        ));
+    }
+    let Some(mut result) = last else {
+        return Ok(unmeasured(
+            &OpError::Io("the measured chain produced no root".to_string()),
+            Vec::new(),
+        ));
+    };
+    // The row publishes the **chain's** counters, not the last batch's: the tier
+    // is the tree, and a counter that reported one operation would understate the
+    // work the row actually charged.
+    result.counters = counters;
+    let measured_root = result.root;
+    let measured = Measured {
+        result,
+        objects,
+        report,
+        heap,
+    };
+    record_counters(context, &measured, label)?;
+    let largest = batches.iter().map(|batch| batch.bindings()).max().unwrap_or(0);
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.operations"),
+        batches.len() as i128,
+        "operations",
+        "declared multi-operation structure of the tier",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.batch_bindings_max"),
+        largest as i128,
+        "bindings",
+        "largest batch, against the walk ceiling",
+    )?;
+    let mut gates = common_gates(&measured, &measured.result, label);
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.walk-ceiling",
+        largest <= WALK_CEILING,
+        &format!("{} operations, largest {largest} bindings", batches.len()),
+        &format!("every operation states at most {WALK_CEILING} bindings"),
+    ));
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o4-chain-roots",
+        roots == fixture_roots,
+        &format!("{} batch roots reproduced", roots.len()),
+        &format!(
+            "{} roots from the unmeasured fixture chain",
+            fixture_roots.len()
+        ),
+    ));
+    let listing = listings_match(&fixture, fixture_root, prepared)?;
+    match listing {
+        Ok(directories) => {
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("{label}.listing_directories"),
+                directories as i128,
+                "directories",
+                "O4 listing compared against the fixture manifest",
+            )?;
+            gates.push(gates::require(
+                GateClass::Correctness,
+                "g1.o4-listing",
+                true,
+                &format!("{directories} directories equal the manifest"),
+                "every directory's bindings equal the fixture manifest",
+            ));
+        }
+        Err(disagreement) => gates.push(Gate::fail(
+            GateClass::Correctness,
+            "g1.o4-listing",
+            &disagreement,
+            "every directory's bindings equal the fixture manifest",
+        )),
+    }
+    let _ = measured_root;
+
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("recipe_profile: {}", prepared.recipe.profile),
+            format!("recipe_entries: {}", prepared.recipe.entries),
+            format!("recipe_directories: {}", prepared.recipe.directories),
+            format!("bindings: {}", prepared.bindings()),
+            format!(
+                "multi_operation: {} batches of at most {WALK_CEILING} bindings; the first is a \
+                 build and the rest are updates that state new files only",
+                batches.len()
+            ),
+            "cache_state: warm-in-process-fixture; the input and every batch's base are built \
+             before the timed region"
+                .to_string(),
+            "measured_consumer: discarding; each batch's base is a fixture input".to_string(),
+            "oracle_phase: separate-unmeasured-replay".to_string(),
+        ],
+    })
+    .map(|outcome| {
+        let _ = case;
+        outcome
+    })
 }
 
 /// The declared `c1.fs.build-scale` ladder, by entry count.

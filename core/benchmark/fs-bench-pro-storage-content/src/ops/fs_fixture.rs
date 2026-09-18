@@ -82,6 +82,31 @@ impl Recipe {
     }
 }
 
+/// One operation of a multi-operation build.
+///
+/// A batch owns its own directory updates, inode values and declared new
+/// serials, so it can be handed to `build_filesystem` (the first batch) or
+/// `update_filesystem` (every later one) without the driver reassembling
+/// anything. `PreparedTree::batches` is the only producer.
+pub struct Batch {
+    /// The final bindings this operation states, sorted by parent.
+    pub directories: Vec<DirectoryUpdate>,
+    /// The typed values this operation declares, sorted by serial.
+    pub inodes: Vec<InodeUpdate>,
+    /// The serials this operation allocates, sorted and unique.
+    pub new_inodes: Vec<u64>,
+}
+
+impl Batch {
+    /// Bindings this operation states, which is what the walk charges.
+    pub fn bindings(&self) -> usize {
+        self.directories
+            .iter()
+            .map(|update| update.changes.len())
+            .sum()
+    }
+}
+
 /// One prepared input, with the derived views the O4 oracle compares against.
 pub struct PreparedTree {
     /// The recipe it was built from.
@@ -452,6 +477,146 @@ impl PreparedTree {
         let text = std::fs::read_to_string(&path)
             .map_err(|error| format!("{}: {error}", path.display()))?;
         Self::from_text(&text)
+    }
+
+    /// Splits this tree's bindings into the batches a build above the walk
+    /// ceiling needs.
+    ///
+    /// `MAXIMUM_WALK_ENTRIES` is charged once per whole-tree walk and a
+    /// `build_filesystem` states its own bindings, so one build is refused above
+    /// the ceiling; the product's own `limits.rs` doc says a tree larger than that
+    /// "is reached by several operations that each stay under the ceiling". This
+    /// is that route, computed from the **final** tree rather than from a grown
+    /// recipe: `Recipe::files_in` divides `entries` by the directory count, so a
+    /// recipe grown from a smaller one rebinds serials to different directories
+    /// and would make every batch a rebinding of an existing name.
+    ///
+    /// The first batch is a `build_filesystem`. It states the root's bindings and
+    /// every directory's first binding, so each directory inode it declares has an
+    /// update; the remaining batches are `update_filesystem` calls against the
+    /// previous batch's root and state **new regular files only**. No batch
+    /// restates a binding the base already has, which is what keeps
+    /// `check_parent_aliases` from walking the base tree at all.
+    pub fn batches(&self, budget: usize) -> Result<Vec<Batch>, String> {
+        let values: BTreeMap<u64, InodeValue> = self
+            .inodes
+            .iter()
+            .map(|update| (update.serial, update.value))
+            .collect();
+        let root = self
+            .directories
+            .iter()
+            .find(|update| update.parent == ROOT_SERIAL)
+            .ok_or("the tree has no root update")?;
+        if root.changes.len() >= budget {
+            return Err(format!(
+                "{} root bindings do not fit a batch of {budget}",
+                root.changes.len()
+            ));
+        }
+        let derived: Vec<&DirectoryUpdate> = self
+            .directories
+            .iter()
+            .filter(|update| update.parent != ROOT_SERIAL)
+            .collect();
+        if derived.len() > budget - root.changes.len() {
+            return Err(format!(
+                "{} directories do not fit a batch of {budget}",
+                derived.len()
+            ));
+        }
+
+        // The order bindings are stated in: each directory's first binding, so
+        // the build declares every directory it binds, then the rest in path
+        // order. A directory with no binding at all is a recipe defect rather
+        // than a batch defect, and is refused by the caller's own `check`.
+        let mut plan: Vec<(usize, usize)> = Vec::new();
+        for (index, update) in derived.iter().enumerate() {
+            if !update.changes.is_empty() {
+                plan.push((index, 0));
+            }
+        }
+        for (index, update) in derived.iter().enumerate() {
+            for position in 1..update.changes.len() {
+                plan.push((index, position));
+            }
+        }
+
+        let mut batches: Vec<Batch> = Vec::new();
+        let mut cursor = 0_usize;
+        while cursor < plan.len() || batches.is_empty() {
+            let first = batches.is_empty();
+            let capacity = budget - if first { root.changes.len() } else { 0 };
+            let end = (cursor + capacity).min(plan.len());
+            let mut changes: BTreeMap<usize, Vec<(PathName, Option<u64>)>> = BTreeMap::new();
+            for (index, position) in &plan[cursor..end] {
+                changes
+                    .entry(*index)
+                    .or_default()
+                    .push(derived[*index].changes[*position].clone());
+            }
+            cursor = end;
+
+            let mut directories: Vec<DirectoryUpdate> = Vec::new();
+            if first {
+                directories.push(root.clone());
+            }
+            let mut serials: Vec<u64> = Vec::new();
+            if first {
+                serials.push(ROOT_SERIAL);
+                for update in &derived {
+                    serials.push(update.parent);
+                }
+            }
+            for (index, rows) in changes {
+                for (_, binding) in &rows {
+                    if let Some(child) = binding {
+                        serials.push(*child);
+                    }
+                }
+                directories.push(DirectoryUpdate {
+                    parent: derived[index].parent,
+                    changes: rows,
+                });
+            }
+            directories.sort_by_key(|update| update.parent);
+            serials.sort_unstable();
+            serials.dedup();
+            let inodes: Vec<InodeUpdate> = serials
+                .iter()
+                .map(|serial| {
+                    values
+                        .get(serial)
+                        .map(|value| InodeUpdate {
+                            serial: *serial,
+                            value: *value,
+                        })
+                        .ok_or_else(|| format!("no inode value for serial {serial}"))
+                })
+                .collect::<Result<_, _>>()?;
+            let new_inodes: Vec<u64> = if first {
+                serials.clone()
+            } else {
+                serials
+                    .iter()
+                    .copied()
+                    .filter(|serial| *serial != ROOT_SERIAL)
+                    .collect()
+            };
+            batches.push(Batch {
+                directories,
+                inodes,
+                new_inodes,
+            });
+            if end == plan.len() && !first {
+                break;
+            }
+            if end == plan.len() && first {
+                // The first batch already stated everything.
+                break;
+            }
+        }
+        Ok(batches)
     }
 
     /// Asserts the ordering rules `FilesystemInput::check` applies.

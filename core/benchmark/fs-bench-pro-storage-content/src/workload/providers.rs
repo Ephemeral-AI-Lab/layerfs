@@ -306,6 +306,16 @@ impl SharedStore {
         }
     }
 
+    /// Absorbs everything emitted so far into `target`.
+    ///
+    /// A caller that runs a chain of operations keeps one store per operation and
+    /// reads through a [`PairProvider`]; a caller that has to hand a *later*
+    /// operation the objects an *earlier* one emitted absorbs them here, which
+    /// copies rather than aliases.
+    pub fn absorb_into(&self, target: &mut TreeStore) {
+        target.absorb(&self.inner.borrow());
+    }
+
     /// Number of objects emitted so far.
     pub fn len(&self) -> usize {
         self.inner.borrow().len()
