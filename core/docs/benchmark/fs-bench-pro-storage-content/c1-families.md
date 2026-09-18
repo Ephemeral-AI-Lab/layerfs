@@ -5,7 +5,8 @@
 > Stage 6 [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171).
 > Sibling documents: [`c2-families.md`](c2-families.md),
 > [`memory_cpu_space_support.md`](memory_cpu_space_support.md),
-> [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md).
+> [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md),
+> [`gates_and_oracles.md`](gates_and_oracles.md).
 >
 > This is the case specification that must exist **before** benchmark
 > implementation or sample collection.

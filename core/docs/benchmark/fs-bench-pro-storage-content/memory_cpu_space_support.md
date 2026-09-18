@@ -6,7 +6,8 @@
 > [`c1-families.md`](c1-families.md)) and the C2 families
 > ([#183](https://github.com/Ephemeral-AI-Lab/layerfs/issues/183),
 > [`c2-families.md`](c2-families.md)). Preparation and cache-state
-> discipline live in [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md).
+> discipline live in [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md);
+> the gates and oracles are in [`gates_and_oracles.md`](gates_and_oracles.md).
 >
 > Time is the **fourth observation axis** and it already exists: `layerfs-telemetry`,
 > used unmodified. It is covered in §10.

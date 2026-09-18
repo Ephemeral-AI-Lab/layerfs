@@ -3,7 +3,8 @@
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 > Sibling documents: [`c1-families.md`](c1-families.md),
 > [`c2-families.md`](c2-families.md),
-> [`memory_cpu_space_support.md`](memory_cpu_space_support.md).
+> [`memory_cpu_space_support.md`](memory_cpu_space_support.md),
+> [`gates_and_oracles.md`](gates_and_oracles.md).
 > Consumed by Stage 6 [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171)
 > and its two family issues ([#182](https://github.com/Ephemeral-AI-Lab/layerfs/issues/182),
 > [#183](https://github.com/Ephemeral-AI-Lab/layerfs/issues/183)).
