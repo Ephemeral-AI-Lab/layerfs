@@ -94,6 +94,26 @@ C2-7  payload-random-read-{1,10}m-compact-v2, payload-random-read-{100,500}
 C2-9  <mode> <case> ∈ {c1,c2,pipeline} × {small,chunked,small-to-large,large-to-small,batch}
 ```
 
+### 3.2 Two corrections that land on `c2.footprint`
+
+**`st_blocks` on a clone is a fabricated number.** A COW clone's allocated blocks are
+**shared with the master**, so `store_allocated_bytes = st_blocks * 512` double-counts
+and the O6 gate becomes meaningless. The repo says so twice: *"Copies/APFS clones are
+not allocation controls"* (`0.1.4/issue88-delivery/contract-v1.md:174`) and *"APFS
+clones/copies preserve content, not allocation equivalence"*
+(`0.1.4/issue87-analysis:138`). Therefore the reflink rung is **forbidden for
+`c2.footprint`** and for every row that gates allocated bytes; those rows must use the
+byte-copy rung and carry `allocation_attribution: exclusive`. Logical fields —
+`page_count`, `freelist_count`, `pack_bodies_bytes`, `store_apparent_bytes` —
+remain valid on a clone.
+
+**The footprint SQL can silently become a zero.** `SELECT COALESCE(SUM(length(data)), 0)
+FROM object_packs` (lifted from `tests/memory_bounds.rs:280-282`) returns `0` after a
+table rename — and `0 <= database` **passes** the O6 gate `pack_bodies <= database`.
+`benchmark_rules.md:388` forbids exactly that. `space.py` must assert the table exists
+(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_packs'`) and must
+**not** use `COALESCE`: a missing table is `INCOMPLETE`, never a zero.
+
 ## 4. Boundary ladder (each row two-sided)
 
 | Surface | Constant | Value |
@@ -144,6 +164,22 @@ As [`c1-families.md`](c1-families.md) §5, with two C2-specific additions:
    and the publication watermark (`store_policy.retained_pack_ceiling`, advanced
    only in a save's final transaction). Cold and warm index rows **must not be
    pooled**.
+3. **Custody of the prepared Store (review S2).** `journal_mode = MEMORY` is applied
+   **per connection** (`src/sqlite/connection.rs:30-37`) and is not persisted in the
+   file header, so a clone or copy cannot inherit a journal mode and no
+   `-wal`/`-shm`/`-journal` sidecar can exist for it. The existing sidecar refusal is
+   therefore necessary but **not sufficient**: it cannot detect a Store that is
+   currently *open*. With `synchronous = OFF` a mid-transaction Store has partially
+   written pages, and a copy taken then captures a torn page. Enforce quiescence
+   structurally: build in `staging/`, close, `fsync`, atomic `rename` into
+   `prepared/<digest>/`, `chmod` off `0o222`, and **never release the master path to a
+   sample process** (`master_path_released_to_sample: false`).
+4. **`prepare` has no producer today (review S1).** The artifact table in
+   [`test_setup_and_cache_discipline.md`](test_setup_and_cache_discipline.md) §2 defines
+   `objects/` and `store.sqlite`, but nothing in the design *builds* them — and
+   construction is a product operation, so Python cannot. The child needs an
+   `--emit-objects DIR` mode and a fresh-`--store` mode. No new file (they are the
+   `construct` and `save` ops), but the `prepare` verb is unimplementable without them.
 
 **Axis discipline:** report process heap, RSS, SQLite page cache and `.sqlite`
 file bytes as **separate fields**. `synchronous = OFF` + `journal_mode = MEMORY`
