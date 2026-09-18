@@ -1159,6 +1159,9 @@ fn run_delete_row(
         directories: removals,
         inodes: Vec::new(),
         new_inodes: Vec::new(),
+        // Left empty on purpose: the oracle below compares against the *fixture
+        // manifest* and against `PathNotFound`, not against this input's derived
+        // listing view, because a removed directory is absent rather than empty.
         listings: Vec::new(),
         files: Vec::new(),
         directory_serials: Vec::new(),
@@ -1267,20 +1270,79 @@ fn run_delete_row(
     // input - whose bindings are all absences - and never from the artifact the
     // operation produced, so this is the one correctness reading on this row that
     // the product cannot agree with by construction.
-    // **The listing oracle this row does not have, and why.** The obvious O4 for a
-    // removal is "every directory the fixture has reads back empty", but the
-    // removal input unbinds the root's own bindings too, so the derived
-    // directories are *gone* from the namespace and asking for their listings asks
-    // for paths that no longer exist. Detecting that needs the read path to say
-    // "this name is not bound", and `FilesystemRead::resolve` reports an unbound
-    // name as `ContentError::MissingObject`
-    // (`filesystem/read.rs`, `.ok_or(ContentError::MissingObject)`) - the variant
-    // whose own doc reserves it for "the provider does not hold the requested
-    // object" and which `ProviderFailure` exists to be distinguished from. So a
-    // listing oracle here could not tell a removed path from a corrupt provider,
-    // and a gate built on that would be wrong rather than merely weak. The row
-    // therefore carries the replay-identity gates and the mechanism gate below and
-    // no listing oracle; the gap is recorded rather than papered over.
+    // **The O4 oracle: the root reads back empty, and every directory the removal
+    // unbound is gone.** The removal input unbinds the root's own bindings as well
+    // as each directory's, so the derived directories leave the namespace rather
+    // than becoming empty directories - which is why the expectation is "absent",
+    // not "empty", and why this oracle could not be written before
+    // `ContentError::PathNotFound` existed: `MissingObject` made a removed path and
+    // a broken provider the same answer, so the reading could not tell them apart.
+    //
+    // The expectation is the harness's - the fixture manifest's own directory paths
+    // and the root's emptiness - so this is the one correctness reading on this row
+    // the product cannot agree with by construction. The result's objects are the
+    // replay's emitted set and everything it kept is still addressed in the base, so
+    // the oracle reads through one store holding both; the oracle is unmeasured, so
+    // merging them here costs the measured phase nothing.
+    let mut oracle_store = TreeStore::new();
+    oracle_store.absorb(&store);
+    oracle_store.absorb(&fixture);
+    let mut read = FilesystemRead::new(&oracle_store, measured.result.root)
+        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+    let root_listing = list_all(&mut read, &LogicalPath::root())?;
+    let mut gone = 0_usize;
+    let mut survivors: Vec<String> = Vec::new();
+    let mut misclassified: Vec<String> = Vec::new();
+    for (path, _) in &prepared.listings {
+        if path.is_empty() {
+            continue;
+        }
+        let Ok(logical) = LogicalPath::new(path) else {
+            continue;
+        };
+        match read.stat(&logical) {
+            Err(layerfs_content::ContentError::PathNotFound) => gone += 1,
+            Err(error) => misclassified.push(format!("{path}: {error:?}")),
+            Ok(_) => survivors.push(path.clone()),
+        }
+    }
+    let expected_gone = prepared.listings.len().saturating_sub(1);
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.root_bindings_after"),
+        root_listing.len() as i128,
+        "bindings",
+        "O4 listing of the root, compared against an empty expectation",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.unbound_directories"),
+        gone as i128,
+        "directories",
+        "O4: fixture directories the removal unbound, each reporting PathNotFound",
+    )?;
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o4-emptied",
+        root_listing.is_empty() && expected_gone > 0,
+        &format!(
+            "root holds {} bindings, expected 0 of {} fixture directories removed",
+            root_listing.len(),
+            expected_gone
+        ),
+        "every binding the removal input states as an absence is absent from the root",
+    ));
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o4-unbound",
+        gone == expected_gone && survivors.is_empty() && misclassified.is_empty(),
+        &format!(
+            "{gone} of {expected_gone} directories report PathNotFound; {} survived, {} misclassified",
+            survivors.len(),
+            misclassified.len()
+        ),
+        "every directory the removal unbound reports PathNotFound and nothing else",
+    ));
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.reads-back-its-own-output",
