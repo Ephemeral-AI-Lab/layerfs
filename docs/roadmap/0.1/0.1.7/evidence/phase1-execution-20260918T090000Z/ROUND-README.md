@@ -12,6 +12,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-2` | P1-2 — pooled per-operation read session | collected (`after/`) |
 | `p1-1` | P1-1 — branch children in one wave (width 256) | collected (`after/`) |
 | `p1-3` | P1-3 — materialized branch children in one wave | collected (`after/`) |
+| `p1-4` | P1-4 — validation record demands batched behind one memo | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 

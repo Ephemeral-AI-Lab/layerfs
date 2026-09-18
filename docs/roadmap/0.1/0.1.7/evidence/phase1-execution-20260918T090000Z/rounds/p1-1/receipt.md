@@ -140,3 +140,18 @@ combined 84,279 → 84,279. Method: `tools/production_loc.py` over the first par
 - [x] The only pinned update is the pre-authorized width bound; C1's pin is generalized with its semantics preserved and re-proved on the pre-C1 tree
 - [x] Architecture doc (`04-filesystem.md`) updated in the same commit
 - [x] Eight checks green; parity untouched; determinism labelled; two declined halves recorded
+
+## 10. Correction (appended 2026-09-18, by P1-4's commit)
+
+P1-4 (`bfb01f262`) generalized one assertion of §3's test. Nothing above is
+edited; this section records what changed and why.
+
+`a_wide_branch_page_reads_its_children_in_one_wave` asserted
+`provider.demands() == 119`. The provider is shared with validation, whose own
+lookups are demanded through it, so that total legitimately drops when P1-4's
+record memo removes the repeated reads (119 → 107) — it is a cross-subsystem
+total, not a P1-1 counter. The assertion becomes the invariant that survives
+(every object the operation read was demanded from the provider) and P1-1's own
+counters stay pinned: the 80-wide wave, `boundary_waves == 4`, `objects_read` 96,
+`pages_read` 15 and the root. The wave assertion is unaffected because validation's
+own batch on that fixture is narrower than 32.
