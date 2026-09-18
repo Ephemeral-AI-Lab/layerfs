@@ -378,3 +378,103 @@ changed case. The read-back **is** the proof.
 | The report's time axis | `shared/analyze.py:245` still uses `row.wall_ns` |
 | Cleanup as a phase | nothing copied per case yet |
 | Verification reduction | the oracle still re-hashes per member with a fresh cache per member |
+
+
+## 13. Simplifying verification, and the quick mode (owner directive)
+
+### 13.1 The harness over-verifies against its own frozen oracle
+
+`gates_and_oracles.md` §5 freezes a per-family oracle. The four C2 families with the
+largest verification cost are exactly the four whose frozen oracle **does not ask for
+a read-back**:
+
+| family | frozen oracle | driver does O2 read-back |
+| --- | --- | --- |
+| `c2.delta.cdc-locality` | **O1 + O3** | yes — 12.125 s, not required |
+| `c2.reuse.workspace` | **O1 + O5** | yes, not required |
+| `c2.footprint` | **O6 + O1** | yes, not required |
+| `c2.pool.cold-warm` | **O1 + O3** | yes, not required |
+| `c1.construct.*`, `c1.edit.*`, `pipeline.*`, `c2.read.waves` | includes **O2** | yes — **required** |
+| `c1.many-tiny` | O4 + sampled O2 | already sampled |
+| `c1.tree.*`, `c1.change-locality`, `c1.fs.build-scale` | O4 (+ O5) | no full read-back needed |
+
+1. **Removing the unrequired read-back is compliance, not relaxation.** No contract
+   change, no new stamp, no sampling — and it is the largest verification saving
+   available. Do it **before** any sampling.
+2. **The required oracle may be missing while the unrequired one is done.** The
+   drivers gate "replay root == measured root", which is self-consistency, not O1
+   ("expected root `ObjectId`, from a frozen constant or recomputed off the product
+   path"); and the delta counters are written but I find no gate comparing them to
+   **pinned** values, which is what O3 means. Real O1 = pin the expected result root
+   per case (deterministic from the recipe, and transitive over the whole tree
+   because the root identity digests canonical bytes that reference children by id).
+   Real O3 = gate the counts against pinned values. Both are cheap.
+
+The specification sanctions the cheap oracle for an expensive family in §4: *"the
+parity set stays green plus the pinned identity constants match"*, with the
+sealed-oracle parity set pinned at **35** external tests.
+
+### 13.2 The deterministic 10% sample
+
+Quick mode samples **10% of the workload, deterministically and declared**. Not
+random: the harness is "deterministic from its recipe", and a random sample would let
+the same tree `PASS` one run and `FAIL` the next.
+
+| row shape | declared unit `n` | sample |
+| --- | --- | --- |
+| member rows (`c2.reuse.*`, `c2.delta.*`, `c2.pool.*`) | the member set | `max(1, ceil(n/10))`: member 0, member `n-1`, and every 10th between — endpoints always included, because that is where boundary defects live |
+| single-object rows (`c1.construct.*`, `c1.edit.*`, `c1.cdc.chunk-count`, `c1.transition.*`) | logical length `L` | `max(1, ceil(L/10))` bytes as 10 evenly spaced windows, plus the first and last 64 KiB |
+| tree rows (`c1.many-tiny`, `c1.tree.*`, `c1.change-locality`, `c1.fs.build-scale`) | the manifest | the specification's **already-frozen** `TreeSample` bounds (≤11 files, ≤11 dirs, 3 ranges/file, 64 KiB/range) — no new threshold invented |
+| `c2.footprint` | — | O6 + O1 are O(1); no sample needed |
+
+The selection rule is named in the receipt, so a sample is reproducible from the
+receipt alone.
+
+### 13.3 The mode ladder
+
+| mode | oracle | status it can produce |
+| --- | --- | --- |
+| `full` | the frozen per-family oracle, O2 deduplicated where required | `PASS` |
+| `sample` | the deterministic 10% sample | `INCOMPLETE`, never `PASS` |
+| `none` | nothing | `INCOMPLETE`, never `PASS` |
+| `reused` (`--reuse-pass`) | one identity-matched `status=PASS` receipt | `PASS` |
+
+Every receipt carries `verification_mode`, `verification_declared_units`,
+`verification_sampled_units`, `verification_selection`, `verification_omitted` and
+`reused_proof_identities`, and the report header states the run's mode. **A sampled
+or omitted row is `INCOMPLETE`**, so an iteration run cannot be mistaken for
+admission evidence — which is what makes quick-by-default safe.
+
+Quick is the default for iteration (`--lane smoke`, explicit `--case`); an admission
+run is `full` or declares itself otherwise and is ineligible. Making a sampled oracle
+the default *for evidence* changes a gate frozen before measurement (`CONTRACT.md`
+§1: a change after collection needs a new stamp and a new directory) — an owner
+decision, and per §13.1 it should not be needed, because the specification's own
+oracle is already O(1).
+
+### 13.4 Where O2 is required, deduplicate it
+
+`dedup-cdc-overwrite-500` accepts 110,022 occurrences over roughly **3,665 distinct
+objects** — 30x structural redundancy. Verifying each distinct payload once and then
+verifying each member's traversal, assembling that member's digest from the verified
+payload cache, is **complete** and about a fifth of the cost:
+
+```text
+O2 full read-back (today)                12.125 s   measured
+O1 + O3 as the specification requires      ~0.01 s   projected
+O2 deduplicated by distinct object          ~2-3 s   projected
+deterministic 10% sample                    ~0.2 s   projected
+--reuse-pass                                   0 s
+```
+
+**Do not weaken the read-back where the frozen oracle requires it.** The read-back
+*is* the proof for the logical-equality families. The saving is in not doing it 30
+times over, and in not doing it where it was never required.
+
+### 13.5 Sequence this adds to §11
+
+Phase 0 gains the mode ladder and the six verification fields. Phase 2's order does
+not change. A new Phase 2.5 sits between them: remove the unrequired read-back,
+implement pinned O1 and pinned O3, and deduplicate the required O2 — all before any
+sampling is added, so that "quick" never becomes a substitute for doing the required
+oracle correctly.
