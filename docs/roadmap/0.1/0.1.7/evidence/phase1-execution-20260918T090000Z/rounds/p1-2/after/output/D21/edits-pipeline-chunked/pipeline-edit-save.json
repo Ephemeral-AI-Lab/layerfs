@@ -1,52 +1,52 @@
 {
   "name": "edit.save",
-  "elapsed_ns": 1215000,
+  "elapsed_ns": 1353041,
   "children": [
-    {"name": "storage.begin", "elapsed_ns": 192833, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 267375, "children": []},
     {
       "name": "file.edit",
-      "elapsed_ns": 614958,
+      "elapsed_ns": 573209,
       "children": [
         {
           "name": "edit.base",
-          "elapsed_ns": 271250,
+          "elapsed_ns": 220250,
           "children": [
-            {"name": "edit.base_read", "elapsed_ns": 270250, "children": []}
+            {"name": "edit.base_read", "elapsed_ns": 218708, "children": []}
           ]
         },
         {
           "name": "edit.compare",
-          "elapsed_ns": 277667,
+          "elapsed_ns": 285958,
           "children": [
             {
               "name": "edit.compare.window",
-              "elapsed_ns": 276292,
+              "elapsed_ns": 282916,
               "children": [
                 {
                   "name": "mapping.navigate",
-                  "elapsed_ns": 28917,
+                  "elapsed_ns": 35167,
                   "children": [
-                    {"name": "storage.read", "elapsed_ns": 28458, "children": []}
+                    {"name": "storage.read", "elapsed_ns": 34666, "children": []}
                   ]
                 },
                 {
                   "name": "mapping.payload",
-                  "elapsed_ns": 240709,
+                  "elapsed_ns": 241583,
                   "children": [
-                    {"name": "storage.read", "elapsed_ns": 240500, "children": []}
+                    {"name": "storage.read", "elapsed_ns": 241417, "children": []}
                   ]
                 }
               ]
             }
           ]
         },
-        {"name": "edit.split", "elapsed_ns": 37750, "children": []},
-        {"name": "edit.split", "elapsed_ns": 2916, "children": []},
-        {"name": "edit.split", "elapsed_ns": 750, "children": []},
-        {"name": "content.chunk", "elapsed_ns": 15167, "children": []},
-        {"name": "edit.finish", "elapsed_ns": 2750, "children": []}
+        {"name": "edit.split", "elapsed_ns": 41000, "children": []},
+        {"name": "edit.split", "elapsed_ns": 2333, "children": []},
+        {"name": "edit.split", "elapsed_ns": 334, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 14291, "children": []},
+        {"name": "edit.finish", "elapsed_ns": 3083, "children": []}
       ]
     },
-    {"name": "storage.finish", "elapsed_ns": 337000, "children": []}
+    {"name": "storage.finish", "elapsed_ns": 413500, "children": []}
   ]
 }

@@ -1,9 +1,9 @@
 $ cargo +1.85.1 build --release --offline --locked
 cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/client
 exit_code 0
-wall_s 2.581
+wall_s 2.248
 --- stdout ---
 --- stderr ---
    Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
    Compiling phase0client v0.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/client)
-    Finished `release` profile [optimized] target(s) in 2.54s
+    Finished `release` profile [optimized] target(s) in 2.21s

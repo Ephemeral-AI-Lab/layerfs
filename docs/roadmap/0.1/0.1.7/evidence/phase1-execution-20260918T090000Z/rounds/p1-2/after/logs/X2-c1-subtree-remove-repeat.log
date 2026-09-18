@@ -12,13 +12,13 @@ directories: pages read 1 created 1 reused 0 untouched 0 scratch peak 605 top-le
 inodes: pages read 5 created 1 reused 0 scratch peak 67644
 references: rows 202 spilled 0 values 1 removals 201 released 200 peak pending 202
 validation: objects 0 waves 0 inode_demands 0 inode_pages 0 directory_pages 0 entries_examined 0
-elapsed_ns 228541
-phase validate elapsed_ns 2500
-phase directories elapsed_ns 10000
-phase references elapsed_ns 2958
-phase inodes elapsed_ns 60292
-phase cleanup elapsed_ns 625
-phase root.encode elapsed_ns 1167
+elapsed_ns 217292
+phase validate elapsed_ns 2292
+phase directories elapsed_ns 8250
+phase references elapsed_ns 2875
+phase inodes elapsed_ns 57041
+phase cleanup elapsed_ns 459
+phase root.encode elapsed_ns 875
 report_nodes 7
 prepared_objects 11
 --- stderr ---

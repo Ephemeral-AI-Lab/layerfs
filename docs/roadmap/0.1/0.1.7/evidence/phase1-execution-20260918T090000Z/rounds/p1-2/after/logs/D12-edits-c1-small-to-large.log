@@ -16,13 +16,13 @@ emitted: 18 objects, 263269 canonical bytes
 scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
 exclusions: no database, pack, Store or file is opened in this mode
 --- timing tree (inclusive; overlapping spans add to nothing) ---
-file.edit  556.833us
-  edit.op  551.375us
-    edit.base  22.250us
-      edit.base_read  21.250us
-    edit.compare  667ns
-    content.chunk  512.167us
-    edit.finish  11.750us
+file.edit  582.250us
+  edit.op  572.458us
+    edit.base  26.625us
+      edit.base_read  26.166us
+    edit.compare  708ns
+    content.chunk  527.667us
+    edit.finish  12.958us
 timings: 7 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-2/after/output/D12/edits-c1-small-to-large/c1-edit.json
-wall_seconds: 0.002744
+wall_seconds: 0.003671
 --- stderr ---

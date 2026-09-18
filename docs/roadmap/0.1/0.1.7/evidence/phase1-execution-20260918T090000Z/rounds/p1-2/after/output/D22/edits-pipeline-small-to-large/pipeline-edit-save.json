@@ -1,24 +1,24 @@
 {
   "name": "edit.save",
-  "elapsed_ns": 2451792,
+  "elapsed_ns": 2903375,
   "children": [
-    {"name": "storage.begin", "elapsed_ns": 167958, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 200959, "children": []},
     {
       "name": "file.edit",
-      "elapsed_ns": 942042,
+      "elapsed_ns": 973042,
       "children": [
         {
           "name": "edit.base",
-          "elapsed_ns": 542167,
+          "elapsed_ns": 575583,
           "children": [
-            {"name": "edit.base_read", "elapsed_ns": 541333, "children": []}
+            {"name": "edit.base_read", "elapsed_ns": 574625, "children": []}
           ]
         },
-        {"name": "edit.compare", "elapsed_ns": 458, "children": []},
-        {"name": "content.chunk", "elapsed_ns": 389375, "children": []},
-        {"name": "edit.finish", "elapsed_ns": 8375, "children": []}
+        {"name": "edit.compare", "elapsed_ns": 500, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 387416, "children": []},
+        {"name": "edit.finish", "elapsed_ns": 7750, "children": []}
       ]
     },
-    {"name": "storage.finish", "elapsed_ns": 1146875, "children": []}
+    {"name": "storage.finish", "elapsed_ns": 1413500, "children": []}
   ]
 }

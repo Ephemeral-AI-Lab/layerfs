@@ -1,7 +1,7 @@
 $ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits --mode c1 --case large-to-small --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-2/after/output/D13/edits-c1-large-to-small
 cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
 exit_code 0
-wall_s 0.014
+wall_s 0.015
 --- stdout ---
 mode: c1
 case: large-to-small
@@ -16,15 +16,15 @@ emitted: 2 objects, 510 canonical bytes
 scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
 exclusions: no database, pack, Store or file is opened in this mode
 --- timing tree (inclusive; overlapping spans add to nothing) ---
-file.edit  32.959us
-  edit.op  31.333us
-    edit.base  1.750us
-      edit.base_read  917ns
-    edit.compare  625ns
-    edit.split  11.083us
-    edit.split  4.334us
-    edit.split  958ns
-    edit.finish  4.709us
+file.edit  32.375us
+  edit.op  31.041us
+    edit.base  2.292us
+      edit.base_read  1.375us
+    edit.compare  792ns
+    edit.split  10.875us
+    edit.split  4.083us
+    edit.split  667ns
+    edit.finish  5.042us
 timings: 9 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-2/after/output/D13/edits-c1-large-to-small/c1-edit.json
-wall_seconds: 0.002557
+wall_seconds: 0.003535
 --- stderr ---

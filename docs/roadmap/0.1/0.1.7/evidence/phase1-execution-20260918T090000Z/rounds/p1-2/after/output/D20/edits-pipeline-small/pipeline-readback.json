@@ -1,13 +1,13 @@
 {
   "name": "verify.readback",
-  "elapsed_ns": 395667,
+  "elapsed_ns": 425459,
   "children": [
     {
       "name": "content.read",
-      "elapsed_ns": 394292,
+      "elapsed_ns": 424334,
       "children": [
-        {"name": "content.acquire", "elapsed_ns": 391042, "children": []},
-        {"name": "content.emit", "elapsed_ns": 2084, "children": []}
+        {"name": "content.acquire", "elapsed_ns": 421917, "children": []},
+        {"name": "content.emit", "elapsed_ns": 1667, "children": []}
       ]
     }
   ]
