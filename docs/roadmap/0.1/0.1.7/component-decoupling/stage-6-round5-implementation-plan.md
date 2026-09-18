@@ -733,3 +733,20 @@ The lane numbers are conditional on publishing the operation total. **Judge the 
 on the per-row targets**, which are the robust ones: preparation `<= 1.0 s` at every
 tier (tight for the C1 edit 500 MiB rows), cleanup `<= 0.5 s`, and the golden number
 unchanged.
+
+
+### 16.4 Rulings (owner, 2026-09-19) — do not re-open these
+
+1. **The golden number reports; it does not gate**, and it does not drive the budget.
+   `operation_ns` is the report's primary axis and the number tracked round to round.
+   Counters, heap and disk keep deciding, because D1's **+17.6%** same-binary spread
+   cannot separate O(n) from O(log n). Making `elapsed_ns` gate-decide is a
+   `CONTRACT.md` change and is not this round's.
+2. **`FilesystemRead::inode` is in scope, with its own confirmation.** Scoped into #184
+   as its own item: pin both sides of the classification with a test — an unbound name is
+   `PathNotFound`, a provider that does not hold the tree's own root is `MissingObject` —
+   before changing product source, and report a blocker rather than guessing.
+3. **The digest key is the product identity plus a declared fixture-recipe version.**
+   The producer binary is recorded in the manifest as provenance and validated on load,
+   not part of the key. Including it would invalidate every master on every harness edit
+   and leave the round permanently cold.

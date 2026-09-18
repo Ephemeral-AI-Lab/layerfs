@@ -205,21 +205,24 @@ on **one** round-3b row, and the round-4c lane has ten rows the round-3b lane ne
 - **No aggregate gate, no CI workflow, no wrapper.** `tools/preflight.sh` stays retired.
 - **Verify the tree you changed and report exactly which checks ran and which did not.**
 
-## Open questions to resolve before you rely on them
+## Rulings (owner, 2026-09-19) — do not re-open these
 
-1. **Does the golden number gate, or only report?** Recommendation: **report only.**
-   D1's rationale is a **+17.6%** same-binary spread that cannot separate O(n) from
-   O(log n), so `elapsed_ns` never gate-decides; counters, heap and disk keep deciding.
-   Making it gate or drive a budget is a `CONTRACT.md` change and needs an owner ruling.
-2. **`FilesystemRead::inode`** also reports `MissingObject` for a serial the inode table
-   does not hold. Round 4c deliberately left it: in the replacement a serial the table
-   lacks *after* the directory page named it is a torn tree rather than an absent path.
-   Reclassifying it needs its own confirmation. It is scoped into #184; take a ruling
-   before changing product source.
-3. **The digest key.** Include the product identity and a declared **fixture-recipe
-   version**; record the producer binary in the manifest as provenance. Including the
-   producer in the key means every harness edit invalidates all masters and you are
-   permanently cold — which would defeat the whole round.
+1. **The golden number reports; it does not gate.** `operation_ns` is the report's
+   primary axis, the number compared across rows and tracked round to round, and the one
+   number that must not fall. It does **not** decide a gate and does **not** drive the
+   budget: D1's rationale is a **+17.6%** same-binary spread that cannot separate O(n)
+   from O(log n), so counters, heap and disk keep deciding. Do not make `elapsed_ns`
+   gate-decide; that would be a `CONTRACT.md` change and it is not this round's.
+2. **`FilesystemRead::inode` is in scope, but not without its own confirmation.** It also
+   reports `MissingObject` for a serial the inode table does not hold. Round 4c
+   deliberately left it, because in the replacement a serial the table lacks *after* the
+   directory page named it is a torn tree rather than an absent path. It is scoped into
+   #184 as its own item: confirm which class it is, with a test that pins both sides,
+   before changing product source — and report a blocker rather than guessing.
+3. **The digest key is the product identity plus a declared fixture-recipe version.**
+   Record the producer binary in the manifest as provenance and validate it on load, but
+   do **not** put it in the key. Putting it in the key means every harness edit
+   invalidates all masters, you are permanently cold, and the whole round buys nothing.
 
 ## Traps you will otherwise pay for
 
