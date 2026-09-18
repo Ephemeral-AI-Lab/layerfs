@@ -376,3 +376,79 @@ fn the_placement_fit_probe_agrees_with_the_canonical_assembled_length() {
         );
     }
 }
+
+/// A pack never assembles past its lane's limit.
+///
+/// The open pack's running total is the canonical assembled length: the header,
+/// one directory entry per group and every body. A total that starts at zero
+/// instead of at the header is short by `HEADER_LEN`, so the fit probe admits a
+/// group that takes the assembled pack up to `HEADER_LEN` bytes past
+/// `lane.pack_limit()` -- and assembly then refuses its own placement with
+/// `CapacityExceeded { pack.assembled_length }`. A limit no write path can reach
+/// and no read path can return is the failure mode this pins.
+#[test]
+fn a_pack_never_assembles_past_its_lane_limit() {
+    use layerfs_storage::pack::{
+        frame_group, EncodedGroup, GroupCodec, LanePlacement, PackLane, DIRECTORY_ENTRY_LEN,
+        FULL_TAG, HEADER_LEN,
+    };
+
+    let lane = PackLane::Ordinary;
+    let directory = DIRECTORY_ENTRY_LEN;
+    // Four groups must land the assembled pack exactly `HEADER_LEN` past the lane
+    // limit, which is the widest a missing header can overrun it by:
+    // `HEADER_LEN + 4 * (directory + body) == pack_limit + HEADER_LEN`.
+    let body_len = lane.pack_limit() / 4 - directory;
+    assert!(
+        body_len <= lane.body_limit(),
+        "the probe group body must be one the lane accepts"
+    );
+    assert_eq!(
+        HEADER_LEN + 4 * (directory + body_len),
+        lane.pack_limit() + HEADER_LEN,
+        "the probe lands exactly at the widest a missing header can overrun the lane"
+    );
+    // One record, framed: the group body is a 4-byte count and one 4-byte end
+    // offset around the record, so the record is `body_len - 8` bytes -- one tag
+    // byte and `body_len - 9` of filler.
+    let record_len = body_len - 9;
+    // Incompressible filler, so the body is stored exactly as framed and the
+    // arithmetic below is exact rather than dependent on the compressor.
+    let mut record = vec![FULL_TAG];
+    record.extend((0..record_len).map(|index| (index * 31 + 7) as u8));
+    let bytes = frame_group(&[record]).expect("framed group body");
+    assert_eq!(
+        bytes.len(),
+        body_len,
+        "the probe group is the intended width"
+    );
+    let group = EncodedGroup {
+        bytes,
+        decoded_length: body_len,
+        records: 1,
+        codec: GroupCodec::Raw,
+    };
+
+    let mut placement = LanePlacement::new();
+    let mut next_pack_id = 1_i64;
+    let writes = placement
+        .select_many(
+            lane,
+            vec![group.clone(), group.clone(), group.clone(), group],
+            &mut next_pack_id,
+        )
+        .expect("placement must not assemble a pack it will refuse");
+    assert!(!writes.is_empty());
+    for write in &writes {
+        assert!(
+            write.bytes.len() <= lane.pack_limit(),
+            "an assembled pack of {} bytes exceeds the {} limit",
+            write.bytes.len(),
+            lane.pack_limit()
+        );
+    }
+    // The boundary is a real one: the groups fill the lane's pack limit, so the
+    // fourth cannot join the first three.
+    assert_eq!(writes.len(), 2, "the pack boundary is crossed");
+    assert_eq!(writes[0].placed.len(), 3);
+}

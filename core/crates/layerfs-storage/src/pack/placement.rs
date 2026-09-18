@@ -8,7 +8,7 @@
 
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::{assemble, assemble_consuming};
-use crate::pack::layout::{append_fits, directory_entry_len, EncodedGroup, PackLane};
+use crate::pack::layout::{append_fits, directory_entry_len, EncodedGroup, PackLane, HEADER_LEN};
 
 /// One pack this save created and may still append to.
 ///
@@ -102,10 +102,16 @@ impl LanePlacement {
                 *next_pack_id = pack_id
                     .checked_add(1)
                     .ok_or(StorageError::Integrity("pack identifier overflow"))?;
+                // A fresh pack already assembles to its control area. The running
+                // total is the canonical assembled length - header, one directory
+                // entry per group and every body - so it starts at the header, not
+                // at zero: a total without the header lets a pack assemble up to
+                // `HEADER_LEN` bytes past the lane limit, which `assemble` then
+                // refuses with `CapacityExceeded { pack.assembled_length }`.
                 self.open = Some(OpenPack {
                     pack_id,
                     groups: Vec::new(),
-                    assembled: 0,
+                    assembled: HEADER_LEN,
                 });
                 pending = Some((pack_id, true, Vec::new()));
             }
@@ -165,8 +171,9 @@ impl LanePlacement {
         }
         let bytes = if closing {
             // The tail is consumed, so its running total goes with it: the caller
-            // replaces the open pack immediately after a closing assembly.
-            open.assembled = 0;
+            // replaces the open pack immediately after a closing assembly. What is
+            // left is an empty pack, which assembles to its header alone.
+            open.assembled = HEADER_LEN;
             assemble_consuming(lane, std::mem::take(&mut open.groups))?
         } else {
             assemble(lane, &open.groups)?
