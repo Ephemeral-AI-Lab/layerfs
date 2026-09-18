@@ -1,0 +1,7 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/client/target/release/phase0client c2-references 4096
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.229
+--- stdout ---
+c2-references rows 4096 elapsed_ns 220459625 targets inserted 4096 targets presence_queries 0 dependents inserted 4096 dependents presence_queries 8 | note the dependent wave names 4096 stored objects it does not offer, so the availability check must ask about each of them
+--- stderr ---
