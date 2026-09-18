@@ -374,7 +374,7 @@ changed, which invalidates the harness identity.
 | `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check` | clean |
 | `cargo +1.85.1 test --locked --manifest-path core/Cargo.toml` | 472 passed / 0 failed |
 | `cargo +1.85.1 clippy --locked --manifest-path core/Cargo.toml --all-targets -- -D warnings` | clean |
-| `cargo +1.85.1 test --locked --manifest-path $H/Cargo.toml` | 87 passed / 0 failed |
+| `cargo +1.85.1 test --locked --manifest-path $H/Cargo.toml` | 84 passed / 0 failed |
 | `python3 -m unittest discover -s $H/shared -p 'test_*.py'` | OK, 106 tests |
 | `python3 $H/runner.py self-check` | PASS — lock parity 46 entries / 0 mismatches, registry, declared exceptions, golden |
 | `python3 tools/production_loc.py` | core 19517 / reference 65417 / combined **84934** |
