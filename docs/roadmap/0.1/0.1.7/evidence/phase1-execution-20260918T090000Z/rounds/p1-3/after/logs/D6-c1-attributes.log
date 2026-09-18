@@ -1,0 +1,26 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/filesystem_timing_c1 --case attributes --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/rounds/p1-3/after/output/D6/c1-attributes
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.005
+--- stdout ---
+case attributes
+root ac9a8c1761cb06a7e039420809111b3a15088a1a01a2a0afdd056061d3ba6c3c
+inode_table 20b4060746ac32dd61abfe8ee2633eb3a504b1bd237080083994dbfe54e80b21
+directories 0 bindings +0 -0
+objects read 0 waves 0 bytes 0 emitted 5 bytes 507
+directories: pages read 0 created 0 reused 0 untouched 0 scratch peak 0 top-level 1
+inodes: pages read 0 created 0 reused 0 scratch peak 0
+references: rows 0 spilled 0 values 0 removals 0 released 0 peak pending 0
+validation: objects 0 waves 0 inode_demands 0 inode_pages 0 directory_pages 0 entries_examined 0
+attribute reads: inode page lookup 20b4060746ac32dd61abfe8ee2633eb3a504b1bd237080083994dbfe54e80b21, base attribute page 541c65f6a7cf1c2f975a474c379ba14f23e88af46ef4beb0a4fe49363c9e6875
+attribute_patch: base tree 541c65f6a7cf1c2f975a474c379ba14f23e88af46ef4beb0a4fe49363c9e6875 set 1 removed 0 preserved 1 base entries 1 base pages 1 values emitted 1 | readback 21 bytes "timed attribute value"
+elapsed_ns 27125
+phase validate elapsed_ns 2500
+phase directories elapsed_ns 417
+phase references elapsed_ns 250
+phase inodes elapsed_ns 791
+phase cleanup elapsed_ns 333
+phase root.encode elapsed_ns 1083
+report_nodes 7
+prepared_objects 11
+--- stderr ---
