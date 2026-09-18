@@ -1,0 +1,22 @@
+{
+  "name": "file.edit",
+  "elapsed_ns": 803834,
+  "children": [
+    {
+      "name": "edit.op",
+      "elapsed_ns": 793583,
+      "children": [
+        {
+          "name": "edit.base",
+          "elapsed_ns": 28333,
+          "children": [
+            {"name": "edit.base_read", "elapsed_ns": 27791, "children": []}
+          ]
+        },
+        {"name": "edit.compare", "elapsed_ns": 750, "children": []},
+        {"name": "content.chunk", "elapsed_ns": 746292, "children": []},
+        {"name": "edit.finish", "elapsed_ns": 13292, "children": []}
+      ]
+    }
+  ]
+}

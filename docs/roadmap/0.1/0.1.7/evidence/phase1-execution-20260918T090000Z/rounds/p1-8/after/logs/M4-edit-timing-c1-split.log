@@ -1,0 +1,20 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/edit_timing_c1 --case split
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.017
+--- stdout ---
+implementation: candidate stored-tree edit
+case: split
+base_bytes: 3000000
+logical_length: 3000000
+edit: keep [(0, 40000), (1500000, 1540000), (2960000, 3000000)] of 3000000; result 120000
+elapsed_ns: 187958
+edited_root: 4a4caa46051409cb56d4f28c3baa9b0adf502739fdb7a163900699e737641958
+objects_before: 161
+objects_written: 1
+objects_written_bytes: 120023
+nodes_created: 1
+nodes_read: 13
+edit_nodes_read: 0
+mapping_pages: 3
+--- stderr ---

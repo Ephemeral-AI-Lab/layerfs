@@ -1,0 +1,7 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase1-execution-20260918T090000Z/client/target/release/phase0client order 4000 2000 64
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.155
+--- stdout ---
+order pairs 2000 pending 64 spilled 3968 elapsed_ns 141495375 rows_read 25809 rows_written 25760 runs_created 124 merges 61 peak_run_bytes 568320 peak_live_runs 5 peak_pending 64 held_now 0 peak_backing 568320 emitted 14 dir_pages_read 17 dir_pages_created 11 dir_pages_reused 0 dir_scratch 376158 ino_pages_read 81 ino_pages_created 2 ino_pages_reused 40 ino_scratch 709396 objects_read 98 read_waves 5 bytes_read 400354 rows_touched 4001 final_values 2001 final_removals 0
+--- stderr ---

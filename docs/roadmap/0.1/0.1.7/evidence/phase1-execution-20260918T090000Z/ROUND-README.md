@@ -14,6 +14,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-3` | P1-3 — materialized branch children in one wave | collected (`after/`) |
 | `p1-4` | P1-4 — validation record demands batched behind one memo | collected (`after/`) |
 | `p1-6` | P1-6 — the discarded validation load | **landed as the safe variant** (`after/`; the decline in §1–§5 is superseded by the appended §6) |
+| `p1-8` | P1-8 — one ordered cursor for an assembly's retained runs | collected (`after/`, `parent-m4/`) |
 | `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |
@@ -59,6 +60,18 @@ under [`CONTRACT.md`](CONTRACT.md).
    `edit_memory_probe` also joins `artifacts.txt`. Nothing about the frozen set,
    its vehicles, parameters or printed fields changes: D27 keeps every field it
    printed (checked by diff) and gains one additive `case: default` line.
+
+4. **The `M4` vehicle row added to `collect.py` (2026-09-18, with P1-8's
+   commit).** P1-8's discriminating shape is three retained runs of a chunked base
+   whose result is one whole-file object, and no frozen row reaches that route:
+   `edits.c1.small` assembles over a whole-file base, and the `shrink` row is a
+   single retained run. `edit_timing_c1 --case split` adds that shape as an
+   **additive case** (the frozen cases `default`/`delete`/`shrink` and every
+   printed field are unchanged — verified by the counter-only diff of the arms),
+   and `collect.py`'s `v2` set gained `M4` to run it. Like V2's `M1`–`M3`, `M4` is
+   a vehicle row, not a frozen-set row; it is included in `all`. The `split` case
+   also serves the frozen-set claim that a chunked base with a whole-file result
+   emits the reference bytes, which no frozen row could check.
 
 ## What each round directory holds
 

@@ -142,6 +142,12 @@ def main():
             [str(CORE / "edit_timing_c1"), "--case", "delete"])
         run(round_dir, "M3", "edit-timing-c1-shrink",
             [str(CORE / "edit_timing_c1"), "--case", "shrink"])
+        # M4 is P1-8's discriminating row: three retained runs of a chunked base
+        # whose result is one whole-file object. Added with P1-8's commit
+        # (ROUND-README.md correction 4); the frozen cases and fields are
+        # unchanged and the `case:` line is additive.
+        run(round_dir, "M4", "edit-timing-c1-split",
+            [str(CORE / "edit_timing_c1"), "--case", "split"])
 
     if "extra" in sets:
         run(round_dir, "D27", "edit-timing-c1-nodes-read", [str(CORE / "edit_timing_c1")])
