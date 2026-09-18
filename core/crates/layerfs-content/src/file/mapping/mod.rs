@@ -14,7 +14,8 @@ pub use codec::{
     CHUNK_MAGIC,
 };
 pub use read::{
-    read_range, RangeCursor, ReadCounters, READ_NAVIGATION_WAVE, READ_WAVE_BYTES, READ_WAVE_OBJECTS,
+    read_range, PageCache, RangeCursor, ReadCounters, READ_NAVIGATION_CACHE_PAGES,
+    READ_NAVIGATION_WAVE, READ_WAVE_BYTES, READ_WAVE_OBJECTS,
 };
 pub use types::{
     ChildDescriptor, ExtentNode, ExtentSlice, FileState, NodeSummary, MAX_ENTRIES, MAX_LEVEL,

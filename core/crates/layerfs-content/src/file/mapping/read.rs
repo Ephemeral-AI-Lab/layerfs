@@ -81,15 +81,66 @@ struct Frontier {
     expected_root: Option<(u64, u64)>,
 }
 
-/// Mapping pages one traversal has already acquired, keyed by identity.
+/// Mapping pages one operation has already acquired, keyed by identity.
 ///
-/// A page is navigation state, not payload: the same page reached again by a
-/// later range of the same operation is served from here, so the provider demand
-/// (and the `nodes_read` charge that goes with it) happens once. The cache is
-/// bounded by [`READ_NAVIGATION_CACHE_PAGES`] and emptied wholesale when it
-/// overflows, which keeps a long operation's retained pages inside a declared
-/// ceiling instead of growing with the file.
-pub type PageCache = std::collections::HashMap<(ObjectId, bool), Vec<u8>>;
+/// A page is navigation state, not payload: the same page reached again - by a
+/// later range of one cursor, or by the pass that follows the one that read it -
+/// is served from here, so the provider demand (and the `nodes_read` charge that
+/// goes with it) happens once. The cache is bounded by
+/// [`READ_NAVIGATION_CACHE_PAGES`] and emptied wholesale when it overflows, which
+/// keeps a long operation's retained pages inside a declared ceiling instead of
+/// growing with the file.
+#[derive(Default)]
+pub struct PageCache {
+    pages: std::collections::HashMap<(ObjectId, bool), Vec<u8>>,
+    /// Pages this cache refuses to exceed before it empties wholesale.
+    limit: usize,
+}
+
+impl PageCache {
+    /// Cache bounded by the module's declared page ceiling.
+    pub fn new() -> Self {
+        Self::bounded(READ_NAVIGATION_CACHE_PAGES)
+    }
+
+    /// Cache bounded by `limit` pages.
+    pub fn bounded(limit: usize) -> Self {
+        Self {
+            pages: std::collections::HashMap::new(),
+            limit: limit.max(1),
+        }
+    }
+
+    /// The page `id` decoded under `root` context, if this cache holds it.
+    pub fn get(&self, id: ObjectId, root: bool) -> Option<&[u8]> {
+        self.pages.get(&(id, root)).map(Vec::as_slice)
+    }
+
+    /// Holds one page.
+    ///
+    /// The bound is enforced by [`PageCache::make_room_for`] before a batch is
+    /// inserted, never here: a page this call has just been handed must stay
+    /// readable by the pass that is about to use it.
+    pub fn insert(&mut self, id: ObjectId, root: bool, canonical: Vec<u8>) {
+        self.pages.insert((id, root), canonical);
+    }
+
+    /// Empties the cache when `incoming` more pages would exceed the bound.
+    ///
+    /// The eviction is wholesale rather than per page: a page is only useful
+    /// through the traversal that reached it, so dropping all of them is the state
+    /// that keeps the bound honest without a replacement policy.
+    pub fn make_room_for(&mut self, incoming: usize) {
+        if self.pages.len() + incoming > self.limit {
+            self.pages.clear();
+        }
+    }
+
+    /// True when the cache holds nothing.
+    pub fn is_empty(&self) -> bool {
+        self.pages.is_empty()
+    }
+}
 
 /// Pages one cursor may retain.
 pub const READ_NAVIGATION_CACHE_PAGES: usize = 2 * READ_NAVIGATION_WAVE;
@@ -140,14 +191,12 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
         }
         let mut missing: Vec<(ObjectId, bool)> = Vec::new();
         for key in &wanted {
-            if !self.cache.contains_key(key) {
+            if self.cache.get(key.0, key.1).is_none() {
                 missing.push(*key);
             }
         }
         if !missing.is_empty() {
-            if self.cache.len() + missing.len() > READ_NAVIGATION_CACHE_PAGES {
-                self.cache.clear();
-            }
+            self.cache.make_room_for(missing.len());
             let ids: Vec<ObjectId> = missing.iter().map(|(id, _)| *id).collect();
             let values = self
                 .reader
@@ -159,7 +208,7 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                 });
             }
             for (index, key) in missing.iter().enumerate() {
-                self.cache.insert(*key, values[index].clone());
+                self.cache.insert(key.0, key.1, values[index].clone());
             }
             self.counters.nodes_read = self.counters.nodes_read.saturating_add(ids.len() as u64);
             self.counters.node_batches_read = self.counters.node_batches_read.saturating_add(1);
@@ -169,8 +218,8 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
             .iter()
             .map(|node| {
                 self.cache
-                    .get(&(node.id, node.root))
-                    .cloned()
+                    .get(node.id, node.root)
+                    .map(<[u8]>::to_vec)
                     .ok_or(ContentError::MissingObject)
             })
             .collect()
@@ -313,24 +362,28 @@ pub struct RangeCursor<'a, 'r, 's> {
     reader: &'a dyn AuthenticatedObjects,
     state: FileState,
     scope: &'s TimingScope<'r, Active>,
-    cache: PageCache,
     counters: ReadCounters,
     /// Position the range before the active one ended at.
     segment_start: u64,
 }
 
 impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
-    /// Opens a cursor over `state`.
+    /// Opens a cursor over `state`, memoizing its pages in `pages`.
+    ///
+    /// The cache is the caller's, so a cursor can be handed the pages an earlier
+    /// pass of the same operation acquired and can leave its own for the pass that
+    /// follows it.
     pub fn new(
         reader: &'a dyn AuthenticatedObjects,
         state: FileState,
+        pages: &mut PageCache,
         scope: &'s TimingScope<'r, Active>,
     ) -> ContentResult<Self> {
+        let _ = pages;
         Ok(Self {
             reader,
             state,
             scope,
-            cache: PageCache::new(),
             counters: ReadCounters::default(),
             segment_start: 0,
         })
@@ -345,6 +398,7 @@ impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
         &mut self,
         range: Range<u64>,
         sink: &mut dyn Write,
+        pages: &mut PageCache,
     ) -> ContentResult<ReadCounters> {
         if range.start > range.end
             || range.end > self.state.logical_len
@@ -361,7 +415,7 @@ impl<'a, 'r, 's> RangeCursor<'a, 'r, 's> {
             return Ok(self.counters);
         }
         let requested = range.end - range.start;
-        let mut wave = Wave::new(self.reader, sink, self.scope, &mut self.cache);
+        let mut wave = Wave::new(self.reader, sink, self.scope, pages);
         traverse(self.state, &range, &mut wave)?;
         wave.flush()?;
         let segment = wave.counters;

@@ -331,7 +331,7 @@ published and the largest frontier it held.
 - `read_range` reads a logical sub-range under the same discipline.
 - `RangeCursor` (`mapping/read.rs`) serves a sequence of ascending sub-ranges of
   one chunked file through the same traversal, keeping the mapping pages it has
-  already acquired. A page two ranges share — the root of every one of them, and
+  already acquired in a `PageCache` the caller owns. A page two ranges share — the root of every one of them, and
   every other ancestor of their union path — is one provider demand and one
   `nodes_read` charge for the whole sequence instead of one per range. The cache
   holds at most `READ_NAVIGATION_CACHE_PAGES` (2 × `READ_NAVIGATION_WAVE` = 64)

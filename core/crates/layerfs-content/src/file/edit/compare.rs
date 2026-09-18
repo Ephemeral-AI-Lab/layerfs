@@ -10,8 +10,11 @@
 
 use layerfs_telemetry::timer::TimingScope;
 
+use layerfs_telemetry::timer::Active;
+
 use crate::error::{ContentError, ContentResult};
 use crate::file::edit::input::{EditSource, EditStream, Plan, Segment};
+use crate::file::mapping::{PageCache, RangeCursor};
 use crate::file::view::FileView;
 use crate::object::AuthenticatedObjects;
 
@@ -28,60 +31,91 @@ pub enum NoOpVerdict {
 }
 
 /// Compares every replacement with its base range, bounded and in order.
+///
+/// `pages` is the operation's shared mapping-page memo. A chunked base reads its
+/// windows through a cursor over it, so the pages this pass acquires are already
+/// held when the construction pass reaches them; a whole-file base has no mapping
+/// to navigate and leaves the memo untouched.
 pub fn compare_replacements(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
+    pages: &mut PageCache,
     scope: TimingScope<'_>,
 ) -> ContentResult<NoOpVerdict> {
-    scope.run(|compare| {
-        let mut plan = Plan::new(stream);
-        let mut base_window: Vec<u8> = Vec::new();
-        let mut replacement_window: Vec<u8> = Vec::new();
-        while let Some(segment) = plan.advance()? {
-            let Segment::Replace { index, base, len } = segment else {
-                continue;
-            };
-            if len != base.1 - base.0 {
+    scope.run(|compare| match view.file_state()? {
+        Some(state) => {
+            let mut cursor = RangeCursor::new(reader, state, pages, compare)?;
+            compare_windows(
+                view,
+                reader,
+                Some(&mut cursor),
+                pages,
+                stream,
+                source,
+                compare,
+            )
+        }
+        None => compare_windows(view, reader, None, pages, stream, source, compare),
+    })
+}
+
+/// Walks the plan's replacement segments in bounded windows.
+fn compare_windows(
+    view: &FileView,
+    reader: &dyn AuthenticatedObjects,
+    mut cursor: Option<&mut RangeCursor<'_, '_, '_>>,
+    pages: &mut PageCache,
+    stream: &EditStream,
+    source: &dyn EditSource,
+    compare: &TimingScope<'_, Active>,
+) -> ContentResult<NoOpVerdict> {
+    let mut plan = Plan::new(stream);
+    let mut base_window: Vec<u8> = Vec::new();
+    let mut replacement_window: Vec<u8> = Vec::new();
+    while let Some(segment) = plan.advance()? {
+        let Segment::Replace { index, base, len } = segment else {
+            continue;
+        };
+        if len != base.1 - base.0 {
+            return Ok(NoOpVerdict::Differs);
+        }
+        if len == 0 {
+            continue;
+        }
+        let mut offset = 0_u64;
+        while offset < len {
+            let take = (len - offset).min(COMPARE_WINDOW_BYTES as u64);
+            let window = base.0 + offset..base.0 + offset + take;
+            base_window.clear();
+            compare
+                .child("edit.compare.window")
+                .run(|scope| match cursor.as_mut() {
+                    Some(cursor) => cursor
+                        .read_segment(window.clone(), &mut base_window, pages)
+                        .map(|_| ()),
+                    None => view.read_range(reader, window.clone(), &mut base_window, scope),
+                })?;
+            if base_window.len() as u64 != take {
+                return Err(ContentError::LengthMismatch {
+                    expected: take,
+                    actual: base_window.len() as u64,
+                });
+            }
+            replacement_window.clear();
+            replacement_window.resize(take as usize, 0);
+            let read = source.read_at(index, offset, &mut replacement_window[..take as usize])?;
+            if read as u64 != take {
+                return Err(ContentError::InvalidEdit {
+                    what: "replacement bytes",
+                });
+            }
+            if base_window != replacement_window {
                 return Ok(NoOpVerdict::Differs);
             }
-            if len == 0 {
-                continue;
-            }
-            let mut offset = 0_u64;
-            while offset < len {
-                let take = (len - offset).min(COMPARE_WINDOW_BYTES as u64);
-                base_window.clear();
-                compare.child("edit.compare.window").run(|window| {
-                    view.read_range(
-                        reader,
-                        base.0 + offset..base.0 + offset + take,
-                        &mut base_window,
-                        window,
-                    )
-                })?;
-                if base_window.len() as u64 != take {
-                    return Err(ContentError::LengthMismatch {
-                        expected: take,
-                        actual: base_window.len() as u64,
-                    });
-                }
-                replacement_window.clear();
-                replacement_window.resize(take as usize, 0);
-                let read =
-                    source.read_at(index, offset, &mut replacement_window[..take as usize])?;
-                if read as u64 != take {
-                    return Err(ContentError::InvalidEdit {
-                        what: "replacement bytes",
-                    });
-                }
-                if base_window != replacement_window {
-                    return Ok(NoOpVerdict::Differs);
-                }
-                offset += take;
-            }
+            offset += take;
         }
-        Ok(NoOpVerdict::Equal)
-    })
+    }
+    Ok(NoOpVerdict::Equal)
 }

@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::{
     decode_node_with_context, encode_node, ChildDescriptor, ExtentNode, ExtentSlice, NodeSummary,
-    MAX_ENTRIES, MAX_LEVEL,
+    PageCache, MAX_ENTRIES, MAX_LEVEL,
 };
 use crate::object::{
     AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
@@ -109,6 +109,8 @@ impl Draft {
 pub struct EditObjects<'a> {
     reader: &'a dyn AuthenticatedObjects,
     consumer: &'a mut dyn FinalizedConsumer,
+    /// Mapping pages an earlier pass of this operation already acquired.
+    pages: &'a mut PageCache,
     drafts: BTreeMap<ObjectId, Draft>,
     /// Draft children each live draft still references.
     parent_refs: BTreeMap<ObjectId, u32>,
@@ -122,13 +124,18 @@ pub struct EditObjects<'a> {
 
 impl<'a> EditObjects<'a> {
     /// Empty operation state over `reader`, publishing to `consumer`.
+    ///
+    /// `pages` is the operation's shared mapping-page memo: a page the comparison
+    /// pass acquired is served from it here instead of being demanded again.
     pub fn new(
         reader: &'a dyn AuthenticatedObjects,
         consumer: &'a mut dyn FinalizedConsumer,
+        pages: &'a mut PageCache,
     ) -> Self {
         Self {
             reader,
             consumer,
+            pages,
             drafts: BTreeMap::new(),
             parent_refs: BTreeMap::new(),
             detached: BTreeSet::new(),
@@ -151,12 +158,26 @@ impl<'a> EditObjects<'a> {
 
     /// Reads and decodes one mapping page under its root/non-root context.
     pub fn load_node(&mut self, summary: NodeSummary, root: bool) -> ContentResult<ExtentNode> {
+        // The memo is consulted before the charge and before the demand: a page an
+        // earlier pass of this operation acquired is neither read nor demanded
+        // again, so `nodes_read` keeps counting what this operation actually read.
+        if let Some(canonical) = self.pages.get(summary.id, root) {
+            let node = decode_node_with_context(canonical, root)?;
+            if node.level() != summary.level
+                || node.logical_len() != summary.bytes
+                || node.extent_count() != summary.extents
+            {
+                return Err(ContentError::InvalidRecord("extent summary"));
+            }
+            return Ok(node);
+        }
         self.counters.nodes_read = self.counters.nodes_read.saturating_add(1);
         let node = match self.drafts.get(&summary.id) {
             Some(Draft::Node(node)) => node.clone(),
             Some(Draft::Page(object)) => decode_node_with_context(object.canonical(), root)?,
             None => {
                 let canonical = self.reader.read_canonical(summary.id)?;
+                self.pages.insert(summary.id, root, canonical.clone());
                 decode_node_with_context(&canonical, root)?
             }
         };

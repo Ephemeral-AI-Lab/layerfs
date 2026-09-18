@@ -651,6 +651,65 @@ fn edit_counters(
     )
 }
 
+#[test]
+fn a_page_two_passes_reach_is_demanded_once_for_the_operation() {
+    // P1-7: one `apply_edits` builds one mapping-page memo and hands it to both
+    // passes. The comparison reads the replaced range and the split descent walks
+    // into the same mapping pages; without the memo each of those pages is a
+    // separate provider demand, and with it the second reach is a memo hit. The
+    // census is per object identity, so "at most once" is the whole claim: an
+    // object demanded twice is a page the operation read twice.
+    let bytes = noise(262_144);
+    let (store, root) = build(&bytes);
+    let inventory = inventory_of(&store, root);
+    let (start, end) = aligned_shape(&inventory);
+    let recorder = Recorder {
+        inner: &store,
+        demanded: RefCell::new(Vec::new()),
+    };
+    let mut ledger = Ledger::default();
+    let policy = ConstructionPolicy::frozen_default();
+    let removed = end - start;
+    let mut replacements = Replacements::new();
+    replacements.push(noise(removed as usize));
+    let stream =
+        EditStream::new(bytes.len() as u64, vec![Edit::overwrite(start, end)]).expect("stream");
+    let edited = disabled_scope(|scope| {
+        apply_edits(
+            policy,
+            &policy.capacities(),
+            &recorder,
+            EditRequest {
+                root,
+                edits: &stream,
+                source: &replacements,
+            },
+            &mut ledger,
+            scope.child("edit"),
+        )
+    })
+    .expect("edit succeeds");
+    let demanded = recorder.demanded.into_inner();
+    let mut counts: std::collections::BTreeMap<ObjectId, usize> = std::collections::BTreeMap::new();
+    for id in &demanded {
+        *counts.entry(*id).or_default() += 1;
+    }
+    for (id, count) in &counts {
+        assert!(
+            *count <= 1,
+            "object {id} was demanded {count} times by one operation: {counts:?}"
+        );
+    }
+    assert!(
+        counts.len() > 3,
+        "the fixture must demand several objects: {counts:?}"
+    );
+    assert!(
+        edited.counters.nodes_read > 0,
+        "the operation did read stored nodes"
+    );
+}
+
 /// The two shapes P1-9 distinguishes: the same extent-aligned range, deleted or
 /// overwritten, on one 262,144-byte chunked base.
 fn aligned_pair() -> ((u64, usize, ObjectId), (u64, usize, ObjectId)) {
@@ -685,10 +744,20 @@ fn a_pure_deletion_never_walks_the_rightmost_path() {
     // split already built, so it never reaches the provider: the deletion's
     // provider-demand count is the same with and without the walk, and only
     // `EditCounters::nodes_read` sees it.
+    // P1-7 tightened both pins: the comparison pass's mapping pages are
+    // memo-served to the construction pass, so the overwrite's totals moved
+    // 7/6 -> 6/5 while the deletion's are unchanged (it reads no base range for
+    // comparison, because a length-changing edit is a difference by construction).
+    // The assertions below state the current counts and the bound each protects.
     let (deletion, overwrite) = aligned_pair();
     assert_eq!(
         deletion.0, 4,
         "the split's own loads, with no rightmost walk"
+    );
+    assert!(
+        deletion.0 <= 4,
+        "the split's own loads, with no rightmost walk: {}",
+        deletion.0
     );
     assert_eq!(
         deletion.1, 2,
@@ -708,11 +777,17 @@ fn an_overwrite_still_demands_the_predecessor_path() {
     // consumes the rightmost payload hint, so its walk and its scan remain.
     let (deletion, overwrite) = aligned_pair();
     assert_eq!(
-        overwrite.0, 7,
-        "the split, the rightmost walk and the replacement scan"
+        overwrite.0, 6,
+        "the split, the rightmost walk and the replacement scan, with the compare \
+         pass's mapping page memo-served"
+    );
+    assert!(
+        overwrite.0 <= 7,
+        "the split, the rightmost walk and the replacement scan: {}",
+        overwrite.0
     );
     assert_eq!(
-        overwrite.1, 6,
+        overwrite.1, 5,
         "and the payloads the scan demands, which the deletion never touches"
     );
     assert_ne!(

@@ -699,24 +699,37 @@ fn an_interior_join_reads_its_boundary_child_once() {
     // base with a 40,000-byte replacement at its middle — because it is the case
     // that actually takes the height-mismatched branch: the append-only and
     // root-collapse cases below join equal heights and never load a boundary child.
+    // P1-7 tightened the pin: a mapping page the comparison pass acquired is now
+    // memo-served to the construction pass, so this shape's `nodes_read` moved
+    // 22 -> 20. The bound says what this test protects — the boundary child is
+    // decoded once per join, not twice — while allowing a later item to lower the
+    // total again; the exact current value is stated here so a rise is visible.
     let (nodes, root) = edited_nodes("interior-multi-level");
-    assert_eq!(
-        nodes, 22,
-        "the boundary child is decoded once per join, not twice"
+    assert_eq!(nodes, 20, "the current count with the shared page memo");
+    assert!(
+        nodes <= 22,
+        "the boundary child is decoded once per join, not twice: {nodes}"
     );
     assert_eq!(
         root, "57e0a51cc3291c890ba1616d3e1669e19554c38ecaad34d89af5a0f6a25493f0",
         "the emitted root is the pre-change value"
     );
 
-    // The negative controls: shapes whose joins are equal-height are untouched.
-    for (case, expected) in [
-        ("unequal-height-join", 4_u64),
-        ("height-growth", 4),
-        ("root-collapse", 4),
-        ("join-80-100", 9),
+    // The negative controls: shapes whose joins are equal-height. P1-7's shared
+    // page memo lowered the first two from 4 to 3 (the comparison pass's page is
+    // the one the construction pass would have re-demanded); each row states the
+    // current count and the bound the case protects, so a rise is still a failure.
+    for (case, now, bound) in [
+        ("unequal-height-join", 3_u64, 4_u64),
+        ("height-growth", 3, 4),
+        ("root-collapse", 4, 4),
+        ("join-80-100", 9, 9),
     ] {
         let (nodes, _) = edited_nodes(case);
-        assert_eq!(nodes, expected, "{case} must not change");
+        assert_eq!(nodes, now, "{case}: the current count");
+        assert!(
+            nodes <= bound,
+            "{case} must not rise above {bound}: {nodes}"
+        );
     }
 }

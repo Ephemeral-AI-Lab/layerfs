@@ -61,11 +61,16 @@ pub fn apply_edits(
         }
         let final_len = request.edits.final_len();
         let representation = policy.representation(final_len);
+        // One mapping-page memo for the whole operation. The comparison pass fills
+        // it as it navigates, and the construction pass reads the pages it names
+        // from it instead of demanding them a second time.
+        let mut pages = crate::file::mapping::PageCache::new();
         if let NoOpVerdict::Equal = compare_replacements(
             &view,
             reader,
             request.edits,
             request.source,
+            &mut pages,
             edit.child("edit.compare"),
         )? {
             // Every replacement was byte-identical, so the result is the base.
@@ -90,6 +95,7 @@ pub fn apply_edits(
                     reader,
                     request.edits,
                     request.source,
+                    &mut pages,
                     edit.child("edit.assemble"),
                 )?;
                 let canonical = edit
@@ -112,7 +118,9 @@ pub fn apply_edits(
                 // The view already acquired and decoded the base root, so the
                 // chunked route is handed that decoded state instead of reading
                 // and decoding the same object a second time.
-                Some(state) => replace_chunked(capacities, state, reader, &request, consumer, edit),
+                Some(state) => replace_chunked(
+                    capacities, state, reader, &request, consumer, &mut pages, edit,
+                ),
                 None => stream_combined(capacities, &view, &request, consumer, edit),
             },
         }
@@ -127,9 +135,10 @@ fn assemble_final(
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
+    pages: &mut crate::file::mapping::PageCache,
     scope: TimingScope<'_, layerfs_telemetry::timer::Pending>,
 ) -> ContentResult<Vec<u8>> {
-    scope.run(|assemble| assemble_inner(view, reader, stream, source, assemble))
+    scope.run(|assemble| assemble_inner(view, reader, stream, source, pages, assemble))
 }
 
 fn assemble_inner(
@@ -137,6 +146,7 @@ fn assemble_inner(
     reader: &dyn AuthenticatedObjects,
     stream: &EditStream,
     source: &dyn EditSource,
+    pages: &mut crate::file::mapping::PageCache,
     scope: &TimingScope<'_, layerfs_telemetry::timer::Active>,
 ) -> ContentResult<Vec<u8>> {
     let final_len = stream.final_len();
@@ -158,7 +168,7 @@ fn assemble_inner(
     }
     let mut cursor = match view.file_state()? {
         Some(state) => Some(crate::file::mapping::RangeCursor::new(
-            reader, state, scope,
+            reader, state, pages, scope,
         )?),
         None => None,
     };
@@ -168,7 +178,7 @@ fn assemble_inner(
                 if base.1 > base.0 {
                     match &mut cursor {
                         Some(cursor) => {
-                            cursor.read_segment(base.0..base.1, &mut out)?;
+                            cursor.read_segment(base.0..base.1, &mut out, pages)?;
                         }
                         None => {
                             view.read_range(reader, base.0..base.1, &mut out, scope)?;
@@ -236,6 +246,7 @@ fn replace_chunked(
     reader: &dyn AuthenticatedObjects,
     request: &EditRequest<'_>,
     consumer: &mut dyn FinalizedConsumer,
+    pages: &mut crate::file::mapping::PageCache,
     edit: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
     // One read of the base root per edit, not two: the state the view decoded is
@@ -250,7 +261,7 @@ fn replace_chunked(
     // mapping root lives in `summary` and every other field of the file state is
     // derived once, at emission.
     let mut result_len = state.logical_len;
-    let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer);
+    let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages);
     for (index, declared) in request.edits.edits().iter().enumerate() {
         let replacement_len = declared.replacement_len();
         let (left, tail) = edit.child("edit.split").run(|_| {

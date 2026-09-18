@@ -277,6 +277,27 @@ unchanged: a chunk that straddles two retained runs is still read once per run,
 because a run is served exactly and independently. Emission order and the emitted
 object are untouched.
 
+### 13.2.1 The operation's shared page memo
+
+One `apply_edits` builds one `PageCache` and hands it to both passes. The
+comparison pass navigates the base through a `RangeCursor` over it — one descent
+for all of a replacement's windows instead of one per 64 KiB window — and the
+construction pass consults the same memo in `EditObjects::load_node` **before** the
+`nodes_read` charge and before the reader demand, so a mapping page the comparison
+already acquired is neither read nor charged twice. A memo hit still decodes under
+the caller's root context: only canonical bytes are shared, never decoded nodes,
+because the two contexts validate different partition rules.
+
+That is where the chunked route's `nodes_read` saving comes from: on the D27 shape
+the mapping root and one leaf are each demanded once by the comparison and again by
+the split descent, and the memo turns the second pair into hits — `nodes_read`
+9 → 7. A pure deletion is unaffected: a length-changing edit is a difference by
+construction, so the comparison returns before it reads any base byte. The
+comparison verdict, its emission behaviour, and the `edit.compare` timing child are
+all unchanged — the memo only answers demands that would otherwise re-read a page,
+so **an error raised by a memo hit is raised at the point of the later demand
+rather than at a re-read**, which no test pins today.
+
 Growing across the boundary is the expensive direction: `stream_combined` must
 chunk the entire result. That is inherent — the base was a whole file, so there
 were no chunks to reuse — and it streams, so memory stays flat no matter how large
