@@ -16,6 +16,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-6` | P1-6 — the discarded validation load | **measured-and-declined** (no commit) |
 | `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
+| `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 
