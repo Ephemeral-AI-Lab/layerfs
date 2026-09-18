@@ -158,3 +158,49 @@ instrument added (V8).
 | landed in part, blocked | V7 |
 | measured-and-declined | P2-1, P2-3 |
 | not delivered / blocked | none |
+
+---
+
+## 8. Owner ruling (2026-09-18): the blocked and declined items close as not-to-implement
+
+> **Appended after the closing pass, at the owner's instruction.** The receipts above
+> are unchanged: nothing in §1–§7 is rewritten, and the measurements stand exactly as
+> taken. What changes is the **disposition** of three items.
+
+The owner ruled that Phase 2 is reported **complete**, and that
+
+* **V7's blocked spill half** (the profile half landed, `8f0fda297`) and
+* **P2-1** and **P2-3** (measured-and-declined, candidate patches preserved in
+  [`rounds/p2-1/attempt/`](rounds/p2-1/attempt/) and
+  [`rounds/p2-3/attempt/`](rounds/p2-3/attempt/))
+
+are **justified not to implement**: they close in their recorded states rather than
+staying open on the tracker. No further work is owed on them in this phase, and no
+product change is pending for them.
+
+What that does **not** change, stated so the record cannot be read more generously
+than the evidence:
+
+* V7's spill counter is still **unreadable from product code** — the blocker named in
+  §6 and in V7's receipt is a fact about `rusqlite` 0.40.2 and this crate's audited
+  `unsafe` boundary, not a decision;
+* the product still runs SQLite's default page-cache profile and NORMAL locking —
+  P2-1 and P2-3 were **not** implemented, and their "not to implement" is a ruling,
+  not a measurement reversal;
+* the two phases' guarantees are unchanged: the reader contract that P2-3's candidate
+  broke, and the zero-spill finding P0-2 measured under both profiles, both stand.
+
+Updated terminal states:
+
+| state | items |
+| --- | --- |
+| landed | P2-0 (with correction), V5 (with correction), V6, P2-8, P2-6, P2-7, P2-4 (with correction), P2-5, P2-2 (with refuted detail), V8 (added instrument) |
+| blocked — **closed by owner ruling as not to implement** | V7 (profile half landed) |
+| measured-and-declined — **closed by owner ruling as not to implement** | P2-1, P2-3 |
+| not delivered | none |
+
+With that, every box on
+[#178](https://github.com/Ephemeral-AI-Lab/layerfs/issues/178)'s Phase 2 list is
+closed by its own receipt, and the phase is complete: eleven product commits, nine
+items landed, three closed as not-to-implement, parity 35/35 unchanged, 469 tests
+green, production LOC 19,264 → 19,503 (+239).
