@@ -55,6 +55,12 @@ pub struct OutcomeCounters {
     /// and `commits`. Before batching, `statements == inserted` for a save that
     /// reuses nothing.
     pub statements: u64,
+    /// Presence queries issued for offered objects' direct references.
+    ///
+    /// One charge per call into the paged presence lookup, which is the unit a
+    /// wave-level batch removes: the lookup pages its own identifiers, so a call
+    /// is one bounded query set however many references it carries.
+    pub presence_queries: u64,
     /// Representation selection outcomes.
     pub delta: DeltaCounters,
     /// Work spent acquiring delta bases.

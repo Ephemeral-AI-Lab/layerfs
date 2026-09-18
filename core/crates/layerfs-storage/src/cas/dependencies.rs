@@ -44,16 +44,19 @@ impl Availability {
     /// `pending` reports identities this owner has accepted into an unfinished
     /// group but not yet written. They are available to the same operation and
     /// must not trigger a query for bytes that only exist in memory.
+    ///
+    /// Returns the presence queries this call had to issue: zero once the wave was
+    /// seeded (§`seed`), which is the whole point of seeding it.
     pub fn validate(
         &mut self,
         connection: &Connection,
         object: &FinalizedObject,
         ceiling: i64,
         pending: impl Fn(ObjectId) -> bool,
-    ) -> StorageResult<()> {
+    ) -> StorageResult<u64> {
         let missing = self.unresolved(object, &pending);
         if missing.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         for found in lookup::present(connection, &missing, ceiling)? {
             self.known.insert(found);
@@ -66,7 +69,7 @@ impl Availability {
                 });
             }
         }
-        Ok(())
+        Ok(1)
     }
 
     fn unresolved(

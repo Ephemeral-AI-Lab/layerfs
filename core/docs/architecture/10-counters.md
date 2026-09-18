@@ -9,7 +9,8 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 in place and carry their own commits, as is the `PoolCounters` home moved from
 `cas/owner.rs` to `cas/pool_lane.rs` by #178 **P2-0** (2026-09-18) and the
 `statements` counter added by #178 **V5** (2026-09-18) and the `group_decodes`
-counter added by #178 **V6** (2026-09-18). Scope, method,
+counter added by #178 **V6** (2026-09-18), and the `presence_queries` counter
+added by #178 **V8** (2026-09-18). Scope, method,
 measurement status and upkeep are stated in the [index](README.md).
 
 Chapter numbers are global to the set: this paper holds **chapter 15**.
@@ -63,7 +64,7 @@ collect. Until now the set cited them ad hoc with no single inventory.
 
 | Type | Where | Fields |
 | --- | --- | --- |
-| `SaveOutcome` | `cas/store.rs` | `reused`, `inserted`, `packs_created`, `pack_appends`, `commits`, `statements`, `full_records`, `prefix_records`, `delta`, `chain`, `pool` |
+| `SaveOutcome` | `cas/store.rs` | `reused`, `inserted`, `packs_created`, `pack_appends`, `commits`, `statements`, `presence_queries`, `full_records`, `prefix_records`, `delta`, `chain`, `pool` |
 | `DeltaCounters` | `encoding/delta/select.rs` | `prepared_full`, `trials`, `prefix_selected`, `full_losses`, `no_candidate`, `absent_candidates`, `ineligible_candidates`, `work_exceeded` |
 | `ChainCounters` | `encoding/delta/read.rs` | `objects`, `edges`, `encoded_bytes`, `canonical_bytes`, `max_depth`, `group_decodes` |
 | `PoolCounters` | `cas/pool_lane.rs` | `leaves`, `reused_values`, `new_values`, `groups`, `delta_leaves`, `full_leaves`, `trials`, `work_exceeded` |
@@ -92,6 +93,13 @@ pipeline readbacks that is 2 → 1. The cache is a reading of work, never a
 visibility shortcut: the resolver checks the location's pack against the wave's
 ceiling *before* consulting it, because the ceiling is re-read per wave while the
 cache outlives a wave.
+
+`presence_queries` (added at #178 **V8**, 2026-09-18) counts the calls a save made
+into the paged presence lookup while validating offered objects' direct references
+(`Availability::validate`). The unit is the call, not the SQL statement: the lookup
+pages its own identifiers, so one call is one bounded query set however many
+references it carries. A wave pays nothing for a reference it offered or already
+resolved, so the counter reads the work a wave-level batch removes.
 
 `statements` (added at #178 **V5**, 2026-09-18) counts the `INSERT` statements
 issued for object rows - **statements, not rows**: a multi-row `INSERT` of `k` rows

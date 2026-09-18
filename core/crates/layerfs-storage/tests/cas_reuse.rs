@@ -401,3 +401,71 @@ fn a_locator_whose_identity_does_not_match_its_bytes_is_refused() {
         Ok(_) => panic!("a locator whose bytes hash to another identity was accepted"),
     }
 }
+
+/// The presence-query counter: one charge per offered object that has to ask.
+///
+/// A wave seeds its availability with the identities it *offered*; a direct
+/// reference outside that set - an object already stored but not part of this
+/// wave - costs one paged presence query. The counter is what the wave-level
+/// batch (`P2-5`) is measured against, so it is pinned here with its control: a
+/// wave whose references are all known pays nothing.
+#[test]
+fn a_presence_query_is_charged_for_a_reference_outside_the_wave() {
+    let dir = TempDir::new("presence");
+    let path = dir.store_path("presence");
+    let store = create_store(&path);
+
+    let target = layerfs_content::FinalizedObject::new(
+        ObjectRole::WholeFile,
+        support::assembled_small_object(b"presence-target"),
+    )
+    .expect("target object");
+    let target_id = target.id();
+    let first = disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("begin"))?;
+        operation.accept(target)?;
+        operation.finish(scope.child("finish"))
+    })
+    .expect("target save");
+    assert_eq!(first.inserted, 1);
+    assert_eq!(
+        first.presence_queries, 0,
+        "a wave with no outside reference asks nothing"
+    );
+
+    // A second object that names the stored target: the target is available but
+    // was not offered in this wave, so availability has to ask once.
+    let dependent = layerfs_content::FinalizedObject::new(
+        ObjectRole::WholeFile,
+        support::assembled_small_object(b"presence-dependent"),
+    )
+    .expect("dependent object")
+    .with_references(vec![target_id]);
+    let second = disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("begin"))?;
+        operation.accept(dependent)?;
+        operation.finish(scope.child("finish"))
+    })
+    .expect("dependent save");
+    assert_eq!(second.inserted, 1);
+    assert_eq!(
+        second.presence_queries, 1,
+        "one outside reference is one presence query"
+    );
+
+    // Control: offering the reference itself in the wave makes it known without a
+    // query, so the charge follows the reference, not the save.
+    let offered = layerfs_content::FinalizedObject::new(
+        ObjectRole::WholeFile,
+        support::assembled_small_object(b"presence-offered"),
+    )
+    .expect("offered object")
+    .with_references(vec![target_id]);
+    let third = disabled(|scope| {
+        let mut operation = store.begin_save(scope.child("begin"))?;
+        operation.accept(offered)?;
+        operation.finish(scope.child("finish"))
+    })
+    .expect("third save");
+    assert_eq!(third.presence_queries, 1, "the reference is still outside");
+}

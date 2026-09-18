@@ -34,9 +34,10 @@ impl MutationOwner {
         if self.terminal {
             return Err(StorageError::Aborted);
         }
-        availability.validate(&self.connection, object, i64::MAX, |id| {
+        let queries = availability.validate(&self.connection, object, i64::MAX, |id| {
             self.pending_member(id)
         })?;
+        self.counters.presence_queries = self.counters.presence_queries.saturating_add(queries);
         let record = self.select_record(object, advisory)?;
         let lane = record.lane;
         let index = lane.index();

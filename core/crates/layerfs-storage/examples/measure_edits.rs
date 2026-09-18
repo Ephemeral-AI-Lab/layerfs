@@ -474,12 +474,13 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
         operation.accept(dependent)?;
         let outcome = operation.finish(save.child("storage.finish"))?;
         println!(
-            "save: inserted {} reused {} prefix records {} full records {} trials {}",
+            "save: inserted {} reused {} prefix records {} full records {} trials {} presence queries {}",
             outcome.inserted,
             outcome.reused,
             outcome.prefix_records,
             outcome.full_records,
-            outcome.delta.trials
+            outcome.delta.trials,
+            outcome.presence_queries
         );
         Ok(store)
     });
@@ -582,12 +583,13 @@ fn run_pipeline(
     println!("edited root: {edited_root}");
     println!("edited length: {}", stream.final_len());
     println!(
-        "save: inserted {} reused {} packs {} prefix records {} full records {}",
+        "save: inserted {} reused {} packs {} prefix records {} full records {} presence queries {}",
         outcome.inserted,
         outcome.reused,
         outcome.packs_created,
         outcome.prefix_records,
-        outcome.full_records
+        outcome.full_records,
+        outcome.presence_queries
     );
     // One provider across the whole readback: the counter it carries is the
     // operation's connection lifetime, which is the figure P1-2 pools.

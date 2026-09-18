@@ -53,6 +53,8 @@ pub struct SaveOutcome {
     /// an INSERT-batching change moves, and it is deliberately not a row count:
     /// `inserted` already is one.
     pub statements: u64,
+    /// Presence queries issued for offered objects' direct references.
+    pub presence_queries: u64,
     /// Representation selection outcomes.
     pub delta: DeltaCounters,
     /// Work spent acquiring delta bases.
@@ -72,6 +74,7 @@ impl From<OutcomeCounters> for SaveOutcome {
             full_records: counters.full_records,
             prefix_records: counters.prefix_records,
             statements: counters.statements,
+            presence_queries: counters.presence_queries,
             delta: counters.delta,
             chain: counters.chain,
             pool: counters.pool,
