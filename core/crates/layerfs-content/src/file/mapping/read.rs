@@ -452,7 +452,9 @@ fn merge(total: &mut ReadCounters, wave: ReadCounters) {
 /// acquired, decoded and released before the next. A child whose subtree starts
 /// at or after range.end is never demanded - that is where the recursive form
 /// stopped descending - and neither is any node after it, because the frontier is
-/// in logical order.
+/// in logical order. Every comparison is in absolute file offsets: a page's child
+/// summaries are cumulative from the page's own start, so each is rebased on the
+/// frontier's origin before it is compared with the range.
 fn traverse(
     state: FileState,
     range: &Range<u64>,
@@ -500,7 +502,17 @@ fn traverse(
                             .ok_or(ContentError::MappingDepthExceeded)?;
                         let mut previous = node.origin;
                         for child in children {
-                            let end = child.cumulative_logical_end;
+                            // A child's cumulative end is cumulative within *this*
+                            // page, so it is relative to the page's own origin while
+                            // the range and the frontier carry absolute offsets. A
+                            // page whose origin is zero - the root, and every page of
+                            // a one-level tree - hides the difference; a non-root
+                            // branch of a deeper tree does not, and reading it through
+                            // the relative value prunes children the range covers.
+                            let end = node
+                                .origin
+                                .checked_add(child.cumulative_logical_end)
+                                .ok_or(ContentError::LengthOverflow)?;
                             if end <= range.start {
                                 previous = end;
                                 continue;

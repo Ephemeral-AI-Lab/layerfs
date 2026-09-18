@@ -2,8 +2,8 @@
 
 mod support;
 
-use layerfs_content::file::mapping::decode_file_state;
-use layerfs_content::{read_all, read_range, ContentError, ObjectRole};
+use layerfs_content::file::mapping::{decode_file_state, emit_file_state, ExtentBuilder};
+use layerfs_content::{read_all, read_range, ConstructionPolicy, ContentError, ObjectRole};
 use support::{
     build_file, disabled_scope, mapping_page_sizes, noise, patterned, read_back, repeat,
     CountingStore, MemoryStore, PoisonedStore,
@@ -732,4 +732,63 @@ fn the_payload_wave_enforces_both_its_object_and_its_byte_ceiling() {
         counters.payload_bytes_read as usize <= READ_WAVE_BYTES,
         "the bytes one read serves stay inside the declared ceiling: {counters:?}"
     );
+}
+
+/// A range read serves a tree with more than one branch level.
+///
+/// `ChildDescriptor::cumulative_logical_end` is cumulative *within its own page*,
+/// not from the start of the file. A traversal that compares it against an
+/// absolute range bound therefore prunes every child of a non-root branch whose
+/// subtree begins past the range, emits fewer bytes than it was asked for, and
+/// refuses itself with `InvalidRecord("mapping coverage")`. A tree whose root is
+/// a single branch level hides this, because there the page origin is zero and the
+/// two readings of the field agree. With the frozen page capacity of 128 entries
+/// the tree gains its second branch level at 16,385 extents.
+#[test]
+fn a_range_read_serves_a_tree_with_more_than_one_branch_level() {
+    let policy = ConstructionPolicy::frozen_default();
+    let extents = 16_385_usize;
+    let mut store = MemoryStore::new();
+    let mut builder = ExtentBuilder::new(&policy.capacities());
+    let expected: Vec<u8> = (0..extents).map(|index| (index % 251) as u8).collect();
+    for byte in &expected {
+        builder
+            .push_chunk(std::slice::from_ref(byte), None, &mut store)
+            .expect("one chunk per logical byte");
+    }
+    let build = builder.finish(&mut store).expect("mapping tree");
+    let root = emit_file_state(&mut store, build.root.expect("mapping root")).expect("file state");
+    let state = decode_file_state(store.canonical(root).unwrap()).expect("decoded file state");
+    assert_eq!(
+        state.tree_level, 2,
+        "the tree has two branch levels above its leaves"
+    );
+    assert_eq!(state.extent_count, extents as u64);
+    assert_eq!(state.logical_len, extents as u64);
+
+    // A range that starts in the first leaf is the case the old traversal got
+    // right; the middle and tail ranges are the ones it pruned away.
+    let ranges = [
+        0_u64..1_000,
+        (extents as u64 / 2)..(extents as u64 / 2 + 1_000),
+        (extents as u64 - 4_096)..(extents as u64),
+    ];
+    for range in ranges {
+        let mut out = Vec::new();
+        disabled_scope(|scope| {
+            read_range(
+                &store,
+                root,
+                range.clone(),
+                &mut out,
+                scope.child("content.read"),
+            )
+        })
+        .unwrap_or_else(|error| panic!("range {range:?} failed: {error}"));
+        assert_eq!(
+            out,
+            expected[range.start as usize..range.end as usize],
+            "range {range:?} is served byte-exactly"
+        );
+    }
 }
