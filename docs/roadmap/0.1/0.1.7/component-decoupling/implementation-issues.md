@@ -41,12 +41,29 @@ amendments with the exact source under review. The original recommendation was
 exclude tests/docs/examples/manifests/tooling and are not physical file ceilings.
 Actual results and misses must be reported, never hidden by weakening correctness.
 
-## Current handoff: Stage 5 terminal pass
+## Current handoff: Stage 6 qualification
 
-**Work continues through the [Stage 5 terminal handoff](stage-5-terminal-handoff-20260917.md).**
-Its terminal condition is every Stage 5 and cumulative criterion passing with no
-FAIL, INCOMPLETE or unowned row, followed by a clean closing review and the closure
-of #170. #170 is **open** and **not accepted**: the
+**Work continues through the [Stage 6 handoff](stage-6-handoff.md)** for
+[#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171). It qualifies the
+complete C1/C2 core against the frozen case specification under
+`core/docs/benchmark/fs-bench-pro-storage-content/`. One agent, **no subagents and no
+codex**; the production LOC delta is expected to be **0**.
+[#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) (Stage 5) is **closed**
+at its implemented scope, and #168/#169 are closed under their recorded scope and
+waivers. The frozen specification is committed before any harness code or collection,
+as the measurement contract requires.
+
+The two family sub-issues [#182](https://github.com/Ephemeral-AI-Lab/layerfs/issues/182)
+(C1) and [#183](https://github.com/Ephemeral-AI-Lab/layerfs/issues/183) (C2) carry the
+family-level discussion; #171 is the acceptance issue.
+
+## Prior handoff: Stage 5 terminal pass (historical)
+
+**This routing is complete and is retained as the record.** Its terminal condition —
+every Stage 5 and cumulative criterion passing with no FAIL, INCOMPLETE or unowned
+row, followed by a clean closing review and the closure of #170 — was met at
+`2026-09-17T21:05:53Z` (comment `5721219925`, final HEAD `249d2b917`). At the time
+this text was written, #170 was **open** and **not accepted**: the
 [round-2 independent review](stages-1-5-review-20260917T230700Z.md) recorded
 64 PASS / 9 FAIL / 8 PARTIAL-INCOMPLETE of 83 Stage-5 rows and 30 PASS / 3 FAIL of
 36 cumulative rows, with five blocking items: harness case selection, six

@@ -63,6 +63,12 @@ that owns the work you are doing:
 | `gates_and_oracles.md` | Gate classes G1-G7, oracle classes O1-O7, status vocabulary, and the bands. |
 | `implementation_estimate.md` | The file structure, the LOC estimate, the reuse ledger and experiments E1-E4. |
 
+The specification headers address themselves to two family sub-issues of #171:
+[#182](https://github.com/Ephemeral-AI-Lab/layerfs/issues/182) (C1 families) and
+[#183](https://github.com/Ephemeral-AI-Lab/layerfs/issues/183) (C2 families). They
+carry no separate acceptance criteria — #171 is the acceptance issue — but they are
+where a family-level question is discussed.
+
 ### 1.3 Mandatory — why you exist (what Stage 5 handed you)
 
 | # | Document | Why |
@@ -72,6 +78,30 @@ that owns the work you are doing:
 | 10 | [`stages-1-5-review-20260917T230700Z.md`](stages-1-5-review-20260917T230700Z.md) | The governing review. **§10 action 10 is your row**; §11 "Final answers" states in its own words what Stage 6 must supply. |
 | 11 | [`complexity-and-roundtrip-research-20260917.md`](complexity-and-roundtrip-research-20260917.md) | Per-area complexity versus the reference and a risk-tiered optimisation register. **Source-read only — no measurement.** It is a hypothesis list, not evidence. |
 | 12 | [`parallelism-and-batching-study-20260918.md`](parallelism-and-batching-study-20260918.md) | Bounds what to measure first (worker pools, SQLite tuning, statement batching). Also source-read only. |
+
+**Four traps in the Stage 5 record.** They are bookkeeping defects in a closed stage,
+not live work, but each one can mislead you:
+
+- **`VF-6` is labelled `PASS` in one evidence file.** The verdict column of
+  `../evidence/stage-5-terminal-20260918T120000Z/verify-VF5-VF6-F5.md:16` reads
+  **PASS** for a row the matrices record as `NOT_RUN` under an owner disposition. The
+  matrices govern (`stage-5-report.md` §16), and the sibling verifier
+  `verify-close-evidence-limits.md:33` records the correct reading. Do not cite that
+  `PASS` column, and do not treat the row as closed.
+- **The terminal closing comment overstates its own evidence.** Comment `5721219925`
+  says the falsifier's "final verdict table marks every item SATISFIED"; the committed
+  table marks item 10 **PENDING BY DESIGN**
+  (`verify-close-terminal-checklist.md:500`), and the tree the comment names
+  (`249d2b917`) did not yet contain that table. Cite the report, not the comment.
+- **Two Stage 5 criteria were met under a disclosed re-reading**, and both are recorded
+  in the tree: terminal item 6 (per-commit LOC reproducibility — seven of 27 Stage-5
+  commits are documented as not reproducing, `verify-close-terminal-checklist.md:169,179-188`)
+  and `R2-F14` (its named clipped-run receipt is unreachable; the row passes on wiring
+  plus telemetry tests, `verify-R2-F1-F2-F3-F14.md:205-218`). Read the qualification
+  before repeating either as a clean pass.
+- **The closure-boundary file count is recorded two ways** — 115 in
+  `stage-5-completion-report-20260917.md` §7/§7a, 116 in the closure logs and
+  `verify-close-cumulative.md:127`. Harmless to you, but do not quote either as fact.
 
 ### 1.4 Read before you write the affected code
 
@@ -101,7 +131,7 @@ that owns the work you are doing:
 | Repository | `/Users/yifanxu/Ephemeral-AI-Lab/layerfs` |
 | Branch | `main` |
 | Issue | [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) — open, not started |
-| Predecessor | [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) — **closed** 2026-09-18 local = 2026-09-17T21:05:53Z UTC (the closure documents and the tracker use the two clocks; both refer to the same event) |
+| Predecessor | [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) — **closed** `2026-09-17T21:05:53Z`, comment `5721219925`, final HEAD `249d2b917`. An earlier component-scope closure at `2026-09-17T07:58:02Z` (comment `5711002673`, source of record `f2de7810e`) was reopened by the round-2 review; **it is not the closure of record**, and a document citing only that instant is describing the superseded one. |
 | Frozen specification | committed under `core/docs/benchmark/fs-bench-pro-storage-content/` (7 files) |
 | Target directory | `core/benchmark/fs-bench-pro-storage-content/` — **exists and is empty** |
 | Existing harness to reuse | `benchmark/fs-bench-pro/` (v0.1.6, the reference campaign) |
@@ -301,6 +331,19 @@ Write one section of the Stage 6 qualification plan that lists, with a reason ea
 
 It must **not** carry the Stage 5 component rows as a substitute for any of them.
 
+Four further inheritances belong on the same list, because Stage 5 scoped them out by
+name and no later stage has picked them up:
+
+5. **Derived-unverified limits** — `MAXIMUM_LEVELS` 32, the 256-group pack ceiling and
+   the level-31 tree are arithmetic, not observed. Either exercise each or carry the
+   label `derived, unverified at scale` with the arithmetic.
+6. **Storage-side fixed work budgets** — scoped out of Stage 5 but named
+   (`stage-5-report.md` §16). Report them or say why they are out of scope.
+7. **The sixth integration route**, "measured route with real payloads"
+   (`stage-5-report.md` §16) — it follows `VF-6`, so it inherits that disposition.
+8. **The two Stage 3-4 owner waivers (`S3-6`, `S4-5`) stay waived, unmeasured and
+   unpromoted.** They are not yours to re-open and not yours to evidence.
+
 **And you must record the D1 owner decision explicitly.** The governing review
 (§11) requires Stage 6 to supply *"a frozen complete-operation comparator (or an
 explicit owner decision that none will exist and the claim is withdrawn)"*. The
@@ -315,6 +358,13 @@ in the plan so the absence reads as a decision and not as an omission.
 - Evidence under `benchmark-results/fs-bench-pro-storage-content/` (gitignored,
   development) and, for admission, a dated append-only directory under
   `docs/roadmap/0.1/0.1.7/evidence/`.
+- **The ledger entry is mandatory, not optional.** `AGENTS.md` §3 item 6 requires every
+  measurement round to append an entry carrying **exact numbers, limits, the arithmetic,
+  the identities, the reproduction command, and every non-passing line**. For Stage 6
+  the successor ledger is the round's own
+  `docs/roadmap/0.1/0.1.7/evidence/<stamp>/README.md` — declare it as such the first
+  time you write one, so the successor is named rather than assumed. Section 7's receipt
+  rule does not carry limits or arithmetic on its own; the ledger entry does.
 - One comment per round on [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171):
   what changed, the evidence path, the row deltas, and every command that failed or
   did not run.
@@ -374,7 +424,7 @@ before/after honestly; never claim a delta of 0 for a commit that has one.
 | --- | --- |
 | Production Rust under `core/crates/*/src` | **fewer than 1,000 physical lines — maximum 999**, including comments and blank lines |
 | Product `lib.rs` and `mod.rs` | **maximum 200 physical lines**, declaration/delegation only |
-| Shipped runtime SQL under `crates/*/src` or package `sql/` | counts toward the 999 ceiling |
+| Shipped runtime SQL under `core/crates/*/src` or `core/crates/*/sql` | counts toward the 999 ceiling |
 | **Benchmark Python files** | **exempt from any line-count limit** — an owner clarification, recorded here. `core/benchmark/**` is not product source and the boundary guard does not scan it. |
 | Benchmark Rust files | likewise outside the guard; keep them focused anyway, and keep the largest (the oracle) near its ~620-line estimate |
 

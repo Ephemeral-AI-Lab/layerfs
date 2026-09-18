@@ -28,7 +28,10 @@ Release: [v0.1.7 checklist](../README.md), tracked by
   [`../evidence/stage-5-terminal-20260918T120000Z/`](../evidence/stage-5-terminal-20260918T120000Z/).
 - **Stage 5's registers are closed (2026-09-18).** The implementation tracker
   [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) closed at its
-  implemented scope on 2026-09-17; its two research registers — the complexity and
+  implemented scope with terminal closure `2026-09-17T21:05:53Z` (comment
+  `5721219925`, final HEAD `249d2b917`); an earlier component-scope closure at
+  `2026-09-17T07:58:02Z` was reopened by the round-2 review and is not the closure
+  of record. Its two research registers — the complexity and
   round-trip register
   [#176](https://github.com/Ephemeral-AI-Lab/layerfs/issues/176) and the
   parallelism/batching register

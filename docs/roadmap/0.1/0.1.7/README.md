@@ -128,7 +128,11 @@ remain mandatory. No runtime setting or performance result is claimed here.
 
 ## Plan status
 
-**Stage 5 is closed at its implemented scope (2026-09-18).** The
+**Stage 5 is closed at its implemented scope.** The terminal closure is
+`2026-09-17T21:05:53Z`, comment `5721219925`, final HEAD
+`249d2b917211d300b93fa3ead418a7eeb56e731b`. An earlier component-scope closure at
+`2026-09-17T07:58:02Z` (comment `5711002673`, source of record `f2de7810e`) was
+reopened by the round-2 independent review and is **not** the closure of record. The
 [Stage 5 terminal handoff](component-decoupling/stage-5-terminal-handoff-20260917.md)
 drove [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) to its
 terminal condition: every remediation round landed its rows with receipts, each
@@ -150,8 +154,9 @@ reference ordering.
 The [Stages 3–4 closure record](component-decoupling/stages-3-4-completion-round-20260917.md)
 records completed scopes and explicit unmeasured owner waivers; it is not a
 performance baseline claim. Stage 6 (#171) qualifies the whole core and owns the
-deferred complete-operation comparison; Stage 7 (#172) integrates the later
-Workspace/runtime shape. No complete-operation performance claim is made by
+`VF-6` disposition: under the frozen `structural-complexity` decision (`D1`) the
+comparative claim is **withdrawn**, not deferred a second time. Stage 7 (#172)
+integrates the later Workspace/runtime shape. No complete-operation performance claim is made by
 Stage 5, and nothing is tagged or released by this closure.
 
 Two source-read studies now bound what Stage 6 should measure first: the
@@ -206,7 +211,7 @@ reuse, three pack framings, the four-table SQLite schema and independent timing.
 The [Stages 0–2 report](component-decoupling/stages-0-2-report.md) records the
 frozen profile, expected-versus-actual production LOC, the run commands, the
 observed roots and every declared gap (DELTA, larger cutoffs, pooling, RSS
-evidence and the un-induced unknown-outcome case). Stages 3–7 remain open, and no
+evidence and the un-induced unknown-outcome case). Stages 6–7 remain open, and no
 part of v0.1.7 is claimed complete.
 
 The initial [Stages 3–4 report](component-decoupling/stages-3-4-report.md) records
@@ -218,9 +223,13 @@ coverage and qualification, after pooling was implemented in the
 [completion report](component-decoupling/stages-3-4-completion-report.md).
 Combined edit qualification waits for D; pooling checks do not.
 [#168](https://github.com/Ephemeral-AI-Lab/layerfs/issues/168) and
-[#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169) remain incomplete;
-the acceptance criteria are unchanged. No optimization claim follows from the
-passing subset or smoke timings, and no required work is moved to Stage 5/6.
+[#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169) are **closed**
+under the scope and waivers recorded in the
+[Stages 3–4 closure record](component-decoupling/stages-3-4-completion-round-20260917.md);
+their acceptance criteria were not relaxed, and their unmeasured performance rows
+stay unmeasured and owner-waived rather than promoted. No optimization claim
+follows from the passing subset or smoke timings, and no required work was moved
+to Stage 5/6.
 The [agreed cluster 1/2 overview](component-decoupling/cluster-1-2-components.md)
 contains three canonical-content components and four physical-storage components,
 with shared telemetry and external runtime/workflow ownership. Detailed contracts
