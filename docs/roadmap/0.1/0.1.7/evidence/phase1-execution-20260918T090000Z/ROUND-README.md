@@ -18,6 +18,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-7` | P1-7 — one shared page memo between the two edit passes | collected (`after/`, `parent-test/`) |
 | `p1-14` | P1-14 — the whole-file edit assembles into the object's own buffer | collected (`after/`) |
 | `p1-13` | P1-13 — merge fanout 4, multiway cascade | **incomplete, cause diagnosed, reverted** (`receipt.md` only; no `after/` arm) |
+| `p1-15` | P1-15 — hybrid binary-search-on-restart | **incomplete, reverted** (`receipt.md` only; no `after/` arm) |
 | `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |
