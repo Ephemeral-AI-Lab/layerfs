@@ -1,0 +1,141 @@
+{
+  "experiments": [
+    {
+      "experiment": "E1",
+      "fields": {
+        "clone_apparent_bytes": 67108864,
+        "clone_blocks_bytes": 67108864,
+        "clone_digest_after": "a6d599895bb59123a98c005635e8cac5eb8b80a2f91b9aabaa5441bec447ff5e",
+        "clone_ino": 822192962,
+        "clone_method": "apfs-clonefile-cow-v1",
+        "distinct_inode": true,
+        "free_bytes_before": 297578311680,
+        "master_bytes": 67108864,
+        "master_digest_after": "9bb748eff0f8cf0d4340e92cc2191a704a9d2aea15e9e8214802afcc2ff0c060",
+        "master_digest_before": "9bb748eff0f8cf0d4340e92cc2191a704a9d2aea15e9e8214802afcc2ff0c060",
+        "master_ino": 822192961,
+        "master_unchanged": true,
+        "used_bytes_far_below_file_size": false
+      },
+      "notes": [
+        "fsync is used *here* and only here: this is the harness's own isolation probe on a throwaway file, not a product path and not a report path"
+      ],
+      "outcome": "REFUTED",
+      "question": "does a clonefile clone have its own inode, leave its master unchanged, and share blocks",
+      "schema": "layerfs-experiment-v1"
+    },
+    {
+      "experiment": "E2",
+      "fields": {
+        "clone_independent_of_master_residency": true,
+        "clone_invalidated": true,
+        "clone_resident_pages": 0,
+        "clone_resident_pages_after_clone_read": 4096,
+        "clone_resident_pages_after_dewarm": 0,
+        "master_resident_pages_after_clone_dewarm": 4096,
+        "master_resident_pages_after_clone_read": 4096,
+        "master_resident_pages_after_full_read": 4096,
+        "master_resident_pages_before_clone_read": 4096,
+        "master_total_pages": 4096
+      },
+      "notes": [
+        "the decisive question for the reflink rung is the *first* reading: a clone that inherits its master's residency cannot carry a prepared-dewarmed claim"
+      ],
+      "outcome": "SATISFIED",
+      "question": "after the master is read fully, is a fresh clone's residency zero, and does msync(MS_INVALIDATE) on the clone evict the master",
+      "schema": "layerfs-experiment-v1"
+    },
+    {
+      "experiment": "E3",
+      "fields": {
+        "child_exit_code": 0,
+        "child_stdout": "lifecycle-create PASS gates=6 trace_bytes=4570",
+        "master_digest_after_mutating_clone": "1cd2737dec7f51ea6be57d358862cb9c4ec02fabf57a30597365e787e00130ea",
+        "master_digest_before": "1cd2737dec7f51ea6be57d358862cb9c4ec02fabf57a30597365e787e00130ea",
+        "master_unchanged": true,
+        "page_count_before": 8,
+        "page_count_clone": 8,
+        "quick_check_before": "ok",
+        "quick_check_clone": "ok",
+        "sidecars": [],
+        "store_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmpkr_ber5l/e3-store/sample.sqlite"
+      },
+      "notes": [],
+      "outcome": "SATISFIED",
+      "question": "does a clone of a closed, quiescent Store preserve page count, quick_check and the master's digest",
+      "schema": "layerfs-experiment-v1"
+    },
+    {
+      "experiment": "E4",
+      "fields": {
+        "clone_directory_link_counts": {
+          "nested": 3
+        },
+        "clone_file_link_counts": {
+          "file.txt": 1,
+          "link": 1,
+          "nested/deep.txt": 1
+        },
+        "entries": 4,
+        "every_file_st_nlink_is_one": true,
+        "mismatches": {},
+        "symlink_targets": {
+          "link": "file.txt"
+        },
+        "xattrs_compared": true
+      },
+      "notes": [
+        "st_nlink == 1 is checked for files only: a directory's link count is structural, and asserting 1 for it would refute every faithful clone"
+      ],
+      "outcome": "SATISFIED",
+      "question": "does a clonefile directory clone preserve mode, mtime, symlinks, xattrs and st_nlink",
+      "schema": "layerfs-experiment-v1"
+    },
+    {
+      "experiment": "W1",
+      "fields": {
+        "control_opened": true,
+        "control_stdout": "lifecycle-open PASS gates=8 trace_bytes=5063",
+        "create_stdout": "lifecycle-create PASS gates=6 trace_bytes=4570",
+        "perturbed_refused": true,
+        "perturbed_stdout": "lifecycle-open NOT_RUN gates=3 trace_bytes=2067",
+        "perturbed_trace_tail": "{\"schema\":\"layerfs-trace-v1\",\"seq\":14,\"kind\":\"receipt\",\"key\":\"note\",\"value\":\"not_run_reason: product error: Integrity(\\\"publication watermark is ahead of storage\\\")\",\"unit\":\"\",\"basis\":\"driver declaration\"}"
+      },
+      "notes": [
+        "the perturbation is an ordinary UPDATE through sqlite3, outside the product; no product source was modified, no hook was added and no fault was injected into the crate"
+      ],
+      "outcome": "SATISFIED",
+      "question": "does a hand-edited watermark make Store::open refuse with Integrity, while an unperturbed copy still opens",
+      "schema": "layerfs-experiment-v1"
+    },
+    {
+      "experiment": "W4",
+      "fields": {
+        "files_scanned": 120,
+        "scan_findings": {},
+        "scan_status": "PASS",
+        "token_classes": [
+          "backoff_call",
+          "fdatasync",
+          "fsync",
+          "non_zero_busy_timeout",
+          "resend_call",
+          "retry_call",
+          "sync_all",
+          "sync_data",
+          "wal_mode_literal",
+          "wal_string_literal"
+        ]
+      },
+      "notes": [
+        "the scan strips Rust comments first, deliberately: the product documents why these calls are absent, and a scan that counted the explanation could not be kept green"
+      ],
+      "outcome": "SATISFIED",
+      "question": "is the no-fsync / no-WAL / no-retry contract intact in the sealed product source, and do the runtime tripwires agree",
+      "schema": "layerfs-experiment-v1"
+    }
+  ],
+  "ran_utc": "2026-09-18T21:09:12Z",
+  "schema": "layerfs-calibration-v1",
+  "wall_ns": 825416375
+}
