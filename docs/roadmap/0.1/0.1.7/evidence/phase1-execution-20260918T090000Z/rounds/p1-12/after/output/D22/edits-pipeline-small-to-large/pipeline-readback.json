@@ -1,0 +1,33 @@
+{
+  "name": "verify.readback",
+  "elapsed_ns": 863917,
+  "children": [
+    {
+      "name": "content.read",
+      "elapsed_ns": 863250,
+      "children": [
+        {"name": "content.acquire", "elapsed_ns": 224834, "children": []},
+        {
+          "name": "content.traverse",
+          "elapsed_ns": 637333,
+          "children": [
+            {
+              "name": "mapping.navigate",
+              "elapsed_ns": 34333,
+              "children": [
+                {"name": "storage.read", "elapsed_ns": 34167, "children": []}
+              ]
+            },
+            {
+              "name": "mapping.payload",
+              "elapsed_ns": 586166,
+              "children": [
+                {"name": "storage.read", "elapsed_ns": 586042, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

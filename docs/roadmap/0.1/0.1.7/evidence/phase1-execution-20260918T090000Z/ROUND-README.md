@@ -17,6 +17,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `v4` | V4 — `edit_timing_c1` prints `EditCounters.nodes_read` | collected (`after/`) |
 | `p1-9` | P1-9 — a pure deletion skips the rightmost walk | collected (`after/`) |
 | `p1-5` | P1-5 — a spill resets only the tiers it replaces | collected (`after/`) |
+| `p1-12` | P1-12 — a page keeps a running width total | collected (`after/`) |
 
 ## Driver corrections (recorded, not silent)
 
