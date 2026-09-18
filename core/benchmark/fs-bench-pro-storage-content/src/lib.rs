@@ -16,5 +16,9 @@
 #![deny(missing_docs)]
 
 pub mod families;
+pub mod fixture;
+pub mod gates;
+pub mod ops;
 pub mod registry;
 pub mod support;
+pub mod workload;
