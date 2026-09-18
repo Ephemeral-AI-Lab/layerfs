@@ -68,12 +68,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             self.persist_entry(&mut page.entries[last], page.level)?;
         }
         self.append_entry(page, entry)?;
-        let size = crate::filesystem::sorted::format::EMPTY_PAGE_BYTES
-            + page
-                .entries
-                .iter()
-                .map(|entry| F::width(&entry.key, page.level))
-                .sum::<usize>();
+        let size = crate::filesystem::sorted::format::EMPTY_PAGE_BYTES + page.widths;
         if F::fits(size, page.entries.len(), page.level) {
             return Ok(None);
         }
@@ -85,6 +80,9 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         let split = crate::filesystem::sorted::format::nearest_half(&widths);
         let mut right = self.page(page.level)?;
         for entry in page.entries.drain(split..) {
+            // The row leaves this page and lands in `right`, whose own running
+            // total `append_entry` maintains.
+            page.widths = page.widths.saturating_sub(F::width(&entry.key, page.level));
             self.append_entry(&mut right, entry)?;
         }
         page.origin = None;

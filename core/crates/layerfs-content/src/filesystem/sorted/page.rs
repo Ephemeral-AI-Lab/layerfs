@@ -96,6 +96,14 @@ pub(crate) struct Page<K, V> {
     pub level: u8,
     /// Rows in key order.
     pub entries: Vec<Entry<K, V>>,
+    /// Sum of the encoded widths of `entries` at this level.
+    ///
+    /// Maintained by [`Engine::append_entry`], the single funnel every row passes
+    /// through, so the fill test and the split decision read it instead of
+    /// re-summing every key after every append (which is O(k) per append, O(k²)
+    /// per page). `Entry::bytes` is a *subtree's* encoded bytes and is not this
+    /// figure.
+    pub widths: usize,
     /// Stored origin of this page, when it was materialized from one.
     pub origin: Option<ObjectId>,
     /// Retained page and row scratch.
@@ -180,6 +188,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         Ok(Page {
             level,
             entries: Vec::new(),
+            widths: 0,
             origin: None,
             lease,
         })
@@ -579,6 +588,10 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             page.lease.shrink(before * size);
         }
         page.lease.grow(F::heap_bytes(&entry.key))?;
+        page.widths = page
+            .widths
+            .checked_add(F::width(&entry.key, page.level))
+            .ok_or(ContentError::LengthOverflow)?;
         page.entries.push(entry);
         Ok(())
     }

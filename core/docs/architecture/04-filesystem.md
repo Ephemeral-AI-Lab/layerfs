@@ -124,6 +124,14 @@ An unfinished page this operation built stays **decoded and private** until the
 merge proves it final. Children are read in bounded authenticated batches
 (`BATCH_CHILDREN = 256`), and the accumulating right spine holds private pages.
 
+**Filling and splitting read a running total, not a re-sum.** A page carries the
+sum of its rows' encoded widths, maintained by the one funnel every row passes
+through (`append_entry`), so the fill test after an append and the split point are
+O(1) reads instead of an O(k) sum over every key — O(k) per page fill rather than
+O(k²), with k bounded by the page ceiling (740 rows for a directory leaf). The
+figure is a page's **row widths**; `Entry::bytes` is a different number (a
+subtree's encoded bytes) and is not it.
+
 The width is the widest real demand, not the demand ceiling: one branch page's
 children are bounded by the directory format at 232 (1-byte names), so 256 covers
 every legal page in one wave. A full-width reservation is `256 x (8,192 + 88)`

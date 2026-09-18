@@ -268,3 +268,65 @@ fn a_late_source_error_propagates_and_publishes_nothing() {
     );
     let _ = lookup;
 }
+
+/// Decodes a built tree and reports each level's `(page bytes, rows)` pairs.
+fn partition(store: &TreeStore, root: ObjectId) -> Vec<Vec<usize>> {
+    use layerfs_content::filesystem::directory::codec::{decode_directory_page, DirectoryPage};
+    let mut shapes = Vec::new();
+    let mut level = vec![root];
+    while !level.is_empty() {
+        let mut next = Vec::new();
+        let mut row = Vec::new();
+        for id in &level {
+            let canonical = store.canonical(*id).expect("page");
+            row.push(canonical.len());
+            match decode_directory_page(canonical).expect("decode") {
+                DirectoryPage::Leaf { entries, .. } => row.push(entries.len()),
+                DirectoryPage::Branch { children, .. } => {
+                    row.push(children.len());
+                    for (_, child) in children {
+                        next.push(child);
+                    }
+                }
+            }
+        }
+        shapes.push(row);
+        level = next;
+    }
+    shapes
+}
+
+#[test]
+fn page_widths_running_total_matches_the_recorded_partition() {
+    // P1-12 replaced the per-append width sum (O(k) per append, O(k^2) per page)
+    // with a running total on the page. `Page::widths` is crate-private, so the
+    // observable from here is what it feeds: the fill test and the split point,
+    // i.e. the exact page partition. These two shapes are the recorded partition
+    // of the same fixtures on the parent tree, so a running total that drifts by
+    // one row-width moves a number here.
+    for (count, expected) in [
+        (
+            740_usize,
+            vec![vec![179, 3], vec![4118, 194, 4118, 194, 7436, 352]],
+        ),
+        (
+            1_500,
+            vec![
+                vec![359, 7],
+                vec![
+                    4118, 194, 4118, 194, 4118, 194, 4118, 194, 4118, 194, 4118, 194, 7100, 336,
+                ],
+            ],
+        ),
+    ] {
+        let entries = (0..count)
+            .map(|index| (index, index + 1))
+            .collect::<Vec<_>>();
+        let (store, root) = build(&entries);
+        assert_eq!(
+            partition(&store, root),
+            expected,
+            "{count} entries must partition exactly as recorded"
+        );
+    }
+}
