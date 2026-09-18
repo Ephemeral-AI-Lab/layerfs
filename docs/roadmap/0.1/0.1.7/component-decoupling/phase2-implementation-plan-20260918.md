@@ -4,7 +4,7 @@
 > [#178](https://github.com/Ephemeral-AI-Lab/layerfs/issues/178) — the DB/engine
 > boxes (`P2-1`..`P2-8`) plus the structural and instrument prerequisites that
 > make them measurable. Built by static source reading of the working tree at
-> `2137c8487` (clean apart from an untracked `core/docs/benchmark/`): every
+> `2137c8487` (clean apart from the untracked `core/docs/benchmark/`, which is Stage 6 / #182 and not staged): every
 > `path:line` below was re-read in the **core** tree before entry, and where the
 > register's citation resolves only in the reference or under a different module
 > name the difference is recorded per item. **No builds, tests, timings or
@@ -18,6 +18,12 @@
 > [#177](https://github.com/Ephemeral-AI-Lab/layerfs/issues/177) (parallelism +
 > batching). Phase 1's plan is
 > [`phase1-implementation-plan-20260917.md`](phase1-implementation-plan-20260917.md).
+> The Phase 1 closure record and the **entry conditions** are
+> [`phase2-entry-handoff-20260918.md`](phase2-entry-handoff-20260918.md), whose §4.2
+> asks for exactly this document; its §2 rulings are this plan's §9 questions 2, 4,
+> 6 and 7, and its §3 lists the Phase 1 assets Phase 2 reuses unchanged (frozen set
+> and `CONTRACT.md`, the per-tree probe client, `V1`–`V4`, the eight checks, the
+> author-verification form).
 
 ## 0. Entry conditions
 
@@ -421,23 +427,41 @@ Every item, without exception:
 
 ## 9. Open owner questions
 
-1. **Authorise P2-0?** It is a production-file change with a non-zero LOC delta
-   (imports and visibility markers) for zero behaviour change — Phase 1's
-   precedent was "no new production files". Without it, `P2-2` and `P2-5` are
-   written into a file with 37 lines of headroom.
-2. **Disposition of P2-1** given P0-2 (no spilling found at 1× or 4× the ceiling):
-   proceed, defer to a Phase 2 tail, or close it as **measured-and-declined**? The
-   read-path half is now measurable; the write-path half needs V7 first.
-3. **Authorise V5–V7?** Each is product telemetry plus a vehicle print, and each
-   is a harness change — the same class Phase 1 approved as V1–V4.
-4. **P2-3's scope change**: is an exclusive write lock compatible with the
-   one-save-owner contract, and with a Store opened read-only?
+Questions 2, 4, 6 and 7 are
+[`phase2-entry-handoff-20260918.md`](phase2-entry-handoff-20260918.md) §2.1–§2.4 in
+this plan's terms; the rest are this plan's additions. **No Phase 2 item starts
+before they are answered on #178 and recorded here.**
+
+1. **Authorise `P2-0`?** It is a production-file change with a non-zero LOC delta
+   (imports and visibility markers) for zero behaviour change — Phase 1's precedent
+   was "no new production files". Without it, `P2-2` and `P2-5` are written into a
+   file with 37 lines of headroom.
+2. **Is `P2-1` authorised at all, and on which measured shape?** It is a
+   cache-policy change, and cache policy is named in Phase 1's out-of-scope list;
+   P0-2 already undercut its write-path premise. Proceed, defer, or close it as
+   **measured-and-declined**? The read-path half is now measurable (P1-2 landed);
+   the write-path half needs `V7` first.
+3. **Authorise `V5`–`V7`?** Each is product telemetry plus a vehicle print — the
+   same class Phase 1 approved as `V1`–`V4`.
+4. **`P2-3`'s scope**: is an exclusive write lock compatible with the one-save-owner
+   contract, and is the item scoped to the write owner only, or is the contract
+   amended?
 5. **Does Phase 2 start before the two Phase 1 closure rulings are settled**
-   (P1-7's third pinned test, P1-10's architecture-document gap)?
-6. **Confirm the parked register stays parked** (producer pool, group target,
-   branch-row summaries, pack-BLOB chunking, membership single-hash, persisted
-   pool cursor), and that `P1-13`/`P1-15` stay with the Phase 1 continuation
-   handoff.
+   (P1-7's third pinned test, P1-10's architecture-document gap)? Both are contract
+   deviations Phase 2 would otherwise inherit silently.
+6. **What is the standing of `P1-13` and `P1-15`?** Closed as not delivered,
+   deferred into Phase 2, or carried as debt with their receipts? `P2-7` rebases
+   cleanly on today's cascade, but both attempts **found latent correctness defects**
+   in the ordering store (`find` and the newest-first scan disagreeing about a
+   serial; a stale row crossing tiers) — unfinished verification of existing
+   behaviour, which should be recorded as an open question about the ordering store
+   rather than dropped.
+7. **Confirm the single-worker rule still governs Phase 2's measurements**, so
+   `P2-2`'s A/B stays a batching change and does not quietly become a parallelism
+   change, and so the parked `O4` pool stays parked.
+8. **Confirm the parked register stays parked** (producer pool, group target,
+   branch-row summaries, pack-BLOB chunking, membership single-hash, persisted pool
+   cursor) and the pending-ceiling default stays as P1-16 documented it.
 
 ## 10. Non-goals and prohibitions
 
