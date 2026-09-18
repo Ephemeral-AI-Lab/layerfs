@@ -1,0 +1,9 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/client/target/release/phase0client c2 8191 default
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.259
+--- stdout ---
+c2 rows 8191 canonical_bytes 1023875 cache_arm default elapsed_ns 248382750 inserted 8191 reused 0 packs_created 33 pack_appends 8169 commits 31 statements 8191 full_records 8191 prefix_records 0 pool_leaves 8191 pool_new_values 8191 pool_groups 8191 pool_delta_leaves 0 pool_trials 0
+c2 save-connection profile page_size 4096 cache_size 2000 cache_spill 20000 mmap_size 0 | note read back on the save's own connection by SaveOperation::connection_profile(); the page-cache spill counter is NOT here - reading SQLITE_DBSTATUS needs FFI and this crate allows unsafe in one audited module only (see V7's receipt)
+c2 inspection-connection pragma cache_size 2000 cache_spill 20000 page_size 4096 journal_mode delete | dbstatus cache_spill ok=true value=0 | cache_write ok=true value=0 | cache_used ok=true value=9984 | note the spill counter below belongs to THIS connection, not the save's: the product exposes no public surface for the save connection, so a nonzero value here is not the save's spill count
+--- stderr ---
