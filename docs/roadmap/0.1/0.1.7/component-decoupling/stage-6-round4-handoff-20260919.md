@@ -13,6 +13,10 @@
 >
 > **How you work:** one agent, working alone. **No subagents. No codex.** Everything
 > happens in your session.
+>
+> **Entry point:** [`stage-6-round4-prompt.md`](stage-6-round4-prompt.md) is the
+> paste-ready prompt that dispatches this document. Start a successor session with
+> that file; use this one for the detail.
 
 ## 1. Where the tree actually is
 
