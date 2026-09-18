@@ -5,6 +5,7 @@
 //! the mutated artifact, and it authenticates every read with an identity check
 //! rather than trusting the bytes it is handed.
 
+pub mod artifact;
 pub mod digest;
 pub mod oracle;
 pub mod providers;

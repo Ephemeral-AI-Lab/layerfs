@@ -79,6 +79,17 @@ DECLARED_EXCEPTIONS = {
 }
 
 
+# Rows whose driver declares the three-phase split. The driver is the authority:
+# a row whose trace carries `oracle_phase: verify-invocation` is run in phases,
+# and one that does not is not, so this set only decides which cases the runner
+# acquires an artifact for before the performance invocation.
+PHASE_SPLIT_FAMILIES = {"c2.delta.cdc-locality"}
+
+# Verification budget, separate from the complete-command budget (benchmark_rules
+# section 11: performance and verifier timeouts MUST be separate and reported).
+VERIFICATION_BUDGET_NS = 60 * 1_000_000_000
+
+
 class RunnerError(Exception):
     """The run cannot proceed as asked."""
 
@@ -180,38 +191,116 @@ def cmd_list(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def artifact_root() -> Path:
+    """Where prepared artifacts live. Immutable once sealed."""
+    return RESULTS_ROOT / "prepared"
+
+
+def acquire(case_id: str, root: Path, harness_sha: str) -> dict[str, object]:
+    """Acquires one row's artifact once, keyed by the harness that produced it.
+
+    Reuse is refused when the sealed marker names a different harness binary: the
+    fixture is a function of the harness, so an artifact from another build is not
+    the same input. An entry that exists without a seal is an interrupted
+    acquisition and is not consumed.
+    """
+    destination = root / case_id
+    marker = destination / "sealed.tsv"
+    if marker.exists():
+        recorded = {}
+        for line in marker.read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("\t")
+            recorded[key] = value
+        if recorded.get("harness_sha256") == harness_sha:
+            return {"case_id": case_id, "state": "reused", "artifact": str(destination)}
+        return {
+            "case_id": case_id,
+            "state": "stale",
+            "reason": "the sealed artifact names another harness binary",
+            "artifact": str(destination),
+        }
+    if destination.exists():
+        return {
+            "case_id": case_id,
+            "state": "not-produced",
+            "reason": "an unsealed artifact directory exists; an interrupted acquisition is not consumed",
+        }
+    destination.mkdir(parents=True)
+    acquisition = destination / "acquisition"
+    started = time.monotonic_ns()
+    result = subprocess.run(
+        [str(BINARY), "--case", case_id, "--phase", "prepare",
+         "--emit-input", str(destination), "--out", str(acquisition)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment(),
+    )
+    wall_ns = time.monotonic_ns() - started
+    record = {
+        "case_id": case_id,
+        "state": "acquired" if result.returncode == 0 else "failed",
+        "artifact": str(destination),
+        "acquisition_wall_ns": wall_ns,
+        "exit_code": result.returncode,
+        "stdout": result.stdout.strip()[-500:],
+        "stderr": result.stderr.strip()[-500:],
+    }
+    if result.returncode == 0:
+        with (destination / "sealed.tsv").open("a", encoding="utf-8") as handle:
+            handle.write(f"harness_sha256\t{harness_sha}\n")
+    return record
+
+
 def cmd_prepare(arguments: argparse.Namespace) -> int:
     """Acquires the prepared artifacts a selection needs, once."""
-    root = Path(arguments.out) if arguments.out else RESULTS_ROOT / "prepared"
+    root = Path(arguments.out) if arguments.out else artifact_root()
     root.mkdir(parents=True, exist_ok=True)
+    if not BINARY.exists():
+        build()
+    harness_sha = receipt.sha256_file(BINARY) if BINARY.exists() else ""
     manifest = {
         "schema": "layerfs-prepared-manifest-v1",
         "root": str(root),
         "acquired_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "harness_sha256": harness_sha,
         "cases": [],
     }
     selected = arguments.case or registry_rows()
     for case_id in selected:
-        destination = root / case_id
-        if destination.exists():
-            manifest["cases"].append({"case_id": case_id, "state": "reused"})
+        family = family_of(case_id)
+        if family not in PHASE_SPLIT_FAMILIES:
+            manifest["cases"].append(
+                {
+                    "case_id": case_id,
+                    "state": "not-produced",
+                    "reason": f"{family} does not declare a phase split; its fixture is built inside its one invocation",
+                }
+            )
             continue
-        destination.mkdir(parents=True)
-        # The prepared artifact a C1 filesystem family needs is a serialized
-        # `FilesystemInput`, and a C2 family needs a closed Store. Both are
-        # produced by the child, because construction is a product operation and
-        # Python cannot perform one. Until that producer exists the row is
-        # recorded here rather than faked.
-        manifest["cases"].append(
-            {
-                "case_id": case_id,
-                "state": "not-produced",
-                "reason": "no child producer is implemented for this family's artifact yet",
-            }
-        )
+        manifest["cases"].append(acquire(case_id, root, harness_sha))
     receipt.write_append_only(root / f"manifest-{manifest['acquired_utc'].replace(':', '')}.json", manifest)
     print(f"prepare: {len(manifest['cases'])} case(s) considered at {root}")
     return 0
+
+
+def family_of(case_id: str) -> str:
+    """The family a case belongs to, read from the binary's own registry."""
+    for row in registry_table():
+        if row[0] == case_id:
+            return row[1]
+    return ""
+
+
+def registry_table() -> list[list[str]]:
+    """The binary's registry as rows, so no family list is maintained by hand."""
+    result = subprocess.run(
+        [str(BINARY), "--list", "--format", "tsv", "--lane", "full"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return [line.split("\t") for line in result.stdout.splitlines() if "\t" in line][1:]
 
 
 def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[str, object]:
@@ -223,15 +312,51 @@ def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[st
     # the append-only rule is enforced at the producer rather than by the runner
     # creating the path first and then refusing the child its own directory.
     declared_exception = case_id in DECLARED_EXCEPTIONS
+    acquisition: dict[str, object] = {}
+    command = [str(BINARY), "--case", case_id, "--out", str(case_dir)]
+    if family_of(case_id) in PHASE_SPLIT_FAMILIES:
+        artifact = artifact_root() / case_id
+        acquisition = acquire(case_id, artifact_root(), identity.harness_binary_sha256 or "")
+        command += ["--load-input", str(artifact)]
     started = time.monotonic_ns()
     result = subprocess.run(
-        [str(BINARY), "--case", case_id, "--out", str(case_dir)],
+        command,
         capture_output=True,
         text=True,
         check=False,
         env=environment(),
     )
     wall_ns = time.monotonic_ns() - started
+    # The verification phase is a second invocation with its own budget and its own
+    # timing scope. It appends its gates to the same trace, so the row's status and
+    # the verifier's re-derivation both see one record set.
+    verification: dict[str, object] = {}
+    # The driver is the authority on whether this row has a deferred oracle: the
+    # trace it just wrote says so, and nothing here decides it from a family list.
+    trace_path = case_dir / "trace.jsonl"
+    deferred = trace_path.exists() and "oracle_phase: verify-invocation" in trace_path.read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if deferred:
+        verification_started = time.monotonic_ns()
+        verified = subprocess.run(
+            [str(BINARY), "--case", case_id, "--phase", "verify",
+             "--load-input", str(artifact_root() / case_id), "--out", str(case_dir)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=environment(),
+        )
+        verification_ns = time.monotonic_ns() - verification_started
+        verification = {
+            "phase": "verify",
+            "exit_code": verified.returncode,
+            "wall_ns": verification_ns,
+            "budget_ns": VERIFICATION_BUDGET_NS,
+            "status": "PASS" if verification_ns <= VERIFICATION_BUDGET_NS else "FAIL",
+            "stdout": verified.stdout.strip()[-500:],
+            "stderr": verified.stderr.strip()[-500:],
+        }
     budget = receipt.budget(wall_ns, declared_exception)
     parsed = trace_module.read(case_dir / "trace.jsonl")
     status = parsed.status()
@@ -280,6 +405,8 @@ def run_case(case_id: str, run_dir: Path, identity: receipt.Identity) -> dict[st
         },
         "wall_ns": wall_ns,
         "budget": budget.as_fields(),
+        "acquisition": acquisition,
+        "verification": verification,
         "identity": identity.as_fields(),
         "receipt_path": str(case_dir / "receipt.json"),
     }

@@ -82,6 +82,44 @@ impl TraceWriter {
         })
     }
 
+    /// Opens an existing trace and continues its sequence.
+    ///
+    /// A phase-split row writes its measured phase and its verification phase from
+    /// two invocations. `benchmark_rules.md` section 6 requires them to have
+    /// separate timing scopes; it does not require them to have separate files, and
+    /// one append-only trace per row is what lets the verifier re-derive the row's
+    /// status from the same record set the runner published. The sequence counter
+    /// continues rather than restarting, because a reader that sees `seq` go
+    /// backwards records a structural defect.
+    pub fn append(path: &Path) -> std::io::Result<Self> {
+        let mut sequence = 0_u64;
+        let mut bytes = 0_u64;
+        if path.exists() {
+            let text = std::fs::read_to_string(path)?;
+            bytes = text.len() as u64;
+            let prefix = format!("{{\"schema\":\"{SCHEMA}\",\"seq\":");
+            for line in text.lines() {
+                let Some(rest) = line.strip_prefix(prefix.as_str()) else {
+                    continue;
+                };
+                let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+                if let Ok(value) = digits.parse::<u64>() {
+                    sequence = sequence.max(value.saturating_add(1));
+                }
+            }
+        }
+        let handle = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            handle,
+            sequence,
+            bytes,
+        })
+    }
+
     /// Path this writer owns.
     pub fn path(&self) -> &Path {
         &self.path

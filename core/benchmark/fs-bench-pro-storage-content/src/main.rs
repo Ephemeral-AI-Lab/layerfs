@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use fs_bench_storage_content::ops::{self, OpContext};
+use fs_bench_storage_content::ops::{self, Hold, HoldPoint, OpContext, Phase};
 use fs_bench_storage_content::registry::{self, Admission};
 use fs_bench_storage_content::support::trace::{Kind, TraceWriter};
 
@@ -27,6 +27,8 @@ struct Args {
     objects: Option<PathBuf>,
     prepared_input: Option<PathBuf>,
     load_input: bool,
+    phase: Phase,
+    hold: Option<Hold>,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
@@ -42,6 +44,8 @@ fn parse(args: &[String]) -> Result<Args, String> {
         objects: None,
         prepared_input: None,
         load_input: false,
+        phase: Phase::Perf,
+        hold: None,
     };
     let mut index = 0;
     while index < args.len() {
@@ -102,6 +106,64 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 parsed.prepared_input =
                     Some(PathBuf::from(args.get(index).ok_or("--load-input expects a path")?));
                 parsed.load_input = true;
+            }
+            "--hold-save" => {
+                index += 1;
+                let marker = PathBuf::from(args.get(index).ok_or("--hold-save expects a path")?);
+                parsed.hold = Some(Hold {
+                    marker,
+                    nanos: parsed.hold.as_ref().map(|hold| hold.nanos).unwrap_or(0),
+                    point: parsed
+                        .hold
+                        .as_ref()
+                        .map(|hold| hold.point)
+                        .unwrap_or(HoldPoint::Begin),
+                });
+            }
+            "--hold-ns" => {
+                index += 1;
+                let nanos: u64 = args
+                    .get(index)
+                    .ok_or("--hold-ns expects a number")?
+                    .parse()
+                    .map_err(|_| "--hold-ns expects a number".to_string())?;
+                let marker = parsed
+                    .hold
+                    .as_ref()
+                    .map(|hold| hold.marker.clone())
+                    .ok_or("--hold-ns requires --hold-save")?;
+                let point = parsed
+                    .hold
+                    .as_ref()
+                    .map(|hold| hold.point)
+                    .unwrap_or(HoldPoint::Begin);
+                parsed.hold = Some(Hold { marker, nanos, point });
+            }
+            "--hold-at" => {
+                index += 1;
+                let point = match args.get(index).map(String::as_str) {
+                    Some("begin") => HoldPoint::Begin,
+                    Some("accept") => HoldPoint::Accept,
+                    other => return Err(format!("--hold-at expects begin|accept, got {other:?}")),
+                };
+                let marker = parsed
+                    .hold
+                    .as_ref()
+                    .map(|hold| hold.marker.clone())
+                    .ok_or("--hold-at requires --hold-save")?;
+                let nanos = parsed.hold.as_ref().map(|hold| hold.nanos).unwrap_or(0);
+                parsed.hold = Some(Hold { marker, nanos, point });
+            }
+            "--phase" => {
+                index += 1;
+                parsed.phase = match args.get(index).map(String::as_str) {
+                    Some("prepare") => Phase::Prepare,
+                    Some("perf") => Phase::Perf,
+                    Some("verify") => Phase::Verify,
+                    other => {
+                        return Err(format!("--phase expects prepare|perf|verify, got {other:?}"))
+                    }
+                };
             }
             other => return Err(format!("unknown argument {other:?}")),
         }
@@ -180,7 +242,11 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         eprintln!("fs-bench-storage-content: --case requires --out");
         return ExitCode::from(2);
     };
-    if output.exists() {
+    // The performance invocation owns the fresh output directory. The
+    // verification invocation continues in it: it appends to the same trace and
+    // reads the Store the measured phase wrote, so refusing an existing path there
+    // would refuse the phase its own input.
+    if output.exists() && parsed.phase != Phase::Verify {
         eprintln!(
             "fs-bench-storage-content: {} already exists; receipts are append-only",
             output.display()
@@ -192,7 +258,16 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         return ExitCode::from(2);
     }
     let trace_path = output.join("trace.jsonl");
-    let mut trace = match TraceWriter::create(&trace_path) {
+    // A verification invocation continues the performance invocation's trace. A
+    // preparation invocation writes its own: it is not part of the row's measured
+    // record, and mixing an acquisition into the row's gates would let setup work
+    // decide a measured row.
+    let opened = if parsed.phase == Phase::Verify {
+        TraceWriter::append(&trace_path)
+    } else {
+        TraceWriter::create(&trace_path)
+    };
+    let mut trace = match opened {
         Ok(trace) => trace,
         Err(error) => {
             eprintln!("fs-bench-storage-content: {error}");
@@ -217,6 +292,7 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         ("cache_state", format!("{:?}", case.cache)),
         ("store_state", format!("{:?}", case.store)),
         ("shape", format!("{:?}", case.shape)),
+        ("phase", format!("{:?}", parsed.phase)),
     ];
     for (key, value) in header {
         if let Err(error) = trace.write(Kind::Run, key, &value, "", "registry row") {
@@ -230,6 +306,8 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         objects: parsed.objects.clone(),
         prepared_input: parsed.prepared_input.clone(),
         load_input: parsed.load_input,
+        phase: parsed.phase,
+        hold: parsed.hold.clone(),
         trace: &mut trace,
     };
     let outcome = match ops::run(case, &mut context) {

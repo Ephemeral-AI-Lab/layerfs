@@ -21,6 +21,7 @@ import ctypes
 import hashlib
 import os
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -414,6 +415,12 @@ def e4_tree_fidelity(root: Path) -> Experiment:
     return experiment
 
 
+# The save the declared-process-kill arm kills into. It is large enough to open
+# more than one write transaction, so committed pack rows exist in the file while
+# the watermark transaction has not run.
+W2_SAVE_CASE = "dedup-cross-file-unique-10"
+
+
 def _run_child(
     binary: Path, case_id: str, out: Path, store: Path | None = None
 ) -> subprocess.CompletedProcess:
@@ -494,6 +501,174 @@ def w1_watermark_refusal(root: Path, harness_binary: Path) -> Experiment:
     return experiment
 
 
+def w2_declared_process_kill(root: Path, harness_binary: Path) -> Experiment:
+    """W2: a declared process kill leaves a Store the product refuses to reuse.
+
+    `CONTRACT.md` section 7 asks for the failure / unknown-outcome / cleanup bullet
+    to be exercised **without product fault injection**, and `c2-families.md`
+    section 4 states what the product must then do: a save whose packs were written
+    but whose publication watermark did not commit leaves packs that are "neither
+    published nor deleted", and `begin_save` must refuse with `UninspectedState`.
+
+    The kill is external and declared. The child is a harness process that has
+    accepted its whole offered set and has **not** committed the watermark; it
+    writes a marker at that point and holds, so the killer waits for the child's own
+    declaration rather than for a wall-clock guess. Nothing in `core/crates/*/src`
+    was changed to make the hold possible - the wait state is harness argv.
+
+    The control is the same save run to completion: if a completed Store were
+    refused too, the refusal would say nothing about the kill.
+    """
+    experiment = Experiment(
+        identifier="W2",
+        question=(
+            "does a declared SIGKILL of a child that has accepted a save but not "
+            "committed its watermark leave a Store whose next begin_save is refused "
+            "with UninspectedState, while the same save run to completion is accepted"
+        ),
+    )
+    environment = dict(os.environ)
+    environment["LAYERFS_CONSTRUCTION_WORKERS"] = "1"
+
+    # The save is large enough to open more than one write transaction, which is
+    # what puts committed pack rows in the file while the watermark is still behind
+    # them. A save small enough to stay inside one transaction would be rolled back
+    # by nothing and would leave no uninspected state to find.
+    # The child creates its own output directory and refuses an existing one, so
+    # the runner must not pre-create it.
+    victim_out = root / "w2-victim-run"
+    marker = root / "w2-held.marker"
+    if marker.exists():
+        marker.unlink()
+    child = subprocess.Popen(
+        [
+            str(harness_binary),
+            "--case", W2_SAVE_CASE,
+            "--out", str(victim_out),
+            "--hold-save", str(marker),
+            "--hold-at", "accept",
+            "--hold-ns", str(60 * 1_000_000_000),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=environment,
+    )
+    deadline = time.monotonic() + 120.0
+    held = False
+    while time.monotonic() < deadline:
+        if marker.exists():
+            held = True
+            break
+        if child.poll() is not None:
+            break
+        time.sleep(0.01)
+    experiment.fields["hold_marker_observed"] = held
+    if not held:
+        child.kill()
+        child.wait(timeout=60)
+        experiment.outcome = "REFUTED"
+        experiment.fields["victim_stdout"] = (child.stdout.read() if child.stdout else "")[-500:]
+        experiment.fields["victim_stderr"] = (child.stderr.read() if child.stderr else "")[-500:]
+        experiment.notes.append(
+            "the child never declared a hold point with objects accepted, so no kill "
+            "point existed and the arm proves nothing"
+        )
+        return experiment
+    child.kill()
+    child.wait(timeout=60)
+    experiment.fields["victim_exit_code"] = child.returncode
+    experiment.fields["victim_killed_by_sigkill"] = child.returncode == -signal.SIGKILL
+
+    killed = victim_out / "sample.sqlite"
+    if not killed.exists():
+        experiment.outcome = "REFUTED"
+        experiment.notes.append(f"the killed child left no Store at {killed}")
+        return experiment
+
+    # The control: the identical save, run to completion, no hold and no kill.
+    control_out = root / "w2-control-run"
+    control_run = _run_child(harness_binary, W2_SAVE_CASE, control_out)
+    experiment.fields["control_run_stdout"] = control_run.stdout.strip()
+    control = control_out / "sample.sqlite"
+    if not control.exists():
+        experiment.outcome = "REFUTED"
+        experiment.notes.append(f"the control run left no Store at {control}")
+        return experiment
+
+    killed_state = _watermark_state(killed)
+    control_state = _watermark_state(control)
+    experiment.fields["killed_store_state"] = killed_state
+    experiment.fields["control_store_state"] = control_state
+
+    after_out = root / "w2-after-run"
+    after = _run_child(harness_binary, "lifecycle-begin-save", after_out, store=killed)
+    accepted_out = root / "w2-accepted-run"
+    accepted = _run_child(harness_binary, "lifecycle-begin-save", accepted_out, store=control)
+    after_trace = (after_out / "trace.jsonl").read_text(encoding="utf-8")
+    accepted_trace = (accepted_out / "trace.jsonl").read_text(encoding="utf-8")
+    refused = "UninspectedState" in after_trace
+    control_accepted = "row.not-run" not in accepted_trace
+    experiment.fields.update(
+        {
+            "after_stdout": after.stdout.strip(),
+            "accepted_stdout": accepted.stdout.strip(),
+            "killed_store_refused": refused,
+            "killed_store_refusal_class": _refusal_class(after_trace),
+            "control_store_accepted": control_accepted,
+            "after_trace_tail": after_trace.strip().splitlines()[-1][:400],
+        }
+    )
+    experiment.notes.append(
+        "the hold is harness argv (--hold-save/--hold-at/--hold-ns) on a child that "
+        "has already accepted its offered set; it adds no product hook, no feature "
+        "flag and no fault-injection surface, and the killed child's own output is a "
+        "calibration arm rather than admission evidence"
+    )
+    experiment.notes.append(
+        "the declared refusal is UninspectedState. A refusal with any other class, or "
+        "an acceptance, is recorded as it happened: the arm's point is what the "
+        "product actually does, not what the specification predicted"
+    )
+    experiment.outcome = "SATISFIED" if refused and control_accepted else "REFUTED"
+    return experiment
+
+
+def _watermark_state(path: Path) -> dict[str, object]:
+    """`(ceiling, highest pack id, objects)` read straight out of the Store file.
+
+    Read with `sqlite3` and not through the product, so the arm's own description of
+    the state it killed into is independent of the code under test.
+    """
+    import sqlite3
+
+    try:
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        ceiling = connection.execute(
+            "SELECT retained_pack_ceiling FROM store_policy"
+        ).fetchone()
+        highest = connection.execute("SELECT MAX(pack_id) FROM object_packs").fetchone()
+        objects = connection.execute("SELECT COUNT(*) FROM objects").fetchone()
+        connection.close()
+        return {
+            "retained_pack_ceiling": None if ceiling is None else ceiling[0],
+            "highest_pack_id": None if highest is None else highest[0],
+            "object_rows": None if objects is None else objects[0],
+        }
+    except sqlite3.Error as error:
+        return {"error": str(error)}
+
+
+def _refusal_class(trace_text: str) -> str:
+    """The error class a `row.not-run` record names, or the empty string."""
+    for line in trace_text.splitlines():
+        if "row.not-run" not in line:
+            continue
+        _, _, value = line.partition('"value":"')
+        return value.split("|")[1][:200] if "|" in value else value[:200]
+    return ""
+
+
 def w4_sealed_call_graph() -> Experiment:
     """W4: the sealed call-graph status and the runtime tripwires.
 
@@ -527,7 +702,7 @@ def w4_sealed_call_graph() -> Experiment:
 def run_all(
     harness_binary: Path, repo_root: Path, work_root: Path | None = None
 ) -> list[Experiment]:
-    """Runs E1-E4 and the two designed WP-9 checks, failures included."""
+    """Runs E1-E4 and the three designed arms, failures included."""
     results: list[Experiment] = []
     with tempfile.TemporaryDirectory(dir=str(work_root) if work_root else None) as directory:
         root = Path(directory)
@@ -536,6 +711,7 @@ def run_all(
         results.append(e3_quiescent_store(root, harness_binary, repo_root))
         results.append(e4_tree_fidelity(root))
         results.append(w1_watermark_refusal(root, harness_binary))
+        results.append(w2_declared_process_kill(root, harness_binary))
         results.append(w4_sealed_call_graph())
     return results
 

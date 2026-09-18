@@ -148,6 +148,24 @@ impl Sha256 {
     }
 }
 
+/// Parses a 64-character hex digest, refusing anything else.
+///
+/// A digest that cannot be parsed is `None` and never a zero digest: an artifact
+/// whose expectation read back as all zeros would verify nothing while reporting
+/// that it verified everything.
+pub fn unhex(text: &str) -> Option<[u8; 32]> {
+    if text.len() != 64 {
+        return None;
+    }
+    let mut out = [0_u8; 32];
+    for (index, chunk) in text.as_bytes().chunks_exact(2).enumerate() {
+        let high = (chunk[0] as char).to_digit(16)?;
+        let low = (chunk[1] as char).to_digit(16)?;
+        out[index] = (high * 16 + low) as u8;
+    }
+    Some(out)
+}
+
 /// Hex-encodes a digest.
 pub fn hex(digest: &[u8; 32]) -> String {
     let mut out = String::with_capacity(64);

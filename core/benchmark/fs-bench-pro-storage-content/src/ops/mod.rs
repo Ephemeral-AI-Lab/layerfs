@@ -28,6 +28,58 @@ use crate::gates::{aggregate, Gate, Status};
 use crate::registry::{Case, Shape};
 use crate::support::trace::TraceWriter;
 
+/// Which of a row's three phases this invocation runs.
+///
+/// `benchmark_rules.md` section 6 requires setup, performance and verification to
+/// use separate timing and resource scopes, and owner decision D2 already asks for
+/// fixture construction to leave the performance invocation. A row that declares
+/// `PhaseSplit` runs one invocation per phase against one prepared artifact; every
+/// other row runs `Perf` alone and is unchanged.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Phase {
+    /// Acquires the row's prepared artifact and does not measure.
+    Prepare,
+    /// The measured phase. Never builds a fixture and never runs an oracle.
+    Perf,
+    /// The unmeasured oracle, charged to the verification budget.
+    Verify,
+}
+
+/// A declared wait state a calibration arm can ask the child to enter.
+///
+/// This is **harness argv**, not a product surface: it touches no hook, no feature
+/// flag and no fault-injection path in `core/crates/*/src`. It exists so the
+/// declared-process-kill arm has a point to kill at - a child that has acquired
+/// write ownership of a Store and is provably inside a save - which is the one
+/// thing `CONTRACT.md` section 7 asks for and nothing in the product provides.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Hold {
+    /// File written once the child is inside the save, so the killer can wait for
+    /// a real hold point rather than for a wall-clock guess.
+    pub marker: std::path::PathBuf,
+    /// Nanoseconds to hold before the child continues on its own.
+    pub nanos: u64,
+    /// Which declared point to hold at.
+    pub point: HoldPoint,
+}
+
+/// The declared points a calibration arm can kill a child at.
+///
+/// The two are different states, and the product's own contract distinguishes
+/// them: `begin_save` after a killed run is `UninspectedState` only when the
+/// killed save had **written packs whose watermark transaction did not commit**.
+/// A child killed while merely holding ownership has written nothing, so the next
+/// `begin_save` is correctly accepted; an arm that kills there measures the wrong
+/// state and would report the product as wrong for being right.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HoldPoint {
+    /// After `begin_save` acquired ownership and before anything is accepted.
+    Begin,
+    /// After the offered objects are accepted and before `finish` commits the
+    /// publication watermark.
+    Accept,
+}
+
 /// Where one case writes, and what it was handed.
 pub struct OpContext<'a> {
     /// Fresh output directory for this case. It must not already exist.
@@ -40,11 +92,33 @@ pub struct OpContext<'a> {
     pub prepared_input: Option<PathBuf>,
     /// `true` to load `prepared_input` instead of building and emitting it.
     pub load_input: bool,
+    /// Which phase this invocation runs.
+    pub phase: Phase,
+    /// Declared wait state, when a calibration arm asked for one.
+    pub hold: Option<Hold>,
     /// Trace writer for this case.
     pub trace: &'a mut TraceWriter,
 }
 
 impl OpContext<'_> {
+    /// Enters the declared wait state, when one was asked for.
+    ///
+    /// Returns whether it held. The marker is written **before** the sleep, so a
+    /// killer waits for the child's own declaration that it reached the point
+    /// rather than for a wall-clock guess.
+    pub fn hold_at(&self, point: HoldPoint) -> Result<bool, OpError> {
+        let Some(hold) = &self.hold else {
+            return Ok(false);
+        };
+        if hold.point != point {
+            return Ok(false);
+        }
+        std::fs::write(&hold.marker, "held")
+            .map_err(|error| OpError::Io(format!("{}: {error}", hold.marker.display())))?;
+        std::thread::sleep(std::time::Duration::from_nanos(hold.nanos));
+        Ok(true)
+    }
+
     /// Ensures the case's output directory exists.
     ///
     /// The append-only refusal lives in `main`, which owns the decision about

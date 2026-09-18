@@ -31,6 +31,7 @@ use crate::registry::{Case, DeltaOp, FootprintOp, LifecycleStep, ReuseOp};
 use crate::support::instruments;
 use crate::support::trace::Kind;
 use crate::workload::oracle::{self, Expectation};
+use crate::workload::artifact::{Artifact, Member};
 use crate::workload::providers::TreeStore;
 
 /// The declared copy rung and its allocation attribution.
@@ -224,6 +225,12 @@ pub fn lifecycle(
                     Ok(_) => "ACQUIRED".to_string(),
                     Err(error) => format!("{error:?}"),
                 };
+                // The declared wait state a calibration arm can ask for. The save
+                // is held, not aborted, until the arm's killer takes the process.
+                let held = context
+                    .hold_at(crate::ops::HoldPoint::Begin)
+                    .map_err(|_| layerfs_storage::StorageError::Integrity("hold marker"))?;
+                let _ = held;
                 operation.abort(scope.child("storage.abort"))?;
                 Ok::<_, layerfs_storage::StorageError>((
                     format!("{}|{second_token}", store.path().display()),
@@ -375,6 +382,13 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
                 operation.accept(object)?;
             }
         }
+        // The second declared kill point: every offered object is accepted and the
+        // publication watermark transaction has not committed, so the Store holds
+        // packs that are neither published nor deleted. `--hold-save` is harness
+        // argv; a row that was not asked to hold passes straight through.
+        context
+            .hold_at(crate::ops::HoldPoint::Accept)
+            .map_err(|_| layerfs_storage::StorageError::Integrity("hold marker"))?;
         operation.finish(scope.child("storage.finish"))
     });
     let heap = instruments::heap_end();
@@ -678,17 +692,24 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
     })
 }
 
-/// The object set one delta row saves, and the recipe its oracle uses.
-fn delta_members(
+/// The object set one delta row offers, the base it is derived from, and the
+/// expectation each member's logical bytes must satisfy.
+///
+/// The artifact holds the **union** of every distinct object rather than one store
+/// per member: 500 members derived from one 4 MiB base share almost every chunk,
+/// so the union is the base plus the members' new material, while 500 separate
+/// stores would be 500 copies of the same bytes on disk.
+fn delta_fixture(
     op: DeltaOp,
     members: u32,
     bytes: u64,
     seed: u64,
-) -> Result<(TreeStore, Vec<(TreeStore, ObjectId)>, Vec<Expectation>), OpError> {
+) -> Result<(TreeStore, Artifact), OpError> {
     let base_bytes = fixture::noise(bytes, seed);
     let (base, _base_root) = objects_of(&base_bytes)?;
-    let mut derived = Vec::with_capacity(members as usize);
-    let mut expectations = Vec::with_capacity(members as usize);
+    let mut objects = TreeStore::new();
+    objects.absorb(&base);
+    let mut list = Vec::with_capacity(members as usize);
     for index in 0..members {
         let mut member = base_bytes.clone();
         let len = member.len();
@@ -720,31 +741,104 @@ fn delta_members(
                     let at = ((len as f64) * (step as f64 + 1.0) / 9.0) as usize;
                     let end = (at + 4_096).min(len);
                     if end > at {
-                        let patch = fixture::noise((end - at) as u64, seed ^ u64::from(index) ^ step);
+                        let patch =
+                            fixture::noise((end - at) as u64, seed ^ u64::from(index) ^ step);
                         member[at..end].copy_from_slice(&patch);
                     }
                 }
             }
         }
-        expectations.push(Expectation::of(&member));
-        derived.push(objects_of(&member)?);
+        let (store, root) = objects_of(&member)?;
+        let ids = store.insertion_order().to_vec();
+        objects.absorb(&store);
+        list.push(Member {
+            ids,
+            root,
+            expectation: Expectation::of(&member),
+        });
     }
-    Ok((base, derived, expectations))
+    Ok((base, Artifact { objects, members: list }))
 }
 
-/// C2-3: CDC delta locality over a stored base.
-pub fn delta(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    context.create_output()?;
-    let mut gates = Vec::new();
+/// The artifact directory a delta row's phases share.
+fn delta_artifact(context: &OpContext<'_>) -> Result<PathBuf, OpError> {
+    context
+        .prepared_input
+        .clone()
+        .ok_or_else(|| OpError::Io("this row runs in phases and needs --emit-input/--load-input".to_string()))
+}
+
+/// C2-3 `prepare`: acquire the fixture once and write the artifact.
+///
+/// Nothing here is measured. The row's own receipt is written by the performance
+/// invocation; this one writes the acquisition record beside the artifact, and the
+/// runner publishes its wall as `acquisition_wall_ns` outside the row's admission
+/// decision, exactly as owner decision D2 requires.
+fn delta_prepare(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = delta_artifact(context)?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
     let bytes = if case.bytes > 0 { case.bytes } else { 4 << 20 };
-    let (base, derived, expectations) = delta_members(op, members, bytes, seed)?;
+    let (base, artifact) = delta_fixture(op, members, bytes, seed)?;
+    create_and_save_untimed(&directory.join("base.sqlite"), &base)?;
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.members",
+        artifact.members.len() as i128,
+        "members",
+        "member set the artifact declares",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.base_bytes",
+        bytes as i128,
+        "bytes",
+        "declared base bytes",
+    )?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_op: {op:?}"),
+            format!("prepare_members: {members}"),
+            format!("prepare_base_bytes: {bytes}"),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
 
-    let base_path = context.output.join("base.sqlite");
+/// C2-3 `perf`: the measured save against the prepared artifact.
+///
+/// The base is a copy of the artifact's Store, de-warmed; the offered objects come
+/// from the artifact's in-memory union, which is a declared
+/// `warm-in-process-fixture`. The read-back oracle is **not** here: it is a
+/// second, unmeasured operation and it runs in the `verify` phase, where its wall
+/// is charged to the 60 s verification budget rather than to this row's 15 s
+/// complete-command budget.
+fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = delta_artifact(context)?;
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let members = case.entries.max(1);
+    let bytes = if case.bytes > 0 { case.bytes } else { 4 << 20 };
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+
     let sample = context.output.join("sample.sqlite");
-    create_and_save_untimed(&base_path, &base)?;
-    let de_warm = prepare_sample(&base_path, &sample)?;
+    let de_warm = prepare_sample(&directory.join("base.sqlite"), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
     gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
 
@@ -755,9 +849,10 @@ pub fn delta(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<Op
     instruments::heap_begin();
     let (result, report) = Timing::record("c2.delta", |scope: &TimingScope<'_, Active>| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        for (member, _root) in &derived {
-            for id in member.insertion_order() {
-                let object = member
+        for member in &artifact.members {
+            for id in &member.ids {
+                let object = artifact
+                    .objects
                     .cloned_object(*id)
                     .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
                 operation.accept(object)?;
@@ -792,36 +887,6 @@ pub fn delta(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<Op
         &format!("{} inserted, {} reused", outcome.inserted, outcome.reused),
         "the save accepted and accounted for the supplied member set",
     ));
-
-    let store = match open_untimed(&sample) {
-        Ok(store) => store,
-        Err(error) => return Ok(unmeasured(&error, gates)),
-    };
-    let mut oracle_ok = true;
-    let mut oracle_note = String::new();
-    for (index, ((_member, root), expectation)) in
-        derived.iter().zip(expectations.iter()).enumerate()
-    {
-        match read_back_through_store(&store, *root, expectation) {
-            Ok(back) => {
-                if !back.matches() {
-                    oracle_ok = false;
-                    oracle_note = format!("member {index} read-back mismatch");
-                }
-            }
-            Err(error) => {
-                oracle_ok = false;
-                oracle_note = format!("member {index}: {error}");
-            }
-        }
-    }
-    gates.push(gates::require(
-        GateClass::Correctness,
-        "g1.o1-member-readback",
-        oracle_ok,
-        if oracle_note.is_empty() { "every member root read back byte-exact" } else { &oracle_note },
-        "each member's logical bytes are recoverable after the save",
-    ));
     gates.extend(sidecar_gates(&sample));
     gates.push(gates::swap_gate(instruments::swaps()));
     Ok(OpOutcome {
@@ -830,12 +895,112 @@ pub fn delta(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<Op
             format!("delta_op: {op:?}"),
             format!("members: {members}"),
             format!("base_bytes: {bytes}"),
-            format!("store_state: opened-from-copy"),
+            format!("artifact_members: {}", artifact.members.len()),
+            "store_state: opened-from-copy".to_string(),
+            "measured_region: begin_save + accept + finish; no fixture construction".to_string(),
+            "oracle_phase: verify-invocation".to_string(),
             format!("copy_rung: {COPY_RUNG}"),
             format!("allocation_attribution: {ATTRIBUTION}"),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
         ],
     })
+    .map(|outcome| {
+        let _ = case;
+        outcome
+    })
+}
+
+/// C2-3 `verify`: the read-back oracle, unmeasured, in its own invocation.
+///
+/// Every member root is read back through the Store the performance invocation
+/// wrote and compared with the expectation the artifact carries, which was derived
+/// from the fixture recipe before the product saw it. This is the second,
+/// unmeasured, byte-identical operation the measurement contract requires, and it
+/// is why the performance receipt can be honest about not containing one.
+fn delta_verify(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = delta_artifact(context)?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let sample = context.output.join("sample.sqlite");
+    if !sample.exists() {
+        return Ok(unmeasured(
+            &OpError::Io(format!(
+                "{}: the performance invocation did not write a sample",
+                sample.display()
+            )),
+            Vec::new(),
+        ));
+    }
+    let store = match open_untimed(&sample) {
+        Ok(store) => store,
+        Err(error) => return Ok(unmeasured(&error, Vec::new())),
+    };
+    let mut oracle_ok = true;
+    let mut oracle_note = String::new();
+    for (index, member) in artifact.members.iter().enumerate() {
+        match read_back_through_store(&store, member.root, &member.expectation) {
+            Ok(back) => {
+                if !back.matches() {
+                    oracle_ok = false;
+                    oracle_note = format!("member {index} read-back mismatch");
+                    break;
+                }
+            }
+            Err(error) => {
+                oracle_ok = false;
+                oracle_note = format!("member {index}: {error}");
+                break;
+            }
+        }
+    }
+    context.trace.write_number(
+        Kind::Counter,
+        "verify.members",
+        artifact.members.len() as i128,
+        "members",
+        "members the artifact declares and this phase read back",
+    )?;
+    let mut gates = vec![gates::require(
+        GateClass::Correctness,
+        "g1.o1-member-readback",
+        oracle_ok,
+        if oracle_note.is_empty() {
+            "every member root read back byte-exact"
+        } else {
+            &oracle_note
+        },
+        "each member's logical bytes are recoverable after the save",
+    )];
+    gates.push(gates::require(
+        GateClass::Custody,
+        "g6.artifact-members",
+        artifact.members.len() == case.entries.max(1) as usize,
+        &format!("{} members verified", artifact.members.len()),
+        &format!("{} members declared", case.entries.max(1)),
+    ));
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("verify_op: {op:?}"),
+            "verification_phase: separate unmeasured invocation".to_string(),
+            "verification_budget: charged to the 60 s verification budget".to_string(),
+        ],
+    })
+}
+
+/// C2-3: CDC delta locality over a stored base.
+///
+/// The row runs in three phases (`Phase::Prepare`, `Phase::Perf`,
+/// `Phase::Verify`). A caller that hands it no artifact directory gets the
+/// performance phase alone, which is what a selected single-case run without a
+/// prepared artifact would ask for - and it fails closed with the reason rather
+/// than silently building the fixture inside the timer.
+pub fn delta(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    match context.phase {
+        crate::ops::Phase::Prepare => delta_prepare(case, op, context),
+        crate::ops::Phase::Perf => delta_perf(case, op, context),
+        crate::ops::Phase::Verify => delta_verify(case, op, context),
+    }
 }
 
 /// C2-3 sub-lane: one chunk-grammar boundary length.
