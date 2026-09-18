@@ -60,6 +60,25 @@ pub fn zeros(len: u64) -> Vec<u8> {
     vec![0_u8; len as usize]
 }
 
+/// The byte pair whose run the frozen chunker cuts at its smallest chunk.
+///
+/// A run of this pair lands the two-byte rolling hash on the boundary mask as soon
+/// as the profile's minimum chunk has accumulated, so the run is cut at
+/// `MINIMUM_CHUNK_BYTES` instead of at the ~20 KiB a noise stream averages. That is
+/// what makes C1-3's `decrease` direction structural: a 64 KiB window of this run
+/// holds seven or eight extents, while the 64 KiB zero run that replaces it holds
+/// two. The pair is a declared fixture constant, not a product one, and
+/// `tests/fixture_declarations.rs` fails if the frozen profile stops cutting it
+/// this way.
+pub const CHUNK_DENSE_PAIR: [u8; 2] = [0x0f, 0x6b];
+
+/// A run of [`CHUNK_DENSE_PAIR`] `len` bytes long.
+pub fn chunk_dense(len: u64) -> Vec<u8> {
+    (0..len as usize)
+        .map(|index| CHUNK_DENSE_PAIR[index % CHUNK_DENSE_PAIR.len()])
+        .collect()
+}
+
 /// Text-like bytes: long repeated words, which is the `-text-v1` fixture shape.
 pub fn text(len: u64, seed: u64) -> Vec<u8> {
     let words = [

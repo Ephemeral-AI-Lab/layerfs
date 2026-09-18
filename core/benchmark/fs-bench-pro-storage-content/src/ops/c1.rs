@@ -351,13 +351,26 @@ pub fn chunk_count(
 
     // The specification fixes the offsets, not the base content. The two
     // directions need two different bases at the same offsets: a zero run to grow
-    // the chunk count out of, and noise to shrink it into. The choice is declared
-    // here rather than hidden in a driver.
-    let zero_region = !matches!(op, CountOp::Decrease);
-    let base = structured(case.bytes, seed, zero_region);
+    // the chunk count out of, and a chunk-dense window to shrink back into. The
+    // choice is declared here rather than hidden in a driver.
     let start = crate::families::c1_cdc::START;
     let len = crate::families::c1_cdc::LEN;
     let end = start + len;
+    // The decrease window is the declared chunk-dense run rather than plain noise.
+    // A 64 KiB noise window holds two or three extents under this profile, which is
+    // exactly what the 64 KiB zero run replacing it chunks to, so the direction the
+    // row's ID claims was a coin flip at this length: a fixture defect, reported as
+    // one, never a product finding. The dense run holds seven or eight, so the
+    // direction follows from the declared base rather than from luck.
+    let base = match op {
+        CountOp::Decrease => {
+            let mut base = structured(case.bytes, seed, false);
+            base[start as usize..end as usize]
+                .copy_from_slice(&fixture::chunk_dense(len));
+            base
+        }
+        _ => structured(case.bytes, seed, true),
+    };
     let replacement: Vec<u8> = match op {
         CountOp::Preserve => base[start as usize..end as usize].to_vec(),
         CountOp::Increase => fixture::noise(len, seed ^ 0x1111),
@@ -500,7 +513,13 @@ pub fn chunk_count(
         gates,
         notes: vec![
             format!("fixture_seed: {seed}"),
-            format!("base_zero_region: {zero_region} (zero region {STRUCTURED_ZERO_REGION:?})"),
+            match op {
+                CountOp::Decrease => format!(
+                    "base_shape: chunk-dense window {start}..{end} of the declared pair {:#04x?}",
+                    crate::fixture::CHUNK_DENSE_PAIR
+                ),
+                _ => format!("base_shape: zero region {STRUCTURED_ZERO_REGION:?}"),
+            },
             format!("edit_start: {start}"),
             format!("edit_len: {len}"),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
