@@ -13,6 +13,7 @@ under [`CONTRACT.md`](CONTRACT.md).
 | `p1-1` | P1-1 — branch children in one wave (width 256) | collected (`after/`) |
 | `p1-3` | P1-3 — materialized branch children in one wave | collected (`after/`) |
 | `p1-4` | P1-4 — validation record demands batched behind one memo | collected (`after/`) |
+| `p1-6` | P1-6 — the discarded validation load | **measured-and-declined** (no commit) |
 
 ## Driver corrections (recorded, not silent)
 
