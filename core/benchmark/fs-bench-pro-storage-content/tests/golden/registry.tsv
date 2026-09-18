@@ -212,10 +212,10 @@ payload-random-read-100m	c2.read.waves	admission	2	100m	-	104857600	0	no	prepare
 payload-random-read-500m	c2.read.waves	admission	3	500m	-	524288000	0	no	prepared-dewarmed	opened-from-copy	read-wave
 pooled-lane-cold	c2.pool.cold-warm	admission	0	-	-	0	512	yes	prepared-dewarmed	opened-from-copy	pool:cold
 pooled-lane-warm	c2.pool.cold-warm	admission	0	-	-	0	512	no	prepared-dewarmed	opened-from-copy	pool:warm
-pipeline-edits-small	pipeline.*	admission	-	-	-	0	0	yes	created-in-sample	created-in-sample	pipeline:editssmall
-pipeline-edits-chunked	pipeline.*	admission	-	-	-	0	0	no	created-in-sample	created-in-sample	pipeline:editschunked
-pipeline-edits-large-to-small	pipeline.*	admission	-	-	-	0	0	no	created-in-sample	created-in-sample	pipeline:editslargetosmall
-pipeline-filesystem-build	pipeline.*	admission	-	-	-	0	0	no	created-in-sample	created-in-sample	pipeline:filesystembuild
+pipeline-edits-small	pipeline.*	admission	-	-	-	0	0	yes	prepared-dewarmed	opened-from-copy	pipeline:editssmall
+pipeline-edits-chunked	pipeline.*	admission	-	-	-	0	0	no	prepared-dewarmed	opened-from-copy	pipeline:editschunked
+pipeline-edits-large-to-small	pipeline.*	admission	-	-	-	0	0	no	prepared-dewarmed	opened-from-copy	pipeline:editslargetosmall
+pipeline-filesystem-build	pipeline.*	admission	-	-	-	0	0	no	prepared-dewarmed	opened-from-copy	pipeline:filesystembuild
 component-primitives-payload	component.primitives	diagnostic	-	-	-	0	0	no	warm-in-process-fixture	-	primitives:payload
 component-primitives-filesystem	component.primitives	diagnostic	-	-	-	0	0	no	warm-in-process-fixture	-	primitives:filesystem
 component-primitives-edit	component.primitives	diagnostic	-	-	-	0	0	no	warm-in-process-fixture	-	primitives:edit

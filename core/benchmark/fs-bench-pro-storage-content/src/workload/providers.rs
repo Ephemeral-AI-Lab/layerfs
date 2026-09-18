@@ -278,6 +278,37 @@ impl AuthenticatedObjects for PairProvider<'_> {
     }
 }
 
+/// A consumer that forwards to another consumer and counts what it forwarded.
+///
+/// The integrated pipeline needs to know that every object C1 emitted reached
+/// the save operation. `SaveHandoff` reports the *storage* failure and not the
+/// count, so the count is taken here, on the one path the objects actually take,
+/// rather than reconstructed from the operation's own counters afterwards.
+pub struct CountingConsumer<'a> {
+    inner: &'a mut dyn FinalizedConsumer,
+    accepted: u64,
+}
+
+impl<'a> CountingConsumer<'a> {
+    /// Wraps a consumer.
+    pub fn new(inner: &'a mut dyn FinalizedConsumer) -> Self {
+        Self { inner, accepted: 0 }
+    }
+
+    /// Objects forwarded so far.
+    pub fn accepted(&self) -> u64 {
+        self.accepted
+    }
+}
+
+impl FinalizedConsumer for CountingConsumer<'_> {
+    fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+        self.inner.accept(object)?;
+        self.accepted += 1;
+        Ok(())
+    }
+}
+
 /// A consumer and a reader over the **same** in-flight objects.
 ///
 /// A filesystem *update* reads back objects it emitted earlier in the same

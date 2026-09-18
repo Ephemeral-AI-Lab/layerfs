@@ -27,7 +27,7 @@ use crate::workload::providers::{PairProvider, TreeStore};
 pub const REPLACEMENT_LEN: u64 = 4_096;
 
 /// Writes the product's own timing tree, byte-verbatim, as `timing.json`.
-fn write_timing(directory: &Path, report: &layerfs_telemetry::timer::TimingReport) -> Result<u64, OpError> {
+pub(super) fn write_timing(directory: &Path, report: &layerfs_telemetry::timer::TimingReport) -> Result<u64, OpError> {
     let path = directory.join("timing.json");
     let mut file = std::fs::File::create(&path)
         .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
@@ -43,7 +43,7 @@ fn write_timing(directory: &Path, report: &layerfs_telemetry::timer::TimingRepor
 }
 
 /// Records the product report's completeness as G7 evidence.
-fn completeness_gate(report: &layerfs_telemetry::timer::TimingReport, id: &'static str) -> Gate {
+pub(super) fn completeness_gate(report: &layerfs_telemetry::timer::TimingReport, id: &'static str) -> Gate {
     if report.root().is_none() {
         return Gate::incomplete(
             GateClass::TimingPurity,
@@ -64,7 +64,7 @@ fn completeness_gate(report: &layerfs_telemetry::timer::TimingReport, id: &'stat
 /// `FileView` is the product's own logical view of a root: it classifies the root
 /// without the harness decoding a mapping page by hand, and it is a *read* path,
 /// distinct from the operation that produced the root.
-fn representation_of(store: &dyn layerfs_content::AuthenticatedObjects, root: ObjectId) -> Result<FileContent, OpError> {
+pub(super) fn representation_of(store: &dyn layerfs_content::AuthenticatedObjects, root: ObjectId) -> Result<FileContent, OpError> {
     let (result, _) = Timing::disabled("oracle.view", |scope: &TimingScope<'_, Active>| {
         let view = FileView::open(store, root, scope.child("view"))?;
         let logical_len = view.logical_len();
@@ -77,7 +77,7 @@ fn representation_of(store: &dyn layerfs_content::AuthenticatedObjects, root: Ob
 }
 
 /// Extents (chunks) the chunked representation of `root` holds; `0` for whole-file.
-fn extent_count_of(store: &dyn layerfs_content::AuthenticatedObjects, root: ObjectId) -> Result<u64, OpError> {
+pub(super) fn extent_count_of(store: &dyn layerfs_content::AuthenticatedObjects, root: ObjectId) -> Result<u64, OpError> {
     match representation_of(store, root)? {
         FileContent::WholeFile { .. } => Ok(0),
         FileContent::Chunked(state) => Ok(state.extent_count),
@@ -85,7 +85,7 @@ fn extent_count_of(store: &dyn layerfs_content::AuthenticatedObjects, root: Obje
 }
 
 /// Closes a row that could not be measured, without pretending it passed.
-fn unmeasured(error: &OpError, gates: Vec<Gate>) -> OpOutcome {
+pub(super) fn unmeasured(error: &OpError, gates: Vec<Gate>) -> OpOutcome {
     OpOutcome {
         gates: gates
             .into_iter()
@@ -296,7 +296,7 @@ pub fn construct(
 }
 
 /// Builds a base into `store` without timers. Setup, never measurement.
-fn build_base(
+pub(super) fn build_base(
     policy: ConstructionPolicy,
     capacities: &layerfs_content::ConstructionCapacities,
     bytes: &[u8],

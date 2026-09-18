@@ -30,9 +30,15 @@ pub fn cases() -> Vec<Case> {
     .iter()
     .map(|(op, id)| {
         let _ = leak(String::new());
+        // Every pipeline row measures against a base that must already be
+        // stored: the edit rows read their base through the Store and the
+        // filesystem row saves into a Store opened over a prepared copy, so the
+        // declaration is `prepared-dewarmed` / `opened-from-copy` and never
+        // `created-in-sample`. The earlier declaration said otherwise and no
+        // driver existed to contradict it.
         CaseSpec::new(id, GROUP, Shape::Pipeline(*op))
-            .cache(CacheState::CreatedInSample)
-            .store(StoreState::CreatedInSample)
+            .cache(CacheState::PreparedDewarmed)
+            .store(StoreState::OpenedFromCopy)
             .smoke_if(*op == PipelineOp::EditsSmall)
             .build()
     })

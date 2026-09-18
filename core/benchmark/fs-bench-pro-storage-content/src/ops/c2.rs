@@ -100,7 +100,7 @@ fn objects_of(bytes: &[u8]) -> Result<(TreeStore, ObjectId), OpError> {
 }
 
 /// Opens a Store without a timer, for setup and oracle work.
-fn open_untimed(path: &Path) -> Result<Store, OpError> {
+pub(super) fn open_untimed(path: &Path) -> Result<Store, OpError> {
     let (result, _) = Timing::disabled("setup.open", |scope: &TimingScope<'_, Active>| {
         Store::open(path, scope.child("store.open"))
     });
@@ -108,7 +108,7 @@ fn open_untimed(path: &Path) -> Result<Store, OpError> {
 }
 
 /// Creates a Store without a timer and saves `objects` into it.
-fn create_and_save_untimed(path: &Path, objects: &TreeStore) -> Result<SaveOutcome, OpError> {
+pub(super) fn create_and_save_untimed(path: &Path, objects: &TreeStore) -> Result<SaveOutcome, OpError> {
     let (result, _) = Timing::disabled("setup.store", |scope: &TimingScope<'_, Active>| {
         let store = Store::create(path, StoragePolicy::frozen_default(), scope.child("store.create"))?;
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
@@ -124,7 +124,7 @@ fn create_and_save_untimed(path: &Path, objects: &TreeStore) -> Result<SaveOutco
 }
 
 /// Copies the base Store to the sample path and de-warms the copy.
-fn prepare_sample(base: &Path, sample: &Path) -> Result<instruments::DeWarmReport, OpError> {
+pub(super) fn prepare_sample(base: &Path, sample: &Path) -> Result<instruments::DeWarmReport, OpError> {
     std::fs::copy(base, sample).map_err(|error| {
         OpError::Io(format!("{} -> {}: {error}", base.display(), sample.display()))
     })?;
@@ -132,7 +132,7 @@ fn prepare_sample(base: &Path, sample: &Path) -> Result<instruments::DeWarmRepor
 }
 
 /// Sidecar gates for a Store path: `journal_mode = MEMORY` leaves none.
-fn sidecar_gates(path: &Path) -> Vec<Gate> {
+pub(super) fn sidecar_gates(path: &Path) -> Vec<Gate> {
     ["-wal", "-shm", "-journal"]
         .iter()
         .map(|suffix| {
@@ -150,7 +150,7 @@ fn sidecar_gates(path: &Path) -> Vec<Gate> {
 }
 
 /// Reads a logical file back through a Store and compares it with the recipe.
-fn read_back_through_store(
+pub(super) fn read_back_through_store(
     store: &Store,
     root: ObjectId,
     expectation: &Expectation,

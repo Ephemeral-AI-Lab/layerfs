@@ -79,7 +79,7 @@ pub struct ThreeTuple {
 }
 
 /// Reads the three-tuple back through the public read path.
-pub fn three_tuple(
+pub(super) fn three_tuple(
     reader: &dyn layerfs_content::AuthenticatedObjects,
     root: FilesystemRootId,
 ) -> Result<ThreeTuple, OpError> {
@@ -231,7 +231,7 @@ fn measure_update(
 }
 
 /// Replays the same build into a store that authenticates every read.
-fn replay_build(
+pub(super) fn replay_build(
     prepared: &PreparedTree,
     scope: layerfs_content::InodeScope,
     backing: Option<&mut dyn OrderingBacking>,
