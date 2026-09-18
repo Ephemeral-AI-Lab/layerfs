@@ -18,6 +18,8 @@
 
 pub mod c1;
 pub mod c2;
+pub mod fs;
+pub mod fs_fixture;
 
 use std::path::{Path, PathBuf};
 
@@ -33,6 +35,10 @@ pub struct OpContext<'a> {
     pub store: Option<PathBuf>,
     /// Object directory for a row that opens a prepared artifact.
     pub objects: Option<PathBuf>,
+    /// Directory for the prepared filesystem input, when the runner cached one.
+    pub prepared_input: Option<PathBuf>,
+    /// `true` to load `prepared_input` instead of building and emitting it.
+    pub load_input: bool,
     /// Trace writer for this case.
     pub trace: &'a mut TraceWriter,
 }
@@ -138,11 +144,11 @@ pub fn run(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpErro
         Shape::SmallFile => c2::small_file(case, context),
         Shape::ReadWave => c2::read_wave(case, context),
         Shape::Footprint(op) => c2::footprint(case, op, context),
-        Shape::ManyTiny(_) => Err(OpError::Unimplemented("many-tiny")),
-        Shape::Tree(_) => Err(OpError::Unimplemented("filesystem-tree")),
-        Shape::Namespace => Err(OpError::Unimplemented("filesystem-namespace")),
-        Shape::Locality(_) => Err(OpError::Unimplemented("filesystem-locality")),
-        Shape::FsBuild { .. } => Err(OpError::Unimplemented("filesystem-build-scale")),
+        Shape::ManyTiny(op) => fs::many_tiny(case, op, context),
+        Shape::Tree(op) => fs::tree(case, op, context),
+        Shape::Namespace => fs::namespace(case, context),
+        Shape::Locality(op) => fs::locality(case, op, context),
+        Shape::FsBuild { text } => fs::fs_build(case, text, context),
         Shape::Workspace(_) => Err(OpError::Unimplemented("workspace-reuse")),
         Shape::Pool { .. } => Err(OpError::Unimplemented("pooled-lane")),
         Shape::Pipeline(_) => Err(OpError::Unimplemented("pipeline")),

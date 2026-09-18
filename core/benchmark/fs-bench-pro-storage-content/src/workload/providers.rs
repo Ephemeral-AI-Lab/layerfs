@@ -87,6 +87,21 @@ impl TreeStore {
         self.objects.get(&id).cloned()
     }
 
+    /// Merges every object of `other` into this store.
+    ///
+    /// A filesystem operation emits only what it changed; a caller that applies
+    /// several operations in sequence keeps one store per operation and reads
+    /// through a [`PairProvider`], or absorbs each result here. Absorbing copies
+    /// the objects, which is why the drivers that only need to *read* a chain use
+    /// the provider instead.
+    pub fn absorb(&mut self, other: &TreeStore) {
+        for id in &other.insertion_order {
+            if let Some(object) = other.objects.get(id) {
+                self.insert_object(object.clone());
+            }
+        }
+    }
+
     /// Stores one finalized object under its own identity.
     pub fn insert_object(&mut self, object: FinalizedObject) -> ObjectId {
         let id = object.id();

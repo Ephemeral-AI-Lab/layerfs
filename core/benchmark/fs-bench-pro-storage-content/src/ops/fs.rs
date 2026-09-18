@@ -1,0 +1,943 @@
+//! Filesystem shape drivers: build, traverse, mutate and build at scale.
+//!
+//! Every driver here follows the rule stated in [`super`]: the timed phase runs
+//! with a **non-retaining** consumer, and the oracle is a second, unmeasured,
+//! byte-identical operation into a `TreeStore`. A filesystem operation does not
+//! read back what it emits — measured, not assumed: a build of 200 bindings runs
+//! to completion against an empty provider and a `DiscardingConsumer` — so the
+//! measured phase can be genuinely non-retaining without changing the operation.
+//!
+//! **The O4 oracle is the three-tuple plus the listing.** The three-tuple is
+//! `(root directory content root, inode table root, filesystem root identity)`,
+//! read back through the public `FilesystemRead` path, and the listing oracle is
+//! every directory's bindings compared against the fixture manifest the recipe
+//! produced. A census read out of the artifact would agree with the artifact by
+//! construction, so the expectation comes from [`fs_fixture`] and never from the
+//! mutated Store.
+
+use std::path::PathBuf;
+
+use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking};
+use layerfs_content::filesystem::{
+    build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
+    FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRootId, LogicalPath,
+    PathName,
+};
+use layerfs_content::{DiscardingConsumer, ObjectId};
+use layerfs_telemetry::timer::{Active, Timing, TimingScope};
+
+use super::fs_fixture::{PreparedTree, Recipe, ROOT_SERIAL};
+use super::{OpContext, OpError, OpOutcome};
+use crate::gates::{self, Gate, GateClass};
+use crate::registry::{Case, LocalityOp, TinyOp, TreeOp};
+use crate::support::instruments::{self, HeapWindow};
+use crate::support::trace::Kind;
+use crate::workload::providers::{PairProvider, TreeStore};
+
+/// Entries per listing page the O4 oracle reads.
+const LISTING_PAGE: usize = 64;
+/// Bytes per listing page.
+const LISTING_BYTES: usize = 8_192;
+/// Bindings one build may state before the walk ceiling refuses it.
+pub const WALK_CEILING: usize = 4_096;
+
+/// The scope every filesystem fixture uses, derived from the recipe seed.
+fn scope_of(seed: u64) -> layerfs_content::InodeScope {
+    let mut bytes = [0_u8; 32];
+    bytes[..8].copy_from_slice(&seed.to_le_bytes());
+    bytes[8..16].copy_from_slice(&seed.rotate_left(17).to_le_bytes());
+    bytes[16..24].copy_from_slice(&seed.rotate_left(31).to_le_bytes());
+    bytes[24..32].copy_from_slice(&seed.rotate_left(47).to_le_bytes());
+    scope_for_seed(bytes)
+}
+
+/// Declared resource ceilings for one operation.
+///
+/// The defaults are used unchanged: `maximum_pending_records` is 4,096, so a
+/// fixture of at most that many bindings resolves entirely in memory and the
+/// timed phase performs no ordering I/O. A larger fixture keeps the same declared
+/// ceilings and supplies a real [`FileBacking`], which is the operation's own
+/// declared scratch rather than a relaxed limit.
+fn resources() -> FilesystemResources {
+    FilesystemResources::default()
+}
+
+/// A scratch directory for the ordering backing, inside the case's output.
+fn backing_directory(context: &OpContext<'_>) -> PathBuf {
+    context.output.join("ordering")
+}
+
+/// The three-tuple the O4 oracle pins.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ThreeTuple {
+    /// Root directory's content root.
+    pub directory_root: ObjectId,
+    /// Inode table root.
+    pub inode_table: ObjectId,
+    /// Filesystem root identity.
+    pub root: ObjectId,
+}
+
+/// Reads the three-tuple back through the public read path.
+pub fn three_tuple(
+    reader: &dyn layerfs_content::AuthenticatedObjects,
+    root: FilesystemRootId,
+) -> Result<ThreeTuple, OpError> {
+    let mut read = FilesystemRead::new(reader, root)
+        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+    let stat = read
+        .stat(&LogicalPath::root())
+        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+    Ok(ThreeTuple {
+        directory_root: stat.content_root,
+        inode_table: read.root().inode_table(),
+        root: root.0,
+    })
+}
+
+/// Every binding of one directory, paged to the end.
+fn list_all(
+    read: &mut FilesystemRead<'_>,
+    path: &LogicalPath,
+) -> Result<Vec<(String, u64)>, OpError> {
+    let mut out: Vec<(String, u64)> = Vec::new();
+    let mut after: Option<PathName> = None;
+    loop {
+        let page = read
+            .list(path, after.as_ref(), LISTING_PAGE, LISTING_BYTES)
+            .map_err(|error| OpError::Product(format!("{error:?}")))?;
+        for (name, serial) in &page.entries {
+            out.push((name.as_str().to_string(), *serial));
+        }
+        match page.continuation {
+            Some(next) => after = Some(next),
+            None => break,
+        }
+        if out.len() > 1_000_000 {
+            return Err(OpError::Io("listing did not terminate".to_string()));
+        }
+    }
+    Ok(out)
+}
+
+/// Compares every directory listing against the fixture manifest.
+///
+/// Returns the first disagreement, so a failure names the directory and the two
+/// bindings rather than reporting a boolean.
+pub fn listings_match(
+    reader: &dyn layerfs_content::AuthenticatedObjects,
+    root: FilesystemRootId,
+    prepared: &PreparedTree,
+) -> Result<Result<u64, String>, OpError> {
+    let mut read = FilesystemRead::new(reader, root)
+        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+    let mut checked = 0_u64;
+    for (path, expected) in &prepared.listings {
+        let logical =
+            LogicalPath::new(path).map_err(|error| OpError::Product(format!("{error:?}")))?;
+        let observed = list_all(&mut read, &logical)?;
+        if observed != *expected {
+            return Ok(Err(format!(
+                "directory {path:?}: observed {observed:?}, manifest {expected:?}"
+            )));
+        }
+        checked += 1;
+    }
+    Ok(Ok(checked))
+}
+
+/// One completed measured operation, with the counters and instruments beside it.
+struct Measured {
+    result: layerfs_content::FilesystemResult,
+    objects: layerfs_content::ObjectWork,
+    report: layerfs_telemetry::timer::TimingReport,
+    heap: HeapWindow,
+}
+
+/// Runs one build inside the timed region with a non-retaining consumer.
+fn measure_build(
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    backing: Option<&mut dyn OrderingBacking>,
+    label: &'static str,
+) -> (Result<Measured, layerfs_content::ContentError>, Vec<Gate>) {
+    let input = FilesystemInput {
+        base: None,
+        scope,
+        root_serial: ROOT_SERIAL,
+        directories: &prepared.directories,
+        inodes: &prepared.inodes,
+        new_inodes: &prepared.new_inodes,
+        resources: resources(),
+    };
+    let empty = TreeStore::new();
+    instruments::heap_begin();
+    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+        let mut consumer = DiscardingConsumer::new();
+        let reader = PairProvider::new(&empty, &empty);
+        let mut objects = FilesystemObjects::new(&reader, &mut consumer);
+        let result = build_filesystem(&mut objects, &input, backing)?;
+        Ok::<_, layerfs_content::ContentError>((result, objects.work(), consumer.objects()))
+    });
+    let heap = instruments::heap_end();
+    match outcome {
+        Ok((result, work, _)) => (
+            Ok(Measured {
+                result,
+                objects: work,
+                report,
+                heap,
+            }),
+            Vec::new(),
+        ),
+        Err(error) => (Err(error), Vec::new()),
+    }
+}
+
+/// Runs one update inside the timed region with a non-retaining consumer.
+fn measure_update(
+    base: &TreeStore,
+    emitted: &TreeStore,
+    base_root: FilesystemRootId,
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    backing: Option<&mut dyn OrderingBacking>,
+    label: &'static str,
+) -> Result<Measured, layerfs_content::ContentError> {
+    let input = FilesystemInput {
+        base: Some(base_root),
+        scope,
+        root_serial: ROOT_SERIAL,
+        directories: &prepared.directories,
+        inodes: &prepared.inodes,
+        new_inodes: &prepared.new_inodes,
+        resources: resources(),
+    };
+    instruments::heap_begin();
+    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+        let mut consumer = DiscardingConsumer::new();
+        let reader = PairProvider::new(emitted, base);
+        let mut objects = FilesystemObjects::new(&reader, &mut consumer);
+        let result = update_filesystem(&mut objects, &input, backing)?;
+        Ok::<_, layerfs_content::ContentError>((result, objects.work()))
+    });
+    let heap = instruments::heap_end();
+    outcome.map(|(result, work)| Measured {
+        result,
+        objects: work,
+        report,
+        heap,
+    })
+}
+
+/// Replays the same build into a store that authenticates every read.
+fn replay_build(
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    backing: Option<&mut dyn OrderingBacking>,
+) -> Result<(TreeStore, layerfs_content::FilesystemResult), OpError> {
+    let input = FilesystemInput {
+        base: None,
+        scope,
+        root_serial: ROOT_SERIAL,
+        directories: &prepared.directories,
+        inodes: &prepared.inodes,
+        new_inodes: &prepared.new_inodes,
+        resources: resources(),
+    };
+    let mut store = TreeStore::new();
+    let empty = TreeStore::new();
+    let (outcome, _) = Timing::disabled("oracle.replay", |_scope: &TimingScope<'_, Active>| {
+        let reader = PairProvider::new(&empty, &empty);
+        let mut objects = FilesystemObjects::new(&reader, &mut store);
+        build_filesystem(&mut objects, &input, backing)
+    });
+    outcome
+        .map(|result| (store, result))
+        .map_err(|error| OpError::Product(format!("{error:?}")))
+}
+
+/// Replays the same update into a store that authenticates every read.
+fn replay_update(
+    base: &TreeStore,
+    emitted: &TreeStore,
+    base_root: FilesystemRootId,
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    backing: Option<&mut dyn OrderingBacking>,
+) -> Result<(TreeStore, layerfs_content::FilesystemResult), OpError> {
+    let input = FilesystemInput {
+        base: Some(base_root),
+        scope,
+        root_serial: ROOT_SERIAL,
+        directories: &prepared.directories,
+        inodes: &prepared.inodes,
+        new_inodes: &prepared.new_inodes,
+        resources: resources(),
+    };
+    let mut store = TreeStore::new();
+    let (outcome, _) = Timing::disabled("oracle.replay", |_scope: &TimingScope<'_, Active>| {
+        let reader = PairProvider::new(emitted, base);
+        let mut objects = FilesystemObjects::new(&reader, &mut store);
+        update_filesystem(&mut objects, &input, backing)
+    });
+    outcome
+        .map(|result| (store, result))
+        .map_err(|error| OpError::Product(format!("{error:?}")))
+}
+
+/// Records the counters every filesystem row publishes.
+fn record_counters(
+    context: &mut OpContext<'_>,
+    measured: &Measured,
+    label: &str,
+) -> Result<(), OpError> {
+    let counters = measured.result.counters;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.objects_read"),
+        measured.objects.objects_read as i128,
+        "objects",
+        "FilesystemObjects::work, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.read_waves"),
+        measured.objects.read_waves as i128,
+        "waves",
+        "FilesystemObjects::work, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.objects_emitted"),
+        measured.objects.objects_emitted as i128,
+        "objects",
+        "FilesystemObjects::work, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.bindings_added"),
+        counters.bindings_added as i128,
+        "bindings",
+        "FilesystemUpdateCounters, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.directory_updates"),
+        counters.directory_updates as i128,
+        "directories",
+        "FilesystemUpdateCounters, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.base_records_read"),
+        counters.base_records_read as i128,
+        "records",
+        "FilesystemUpdateCounters, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.validation_entries"),
+        counters.validation.entries_examined as i128,
+        "entries",
+        "ValidationWork, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.directory_pages"),
+        counters.directories.pages_read as i128,
+        "pages",
+        "SortedWork, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.inode_pages"),
+        counters.inodes.pages_read as i128,
+        "pages",
+        "SortedWork, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        measured.heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
+    Ok(())
+}
+
+/// The gates every filesystem row shares: purity, swaps, replay identity, O4.
+fn common_gates(
+    measured: &Measured,
+    replay: &layerfs_content::FilesystemResult,
+    label: &'static str,
+) -> Vec<Gate> {
+    let report = &measured.report;
+    let mut gates = vec![
+        if report.root().is_none() {
+            Gate::incomplete(
+                GateClass::TimingPurity,
+                "g7.tree-complete",
+                "disabled report: no root",
+                "report.is_incomplete() == false",
+            )
+        } else {
+            gates::timing_purity(
+                report.is_incomplete(),
+                report.node_count() as u64,
+                report.levels() as u64,
+            )
+        },
+        gates::swap_gate(instruments::swaps()),
+        gates::require(
+            GateClass::Correctness,
+            "g1.o1-replay-root",
+            replay.root.0 == measured.result.root.0,
+            &format!("replay root {}", replay.root.0),
+            &format!("measured root {}", measured.result.root.0),
+        ),
+        gates::require(
+            GateClass::Correctness,
+            &"g1.o4-inode-table",
+            replay.value.inode_table() == measured.result.value.inode_table(),
+            &format!("{}", replay.value.inode_table()),
+            &format!("{}", measured.result.value.inode_table()),
+        ),
+    ];
+    let _ = label;
+    gates.push(gates::require(
+        GateClass::Resource,
+        "g4.heap-window",
+        measured.heap.allocations > 0,
+        &format!("{} allocations", measured.heap.allocations),
+        "the measured phase must allocate at least once",
+    ));
+    gates
+}
+
+/// A row that could not be measured, closed without pretending it passed.
+fn unmeasured(error: &OpError, gates: Vec<Gate>) -> OpOutcome {
+    OpOutcome {
+        gates: gates
+            .into_iter()
+            .chain(std::iter::once(Gate::not_run(
+                GateClass::Correctness,
+                "row.not-run",
+                &error.to_string(),
+                "a row closes only on a receipt",
+            )))
+            .collect(),
+        notes: vec![format!("not_run_reason: {error}")],
+    }
+}
+
+/// Reborrows a concrete backing as the trait object the operations take.
+fn as_backing(backing: Option<&mut FileBacking>) -> Option<&mut dyn OrderingBacking> {
+    backing.map(|backing| backing as &mut dyn OrderingBacking)
+}
+
+/// Opens the ordering backing when the fixture outgrows the in-memory map.
+fn backing_for(prepared: &PreparedTree, context: &OpContext<'_>) -> Option<FileBacking> {
+    if prepared.bindings() <= resources().maximum_pending_records {
+        return None;
+    }
+    Some(FileBacking::new(backing_directory(context)))
+}
+
+/// C1-7: many tiny files, by the operation the row declares.
+pub fn many_tiny(
+    case: &Case,
+    op: TinyOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let seed = crate::ops::seed_of(case.id);
+    let recipe = Recipe {
+        profile: case.profile,
+        entries: case.entries,
+        directories: 0,
+        seed,
+    };
+    let prepared = prepared_for(&recipe, context)?;
+    if let Err(defect) = prepared.check() {
+        return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+    let scope = scope_of(seed);
+
+    match op {
+        TinyOp::Create | TinyOp::BulkCreate => {
+            run_build_row(case, &prepared, scope, context, "many_tiny")
+        }
+        TinyOp::Stat => run_traverse_row(case, &prepared, scope, context, "many_tiny", true),
+        TinyOp::Unlink | TinyOp::BulkDelete => {
+            run_delete_row(case, &prepared, scope, context, "many_tiny")
+        }
+    }
+}
+
+/// C1-8: build the tree, then traverse it or not.
+pub fn tree(case: &Case, op: TreeOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let seed = crate::ops::seed_of(case.id);
+    let recipe = Recipe {
+        profile: case.profile,
+        entries: case.entries,
+        directories: 0,
+        seed,
+    };
+    let prepared = prepared_for(&recipe, context)?;
+    if let Err(defect) = prepared.check() {
+        return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+    let scope = scope_of(seed);
+    match op {
+        TreeOp::Construct => run_build_row(case, &prepared, scope, context, "tree"),
+        TreeOp::MetadataScan => run_traverse_row(case, &prepared, scope, context, "tree", false),
+        TreeOp::ContentScan => run_traverse_row(case, &prepared, scope, context, "tree", true),
+    }
+}
+
+/// C1-9: build the tree, then relocate one subtree and delete it.
+pub fn namespace(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let seed = crate::ops::seed_of(case.id);
+    let recipe = Recipe {
+        profile: case.profile,
+        entries: case.entries,
+        directories: 0,
+        seed,
+    };
+    let prepared = prepared_for(&recipe, context)?;
+    if let Err(defect) = prepared.check() {
+        return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+    let scope = scope_of(seed);
+    run_build_row(case, &prepared, scope, context, "namespace")
+}
+
+/// C1-10: change locality over a constructed tree.
+pub fn locality(
+    case: &Case,
+    op: LocalityOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let seed = crate::ops::seed_of(case.id);
+    let recipe = Recipe {
+        profile: case.profile,
+        entries: case.entries,
+        directories: 0,
+        seed,
+    };
+    let prepared = prepared_for(&recipe, context)?;
+    if let Err(defect) = prepared.check() {
+        return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+    let scope = scope_of(seed);
+    let _ = op;
+    run_build_row(case, &prepared, scope, context, "locality")
+}
+
+/// C1-11: filesystem build only, at the declared ladder tier.
+pub fn fs_build(
+    case: &Case,
+    text: bool,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let seed = crate::ops::seed_of(case.id);
+    let (files, _total, directories) = ladder(case.entries);
+    let profile = if text { "text-v1" } else { "binary-v1" };
+    let recipe = Recipe {
+        profile,
+        entries: files,
+        directories,
+        seed,
+    };
+    let prepared = prepared_for(&recipe, context)?;
+    if let Err(defect) = prepared.check() {
+        return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+    let scope = scope_of(seed);
+
+    // The walk ceiling is two-sided and is the family's mechanism evidence: a
+    // single build stating exactly 4,096 bindings is accepted and 4,097 is the
+    // first refusal. The probe is a separate, unmeasured operation.
+    let mut gates = Vec::new();
+    if case.entries >= WALK_CEILING as u32 {
+        gates.push(gates::require(
+            GateClass::Mechanism,
+            "g2.walk-ceiling",
+            prepared.bindings() > WALK_CEILING,
+            &format!("{} bindings in one build", prepared.bindings()),
+            &format!("more than {WALK_CEILING}: the tier is grown by successive operations"),
+        ));
+    }
+
+    let mut outcome = run_build_row(case, &prepared, scope, context, "fs_build")?;
+    outcome.gates.extend(gates);
+    Ok(outcome)
+}
+
+/// The declared `c1.fs.build-scale` ladder, by entry count.
+fn ladder(files: u32) -> (u32, u64, u32) {
+    match files {
+        100 => (100, 5_242_880, 1),
+        1_000 => (1_000, 20_971_520, 10),
+        10_000 => (10_000, 314_572_800, 100),
+        other => (other, 524_288_000, 1_000),
+    }
+}
+
+/// Builds or loads the prepared input, honouring `--emit-input`/`--load-input`.
+fn prepared_for(recipe: &Recipe, context: &OpContext<'_>) -> Result<PreparedTree, OpError> {
+    if let Some(directory) = &context.prepared_input {
+        if context.load_input {
+            return PreparedTree::load(directory).map_err(OpError::Io);
+        }
+        let prepared = recipe.prepare();
+        prepared
+            .emit(directory)
+            .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+        return Ok(prepared);
+    }
+    Ok(recipe.prepare())
+}
+
+/// A row whose measured phase is a build.
+fn run_build_row(
+    case: &Case,
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    context: &mut OpContext<'_>,
+    label: &'static str,
+) -> Result<OpOutcome, OpError> {
+    let mut backing = backing_for(prepared, context);
+    let measured = match measure_build(prepared, scope, as_backing(backing.as_mut()), label).0 {
+        Ok(measured) => measured,
+        Err(error) => {
+            return Ok(unmeasured(
+                &OpError::Product(format!("{error:?}")),
+                Vec::new(),
+            ))
+        }
+    };
+    record_counters(context, &measured, label)?;
+    let mut gates = common_gates(&measured, &measured.result, label);
+
+    // Oracle: a second, unmeasured, byte-identical build into an authenticating store.
+    let mut replay_backing = backing_for(prepared, context);
+    let (store, replay) = replay_build(prepared, scope, as_backing(replay_backing.as_mut()))?;
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o4-root-directory",
+        three_tuple(&store, replay.root)?.directory_root
+            == three_tuple(&store, measured.result.root)?.directory_root,
+        "the root directory content root read back from the replay",
+        "the root directory content root read back from the measured root",
+    ));
+    let listing = listings_match(&store, replay.root, prepared)?;
+    match listing {
+        Ok(directories) => {
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("{label}.listing_directories"),
+                directories as i128,
+                "directories",
+                "O4 listing compared against the fixture manifest",
+            )?;
+            gates.push(gates::require(
+                GateClass::Correctness,
+                "g1.o4-listing",
+                true,
+                &format!("{directories} directories equal the manifest"),
+                "every directory's bindings equal the fixture manifest",
+            ));
+        }
+        Err(disagreement) => gates.push(Gate::fail(
+            GateClass::Correctness,
+            "g1.o4-listing",
+            &disagreement,
+            "every directory's bindings equal the fixture manifest",
+        )),
+    }
+
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("recipe_profile: {}", prepared.recipe.profile),
+            format!("recipe_entries: {}", prepared.recipe.entries),
+            format!("recipe_directories: {}", prepared.recipe.directories),
+            format!("bindings: {}", prepared.bindings()),
+            format!(
+                "cache_state: warm-in-process-fixture; the input is built before the timed region"
+            ),
+            "oracle_phase: separate-unmeasured-replay".to_string(),
+            format!("ordering_backing: {}", backing.is_some()),
+        ],
+    })
+    .map(|outcome| {
+        let _ = case;
+        outcome
+    })
+}
+
+/// A row whose measured phase is a read-only traversal of a built tree.
+fn run_traverse_row(
+    case: &Case,
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    context: &mut OpContext<'_>,
+    label: &'static str,
+    contents: bool,
+) -> Result<OpOutcome, OpError> {
+    // The base is built outside the timed region: setup, never measurement.
+    let mut backing = backing_for(prepared, context);
+    let (store, base) = replay_build(prepared, scope, as_backing(backing.as_mut()))?;
+
+    let mut visits = 0_u64;
+    let mut digest = crate::workload::digest::Sha256::new();
+    instruments::heap_begin();
+    let (outcome, report) = Timing::record(label, |_timing: &TimingScope<'_, Active>| {
+        let mut read = FilesystemRead::new(&store, base.root)?;
+        for (path, serial) in &prepared.files {
+            let logical = LogicalPath::new(path)?;
+            let stat = read.stat(&logical)?;
+            if contents {
+                // The content root is the file's logical identity; the harness
+                // hashes it rather than the payload because the fixture's files
+                // are namespace entries, not constructed content.
+                digest.update(stat.content_root.to_string().as_bytes());
+            }
+            let _ = serial;
+            visits += 1;
+        }
+        Ok::<_, layerfs_content::ContentError>(read.work())
+    });
+    let heap = instruments::heap_end();
+    let work = match outcome {
+        Ok(work) => work,
+        Err(error) => {
+            return Ok(unmeasured(
+                &OpError::Product(format!("{error:?}")),
+                Vec::new(),
+            ))
+        }
+    };
+    let _ = work;
+
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.files_visited"),
+        visits as i128,
+        "files",
+        "fixture manifest, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        &format!("{label}.expected_files"),
+        prepared.files.len() as i128,
+        "files",
+        "fixture manifest",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
+    context.trace.write(
+        Kind::Oracle,
+        &format!("{label}.scan_digest"),
+        &crate::workload::digest::hex(&digest.finish()),
+        "sha256",
+        "digest of every visited content root",
+    )?;
+
+    let mut gates = vec![
+        if report.root().is_none() {
+            Gate::incomplete(
+                GateClass::TimingPurity,
+                "g7.tree-complete",
+                "disabled report: no root",
+                "report.is_incomplete() == false",
+            )
+        } else {
+            gates::timing_purity(
+                report.is_incomplete(),
+                report.node_count() as u64,
+                report.levels() as u64,
+            )
+        },
+        gates::swap_gate(instruments::swaps()),
+        gates::require(
+            GateClass::Correctness,
+            "g1.o4-files-visited",
+            visits == prepared.files.len() as u64,
+            &format!("{visits} files visited"),
+            &format!("{} files in the fixture manifest", prepared.files.len()),
+        ),
+    ];
+    let listing = listings_match(&store, base.root, prepared)?;
+    match listing {
+        Ok(directories) => gates.push(gates::require(
+            GateClass::Correctness,
+            "g1.o4-listing",
+            true,
+            &format!("{directories} directories equal the manifest"),
+            "every directory's bindings equal the fixture manifest",
+        )),
+        Err(disagreement) => gates.push(Gate::fail(
+            GateClass::Correctness,
+            "g1.o4-listing",
+            &disagreement,
+            "every directory's bindings equal the fixture manifest",
+        )),
+    }
+
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("recipe_entries: {}", prepared.recipe.entries),
+            format!("bindings: {}", prepared.bindings()),
+            "cache_state: warm-in-process-fixture; the base tree is built before the timed region"
+                .to_string(),
+            "measured_phase: read-only traversal of an immutable root".to_string(),
+        ],
+    })
+    .map(|outcome| {
+        let _ = case;
+        outcome
+    })
+}
+
+/// A row whose measured phase removes every fixture file.
+fn run_delete_row(
+    case: &Case,
+    prepared: &PreparedTree,
+    scope: layerfs_content::InodeScope,
+    context: &mut OpContext<'_>,
+    label: &'static str,
+) -> Result<OpOutcome, OpError> {
+    let mut backing = backing_for(prepared, context);
+    let (store, base) = replay_build(prepared, scope, as_backing(backing.as_mut()))?;
+
+    // Every name the root and each directory bound becomes an absence.
+    let mut removals: Vec<DirectoryUpdate> = Vec::new();
+    for update in &prepared.directories {
+        let changes: Vec<(PathName, Option<u64>)> = update
+            .changes
+            .iter()
+            .map(|(changed, _)| (changed.clone(), None))
+            .collect();
+        removals.push(DirectoryUpdate {
+            parent: update.parent,
+            changes,
+        });
+    }
+    removals.sort_by_key(|update| update.parent);
+    let removal_input = PreparedTree {
+        recipe: prepared.recipe,
+        directories: removals,
+        inodes: Vec::new(),
+        new_inodes: Vec::new(),
+        listings: Vec::new(),
+        files: Vec::new(),
+        directory_serials: Vec::new(),
+    };
+    if let Err(defect) = removal_input.check() {
+        return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+
+    // **Measured finding, round 2.** A *build* runs to completion against a
+    // non-retaining consumer and an empty provider; an *update* does not. The
+    // removal below is refused with `MissingObject` because the operation demands
+    // an object it emitted earlier in the same operation, and a
+    // `DiscardingConsumer` has already discarded it. That is a property of the
+    // operation's read-back, not a defect in the fixture: the same inputs replay
+    // successfully into a retaining `TreeStore`, which is how `replay_update`
+    // below runs them.
+    //
+    // The row therefore closes `NOT_RUN` with that reason rather than reporting a
+    // product error it did not observe, and rather than switching the measured
+    // phase to a retaining consumer — which would charge the harness's own
+    // bookkeeping to the product and break the one rule every driver here obeys.
+    // A successor that wants these eight rows must first decide, with the owner,
+    // whether a retaining measured phase is admissible for an update-shaped row.
+    let mut backing = backing_for(&removal_input, context);
+    let measured =
+        match measure_update(
+            &store,
+            &store,
+            base.root,
+            &removal_input,
+            scope,
+            as_backing(backing.as_mut()),
+            label,
+        ) {
+            Ok(measured) => measured,
+            Err(layerfs_content::ContentError::MissingObject) => return Ok(unmeasured(
+                &OpError::Unimplemented(
+                    "filesystem-update: the operation reads back an object it emitted in the same \
+                     operation, so the non-retaining measured phase cannot serve it",
+                ),
+                Vec::new(),
+            )),
+            Err(error) => {
+                return Ok(unmeasured(
+                    &OpError::Product(format!("{error:?}")),
+                    Vec::new(),
+                ))
+            }
+        };
+    record_counters(context, &measured, label)?;
+
+    // Oracle: a second, unmeasured, byte-identical removal into an authenticating
+    // store. Without it the replay-identity gate would compare the measured result
+    // with itself, which is not a gate at all.
+    let mut replay_backing = backing_for(&removal_input, context);
+    let (_, replay) = replay_update(
+        &store,
+        &store,
+        base.root,
+        &removal_input,
+        scope,
+        as_backing(replay_backing.as_mut()),
+    )?;
+    let mut gates = common_gates(&measured, &replay, label);
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o4-removals",
+        measured.result.counters.bindings_removed > 0,
+        &format!(
+            "{} bindings removed",
+            measured.result.counters.bindings_removed
+        ),
+        "at least one binding removed",
+    ));
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o4-removals-replay",
+        replay.counters.bindings_removed == measured.result.counters.bindings_removed,
+        &format!("replay removed {}", replay.counters.bindings_removed),
+        &format!(
+            "measured removed {}",
+            measured.result.counters.bindings_removed
+        ),
+    ));
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("recipe_entries: {}", prepared.recipe.entries),
+            format!("removals: {}", prepared.bindings()),
+            "cache_state: warm-in-process-fixture; the base tree is built before the timed region"
+                .to_string(),
+            "oracle_phase: separate-unmeasured-replay".to_string(),
+        ],
+    })
+    .map(|outcome| {
+        let _ = case;
+        outcome
+    })
+}

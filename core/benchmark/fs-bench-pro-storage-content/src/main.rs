@@ -25,6 +25,8 @@ struct Args {
     out: Option<PathBuf>,
     store: Option<PathBuf>,
     objects: Option<PathBuf>,
+    prepared_input: Option<PathBuf>,
+    load_input: bool,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
@@ -38,6 +40,8 @@ fn parse(args: &[String]) -> Result<Args, String> {
         out: None,
         store: None,
         objects: None,
+        prepared_input: None,
+        load_input: false,
     };
     let mut index = 0;
     while index < args.len() {
@@ -86,6 +90,18 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 index += 1;
                 parsed.objects =
                     Some(PathBuf::from(args.get(index).ok_or("--objects expects a path")?));
+            }
+            "--emit-input" => {
+                index += 1;
+                parsed.prepared_input =
+                    Some(PathBuf::from(args.get(index).ok_or("--emit-input expects a path")?));
+                parsed.load_input = false;
+            }
+            "--load-input" => {
+                index += 1;
+                parsed.prepared_input =
+                    Some(PathBuf::from(args.get(index).ok_or("--load-input expects a path")?));
+                parsed.load_input = true;
             }
             other => return Err(format!("unknown argument {other:?}")),
         }
@@ -212,6 +228,8 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         output: &output,
         store: parsed.store.clone(),
         objects: parsed.objects.clone(),
+        prepared_input: parsed.prepared_input.clone(),
+        load_input: parsed.load_input,
         trace: &mut trace,
     };
     let outcome = match ops::run(case, &mut context) {
