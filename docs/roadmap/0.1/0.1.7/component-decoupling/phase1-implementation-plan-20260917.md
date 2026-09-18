@@ -246,10 +246,59 @@ design and **not** the design question the first receipt named. The fix
 (newest-group-first draining plus the tier-ordering invariant as a test) is
 identified but not written; the receipt records it.
 
-**Not started:** P1-15 — the restart lookup half of the ordering pair. P1-13's
-blocker blocks it by its own dependency note ("restart pattern and run lengths
-follow the cascade policy"), and the assignment's landing order puts it after
-P1-13. **The executable assignment for those five is
+**Incomplete too:** P1-15 — the hybrid restart lookup. It was attempted after
+P1-13; the probe mechanism works and one accounting defect was found and fixed in
+the attempt (`RunScan::start_after`), but the restart arm's positioning and the
+per-tier `resume` state are not consistent, and `find` returned a superseded
+duplicate. Reverted; receipt
+[`rounds/p1-15/receipt.md`](../evidence/phase1-execution-20260918T090000Z/rounds/p1-15/receipt.md)
+lists the three-step next move.
+
+## 4c. Phase 1 closed by owner ruling (2026-09-18)
+
+**Phase 1 is closed with 14 of its 16 items landed** plus all four prerequisites
+(and V4), on the owner's ruling that the achieved result is accepted. The two open
+items, `P1-13` and `P1-15`, are **not delivered** and are recorded as incomplete
+with a diagnosed cause and a next step — not as refutations and not as passes.
+
+The closing pass was run as a **completion audit** of the stopped phase
+([`closing-pass.md`](../evidence/phase1-execution-20260918T090000Z/closing-pass.md)):
+the frozen set was re-collected on the final tree and tabulated against every
+item's prediction, and the parity, commit, gate and scope audits were performed.
+It reports three predictions not reproduced (P1-3 partial, P1-13 and P1-15 not
+delivered) and **two findings that need an owner ruling**:
+
+1. **P1-7 moved a third pinned test** beyond the two C1 and P1-1 were authorized
+   for. Each was tightened with its old value kept as an upper bound, but the plan's
+   §P1-7 line says "MUST CHANGE: none" — accept the deviation or rework P1-7 into
+   the C1/P1-1 generalization pattern.
+2. **P1-10 changed a named bound** (the touched-serial divisor `ordering_bytes / 8`
+   → `/ 16`) with no architecture-document update in its commit, against
+   `core/AGENTS.md`.
+
+**Final counter table (phase start `625ad7b57` → final `51d42483e`):**
+
+```text
+C1   D2 objects.read_waves                     4 -> 3
+P1-1 D25/D26 read_waves                       11 -> 5    (ino_scratch 349,820 -> 709,388, the trade)
+P1-2 D21-D24 connection opens                  3 -> 1
+P1-3 13,000-inode provider waves             170 -> 107  (predicted ~3: refuted)
+P1-4 D2 validation waves / pages          42 / 42 -> 2 / 2
+P1-5+P1-10 D26 rows_read                  59,007 -> 25,809
+P1-6 oracle interior-join loads               24 -> 22   (no frozen row moves)
+P1-7 D27 nodes_read / edit_nodes_read       9/10 -> 7/8
+P1-8 M4 nodes_read                            16 -> 13
+P1-9 M2 edit_nodes_read                        8 -> 7
+P1-12 no counter; peak_scratch_bytes +8 B/page slot
+P1-14 M1 peak_delta_bytes                262,328 -> 131,826
+P1-16 docs + boundary test; nothing moved
+P1-13 NOT DELIVERED: D26 rows_written 25,760 / merges 61 unchanged
+P1-15 NOT DELIVERED: D26 restart reads unchanged
+```
+
+Production LOC over the phase: **18,792 → 19,264 (+472)**, core only, no new
+production files; reference `crates/` unchanged at 65,417. Workspace 456 passed /
+0 failed; all eight checks exit 0. **The executable assignment for those five is
 [`phase1-continuation-handoff-20260918.md`](phase1-continuation-handoff-20260918.md)**,
 which carries each one's anchor, file, sketch, corrected design, tests and risks.
 
