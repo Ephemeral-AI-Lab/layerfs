@@ -475,17 +475,19 @@ fn zero_count_serials(
     let mut zero = Vec::new();
     let mut reads = 0_u64;
     for wave in touched.chunks(base_batch.max(1)) {
-        let bases = lookup_many(reader, table, wave, &mut InodeReadWork::default())?;
+        let serials = wave.iter().map(|(serial, _)| *serial).collect::<Vec<_>>();
+        let bases = lookup_many(reader, table, &serials, &mut InodeReadWork::default())?;
         reads = reads.saturating_add(wave.len() as u64);
-        for (index, serial) in wave.iter().enumerate() {
+        for (index, (serial, carried)) in wave.iter().enumerate() {
             let base = bases[index];
-            let count = match reducer.state(*serial)? {
-                Some(PendingState::New { count, .. }) => count,
-                Some(PendingState::Existing { delta, .. }) => {
+            // The state travels with the serial: `touched_serials` already read
+            // every row, so re-asking the reducer here would re-find each one.
+            let count = match carried {
+                PendingState::New { count, .. } => *count,
+                PendingState::Existing { delta, .. } => {
                     let base_count = base.map_or(0, |value| value.namespace_ref_count as i128);
-                    u64::try_from((base_count + i128::from(delta)).max(0)).unwrap_or(0)
+                    u64::try_from((base_count + i128::from(*delta)).max(0)).unwrap_or(0)
                 }
-                None => base.map_or(0, |value| value.namespace_ref_count),
             };
             // A directory this batch drops is not a released inode: it was never
             // part of the result, so there is nothing to traverse.

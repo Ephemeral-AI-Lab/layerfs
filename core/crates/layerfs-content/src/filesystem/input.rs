@@ -82,13 +82,14 @@ impl Default for FilesystemResources {
 impl FilesystemResources {
     /// Serials the operation may collect while it derives final counts.
     ///
-    /// The collection is one `u64` per touched inode, and it is taken from the
-    /// same declared ordering budget as the pending rows and the runs. A caller
-    /// that declares fewer ordering bytes therefore declares a smaller touched
-    /// set, and an operation whose touched set does not fit is refused instead of
-    /// allocating past its own ceiling.
+    /// The collection is one `(u64, PendingState)` per touched inode — the serial
+    /// and the state carried out of the visit that read it — and it is taken from
+    /// the same declared ordering budget as the pending rows and the runs. A
+    /// caller that declares fewer ordering bytes therefore declares a smaller
+    /// touched set, and an operation whose touched set does not fit is refused
+    /// instead of allocating past its own ceiling.
     pub fn maximum_touched_serials(&self) -> usize {
-        match usize::try_from(self.ordering_bytes / 8) {
+        match usize::try_from(self.ordering_bytes / 16) {
             Ok(serials) => serials,
             Err(_) => usize::MAX,
         }

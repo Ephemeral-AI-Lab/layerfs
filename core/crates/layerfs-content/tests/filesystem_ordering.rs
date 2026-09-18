@@ -1193,3 +1193,56 @@ fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
         other => panic!("a map beyond the byte bound must be refused: {other:?}"),
     }
 }
+
+#[test]
+fn carried_state_removes_the_zero_count_re_pass() {
+    // P1-10: `touched_serials` already reads every row, so the state it carries out
+    // must answer the zero-count derivation without a second lookup. Before the
+    // change the caller called `state()` per serial, and every run-held serial paid
+    // at least one run read for it — on the forced-64 row that was 1,968 reads.
+    use layerfs_content::filesystem::references::{PendingState, ReferenceReducer};
+
+    let temp = TempDir::new("ordering-carried-state");
+    let mut backing = RecordingBacking::new(temp.path());
+    let mut reducer = ReferenceReducer::new(8, Some(&mut backing), 4096, 8 << 20);
+    for serial in 1..=200_u64 {
+        reducer
+            .note_removed_binding(serial)
+            .expect("one signed effect per serial");
+    }
+    let touched = reducer.touched_serials(32).expect("touched serials");
+    assert_eq!(touched.len(), 200, "every touched serial is collected once");
+    assert!(
+        reducer.work().runs.runs_created > 0,
+        "an eight-row map must spill this shape"
+    );
+
+    // Deriving the counts from the carried states reads nothing.
+    let reads = reducer.work().runs.rows_read;
+    let mut derived = 0_u64;
+    for (_, state) in &touched {
+        match state {
+            PendingState::New { count, .. } => derived = derived.saturating_add(*count),
+            PendingState::Existing { delta, .. } => {
+                derived = derived.saturating_add(u64::try_from((*delta).max(0)).unwrap_or(0));
+            }
+        }
+    }
+    assert_eq!(derived, 0, "every serial lost its binding");
+    assert_eq!(
+        reducer.work().runs.rows_read,
+        reads,
+        "the carried states answer the derivation without a run read"
+    );
+
+    // The contrast that makes this a test rather than a tautology: one `state`
+    // lookup for a serial the runs hold still charges a run read, which is what
+    // the old derivation paid once per serial.
+    let before = reducer.work().runs.rows_read;
+    let _ = reducer.state(1).expect("state");
+    assert!(
+        reducer.work().runs.rows_read > before,
+        "a re-find still costs a read: {} against {before}",
+        reducer.work().runs.rows_read
+    );
+}

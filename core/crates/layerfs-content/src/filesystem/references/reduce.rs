@@ -162,29 +162,30 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
             Some(row) => Some(*row),
             None => self.runs.find(serial)?,
         };
-        Ok(row.map(|row| match row {
-            Row::Count { value, count, .. } => PendingState::New { value, count },
-            Row::Effect { value, delta, .. } => PendingState::Existing { value, delta },
-        }))
+        Ok(row.map(Self::state_of))
     }
 
-    /// Every serial this reducer holds a row for, in ascending order.
+    /// Every serial this reducer holds a row for, in ascending order, with the
+    /// newest state of each.
     ///
-    /// One `u64` per touched inode, taken from the consolidated snapshot; the
-    /// caller uses it to find the inodes whose derived count reached zero before
-    /// the final stream is built.
-    pub fn touched_serials(&mut self, _batch: usize) -> ContentResult<Vec<u64>> {
+    /// The state is **carried out of the visit** that already reads every row, so
+    /// a caller that needs both the serial set and its states pays one pass
+    /// instead of a pass plus one `state` lookup per serial (each of which is a
+    /// run read once the reducer has consolidated). The collection is therefore
+    /// `(u64, PendingState)` per touched inode rather than one `u64`, which is
+    /// what [`FilesystemResources::maximum_touched_serials`] charges for.
+    pub fn touched_serials(&mut self, _batch: usize) -> ContentResult<Vec<(u64, PendingState)>> {
         self.runs.consolidate()?;
         let mut serials = Vec::new();
-        let mut pending = self.pending.keys().copied().peekable();
+        let mut pending = self.pending.iter().peekable();
         let mut last: Option<u64> = None;
         self.runs.visit_newest_first(|row| {
             let serial = row.serial();
-            while let Some(next) = pending.peek().copied() {
-                if next <= serial {
-                    if last != Some(next) {
-                        serials.push(next);
-                        last = Some(next);
+            while let Some((next, pending_row)) = pending.peek().copied() {
+                if *next <= serial {
+                    if last != Some(*next) {
+                        serials.push((*next, Self::state_of(*pending_row)));
+                        last = Some(*next);
                     }
                     pending.next();
                 } else {
@@ -192,18 +193,26 @@ impl<'r, 'b> ReferenceReducer<'r, 'b> {
                 }
             }
             if last != Some(serial) {
-                serials.push(serial);
+                serials.push((serial, Self::state_of(row)));
                 last = Some(serial);
             }
             Ok(true)
         })?;
-        for next in pending {
-            if last != Some(next) {
-                serials.push(next);
-                last = Some(next);
+        for (next, row) in pending {
+            if last != Some(*next) {
+                serials.push((*next, Self::state_of(*row)));
+                last = Some(*next);
             }
         }
         Ok(serials)
+    }
+
+    /// The pending state one row states.
+    fn state_of(row: Row) -> PendingState {
+        match row {
+            Row::Count { value, count, .. } => PendingState::New { value, count },
+            Row::Effect { value, delta, .. } => PendingState::Existing { value, delta },
+        }
     }
 
     /// Charges the one collection the operation performs over touched serials.
