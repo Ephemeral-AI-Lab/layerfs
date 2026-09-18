@@ -241,6 +241,11 @@ fn main() {
     );
     println!("nodes_created: {}", collector.objects.len());
     println!("nodes_read: {}", demanded.len());
+    // V4 (additive): the operation's own node-load count. `nodes_read` above is
+    // the provider-demand count; a load served by a node this operation built is
+    // charged here and never demanded, so the two differ and only this one sees
+    // the work a split or a rightmost walk does over its own drafts.
+    println!("edit_nodes_read: {}", edited.counters.nodes_read);
     println!("mapping_pages: {mapping_pages}");
 }
 
