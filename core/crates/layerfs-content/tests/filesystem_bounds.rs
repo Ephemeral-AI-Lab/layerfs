@@ -17,8 +17,8 @@ use layerfs_content::filesystem::{
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{ObjectId, ObjectRole};
 use support::filesystem::{
-    count_role, resources, synthetic, value, CountingProvider, RecordingBacking, Session, TempDir,
-    TreeStore,
+    count_role, resources, synthetic, value, with_objects, CountingProvider, RecordingBacking,
+    Session, TempDir, TreeStore,
 };
 
 fn name(value: &str) -> PathName {
@@ -1166,6 +1166,133 @@ fn wide_rename_charges_with(ceilings: FilesystemResources) -> WideRename {
     report.demanded = provider.demands();
     report.peak_wave = provider.peak_wave();
     report
+}
+
+#[test]
+fn a_branch_materialization_reads_children_in_one_wave() {
+    // A tree with more inode leaves than one branch page holds forces a level-1
+    // merge while it is built: the merge materializes two branch pages and reads
+    // their children. Those children used to be point-read one per wave; P1-3
+    // reads them in bounded groups instead.
+    let mut session = Session::new(1).expect("empty");
+    let directory = session.allocate();
+    let count = 13_000_usize;
+    let serials = (0..count).map(|_| session.allocate()).collect::<Vec<_>>();
+    let mut inodes = vec![InodeUpdate {
+        serial: directory,
+        value: dir_value(),
+    }];
+    let mut new = vec![directory];
+    for (index, serial) in serials.iter().enumerate() {
+        inodes.push(InodeUpdate {
+            serial: *serial,
+            value: regular(&format!("mat/content-{index:05}")),
+        });
+        new.push(*serial);
+    }
+    inodes.sort_by_key(|update| update.serial);
+    new.sort_unstable();
+    let root_changes = vec![(name("d"), Some(directory))];
+    let mut directories = vec![DirectoryUpdate {
+        parent: 1,
+        changes: root_changes,
+    }];
+    let mut changes = serials
+        .iter()
+        .enumerate()
+        .map(|(index, serial)| (name(&format!("m{index:05}")), Some(*serial)))
+        .collect::<Vec<_>>();
+    changes.sort_by(|left, right| left.0.cmp(&right.0));
+    directories.push(DirectoryUpdate {
+        parent: directory,
+        changes,
+    });
+    directories.sort_by_key(|update| update.parent);
+
+    // Phase one stores the base into the session's own store, so the second phase
+    // reads the pages this phase emitted.
+    let temp = TempDir::new("bounds-materialize");
+    let mut backing = RecordingBacking::new(temp.path());
+    let build_input = FilesystemInput {
+        base: Some(FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new,
+        resources: resources(),
+    };
+    let built = with_objects(&mut session.store, |objects| {
+        update_filesystem(objects, &build_input, Some(&mut backing))
+    })
+    .expect("wide inode build");
+    let base = built.root.0;
+
+    // Phase two: unbind the lowest 300 serials. Their inode rows are released, so
+    // the inode tree loses three leaves and one stored level-1 branch page drops
+    // below the 64-child fill rule. The merge that repairs it materializes two
+    // stored branch pages and reads their children — the path P1-3 batches.
+    let released = serials[..300]
+        .iter()
+        .enumerate()
+        .map(|(index, _)| (name(&format!("m{index:05}")), None))
+        .collect::<Vec<_>>();
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(base)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &[DirectoryUpdate {
+            parent: directory,
+            changes: released,
+        }],
+        inodes: &[],
+        new_inodes: &[],
+        resources: resources(),
+    };
+    let provider = CountingProvider::new(&session.store);
+    let mut sink = TreeStore::new();
+    let result = {
+        let mut objects = FilesystemObjects::new(&provider, &mut sink);
+        update_filesystem(&mut objects, &input, Some(&mut backing)).expect("release update")
+    };
+    // Before P1-3 this update issued 170 waves: the release's own batch (50) plus
+    // two 64-child materializations, one of which the merge already batched and
+    // the other of which `page_from_wire` point-read child by child. After it,
+    // both materializations are one wave each.
+    let waves = provider.waves();
+    let wide = waves
+        .iter()
+        .copied()
+        .filter(|width| *width > 32)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        wide,
+        vec![50, 64, 64],
+        "the release batch and both stored branch pages are grouped waves: {waves:?}"
+    );
+    assert_eq!(
+        waves.len(),
+        107,
+        "170 waves before P1-3: the second materialization was point-read"
+    );
+    assert_eq!(
+        result.counters.inodes.read_waves, 5,
+        "the inode engine's own waves: 68 before P1-3"
+    );
+    assert_eq!(
+        provider.demands(),
+        303,
+        "the same objects are demanded, however they are grouped"
+    );
+    assert_eq!(
+        result.counters.inodes.pages_read, 134,
+        "and the same pages are read"
+    );
+    assert_eq!(
+        result.root.0.to_string(),
+        "78a3b9026cd9d295067684d267051a7ba9246dc9eec7cb6350639dfd4525c259",
+        "and the emitted root is the pre-change value"
+    );
 }
 
 #[test]

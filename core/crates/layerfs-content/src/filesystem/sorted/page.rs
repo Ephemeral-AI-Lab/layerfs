@@ -462,8 +462,8 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
     ) -> ContentResult<Page<F::Key, F::Value>> {
         let mut page = self.page(read.wire.level)?;
         page.origin = Some(id);
-        for entry in read.wire.entries {
-            if page.level == 0 {
+        if page.level == 0 {
+            for entry in read.wire.entries {
                 self.append_entry(
                     &mut page,
                     Entry {
@@ -477,26 +477,54 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
                         pending: None,
                     },
                 )?;
-            } else {
-                let child = entry
-                    .child
-                    .ok_or(ContentError::InvalidRecord("branch row"))?;
-                let read = self.read(child, false)?;
-                let key = entry.key.clone();
-                self.check_child(page.level, &key, &read.wire)?;
-                self.append_entry(
-                    &mut page,
-                    Entry {
-                        bytes: read.wire.bytes,
-                        key,
-                        id: Some(child),
-                        value: None,
-                        count: read.wire.count,
-                        size: read.wire.size,
-                        items: read.wire.entries.len(),
-                        pending: None,
-                    },
-                )?;
+            }
+        } else {
+            // The children of a materialized branch are read in bounded
+            // authenticated groups, exactly as the merge reads them: one wave per
+            // group instead of one per child, with every page still authenticated,
+            // decoded and context-checked, and the same pages charged.
+            let entries = read.wire.entries;
+            let count = entries.len();
+            let mut start = 0;
+            while start < count {
+                let width = BATCH_CHILDREN.min(count - start);
+                let (chunk, fetched, mut retained) =
+                    self.batch_children(&entries[start..], width)?;
+                let mut available = fetched;
+                for entry in &entries[start..start + chunk] {
+                    let child = entry
+                        .child
+                        .ok_or(ContentError::InvalidRecord("branch row"))?;
+                    let key = entry.key.clone();
+                    let read = if let Some(retained) = &mut retained {
+                        let position = available
+                            .iter()
+                            .position(|(id, _)| *id == child)
+                            .ok_or(ContentError::MissingObject)?;
+                        let (_, canonical) = available.remove(position);
+                        let read = self.decode_page(false, &canonical)?;
+                        retained.shrink(canonical.capacity());
+                        drop(canonical);
+                        read
+                    } else {
+                        self.read(child, false)?
+                    };
+                    self.check_child(page.level, &key, &read.wire)?;
+                    self.append_entry(
+                        &mut page,
+                        Entry {
+                            bytes: read.wire.bytes,
+                            key,
+                            id: Some(child),
+                            value: None,
+                            count: read.wire.count,
+                            size: read.wire.size,
+                            items: read.wire.entries.len(),
+                            pending: None,
+                        },
+                    )?;
+                }
+                start += chunk;
             }
         }
         let count = page.entries.iter().try_fold(0_u64, |total, entry| {
