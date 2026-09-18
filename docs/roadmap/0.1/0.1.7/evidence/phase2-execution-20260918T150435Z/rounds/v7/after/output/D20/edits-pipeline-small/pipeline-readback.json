@@ -1,0 +1,14 @@
+{
+  "name": "verify.readback",
+  "elapsed_ns": 417000,
+  "children": [
+    {
+      "name": "content.read",
+      "elapsed_ns": 416166,
+      "children": [
+        {"name": "content.acquire", "elapsed_ns": 413792, "children": []},
+        {"name": "content.emit", "elapsed_ns": 1708, "children": []}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+$ /Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/release/examples/measure_edits --mode c1 --case chunked --threshold-bytes 131072 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/rounds/v7/after/output/D11/edits-c1-chunked
+cwd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
+exit_code 0
+wall_s 0.015
+--- stdout ---
+mode: c1
+case: chunked
+threshold-bytes: 131072
+timing: on
+fixture: base 262144 bytes, 1 edit(s), 4096 replacement bytes
+stream: 1 edit(s), base 262144 -> final 262144 bytes
+base root: 3e428805690821ee9c1c6e3775de5fa8aa9b901fe20fb18c3136ea239cc8c14d
+result root: ca6c30a4355c63c3e3df39a478482cd57f80b5271885e48a573bbe34a031d6b7
+result length: 262144
+emitted: 3 objects, 4947 canonical bytes
+scope: base reads, the no-op comparison, construction and consumer waiting are inside file.edit
+exclusions: no database, pack, Store or file is opened in this mode
+--- timing tree (inclusive; overlapping spans add to nothing) ---
+file.edit  139.583us
+  edit.op  137.708us
+    edit.base  2.250us
+      edit.base_read  1.250us
+    edit.compare  28.458us
+      edit.compare.window  25.333us
+    edit.split  57.708us
+    edit.split  4.291us
+    edit.split  750ns
+    content.chunk  22.917us
+    edit.finish  4.458us
+timings: 11 nodes at 4 levels -> /Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/phase2-execution-20260918T150435Z/rounds/v7/after/output/D11/edits-c1-chunked/c1-edit.json
+wall_seconds: 0.002939
+--- stderr ---

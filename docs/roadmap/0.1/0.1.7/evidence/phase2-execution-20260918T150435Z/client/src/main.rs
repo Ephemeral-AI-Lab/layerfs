@@ -345,11 +345,22 @@ fn probe_c2(rows: usize, cache: &str) {
         total_bytes += object.canonical_len() as u64;
     }
 
-    if cache == "diagnostic-default-cache" || cache == "diagnostic-large-cache" {
+    if cache == "diagnostic-default-cache"
+        || cache == "diagnostic-large-cache"
+        || cache == "diagnostic-small-cache"
+    {
         let profile = if cache == "diagnostic-large-cache" {
             // The reference's profile: 32 MiB and spilling OFF.
             "PRAGMA journal_mode = MEMORY; PRAGMA synchronous = OFF; PRAGMA temp_store = MEMORY; \
              PRAGMA cache_size = -32768; PRAGMA cache_spill = OFF;"
+        } else if cache == "diagnostic-small-cache" {
+            // V7's live control for the spill counter (P0-2's `spillcontrol`,
+            // re-run in this directory): a deliberately tiny 8-page cache with
+            // spilling ON, the same row shape, one transaction. A nonzero value
+            // here is what makes a zero on the product's connection a
+            // measurement rather than a dead read.
+            "PRAGMA journal_mode = MEMORY; PRAGMA synchronous = OFF; PRAGMA temp_store = MEMORY; \
+             PRAGMA cache_size = 8; PRAGMA cache_spill = ON;"
         } else {
             // Core's declared profile as it stands: no cache_size, no cache_spill,
             // so SQLite's own defaults apply (2 MiB, spilling ON).
@@ -409,10 +420,13 @@ fn probe_c2(rows: usize, cache: &str) {
         for object in objects {
             operation.accept(object)?;
         }
+        // V7: the cache profile of the connection that performed the save, read
+        // back from that connection one statement before acknowledgement.
+        let profile = operation.connection_profile()?;
         let outcome = operation.finish(scope.child("storage.finish"))?;
-        Ok::<_, layerfs_storage::StorageError>((store, outcome))
+        Ok::<_, layerfs_storage::StorageError>((store, outcome, profile))
     });
-    let (store, outcome) = saved.expect("save");
+    let (store, outcome, profile) = saved.expect("save");
     let _ = &store;
     let elapsed = started.elapsed().as_nanos();
     println!(
@@ -434,6 +448,10 @@ fn probe_c2(rows: usize, cache: &str) {
         outcome.pool.groups,
         outcome.pool.delta_leaves,
         outcome.pool.trials,
+    );
+    println!(
+        "c2 save-connection profile page_size {} cache_size {} cache_spill {} mmap_size {} | note read back on the save's own connection by SaveOperation::connection_profile(); the page-cache spill counter is NOT here - reading SQLITE_DBSTATUS needs FFI and this crate allows unsafe in one audited module only (see V7's receipt)",
+        profile.page_size, profile.cache_size, profile.cache_spill, profile.mmap_size,
     );
     let connection = rusqlite::Connection::open(&store_path).expect("inspection connection");
     println!(

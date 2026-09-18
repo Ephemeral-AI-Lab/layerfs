@@ -64,7 +64,7 @@ def main():
     round_name, arm = sys.argv[1], sys.argv[2]
     sets = sys.argv[3:] or ["all"]
     if "all" in sets:
-        sets = ["build", "c1", "fs", "edits", "order", "extra", "v2", "c2", "diag"]
+        sets = ["build", "c1", "fs", "edits", "order", "c2-control", "extra", "v2", "c2", "diag"]
     round_dir = HERE / "rounds" / round_name / arm
     round_dir.mkdir(parents=True, exist_ok=True)
 
@@ -148,6 +148,14 @@ def main():
         # unchanged and the `case:` line is additive.
         run(round_dir, "M4", "edit-timing-c1-split",
             [str(CORE / "edit_timing_c1"), "--case", "split"])
+
+    if "c2-control" in sets:
+        # Y1 is V7's live control for the page-cache spill counter: the same
+        # single-row INSERT shape and one transaction on a harness-owned
+        # connection with a deliberately tiny 8-page cache. It is a *diagnostic*,
+        # never a gate sample (P0-2's `spillcontrol`, re-run here because the
+        # product cannot read SQLITE_DBSTATUS itself).
+        run(round_dir, "Y1", "c2-spill-control", [CLIENT, "c2", "20000", "diagnostic-small-cache"])
 
     if "extra" in sets:
         run(round_dir, "D27", "edit-timing-c1-nodes-read", [str(CORE / "edit_timing_c1")])

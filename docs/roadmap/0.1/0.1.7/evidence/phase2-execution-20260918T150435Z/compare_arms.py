@@ -51,10 +51,21 @@ BUILD_STEPS = ("B1", "B2")
 def main() -> int:
     before_dir, after_dir = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
     quiet = "--quiet" in sys.argv
-    before = {p.name: normalise(p.read_text()) for p in sorted((before_dir / "logs").glob("*.log"))
-              if not p.name.startswith(BUILD_STEPS)}
-    after = {p.name: normalise(p.read_text()) for p in sorted((after_dir / "logs").glob("*.log"))
-             if not p.name.startswith(BUILD_STEPS)}
+    # `--skip <prefix>`: steps that exist in one arm only because the harness
+    # gained them with the item (a new diagnostic row). Skipping is by name and
+    # reported, never silent.
+    skipped = []
+    if "--skip" in sys.argv:
+        skipped = sys.argv[sys.argv.index("--skip") + 1].split(",")
+    def keep(path):
+        return not path.name.startswith(BUILD_STEPS) and not any(
+            path.name.startswith(prefix) for prefix in skipped
+        )
+
+    before = {p.name: normalise(p.read_text()) for p in sorted((before_dir / "logs").glob("*.log")) if keep(p)}
+    after = {p.name: normalise(p.read_text()) for p in sorted((after_dir / "logs").glob("*.log")) if keep(p)}
+    if skipped:
+        print(f"steps skipped by name: {', '.join(skipped)} (harness rows added with the item)")
     moved = []
     missing = sorted(set(before) ^ set(after))
     for name in sorted(set(before) & set(after)):
