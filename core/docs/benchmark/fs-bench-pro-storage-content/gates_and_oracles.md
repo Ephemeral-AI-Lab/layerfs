@@ -125,7 +125,7 @@ oracle**, and it is stronger than a spot check because it covers the codec layer
 | `c2.delta.boundaries` | O1 + O3 | root matches at each grammar edge (0, 1, 8,191, 8,192, 16,384, 32,768, 32,769) | `chunks_emitted` matches the edge expectation | — |
 | `c2.reuse.workspace` | O1 + O5 | root matches | reuse counts match the profile | — |
 | `c2.footprint` | O6 + O1 | `pack_bodies <= database`; exactly one file; **no** `-wal`/`-shm`/`-journal` | — | retained bytes ×2.0 in canonical bytes |
-| `c2.read.waves` | O2 + O5 | readback byte-exact; emitted bytes equal requested | `opens` is 1 on the opening wave then 0 (**the O(1) claim**); `pages == ceil(ids / 128)` | **flat memory** |
+| `c2.read.waves` | O2 + O5 | readback byte-exact; emitted bytes equal requested | `opens` is 1 on the opening wave then 0 (**the O(1) claim**) — **but only through `StoreProvider::read_wave`** (`cas/provider.rs:143` computes `u64::from(opened)`); the direct `Store::read_batch` route reports `opens: 1` unconditionally (`cas/store.rs:294`), so this cell is ungateable on that route and the case must be driven through the provider. `pages == ceil(ids / 128)` | **flat memory** |
 | `c2.pool.cold-warm` | O1 + O3 | leaf identity matches; pooled row count matches | `PoolCounters` reuse counts; index entries ≤ 131,072 | cold vs warm reported separately, never pooled |
 | `pipeline.*` | O1 + O2 | end-to-end root and readback both match | C1 construction, handoff and save acknowledgement all counted | ×2.0 |
 
@@ -233,10 +233,16 @@ have no instrument yet:
 
 Also still open, and upstream of admissibility:
 
-- **the counter-attribution defects** — `SortedWork.pages_read` undercounts, and an
-  inner engine inside `Engine::apply_root` returns its work to nobody. A wrong
-  counter invalidates every row that cites it, so **these must be fixed before any
-  counter can gate anything**. Owner: to be assigned (Stage 6 or #178).
+- **the counter-attribution caveats — both re-verified, neither is an open blocker.**
+  `SortedWork.pages_read` no longer undercounts batched merges
+  (`filesystem/sorted/page.rs:277`; landed in Phase 1 with its receipt under
+  `../evidence/phase1-execution-20260918T090000Z/rounds/c1-rebaseline/`). The claim
+  that an inner engine inside `Engine::apply_root` returns its work to nobody does
+  **not reproduce**: the crate's only `Engine::<F>::new` is
+  `filesystem/sorted/finish.rs:33`, its work is returned at `finish.rs:109`, and
+  both callers aggregate it (`filesystem/update.rs:249-252`, `:361`). A counter
+  error would still invalidate every row citing it, so a *new* Stage 6 counter must be
+  attributable where it is charged — but nothing here blocks a row today.
 - `c2.delta.small-file`'s case list is still `TBD`.
 - the declared cardinality array depends on the tier-cut and boundary-family
   decisions still open in [`c1-families.md`](c1-families.md) §9 and

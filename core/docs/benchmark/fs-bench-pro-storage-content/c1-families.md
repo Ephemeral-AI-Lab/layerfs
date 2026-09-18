@@ -119,8 +119,14 @@ Retained fixture constant: `FILE_COUNT = 25_000`.
 
 ## 4. Boundary ladder (each row two-sided: accepted / refused)
 
-Every figure below is enforced by a named check in
-`core/crates/layerfs-content/src/filesystem/limits.rs` or the file-path policy.
+Every figure below is enforced by a named check **in product source**. About
+fourteen rows live in `core/crates/layerfs-content/src/filesystem/limits.rs`; the
+rest are spread across `src/policy.rs`, `file/cdc/gear.rs`,
+`file/mapping/types.rs`, `file/edit/{input,tree,compare}.rs`,
+`filesystem/objects.rs`, `filesystem/sorted/page.rs`,
+`filesystem/references/{reduce,runs}.rs` and `filesystem/root.rs`. **The value is
+what the registry pins; the location is documentation** — a constant-parity test
+must resolve each name, not read one file.
 
 | Surface | Constant | Value |
 | --- | --- | --- |
@@ -157,8 +163,10 @@ cannot be produced).
 
 **Correction (review S4/S5):** `BOUNDARY_{BELOW,EXACT,ABOVE}` are **not** product
 constants. They appear nowhere under `core/crates/*/src` and there is no `131_071`
-literal — the earlier claim that every figure in this table is "enforced by a named
-check in `limits.rs`" holds for the other constants but **not these three**. They are
+literal — and the earlier claim that every figure in this table is "enforced by a
+named check in `limits.rs`" was wrong **twice over**: the other constants are
+enforced, but mostly *not* in `limits.rs` (see §4's preamble), and **these three are
+not product constants at all**. They are
 harness-declared boundary points (they come from the v0.1.6 fixture algebra at
 `v016_common.rs:20-22`). The registry must pin them by golden file and mark them
 harness-declared; the constant-parity test cannot anchor them.
@@ -223,11 +231,18 @@ CDC or read family has nothing to hand off.
 | `edit_memory_probe` | exists | heap peak only; fixed fixture |
 | read-path vehicle (`read_all`/`read_range`/`FileView`) | **missing** | must be built |
 
-**Known counter caveats — validate before gating:** `SortedWork.pages_read` still
-undercounts batched merges (a third defect of the P1-11 family remains: an inner
-engine inside `Engine::apply_root` returns its work to nobody); `pages_reused`
-means *re-encoded to identical bytes*, which is **not** the COW claim —
-`untouched_subtrees` (referenced by identity, never read) is.
+**Counter caveats — status re-verified at the commit pinned in
+[`CONTRACT.md`](CONTRACT.md):** the earlier "`SortedWork.pages_read` still
+undercounts batched merges" caveat is **fixed** — `filesystem/sorted/page.rs:277`
+charges `pages_read += chunk` on the batched path, landed in Phase 1 with its
+receipt under `../evidence/phase1-execution-20260918T090000Z/rounds/c1-rebaseline/`.
+The companion claim that an inner engine inside `Engine::apply_root` returns its
+work to nobody is **not reproducible**: the crate's only `Engine::<F>::new` is
+`filesystem/sorted/finish.rs:33`, its work is returned at `finish.rs:109`, and
+both callers aggregate it (`filesystem/update.rs:249-252` and `:361`). The one
+caveat that stands is semantic, not a defect: `pages_reused` means *re-encoded to
+identical bytes*, which is **not** the COW claim — `untouched_subtrees` (referenced
+by identity, never read) is.
 
 ## 7. Memory and CPU
 

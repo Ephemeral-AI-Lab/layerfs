@@ -126,8 +126,8 @@ field called `memory`.
 
 - **macOS:** `proc_pid_rusage(pid, RUSAGE_INFO_V2, &mut info).ri_resident_size`.
 - **Linux:** `/proc/self/status` → `VmRSS:`.
-- **Prior art:** `benchmark/fs-bench-pro/src/main.rs:238-254` (macOS),
-  `:256-269` (Linux), struct at `:276-299`; 10 ms thread and receipt fields at
+- **Prior art:** `benchmark/fs-bench-pro/src/main.rs:239-254` (macOS),
+  `:257-269` (Linux), struct `DarwinRusageInfoV2` at `:279-299`; 10 ms thread and receipt fields at
   `src/workspace_bench.rs:344-415` (`nominal_interval_ns = 10_000_000`).
 - **Do not** use `ps -o rss= -p <pid>` (as `memory_ledger.rs:144-155` does today)
   for anything but boundary samples: it forks a process per sample, capping the
@@ -159,10 +159,12 @@ field called `memory`.
 - **Cost:** `mincore` over a 500 MB fixture is measurable work. Run it only where
   a case reads a file it just wrote (read and transition families), never on pure
   construction.
-- **Reuse:** `cold.py` is hard-coded to `init_namespace/namespace-100000`
-  (`:13-19`: `FIXTURE_DIGEST`, 100,000 files, 1,001 directories, 500,000,000 bytes,
-  `TARGET_NS = 2.7 s`). Generalizing = parameterize those constants and stamp a new
-  `contract`/`method` pair.
+- **Reuse:** `cold.py` is hard-coded to `init_namespace/namespace-100000`. Its
+  contract block is `:13-19` (`CONTRACT`, `METHOD`, `TARGET_NS = 2.7 s`,
+  `FIXTURE_DIGEST`, `MAX_LAUNCH_GAP_NS`, `METADATA_POLICY`); the fixture sizes it
+  asserts — 100,000 files, 1,001 directories, 500,000,000 bytes — are checked
+  against the receipt at `:134`, `:175`, `:200-201` and `:226-228`, not at `:13-19`.
+  Generalizing = parameterize those constants and stamp a new `contract`/`method` pair.
 
 ## 4. CPU — one syscall, two vantage points
 
@@ -201,7 +203,7 @@ reads, SQLite). That single ratio locates the run among C2's three cost centres.
 - **Sampler self-cost:** a 10 ms thread's CPU is charged to the process by
   `getrusage(RUSAGE_SELF)`. Declare `sampler_threads` in the receipt and run a
   **sampler-on/off control arm** — the same discipline the repo already applies to
-  timing (`--timing on|off`; `tests/timing.rs:193-229` proves recorded and
+  timing (`--timing on|off`; `tests/timing.rs:194-229` proves recorded and
   disabled runs produce identical bytes and counters).
 
 ## 5. Space — `stat` and pragmas
@@ -390,7 +392,7 @@ was built for a future adapter/transport integration that does not exist here.
 **(b) Nodes scale with phases, not with work units.** `MAX_NODES = 1024` is global
 per report. A 500 MB read is roughly 1,000 payload waves — one node per wave blows
 the budget. The product already behaves correctly (`SaveOperation::accept` creates
-no node; `tests/timing.rs:57-94` pins a 600-object save under 16 nodes) and the
+no node; `tests/timing.rs:58-80` pins a 600-object save under 16 nodes) and the
 harness must follow it.
 
 **(c) `MAX_LABEL_BYTES = 128`.** A clipped label marks the row incomplete, so keep
@@ -407,7 +409,7 @@ the row itself. All four existing vehicles already do
 ### 10.6 Control arm
 
 `--timing on|off` — `Timing::record` versus `Timing::disabled`. Disabled reads no
-clock and creates no nodes, and `tests/timing.rs:193-229` already proves the two
+clock and creates no nodes, and `tests/timing.rs:194-229` already proves the two
 produce **identical roots, counters and bytes**, so the arm is free. Report both.
 
 ### 10.7 Saving is the caller's job

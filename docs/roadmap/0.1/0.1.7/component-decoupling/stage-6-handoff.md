@@ -63,6 +63,12 @@ that owns the work you are doing:
 | `gates_and_oracles.md` | Gate classes G1-G7, oracle classes O1-O7, status vocabulary, and the bands. |
 | `implementation_estimate.md` | The file structure, the LOC estimate, the reuse ledger and experiments E1-E4. |
 
+**Read `CONTRACT.md` §11 before you trust any cited mechanism.** The specification was
+frozen at `686c6f140` but the product was re-verified at `f1bcf3789`, and Phase 1's
+`perf(core)` rounds landed in between. §11 carries the pin and a table of every claim
+they invalidated. **Re-verify a cited constant or mechanism at the commit you are
+actually measuring before you design a case around it.**
+
 The specification headers address themselves to two family sub-issues of #171:
 [#182](https://github.com/Ephemeral-AI-Lab/layerfs/issues/182) (C1 families) and
 [#183](https://github.com/Ephemeral-AI-Lab/layerfs/issues/183) (C2 families). They

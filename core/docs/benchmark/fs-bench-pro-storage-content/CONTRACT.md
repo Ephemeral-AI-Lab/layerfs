@@ -240,3 +240,38 @@ failures, `INELIGIBLE` rows and discarded attempts stay on disk with their exit 
 production count, and `core/tools/check_product_boundary.py:90-95` scans only
 `core/crates/*/src` and `core/crates/*/sql`. Every commit in Stage 6 reports
 `Production LOC: <unchanged> -> <unchanged> (delta 0)`.
+
+## 11. Errata and the verification pin
+
+This contract is never re-dated (§1's header). But the **product** moves, and a
+specification written against one commit silently becomes wrong about another. So
+the pin lives here, explicitly, and every correction is recorded rather than
+applied in place.
+
+```text
+specification frozen at   686c6f140   (2026-09-18, this directory + the family specs)
+product re-verified at    f1bcf3789   (2026-09-19)
+```
+
+An independent read-only review re-checked the specifications against the product at
+the verification commit: **every named public API still exists and is public**, every
+**numeric boundary is still right** (cutoff 131,072; chunks 8,192/16,384/32,768;
+4,096 edits; the walk, inode-leaf, branch, scratch, batch, transaction,
+`METADATA_INDEX_VALUES`, `READ_OBJECT_LIMIT` and `LOOKUP_PAGE_IDS` limits), the C2
+profile still holds, and the **35-test** sealed-oracle parity set is exact. Phase 1's
+`perf(core)` rounds landed *after* the freeze and changed two things the specs
+asserted:
+
+| # | The specification said | Verified at the pin | Corrected in |
+| --- | --- | --- | --- |
+| E1 | the C2 statement cost centre is "one statement per row" | **wrong since P2-2** — one multi-row `INSERT` per bound chunk, chunk derived from the engine's own limits and capped at 128; `SaveOutcome.statements` and `presence_queries` are the counters that move | `c2-families.md` §1 |
+| E2 | `SortedWork.pages_read` undercounts batched merges, and an inner engine in `Engine::apply_root` loses its work — both "must be fixed before counters can gate" | **first fixed by P1-11** (`sorted/page.rs:277`); **second does not reproduce** — the crate's only `Engine::<F>::new` is `sorted/finish.rs:33`, returned at `:109`, aggregated by both callers | `c1-families.md` §6, `c2-families.md` §7, `gates_and_oracles.md` §7 |
+| E3 | the cache ladder is three constants; the read counters are four fields; the `opens` gate is absolute | **short by one constant** (`DECODED_GROUP_CACHE_BYTES` = 512 KiB, P2-4), **short by five fields**, and **route-dependent** — `opens` is only 0 on the opening wave through `StoreProvider::read_wave` | `c2-families.md` §§1,4; `gates_and_oracles.md` §5 |
+
+**The instruction this leaves for Stage 6**: re-verify a cited constant or mechanism
+at the commit you are actually measuring before you design a case around it. The pin
+above is a checkpoint, not a promise — #178 and later work will move the product
+again, and a specification that cites a mechanism is only as current as its last
+verification. When you find drift, add it to this table; do not edit the prose
+silently.
+

@@ -26,8 +26,8 @@ tuning the wrong one:
 | Cost centre | Where it lives | Evidence |
 | --- | --- | --- |
 | **encode / hash / frame / assemble** | BLAKE3 identity re-verify, zstd level 3, group framing, pack assembly — CPU + malloc | `SaveOutcome.full_records`, `packs_created`, `pack_appends` |
-| **SQL statement + transaction shape** | one statement per row; a transaction per 8,191 rows / 4 MiB−1 | `SaveOutcome.commits`; **8,191 rows opens 31 transactions** |
-| **read path** | ceiling read, paged locator `SELECT`, chain resolve, windowed decode | `StoreReadCounters{opens, packs_read, edges, max_depth}` |
+| **SQL statement + transaction shape** | one **multi-row `INSERT` per bound chunk** — the chunk is derived from the linked engine's own limits and capped at 128 rows (`sqlite/write.rs:109,119-133`), so the counter is charged where the statement is issued, not inferred from the row count; plus a transaction per 8,191 rows / 4 MiB−1 | `SaveOutcome.statements` (the counter an INSERT-batching change moves), `SaveOutcome.presence_queries` (batched to one query per wave), `SaveOutcome.commits`; **8,191 rows opens 31 transactions** |
+| **read path** | ceiling read, paged locator `SELECT`, chain resolve, windowed decode | `StoreReadCounters{objects, packs_read, pages, ceiling, edges, max_depth, canonical_bytes, group_decodes, opens}` (`cas/store.rs:88-119`) |
 
 Two facts constrain every family below:
 
@@ -134,7 +134,7 @@ table rename — and `0 <= database` **passes** the O6 gate `pack_bodies <= data
 | Delta depth | `DEFAULT_{WHOLE_FILE,CHUNK,METADATA}_DELTA_MAX_DEPTH` | 8 / 4 / 8 (accepted 0..=50) |
 | Pooling | `VALUES_PER_GROUP` / `POOLED_LEAF_ROWS_LIMIT` | 165 / 100 |
 | Pool index | `METADATA_INDEX_VALUES` | **131,072** + wholesale reset |
-| Caches | `DEPENDENCY_PACK_CACHE_BYTES` / `POOLED_VALUE_CACHE_BYTES` / `METADATA_DECODED_WORK_LIMIT` | 4 MiB / 512 KiB / 32 MiB |
+| Caches | `DEPENDENCY_PACK_CACHE_BYTES` / `POOLED_VALUE_CACHE_BYTES` / `DECODED_GROUP_CACHE_BYTES` / `METADATA_DECODED_WORK_LIMIT` | 4 MiB / 512 KiB / 512 KiB / 32 MiB |
 | Match budget | `METADATA_MATCH_BUDGET_BYTES` | 128 KiB |
 | Cleanup page | `CLEANUP_PAGE_ROWS` | 128 |
 
@@ -243,11 +243,14 @@ is bounded, single-variable and measurable. Worth a Phase 2 item.
 
 Two smaller findings these families are likely to surface, also absent from the
 register. **No `VACUUM` exists anywhere in `core/`**, so the `.sqlite` never shrinks
-after `abandon` — a space finding rather than a speed one. And the two known
-counter-attribution defects — `SortedWork.pages_read` undercounting, and the inner
-engine inside `Engine::apply_root` returning its work to nobody — must be **fixed
-before counters can gate anything**, because a wrong counter invalidates every row
-that cites it.
+after `abandon` — a space finding rather than a speed one. And the two
+counter-attribution caveats an earlier revision listed here are **both resolved or
+unreproducible** at the verification commit (see the errata pin in
+[`CONTRACT.md`](CONTRACT.md)): `SortedWork.pages_read` no longer undercounts
+batched merges (`sorted/page.rs:277`), and the "inner engine inside
+`Engine::apply_root` returns its work to nobody" claim does not reproduce. A wrong
+counter would still invalidate every row citing it, so a *new* Stage 6 counter must
+be attributable at its charge site — but nothing here blocks a row today.
 
 ## 8. Explicit non-claims
 

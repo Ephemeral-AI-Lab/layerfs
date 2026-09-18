@@ -285,9 +285,10 @@ produces.
 
 `cold.py` currently applies to exactly one case in the whole v0.1.6 harness
 (`applies()` returns true only for `init_namespace / namespace-100000`) and
-hard-codes `CONTRACT`, `METHOD`, `TARGET_NS = 2.7 s`, `FIXTURE_DIGEST`,
-100,000 files / 1,001 directories / 500,000,000 bytes, and a fixed mtime
-(`:13-19`). Reusing it for a core case means **parameterizing those constants and
+hard-codes `CONTRACT`, `METHOD`, `TARGET_NS = 2.7 s`, `FIXTURE_DIGEST` and a fixed
+mtime in its contract block (`:13-19`), and checks the fixture sizes — 100,000 files,
+1,001 directories, 500,000,000 bytes — against the receipt at `:134`, `:175`,
+`:200-201` and `:226-228`. Reusing it for a core case means **parameterizing those constants and
 stamping a new `contract`/`method` pair** — not editing the existing one, and never
 relabelling an existing receipt.
 
