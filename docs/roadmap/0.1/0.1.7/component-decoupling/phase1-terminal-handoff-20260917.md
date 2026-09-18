@@ -6,14 +6,27 @@
 > its terminal condition. Phase 0 is complete; **Phase 2 is not yours** — do not
 > start it, do not tune a constant, do not touch a parked item.
 >
+> **How you work (owner instruction): you are a SINGLE agent in DeepSeek Harness
+> (DSH).** You must not launch, delegate to, or coordinate with any subagent —
+> no `subagent`, `subagent_fork`, workflow or similar tool is to be used for any
+> part of this assignment — and you must not invoke any external coding-agent or
+> AI CLI (`codex`, `claude`, or anything like them) for implementation,
+> verification or review. Every action is your own, through the harness's own
+> tools: `bash` for commands, the file tools for edits. Because you are alone,
+> your verification is **author-verification, and must be labelled as such** —
+> the honest evidence is the **reproducible receipt** (a command any reader can
+> re-run on the named tree to get the same counter), never your word. §2 and §5
+> define the single-agent verification protocol that replaces independent
+> reviewers.
+>
 > **Terminal condition (the only definition of done):** every prerequisite and
 > every P1-1..P1-16 box on #178 is closed by its own single-variable, measured
 > commit with an append-only receipt showing the counter movement its plan
 > section predicts; the 34-test sealed-oracle parity set is green and unchanged
-> throughout (except the two pre-authorized pinned updates); a closing
-> verification-subagent pass on the final tree returns zero open findings; the
-> documents record the final state; and the #178 boxes link their receipts. Work
-> iteratively until that holds.
+> throughout (except the two pre-authorized pinned updates); the closing
+> self-falsification pass (§5) on the final tree is complete with every check
+> answered; the documents record the final state; and the #178 boxes link their
+> receipts. Work iteratively until that holds.
 
 ## 1. Where you start
 
@@ -48,20 +61,50 @@ ROUND
          cursor — the fused-descent design for P1-7 was REJECTED because it
          would publish before an Equal verdict is known, breaking the
          zero-emission contract pinned at edit_noop.rs:82)
-  2  implement it exactly per its section in the plan + reports; one commit:
-     product change + its new tests + the pinned-test update if pre-authorized
-     + the architecture-doc update in the SAME commit + the LOC disclosure
+  2  implement it yourself, exactly per its section in the plan + reports; one
+     commit: product change + its new tests + the pinned-test update if
+     pre-authorized + the architecture-doc update in the SAME commit + the
+     LOC disclosure
   3  run the checks that cover the change (§4), plus the whole-core set
   4  collect the item's receipt: before (Phase 0 anchor / re-baseline) vs after,
      on the frozen workload set, into the append-only round directory
      docs/roadmap/0.1/0.1.7/evidence/phase1-execution-<stamp>/
-  5  launch a read-only verification subagent for the item (fresh context; its
-     only write is verify-<item>.md in the same directory); adjudicate every
-     finding at its path:line before acting on it
-  6  tick the #178 box with the receipt link; if a finding was real, remedy and
-     re-verify before ticking
+  5  run the SINGLE-AGENT VERIFICATION PROTOCOL on the item (below), and write
+     verify-<item>.md yourself, labelled "author-verified"
+  6  tick the #178 box with the receipt link; if any falsification check
+     failed, remedy and re-verify before ticking
   7  when the last box is ticked, run the closing pass (§5)
 ```
+
+### The single-agent verification protocol (replaces a second reviewer)
+
+Because no independent agent will check your work, the receipt must be strong
+enough that any reader can check it, and you must actively try to break your
+own change before ticking. For each item, in order:
+
+1. **Reproduce from a clean tree.** Export the committed tree to a fresh
+   directory (`git archive <commit> | tar -x -C /tmp/verify-<item>`), build
+   there with the Phase 0 identity discipline, run the frozen workload, and
+   confirm the after-counter. The receipt names the tree, the command and the
+   output — that trio is the evidence, not your assertion.
+2. **Falsify the change.** Work through the falsification list, recording each
+   answer in `verify-<item>.md`:
+   - the new test **fails on the parent tree** (check out or archive the
+     parent, run it, show the failure, return);
+   - the counter moved in the **predicted direction and rough magnitude**, and
+     the *other* counters on the same workload did not move unexplained;
+   - the parity set is green and `git diff <parent>..<commit> -- '*tests*'`
+     shows only the pre-authorized pin change (if any) and the new tests;
+   - the commit is single-variable (`git show --stat` touches only the plan's
+     files; nothing rides along);
+   - the error paths: the malformed input, the refusal, the empty case —
+     the item's plan section names its risks; probe each one;
+   - the elapsed column of your receipt is labelled diagnostic, never a gate.
+3. **Write `verify-<item>.md`** with: the label **author-verified** (never
+   "independent" — you wrote the code), every command with its exit code, the
+   falsification answers, and an explicit UNVERIFIED list for anything you
+   could not check. If a check cannot be performed in this environment, say so
+   rather than skipping it silently.
 
 Rules that make the loop honest:
 
@@ -78,9 +121,9 @@ Rules that make the loop honest:
 - **Gates are deterministic work counters, never elapsed.** Phase 0 proved
   bit-identical counter re-runs and a +17.6% same-binary elapsed spread —
   elapsed is diagnostic-only, labelled as such in every receipt.
-- **Never mark a box on your own word.** A box flips only when the receipt
-  exists and a verification subagent that did not write the code has reproduced
-  the counter movement through public entry points.
+- **Never mark a box on your own word.** A box flips only when the receipt is
+  reproducible by any reader (named tree + command + output), the falsification
+  list is answered in `verify-<item>.md`, and the closing pass (§5) confirms it.
 - **Never silently drop an item.** If an item turns out wrong or pointless,
   record it on #178 as measured-and-declined (or blocked) with the receipt and
   the reason — the plan's targets are hypotheses the receipts confirm or
@@ -97,11 +140,12 @@ sketch, tests and verification. The receipt for each box must show, at minimum:
 - the counter moving in the **predicted direction and rough magnitude** (e.g.
   P1-5: forced-64 per-doubling `rows_read` ×3.0 → ~×2.1–2.4; P1-13:
   `merges` 61 → ~half-scale; P1-2: V3's opens O(waves) → O(1); P1-14: the
-  counting-allocator peak ≤ ~2n);
-- the new test passing **and failing on the pre-item tree** (demonstrate once
-  per item: check out the parent, run the new test, show it fail, return);
+  counting-allocator peak ≤ ~2n; P1-7: D27 `nodes_read` 9 → ≈7);
+- the new test passing **and failing on the pre-item tree** (falsification
+  check 2a — the failure run is part of the receipt);
 - the parity set green; the eight checks green; the LOC line in the commit
-  message; the architecture-doc update in the same commit.
+  message; the architecture-doc update in the same commit;
+- the completed `verify-<item>.md`, labelled author-verified.
 
 Special cases:
 
@@ -109,8 +153,9 @@ Special cases:
   affected Phase 0 rows (the old values stay, labelled inflated ×2 for batch
   reads).
 - **P1-12** has no counter: its commit shows the incremental-arithmetic
-  argument in the message, cites the loop, and its "receipt" is the
-  review-subagent's verification of the invariant — say so plainly on #178.
+  argument in the message, cites the loop, and its `verify-<item>.md` records
+  the invariant argument and the loop's line citations — say so plainly on
+  #178.
 - **P1-16** delivers documentation + a high-ceiling boundary test; **changing
   the default pending ceiling is an owner ruling on #178, not yours.**
 - **P1-4** must demonstrate `entries_examined` bit-identical and pin the
@@ -135,14 +180,31 @@ respects the measurement lock (run alone), fresh outputs, one sample per
 workload, and the Phase 0 contract's identity discipline (clean tree, release
 profile, `+1.85.1`, `--locked`, one worker).
 
-## 5. The closing pass
+## 5. The closing pass (self-falsification, single agent)
 
-When the last box is ticked: launch closing verification subagents — one per
-plan group (prerequisites, navigation+validate, edit path, ordering), one over
-the receipts as a whole, and one falsifier that tries to break the terminal
-condition (any box without a receipt, any receipt whose counter does not show
-the claimed movement, any parity test quietly changed, any bundled commit, any
-elapsed figure quoted as a gate). Adjudicate everything; remedy; re-verify.
+When the last box is ticked, perform the closing pass yourself — no subagents.
+Each check gets a written answer in `closing-pass.md` in the final round's
+evidence directory:
+
+1. **Boxes ↔ receipts:** every prerequisite and P1 box on #178 links a receipt;
+   every receipt links a box; nothing is ticked without one.
+2. **Counter re-run:** on the final tree, re-run the full frozen workload set
+   once and tabulate every item's before → after counter beside its plan
+   prediction; any counter that did not move as predicted is flagged and
+   reconciled (the plan's targets are hypotheses — a refuted one is recorded,
+   not explained away).
+3. **Parity audit:** `git diff <phase1-start>..<final> -- '*tests*'` contains
+   only the two pre-authorized pin updates and the new tests; the sealed-oracle
+   set green; `git diff --stat` over product files matches the plan's file map.
+4. **Commit audit:** every commit in the range is single-variable, carries its
+   LOC disclosure (re-run `tools/production_loc.py` on a sample of three and
+   compare), and carries its architecture-doc update.
+5. **Gate audit:** grep the receipts for any elapsed figure quoted as a gate;
+   grep for any counter "fixed" outside C1; confirm every verification file is
+   labelled author-verified.
+6. **Scope audit:** no Phase 2 change, no parked item, no default change, no
+   worker/timeout/cache tuning anywhere in the range.
+
 Then: update the plan document with the final counter table (before → after
 per item), post the summary on #178, and **stop** — Phase 2 is not started by
 this handoff.
@@ -157,8 +219,13 @@ outcome; a green-looking checklist with an unresolved item is not.
 
 ## 7. Anti-patterns that will fail the closing pass
 
+- Launching or delegating to any subagent, or invoking any external agent CLI
+  (`codex`, `claude`, or similar) — this assignment is single-agent by owner
+  instruction.
 - Ticking a box from a passing suite or an attractive diff instead of the
   counter receipt.
+- Calling your own verification "independent" — it is author-verified by
+  construction; the receipt's reproducibility is the evidence.
 - Quoting elapsed nanoseconds as a gate.
 - Bundling two items into one commit, or "fixing" a counter so a number looks
   better (C1 is the only authorized counter-semantics change, and it
