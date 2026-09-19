@@ -2,11 +2,16 @@
 
 mod support;
 
+use layerfs_content::filesystem::directory::codec::{encode_directory_page, DirectoryPage};
+use layerfs_content::filesystem::inode::codec::{encode_inode_page, InodePage};
+use layerfs_content::filesystem::root::{
+    profile_id, scope_for_seed, FilesystemRoot, FilesystemRootId,
+};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::filesystem::{DirectoryUpdate, InodeUpdate, LogicalPath, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
-use layerfs_content::{ContentError, ObjectId};
-use support::filesystem::{synthetic, value, Session};
+use layerfs_content::{ContentError, ObjectId, ObjectRole};
+use support::filesystem::{synthetic, value, Session, TreeStore};
 
 fn name(value: &str) -> PathName {
     PathName::new(value).expect("name")
@@ -174,6 +179,91 @@ fn an_unbound_name_is_not_provider_absence() {
     assert_ne!(
         missing, unbound,
         "provider absence and an unbound name must not be the same answer"
+    );
+}
+
+/// A serial a directory binds and the inode table does not hold is a **logical**
+/// absence, and this is the test that says which class it is.
+///
+/// `FilesystemRead::inode` answered it with `MissingObject`, which `error.rs`
+/// reserves for the provider and for nothing else. The two classes come from
+/// different layers and they are not the same answer:
+///
+/// * a serial the table does not hold is a **lookup miss** — `inode::read::lookup`
+///   returns `Ok(None)` for it, and its own module doc says so: *"an absent serial is
+///   reported as absent rather than as a missing object"*;
+/// * a provider that does not hold an object the walk names is `Err(MissingObject)`
+///   from the reader itself, and it never reaches the line this test is about.
+///
+/// The tree is built by hand because no public operation can produce it:
+/// `validate.rs` refuses a directory binding with no inode record
+/// (`InvalidRecord("directory bindings missing")`), which is why this class had to be
+/// pinned by a test rather than observed. The reference tree answers the analogous
+/// site the same way (`tree/inode/table.rs`: `inode_record_lookup(...)?`
+/// `.ok_or(CoreError::PathNotFound)?`).
+#[test]
+fn a_serial_the_table_lacks_is_not_provider_absence() {
+    // The directory binds `x` to a serial the inode table will not hold. The table
+    // holds the root inode and nothing else, so the miss is a serial above its
+    // maximum rather than a page that could not be read.
+    const BOUND: u64 = 7;
+    let scope = scope_for_seed([0x5a; 32]);
+    let mut store = TreeStore::new();
+    let directory_root = store.insert(
+        ObjectRole::DirectoryLeaf,
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: vec![(name("x"), BOUND)],
+        })
+        .expect("a one-row directory page encodes"),
+    );
+    let table_root = store.insert(
+        ObjectRole::InodeLeaf,
+        encode_inode_page(&InodePage::Leaf {
+            entries: vec![(
+                1,
+                value(
+                    InodeKind::Directory,
+                    directory_root,
+                    synthetic("read/root-metadata"),
+                ),
+            )],
+        })
+        .expect("a one-row inode page encodes"),
+    );
+    let root = store.insert(
+        ObjectRole::FilesystemRoot,
+        FilesystemRoot::new(profile_id(), scope, 1, table_root)
+            .expect("a root over its own table")
+            .encode()
+            .expect("the root encodes"),
+    );
+
+    // The walk reads the root, finds `x` bound, and demands an inode record the
+    // table does not hold. That is an absent inode, not an absent object.
+    let mut read = layerfs_content::filesystem::FilesystemRead::new(&store, FilesystemRootId(root))
+        .expect("the root is present, so the reader opens");
+    let absent = read
+        .stat(&LogicalPath::new("x").unwrap())
+        .expect_err("a serial the table lacks must not resolve");
+    assert_eq!(
+        absent,
+        ContentError::PathNotFound,
+        "a serial the inode table does not hold is a logical absence"
+    );
+
+    // The other class, in the same test: a provider that does not hold the tree's
+    // own root object. Matched rather than `expect_err`, because `FilesystemRead`
+    // is deliberately not `Debug`.
+    let empty = TreeStore::new();
+    let missing =
+        match layerfs_content::filesystem::FilesystemRead::new(&empty, FilesystemRootId(root)) {
+            Ok(_) => panic!("an empty provider cannot serve the root"),
+            Err(error) => error,
+        };
+    assert_eq!(missing, ContentError::MissingObject);
+    assert_ne!(
+        missing, absent,
+        "provider absence and an inode the table lacks must not be the same answer"
     );
 }
 

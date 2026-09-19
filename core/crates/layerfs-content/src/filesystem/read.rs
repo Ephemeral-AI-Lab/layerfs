@@ -273,8 +273,24 @@ impl<'a> FilesystemRead<'a> {
         }
     }
 
+    /// Reads one inode record the walk demands.
+    ///
+    /// A serial the table does not hold is a **logical** absence, not provider
+    /// absence: the lookup miss is `Ok(None)` from
+    /// [`inode_lookup`](crate::filesystem::inode::read::lookup), whose own contract
+    /// is that *"an absent serial is reported as absent rather than as a missing
+    /// object"*. `MissingObject` is the provider's answer and for nothing else —
+    /// `object::access`, `cas::provider` and `error.rs` all say so — and a provider
+    /// that does not hold an object this walk names never reaches this line: it
+    /// returns `Err(MissingObject)` from the read itself.
+    ///
+    /// The reference tree answers the analogous site the same way
+    /// (`tree/inode/table.rs`). This layer holds no completeness proof for the tree
+    /// it walks — a resolve reads one path component at a time and never loads the
+    /// whole inode table — so it is not entitled to call a lookup miss a torn tree;
+    /// that judgement belongs where inputs are checked, in `validate`.
     fn inode(&mut self, table: InodeTable, serial: u64) -> ContentResult<InodeValue> {
         inode_lookup(self.reader, table, serial, &mut self.work.inode)?
-            .ok_or(ContentError::MissingObject)
+            .ok_or(ContentError::PathNotFound)
     }
 }
