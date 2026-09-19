@@ -17,11 +17,9 @@
 
 use std::path::{Path, PathBuf};
 
-use layerfs_content::{
-    construct_bytes, ConstructionPolicy, ConstructionCapacities, ObjectId,
-};
+use layerfs_content::{construct_bytes, ConstructionCapacities, ConstructionPolicy, ObjectId};
 use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
-use layerfs_telemetry::timer::{Active, Timing, TimingScope, TimingReport};
+use layerfs_telemetry::timer::{Active, Timing, TimingReport, TimingScope};
 
 use super::{seed_of, OpContext, OpError, OpOutcome, Phase};
 use crate::fixture;
@@ -29,8 +27,8 @@ use crate::gates::{self, Gate, GateClass};
 use crate::registry::{Case, DeltaOp, FootprintOp, LifecycleStep, ReuseOp};
 use crate::support::instruments;
 use crate::support::trace::Kind;
-use crate::workload::oracle::{self, Expectation};
 use crate::workload::artifact::{Artifact, Member, Values};
+use crate::workload::oracle::{self, Expectation};
 use crate::workload::providers::TreeStore;
 
 /// The declared copy rung and its allocation attribution.
@@ -81,7 +79,13 @@ fn objects_of(bytes: &[u8]) -> Result<(TreeStore, ObjectId), OpError> {
     let capacities: ConstructionCapacities = policy.capacities();
     let mut store = TreeStore::new();
     let (result, _) = Timing::disabled("setup.construct", |scope: &TimingScope<'_, Active>| {
-        construct_bytes(policy, &capacities, bytes, &mut store, scope.child("content"))
+        construct_bytes(
+            policy,
+            &capacities,
+            bytes,
+            &mut store,
+            scope.child("content"),
+        )
     });
     let file = result.map_err(|error| OpError::Product(format!("{error:?}")))?;
     Ok((store, file.root))
@@ -96,9 +100,16 @@ pub(super) fn open_untimed(path: &Path) -> Result<Store, OpError> {
 }
 
 /// Creates a Store without a timer and saves `objects` into it.
-pub(super) fn create_and_save_untimed(path: &Path, objects: &TreeStore) -> Result<SaveOutcome, OpError> {
+pub(super) fn create_and_save_untimed(
+    path: &Path,
+    objects: &TreeStore,
+) -> Result<SaveOutcome, OpError> {
     let (result, _) = Timing::disabled("setup.store", |scope: &TimingScope<'_, Active>| {
-        let store = Store::create(path, StoragePolicy::frozen_default(), scope.child("store.create"))?;
+        let store = Store::create(
+            path,
+            StoragePolicy::frozen_default(),
+            scope.child("store.create"),
+        )?;
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
         for id in objects.insertion_order() {
             let object = objects
@@ -118,12 +129,13 @@ pub(super) fn create_and_save_untimed(path: &Path, objects: &TreeStore) -> Resul
 /// charged to `acquisition_wall_ns`, which is a subset of `preparation_wall_ns`:
 /// the copy is preparation, and it is also the one part of preparation the rules
 /// single out by name.
-pub(super) fn prepare_sample(base: &Path, sample: &Path) -> Result<instruments::DeWarmReport, OpError> {
+pub(super) fn prepare_sample(
+    base: &Path,
+    sample: &Path,
+) -> Result<instruments::DeWarmReport, OpError> {
     let started = std::time::Instant::now();
-    std::fs::copy(base, sample).map_err(|error| {
-        OpError::Io(format!("{} -> {}: {error}", base.display(), sample.display()))
-    })?;
-    // `std::fs::copy` copies the source's permission bits, and a sealed master is
+    byte_copy(base, sample)?;
+    // A byte copy carries the source's permission bits, and a sealed master is
     // 0o444 by construction (`test_setup_and_cache_discipline.md` section 3). The
     // sample is the row's own writable copy — section 4 step 4 of the same document
     // is `chmod 0600` — so the copy is made writable here rather than left as a
@@ -133,6 +145,73 @@ pub(super) fn prepare_sample(base: &Path, sample: &Path) -> Result<instruments::
         instruments::de_warm(sample).map_err(|error| OpError::Io(format!("de-warm: {error}")))?;
     crate::support::phases::add_acquisition(started.elapsed().as_nanos() as u64);
     Ok(report)
+}
+
+/// One **independent byte copy** of the master, and never a clone.
+///
+/// `test_setup_and_cache_discipline.md` section 4 names the mechanism in as many
+/// words — *"`shutil.copyfileobj` with a 1 MiB buffer — **an independent byte copy,
+/// deliberately not an APFS clone**"* — and this function used to call
+/// `std::fs::copy`, which on APFS **is** a clone. Measured on this host with a
+/// 136,716,288-byte master:
+///
+/// ```text
+/// std::fs::copy        136716288 bytes in   857 us   159.5 GB/s   36 KiB of free space consumed
+/// shutil.copyfileobj   136716288 bytes in 0.166 s     0.82 GB/s  133 MiB of free space consumed
+/// ```
+///
+/// 159 GB/s is not a copy, and 36 KiB is not the file. The consequence was not a
+/// wrong number but a **false declaration**: every C2 row published
+/// `copy_rung: closed-quiescent-byte-copy` and `allocation_attribution: exclusive`
+/// while sharing extents with its master, and section 4.2 forbids exactly that rung
+/// for `c2.footprint` and for any row gating allocated bytes, because a clone's
+/// `st_blocks` double-counts blocks shared with the master. The mechanism is
+/// permitted; the undeclared one is not.
+///
+/// The steps below are section 4's, in its order: a 1 MiB buffered copy, a flush and
+/// an `fsync`, and the inode-alias refusal. `PRAGMA quick_check` is the one step this
+/// harness cannot take — it links no SQLite — and `Store::open`'s own watermark
+/// refusal is the integrity gate it has instead, as section 3.1 records.
+fn byte_copy(source: &Path, destination: &Path) -> Result<(), OpError> {
+    use std::io::{Read, Write};
+
+    let mut from = std::fs::File::open(source)
+        .map_err(|error| OpError::Io(format!("{}: {error}", source.display())))?;
+    let mut to = std::fs::File::create(destination)
+        .map_err(|error| OpError::Io(format!("{}: {error}", destination.display())))?;
+    let mut buffer = vec![0_u8; 1 << 20];
+    loop {
+        let read = from
+            .read(&mut buffer)
+            .map_err(|error| OpError::Io(format!("{}: {error}", source.display())))?;
+        if read == 0 {
+            break;
+        }
+        to.write_all(&buffer[..read])
+            .map_err(|error| OpError::Io(format!("{}: {error}", destination.display())))?;
+    }
+    to.flush()
+        .map_err(|error| OpError::Io(format!("{}: {error}", destination.display())))?;
+    to.sync_all()
+        .map_err(|error| OpError::Io(format!("{}: {error}", destination.display())))?;
+    // Section 4 step 6: a sample that aliases its master's inode is not a copy. It
+    // cannot happen through this function — and that is the point of asserting it,
+    // because it *did* happen through the one this replaced.
+    let master = std::fs::metadata(source)
+        .map_err(|error| OpError::Io(format!("{}: {error}", source.display())))?;
+    let copy = std::fs::metadata(destination)
+        .map_err(|error| OpError::Io(format!("{}: {error}", destination.display())))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if (master.dev(), master.ino()) == (copy.dev(), copy.ino()) {
+            return Err(OpError::Io(format!(
+                "sample aliases master inode: {}",
+                destination.display()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Makes one file owner-readable and owner-writable, refusing anything else.
@@ -171,7 +250,11 @@ pub(super) fn sidecar_gates(path: &Path) -> Vec<Gate> {
                 GateClass::Cleanup,
                 "g5.no-sidecars",
                 !present,
-                &format!("{}: {}", sidecar.display(), if present { "present" } else { "absent" }),
+                &format!(
+                    "{}: {}",
+                    sidecar.display(),
+                    if present { "present" } else { "absent" }
+                ),
                 "no -wal, -shm or -journal sidecar",
             )
         })
@@ -223,7 +306,9 @@ pub fn lifecycle(
         };
         let de_warm = prepare_sample(&master, &sample)?;
         gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-        gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+        gates.push(crate::gates::attribution_gate(
+            crate::gates::Attribution::Exclusive,
+        ));
     }
 
     instruments::heap_begin();
@@ -231,7 +316,11 @@ pub fn lifecycle(
         match step {
             LifecycleStep::Create => {
                 let store = Store::create(&sample, policy, scope.child("store.create"))?;
-                Ok::<_, layerfs_storage::StorageError>((store.path().display().to_string(), 0_i128, 0_i128))
+                Ok::<_, layerfs_storage::StorageError>((
+                    store.path().display().to_string(),
+                    0_i128,
+                    0_i128,
+                ))
             }
             LifecycleStep::Open => {
                 let store = Store::open(&sample, scope.child("store.open"))?;
@@ -295,8 +384,20 @@ pub fn lifecycle(
         Some((path, second)) => (path.to_string(), Some(second.to_string())),
         None => (store_path.clone(), None),
     };
-    context.trace.write(Kind::Receipt, "store_path", &store_path, "", "the path the operation used")?;
-    context.trace.write(Kind::Receipt, "master_source", &master_source, "", "where the sample copy came from")?;
+    context.trace.write(
+        Kind::Receipt,
+        "store_path",
+        &store_path,
+        "",
+        "the path the operation used",
+    )?;
+    context.trace.write(
+        Kind::Receipt,
+        "master_source",
+        &master_source,
+        "",
+        "where the sample copy came from",
+    )?;
     if let Some(second) = &second_begin {
         context.trace.write(
             Kind::Oracle,
@@ -306,10 +407,34 @@ pub fn lifecycle(
             "a second exclusive acquisition on the same Store",
         )?;
     }
-    context.trace.write_number(Kind::Counter, "lifecycle.first", first, "count", "objects or inserted, per step")?;
-    context.trace.write_number(Kind::Counter, "lifecycle.second", second, "count", "commits or pending bytes, per step")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "lifecycle.first",
+        first,
+        "count",
+        "objects or inserted, per step",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "lifecycle.second",
+        second,
+        "count",
+        "commits or pending bytes, per step",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     gates.push(gates::require(
@@ -338,7 +463,11 @@ pub fn lifecycle(
             format!("master_source: {master_source}"),
             format!(
                 "store_state: {}",
-                if step == LifecycleStep::Create { "created-in-sample" } else { "opened-from-copy" }
+                if step == LifecycleStep::Create {
+                    "created-in-sample"
+                } else {
+                    "opened-from-copy"
+                }
             ),
             format!("copy_rung: {COPY_RUNG}"),
             format!("allocation_attribution: {ATTRIBUTION}"),
@@ -382,7 +511,11 @@ fn reuse_member_bytes(op: ReuseOp, index: u32, member_bytes: u64, seed: u64) -> 
 }
 
 /// C2-2 `prepare`: acquire the member set once, with every expectation it gates.
-fn reuse_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn reuse_prepare(
+    case: &Case,
+    op: ReuseOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     let directory = context.artifact_directory()?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
@@ -410,8 +543,20 @@ fn reuse_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
     artifact
         .seal(&directory, case.id)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
-    context.trace.write_number(Kind::Counter, "prepare.objects", written as i128, "objects", "distinct canonical objects the artifact holds")?;
-    context.trace.write_number(Kind::Counter, "prepare.members", artifact.members.len() as i128, "members", "member set the artifact declares")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.members",
+        artifact.members.len() as i128,
+        "members",
+        "member set the artifact declares",
+    )?;
     Ok(OpOutcome {
         gates: Vec::new(),
         notes: vec![
@@ -458,7 +603,9 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
     create_and_save_untimed(&base, &TreeStore::new())?;
     let de_warm = prepare_sample(&base, &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -493,15 +640,69 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
     };
     let expected_reused = accepted - distinct.len() as u64;
 
-    context.trace.write_number(Kind::Counter, "reuse.accepted", accepted as i128, "objects", "harness-declared member set")?;
-    context.trace.write_number(Kind::Counter, "reuse.distinct", distinct.len() as i128, "objects", "harness-declared member set")?;
-    context.trace.write_number(Kind::Counter, "reuse.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "reuse.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "reuse.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
-    context.trace.write_number(Kind::Counter, "reuse.statements", i128::from(outcome.statements), "statements", "SaveOutcome.statements")?;
-    context.trace.write_number(Kind::Counter, "reuse.presence_queries", i128::from(outcome.presence_queries), "queries", "SaveOutcome.presence_queries")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.accepted",
+        accepted as i128,
+        "objects",
+        "harness-declared member set",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.distinct",
+        distinct.len() as i128,
+        "objects",
+        "harness-declared member set",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.reused",
+        i128::from(outcome.reused),
+        "objects",
+        "SaveOutcome.reused",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.commits",
+        i128::from(outcome.commits),
+        "transactions",
+        "SaveOutcome.commits",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.statements",
+        i128::from(outcome.statements),
+        "statements",
+        "SaveOutcome.statements",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "reuse.presence_queries",
+        i128::from(outcome.presence_queries),
+        "queries",
+        "SaveOutcome.presence_queries",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     let equation = match op {
@@ -561,10 +762,9 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
                 gates,
             ));
         };
-        if !pairs
-            .iter()
-            .any(|(seen, seen_expectation)| *seen == member.root && *seen_expectation == expectation)
-        {
+        if !pairs.iter().any(|(seen, seen_expectation)| {
+            *seen == member.root && *seen_expectation == expectation
+        }) {
             pairs.push((member.root, expectation));
         }
     }
@@ -586,9 +786,9 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
     }
     let covered = artifact.members.iter().all(|member| {
         member.expectation.is_some_and(|expectation| {
-            pairs
-                .iter()
-                .any(|(seen, seen_expectation)| *seen == member.root && *seen_expectation == expectation)
+            pairs.iter().any(|(seen, seen_expectation)| {
+                *seen == member.root && *seen_expectation == expectation
+            })
         })
     });
     context.trace.write_number(
@@ -607,7 +807,11 @@ fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<O
         GateClass::Correctness,
         "g1.o1-member-readback",
         oracle_ok && covered,
-        if oracle_note.is_empty() { &summary } else { &oracle_note },
+        if oracle_note.is_empty() {
+            &summary
+        } else {
+            &oracle_note
+        },
         "every member's logical bytes are recoverable after the save",
     ));
     gates.extend(sidecar_gates(&sample));
@@ -660,7 +864,11 @@ fn base_file_seed(seed: u64, index: u32) -> u64 {
 /// base the Store already holds and the additions are fixtures. The registry
 /// declares `Preparation::BaseStore`, so the base Store, the addition set and every
 /// addition's expectation are acquired once.
-pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+pub fn workspace(
+    case: &Case,
+    op: ReuseOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     match context.phase {
         Phase::Prepare => workspace_prepare(case, op, context),
         Phase::Perf => workspace_perf(case, op, context),
@@ -696,7 +904,11 @@ fn workspace_member_bytes(
 }
 
 /// C2-4 `prepare`: acquire the base Store and the addition set once.
-fn workspace_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn workspace_prepare(
+    case: &Case,
+    op: ReuseOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     let directory = context.artifact_directory()?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
@@ -737,16 +949,32 @@ fn workspace_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> R
     artifact.members = list;
     artifact.values.set_scalar("members", u64::from(members));
     artifact.values.set_scalar("member_bytes", member_bytes);
-    artifact.values.set_scalar("base_files", u64::from(base_files));
-    artifact.values.set_scalar("base_objects", base_store.len() as u64);
+    artifact
+        .values
+        .set_scalar("base_files", u64::from(base_files));
+    artifact
+        .values
+        .set_scalar("base_objects", base_store.len() as u64);
     let written = artifact
         .write(&directory)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
     artifact
         .seal(&directory, case.id)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
-    context.trace.write_number(Kind::Counter, "prepare.objects", written as i128, "objects", "distinct canonical objects the artifact holds")?;
-    context.trace.write_number(Kind::Counter, "prepare.members", artifact.members.len() as i128, "members", "member set the artifact declares")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.members",
+        artifact.members.len() as i128,
+        "members",
+        "member set the artifact declares",
+    )?;
     Ok(OpOutcome {
         gates: Vec::new(),
         notes: vec![
@@ -761,7 +989,11 @@ fn workspace_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> R
 }
 
 /// C2-4 `perf`: the measured save against the prepared base Store.
-fn workspace_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn workspace_perf(
+    case: &Case,
+    op: ReuseOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     context.create_output()?;
     let mut gates = Vec::new();
     let directory = context.artifact_directory()?;
@@ -795,7 +1027,9 @@ fn workspace_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resu
     let sample = context.output.join("sample.sqlite");
     let de_warm = prepare_sample(&Artifact::store_path(&directory), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -822,16 +1056,76 @@ fn workspace_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resu
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
-    context.trace.write_number(Kind::Counter, "workspace.base_files", base_files as i128, "files", "harness-declared base file count")?;
-    context.trace.write_number(Kind::Counter, "workspace.base_objects", base_objects as i128, "objects", "objects the base Store already held")?;
-    context.trace.write_number(Kind::Counter, "workspace.accepted", accepted as i128, "objects", "harness-declared addition set")?;
-    context.trace.write_number(Kind::Counter, "workspace.distinct", distinct.len() as i128, "objects", "harness-declared addition set")?;
-    context.trace.write_number(Kind::Counter, "workspace.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "workspace.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "workspace.packs_created", i128::from(outcome.packs_created), "packs", "SaveOutcome.packs_created")?;
-    context.trace.write_number(Kind::Counter, "workspace.statements", i128::from(outcome.statements), "statements", "SaveOutcome.statements")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.base_files",
+        base_files as i128,
+        "files",
+        "harness-declared base file count",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.base_objects",
+        base_objects as i128,
+        "objects",
+        "objects the base Store already held",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.accepted",
+        accepted as i128,
+        "objects",
+        "harness-declared addition set",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.distinct",
+        distinct.len() as i128,
+        "objects",
+        "harness-declared addition set",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.reused",
+        i128::from(outcome.reused),
+        "objects",
+        "SaveOutcome.reused",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.packs_created",
+        i128::from(outcome.packs_created),
+        "packs",
+        "SaveOutcome.packs_created",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "workspace.statements",
+        i128::from(outcome.statements),
+        "statements",
+        "SaveOutcome.statements",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     // The declared equation, per kind. An `exact` addition carries only identities
@@ -849,18 +1143,13 @@ fn workspace_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resu
         equation,
         &format!(
             "reused {} of {accepted} accepted, {} inserted ({} base files, {} base objects)",
-            outcome.reused,
-            outcome.inserted,
-            base_files,
-            base_objects
+            outcome.reused, outcome.inserted, base_files, base_objects
         ),
         match op {
             ReuseOp::Identical => {
                 "exact profile: every accepted object is an identity the base already holds"
             }
-            ReuseOp::Unique | ReuseOp::Base128 => {
-                "unique profile: nothing in the base is reused"
-            }
+            ReuseOp::Unique | ReuseOp::Base128 => "unique profile: nothing in the base is reused",
             ReuseOp::Local => "local profile: some objects are reused, not all",
         },
     ));
@@ -900,7 +1189,11 @@ fn workspace_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resu
             GateClass::Correctness,
             "g1.o1-addition-presence",
             present.len() == distinct.len(),
-            &format!("{} of {} distinct pinned addition roots present", present.len(), distinct.len()),
+            &format!(
+                "{} of {} distinct pinned addition roots present",
+                present.len(),
+                distinct.len()
+            ),
             "every addition root the recipe declares is present after the save",
         )),
         Err(error) => gates.push(Gate::incomplete(
@@ -1003,7 +1296,14 @@ fn delta_fixture(
             expectation: None,
         });
     }
-    Ok((base, Artifact { objects, members: list, values: Values::new() }))
+    Ok((
+        base,
+        Artifact {
+            objects,
+            members: list,
+            values: Values::new(),
+        },
+    ))
 }
 
 /// C2-3 `prepare`: acquire the fixture once and write the artifact.
@@ -1012,7 +1312,11 @@ fn delta_fixture(
 /// invocation; this one writes the acquisition record beside the artifact, and the
 /// runner publishes its wall as `acquisition_wall_ns` outside the row's admission
 /// decision, exactly as owner decision D2 requires.
-fn delta_prepare(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn delta_prepare(
+    case: &Case,
+    op: DeltaOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     let directory = context.artifact_directory()?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
@@ -1078,7 +1382,9 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
     let sample = context.output.join("sample.sqlite");
     let de_warm = prepare_sample(&Artifact::store_path(&directory), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -1105,17 +1411,83 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
-    context.trace.write_number(Kind::Counter, "delta.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "delta.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "delta.full_records", i128::from(outcome.full_records), "records", "SaveOutcome.full_records")?;
-    context.trace.write_number(Kind::Counter, "delta.prefix_records", i128::from(outcome.prefix_records), "records", "SaveOutcome.prefix_records")?;
-    context.trace.write_number(Kind::Counter, "delta.chain_max_depth", i128::from(outcome.chain.max_depth), "edges", "SaveOutcome.chain.max_depth")?;
-    context.trace.write_number(Kind::Counter, "delta.prefix_selected", i128::from(outcome.delta.prefix_selected), "records", "SaveOutcome.delta.prefix_selected")?;
-    context.trace.write_number(Kind::Counter, "delta.full_losses", i128::from(outcome.delta.full_losses), "records", "SaveOutcome.delta.full_losses")?;
-    context.trace.write_number(Kind::Counter, "delta.no_candidate", i128::from(outcome.delta.no_candidate), "records", "SaveOutcome.delta.no_candidate")?;
-    context.trace.write_number(Kind::Counter, "delta.work_exceeded", i128::from(outcome.delta.work_exceeded), "records", "SaveOutcome.delta.work_exceeded")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.reused",
+        i128::from(outcome.reused),
+        "objects",
+        "SaveOutcome.reused",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.full_records",
+        i128::from(outcome.full_records),
+        "records",
+        "SaveOutcome.full_records",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.prefix_records",
+        i128::from(outcome.prefix_records),
+        "records",
+        "SaveOutcome.prefix_records",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.chain_max_depth",
+        i128::from(outcome.chain.max_depth),
+        "edges",
+        "SaveOutcome.chain.max_depth",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.prefix_selected",
+        i128::from(outcome.delta.prefix_selected),
+        "records",
+        "SaveOutcome.delta.prefix_selected",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.full_losses",
+        i128::from(outcome.delta.full_losses),
+        "records",
+        "SaveOutcome.delta.full_losses",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.no_candidate",
+        i128::from(outcome.delta.no_candidate),
+        "records",
+        "SaveOutcome.delta.no_candidate",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.work_exceeded",
+        i128::from(outcome.delta.work_exceeded),
+        "records",
+        "SaveOutcome.delta.work_exceeded",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     gates.push(gates::require(
@@ -1155,7 +1527,11 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
 /// from the fixture recipe before the product saw it. This is the second,
 /// unmeasured, byte-identical operation the measurement contract requires, and it
 /// is why the performance receipt can be honest about not containing one.
-fn delta_verify(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn delta_verify(
+    case: &Case,
+    op: DeltaOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     let directory = context.artifact_directory()?;
     let artifact = Artifact::read(&directory)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
@@ -1295,7 +1671,9 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
     create_and_save_untimed(&base_path, &TreeStore::new())?;
     let de_warm = prepare_sample(&base_path, &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -1319,19 +1697,58 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
-    context.trace.write_number(Kind::Counter, "boundary.length", length as i128, "bytes", "the row's declared grammar edge")?;
-    context.trace.write_number(Kind::Counter, "boundary.objects", objects.len() as i128, "objects", "harness-supplied object set")?;
-    context.trace.write_number(Kind::Counter, "boundary.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "boundary.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "boundary.length",
+        length as i128,
+        "bytes",
+        "the row's declared grammar edge",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "boundary.objects",
+        objects.len() as i128,
+        "objects",
+        "harness-supplied object set",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "boundary.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "boundary.reused",
+        i128::from(outcome.reused),
+        "objects",
+        "SaveOutcome.reused",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.boundary-accepted",
         outcome.inserted + outcome.reused >= 1,
-        &format!("{} inserted, {} reused at {length} bytes", outcome.inserted, outcome.reused),
+        &format!(
+            "{} inserted, {} reused at {length} bytes",
+            outcome.inserted, outcome.reused
+        ),
         "a grammar edge is accepted, or refused with its declared error class",
     ));
     let store = match open_untimed(&sample) {
@@ -1345,7 +1762,10 @@ pub fn boundary(case: &Case, seed: u8, context: &mut OpContext<'_>) -> Result<Op
                 "g1.o1-readback",
                 back.matches(),
                 &format!("{} bytes read, {}", back.bytes, back.digest),
-                &format!("{} bytes, sha256 {}", back.expected_bytes, back.expected_digest),
+                &format!(
+                    "{} bytes, sha256 {}",
+                    back.expected_bytes, back.expected_digest
+                ),
             )),
             Err(error) => gates.push(Gate::incomplete(
                 GateClass::Correctness,
@@ -1383,7 +1803,9 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
     create_and_save_untimed(&base_path, &TreeStore::new())?;
     let de_warm = prepare_sample(&base_path, &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -1408,18 +1830,51 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
     };
     let cutoff = ConstructionPolicy::frozen_default().small_file_threshold_bytes();
 
-    context.trace.write_number(Kind::Counter, "small_file.bytes", case.bytes as i128, "bytes", "the row's declared tier")?;
-    context.trace.write_number(Kind::Counter, "small_file.full_records", i128::from(outcome.full_records), "records", "SaveOutcome.full_records")?;
-    context.trace.write_number(Kind::Counter, "small_file.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "small_file.bytes",
+        case.bytes as i128,
+        "bytes",
+        "the row's declared tier",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "small_file.full_records",
+        i128::from(outcome.full_records),
+        "records",
+        "SaveOutcome.full_records",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "small_file.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.whole-file-route",
         case.bytes < cutoff && outcome.full_records >= 1,
-        &format!("{} bytes below cutoff {cutoff}: {} FULL records", case.bytes, outcome.full_records),
+        &format!(
+            "{} bytes below cutoff {cutoff}: {} FULL records",
+            case.bytes, outcome.full_records
+        ),
         "a sub-cutoff file takes the whole-file route and is stored as a FULL record",
     ));
     let store = match open_untimed(&sample) {
@@ -1433,7 +1888,10 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
                 "g1.o1-readback",
                 back.matches(),
                 &format!("{} bytes read, {}", back.bytes, back.digest),
-                &format!("{} bytes, sha256 {}", back.expected_bytes, back.expected_digest),
+                &format!(
+                    "{} bytes, sha256 {}",
+                    back.expected_bytes, back.expected_digest
+                ),
             )),
             Err(error) => gates.push(Gate::incomplete(
                 GateClass::Correctness,
@@ -1503,8 +1961,20 @@ fn read_wave_prepare(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutco
     artifact
         .seal(&directory, case.id)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
-    context.trace.write_number(Kind::Counter, "prepare.objects", count as i128, "objects", "distinct canonical objects the base Store holds")?;
-    context.trace.write_number(Kind::Counter, "prepare.base_bytes", case.bytes as i128, "bytes", "declared base bytes")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        count as i128,
+        "objects",
+        "distinct canonical objects the base Store holds",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.base_bytes",
+        case.bytes as i128,
+        "bytes",
+        "declared base bytes",
+    )?;
     Ok(OpOutcome {
         gates: Vec::new(),
         notes: vec![
@@ -1536,7 +2006,9 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
     let sample = context.output.join("sample.sqlite");
     let de_warm = prepare_sample(&Artifact::store_path(&directory), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -1547,8 +2019,10 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
     let (result, report) = super::measure("c2.read.waves", |scope: &TimingScope<'_, Active>| {
         let provider = StoreProvider::new(&store);
         let (first, first_counters) = provider.read_wave(&[root], scope.child("storage.wave1"))?;
-        let (second, second_counters) = provider.read_wave(&[root], scope.child("storage.wave2"))?;
-        let bytes_out = first.iter().map(Vec::len).sum::<usize>() + second.iter().map(Vec::len).sum::<usize>();
+        let (second, second_counters) =
+            provider.read_wave(&[root], scope.child("storage.wave2"))?;
+        let bytes_out =
+            first.iter().map(Vec::len).sum::<usize>() + second.iter().map(Vec::len).sum::<usize>();
         Ok::<_, layerfs_storage::StorageError>((
             first_counters,
             second_counters,
@@ -1563,22 +2037,79 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
-    context.trace.write_number(Kind::Counter, "read.wave1_opens", i128::from(first.opens), "connections", "StoreReadCounters.opens of wave 1")?;
-    context.trace.write_number(Kind::Counter, "read.wave2_opens", i128::from(second.opens), "connections", "StoreReadCounters.opens of wave 2")?;
-    context.trace.write_number(Kind::Counter, "read.provider_opens", i128::from(opens), "connections", "StoreProvider.connection_opens()")?;
-    context.trace.write_number(Kind::Counter, "read.wave1_pages", i128::from(first.pages), "pages", "StoreReadCounters.pages of wave 1")?;
-    context.trace.write_number(Kind::Counter, "read.emitted_bytes", bytes_out as i128, "bytes", "sum of the two waves' returned bytes")?;
-    context.trace.write_number(Kind::Counter, "read.canonical_bytes", i128::from(first.canonical_bytes + second.canonical_bytes), "bytes", "StoreReadCounters.canonical_bytes")?;
-    context.trace.write_number(Kind::Counter, "read.ceiling", i128::from(first.ceiling), "pack id", "StoreReadCounters.ceiling")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.wave1_opens",
+        i128::from(first.opens),
+        "connections",
+        "StoreReadCounters.opens of wave 1",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.wave2_opens",
+        i128::from(second.opens),
+        "connections",
+        "StoreReadCounters.opens of wave 2",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.provider_opens",
+        i128::from(opens),
+        "connections",
+        "StoreProvider.connection_opens()",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.wave1_pages",
+        i128::from(first.pages),
+        "pages",
+        "StoreReadCounters.pages of wave 1",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.emitted_bytes",
+        bytes_out as i128,
+        "bytes",
+        "sum of the two waves' returned bytes",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.canonical_bytes",
+        i128::from(first.canonical_bytes + second.canonical_bytes),
+        "bytes",
+        "StoreReadCounters.canonical_bytes",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "read.ceiling",
+        i128::from(first.ceiling),
+        "pack id",
+        "StoreReadCounters.ceiling",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     gates.push(gates::require(
         GateClass::Mechanism,
         "g2.opens-o1",
         first.opens == 1 && second.opens == 0 && opens == 1,
-        &format!("wave1 opens {}, wave2 opens {}, provider opens {opens}", first.opens, second.opens),
+        &format!(
+            "wave1 opens {}, wave2 opens {}, provider opens {opens}",
+            first.opens, second.opens
+        ),
         "opens is 1 on the opening wave then 0: the O(1) connection claim",
     ));
     let expected_pages = 1_u64;
@@ -1599,7 +2130,10 @@ fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
             "g1.o2-readback",
             back.matches(),
             &format!("{} bytes read, {}", back.bytes, back.digest),
-            &format!("{} bytes, sha256 {}", back.expected_bytes, back.expected_digest),
+            &format!(
+                "{} bytes, sha256 {}",
+                back.expected_bytes, back.expected_digest
+            ),
         )),
         Err(error) => gates.push(Gate::incomplete(
             GateClass::Correctness,
@@ -1654,9 +2188,7 @@ fn pooled_leaves(
                 metadata_root: ObjectId::for_bytes(format!("{label}/metadata").as_bytes()),
             };
             page.push(InodeLeafRow {
-                serial: serial_base
-                    + u64::from(leaf) * u64::from(rows)
-                    + u64::from(row),
+                serial: serial_base + u64::from(leaf) * u64::from(rows) + u64::from(row),
                 value: layerfs_content::inode_leaf::encode_inode_value(value),
             });
         }
@@ -1715,7 +2247,9 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
     create_and_save_untimed(&base, prepared)?;
     let de_warm = prepare_sample(&base, &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -1745,23 +2279,125 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
     let index_bytes = store.pool_index_bytes();
 
     let pool = outcome.pool;
-    context.trace.write_number(Kind::Counter, "pool.leaves", pool.leaves as i128, "leaves", "SaveOutcome.pool.leaves")?;
-    context.trace.write_number(Kind::Counter, "pool.reused_values", pool.reused_values as i128, "values", "SaveOutcome.pool.reused_values")?;
-    context.trace.write_number(Kind::Counter, "pool.new_values", pool.new_values as i128, "values", "SaveOutcome.pool.new_values")?;
-    context.trace.write_number(Kind::Counter, "pool.groups", pool.groups as i128, "groups", "SaveOutcome.pool.groups, the metadata_value_groups catalogue")?;
-    context.trace.write_number(Kind::Counter, "pool.delta_leaves", pool.delta_leaves as i128, "leaves", "SaveOutcome.pool.delta_leaves")?;
-    context.trace.write_number(Kind::Counter, "pool.full_leaves", pool.full_leaves as i128, "leaves", "SaveOutcome.pool.full_leaves")?;
-    context.trace.write_number(Kind::Counter, "pool.trials", pool.trials as i128, "trials", "SaveOutcome.pool.trials")?;
-    context.trace.write_number(Kind::Counter, "pool.work_exceeded", pool.work_exceeded as i128, "leaves", "SaveOutcome.pool.work_exceeded")?;
-    context.trace.write_number(Kind::Counter, "pool.declared_values", declared_values as i128, "values", "case configuration: leaves x rows")?;
-    context.trace.write_number(Kind::Counter, "pool.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "pool.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
-    context.trace.write_number(Kind::Counter, "pool.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
-    context.trace.write_number(Kind::Counter, "pool.index_entries_before", index_before as i128, "entries", "Store::pool_index_entries before the measured save")?;
-    context.trace.write_number(Kind::Counter, "pool.index_entries", index_entries as i128, "entries", "Store::pool_index_entries after the measured save")?;
-    context.trace.write_number(Kind::Counter, "pool.index_bytes", index_bytes as i128, "bytes", "Store::pool_index_bytes after the measured save")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.leaves",
+        pool.leaves as i128,
+        "leaves",
+        "SaveOutcome.pool.leaves",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.reused_values",
+        pool.reused_values as i128,
+        "values",
+        "SaveOutcome.pool.reused_values",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.new_values",
+        pool.new_values as i128,
+        "values",
+        "SaveOutcome.pool.new_values",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.groups",
+        pool.groups as i128,
+        "groups",
+        "SaveOutcome.pool.groups, the metadata_value_groups catalogue",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.delta_leaves",
+        pool.delta_leaves as i128,
+        "leaves",
+        "SaveOutcome.pool.delta_leaves",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.full_leaves",
+        pool.full_leaves as i128,
+        "leaves",
+        "SaveOutcome.pool.full_leaves",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.trials",
+        pool.trials as i128,
+        "trials",
+        "SaveOutcome.pool.trials",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.work_exceeded",
+        pool.work_exceeded as i128,
+        "leaves",
+        "SaveOutcome.pool.work_exceeded",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.declared_values",
+        declared_values as i128,
+        "values",
+        "case configuration: leaves x rows",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.reused",
+        i128::from(outcome.reused),
+        "objects",
+        "SaveOutcome.reused",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.commits",
+        i128::from(outcome.commits),
+        "transactions",
+        "SaveOutcome.commits",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.index_entries_before",
+        index_before as i128,
+        "entries",
+        "Store::pool_index_entries before the measured save",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.index_entries",
+        index_entries as i128,
+        "entries",
+        "Store::pool_index_entries after the measured save",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pool.index_bytes",
+        index_bytes as i128,
+        "bytes",
+        "Store::pool_index_bytes after the measured save",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     gates.push(gates::require(
@@ -1843,7 +2479,11 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
             GateClass::Correctness,
             "g1.o1-leaf-presence",
             present.len() == distinct.len(),
-            &format!("{} of {} distinct pinned leaf identities present", present.len(), distinct.len()),
+            &format!(
+                "{} of {} distinct pinned leaf identities present",
+                present.len(),
+                distinct.len()
+            ),
             "every pooled leaf identity the row offered is present after the save",
         )),
         Err(error) => gates.push(Gate::incomplete(
@@ -1933,7 +2573,11 @@ fn footprint_supplied(case: &Case, op: FootprintOp, seed: u64) -> Result<TreeSto
 }
 
 /// C2-5 `prepare`: acquire the supplied object set once.
-fn footprint_prepare(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn footprint_prepare(
+    case: &Case,
+    op: FootprintOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     let directory = context.artifact_directory()?;
     let supplied = footprint_supplied(case, op, seed_of(case.id))?;
     let count = supplied.len();
@@ -1944,7 +2588,13 @@ fn footprint_prepare(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) 
     artifact
         .seal(&directory, case.id)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
-    context.trace.write_number(Kind::Counter, "prepare.objects", written as i128, "objects", "distinct canonical objects the artifact holds")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
     Ok(OpOutcome {
         gates: Vec::new(),
         notes: vec![
@@ -1957,7 +2607,11 @@ fn footprint_prepare(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) 
 }
 
 /// C2-5 `perf`: the measured save of the prepared object set.
-fn footprint_perf(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+fn footprint_perf(
+    case: &Case,
+    op: FootprintOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
     context.create_output()?;
     let mut gates = Vec::new();
     let directory = context.artifact_directory()?;
@@ -1972,7 +2626,9 @@ fn footprint_perf(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> 
     create_and_save_untimed(&base_path, &TreeStore::new())?;
     let de_warm = prepare_sample(&base_path, &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
-    gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
+    gates.push(crate::gates::attribution_gate(
+        crate::gates::Attribution::Exclusive,
+    ));
 
     let store = match open_untimed(&sample) {
         Ok(store) => store,
@@ -1997,15 +2653,69 @@ fn footprint_perf(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> 
     };
     let space = instruments::space(&sample).map_err(|error| OpError::Io(format!("{error}")))?;
 
-    context.trace.write_number(Kind::Counter, "footprint.objects_supplied", supplied.len() as i128, "objects", "harness-supplied object set")?;
-    context.trace.write_number(Kind::Counter, "footprint.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
-    context.trace.write_number(Kind::Counter, "footprint.packs_created", i128::from(outcome.packs_created), "packs", "SaveOutcome.packs_created")?;
-    context.trace.write_number(Kind::Counter, "footprint.pack_appends", i128::from(outcome.pack_appends), "appends", "SaveOutcome.pack_appends")?;
-    context.trace.write_number(Kind::Counter, "footprint.statements", i128::from(outcome.statements), "statements", "SaveOutcome.statements")?;
-    context.trace.write_number(Kind::Resource, "space.apparent_bytes", space.apparent_bytes as i128, "bytes", "st_size of the Store file")?;
-    context.trace.write_number(Kind::Resource, "space.allocated_bytes", space.allocated_bytes as i128, "bytes", "st_blocks * 512 of the Store file, exclusive attribution")?;
-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
+    context.trace.write_number(
+        Kind::Counter,
+        "footprint.objects_supplied",
+        supplied.len() as i128,
+        "objects",
+        "harness-supplied object set",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "footprint.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "footprint.packs_created",
+        i128::from(outcome.packs_created),
+        "packs",
+        "SaveOutcome.packs_created",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "footprint.pack_appends",
+        i128::from(outcome.pack_appends),
+        "appends",
+        "SaveOutcome.pack_appends",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "footprint.statements",
+        i128::from(outcome.statements),
+        "statements",
+        "SaveOutcome.statements",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "space.apparent_bytes",
+        space.apparent_bytes as i128,
+        "bytes",
+        "st_size of the Store file",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "space.allocated_bytes",
+        space.allocated_bytes as i128,
+        "bytes",
+        "st_blocks * 512 of the Store file, exclusive attribution",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
 
     gates.push(completeness_gate(&report));
     // O1: the supplied identities, pinned, answered by the product's presence path.
@@ -2024,7 +2734,11 @@ fn footprint_perf(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> 
             GateClass::Correctness,
             "g1.o1-supplied-presence",
             present.len() == distinct.len(),
-            &format!("{} of {} distinct pinned supplied identities present", present.len(), distinct.len()),
+            &format!(
+                "{} of {} distinct pinned supplied identities present",
+                present.len(),
+                distinct.len()
+            ),
             "every supplied identity is present after the save",
         )),
         Err(error) => gates.push(Gate::incomplete(
@@ -2038,7 +2752,11 @@ fn footprint_perf(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> 
         GateClass::Correctness,
         "g1.objects-stored",
         outcome.inserted > 0,
-        &format!("{} inserted of {} supplied", outcome.inserted, supplied.len()),
+        &format!(
+            "{} inserted of {} supplied",
+            outcome.inserted,
+            supplied.len()
+        ),
         "the supplied object set was stored",
     ));
     gates.push(gates::require(

@@ -1,13 +1,13 @@
 {
  "schema": "layerfs-quick-modes-v1",
- "note": "The mode ladder, its declared default, and the reuse path, exercised on the twenty-case smoke lane. A sampled or omitted row is INCOMPLETE, never PASS; the deferred oracle exists only for c2.delta.cdc-locality, whose smoke representative is dedup-cdc-overwrite-1.",
+ "note": "The mode ladder, its declared default, and the reuse path, on the twenty-case smoke lane. A sampled or omitted row is INCOMPLETE, never PASS.",
  "default_for_iteration": {
-  "rule": "#184 section 10.3: quick is the default for iteration (--lane smoke and explicit --case runs); an admission run is full or declares itself otherwise",
+  "rule": "#184 section 10.3: quick for --lane smoke and explicit --case, full for a whole-lane run",
   "smoke_lane_no_flag": {
    "tally": {
     "INCOMPLETE": 20
    },
-   "wall_ns": 626246625,
+   "wall_ns": 551567625,
    "verification_mode": "sample"
   },
   "whole_lane_no_flag": {
@@ -21,7 +21,7 @@
    "tally": {
     "PASS": 20
    },
-   "wall_ns": 605558500,
+   "wall_ns": 528935792,
    "verification_mode": "full"
   }
  },
@@ -29,34 +29,26 @@
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 625384167,
+  "wall_ns": 531187416,
   "verification_mode": "none"
- },
- "verify_full": {
-  "tally": {
-   "PASS": 20
-  },
-  "wall_ns": 605558500,
-  "verification_mode": "full"
  },
  "perf_reuse_pass": {
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 601159125,
+  "wall_ns": 526423000,
   "verification_mode": "sample"
  },
- "reuse_pass_note": "dedup-cdc-overwrite-1 is PASS with verification.status REUSED, the omission recorded on the row, and phases.reused_invocations == ['verify'].",
  "verify_reuse_pass": {
   "re_derived": 0,
   "cases": 220,
-  "source": "/tmp/r5c-final5/verification.json",
+  "source": "/tmp/r5c-final6/verification.json",
   "reused_proof_identities_include": "harness_python_sha256"
  },
  "refusals": [
   "a missing proof path: refused",
   "a run.json offered as a proof: refused, wrong schema",
-  "a proof whose harness_python_sha256 differs: refused, the pair is not the pair"
- ],
- "reuse_identity_note": "perf --reuse-pass was measured at 5bf193ce1, the commit this receipt's lane ran on, with a proof from that same run; a later commit refuses it by design. verify --reuse-pass reads the pair the run recorded and still accepts it."
+  "a proof whose harness_python_sha256 differs: refused, the pair is not the pair",
+  "a perf proof offered after a later commit: refused, it is a proof of another tree"
+ ]
 }

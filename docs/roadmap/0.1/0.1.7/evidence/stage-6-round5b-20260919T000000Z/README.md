@@ -13,9 +13,9 @@
 | --- | --- |
 | Command | `python3 runner.py perf --lane full --out <dir>` |
 | Cases | 220 registered (217 admission + 3 diagnostic), one sample per case per arm |
-| Wall | **173.855 s** |
-| Source commit | `5bf193ce16732d1d2545a1ae0e34606bca8d6ab4`, **clean tree** |
-| Harness binary sha256 | `f20dca0022b37dea266ea0a81ee52f260cc8017a6291bfb86dc0f685c02c52e0` |
+| Wall | **134.430 s** |
+| Source commit | `7c58ad174808f3c977f15dcdbaed5e5b2056b403`, **clean tree** |
+| Harness binary sha256 | `962d8a45afa74a88d3c00645ad273fabdb4842590a81c6634317668121c647aa` |
 | Harness Python sha256 | `530fb870fda600cb77b761cfd2a3d05a147949dbf98d0d6f6d0623679a2ed0da` |
 | Product lock sha256 | `bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991` |
 | Harness lock sha256 | `f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e` |
@@ -41,21 +41,21 @@
 
 Verification: **0 disagreements** across all 220 re-derived statuses; sealed call-graph
 **PASS** over **120** product source files; runtime tripwires **PASS** over **141** stores;
-verification budget `PASS` at **2.02 s** against the 60 s limit. Calibration: E1 `REFUTED`,
+verification budget `PASS` at **2.00 s** against the 60 s limit. Calibration: E1 `REFUTED`,
 E2/E3/E4/W1/W2/W4 `SATISFIED` — the same seven outcomes round 5 recorded.
 
 ## 2. The four phases, before and after
 
 | phase | field | round 5 | **round 5b** | target |
 | --- | --- | ---: | ---: | --- |
-| a preparation | `preparation_wall_ns` | 98.226 s | **27.138 s** | ≤ 25 s — **missed by 2.1 s** |
-| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **0.074 s** | reported |
-| b **real work** | **`operation_ns`** | **76.184 s** | **75.282 s** | published, must not fall — **see §2.1** |
-| c verification | `verification_wall_ns` | 85.513 s | **68.895 s** | ≤ 108 s — **met** |
-| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000044 s** (4,416 ns max) | ≤ 0.5 s/row — **met** |
-| | harness work in the timer | `handoff_ns` | **1.040 s** (0.115 s max) | published |
-| | process wall | `complete_command_ns` | **172.482 s** (10.052 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
-| **lane** | `run.json` wall | **263.776 s** | **173.855 s** | ≤ 200 s — **met** |
+| a preparation | `preparation_wall_ns` | 98.226 s | **23.149 s** | ≤ 25 s — **met** |
+| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **0.069 s** | reported |
+| b **real work** | **`operation_ns`** | **76.184 s** | **76.508 s** | published, must not fall — **see §2.1** |
+| c verification | `verification_wall_ns` | 85.513 s | **32.339 s** | ≤ 108 s — **met** |
+| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000094 s** (9,416 ns max) | ≤ 0.5 s/row — **met** |
+| | harness work in the timer | `handoff_ns` | **0.992 s** (0.118 s max) | published |
+| | process wall | `complete_command_ns` | **133.074 s** (10.384 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
+| **lane** | `run.json` wall | **263.776 s** | **134.430 s** | ≤ 200 s — **met** |
 
 The four phases reconcile with the wall on **every** row — `unreconciled_rows: []` in
 `run-full.json` — inside the declared tolerance of 250 ms plus 2% of the wall.
@@ -67,7 +67,7 @@ rejected.* The lane totals are
 
 ```text
 round 5 receipt      sum(operation_ns) = 76.184 s
-round 5b             sum(operation_ns) = 75.282 s   (-1.18%)
+round 5b             sum(operation_ns) = 76.508 s   (+0.43%)
 ```
 
 **Over the rows that publish an operation root in both runs, the golden number rose:**
@@ -224,9 +224,9 @@ sampling anything.
 
 | | round 5 | **round 5b** |
 | --- | ---: | ---: |
-| lane `verification_wall_ns` | 85.513 s | **68.895 s** |
-| largest single invocation | 7.636 s | **4.192 s** |
-| deferred verify invocations | 1.905 s | **0.818 s** |
+| lane `verification_wall_ns` | 85.513 s | **32.339 s** |
+| largest single invocation | 7.636 s | **2.558 s** |
+| deferred verify invocations | 1.905 s | **0.808 s** |
 
 ## 5. Defects fixed rather than recorded
 
@@ -412,7 +412,7 @@ cargo +1.85.1 test  --locked --manifest-path $H/Cargo.toml            # 92 passe
 python3 -m unittest discover -s $H/shared -p 'test_*.py'              # 112 tests, OK
 python3 $H/runner.py self-check                                       # PASS
 python3 $H/runner.py prepare                                          # 143.5 s cold, once per digest
-python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 173.9 s
+python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 134.4 s
 python3 $H/runner.py verify --run /tmp/r5b                            # 0 disagreements
 python3 $H/runner.py report --run /tmp/r5b
 python3 $H/runner.py calibrate --out /tmp/r5b                         # E1 REFUTED, six SATISFIED
