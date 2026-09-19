@@ -24,6 +24,13 @@
 | Verification mode | `full` |
 | Fixture-recipe version | `fs-bench-fixture-recipe-v2` |
 
+> **A note on the tree.** Two documentation-only commits follow the one this lane ran on
+> (`4044ae0ca`, `73f755f85`): the harness README, this directory and the round-5 handoff's
+> forward pointer. **Neither changes a compiled byte** — the harness binary sha256 above is
+> the same before and after, and the golden registry and expected tables are untouched — so
+> the receipt names the commit the lane actually ran on rather than a later one that would
+> have produced the same run.
+
 | Class | Rows | PASS | FAIL | NOT_RUN |
 | --- | ---: | ---: | ---: | ---: |
 | Admission (the frozen 217) | 217 | **217** | **0** | **0** |
@@ -213,7 +220,13 @@ Three, all in `core/benchmark/**`, all exposed by this change:
    (`W2 REFUTED`). `calibrate` now acquires the master its arm needs. Caught by running
    `calibrate`, not by assuming it still worked.
 
-A fourth is recorded rather than fixed, because its fix is a scope question: **the harness
+**A corrupted or truncated master fails closed, and this was checked rather than assumed.**
+Flipping one byte of a sealed artifact's `objects/pack.bin` makes the row `NOT_RUN` with
+`<id> does not re-identify from its stored bytes`; truncating it makes the row `NOT_RUN` with
+`pack.bin at <offset>: failed to fill whole buffer`. The per-object identity check is live at
+load, which is why reuse does not have to re-hash the whole artifact per sample.
+
+A fifth is recorded rather than fixed, because its fix is a scope question: **the harness
 identity still does not cover the harness's own Python.** A receipt names the Rust binary's
 sha256, both lockfiles and the registry table; a Python-only change to `runner.py` or
 `shared/` leaves every one of them unchanged. `harness_binary_sha256` in this receipt is
