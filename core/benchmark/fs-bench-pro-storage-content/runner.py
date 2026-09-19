@@ -368,6 +368,104 @@ def acquire(case_id: str, root: Path, identity: receipt.Identity, row: list[str]
     return record
 
 
+def load_reused_proof(path: str, identity: receipt.Identity, selection: list[str]) -> dict[str, object]:
+    """Validates a verification receipt offered in place of re-running verification.
+
+    Fails closed on every way the offer can be wrong, and each check exists because
+    accepting without it would let one tree's proof admit another tree's row:
+
+    * **schema** — it must be a `layerfs-core-verification-v1` document;
+    * **identity** — source commit, harness binary, both lockfiles, the registry
+      table and the worker count must all match the run about to be admitted;
+    * **hard limits** — the proof must record zero disagreements, a sealed
+      call-graph `PASS`, runtime tripwires `PASS` and a verification wall inside its
+      own 60 s budget;
+    * **coverage** — every selected case must appear with `status == PASS` and a
+      published status of `PASS`. A case the proof does not cover is not covered by
+      the omission either.
+
+    The caller records `reused_proof_identities` and the omission on every row it
+    covers, so the reuse is visible in the receipt rather than inferred from a
+    shorter wall time.
+    """
+    document = json.loads(Path(path).read_text(encoding="utf-8"))
+    if document.get("schema") != "layerfs-core-verification-v1":
+        raise ReuseRefused(f"{path}: schema {document.get('schema')!r} is not a verification receipt")
+    previous_run = Path(str(document.get("run_dir", ""))) / "run.json"
+    if not previous_run.exists():
+        raise ReuseRefused(f"{path}: the run it verified ({previous_run}) is not on disk")
+    previous = json.loads(previous_run.read_text(encoding="utf-8"))
+    previous_identity = dict(previous.get("identity", {}))
+    mismatched = [
+        field
+        for field in REUSED_PROOF_IDENTITY_FIELDS
+        if str(previous_identity.get(field)) != str(identity.as_fields().get(field))
+    ]
+    if mismatched:
+        raise ReuseRefused(
+            "the offered proof was produced on a different pair: "
+            + ", ".join(
+                f"{field} {previous_identity.get(field)!r} != {identity.as_fields().get(field)!r}"
+                for field in mismatched
+            )
+        )
+    if int(document.get("disagreements", 1)) != 0:
+        raise ReuseRefused(f"{path}: {document.get('disagreements')} disagreement(s) recorded")
+    call_graph = document.get("sealed_call_graph", {}) or {}
+    tripwires = document.get("runtime_tripwires", {}) or {}
+    if call_graph.get("status") != "PASS":
+        raise ReuseRefused(f"{path}: sealed call-graph is {call_graph.get('status')!r}")
+    if tripwires.get("status") != "PASS":
+        raise ReuseRefused(f"{path}: runtime tripwires are {tripwires.get('status')!r}")
+    wall_ns = int(document.get("wall_ns", 0))
+    if receipt.verification_budget(wall_ns).status != "PASS":
+        raise ReuseRefused(f"{path}: its own verification wall {wall_ns / 1e9:.3f} s exceeds the 60 s budget")
+    proofs: dict[str, dict[str, object]] = {}
+    for finding in document.get("findings", []) or []:
+        case_id = str(finding.get("case_id", ""))
+        if not case_id:
+            continue
+        if finding.get("status") != "PASS" or finding.get("published_status") != "PASS":
+            continue
+        phases = finding.get("phases", {}) or {}
+        if phases.get("status") != "PASS":
+            continue
+        proofs[case_id] = {
+            "proof": str(path),
+            "identities": {
+                field: previous_identity.get(field) for field in REUSED_PROOF_IDENTITY_FIELDS
+            },
+        }
+    # Coverage is required for every selected case the verified run actually ran. A
+    # row whose driver does not exist is `NOT_RUN` in both runs: it has no oracle to
+    # reuse, and requiring a proof for it would make `--reuse-pass` unusable on any
+    # lane that contains one.
+    previous_rows = previous_run.parent
+    measured = [
+        case_id
+        for case_id in selection
+        if (previous_rows / case_id / "receipt.json").exists()
+        and json.loads((previous_rows / case_id / "receipt.json").read_text(encoding="utf-8")).get(
+            "status"
+        )
+        != "NOT_RUN"
+    ]
+    uncovered = [case_id for case_id in measured if case_id not in proofs]
+    if uncovered:
+        raise ReuseRefused(
+            f"{path} covers no passing proof for {len(uncovered)} measured case(s): "
+            + ", ".join(uncovered[:5])
+        )
+    return {
+        "path": str(path),
+        "identities": {
+            field: previous_identity.get(field) for field in REUSED_PROOF_IDENTITY_FIELDS
+        },
+        "verified_run": str(previous_run.parent),
+        "cases": proofs,
+    }
+
+
 def cmd_prepare(arguments: argparse.Namespace) -> int:
     """Acquires the prepared artifacts a selection needs, once."""
     root = Path(arguments.out) if arguments.out else artifact_root()
