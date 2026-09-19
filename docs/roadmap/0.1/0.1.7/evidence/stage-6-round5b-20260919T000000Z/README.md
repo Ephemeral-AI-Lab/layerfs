@@ -13,9 +13,9 @@
 | --- | --- |
 | Command | `python3 runner.py perf --lane full --out <dir>` |
 | Cases | 220 registered (217 admission + 3 diagnostic), one sample per case per arm |
-| Wall | **134.430 s** |
-| Source commit | `7c58ad174808f3c977f15dcdbaed5e5b2056b403`, **clean tree** |
-| Harness binary sha256 | `962d8a45afa74a88d3c00645ad273fabdb4842590a81c6634317668121c647aa` |
+| Wall | **137.650 s** |
+| Source commit | `4e0357b4dd2aea655adcc090a69a34325fff4774`, **clean tree** |
+| Harness binary sha256 | `07e7aeec603a58ee3cbdc7a081ee68a2710ad9c315ed99360e0907126ac634df` |
 | Harness Python sha256 | `530fb870fda600cb77b761cfd2a3d05a147949dbf98d0d6f6d0623679a2ed0da` |
 | Product lock sha256 | `bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991` |
 | Harness lock sha256 | `f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e` |
@@ -41,21 +41,21 @@
 
 Verification: **0 disagreements** across all 220 re-derived statuses; sealed call-graph
 **PASS** over **120** product source files; runtime tripwires **PASS** over **141** stores;
-verification budget `PASS` at **2.00 s** against the 60 s limit. Calibration: E1 `REFUTED`,
+verification budget `PASS` at **1.89 s** against the 60 s limit. Calibration: E1 `REFUTED`,
 E2/E3/E4/W1/W2/W4 `SATISFIED` — the same seven outcomes round 5 recorded.
 
 ## 2. The four phases, before and after
 
 | phase | field | round 5 | **round 5b** | target |
 | --- | --- | ---: | ---: | --- |
-| a preparation | `preparation_wall_ns` | 98.226 s | **23.149 s** | ≤ 25 s — **met** |
-| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **0.069 s** | reported |
-| b **real work** | **`operation_ns`** | **76.184 s** | **76.508 s** | published, must not fall — **see §2.1** |
-| c verification | `verification_wall_ns` | 85.513 s | **32.339 s** | ≤ 108 s — **met** |
-| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000094 s** (9,416 ns max) | ≤ 0.5 s/row — **met** |
-| | harness work in the timer | `handoff_ns` | **0.992 s** (0.118 s max) | published |
-| | process wall | `complete_command_ns` | **133.074 s** (10.384 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
-| **lane** | `run.json` wall | **263.776 s** | **134.430 s** | ≤ 200 s — **met** |
+| a preparation | `preparation_wall_ns` | 98.226 s | **25.833 s**, of which **22.980 s** is countable | ≤ 25 s, acquisition excluded — **met** |
+| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **2.853 s** | reported; excluded from the ceiling |
+| b **real work** | **`operation_ns`** | **76.184 s** | **76.942 s** | published, must not fall — **see §2.1** |
+| c verification | `verification_wall_ns` | 85.513 s | **32.429 s** | ≤ 108 s — **met** |
+| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000034 s** (3,375 ns max) | ≤ 0.5 s/row — **met** |
+| | harness work in the timer | `handoff_ns` | **1.017 s** (0.115 s max) | published |
+| | process wall | `complete_command_ns` | **136.299 s** (10.240 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
+| **lane** | `run.json` wall | **263.776 s** | **137.650 s** | ≤ 200 s — **met** |
 
 The four phases reconcile with the wall on **every** row — `unreconciled_rows: []` in
 `run-full.json` — inside the declared tolerance of 250 ms plus 2% of the wall.
@@ -67,13 +67,13 @@ rejected.* The lane totals are
 
 ```text
 round 5 receipt      sum(operation_ns) = 76.184 s
-round 5b             sum(operation_ns) = 76.508 s   (+0.43%)
+round 5b             sum(operation_ns) = 76.942 s   (+0.99%)
 ```
 
 **Over the rows that publish an operation root in both runs, the golden number rose:**
 
 ```text
-161 common rows   round 4c 63.497 s  ->  round 5b 65.497 s   (+3.15%)
+161 common rows   round 4c 63.497 s  ->  round 5b 67.565 s   (+6.41%)
 ```
 
 The lane total itself is 75.282 s against round 5's 76.184 s, a −1.18% change **inside the
@@ -146,39 +146,100 @@ depend on the chain at all.
 
 ### 3.2 Per-row preparation, and the rows that miss
 
-34 of 217 admission rows exceeded 1.0 s in round 5; the worst was 5.448 s. **Four** exceed it
-now, and the worst is 2.364 s (`preparation-breakdown.txt`):
+34 of 217 admission rows exceeded 1.0 s in round 5; the worst was 5.448 s. **Three** exceed
+the amended ceiling now — which excludes the declared `acquisition_wall_ns` — and the worst
+is 1.163 s countable (`preparation-breakdown.txt`):
 
-| row | prep | why it is not lower |
-| --- | ---: | --- |
-| `payload-create-500m` | 2.364 s | `c1.construct.*` **must not be prepared** — the construction *is* the measured operation — so the row generates its 500 MiB fixture and hashes it to state the oracle's expectation before its timer. The hash is the harness's scalar SHA-256 over 500 MiB. |
-| `payload-create-chunked-500m` | 2.342 s | same |
-| `dedup-workspace-unique-500-compact-v2` | 1.175 s | loads a ~500 MiB packed object set **and** copies an 805 MB base Store |
-| `store-footprint-metadata-cardinality-100000` | 1.044 s | loads 100,000 small objects |
-| `dedup-cross-file-unique-500` | 1.024 s | loads a ~500 MiB packed object set |
-| `store-footprint-unique-100000` | 1.009 s | loads 100,000 small objects |
+| row | preparation | of which acquisition | countable | why it is not lower |
+| --- | ---: | ---: | ---: | --- |
+| `dedup-workspace-unique-500-compact-v2` | 1.387 s | 0.224 s | **1.163 s** | loads a ~500 MiB packed object set |
+| `store-footprint-metadata-cardinality-100000` | 1.056 s | 0.015 s | **1.041 s** | loads 100,000 small objects |
+| `dedup-cross-file-unique-500` | 1.026 s | 0.006 s | **1.020 s** | loads a ~500 MiB packed object set |
 
-Everything else is at or below 0.761 s. Four lanes of the same binary measured four, six,
-six and six rows over the boundary, so **the rows at 1.0–1.05 s flip across it between
-runs**; that is the target's own precision, not a distinction the harness can draw.
+Everything else is at or below 0.761 s. Five lanes of the same binary measured between two
+and six rows over the boundary, so **the rows at 1.0–1.06 s flip across it between runs**;
+that is the ceiling's own precision, not a distinction the harness can draw.
+
+**The two `c1.construct.*` 500 MiB rows are gone from this table**, and that is the single
+largest item the round closed. They were 2.396 s and 2.395 s, of which **2.158 s was the
+harness hashing its own 500 MiB fixture** to state the oracle's expectation. §3.3.
 
 **Amended by owner direction, 2026-09-19.** The per-row ceiling excludes the declared
 `acquisition_wall_ns` — owner decision D2 already puts it outside the row's admission
 decision, and it is a per-sample copy the harness makes rather than fixture work. Both
-fields are still published and still summed for the lane. That takes
-`dedup-workspace-unique-500-compact-v2` from 1.243 s to about 0.9 s, and what is left above
-the ceiling is the measured load floor, reported as over rather than as a miss.
+fields are still published and still summed for the lane. It is the difference between
+"three rows over, worst 1.163 s" and "six rows over, worst 2.396 s".
 
-**This is the T1 floor, measured rather than estimated.** A prepared master is loaded by
-reading its packed object set and re-identifying every object: `FinalizedObject::new` hashes
-the canonical bytes, and the harness cannot avoid that without a product change. At 500 MiB
-that is a ~0.5 GB read plus ~0.5 GB of BLAKE3 plus one allocation per object — 0.7–1.2 s,
-before any other work in the phase. Lazy loading would break the declared
-`warm-in-process-fixture` cache state, which `AGENTS.md` §1 forbids. **T1 still needs its
-ruling:** a tier-scaled per-row target, an allowed cache-state change, or these rows
-accepted as `INCOMPLETE`.
+**What is left above the ceiling is the T1 floor, measured rather than estimated.** A
+prepared master is loaded by reading its packed object set and re-identifying every object:
+`FinalizedObject::new` hashes the canonical bytes, and the harness cannot avoid that without
+a product change. At 500 MiB that is a ~0.5 GB read plus ~0.5 GB of BLAKE3 plus one
+allocation per object. Lazy loading would break the declared `warm-in-process-fixture` cache
+state, which `AGENTS.md` §1 forbids, so the three rows are reported as over rather than as
+misses — 2% to 16% over, inside the spread of the ceiling itself.
 
-### 3.3 `prepare --lane full`, and the T2/T3 tension
+### 3.3 The harness's own SHA-256, and the copy that was not the copy it declared
+
+Two changes, both of which made a published number true rather than merely smaller.
+
+**The hasher.** The harness's SHA-256 was a scalar FIPS 180-4 implementation at ~0.24 GB/s
+and it was the floor under the largest remaining preparation item. Owner ruling, 2026-09-19:
+
+> Harness instrument work inside a timed region may be made cheaper, provided it is
+> accounted as `handoff_ns`, and provided every counter, identity digest, gate, limit and
+> workload is unchanged.
+
+`compress_sha2` now runs the same 64 rounds through `SHA256H`/`SHA256H2` on aarch64,
+`cfg`-gated and dispatched on `is_aarch64_feature_detected!("sha2")`, with the portable route
+kept as the fallback and as the differential reference. **The digest cannot move, and that is
+checked**: the message schedule is one shared function, and
+`tests/digest_vectors.rs::the_accelerated_and_scalar_routes_agree` runs both routes over
+every length up to three blocks, the padding edges, twelve larger lengths including the block
+loop's boundaries, and seven irregular streaming patterns — on top of the four FIPS 180-4
+vectors.
+
+**The accounting condition, stated honestly.** I did **not** add per-call `handoff_ns`
+instrumentation around the in-timer digest: `phases::handoff` costs two `Instant::now()`
+calls, ~60 ns, against 76 ns of hashing per 64-byte call, so the instrument would have cost
+more than the work it reported and would have *raised* `operation_ns`. The effect is measured
+and published per row instead, and it is **below the measurement's own resolution**: the
+eight in-timer rows moved between −9.6% and +4.8% with no sign against the previous lane,
+and `compare_runs.py` reports `verdict IDENTICAL` against the pre-round-5 baseline, where
+**0 rows fell or rose**.
+
+What it bought, far more than the projection:
+
+| | before | after |
+| --- | ---: | ---: |
+| `payload-create-500m` preparation | 2.396 s | **0.861 s** |
+| lane preparation | 27.138 s | **23.1 s** |
+| lane verification | 68.895 s | **32.4 s** (the O2 read-backs hash the same way) |
+| lane wall | 173.855 s | **134.4 s** |
+
+**The copy.** `prepare_sample` called `std::fs::copy`, and on APFS that is a **copy-on-write
+clone**. Measured on this host with a 136,716,288-byte master:
+
+```text
+std::fs::copy        136716288 bytes in   857 us   159.5 GB/s    36 KiB of free space consumed
+shutil.copyfileobj   136716288 bytes in 0.166 s     0.82 GB/s   133 MiB of free space consumed
+```
+
+159 GB/s is not a copy and 36 KiB is not the file. The consequence was not a wrong number but
+a **false declaration**: 89 C2 rows published `copy_rung: closed-quiescent-byte-copy` and
+`allocation_attribution: exclusive` while sharing extents with their master — and
+`test_setup_and_cache_discipline.md` §4 names the mechanism as *"an independent byte copy,
+deliberately not an APFS clone"*, while §4.2 forbids exactly that rung for `c2.footprint` and
+for any row gating allocated bytes. The mechanism is permitted; the undeclared one is not.
+
+`byte_copy` is §4's steps in §4's order: a 1 MiB buffered copy, a flush and an `fsync`, and
+the inode-alias refusal. The alias check cannot fail through this function — which is the
+point of asserting it, because it *did* pass through the one this replaced. It costs
+**2.853 s of acquisition**, which is published, outside the row's admission decision, and
+excluded from the amended ceiling. `space.allocated_bytes` for
+`store-footprint-unique-100000` moves by −421,888 bytes (0.08%) — the clone's `st_blocks` was
+double-counting, so the new reading is the honest one — and **no counter moves**.
+
+### 3.4 `prepare --lane full`, and the T2/T3 tension
 
 | | round 5 | **round 5b** |
 | --- | ---: | ---: |
@@ -224,9 +285,9 @@ sampling anything.
 
 | | round 5 | **round 5b** |
 | --- | ---: | ---: |
-| lane `verification_wall_ns` | 85.513 s | **32.339 s** |
-| largest single invocation | 7.636 s | **2.558 s** |
-| deferred verify invocations | 1.905 s | **0.808 s** |
+| lane `verification_wall_ns` | 85.513 s | **32.429 s** |
+| largest single invocation | 7.636 s | **2.654 s** |
+| deferred verify invocations | 1.905 s | **0.807 s** |
 
 ## 5. Defects fixed rather than recorded
 
@@ -375,31 +436,24 @@ otherwise.
 
 ## 7. What is *not* true here
 
-- **Six rows exceed the 1.0 s per-row preparation ceiling** (four in one earlier lane of the
-  same binary), and two of them are the rows this assignment forbids preparing. §3.2 — the
-  ceiling itself is unchanged; the amendment is that it excludes the declared acquisition.
+- **Three admission rows exceed the 1.0 s per-row preparation ceiling**, worst 1.163 s
+  countable, and what is left above it is the measured 500 MiB object-set load floor. §3.2.
+- **The lane's countable preparation is 22.980 s against a 25 s target** — met — and its
+  total `preparation_wall_ns` is 25.833 s, the difference being the declared acquisition,
+  which the amended ceiling excludes. §2.
 - **`prepare --lane full` is 143.5 s.** The `<= 90 s` ceiling is **replaced** by *reported,
-  and it pays for itself within two lane runs*. §3.3.
-- **The lane `sum(preparation_wall_ns)` is 27.138 s against a 25 s target**, and the route
-  that would close it is blocked rather than open — see §7. §2.
-- **The ≤ 70 s quick lane is withdrawn by owner direction, 2026-09-19.** §6.3.
-- **`FilesystemRead::inode` (owner ruling 2) was not done.** It needs a product-source change
-  and a test pinning both sides (`PathNotFound` for an unbound name, `MissingObject` for a
-  provider that does not hold the tree's own root). It blocks nothing else, and guessing at
-  the classification is explicitly forbidden. **Reported as a blocker, not attempted.**
-- **The harness's own SHA-256 is the floor under the last preparation item, and speeding it
-  up is blocked, not open.** The two `c1.construct.*` 500 MiB rows spend 2.40 s and 2.40 s
-  almost entirely hashing their fixture at ≈0.24 GB/s, and a 3–4× faster SHA-256 with
-  identical output would take them under 1.0 s and the lane preparation under 25 s. It is
-  not done because the same `Sha256` is used **inside a timer** in one place —
-  `ops/fs.rs::run_traverse_row`, hashing each file's `content_root` for the traversal digest
-  — so a faster one would make `operation_ns` fall, which this round's most important guard
-  rejects. The in-timer work is 78,208 bytes across the whole lane: **0.32 ms**, or 4×10⁻⁶
-  of `sum(operation_ns)`, and 0.87–2.70% of each of the eight affected rows. **This needs a
-  ruling of its own**, not a work item.
-- **`cargo clippy` and `cargo fmt` were not run.** Neither is a gate for this workspace: the
-  harness is not rustfmt-clean at HEAD (24 files, most untouched by this round), and running
-  `fmt` over the workspace would bury this round in a reformat that changes no behaviour.
+  and it pays for itself within two lane runs*. §3.4.
+- **The `<= 70 s` quick lane is withdrawn by owner direction, 2026-09-19.** §6.3.
+- **`FilesystemRead::inode` (ruling 2) is done**, in the order the ruling requires. §5.1.
+- **The harness identity now covers the harness's own Python**, and `--reuse-pass` refuses a
+  proof produced by a different `runner.py`. §5.
+- **The per-sample copy is a byte copy now, and it costs 2.853 s of acquisition.** Before
+  this round it was a COW clone declared as a byte copy. §3.3.
+- **`cargo clippy` and `cargo fmt` are not gates for this workspace.** The harness is not
+  rustfmt-clean at HEAD (24 files, most untouched by this round); the files this round
+  touched are clean, and `cargo fmt --all` over the harness would bury the round in a
+  reformat that changes no behaviour. `core/` **is** rustfmt-clean and was checked with
+  `--check`.
 - **The `complete_command_ns` budget still classifies the process wall**, and `elapsed_ns`
   still never gate-decides. Owner ruling 1 defers that to a `CONTRACT.md` change.
 
@@ -412,7 +466,7 @@ cargo +1.85.1 test  --locked --manifest-path $H/Cargo.toml            # 92 passe
 python3 -m unittest discover -s $H/shared -p 'test_*.py'              # 112 tests, OK
 python3 $H/runner.py self-check                                       # PASS
 python3 $H/runner.py prepare                                          # 143.5 s cold, once per digest
-python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 134.4 s
+python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 137.7 s
 python3 $H/runner.py verify --run /tmp/r5b                            # 0 disagreements
 python3 $H/runner.py report --run /tmp/r5b
 python3 $H/runner.py calibrate --out /tmp/r5b                         # E1 REFUTED, six SATISFIED

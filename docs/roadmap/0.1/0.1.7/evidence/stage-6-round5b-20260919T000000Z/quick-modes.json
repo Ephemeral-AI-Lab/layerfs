@@ -7,7 +7,7 @@
    "tally": {
     "INCOMPLETE": 20
    },
-   "wall_ns": 551567625,
+   "wall_ns": 662886708,
    "verification_mode": "sample"
   },
   "whole_lane_no_flag": {
@@ -16,33 +16,26 @@
     "NOT_RUN": 3
    },
    "verification_mode": "full"
-  },
-  "explicit_flag_wins": {
-   "tally": {
-    "PASS": 20
-   },
-   "wall_ns": 528935792,
-   "verification_mode": "full"
   }
  },
  "verify_none": {
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 531187416,
+  "wall_ns": 621316709,
   "verification_mode": "none"
  },
  "perf_reuse_pass": {
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 526423000,
+  "wall_ns": 607492542,
   "verification_mode": "sample"
  },
  "verify_reuse_pass": {
   "re_derived": 0,
   "cases": 220,
-  "source": "/tmp/r5c-final6/verification.json",
+  "source": "/tmp/r5c-final7/verification.json",
   "reused_proof_identities_include": "harness_python_sha256"
  },
  "refusals": [

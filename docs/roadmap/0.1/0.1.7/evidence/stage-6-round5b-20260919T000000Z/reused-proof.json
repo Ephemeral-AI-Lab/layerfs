@@ -4,25 +4,25 @@
     "limit_ns": 60000000000,
     "reason": "0.022 s",
     "status": "PASS",
-    "wall_ns": 22355167
+    "wall_ns": 21784333
   },
   "cases": 220,
   "disagreements": 0,
   "findings": [],
   "mode": "reused",
   "omission": "verification was not re-derived: an identity-matched PASS receipt was accepted instead, for every case in this run",
-  "reused_proof": "/tmp/r5c-final6/verification.json",
+  "reused_proof": "/tmp/r5c-final7/verification.json",
   "reused_proof_identities": {
     "construction_workers": "1",
-    "harness_binary_sha256": "962d8a45afa74a88d3c00645ad273fabdb4842590a81c6634317668121c647aa",
+    "harness_binary_sha256": "07e7aeec603a58ee3cbdc7a081ee68a2710ad9c315ed99360e0907126ac634df",
     "harness_lock_sha256": "f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e",
     "harness_python_sha256": "530fb870fda600cb77b761cfd2a3d05a147949dbf98d0d6f6d0623679a2ed0da",
     "product_lock_sha256": "bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991",
     "registry_tsv_sha256": "3f01abded44b973dee4d2a3a31364212cd742bce1b3f7800eb4e5a7b6d8f43e3",
-    "source_commit": "7c58ad174808f3c977f15dcdbaed5e5b2056b403"
+    "source_commit": "4e0357b4dd2aea655adcc090a69a34325fff4774"
   },
-  "reused_proof_verified_run": "/tmp/r5c-final6",
-  "run_dir": "/tmp/r5c-final6",
+  "reused_proof_verified_run": "/tmp/r5c-final7",
+  "run_dir": "/tmp/r5c-final7",
   "runtime_tripwires": {
     "status": "REUSED",
     "stores_checked": 0
@@ -32,5 +32,5 @@
     "files_scanned": 0,
     "status": "REUSED"
   },
-  "wall_ns": 22355167
+  "wall_ns": 21784333
 }
