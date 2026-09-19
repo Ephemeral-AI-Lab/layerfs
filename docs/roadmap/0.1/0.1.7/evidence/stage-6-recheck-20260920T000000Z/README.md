@@ -291,3 +291,23 @@ now green (8 + 2 + 9 + 4 + 12 tests, 0 failed) and `runner.py self-check` is PAS
 - Another workstream's files were dirty in the tree during every run above
   (`core/docs/architecture/proposal/*`). They are recorded in each receipt's
   `source_dirty_files`; they are not this change's and were not staged by it.
+
+### 5.6 The sealed run, at the commit
+
+`d87703bd3` carries the re-baselined table and the doctest fence. One further
+full-lane run was taken at that commit so the closure receipt is not a
+dirty-seal one for this change:
+
+| run | source | dirty files | harness binary | rows |
+| --- | --- | --- | --- | --- |
+| `run-20260920T-fix5` | **`d87703bd3ad1`** | only another workstream's `core/docs/architecture/proposal/*` | `5fcc7554e5b2b35c` | **217 PASS / 0 FAIL / 3 NOT_RUN**, 147.1 s |
+
+Its harness binary is **byte-identical to `run-20260920T-fix4`'s**
+(`5fcc7554e5b2b35c`), which is what proves the fix4 receipts are the receipts of
+the committed content and not of some other working tree. `verify` on fix5: **0
+disagreements** over 220 cases, call-graph PASS over 121 files, tripwires PASS
+over 141 stores, 3.89 s.
+
+The two files this change touches no longer appear in any receipt's
+`source_dirty_files`; the remaining entries belong to a concurrent workstream and
+were neither staged nor modified here.
