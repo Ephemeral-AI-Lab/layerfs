@@ -107,6 +107,14 @@ the init/commit pipelines against the Store, every DB operation by phase, and th
 three concurrency cases with their prerequisite races. The folder README states the
 three co-design pairs and their design order.
 
+[`deferred/`](deferred/) holds the opposite kind of document: items this set
+records as **not** implemented and **not** scheduled, each naming the ruling or
+amendment that must precede it. The first is
+[`deferred/01-size-transition-delta-hints.md`](deferred/01-size-transition-delta-hints.md)
+— delta hints across the whole-file / chunked size transition, with the diagrams
+that keep the reference implementation, the `core/` gap and the declined
+cross-role ruling apart.
+
 This paper adds the module map ([§8](#8-module-map)), what the set does not claim
 ([§10](#10-what-this-set-does-not-claim)) and the source index.
 
