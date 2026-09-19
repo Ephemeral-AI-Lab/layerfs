@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Stage 6 harness runner: list | prepare | perf | verify | report | self-check | calibrate.
+"""The Stage 6 harness runner: list | prepare | prune | perf | verify | report | self-check | calibrate.
 
 What each verb guarantees
 -------------------------
@@ -11,6 +11,14 @@ What each verb guarantees
 `prepare`
     Acquires a prepared artifact once, keyed by a compatibility digest, and leaves
     it immutable. Nothing in a timed phase rebuilds it.
+
+`prune`
+    Removes prepared artifacts the current compatibility key no longer accepts —
+    superseded entries, entries sealed under a different key, and unsealed
+    directories left by an interrupted acquisition — and **never** a master the
+    current key still accepts, because removing one costs a full re-acquisition. It
+    holds the measurement lock, so it cannot delete a master a running lane is about
+    to load.
 
 `perf`
     Runs one sample per case per arm, holds the measurement lock, enforces the
@@ -547,6 +555,119 @@ def validate_artifact(destination: Path, record: dict[str, object]) -> dict[str,
     }
 
 
+def directory_bytes(path: Path) -> int:
+    """Bytes one directory tree occupies, by `st_size`."""
+    return sum(entry.stat().st_size for entry in path.rglob("*") if entry.is_file())
+
+
+def remove_artifact(path: Path) -> None:
+    """Removes one sealed artifact, taking the write bit back first.
+
+    A sealed master is `0o444`/`0o555` by construction
+    (`test_setup_and_cache_discipline.md` section 3), so a removal that did not lift
+    the seal would fail on every entry it was asked to prune — which is the state the
+    first version of this verb was written against.
+    """
+    for entry in sorted(path.rglob("*"), reverse=True):
+        mode = entry.stat().st_mode & 0o777
+        os.chmod(entry, mode | 0o200)
+    os.chmod(path, (path.stat().st_mode & 0o777) | 0o200)
+    shutil.rmtree(path)
+
+
+def cmd_prune(arguments: argparse.Namespace) -> int:
+    """Removes prepared artifacts the current key no longer accepts.
+
+    **What it never touches.** An artifact whose seal carries the compatibility
+    digest the current registry and locks produce is a master this campaign will
+    reuse, and removing it costs a full re-acquisition. It is kept, always.
+
+    **What it removes, each with its reason.**
+
+    * `*.superseded-*` — an entry a previous acquisition moved aside when its key
+      stopped matching. Nothing reads them.
+    * an entry whose seal names a different key — superseded by a recipe or product
+      change, and never consumed (`acquire` re-acquires rather than reuse it).
+    * an unsealed directory — an interrupted acquisition. `acquire` refuses to
+      consume one, so it is dead weight.
+
+    It holds the measurement lock, because deleting a master a running lane is about
+    to load would corrupt that lane rather than fail it. `--dry-run` reports and
+    removes nothing.
+    """
+    root = Path(arguments.out) if arguments.out else artifact_root()
+    if not root.exists():
+        print(f"prune: {root} does not exist; nothing to prune")
+        return 0
+    if not BINARY.exists():
+        build()
+    identity = receipt.identify(REPO_ROOT, HARNESS_ROOT, BINARY)
+    rows = {row[0]: row for row in registry_table()}
+
+    kept: list[tuple[str, int]] = []
+    removed: list[dict[str, object]] = []
+    with receipt.measurement_lock(LOCK_PATH):
+        for entry in sorted(root.iterdir()):
+            if not entry.is_dir():
+                continue
+            if ".superseded-" in entry.name:
+                reason = "a superseded entry a previous acquisition moved aside"
+            else:
+                row = rows.get(entry.name)
+                seal = read_seal(entry / "sealed.tsv")
+                if row is None:
+                    reason = "no registered case of this name"
+                elif not seal:
+                    reason = "an unsealed directory; an interrupted acquisition is never consumed"
+                elif seal.get("compatibility") == compatibility_digest(row, identity):
+                    kept.append((entry.name, directory_bytes(entry)))
+                    continue
+                else:
+                    reason = "sealed under a different compatibility digest"
+            size = directory_bytes(entry)
+            if not arguments.dry_run:
+                remove_artifact(entry)
+            removed.append({"entry": entry.name, "bytes": size, "reason": reason})
+
+    reclaimed = sum(int(item["bytes"]) for item in removed)
+    kept_bytes = sum(size for _, size in kept)
+    document = {
+        "schema": "layerfs-prepared-prune-v1",
+        "root": str(root),
+        "dry_run": bool(arguments.dry_run),
+        "harness_sha256": identity.harness_binary_sha256 or "",
+        "harness_python_sha256": identity.harness_python_sha256,
+        "compatibility_inputs": {
+            "product_lock_sha256": identity.product_lock_sha256,
+            "harness_lock_sha256": identity.harness_lock_sha256,
+            "recipe_version": FIXTURE_RECIPE_VERSION,
+        },
+        "kept": [{"entry": name, "bytes": size} for name, size in kept],
+        "kept_bytes": kept_bytes,
+        "removed": removed,
+        "removed_bytes": reclaimed,
+        "note": (
+            "a kept entry is one the current key still accepts; removing it would cost "
+            "a full re-acquisition"
+        ),
+    }
+    # A nanosecond stamp, because a second-resolution one collides when a dry run and
+    # an apply happen inside the same second — and `write_append_only` refuses the
+    # second write *after* the entries are already gone, which loses the record of a
+    # removal that happened. The record is written before the report for the same
+    # reason: a prune that fails to record itself has removed evidence.
+    stamp = time.strftime("%Y-%m-%dT%H%M%SZ", time.gmtime())
+    receipt.write_append_only(root / f"prune-{stamp}-{time.time_ns()}.json", document)
+    for item in removed:
+        print(f"  {'would remove' if arguments.dry_run else 'removed'}  {item['bytes'] / 1e6:9.1f} MB  {item['entry']}  ({item['reason']})")
+    print(
+        f"prune: {len(kept)} kept ({kept_bytes / 1e9:.3f} GB), "
+        f"{len(removed)} {'to remove' if arguments.dry_run else 'removed'} "
+        f"({reclaimed / 1e9:.3f} GB) at {root}"
+    )
+    return 0
+
+
 def load_reused_proof(path: str, identity: receipt.Identity, selection: list[str]) -> dict[str, object]:
     """Validates a verification receipt offered in place of re-running verification.
 
@@ -852,7 +973,15 @@ def run_case(
         expects_operation=parsed.status() != "NOT_RUN",
         reused_invocations=tuple(reused_invocations),
     )
-    budget = receipt.budget(wall_ns, declared_exception)
+    # The budgeted quantity is the formula `CONTRACT.md` section 4 fixes: the four
+    # declared phases plus a declared lifecycle allowance, never the raw wall.
+    declared_ns = (
+        int(declared_phases.get("preparation_wall_ns", 0))
+        + int(declared_phases.get("operation_ns", 0))
+        + int(declared_phases.get("verification_wall_ns", 0))
+        + int(declared_phases.get("cleanup_wall_ns", 0))
+    )
+    budget = receipt.budget(wall_ns, declared_exception, declared_ns=declared_ns)
     if verification.get("phase") == "verify":
         # The child declares the verification unit and the sample it took; the
         # runner does not guess either from a family name.
@@ -917,6 +1046,20 @@ def run_case(
         )
         if trace_module.SEVERITY["INCOMPLETE"] > trace_module.SEVERITY.get(status, 5):
             status = "INCOMPLETE"
+    # The two axes the resource document names and no receipt carried before round
+    # 5b: the measured region's CPU and the child's peak resident set. Both are read
+    # at the phase boundary by the child and composed here, so no driver chooses them.
+    resources = dict(parsed.resources())
+    if declared_phases.get("cpu_user_ns") is not None:
+        resources["cpu.user_ns"] = declared_phases["cpu_user_ns"]
+        resources["cpu.system_ns"] = declared_phases["cpu_system_ns"]
+    if declared_phases.get("process_peak_rss_bytes") is not None:
+        resources["rss.process_peak_bytes"] = declared_phases["process_peak_rss_bytes"]
+    # Storage, per row: the bytes the row's prepared master occupies, or zero when it
+    # declares none. The per-sample Store readings stay where they were, on the rows
+    # that gate them.
+    resources["artifact.data_bytes"] = int(acquisition.get("data_bytes", 0) or 0)
+
     document: dict[str, object] = {
         "schema": receipt.SCHEMA,
         "case_id": case_id,
@@ -930,7 +1073,7 @@ def run_case(
         "status": status,
         "gates": gates,
         "counters": parsed.counters(),
-        "resources": parsed.resources(),
+        "resources": resources,
         "notes": parsed.notes(),
         "trace_defects": parsed.defects,
         "child": {
@@ -1158,9 +1301,19 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
                 continue
             document = json.loads(receipt_path.read_text(encoding="utf-8"))
             parsed = trace_module.read(trace_path)
+            published_phases = document.get("phases", {}) or {}
             budget = receipt.budget(
                 int(document.get("wall_ns", 0)),
                 case_dir.name in DECLARED_EXCEPTIONS,
+                declared_ns=sum(
+                    int(published_phases.get(field, 0) or 0)
+                    for field in (
+                        "preparation_wall_ns",
+                        "operation_ns",
+                        "verification_wall_ns",
+                        "cleanup_wall_ns",
+                    )
+                ),
             )
             # The complete-command budget is a *published* figure too, and it can
             # override a row: a case whose gates all held but whose command
@@ -1539,6 +1692,13 @@ def main() -> int:
     report.add_argument("--run", required=True)
     report.add_argument("--out")
     report.set_defaults(function=cmd_report)
+
+    prune = sub.add_parser("prune")
+    prune.add_argument("--out", help="the artifact root; defaults to the prepared root")
+    prune.add_argument(
+        "--dry-run", action="store_true", help="report what would be removed and remove nothing"
+    )
+    prune.set_defaults(function=cmd_prune)
 
     self_check = sub.add_parser("self-check")
     self_check.set_defaults(function=cmd_self_check)

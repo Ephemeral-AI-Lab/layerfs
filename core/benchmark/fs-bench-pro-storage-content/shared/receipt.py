@@ -38,6 +38,18 @@ COMPLETE_COMMAND_LIMIT_NS = 15_000_000_000
 DECLARED_EXCEPTION_LIMIT_NS = 25_000_000_000
 VERIFICATION_LIMIT_NS = 60_000_000_000
 
+# What the complete-command budget adds to the child's own declared phases.
+#
+# `CONTRACT.md` section 4 fixes the budgeted quantity as a **formula**, not as the
+# runner's raw process wall: the sum of the four declared phases plus this declared
+# allowance, which covers the one thing no phase owns — fork, exec and dyld, the trace
+# header, gate assembly and process teardown. It is a constant rather than a
+# measurement so the budgeted quantity does not move with a machine's process-start
+# jitter, and the reconciliation independently requires
+# `declared <= invocation <= wall` inside the same tolerance, so the allowance cannot
+# hide work: a row whose unaccounted span exceeds it fails reconciliation first.
+LIFECYCLE_ALLOWANCE_NS = 250_000_000
+
 
 class ReceiptError(Exception):
     """The receipt contract was violated."""
@@ -218,10 +230,16 @@ class Budget:
     limit_ns: int
     status: str
     reason: str
+    declared_ns: int = 0
+    lifecycle_allowance_ns: int = 0
+    budgeted_ns: int = 0
 
     def as_fields(self) -> dict[str, object]:
         return {
             "wall_ns": self.wall_ns,
+            "declared_ns": self.declared_ns,
+            "lifecycle_allowance_ns": self.lifecycle_allowance_ns,
+            "budgeted_ns": self.budgeted_ns,
             "limit_ns": self.limit_ns,
             "declared_exception": self.declared_exception,
             "status": self.status,
@@ -229,23 +247,64 @@ class Budget:
         }
 
 
-def budget(wall_ns: int, declared_exception: bool = False) -> Budget:
-    """Classifies one complete-command wall time.
+def budget(
+    wall_ns: int,
+    declared_exception: bool = False,
+    declared_ns: int | None = None,
+) -> Budget:
+    """Classifies one complete command against its limit.
 
-    A miss is `NOT_RUN` with the measured wall time and the reason — never a
-    relaxed limit and never a shrunk workload.
+    **The budgeted quantity is a formula**, as `CONTRACT.md` section 4 fixes it:
+
+        budgeted = declared_ns + LIFECYCLE_ALLOWANCE_NS
+        declared_ns = preparation + operation + verification + cleanup
+
+    and *not* the runner's raw process wall. The wall is still published as
+    `complete_command_ns`, because that is what bounds the command a reader can see;
+    what changed is that process start-up and the runner's own bookkeeping are no
+    longer charged to the case's budget as if the case had spent them. Before this,
+    a case whose four phases were well inside the limit could be `NOT_RUN` on a
+    machine whose `fork`/`exec` was slow, and — the reason the issue was filed —
+    preparation and verification were billed to a *performance* budget rather than
+    to their own targets.
+
+    A miss is `NOT_RUN` with the measured figures and the reason — never a relaxed
+    limit and never a shrunk workload. A caller with no phases to hand passes
+    `declared_ns=None`, and the wall is classified directly, which is the behaviour
+    every receipt written before the formula had.
     """
     limit = DECLARED_EXCEPTION_LIMIT_NS if declared_exception else COMPLETE_COMMAND_LIMIT_NS
-    if wall_ns <= limit:
+    allowance = LIFECYCLE_ALLOWANCE_NS if declared_ns is not None else 0
+    declared = declared_ns or 0
+    budgeted = declared + allowance if declared_ns is not None else wall_ns
+    kind = "declared exception" if declared_exception else "complete-command"
+    if budgeted <= limit:
         return Budget(
             wall_ns, declared_exception, limit, "PASS",
-            f"{wall_ns / 1e9:.3f} s within the {'declared exception' if declared_exception else 'complete-command'} limit",
+            f"{budgeted / 1e9:.3f} s within the {kind} limit"
+            + (
+                f" ({declared / 1e9:.3f} s of declared phases + "
+                f"{allowance / 1e9:.3f} s of lifecycle allowance; wall {wall_ns / 1e9:.3f} s)"
+                if declared_ns is not None
+                else ""
+            ),
+            declared_ns=declared,
+            lifecycle_allowance_ns=allowance,
+            budgeted_ns=budgeted,
         )
     return Budget(
         wall_ns, declared_exception, limit, "NOT_RUN",
-        f"{wall_ns / 1e9:.3f} s exceeds the {limit / 1e9:.0f} s "
-        f"{'declared exception' if declared_exception else 'complete-command'} limit; "
-        "the row is recorded NOT_RUN with this measured wall time and is never shrunk to fit",
+        f"{budgeted / 1e9:.3f} s exceeds the {limit / 1e9:.0f} s {kind} limit"
+        + (
+            f" ({declared / 1e9:.3f} s of declared phases + "
+            f"{allowance / 1e9:.3f} s of lifecycle allowance; wall {wall_ns / 1e9:.3f} s)"
+            if declared_ns is not None
+            else ""
+        )
+        + "; the row is recorded NOT_RUN with these measured figures and is never shrunk to fit",
+        declared_ns=declared,
+        lifecycle_allowance_ns=allowance,
+        budgeted_ns=budgeted,
     )
 
 

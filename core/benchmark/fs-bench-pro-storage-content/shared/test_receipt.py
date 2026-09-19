@@ -100,11 +100,63 @@ class BudgetTest(unittest.TestCase):
         self.assertIn("29.620 s", missed.reason)
         self.assertIn("never shrunk to fit", missed.reason)
 
+    def test_the_budget_classifies_the_formula_and_not_the_raw_wall(self) -> None:
+        """`CONTRACT.md` section 4 fixes the budgeted quantity as a formula.
+
+        The wall is still published, and it is no longer what decides: a case whose
+        four phases are well inside the limit is inside it however slowly this host
+        forks. The allowance is declared and constant, so the outcome does not move
+        with process-start jitter.
+        """
+        # Four phases summing to 14.5 s, on a host whose process lifecycle cost 0.4 s:
+        # the wall alone would be NOT_RUN, the formula is PASS.
+        formula = receipt.budget(14_900_000_000, declared_ns=14_500_000_000)
+        self.assertEqual(formula.status, "PASS")
+        self.assertEqual(formula.budgeted_ns, 14_500_000_000 + receipt.LIFECYCLE_ALLOWANCE_NS)
+        self.assertEqual(formula.declared_ns, 14_500_000_000)
+        self.assertEqual(formula.lifecycle_allowance_ns, receipt.LIFECYCLE_ALLOWANCE_NS)
+        self.assertEqual(formula.wall_ns, 14_900_000_000)
+        self.assertIn("declared phases", formula.reason)
+
+        # Exactly on the limit passes; one nanosecond past it does not.
+        on = receipt.COMPLETE_COMMAND_LIMIT_NS - receipt.LIFECYCLE_ALLOWANCE_NS
+        self.assertEqual(receipt.budget(0, declared_ns=on).status, "PASS")
+        self.assertEqual(receipt.budget(0, declared_ns=on + 1).status, "NOT_RUN")
+
+        # A caller with no phases to hand classifies the wall, which is what every
+        # receipt written before the formula had.
+        self.assertEqual(receipt.budget(14_000_000_000).budgeted_ns, 14_000_000_000)
+        self.assertEqual(receipt.budget(14_000_000_000).lifecycle_allowance_ns, 0)
+        self.assertEqual(receipt.budget(15_000_000_001).status, "NOT_RUN")
+
+        # The declared-exception ladder is unchanged and still applies to the formula.
+        self.assertEqual(
+            receipt.budget(0, declared_exception=True, declared_ns=25_000_000_000).status,
+            "NOT_RUN",
+        )
+        self.assertEqual(
+            receipt.budget(
+                0,
+                declared_exception=True,
+                declared_ns=25_000_000_000 - receipt.LIFECYCLE_ALLOWANCE_NS,
+            ).status,
+            "PASS",
+        )
+
     def test_a_budget_outcome_renders_the_fields_a_receipt_needs(self) -> None:
         fields = receipt.budget(1_000_000_000).as_fields()
         self.assertEqual(
             sorted(fields),
-            ["declared_exception", "limit_ns", "reason", "status", "wall_ns"],
+            [
+                "budgeted_ns",
+                "declared_exception",
+                "declared_ns",
+                "lifecycle_allowance_ns",
+                "limit_ns",
+                "reason",
+                "status",
+                "wall_ns",
+            ],
         )
 
     def test_verification_has_its_own_sixty_second_limit(self) -> None:

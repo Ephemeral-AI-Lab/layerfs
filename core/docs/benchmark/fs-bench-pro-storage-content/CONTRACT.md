@@ -112,12 +112,33 @@ The full text is in `memory_cpu_space_support.md` and
 | Outputs | fresh path per run; receipts append-only; failures retained |
 | Cache state | declared per row, enforced equally, **never pooled across states** |
 | Workers | **1**; `LAYERFS_CONSTRUCTION_WORKERS=1` exported and asserted in the receipt |
-| Complete command | <= **15 s**; declared exceptions <= **25 s**; verification <= **60 s** |
+| Complete command | **a formula, not the raw process wall** (below); limit <= **15 s**, declared exceptions <= **25 s**; verification <= **60 s** |
 | Lock | measurement lock held per `perf`/`verify` invocation |
 | Toolchain | `cargo +1.85.1`, `--locked`, release |
 | Clocks | one domain: `CLOCK_MONOTONIC_RAW` (id 4), Rust and Python |
 | Trace schema | `layerfs-trace-v1` |
 | Receipt schema | `layerfs-core-receipt-v1` |
+
+**The complete-command formula.** The budgeted quantity is
+
+```text
+budgeted = declared_ns + LIFECYCLE_ALLOWANCE_NS
+declared_ns = preparation_wall_ns + operation_ns + verification_wall_ns + cleanup_wall_ns
+LIFECYCLE_ALLOWANCE_NS = 250 ms, declared
+```
+
+The wall is still **published** as `complete_command_ns`, because that is what bounds
+the command a reader can see. What the formula removes is the runner's raw process wall
+as the *deciding* quantity: process start-up, the trace header, gate assembly and
+teardown belong to no phase, and charging them to a case's budget made a row `NOT_RUN`
+on a host whose `fork`/`exec` was slow and billed preparation and verification to a
+**performance** budget instead of to their own targets (preparation to
+`test_setup_and_cache_discipline.md` §3's per-row ceiling, verification to its own 60 s
+limit above). The allowance is a declared constant rather than a measurement so the
+budgeted figure does not move with process-start jitter, and it cannot hide work: the
+reconciliation independently requires `declared <= invocation <= wall` inside the
+declared tolerance, so a row whose unaccounted span exceeded the allowance fails
+reconciliation first and is `INCOMPLETE`. Erratum **E4** records the change.
 
 ## 5. Owner decisions (frozen)
 
@@ -267,6 +288,14 @@ asserted:
 | E1 | the C2 statement cost centre is "one statement per row" | **wrong since P2-2** — one multi-row `INSERT` per bound chunk, chunk derived from the engine's own limits and capped at 128; `SaveOutcome.statements` and `presence_queries` are the counters that move | `c2-families.md` §1 |
 | E2 | `SortedWork.pages_read` undercounts batched merges, and an inner engine in `Engine::apply_root` loses its work — both "must be fixed before counters can gate" | **first fixed by P1-11** (`sorted/page.rs:277`); **second does not reproduce** — the crate's only `Engine::<F>::new` is `sorted/finish.rs:33`, returned at `:109`, aggregated by both callers | `c1-families.md` §6, `c2-families.md` §7, `gates_and_oracles.md` §7 |
 | E3 | the cache ladder is three constants; the read counters are four fields; the `opens` gate is absolute | **short by one constant** (`DECODED_GROUP_CACHE_BYTES` = 512 KiB, P2-4), **short by five fields**, and **route-dependent** — `opens` is only 0 on the opening wave through `StoreProvider::read_wave` | `c2-families.md` §§1,4; `gates_and_oracles.md` §5 |
+
+Phase 1 and Stage 6 moved the *harness*, and the harness's own budget rule was frozen
+here against the raw process wall. Stage 6 round 5b measured what that cost and replaced
+it:
+
+| # | The specification said | Verified at the pin | Corrected in |
+| --- | --- | --- | --- |
+| E4 | the complete-command budget classifies the process wall | **wrong once the four phases were published** — the wall charges process start-up and the runner's own bookkeeping to the case, and it billed preparation and verification to a performance budget. The budgeted quantity is now `declared_ns + 250 ms`, with `declared <= invocation <= wall` still required by the reconciliation | §4 above; `shared/receipt.py`; `runner.py` |
 
 **The instruction this leaves for Stage 6**: re-verify a cited constant or mechanism
 at the commit you are actually measuring before you design a case around it. The pin

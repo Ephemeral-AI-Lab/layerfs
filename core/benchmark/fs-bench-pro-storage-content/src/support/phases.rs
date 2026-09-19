@@ -53,6 +53,23 @@ pub struct Phases {
     /// Bytes of the product's own `timing.json` this invocation wrote, or zero
     /// when it wrote none.
     pub timing_json_bytes: u64,
+    /// User-mode CPU the **measured region** consumed, from `getrusage`.
+    ///
+    /// The axis the resource document names fourth and the harness published
+    /// nowhere until round 5b: every receipt carried a heap reading and no CPU one.
+    /// Both `getrusage` reads happen at the phase boundary — before the timer opens
+    /// and after it closes — so the instrument is not inside the region it measures.
+    pub cpu_user_ns: u64,
+    /// System-mode CPU the **measured region** consumed.
+    pub cpu_system_ns: u64,
+    /// Peak resident set of this child, from `getrusage(RUSAGE_SELF).ru_maxrss`.
+    ///
+    /// A **lifetime** figure for the whole process, not a phase number, and labelled
+    /// as one: `AGENTS.md` section 5 forbids quoting a lifetime counter as a phase
+    /// reading. One child runs one case, so it is that case's peak — a bound and an
+    /// anomaly detector, which is what the counted allocator's
+    /// `heap.peak_incremental_bytes` is the precise phase figure beside.
+    pub process_peak_rss_bytes: u64,
 }
 
 impl Phases {
@@ -79,6 +96,9 @@ impl Phases {
             ("handoff_ns", self.handoff_ns),
             ("invocation_ns", self.invocation_ns),
             ("timing_json_bytes", self.timing_json_bytes),
+            ("cpu_user_ns", self.cpu_user_ns),
+            ("cpu_system_ns", self.cpu_system_ns),
+            ("process_peak_rss_bytes", self.process_peak_rss_bytes),
         ]
     }
 }
@@ -92,6 +112,10 @@ struct Clock {
     acquisition_ns: u64,
     operation_ns: u64,
     timing_json_bytes: u64,
+    /// CPU at the close of preparation, and at the close of the measured region.
+    cpu_at_prepared: Option<crate::support::instruments::CpuReading>,
+    cpu_at_measured: Option<crate::support::instruments::CpuReading>,
+    process_peak_rss_bytes: u64,
 }
 
 static CLOCK: OnceLock<Mutex<Clock>> = OnceLock::new();
@@ -118,6 +142,9 @@ fn clock() -> MutexGuard<'static, Clock> {
                 acquisition_ns: 0,
                 operation_ns: 0,
                 timing_json_bytes: 0,
+                cpu_at_prepared: None,
+                cpu_at_measured: None,
+                process_peak_rss_bytes: 0,
             })
         })
         .lock()
@@ -138,6 +165,9 @@ pub fn begin(output: &Path) {
     held.acquisition_ns = 0;
     held.operation_ns = 0;
     held.timing_json_bytes = 0;
+    held.cpu_at_prepared = None;
+    held.cpu_at_measured = None;
+    held.process_peak_rss_bytes = 0;
     MEASURED_OPEN.store(false, Ordering::Relaxed);
     HANDOFF_NS.store(0, Ordering::Relaxed);
 }
@@ -168,9 +198,13 @@ pub fn preparation_is_the_invocation() {
 
 fn mark_prepared() {
     let now = Instant::now();
+    // Outside the measured region by construction: `ops::measure` marks preparation
+    // closed *before* it opens the product's timer.
+    let cpu = crate::support::instruments::cpu_now();
     let mut held = clock();
     if held.prepared.is_none() {
         held.prepared = Some(now);
+        held.cpu_at_prepared = cpu;
     }
 }
 
@@ -182,10 +216,15 @@ fn mark_prepared() {
 pub fn measured(operation_ns: u64, timing_json_bytes: u64) {
     MEASURED_OPEN.store(false, Ordering::Relaxed);
     let now = Instant::now();
+    // Also outside the region: the product's timer has already closed.
+    let cpu = crate::support::instruments::cpu_now();
+    let rss = crate::support::instruments::lifetime_peak_rss_bytes().unwrap_or(0);
     let mut held = clock();
     if held.measured.is_none() {
         held.measured = Some(now);
+        held.cpu_at_measured = cpu;
     }
+    held.process_peak_rss_bytes = held.process_peak_rss_bytes.max(rss);
     held.operation_ns = operation_ns;
     held.timing_json_bytes = timing_json_bytes;
 }
@@ -259,6 +298,15 @@ pub fn snapshot() -> Phases {
         .or(held.measured)
         .map(|mark| now.saturating_duration_since(mark).as_nanos() as u64)
         .unwrap_or(0);
+    // The measured region's own CPU: the difference between the two boundary reads,
+    // saturating because a zero reading means the platform could not produce one.
+    let cpu_delta = match (held.cpu_at_prepared, held.cpu_at_measured) {
+        (Some(before), Some(after)) => Some((
+            after.user_ns.saturating_sub(before.user_ns),
+            after.system_ns.saturating_sub(before.system_ns),
+        )),
+        _ => None,
+    };
     Phases {
         preparation_ns: since_start(held.prepared),
         acquisition_ns: held.acquisition_ns,
@@ -268,6 +316,9 @@ pub fn snapshot() -> Phases {
         handoff_ns: HANDOFF_NS.load(Ordering::Relaxed),
         invocation_ns: now.saturating_duration_since(held.start).as_nanos() as u64,
         timing_json_bytes: held.timing_json_bytes,
+        cpu_user_ns: cpu_delta.map(|(user, _)| user).unwrap_or(0),
+        cpu_system_ns: cpu_delta.map(|(_, system)| system).unwrap_or(0),
+        process_peak_rss_bytes: held.process_peak_rss_bytes,
     }
 }
 
@@ -318,6 +369,9 @@ pub fn parse(text: &str) -> Result<(String, Phases), String> {
             "handoff_ns" => phases.handoff_ns = parsed,
             "invocation_ns" => phases.invocation_ns = parsed,
             "timing_json_bytes" => phases.timing_json_bytes = parsed,
+            "cpu_user_ns" => phases.cpu_user_ns = parsed,
+            "cpu_system_ns" => phases.cpu_system_ns = parsed,
+            "process_peak_rss_bytes" => phases.process_peak_rss_bytes = parsed,
             _ => {}
         }
     }

@@ -77,6 +77,18 @@ def read_invocation(path: str | Path) -> dict[str, object]:
         if not isinstance(value, int) or value < 0:
             raise PhaseError(f"{path}: {key} is {value!r}")
         fields[key] = value
+    # The CPU and RSS readings arrived with round 5b's wiring of the two axes the
+    # resource document names and no receipt carried. They are read tolerantly: a
+    # phase file written before that wiring has none, and a missing reading is
+    # `None` rather than a zero that would read as "the operation used no CPU".
+    for key in ("cpu_user_ns", "cpu_system_ns", "process_peak_rss_bytes"):
+        value = document.get(key)
+        if value is None:
+            fields[key] = -1
+        elif not isinstance(value, int) or value < 0:
+            raise PhaseError(f"{path}: {key} is {value!r}")
+        else:
+            fields[key] = value
     if fields["acquisition_ns"] > fields["preparation_ns"]:
         raise PhaseError(
             f"{path}: acquisition {fields['acquisition_ns']} exceeds preparation "
@@ -216,6 +228,15 @@ def compose(
         "complete_command_ns": invocation_walls.get("perf", 0),
         "verification_invocation_ns": invocation_walls.get("verify", 0),
     }
+    # The measured region's CPU and the child's peak resident set, composed the same
+    # way the phase spans are. A reading the child could not produce is absent, not
+    # zero.
+    cpu_user = [int(r["cpu_user_ns"]) for r in readings.values() if int(r["cpu_user_ns"]) >= 0]
+    cpu_system = [int(r["cpu_system_ns"]) for r in readings.values() if int(r["cpu_system_ns"]) >= 0]
+    rss = [int(r["process_peak_rss_bytes"]) for r in readings.values() if int(r["process_peak_rss_bytes"]) >= 0]
+    totals["cpu_user_ns"] = sum(cpu_user) if cpu_user else None
+    totals["cpu_system_ns"] = sum(cpu_system) if cpu_system else None
+    totals["process_peak_rss_bytes"] = max(rss) if rss else None
     # The published operation time is checked against the product's own artifact,
     # not against the child's summary of it. Two sources, one number.
     timing_path = case_dir / "timing.json"
