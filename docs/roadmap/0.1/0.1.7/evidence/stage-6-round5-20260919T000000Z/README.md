@@ -289,7 +289,34 @@ the ones above.
 `tools/preflight.sh` was not run and was not restored. No CI workflow, no aggregate gate and
 no wrapper was created.
 
-## 11. Files in this directory
+## 11. What is left
+
+This is the first half of round 5. The honest-numbers half is finished; the cheap half is
+half done, and the half that is not done is the larger one — **preparation is byte-for-byte
+the same work round 4c did** (98.2 s of this lane, against a 25 s target), because V9–V11
+were not implemented.
+
+The full status — where the 98.2 s is by family, the seven remaining work items with
+estimates, the four decisions that are not the implementer's to make, and the reproduction
+commands — is
+[`stage-6-round5-handoff-20260919.md`](../../component-decoupling/stage-6-round5-handoff-20260919.md).
+The paste-ready entry point for the successor is
+[`stage-6-round5-continuation-prompt.md`](../../component-decoupling/stage-6-round5-continuation-prompt.md).
+
+Completion, by four denominators, with the reasoning in the handoff §3.1:
+
+| denominator | basis | % |
+| --- | --- | ---: |
+| item list (V1–V13) | 9 done, V6 half, V9–V11 zero | 73% |
+| stated targets met | 5 of 10 | 50% |
+| lane cost closed | 152.0 s of a 215.8 s gap | 70% |
+| the round's two halves | honest numbers ≈ 100%; cheap campaign ≈ 50% | ~75% |
+
+**Every figure in this table is an estimate, not a measurement.** It is recorded here so a
+reader of the receipt is not left with the impression that the round's cost targets were met;
+the measurements are §2 and §6, and they say plainly which targets were not.
+
+## 12. Files in this directory
 
 | File | What |
 | --- | --- |

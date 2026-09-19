@@ -223,7 +223,10 @@ so a reader is not misled by the sections above.
   master. A master sealed under a different key — or with no key at all — is superseded
   rather than consumed; round 4 consumed one.
 
-**Still not true.**
+**Still not true.** The full status, the work items and the four decisions it needs are in
+[`stage-6-round5-handoff-20260919.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-round5-handoff-20260919.md);
+the successor's entry point is
+[`stage-6-round5-continuation-prompt.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-round5-continuation-prompt.md).
 
 - **Preparation is still rebuilt per run for six fixture-heavy families.** Only
   `c2.delta.cdc-locality` has a prepared master. `c1.edit.*`, `c1.cdc.chunk-count`,
