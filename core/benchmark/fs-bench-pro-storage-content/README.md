@@ -39,7 +39,7 @@ trace; the runner derives a receipt from it and never edits either.
 | --- | --- |
 | `list` | Prints the binary's own generated registry, so what is listed is what is registered. |
 | `prepare` | Acquires the prepared artifacts a selection needs, once. A row whose registry declaration names a master is acquired for real into `prepared/<case_id>/`, hashed per file, given a `manifest.json`, keyed by its compatibility digest and sealed read-only; a row that declares none is recorded `not-produced` **with that reason** rather than faked. The declaration is a column of the binary's own registry, so no family list is maintained by hand. |
-| `perf` | One sample per case per arm; fresh output; measurement lock held; complete-command budget enforced per case; a receipt that names the tree it ran on. A row whose driver declares `oracle_phase: verify-invocation` is run in phases: the performance invocation is budgeted on its own complete command, and verification is a **second, unmeasured invocation** charged to its own 60 s budget. |
+| `perf` | One sample per case per arm; fresh output; measurement lock held; complete-command budget enforced per case; a receipt that names the tree it ran on. The verification mode defaults to `full` for a whole-lane run and to `sample` for iteration — `--lane smoke` or any explicit `--case` — and `--verify` always wins over that default. A row whose driver declares `oracle_phase: verify-invocation` is run in phases: the performance invocation is budgeted on its own complete command, and verification is a **second, unmeasured invocation** charged to its own 60 s budget. |
 | `verify` | Re-reads the raw artifacts and re-derives flatness, sequence, worst-gate aggregation, budget classification, and — for C2 rows — the space and pack accounting read out of the Store file itself. |
 | `report` | Renders the ladders, bands and the four-axis view. Time is printed and never decides. |
 | `self-check` | Runs every Python self-check, the registry self-check, the golden comparison and the lock-parity test. |
@@ -277,11 +277,17 @@ Recorded here so a reader is not misled by the sections above.
   over 118 masters, 15.567 GB), having acquired six families' masters for the first time. Round 5 passed at 75.39 s only because only twenty
   masters existed. The acquisition is untimed and once per compatibility digest, and it is
   what makes the 200 s lane target reachable. **T2/T3 need their ruling.**
-- **The quick lane is not fast.** `--verify none` skips the *deferred* verification
-  invocation, which only `c2.delta.cdc-locality` has: 0.801 s of a 173.6 s lane. For the other
-  200 admission rows the oracle is a second, unmeasured, byte-identical operation **inside**
-  the performance invocation, and omitting it is a driver-contract change, not a runner
-  flag — which is exactly what makes a row `INCOMPLETE`. **Decision 3 needs its ruling.**
+- **The quick lane is not fast, and the quick *default* does not make it fast.** #184
+  section 10.3 (owner directive) fixes the default: *"Quick is the default for iteration
+  (`--lane smoke` and explicit `--case` runs); an admission run is `full` or declares itself
+  otherwise and is ineligible."* That rule is implemented — a whole-lane run resolves to
+  `full`, anything narrower to `sample`, and `--verify` wins — but the ≤ 70 s target is a
+  separate thing and is not met. `--verify none` skips the *deferred* verification
+  invocation, which only `c2.delta.cdc-locality` has: 0.801 s of a 173.6 s lane. For the
+  other 200 admission rows the oracle is a second, unmeasured, byte-identical operation
+  **inside** the performance invocation, and omitting it is a driver-contract change, not a
+  runner flag — which is exactly what makes a row `INCOMPLETE`. **Decision 3 needs its
+  ruling.**
 - **`FilesystemRead::inode` (owner ruling 2) is not done.** It needs a product-source
   change and a test pinning both sides. Reported as a blocker rather than guessed at.
 - **The harness identity does not cover the harness's own Python.** A receipt names the Rust

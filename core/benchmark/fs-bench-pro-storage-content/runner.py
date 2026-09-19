@@ -98,11 +98,36 @@ VERIFICATION_BUDGET_NS = 60 * 1_000_000_000
 # run cannot be mistaken for a campaign.
 VERIFICATION_MODES = ("full", "sample", "none")
 
+# The mode an invocation runs in when the caller does not declare one. #184 section
+# 10.3 (owner directive, 2026-09-19) states the rule in one sentence: *"Quick is the
+# default for iteration (`--lane smoke` and explicit `--case` runs); an admission run
+# is `full` or declares itself otherwise and is ineligible."* The two halves are
+# separate: making a sampled oracle the default **for evidence** would change a gate
+# frozen before measurement, which stays an owner decision — so a full-lane run is
+# `full`, and everything narrower is quick. `--verify` always wins over this.
+ITERATION_LANE = "smoke"
+ITERATION_MODE = "sample"
+ADMISSION_MODE = "full"
+
 # The deterministic sample: `max(1, ceil(n/10))` of the row's declared verification
 # unit, selected by `index % 10 == 0` in declaration order. One rule, stated once,
 # applied wherever a row declares a countable unit - never "the first ten".
 SAMPLE_DIVISOR = 10
 SAMPLE_RULE = "index % 10 == 0 in declaration order, max(1, ceil(units/10)) units"
+
+
+def default_verification_mode(lane: str, cases: list[str] | None) -> str:
+    """The mode this invocation runs in when the caller declares none.
+
+    An **explicit `--case`** is iteration whatever lane it names, and so is the
+    smoke lane; only a whole-lane admission run is `full`. The resolved mode is
+    published in every receipt, in the run document and in the report header, and a
+    row it sampled or omitted is `INCOMPLETE`, so the default cannot silently
+    promote an iteration run into evidence.
+    """
+    if cases:
+        return ITERATION_MODE
+    return ADMISSION_MODE if lane == "full" else ITERATION_MODE
 
 
 def sample_size(units: int) -> int:
@@ -932,6 +957,13 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
     identity = receipt.identify(REPO_ROOT, HARNESS_ROOT, BINARY)
     assert_workers(identity)
     selection = arguments.case or registry_rows("--lane", arguments.lane)
+    verification_mode = arguments.verify or default_verification_mode(
+        arguments.lane, arguments.case
+    )
+    print(
+        f"perf: verification mode {verification_mode}"
+        + ("" if arguments.verify else " (the declared default for this selection)")
+    )
     reused_proof = None
     if arguments.reuse_pass:
         try:
@@ -947,8 +979,8 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
         "cache_state": "declared per row; never pooled",
         "samples_per_case_per_arm": 1,
         "declared_exceptions": sorted(DECLARED_EXCEPTIONS & set(selection)),
-        "verification_mode": arguments.verify,
-        "verification_sample_rule": SAMPLE_RULE if arguments.verify == "sample" else "",
+        "verification_mode": verification_mode,
+        "verification_sample_rule": SAMPLE_RULE if verification_mode == "sample" else "",
         "reused_proof_identities": (reused_proof or {}).get("identities"),
         "reused_proof": (reused_proof or {}).get("path"),
         "reused_proof_omission": (
@@ -971,7 +1003,7 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
                         case_id,
                         run_dir,
                         identity,
-                        verification_mode=arguments.verify,
+                        verification_mode=verification_mode,
                         reused_proof=reused_proof,
                     )
                 )
@@ -1481,7 +1513,15 @@ def main() -> int:
     perf.add_argument("--out", required=True)
     perf.add_argument("--case", action="append")
     perf.add_argument("--no-build", action="store_true")
-    perf.add_argument("--verify", choices=list(VERIFICATION_MODES), default="full")
+    perf.add_argument(
+        "--verify",
+        choices=list(VERIFICATION_MODES),
+        default=None,
+        help=(
+            "verification mode; defaults to full for a whole-lane run and to sample "
+            "for iteration (--lane smoke or any explicit --case)"
+        ),
+    )
     perf.add_argument("--reuse-pass")
     perf.set_defaults(function=cmd_perf)
 
