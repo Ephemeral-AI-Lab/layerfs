@@ -14,6 +14,13 @@
 > [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) is **closed** and was not
 > reopened.
 
+> **The preparation half landed, 2026-09-19 (round 5b).** This document's §4, §5.1 and §5.2
+> leave V6 and V9–V11 open and estimate them at 12–18 hours; they are done, together with
+> the registry declaration that deletes `PHASE_SPLIT_FAMILIES`. **Its measured figures stand
+> as the round-5 record and are not edited**; the successor's status, the new numbers and
+> the misses that remain are in
+> [`../evidence/stage-6-round5b-20260919T000000Z/`](../evidence/stage-6-round5b-20260919T000000Z/README.md).
+
 ## 1. Where the tree is
 
 ```text
