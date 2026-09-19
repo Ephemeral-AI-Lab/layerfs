@@ -13,6 +13,7 @@ use rusqlite::Connection;
 use layerfs_content::inode_leaf::{
     decode_pooled_body, rebuild_leaf, INODE_VALUE_BYTES, MAXIMUM_LEAF_ROWS,
 };
+use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::pool::{delta, leaf, value_group};
@@ -230,7 +231,8 @@ impl PoolReader {
         let mut current = root;
         loop {
             chain.push(current);
-            let Some(base) = current.base_object_id else {
+            let record = self.record(connection, workspace, &current)?;
+            let Some(base) = pooled_base(&record)? else {
                 break;
             };
             if chain.len() > usize::from(capacities.metadata_delta_max_depth) {
@@ -252,6 +254,11 @@ impl PoolReader {
             current = location;
         }
         let mut body: Option<Vec<u8>> = None;
+        // Identity of the element decoded immediately before this one, which is
+        // this element's base whenever the record says it has one. The record's
+        // own base identity is checked against it, so the edge the walk followed
+        // and the edge the record states must be the same edge.
+        let mut decoded_id: Option<ObjectId> = None;
         let mut canonical_work = 0_u64;
         let mut encoded_work = 0_u64;
         for location in chain.iter().rev() {
@@ -276,11 +283,8 @@ impl PoolReader {
                     let base_body = body
                         .as_ref()
                         .ok_or(StorageError::Integrity("pooled delta without base"))?;
-                    let expected_base = base;
-                    let base_id = location
-                        .base_object_id
-                        .ok_or(StorageError::Integrity("pooled delta base"))?;
-                    if expected_base != base_id {
+                    let base_id = decoded_id.ok_or(StorageError::Integrity("pooled delta base"))?;
+                    if base != base_id {
                         return Err(StorageError::Integrity("pooled delta base identity"));
                     }
                     if output_length != leaf::physical_length(location.canonical_length)? {
@@ -289,8 +293,24 @@ impl PoolReader {
                     delta::apply(base_body, instructions, count, output_length)?
                 }
             });
+            decoded_id = Some(location.object_id);
         }
         body.ok_or(StorageError::Integrity("pooled chain empty"))
+    }
+
+    /// The direct base identity one stored pooled locator names.
+    ///
+    /// `None` when the leaf is stored in full. The writer's depth walk reads a
+    /// chain's edges without decoding it, and does so through the same pack cache
+    /// the acquisition that follows uses, so an edge costs no second fetch.
+    pub fn stored_base(
+        &mut self,
+        connection: &Connection,
+        workspace: &mut DecompressionWorkspace,
+        location: &ObjectLocation,
+    ) -> StorageResult<Option<ObjectId>> {
+        let record = self.record(connection, workspace, location)?;
+        pooled_base(&record)
     }
 
     fn record(
@@ -376,4 +396,15 @@ impl PoolReader {
         }
         Ok(canonical)
     }
+}
+/// The direct base identity one pooled leaf record names, or `None` when FULL.
+///
+/// A pooled leaf keeps its base in the record (`pool::leaf::PooledRecord::Delta`),
+/// which is the same fact the ordinary lanes keep in theirs, so one reader serves
+/// both: an unparsable record is an integrity failure, not a chain that ends.
+fn pooled_base(record: &[u8]) -> StorageResult<Option<ObjectId>> {
+    Ok(match leaf::parse(record)? {
+        leaf::PooledRecord::Full(_) => None,
+        leaf::PooledRecord::Delta { base, .. } => Some(base),
+    })
 }

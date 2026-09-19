@@ -5,8 +5,12 @@
 //! selection compares complete record costs rather than frame lengths alone.
 //! Both grammars are shared by the encoder here and by the reconstruction path,
 //! so a record that cannot be parsed cannot be selected or read.
+//!
+//! The base identity is also the **only** record of a dependency edge: it is not
+//! duplicated in a locator column, and `stored_base` is the single reader of it
+//! for every walk.
 
-use layerfs_content::ObjectId;
+use layerfs_content::{ObjectId, ObjectRole};
 
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::{PackLane, WHOLE_FILE_COMPACT_DROP};
@@ -232,6 +236,32 @@ fn parse_framed(record: &[u8]) -> StorageResult<ParsedRecord<'_>> {
         base,
         frame,
     })
+}
+
+/// The direct base identity a stored record carries, or `None` when it is FULL.
+///
+/// This is the **only** source of a dependency edge: there is no base column, so
+/// a caller that wants to walk a chain reads the record. The answer is derived
+/// from the same grammar the decoder uses, so a record whose framing cannot be
+/// parsed is an integrity failure here rather than a chain that silently ends.
+///
+/// An `Ordinary` locator is ambiguous by grammar alone: the lane holds both plain
+/// canonical objects, whose records are always FULL, and pooled inode leaves,
+/// whose records are pooled ones. The role recorded with the locator decides, the
+/// same way it decides for the decoder.
+pub fn stored_base(
+    lane: PackLane,
+    record: &[u8],
+    canonical_length: usize,
+    role: ObjectRole,
+) -> StorageResult<Option<ObjectId>> {
+    if lane == PackLane::Ordinary && role == ObjectRole::InodeLeaf {
+        return Ok(match crate::encoding::pool::leaf::parse(record)? {
+            crate::encoding::pool::leaf::PooledRecord::Full(_) => None,
+            crate::encoding::pool::leaf::PooledRecord::Delta { base, .. } => Some(base),
+        });
+    }
+    Ok(parse(lane, record, canonical_length)?.base)
 }
 
 /// True when `record` was assembled with its compact framing bytes dropped.

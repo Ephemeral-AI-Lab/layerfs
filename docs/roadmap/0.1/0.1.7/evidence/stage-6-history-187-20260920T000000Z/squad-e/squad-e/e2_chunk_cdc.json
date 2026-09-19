@@ -1,0 +1,22 @@
+{
+  "bytes_reused_within_file": 2348239,
+  "chunked_version_bytes": 24492001,
+  "chunked_versions": 91,
+  "chunks": 1233,
+  "chunks_duplicated_within_one_version": 0,
+  "chunks_reused_within_file": 129,
+  "distinct_chunk_contents": 1098,
+  "distinct_minus_store_residual": 0,
+  "duplicate_emissions": 135,
+  "duplicate_emissions_cross_path": 6,
+  "duplicate_emissions_same_path": 129,
+  "emitted_chunks": 1233,
+  "port_matches_store": false,
+  "purity_probe_chunks": [
+    8,
+    8,
+    8
+  ],
+  "purity_probe_identical": true,
+  "store_chunk_objects": 1098
+}

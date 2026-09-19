@@ -9,6 +9,15 @@
 Operational half: [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) — the five phases, every DB operation, and the concurrency cases.
 Folder index and conventions: [`README.md`](README.md).
 
+**Implementation order (owner direction, 2026-09-20): third, after pair 3's
+service/transport and pair 1's Workspace/FUSE integration.** See the
+[execution sequence](README.md#implementation-order-pair-3-then-pair-1-then-pair-2).
+Provide the minimal identity/allocation and acknowledgement definitions needed
+by earlier steps as design input; full history implementation follows them.
+Their saved-root result is not a logical Commit. This pair adds staging, Commit
+and conditional publication through the established service, after tenancy and
+history metadata/transaction placement are explicit.
+
 ---
 
 ## 1. Why this is a co-design pair

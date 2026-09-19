@@ -362,3 +362,91 @@ pub fn corrupt_value_group_digest(path: &Path) {
 }
 
 pub mod filesystem;
+
+/// Rewrites the direct base identity one stored record carries.
+///
+/// There is no base column: a dependency edge lives in the packed record, so a
+/// test that forges one rewrites the pack. A raw group is patched in place; a
+/// compressed group is decoded, patched and re-encoded through the product's own
+/// framing, and the whole pack is written back.
+pub fn forge_stored_base(path: &std::path::Path, object: ObjectId, base: ObjectId) {
+    use layerfs_storage::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
+    use layerfs_storage::pack::{assemble, build_group};
+
+    let connection = rusqlite::Connection::open(path).expect("raw connection");
+    let (pack_id, group_number, record_number): (i64, i64, i64) = connection
+        .query_row(
+            "SELECT pack_id, group_number, record_number FROM objects WHERE object_id = ?1",
+            rusqlite::params![object.to_bytes().to_vec()],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("locator");
+    let pack: Vec<u8> = connection
+        .query_row(
+            "SELECT data FROM object_packs WHERE pack_id = ?1",
+            rusqlite::params![pack_id],
+            |row| row.get(0),
+        )
+        .expect("pack");
+    let header = parse_header(&pack).expect("pack header");
+    let mut decode = layerfs_storage::encoding::DecompressionWorkspace::new().expect("decode");
+    let mut groups: Vec<Vec<Vec<u8>>> = Vec::new();
+    let mut compressed = false;
+    for group in 0..header.group_count {
+        let view = group_view(&pack, header, group).expect("group view");
+        let body = match view.codec {
+            GroupCodec::Raw => pack[view.start..view.end].to_vec(),
+            GroupCodec::Zstandard => {
+                compressed = true;
+                decode
+                    .decompress_group(&pack[view.start..view.end], view.decoded_length)
+                    .expect("group body")
+            }
+        };
+        // The compact lane stores its record bare: the group body is the record,
+        // with no count or end-offset directory in front of it.
+        let mut records: Vec<Vec<u8>> = if header.lane == PackLane::WholeFile {
+            vec![body]
+        } else {
+            layerfs_storage::encoding::group_records(&body)
+                .expect("group records")
+                .into_iter()
+                .map(<[u8]>::to_vec)
+                .collect()
+        };
+        if group == group_number as usize {
+            let record = &mut records[record_number as usize];
+            assert_eq!(record[0], 1, "the forged record must be a PREFIX record");
+            record[1..33].copy_from_slice(base.as_bytes());
+        }
+        groups.push(records);
+    }
+    let bytes = if compressed {
+        let mut encode = layerfs_storage::encoding::CompressionWorkspace::new().expect("encode");
+        let mut encoded = Vec::new();
+        for records in &groups {
+            encoded.push(build_group(header.lane, records, Some(&mut encode)).expect("group"));
+        }
+        assemble(header.lane, &encoded).expect("pack")
+    } else {
+        let mut bytes = pack;
+        let view = group_view(&bytes, header, group_number as usize).expect("group view");
+        let mut offset = if header.lane == PackLane::WholeFile {
+            0
+        } else {
+            4 + 4 * groups[group_number as usize].len()
+        };
+        for record in &groups[group_number as usize][..record_number as usize] {
+            offset += record.len();
+        }
+        bytes[view.start + offset + 1..view.start + offset + 33].copy_from_slice(base.as_bytes());
+        bytes
+    };
+    let affected = connection
+        .execute(
+            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
+            rusqlite::params![pack_id, bytes],
+        )
+        .expect("pack rewrite");
+    assert_eq!(affected, 1);
+}

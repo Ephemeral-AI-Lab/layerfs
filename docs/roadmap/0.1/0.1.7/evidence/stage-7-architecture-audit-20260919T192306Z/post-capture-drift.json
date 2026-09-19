@@ -1,0 +1,9 @@
+{
+  "meaning": "Changes made by ongoing work after capture; findings describe the frozen snapshot, not these later edits.",
+  "changed_since_capture": [
+    "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+    "core/crates/layerfs-storage/tests/delta_chains.rs",
+    "core/crates/layerfs-storage/tests/delta_payload.rs",
+    "core/crates/layerfs-storage/tests/metadata_pool.rs"
+  ]
+}

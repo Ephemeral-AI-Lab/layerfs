@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "checked_files": 476,
+  "method": "Reconstruct HEAD files outside the repository, git apply --check and apply captured patch, compare SHA-256 against frozen snapshot manifest. No product execution.",
+  "mismatches": [],
+  "patch": "reviewed-product.patch.gz",
+  "source_whitespace": "One added blank line at EOF preserved from the reviewed working-tree source; git apply emitted a warning and reconstructed all file hashes exactly."
+}

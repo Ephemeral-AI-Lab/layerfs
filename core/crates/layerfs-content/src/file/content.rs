@@ -14,7 +14,7 @@ use std::io::Read;
 use layerfs_telemetry::timer::{Active, TimingScope};
 
 use crate::error::{ContentError, ContentResult};
-use crate::file::mapping::{self, FileState, MappingBuild};
+use crate::file::mapping::{self, FileState, MappingBuild, PredecessorBase};
 use crate::object::{
     encode_bytes_object, AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId,
     ObjectRole,
@@ -211,17 +211,38 @@ pub fn construct_bytes(
     consumer: &mut dyn FinalizedConsumer,
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
+    construct_bytes_with_predecessor(policy, capacities, bytes, None, consumer, scope)
+}
+
+/// Constructs a complete file from a known byte slice, offering a stored earlier
+/// version as the positional delta-base correspondence for a chunked result.
+///
+/// `base` is the earlier version's stored root together with the provider that
+/// serves it. It is consulted only when the result is chunked: a whole-file result
+/// is offered no chunk base, and a base that is itself a whole-file object offers
+/// nothing, because admitting a base across the representation transition is the
+/// deferred cross-role half and is not part of this design. With no base this is
+/// byte for byte `construct_bytes`.
+pub fn construct_bytes_with_predecessor(
+    policy: ConstructionPolicy,
+    capacities: &ConstructionCapacities,
+    bytes: &[u8],
+    base: Option<PredecessorBase<'_>>,
+    consumer: &mut dyn FinalizedConsumer,
+    scope: TimingScope<'_>,
+) -> ContentResult<ConstructedFile> {
     // A policy this profile does not support is refused before any work: the
     // entry point is where a caller learns its inputs are unusable, not the first
     // object that happens to depend on the unsupported field.
     policy.validated()?;
-    scope.run(|construct| construct_bytes_in(policy, capacities, bytes, consumer, construct))
+    scope.run(|construct| construct_bytes_in(policy, capacities, bytes, base, consumer, construct))
 }
 
 fn construct_bytes_in(
     policy: ConstructionPolicy,
     capacities: &ConstructionCapacities,
     bytes: &[u8],
+    base: Option<PredecessorBase<'_>>,
     consumer: &mut dyn FinalizedConsumer,
     construct: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
@@ -244,7 +265,7 @@ fn construct_bytes_in(
             })
         }
         Representation::Empty | Representation::Chunked => {
-            construct_chunked(capacities, bytes, consumer, construct)
+            construct_chunked(capacities, bytes, base, consumer, construct)
         }
     }
 }
@@ -277,11 +298,12 @@ pub fn construct_stream<R: Read>(
             .child("content.probe")
             .run(|_| read_at_most(&mut source, cutoff, &mut prefix))?;
         if (prefix.len() as u64) < cutoff {
-            return construct_bytes_in(policy, capacities, &prefix, consumer, construct);
+            return construct_bytes_in(policy, capacities, &prefix, None, consumer, construct);
         }
         construct_chunked(
             capacities,
             std::io::Cursor::new(prefix).chain(source),
+            None,
             consumer,
             construct,
         )
@@ -297,12 +319,20 @@ fn read_at_most<R: Read>(source: &mut R, limit: u64, prefix: &mut Vec<u8>) -> Co
 fn construct_chunked<R: Read>(
     capacities: &ConstructionCapacities,
     source: R,
+    base: Option<PredecessorBase<'_>>,
     consumer: &mut dyn FinalizedConsumer,
     scope: &TimingScope<'_, Active>,
 ) -> ContentResult<ConstructedFile> {
-    let build = scope
-        .child("content.chunk")
-        .run(|_| mapping::build_streaming(capacities, source, consumer))?;
+    let build = scope.child("content.chunk").run(|chunk| {
+        // Opening the correspondence is one read of the base root, and it is the
+        // read that declines a base which is not chunked. No base is opened when
+        // none was offered, so a base-less construction performs no read at all.
+        let mut cursor = match base {
+            Some(base) => mapping::PredecessorCursor::open(base, chunk)?,
+            None => None,
+        };
+        mapping::build_streaming_with_predecessor(capacities, source, cursor.as_mut(), consumer)
+    })?;
     let mapping_root = match build.root {
         Some(root) => root,
         None => {

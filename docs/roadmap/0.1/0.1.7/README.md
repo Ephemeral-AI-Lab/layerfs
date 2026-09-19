@@ -128,6 +128,38 @@ remain mandatory. No runtime setting or performance result is claimed here.
 
 ## Plan status
 
+**Current direction, 2026-09-20:** Stages 0–6 are closed at their recorded scope.
+[Stage 6 closure evidence](evidence/stage-6-round4c-20260919T000000Z/README.md)
+and the [harness follow-up](evidence/stage-6-round5b-20260919T000000Z/README.md)
+carry the qualification results and their limits. The separate retained-history
+claim retains its own acceptance; it is not implied by that closure.
+
+**Stage 7 is now the [cluster 1 + cluster 2 architecture review](component-decoupling/stage-7-architecture-review.md)**
+([#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172)). It replaces the
+former Workspace/FUSE/runtime implementation assignment. Its first priority is
+flexibility, pluggability and independent evolution: integration should be able
+to consume stable contracts while another worktree optimizes C1/C2, then adopt
+compatible component revisions without rewriting integration logic. The review
+requires source-backed findings and a concrete substitution proof, not just
+separate crates or a passing functional suite.
+
+**Subsequent implementation order (owner direction, 2026-09-20): pair 3 → pair 1 → pair 2.**
+First [#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181) establishes the
+operation-owner/service and transport with a real test client; then
+[#179](https://github.com/Ephemeral-AI-Lab/layerfs/issues/179) builds Workspace/FUSE
+on that endpoint; then [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180)
+adds history, staging, logical Commit and conditional head publication. A short
+shared operation agreement precedes pair 3; it does not require implementing all
+three pairs in parallel. The [execution contract](../../../../core/docs/architecture/proposal/README.md#implementation-order-pair-3-then-pair-1-then-pair-2)
+defines each step's deliverable and the saved-root versus logical Commit boundary.
+Pair 3 has two explicit priorities: **portable architecture for future
+cloud/serverless SQLite**, and **actual Linux Docker daemon + host service
+implementation/verification**. See its [scope and acceptance](../../../../core/docs/architecture/proposal/04-boundary-and-trust.md).
+Durability is planned later; cloud backends and durability are not implemented
+by this pair. Workspace/FUSE arrive with pair 1.
+Earlier handoffs and receipts below retain their historical scope; references in
+those records to Stage 7 runtime work are superseded by this owner direction.
+
 **Stage 5 is closed at its implemented scope.** The terminal closure is
 `2026-09-17T21:05:53Z`, comment `5721219925`, final HEAD
 `249d2b917211d300b93fa3ead418a7eeb56e731b`. An earlier component-scope closure at
@@ -156,7 +188,8 @@ records completed scopes and explicit unmeasured owner waivers; it is not a
 performance baseline claim. Stage 6 (#171) qualifies the whole core and owns the
 `VF-6` disposition: under the frozen `structural-complexity` decision (`D1`) the
 comparative claim is **withdrawn**, not deferred a second time. Stage 7 (#172)
-integrates the later Workspace/runtime shape. No complete-operation performance claim is made by
+reviews C1/C2 architecture flexibility and pluggability; the co-design pairs own
+subsequent integration design. No complete-operation performance claim is made by
 Stage 5, and nothing is tagged or released by this closure.
 
 Two source-read studies now bound what Stage 6 should measure first: the
@@ -168,7 +201,7 @@ Two source-read studies now bound what Stage 6 should measure first: the
 configuration layer is behind, and the end-to-end balance is unmeasured).
 Neither takes a measurement or makes a performance claim.
 
-**Stage 6 is the active stage (2026-09-19).**
+**Historical Stage 6 assignment (superseded by the closure linked above).**
 [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) qualifies the complete
 C1/C2 core for correctness, performance and memory, and its
 [Stage 6 handoff](component-decoupling/stage-6-handoff.md) is the executable
@@ -187,7 +220,7 @@ round-2 review assigned to the Stage 6 owner. No performance claim is made here,
 Stage 6 runs under the measurement contract with one sample per case per arm and no
 fault-injection branch in product source.
 
-**Stage 6 round 1 is recorded (2026-09-18T175400Z), and it does not close #171.**
+**Historical Stage 6 round 1 (2026-09-18T175400Z); later rounds closed #171.**
 The harness runs end to end and published a status for all **220 registered rows**
 (217 admission + 3 diagnostic): **122 PASS / 3 FAIL / 95 NOT_RUN**, one sample per
 case per arm, every non-`PASS` row retaining its measured state and reason. The
@@ -222,8 +255,9 @@ The successor's executable assignment is the
 the tree's actual state, the measured matrices, the one owner decision that gates
 twelve rows, the ordered work plan (test suite first, then the six filesystem
 families and the pipeline), and the sixteen traps round 1 hit.
-#171 stays **open**: acceptance checkboxes 1, 2, 4 and 5 carry unrun work that is
-recorded rather than waived. Nothing is tagged or released.
+At round 1, #171 stayed **open**: acceptance checkboxes 1, 2, 4 and 5 carried
+unrun work. The later closure linked above records their disposition. Nothing is
+tagged or released.
 
 Design planning (owner direction, 2026-09-16). The
 [component-decoupling discussion index](component-decoupling/README.md) organizes
@@ -249,8 +283,8 @@ reuse, three pack framings, the four-table SQLite schema and independent timing.
 The [Stages 0–2 report](component-decoupling/stages-0-2-report.md) records the
 frozen profile, expected-versus-actual production LOC, the run commands, the
 observed roots and every declared gap (DELTA, larger cutoffs, pooling, RSS
-evidence and the un-induced unknown-outcome case). Stages 6–7 remain open, and no
-part of v0.1.7 is claimed complete.
+evidence and the un-induced unknown-outcome case). Stages 0–6 are now closed at
+their recorded scope; the new Stage 7 review remains open, and v0.1.7 is not released.
 
 The initial [Stages 3–4 report](component-decoupling/stages-3-4-report.md) records
 payload delta/configuration and partial edits, with missing physical metadata
@@ -345,6 +379,8 @@ group is **outside the 217**: it keeps its own lanes, its own cardinality of 3, 
 golden table and its own verification mode, and it does not amend
 [`CONTRACT.md`](../../../../core/docs/benchmark/fs-bench-pro-storage-content/CONTRACT.md)
 or any 217-row verdict. It makes no Commit, LayerStack, Branch, FUSE, daemon or cgroup
-claim — Stage 7 ([#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172)) owns
-that half. No row of this claim has been measured; the specification states no
-measurement.
+claim — subsequent integration design belongs to the co-design pairs
+[#179](https://github.com/Ephemeral-AI-Lab/layerfs/issues/179),
+[#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180) and
+[#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181). The specification
+itself states no measurement; subsequent evidence and dispositions belong to #186.

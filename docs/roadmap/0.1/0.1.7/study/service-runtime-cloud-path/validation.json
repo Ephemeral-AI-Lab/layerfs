@@ -1,0 +1,7 @@
+{
+  "local_links_and_whitespace": "PASS",
+  "errors": [],
+  "json": "valid",
+  "source_changed_after_manifest_capture": [],
+  "builds_tests_deployments_benchmarks": "NOT_RUN; read-only research"
+}

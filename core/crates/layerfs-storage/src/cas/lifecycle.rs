@@ -31,6 +31,7 @@ impl MutationOwner {
         connection: Connection,
         capacities: StorageCapacities,
         pool_index: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
+        candidates: std::sync::Arc<std::sync::Mutex<Candidates>>,
     ) -> StorageResult<Self> {
         // The connection is caller-supplied at this seam, so its profile is
         // re-verified rather than trusted: a write must never run on a
@@ -53,6 +54,18 @@ impl MutationOwner {
         let next_pack_id = baseline_pack_id
             .checked_add(1)
             .ok_or(StorageError::Integrity("pack identifier overflow"))?;
+        // The Store-owned content index is read back here, not at the call site,
+        // because it must be read inside the write acquisition that is about to
+        // use it. `Store::open` already loaded it, so this reads the table only
+        // after a failed save invalidated the slots.
+        {
+            let mut index = candidates
+                .lock()
+                .map_err(|_| StorageError::Integrity("candidate index lock"))?;
+            if index.needs_load() {
+                index.reload(&connection)?;
+            }
+        }
         let compression = CompressionWorkspace::new()?;
         let decompression = DecompressionWorkspace::new()?;
         Ok(Self {
@@ -87,7 +100,7 @@ impl MutationOwner {
                 transactions: 1,
                 ..OutcomeCounters::default()
             },
-            candidates: Candidates::new()?,
+            candidates,
             depths: DepthCache::new(),
             pack_cache: BTreeMap::new(),
             chain: ChainCounters::default(),
@@ -185,6 +198,18 @@ impl MutationOwner {
             write::begin_immediate(&self.connection)?;
             self.counters.transactions += 1;
         }
+        // **W2 (#188d).** The content index is written in the transaction that
+        // publishes the objects it names, and only the entries this save admitted
+        // are written. Either the save's output and its index both become visible,
+        // or neither does: a rolled-back transaction leaves the table exactly as
+        // the last acknowledged save left it.
+        {
+            let mut index = self
+                .candidates
+                .lock()
+                .map_err(|_| StorageError::Integrity("candidate index lock"))?;
+            index.flush(&self.connection)?;
+        }
         // The watermark names the packs this save created. It advances only here,
         // so either the save's output and its watermark both become visible, or
         // neither does.
@@ -207,6 +232,10 @@ impl MutationOwner {
             self.transaction_open = false;
         }
         crate::sqlite::cleanup::abandon(&self.connection, self.baseline_pack_id)?;
+        // An abandoned save published nothing, so the entries it admitted name
+        // objects that do not exist. The table is authoritative and was never
+        // written; the slots are dropped and read back by the next save.
+        self.invalidate_candidates();
         Ok(())
     }
 
@@ -220,6 +249,7 @@ impl MutationOwner {
         if let Ok(mut index) = self.pool_index.lock() {
             index.invalidate();
         }
+        self.invalidate_candidates();
     }
 
     /// Marks an unproven outcome: affected writes stop and nothing is deleted.
@@ -227,6 +257,19 @@ impl MutationOwner {
         self.terminal = true;
         self.quarantined = true;
         if let Ok(mut index) = self.pool_index.lock() {
+            index.invalidate();
+        }
+        self.invalidate_candidates();
+    }
+
+    /// Drops the Store-owned content index back to "reload from the table".
+    ///
+    /// A failed save may have admitted entries for objects it never published, and
+    /// the flush that would have written them never committed. The table is
+    /// authoritative and the slots are disposable derivation, so the reset is
+    /// whole and the next save reads the table back rather than repairing anything.
+    fn invalidate_candidates(&mut self) {
+        if let Ok(mut index) = self.candidates.lock() {
             index.invalidate();
         }
     }

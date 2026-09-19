@@ -1,0 +1,12 @@
+{
+  "head": "66bce8378b5e9ecb1135b1636f8ee2ffac46ccf5",
+  "method": "Read-only sequencing review; GitHub issue bodies captured before review. Planning proposals are not implementation evidence.",
+  "sources": {
+    "core/docs/architecture/proposal/README.md": "8c638b57a1625160cf9043ee51f8ba756a51b66387df3d1f8d553eecb64a4486",
+    "core/docs/architecture/proposal/01-projection-and-runtime.md": "526a16b8a9448a40c33b8fb22818660d2665a2fbd6da0f73cdb4abad29ce6666",
+    "core/docs/architecture/proposal/02-init-commit-and-concurrency.md": "fe5efbc44fb3157c598c9ea7a90d1b024ee33ac53f2308c9ab5c1d1d92da4429",
+    "core/docs/architecture/proposal/03-history.md": "239e7133c5148387d405c7a9e14c84086956adcf71317b6538606767e1cd8414",
+    "core/docs/architecture/proposal/04-boundary-and-trust.md": "70dba6458f5cb19ee21b04b1ea1b35281c6006f2bea0a36827a1da8f2ff8d7f1",
+    "docs/roadmap/0.1/0.1.7/README.md": "7dffd0802247c681e367bf8d3cd4ac02450372240a63453191d24136876dafbd"
+  }
+}

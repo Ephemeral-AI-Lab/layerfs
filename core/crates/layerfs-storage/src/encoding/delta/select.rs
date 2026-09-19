@@ -15,12 +15,12 @@ use layerfs_content::{ObjectId, ObjectRole};
 
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
-use crate::encoding::delta::read::{ChainCounters, Resolver};
+use crate::encoding::delta::read::{ChainBases, ChainCounters, Resolver};
 use crate::encoding::full::{encode_full, encode_prefix, raw_payload, EncodedRecord};
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
-use crate::sqlite::lookup;
+use crate::sqlite::lookup::{self, ObjectLocation};
 use layerfs_content::MAXIMUM_DELTA_MAX_DEPTH;
 
 /// Live entries of the per-save chain-depth cache.
@@ -83,23 +83,53 @@ impl DepthCache {
     }
 
     /// Depth of `id` in its dependency chain, or `None` when it is not stored.
-    pub fn depth_of(&mut self, connection: &Connection, id: ObjectId) -> StorageResult<Option<u8>> {
-        Ok(self.cost_of(connection, id)?.map(|cost| cost.depth))
+    pub fn depth_of<F>(
+        &mut self,
+        connection: &Connection,
+        workspace: &mut DecompressionWorkspace,
+        id: ObjectId,
+        base_of: F,
+    ) -> StorageResult<Option<u8>>
+    where
+        F: FnMut(
+            &Connection,
+            &mut DecompressionWorkspace,
+            &ObjectLocation,
+        ) -> StorageResult<Option<ObjectId>>,
+    {
+        Ok(self
+            .cost_of(connection, workspace, id, base_of)?
+            .map(|cost| cost.depth))
     }
 
     /// Depth and canonical cost of `id`'s chain, or `None` when it is not stored.
     ///
     /// The walk is iterative and bounded by the profile maximum; a stored chain
     /// longer than that is corrupt and is reported rather than absorbed.
-    pub fn cost_of(
+    pub fn cost_of<F>(
         &mut self,
         connection: &Connection,
+        workspace: &mut DecompressionWorkspace,
         id: ObjectId,
-    ) -> StorageResult<Option<ChainCost>> {
+        mut base_of: F,
+    ) -> StorageResult<Option<ChainCost>>
+    where
+        F: FnMut(
+            &Connection,
+            &mut DecompressionWorkspace,
+            &ObjectLocation,
+        ) -> StorageResult<Option<ObjectId>>,
+    {
         let mut path: Vec<(ObjectId, u64)> = Vec::new();
         let mut current = id;
+        // Whether the walk stopped on an **already cached** cost rather than on
+        // the chain root. The cached entry is not pushed onto `path`, but the
+        // edge from the first walked element to it is real, and the arithmetic
+        // below has to count it.
+        let mut cached_edge = 0_u8;
         let cost = loop {
             if let Some(cost) = self.costs.get(&current).copied() {
+                cached_edge = 1;
                 break cost;
             }
             let Some(location) = lookup::location(connection, current, i64::MAX)? else {
@@ -113,7 +143,7 @@ impl DepthCache {
             if path.len() > usize::from(MAXIMUM_DELTA_MAX_DEPTH) + 1 {
                 return Err(StorageError::Integrity("stored dependency chain depth"));
             }
-            match location.base_object_id {
+            match base_of(connection, workspace, &location)? {
                 Some(base) => current = base,
                 None => {
                     break ChainCost {
@@ -127,11 +157,22 @@ impl DepthCache {
         // the root's own depth) or at an already known cost (that object's depth).
         // Recording walks back up the path, so the deepest element keeps the depth
         // it actually has and each ancestor below it adds exactly one edge.
+        //
+        // `cached_edge` is that edge, and leaving it out recorded **every level of
+        // a cache-hit walk one edge short**. The consequence was not a cosmetic
+        // one: a producer that respected `whole_file_delta_max_depth` could still
+        // make the writer build a chain one edge deeper than the policy permits,
+        // and the reader — which refuses exactly edges greater than the cap —
+        // then refused the Store's own output. Measured on the retained-history
+        // lane: the faithful model aborts with `Integrity("dependency chain
+        // depth")` at the default policy and again with the driver declaring no
+        // base deeper than 8. The bounds were consistent; the measurement was not.
         let mut level = cost;
         let mut result = cost;
         for (position, (id, own)) in path.iter().rev().enumerate() {
             let depth = cost
                 .depth
+                .saturating_add(cached_edge)
                 .saturating_add(u8::try_from(position).unwrap_or(u8::MAX));
             level = ChainCost {
                 depth,
@@ -300,9 +341,18 @@ pub fn select(
     input.counters.trials = input.counters.trials.saturating_add(1);
     let prefix = encode_prefix(canonical, role, base_id, base_raw, input.capacities, encode)?;
     if prefix.record.len() < full.record.len() {
+        // The walk reads each edge from its record through the selection's own
+        // pack cache, which the acquisition of this same base already filled: the
+        // bodies are fetched once, not once per walk and once per read.
+        let mut bases = ChainBases::new(input.packs);
         let base_cost = input
             .depths
-            .cost_of(input.connection, base_id)?
+            .cost_of(
+                input.connection,
+                input.decode,
+                base_id,
+                |connection, workspace, location| bases.base_of(connection, workspace, location),
+            )?
             .ok_or(StorageError::Integrity("selected base is not stored"))?;
         input.depths.record(
             id,
@@ -366,7 +416,14 @@ fn eligible(
     if location.role != role {
         return Ok(false);
     }
-    let Some(depth) = input.depths.depth_of(input.connection, id)? else {
+    let mut bases = ChainBases::new(input.packs);
+    let depth = input.depths.depth_of(
+        input.connection,
+        input.decode,
+        id,
+        |connection, workspace, location| bases.base_of(connection, workspace, location),
+    )?;
+    let Some(depth) = depth else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
     };

@@ -1,0 +1,58 @@
+{
+  "13": {
+    "covered_canonical_bytes": 220225980,
+    "covered_cross_path": 19816,
+    "covered_cross_save_objects": 22257,
+    "covered_objects": 29706,
+    "covered_same_path": 9890,
+    "index_entries": 14470
+  },
+  "14": {
+    "covered_canonical_bytes": 272238787,
+    "covered_cross_path": 21501,
+    "covered_cross_save_objects": 30011,
+    "covered_objects": 34369,
+    "covered_same_path": 12868,
+    "index_entries": 9791
+  },
+  "15": {
+    "covered_canonical_bytes": 291065235,
+    "covered_cross_path": 22630,
+    "covered_cross_save_objects": 33464,
+    "covered_objects": 36052,
+    "covered_same_path": 13422,
+    "index_entries": 8108
+  },
+  "16": {
+    "covered_canonical_bytes": 296999211,
+    "covered_cross_path": 23045,
+    "covered_cross_save_objects": 34274,
+    "covered_objects": 36544,
+    "covered_same_path": 13499,
+    "index_entries": 7614
+  },
+  "17": {
+    "covered_canonical_bytes": 299192200,
+    "covered_cross_path": 23241,
+    "covered_cross_save_objects": 34584,
+    "covered_objects": 36728,
+    "covered_same_path": 13487,
+    "index_entries": 7428
+  },
+  "18": {
+    "covered_canonical_bytes": 299891843,
+    "covered_cross_path": 23318,
+    "covered_cross_save_objects": 34699,
+    "covered_objects": 36790,
+    "covered_same_path": 13472,
+    "index_entries": 7365
+  },
+  "None": {
+    "covered_canonical_bytes": 303595980,
+    "covered_cross_path": 24232,
+    "covered_cross_save_objects": 35187,
+    "covered_objects": 37200,
+    "covered_same_path": 12968,
+    "index_entries": 6948
+  }
+}

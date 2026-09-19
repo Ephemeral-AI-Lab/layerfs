@@ -59,7 +59,7 @@
 //! directory is listed exactly once across a run, because the spans partition
 //! `1..=157`; nothing is re-read.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -535,6 +535,13 @@ pub struct Corpus {
     states: Vec<State>,
     /// The 157 checkpoints, in manifest order.
     checkpoints: Vec<Checkpoint>,
+    /// Every checkpoint's tree, by 1-based checkpoint index.
+    ///
+    /// `None` until [`Corpus::checkpoint_trees`] fills it. A producer that ran at
+    /// every commit needs each checkpoint's tree to answer "what was this path
+    /// before?", and re-reading a manifest per path would be 157 parses for one
+    /// answer.
+    checkpoint_trees: Vec<Option<BTreeMap<Vec<u8>, TreeEntry>>>,
     /// The previous *selected* state's tree. Empty before the first state.
     previous: BTreeMap<Vec<u8>, TreeEntry>,
 }
@@ -620,6 +627,7 @@ impl Corpus {
             root: root.to_path_buf(),
             row,
             states,
+            checkpoint_trees: vec![None; checkpoints.len()],
             checkpoints,
             previous: BTreeMap::new(),
         })
@@ -660,6 +668,106 @@ impl Corpus {
                 })
                 .sum(),
         }
+    }
+
+    /// Loads every checkpoint's tree, once, so a producer can consult the full
+    /// history without re-reading a manifest per path.
+    pub fn load_checkpoint_trees(&mut self) -> Result<(), HistoryError> {
+        if self.checkpoint_trees.iter().all(Option::is_some) {
+            return Ok(());
+        }
+        for index in 1..=self.checkpoints.len() {
+            let checkpoint = &self.checkpoints[index - 1];
+            let manifest_path = self
+                .root
+                .join("inputs")
+                .join(&checkpoint.sha)
+                .join("manifest.tsv");
+            let tree = parse_tree(&manifest_path)?;
+            self.checkpoint_trees[index - 1] = Some(tree);
+        }
+        Ok(())
+    }
+
+    /// The most recent **earlier** version of each of `paths`, from any checkpoint.
+    ///
+    /// A real producer runs at **every** commit, not only at the selected ones:
+    /// when it saves checkpoint *k* it holds the tree of checkpoint *k-1*, and the
+    /// base it declares for a path is that path's version at *k-1*. The selection
+    /// then saves states 1, 11, 21 ... into one Store, so a file that changed in
+    /// checkpoints 2..10 arrives at state 11 as **new to the Store** while a
+    /// producer that ran at every commit would have had its state-10 version in
+    /// hand.
+    ///
+    /// This is the correspondence Stage 7 owns, supplied by the harness because
+    /// Stage 7 does not exist. It is **harness code and no product line**.
+    ///
+    /// One backward sweep over the checkpoints, not one per path: each checkpoint's
+    /// tree is visited once and every path still looking for a version is answered
+    /// from it. Returns `path -> (oid, the checkpoint that holds it)`.
+    pub fn prior_versions(
+        &self,
+        state: &State,
+        paths: &[Vec<u8>],
+    ) -> Result<BTreeMap<Vec<u8>, ([u8; 20], u16)>, HistoryError> {
+        let mut wanted: BTreeSet<&[u8]> = paths.iter().map(Vec::as_slice).collect();
+        let mut found: BTreeMap<Vec<u8>, ([u8; 20], u16)> = BTreeMap::new();
+        let mut index = state.full157_index;
+        while index > 1 && !wanted.is_empty() {
+            index -= 1;
+            let Some(tree) = self
+                .checkpoint_trees
+                .get(index as usize - 1)
+                .and_then(Option::as_ref)
+            else {
+                return Err(HistoryError::TreeManifest {
+                    path: self.root.clone(),
+                    line: 0,
+                    reason: "checkpoint trees were not loaded before prior_versions".to_string(),
+                });
+            };
+            wanted.retain(|path| match tree.get(*path) {
+                Some(entry) => {
+                    found.insert(path.to_vec(), (entry.oid, index));
+                    false
+                }
+                None => true,
+            });
+        }
+        Ok(found)
+    }
+
+    /// The earlier versions of `paths`, with the bytes a producer would hold.
+    ///
+    /// The correspondence and the input it needs, in one call. The bytes are read
+    /// here, outside the measured children, exactly as a transition's own blobs
+    /// are — a producer reads its input outside the operation it measures.
+    pub fn prior_inputs(
+        &self,
+        state: &State,
+        paths: &[Vec<u8>],
+    ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>, HistoryError> {
+        let found = self.prior_versions(state, paths)?;
+        if found.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let oids: HashSet<[u8; 20]> = found.values().map(|(oid, _)| *oid).collect();
+        let located = self.locate(&oids, 1, state.full157_index)?;
+        let mut bytes_of: HashMap<[u8; 20], Vec<u8>> = HashMap::with_capacity(oids.len());
+        for oid in &oids {
+            let Some((_checkpoint, path)) = located.get(oid) else {
+                continue;
+            };
+            let bytes = read(path)?;
+            bytes_of.insert(*oid, bytes);
+        }
+        let mut out = BTreeMap::new();
+        for (path, (oid, _checkpoint)) in found {
+            if let Some(bytes) = bytes_of.remove(&oid) {
+                out.insert(path, bytes);
+            }
+        }
+        Ok(out)
     }
 
     /// One state's oracle, parsed. The verify phase's O4 source.
@@ -805,7 +913,7 @@ impl Corpus {
     /// The map is built for one transition's span and dropped with it, so it is
     /// bounded by the span and not by the history. Each checkpoint's `blobs/`
     /// directory is listed exactly once across a run.
-    fn locate(
+    pub fn locate(
         &self,
         wanted: &HashSet<[u8; 20]>,
         from: u16,

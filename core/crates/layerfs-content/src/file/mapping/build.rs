@@ -24,6 +24,8 @@ use crate::object::{
 };
 use crate::policy::ConstructionCapacities;
 
+use super::predecessor::PredecessorCursor;
+
 /// Facts established while building; no root reread is required afterwards.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MappingBuild {
@@ -321,9 +323,32 @@ pub fn build_streaming<R: Read>(
     source: R,
     consumer: &mut dyn FinalizedConsumer,
 ) -> ContentResult<MappingBuild> {
+    build_streaming_with_predecessor(capacities, source, None, consumer)
+}
+
+/// Builds the extent tree for `source`, offering every chunk the stored payload
+/// the base mapping holds at that chunk's own byte range.
+///
+/// The cursor is advanced by the builder's own logical position, which is the
+/// chunk's start offset: the chunk at offset `n` of the result is offered the base
+/// extent covering offset `n` of the base. A cursor that has run out of
+/// correspondence offers nothing, and the construction is then byte for byte the
+/// one without a base.
+pub(crate) fn build_streaming_with_predecessor<R: Read>(
+    capacities: &ConstructionCapacities,
+    source: R,
+    predecessor: Option<&mut PredecessorCursor<'_, '_, '_>>,
+    consumer: &mut dyn FinalizedConsumer,
+) -> ContentResult<MappingBuild> {
     let mut builder = ExtentBuilder::new(capacities);
+    let mut predecessor = predecessor;
     let scanned = FastCdc::new().scan(source, |chunk| {
-        builder.push_chunk(chunk, None, consumer).map(|_| ())
+        let start = builder.logical_len();
+        let hint = match predecessor.as_mut() {
+            Some(cursor) => cursor.hint(start, chunk.len() as u32)?,
+            None => None,
+        };
+        builder.push_chunk(chunk, hint, consumer).map(|_| ())
     })?;
     if scanned.bytes_scanned != builder.logical_len() {
         return Err(ContentError::InvalidRecord("chunk accounting"));

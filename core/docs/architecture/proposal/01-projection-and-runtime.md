@@ -9,6 +9,13 @@
 Sibling pairs: [`03-history.md`](03-history.md) · [`04-boundary-and-trust.md`](04-boundary-and-trust.md).
 Folder index and conventions: [`README.md`](README.md).
 
+**Implementation order (owner direction, 2026-09-20): second, after pair 3's
+service/transport foundation, before pair 2's history implementation.** See the
+[execution sequence](README.md#implementation-order-pair-3-then-pair-1-then-pair-2).
+Supply the initial operation requirements before pair 3 builds its endpoint;
+then implement the accumulator and FUSE against that tested endpoint. The early
+path saves and reads explicit roots; logical Commit arrives with pair 2.
+
 ---
 
 ## 1. Why this is a co-design pair
@@ -23,9 +30,9 @@ Change the callback granularity — per-call versus batched — and the accumula
 changes with it. Neither contract is writable alone.
 
 **The coupling is concrete, not stylistic.** C1's write API is batch-shaped:
-`FilesystemInput` takes sorted, unique, **complete** final bindings per changed
-directory, and `update_filesystem` refuses anything else with
-`NonCanonicalOrdering`. FUSE produces per-call, concurrent, unordered mutations.
+`FilesystemInput` takes sorted, unique final bindings for **each changed name**
+in a directory; unchanged names need not be resent. `update_filesystem` rejects
+noncanonical ordering. FUSE produces per-call, concurrent, unordered mutations.
 **Something must accumulate**, and what it must hold is a function of which
 callbacks FUSE delivers.
 
@@ -50,7 +57,7 @@ path-addressed, bounded and batch-capable, so reads map close to 1:1.
 | **The owner stays workspace-agnostic** | it serves "read root R" and "store these objects"; `InodeScope` is a 32-byte value inside a root, not session state |
 | **Reads map ~1:1** | `resolve` · `stat` · `list` (with continuation) · `read_range` · `readlink` · `read_portable` · `read_attribute` · `attribute_keys` all exist and are path-addressed |
 | **Writes map 1:N** | `write`/`create`/`unlink`/`rename`/`setattr` accumulate; only a completed batch reaches C1 |
-| **DB traffic happens at four events** | create · commit (many) · merge · end — never on the FUSE write path |
+| **Accumulate writes before saving** | Each FUSE write need not start a storage transaction. Base/object reads and a pressure-triggered flush must be accounted for separately; their exact callback behavior is part of this design. |
 | **The per-branch serializer is the merge, not the committer** | `workspace_stages` is one row per workspace; only the merge CAS serializes ([`02`](02-init-commit-and-concurrency.md) §9) |
 
 ## 4. Open — every decision this pair must make
@@ -59,9 +66,10 @@ path-addressed, bounded and batch-capable, so reads map close to 1:1.
       happens on breach: refuse, force a flush, or block the writer.
 - [ ] **Flush policy.** Size-triggered, time-triggered, or caller-driven — and
       whether a flush blocks the FUSE callback that triggered it.
-- [ ] **What `commit` returns.** Nothing is durable: MEMORY journal,
-      `synchronous = OFF`, no `fsync` anywhere. The acknowledgement must not read
-      as committed, and must survive connection loss.
+- [ ] **What each acknowledgement means.** Distinguish accepted overlay bytes,
+      completed object save and the later logical Commit/publication result.
+      Preserve the no-crash-durability profile; connection loss can leave an
+      unknown outcome and must not trigger an automatic resend.
 - [ ] **One mount with N workspaces, or N mounts.** One mount routes by path prefix
       and costs one kernel session; N mounts give isolation and cost N. The deciding
       question is whether one workspace may block its neighbours — the same question
@@ -75,10 +83,10 @@ path-addressed, bounded and batch-capable, so reads map close to 1:1.
 
 ## 5. Boundary
 
-- **Design first, measure second.** Nothing here is measurable until a mount exists.
-  [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) owns measured
-  acceptance; [#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172) owns
-  the implementation.
+- **Service first, then projection acceptance.** Pair 3 proves its endpoint with
+  a test client before this pair implements FUSE/Workspace. This pair's mounted
+  behavior requires actual Linux FUSE evidence. #171's core qualification and
+  #172's architecture review do not qualify that integration.
 - **No canonical change.** Transport and projection must not alter emitted bytes.
 - **No durability claim.** A `write()` acknowledgement must not imply durability
   the store does not provide.
@@ -89,4 +97,5 @@ path-addressed, bounded and batch-capable, so reads map close to 1:1.
 
 - Commit and history semantics — [`03-history.md`](03-history.md), [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 - Transport framing, authorization, tenancy — [`04-boundary-and-trust.md`](04-boundary-and-trust.md), [#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181).
-- Any measured performance claim — [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171).
+- Performance claims require separate qualification of the implemented runtime;
+  [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) covers its core scope only.

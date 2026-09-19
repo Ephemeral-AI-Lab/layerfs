@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import struct
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -239,6 +240,213 @@ def canonical_by_role(path: str | Path) -> dict[str, dict[str, int]]:
     return out
 
 
+# --- the pack directory -------------------------------------------------------
+#
+# The instrument that turns "pack bodies" into per-lane and per-object stored
+# bytes. Grammar from `layerfs-storage/src/pack/layout.rs` and `pack/assemble.rs`.
+
+#: `PACK_MAGIC`.
+PACK_MAGIC = b"LFPACK\x00\x00"
+#: `HEADER_LEN`: magic[8] + framing version u32 + group count u32.
+PACK_HEADER_LEN = 16
+#: `DIRECTORY_ENTRY_LEN`, the ordinary/native/pooled/singleton entry width.
+PACK_DIRECTORY_ENTRY_LEN = 16
+#: `WHOLE_FILE_ENTRY_LEN`, the compact whole-file entry: a start offset only.
+PACK_WHOLE_FILE_ENTRY_LEN = 4
+
+#: Framing version -> lane name, from `PackLane::version`. A version outside this
+#: map is refused rather than pooled: versions 3 and 5 belong to other profiles and
+#: trial-decoding them is the mistake the product explicitly refuses to make.
+PACK_LANES: dict[int, str] = {
+    1: "ordinary",
+    2: "native",
+    4: "whole-file",
+    6: "pooled-metadata",
+    7: "singleton",
+}
+
+#: The one lane whose directory is starts-only **and** which holds exactly one
+#: record per group. Per-object attribution is exact here and nowhere else; every
+#: other lane must be reported as an aggregate, because one group holds many
+#: records and a join of `objects` to a group's byte range multiply-counts them.
+SINGLE_RECORD_LANE = "whole-file"
+
+PACK_ROWS_SQL = "SELECT pack_id, data FROM object_packs"
+WHOLE_FILE_LOCATORS_SQL = (
+    "SELECT object_id, pack_id, group_number FROM objects WHERE object_role = 1"
+)
+
+
+@dataclass(frozen=True)
+class PackDirectory:
+    """A Store's pack blobs, split into framing and per-lane bodies.
+
+    `object_packs.data` is the **whole pack** - header and directory included - so
+    `SUM(length(data))`, which is what pack_bodies returns and what the receipts
+    have called "pack bodies", is bodies **plus framing**. This splits it, so the
+    two are never confused again: on the `history-stride10` Store the framing is
+    215,664 B of 119,894,291 B, and charging it to a lane is a real, if small,
+    misattribution.
+    """
+
+    packs: int
+    groups: int
+    blob_bytes: int
+    header_bytes: int
+    directory_bytes: int
+    body_bytes: int
+    by_lane: dict[str, int]
+
+    @property
+    def framing_bytes(self) -> int:
+        """Header plus directory: the part of the blob that is not a body."""
+        return self.header_bytes + self.directory_bytes
+
+    def as_fields(self) -> dict[str, object]:
+        """The `space.pack_directory` block a receipt carries."""
+        return {
+            "packs": self.packs,
+            "groups": self.groups,
+            "blob_bytes": self.blob_bytes,
+            "header_bytes": self.header_bytes,
+            "directory_bytes": self.directory_bytes,
+            "framing_bytes": self.framing_bytes,
+            "body_bytes": self.body_bytes,
+            "by_lane": dict(self.by_lane),
+        }
+
+
+def _pack_group_ranges(blob: bytes, where: str) -> tuple[str, list[tuple[int, int]]]:
+    """One pack's lane and its `(start, length)` group bodies, or `Incomplete`.
+
+    Every structural refusal is `Incomplete` and never a truncated or guessed
+    reading: a pack this module cannot parse is a pack whose bytes are unknown,
+    and an unknown that reads as a number is the one value that must never appear.
+    """
+    if len(blob) < PACK_HEADER_LEN:
+        raise Incomplete(f"{where}: pack is shorter than its own header")
+    if blob[:8] != PACK_MAGIC:
+        raise Incomplete(f"{where}: pack magic is not {PACK_MAGIC!r}")
+    version, count = struct.unpack_from("<II", blob, 8)
+    lane = PACK_LANES.get(version)
+    if lane is None:
+        raise Incomplete(
+            f"{where}: framing version {version} is not one of {sorted(PACK_LANES)}"
+        )
+    ranges: list[tuple[int, int]] = []
+    if lane == SINGLE_RECORD_LANE:
+        if PACK_HEADER_LEN + PACK_WHOLE_FILE_ENTRY_LEN * count > len(blob):
+            raise Incomplete(f"{where}: whole-file directory claims {count} groups past the blob")
+        # The compact directory stores each group's start as an **absolute** offset
+        # into the pack, not a base-relative one: `assemble.rs` seeds the running
+        # offset at `HEADER_LEN + 4 * groups` and emits it as it stands. Treating
+        # them as relative still yields correct lengths for every group but the
+        # last, whose length comes out short by exactly the directory base - a
+        # 183,584 B undercount on the `history-stride10` Store, and silent.
+        offsets = struct.unpack_from(f"<{count}I", blob, PACK_HEADER_LEN)
+        first = PACK_HEADER_LEN + PACK_WHOLE_FILE_ENTRY_LEN * count
+        for index in range(count):
+            start = offsets[index]
+            end = offsets[index + 1] if index + 1 < count else len(blob)
+            if start < first or start > end or end > len(blob):
+                raise Incomplete(f"{where}: whole-file group {index} runs outside the blob")
+            ranges.append((start, end - start))
+    else:
+        if PACK_HEADER_LEN + PACK_DIRECTORY_ENTRY_LEN * count > len(blob):
+            raise Incomplete(f"{where}: directory claims {count} groups past the blob")
+        for index in range(count):
+            start, encoded, _decoded, _codec = struct.unpack_from(
+                "<IIIB", blob, PACK_HEADER_LEN + PACK_DIRECTORY_ENTRY_LEN * index
+            )
+            if start + encoded > len(blob):
+                raise Incomplete(f"{where}: group {index} body runs past the blob")
+            ranges.append((start, encoded))
+    return lane, ranges
+
+
+def _pack_blobs(path: str | Path) -> list[tuple[int, bytes]]:
+    """Every `(pack_id, blob)`. An absent table is `Incomplete`, never empty."""
+    if not table_exists(path, "object_packs"):
+        raise Incomplete("object_packs table is absent; the pack directory is unknown, not empty")
+    connection = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
+    try:
+        return [(int(pid), bytes(data)) for pid, data in connection.execute(PACK_ROWS_SQL)]
+    finally:
+        connection.close()
+
+
+def pack_directory(path: str | Path) -> PackDirectory:
+    """Decodes every pack's header and directory into framing and lane bodies.
+
+    Fail-closed, like the rest of this module. An absent `object_packs` table, a
+    wrong magic, an unimplemented framing version, a directory that claims more
+    groups than the blob can hold and a body that runs past the blob are all
+    `Incomplete`; none is a zero and none is an "other" bucket.
+    """
+    packs = 0
+    groups = 0
+    blob_bytes = 0
+    header_bytes = 0
+    directory_bytes = 0
+    by_lane: dict[str, int] = {}
+    for pack_id, blob in _pack_blobs(path):
+        lane, ranges = _pack_group_ranges(blob, f"pack {pack_id}")
+        packs += 1
+        groups += len(ranges)
+        blob_bytes += len(blob)
+        header_bytes += PACK_HEADER_LEN
+        directory_bytes += len(blob) - PACK_HEADER_LEN - sum(length for _, length in ranges)
+        by_lane[lane] = by_lane.get(lane, 0) + sum(length for _, length in ranges)
+    return PackDirectory(
+        packs=packs,
+        groups=groups,
+        blob_bytes=blob_bytes,
+        header_bytes=header_bytes,
+        directory_bytes=directory_bytes,
+        body_bytes=blob_bytes - header_bytes - directory_bytes,
+        by_lane=by_lane,
+    )
+
+
+def whole_file_records(path: str | Path) -> dict[bytes, int]:
+    """`object_id -> stored bytes` for the **whole-file lane only**.
+
+    This is the one per-object stored-size reading this module will produce, and it
+    produces it only where it is exact. The whole-file lane writes one record per
+    group, so a locator's `(pack_id, group_number)` names that record's byte range
+    and nothing else. Every other lane holds multi-record groups: a join there would
+    charge each member the whole group and multiply-count, so those lanes are
+    refused here and reported as an aggregate by pack_directory.
+
+    A whole-file locator with no group in the directory is `Incomplete` - the row
+    and the pack disagree, and a guessed size would hide it.
+    """
+    if not table_exists(path, "objects"):
+        raise Incomplete("objects table is absent; per-object stored bytes are unknown")
+    sizes: dict[tuple[int, int], int] = {}
+    for pack_id, blob in _pack_blobs(path):
+        lane, ranges = _pack_group_ranges(blob, f"pack {pack_id}")
+        if lane != SINGLE_RECORD_LANE:
+            continue
+        for index, (_start, length) in enumerate(ranges):
+            sizes[(pack_id, index)] = length
+    connection = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
+    try:
+        locators = list(connection.execute(WHOLE_FILE_LOCATORS_SQL))
+    finally:
+        connection.close()
+    out: dict[bytes, int] = {}
+    for object_id, pack_id, group_number in locators:
+        key = (int(pack_id), int(group_number))
+        if key not in sizes:
+            raise Incomplete(
+                f"whole-file object has no group {key} in the pack directory; "
+                "the row and the pack disagree"
+            )
+        out[bytes(object_id)] = sizes[key]
+    return out
+
+
 @dataclass
 class Delta:
     """A Store's before/after pair, with every axis separate and never pooled.
@@ -419,6 +627,9 @@ class Footprint:
     stat: StatSpace | None = None
     sqlite: SqliteSpace | None = None
     pack_bodies: int | None = None
+    #: The pack directory decoded: bodies and framing separated, per lane. Absent
+    #: (never zeroed) when the directory could not be parsed.
+    pack_directory: PackDirectory | None = None
     objects: int | None = None
     catalogue_groups: int | None = None
     catalogue_values: int | None = None
@@ -441,6 +652,8 @@ class Footprint:
             fields.update(self.sqlite.as_fields())
         if self.pack_bodies is not None:
             fields["pack_bodies_bytes"] = self.pack_bodies
+        if self.pack_directory is not None:
+            fields["pack_directory"] = self.pack_directory.as_fields()
         if self.objects is not None:
             fields["object_rows"] = self.objects
         if self.catalogue_groups is not None:
@@ -501,6 +714,10 @@ def footprint(store_path: str | Path, attribution: str = "exclusive") -> Footpri
         reading.pack_bodies = pack_bodies(store_path)
     except (Incomplete, sqlite3.Error) as error:
         reading.incomplete.append(f"pack bodies: {error}")
+    try:
+        reading.pack_directory = pack_directory(store_path)
+    except (Incomplete, sqlite3.Error) as error:
+        reading.incomplete.append(f"pack directory: {error}")
     try:
         reading.objects = object_rows(store_path)
     except (Incomplete, sqlite3.Error) as error:
@@ -659,6 +876,15 @@ def self_check() -> list[str]:
         failures.append("the executed pack SQL uses IFNULL: that is the same fabricated zero")
     if "SUM" not in PACK_SUM_SQL.upper():
         failures.append("the pack SQL does not sum anything, so it cannot measure pack bytes")
+    if set(PACK_LANES) != {1, 2, 4, 6, 7}:
+        failures.append("the framing version map is not the five implemented lanes")
+    if PACK_LANES.get(4) != SINGLE_RECORD_LANE:
+        failures.append(
+            "the starts-only 4-byte directory lane is not the single-record lane: "
+            "per-object attribution there would multiply-count"
+        )
+    if len({name for name in PACK_LANES.values()}) != len(PACK_LANES):
+        failures.append("two framing versions share a lane name")
     return failures
 
 

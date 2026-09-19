@@ -147,7 +147,6 @@ impl MutationOwner {
                 object_id: member.object_id,
                 role: member.role.code(),
                 canonical_length: member.canonical_length,
-                base_object_id: member.base_object_id,
                 pack_id: write.pack_id,
                 group_number: placed.group_number,
                 record_number,

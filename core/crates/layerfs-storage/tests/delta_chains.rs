@@ -13,8 +13,8 @@ use layerfs_content::{
 };
 use layerfs_storage::{StorageError, StoragePolicy, Store};
 use support::{
-    assembled_small_object, create_store, disabled, noise, open_store, patterned, read_objects,
-    save_one, TempDir,
+    assembled_small_object, create_store, disabled, forge_stored_base, noise, open_store,
+    patterned, read_objects, save_one, TempDir,
 };
 
 fn whole(raw: &[u8]) -> FinalizedObject {
@@ -84,8 +84,13 @@ fn a_reduced_depth_stops_at_its_own_boundary() {
     assert_eq!(ids.len(), 3);
     // The next dependent names the deepest object as its base: that base is at
     // the accepted depth, so the trial is not attempted and FULL is stored.
+    // A wholly different payload, not a near copy: this case is about the depth
+    // boundary, and a near copy would also be proposed by the persisted content
+    // index, which would then be the reason a trial ran.
     let mut changed = noise(40_000);
-    changed[500] ^= 0xff;
+    for byte in &mut changed {
+        *byte ^= 0xa5;
+    }
     let deepest = ids[2];
     let outcome = save_one(&store, with_predecessor(whole(&changed), deepest)).expect("save");
     assert_eq!(outcome.reused, 0);
@@ -173,11 +178,22 @@ fn a_wrong_role_dependency_is_rejected() {
     let dir = TempDir::new("chain-role");
     let path = dir.store_path("chain");
     let store = create_store(&path);
-    let base = whole(&noise(30_000));
+    // The dependent must carry a real PREFIX record before its base can be
+    // forged: there is no base column to write, so a FULL record cannot be given
+    // an edge it never had. One changed byte makes the prefix trial win.
+    let raw = noise(30_000);
+    let base = whole(&raw);
+    let base_id = base.id();
     save_one(&store, base).expect("base");
-    let dependent = whole(&noise(30_000));
+    let mut changed = raw.clone();
+    changed[100] ^= 0xff;
+    let dependent = with_predecessor(whole(&changed), base_id);
     let dependent_id = dependent.id();
-    save_one(&store, dependent).expect("dependent");
+    let outcome = save_one(&store, dependent).expect("dependent");
+    assert_eq!(
+        outcome.prefix_records, 1,
+        "the dependent is a prefix record"
+    );
     // A real, stored object of a different role: a chunk payload.
     let other = FinalizedObject::new(
         ObjectRole::Chunk,
@@ -189,18 +205,8 @@ fn a_wrong_role_dependency_is_rejected() {
     drop(store);
 
     // Point the dependent's recorded base at that chunk.
-    let connection = rusqlite::Connection::open(&path).expect("external connection");
-    let affected = connection
-        .execute(
-            "UPDATE objects SET base_object_id = ?2 WHERE object_id = ?1",
-            rusqlite::params![
-                dependent_id.to_bytes().to_vec(),
-                other_id.to_bytes().to_vec()
-            ],
-        )
-        .expect("row change");
-    assert_eq!(affected, 1);
-    drop(connection);
+    // The edge lives in the record, so the forgery rewrites the pack.
+    forge_stored_base(&path, dependent_id, other_id);
     let reopened = open_store(&path);
     let error = read_objects(&reopened, &[dependent_id]).unwrap_err();
     assert!(
@@ -217,33 +223,27 @@ fn a_cyclic_dependency_is_refused_by_chronology() {
     let dir = TempDir::new("chain-cycle");
     let path = dir.store_path("chain");
     let store = create_store(&path);
-    let first = whole(&noise(20_000));
+    let raw = noise(20_000);
+    let first = whole(&raw);
     let first_id = first.id();
     save_one(&store, first).expect("first");
-    let mut distinct = noise(20_000);
+    let mut distinct = raw.clone();
     distinct[0] ^= 0xff;
-    let second = whole(&distinct);
+    let second = with_predecessor(whole(&distinct), first_id);
     let second_id = second.id();
     save_one(&store, second).expect("second");
+    let mut later = distinct.clone();
+    later[1] ^= 0xff;
+    let third = with_predecessor(whole(&later), second_id);
+    let third_id = third.id();
+    save_one(&store, third).expect("third");
     drop(store);
-    let connection = rusqlite::Connection::open(&path).expect("external connection");
-    let affected = connection
-        .execute(
-            "UPDATE objects SET base_object_id = ?2 WHERE object_id = ?1",
-            rusqlite::params![first_id.to_bytes().to_vec(), second_id.to_bytes().to_vec()],
-        )
-        .expect("row change");
-    assert_eq!(affected, 1);
-    let affected = connection
-        .execute(
-            "UPDATE objects SET base_object_id = ?2 WHERE object_id = ?1",
-            rusqlite::params![second_id.to_bytes().to_vec(), first_id.to_bytes().to_vec()],
-        )
-        .expect("row change");
-    assert_eq!(affected, 1);
-    drop(connection);
+    // The edge lives in the record, so the forgery rewrites the pack. Naming a
+    // base stored *after* the dependent is exactly the forward edge a cycle
+    // needs, and it is the one chronology refuses.
+    forge_stored_base(&path, second_id, third_id);
     let reopened = open_store(&path);
-    let error = read_objects(&reopened, &[first_id]).unwrap_err();
+    let error = read_objects(&reopened, &[second_id]).unwrap_err();
     assert!(
         matches!(error, StorageError::Integrity(what) if what.contains("chronology")),
         "a cycle cannot be expressed in locator order: {error}"

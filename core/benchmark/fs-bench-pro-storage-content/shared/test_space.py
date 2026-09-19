@@ -10,7 +10,9 @@ table and a green row is that the sum is refused instead of defaulted.
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import struct
 import sys
 import tempfile
 import unittest
@@ -192,8 +194,176 @@ class ReadingTest(unittest.TestCase):
             self.assertEqual(reading.pack_accounting()["status"], "INCOMPLETE")
 
 
+class PackDirectoryTests(unittest.TestCase):
+    """The pack decoder, on packs built here rather than on a Store."""
+
+    def _store(self, directory: str) -> str:
+        path = os.path.join(directory, "sample.sqlite")
+        connection = sqlite3.connect(path)
+        connection.execute("CREATE TABLE object_packs (pack_id INTEGER PRIMARY KEY, data BLOB)")
+        connection.execute(
+            "CREATE TABLE objects (object_id BLOB, object_role INTEGER, pack_id INTEGER,"
+            " group_number INTEGER)"
+        )
+        return path
+
+    def _whole_file_pack(self, bodies: list[bytes]) -> bytes:
+        # HEADER_LEN + 4 * groups, then each body: a tag byte and a frame. The
+        # compact lane drops the two length fields at assembly time.
+        count = len(bodies)
+        base = 16 + 4 * count
+        out = bytearray(b"LFPACK\x00\x00")
+        out += struct.pack("<II", 4, count)
+        offset = base
+        for body in bodies:
+            out += struct.pack("<I", offset)
+            offset += len(body)
+        for body in bodies:
+            out += body
+        return bytes(out)
+
+    def _ordinary_pack(self, bodies: list[bytes], version: int = 1) -> bytes:
+        count = len(bodies)
+        base = 16 + 16 * count
+        out = bytearray(b"LFPACK\x00\x00")
+        out += struct.pack("<II", version, count)
+        offset = base
+        for body in bodies:
+            out += struct.pack("<IIIB3x", offset, len(body), len(body), 0)
+            offset += len(body)
+        for body in bodies:
+            out += body
+        return bytes(out)
+
+    def test_a_whole_file_pack_splits_into_framing_and_bodies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            bodies = [b"\x00" + b"a" * 9, b"\x01" + b"b" * 19]
+            blob = self._whole_file_pack(bodies)
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (blob,))
+            connection.commit()
+            connection.close()
+            reading = space.pack_directory(path)
+            self.assertEqual(reading.packs, 1)
+            self.assertEqual(reading.groups, 2)
+            self.assertEqual(reading.blob_bytes, len(blob))
+            self.assertEqual(reading.header_bytes, 16)
+            self.assertEqual(reading.directory_bytes, 8)
+            self.assertEqual(reading.framing_bytes, 24)
+            self.assertEqual(reading.body_bytes, len(blob) - 24)
+            self.assertEqual(reading.by_lane, {"whole-file": len(blob) - 24})
+
+    def test_the_blob_sum_is_bodies_plus_framing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            blob = self._whole_file_pack([b"\x00" + b"x" * 5])
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (blob,))
+            connection.commit()
+            connection.close()
+            reading = space.pack_directory(path)
+            self.assertEqual(
+                reading.blob_bytes,
+                reading.body_bytes + reading.framing_bytes,
+                "the pack blob is not bodies plus framing",
+            )
+            self.assertEqual(space.pack_bodies(path), reading.blob_bytes)
+
+    def test_an_unimplemented_framing_version_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            blob = bytearray(self._whole_file_pack([b"\x00" + b"x" * 5]))
+            blob[8:12] = struct.pack("<I", 3)
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (bytes(blob),))
+            connection.commit()
+            connection.close()
+            with self.assertRaises(space.Incomplete):
+                space.pack_directory(path)
+
+    def test_a_wrong_magic_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (b"NOTPACK!" + b"\x00" * 24,))
+            connection.commit()
+            connection.close()
+            with self.assertRaises(space.Incomplete):
+                space.pack_directory(path)
+
+    def test_an_absent_pack_table_is_incomplete_not_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "sample.sqlite")
+            connection = sqlite3.connect(path)
+            connection.execute("CREATE TABLE objects (object_id BLOB)")
+            connection.commit()
+            connection.close()
+            with self.assertRaises(space.Incomplete):
+                space.pack_directory(path)
+
+    def test_whole_file_records_attributes_one_record_per_group(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            bodies = [b"\x00" + b"a" * 9, b"\x01" + b"b" * 19]
+            blob = self._whole_file_pack(bodies)
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (blob,))
+            connection.execute("INSERT INTO objects VALUES (?, 1, 1, 0)", (b"first",))
+            connection.execute("INSERT INTO objects VALUES (?, 1, 1, 1)", (b"second",))
+            connection.commit()
+            connection.close()
+            sizes = space.whole_file_records(path)
+            self.assertEqual(sizes, {b"first": 10, b"second": 20})
+
+    def test_a_multi_record_lane_is_never_attributed_per_object(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            # One native group holding two chunk records: a per-object join would
+            # charge each of them the whole group, so the reader returns nothing for
+            # them and the lane is reported as an aggregate instead.
+            blob = self._ordinary_pack([b"two records in one group"], version=2)
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (blob,))
+            connection.execute("INSERT INTO objects VALUES (?, 2, 1, 0)", (b"a",))
+            connection.execute("INSERT INTO objects VALUES (?, 2, 1, 0)", (b"b",))
+            connection.commit()
+            connection.close()
+            self.assertEqual(space.whole_file_records(path), {})
+            reading = space.pack_directory(path)
+            self.assertEqual(reading.by_lane, {"native": len(blob) - 16 - 16})
+
+    def test_a_whole_file_row_in_a_multi_record_pack_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            # A whole-file role code inside a lane that is not one-record-per-group
+            # is a disagreement between the row and the pack. Charging the row the
+            # whole group is exactly the multiply-count this reader exists to refuse.
+            blob = self._ordinary_pack([b"two records in one group"], version=1)
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (blob,))
+            connection.execute("INSERT INTO objects VALUES (?, 1, 1, 0)", (b"a",))
+            connection.commit()
+            connection.close()
+            with self.assertRaises(space.Incomplete):
+                space.whole_file_records(path)
+
+    def test_a_whole_file_locator_with_no_group_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._store(directory)
+            blob = self._whole_file_pack([b"\x00" + b"a" * 9])
+            connection = sqlite3.connect(path)
+            connection.execute("INSERT INTO object_packs VALUES (1, ?)", (blob,))
+            connection.execute("INSERT INTO objects VALUES (?, 1, 1, 7)", (b"dangling",))
+            connection.commit()
+            connection.close()
+            with self.assertRaises(space.Incomplete):
+                space.whole_file_records(path)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
 
 class CatalogueTest(unittest.TestCase):

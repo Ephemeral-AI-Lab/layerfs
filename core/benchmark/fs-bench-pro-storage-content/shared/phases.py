@@ -171,6 +171,33 @@ def reconcile_invocation(reading: dict[str, object], wall_ns: int, tolerance: in
     return record
 
 
+def declared_child_sum(case_dir: str | Path) -> int | None:
+    """The child sum a driver published, or `None` when it published no choice.
+
+    A driver that measures an operation whose named children are not the whole
+    root — because untimed harness work sits inside the root — publishes the sum
+    it charges. `history.*` does, and the trace record says so in the child's own
+    words rather than in a family list here. A driver that publishes nothing is
+    checked against the root, which is the stronger check and stays the default.
+    """
+    path = Path(case_dir) / "trace.jsonl"
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if '"history.children_ns"' not in line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        value = record.get("value")
+        if isinstance(value, int) and value >= 0:
+            return value
+    return None
+
+
 def compose(
     case_dir: str | Path,
     invocation_walls: dict[str, int],
@@ -252,11 +279,34 @@ def compose(
                 totals["operation_root_elapsed_ns"] = root["elapsed_ns"]
                 totals["operation_root_name"] = root["name"]
                 totals["operation_root_incomplete"] = root["incomplete"]
-                if root["elapsed_ns"] != totals["operation_ns"]:
-                    problems.append(
-                        f"operation_ns {totals['operation_ns']} does not match the product's "
-                        f"own timing root {root['elapsed_ns']}"
-                    )
+                # The product's tree is the authority on the operation time, and
+                # which number in it is the operation is the **driver's** declared
+                # choice. Most rows publish the root. The retained-history lane
+                # publishes the sum of its named children, because the harness's
+                # own corpus reading sits inside the root and between the children
+                # and is not the product's work: charging it to the operation would
+                # report the harness as the product. A row that declares the child
+                # sum is checked against the child sum, and one that declares
+                # nothing is checked against the root.
+                declared_children = declared_child_sum(case_dir)
+                if declared_children is None:
+                    if root["elapsed_ns"] != totals["operation_ns"]:
+                        problems.append(
+                            f"operation_ns {totals['operation_ns']} does not match the product's "
+                            f"own timing root {root['elapsed_ns']}"
+                        )
+                else:
+                    totals["operation_children_ns"] = declared_children
+                    if declared_children != totals["operation_ns"]:
+                        problems.append(
+                            f"operation_ns {totals['operation_ns']} does not match the child sum "
+                            f"{declared_children} the driver published"
+                        )
+                    if declared_children > root["elapsed_ns"]:
+                        problems.append(
+                            f"the child sum {declared_children} exceeds the product's own "
+                            f"timing root {root['elapsed_ns']}"
+                        )
     elif readings.get("perf") is not None and expects_operation:
         problems.append("the performance invocation measured no operation")
     failed = [record for record in invocations if not record.get("reconciles")]

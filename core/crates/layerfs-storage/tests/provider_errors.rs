@@ -135,8 +135,8 @@ fn a_record_above_the_publication_watermark_is_not_reported_as_absence() {
         connection
             .execute(
                 "INSERT INTO objects \
-                 (object_id, object_role, canonical_length, base_object_id, pack_id, group_number, record_number) \
-                 VALUES (?1, 1, 100, NULL, ?2, 0, 0)",
+                 (object_id, object_role, canonical_length, pack_id, group_number, record_number) \
+                 VALUES (?1, 1, 100, ?2, 0, 0)",
                 rusqlite::params![unpublished.as_bytes(), highest + 1],
             )
             .unwrap();

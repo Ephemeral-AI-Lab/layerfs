@@ -2,10 +2,12 @@
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 >
-> **DRAFT — NOT FINALIZED.** The design below does not exist in `core/`, has not
-> been implemented, and has not been measured. It is written to be argued with and
-> then either built behind a test or rejected. See
-> [§14.1](#141-status-and-authority).
+> **DRAFT — PARTLY BUILT.** §14.4's cursor now exists in `core/`
+> (`file/mapping/predecessor.rs`, reached through
+> `construct_bytes_with_predecessor`) and has been measured on one retained-history
+> lane; §14.6's four-case plan has **not** been run, so §14.7 and §14.8 are still
+> hypothesis rather than finding. See [§14.1](#141-status-and-authority) and
+> [§14.9](#149-what-would-finalize-this-paper).
 
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
@@ -24,8 +26,9 @@ descriptive counterpart this proposal builds on.
 | Part | Kind | Authority |
 | --- | --- | --- |
 | §14.2 the gap, §14.3 the mechanism | **Descriptive** — read from source at the pin, both trees | Same as the set |
-| §14.4 the design, §14.5 bounds | **Proposed** — does not exist in `core/` | Draft |
-| §14.6 the measurement plan | **Proposed** | Draft |
+| §14.4 the design | **Built** in `core/` for the complete-construction route; still proposed for the `apply_edits` routes | Source |
+| §14.5 bounds | **Built** as named constants; the four-slot reduction is still proposed | Source for the constants, draft for the reduction |
+| §14.6 the measurement plan | **Proposed** — one lane measured, the four cases not run | Draft |
 | §14.7 expectations | **Hypothesis**, explicitly not a finding | Do not cite |
 
 This paper is the second in the set to contain guidance rather than description.
@@ -67,6 +70,14 @@ For an **in-place overwrite**, the useful base is *the previous version of this
 exact region*. Core offers the region's left neighbour instead — which in a binary
 or a text file is unrelated content, so the trial usually loses and the chunk is
 stored FULL.
+
+**This diagram is the `apply_edits` route, and it is still true.** The
+complete-construction route (`construct_bytes` → `construct_chunked` →
+`build_streaming`) had a *different* gap at the pin — it offered `None` to every
+chunk — and that one is now closed: the route consults the cursor in §14.4 when the
+caller offers a previous version's stored root. `replace_chunked` and
+`stream_combined` are unchanged and still offer the left neighbour and nothing,
+respectively.
 
 The reference tree does not have this gap:
 
@@ -117,10 +128,10 @@ The two coincide only for an edit at the very end of the file. Everywhere else t
 differ, and for the case delta is best at — an in-place modification of
 incompressible content — the reference offers the right answer and core does not.
 
-### 14.4 The proposed design
+### 14.4 The design — built for complete construction
 
 ```text
-   PROPOSED — a cursor over the retained base mapping
+   BUILT — a cursor over the retained base mapping
 
    ┌────────────────────────────────────────────────────────────────────┐
    │  struct PredecessorCursor {                                        │
@@ -145,6 +156,20 @@ incompressible content — the reference offers the right answer and core does n
                                    ▼
         IDENTICAL consumer path — no storage change, no new record form
 ```
+
+**What was actually built, and where it differs from the sketch above.** The file
+is `core/crates/layerfs-content/src/file/mapping/predecessor.rs`; the entry point is
+`construct_bytes_with_predecessor`, and the cursor is threaded into
+`build_streaming_with_predecessor`. Three differences from the sketch:
+
+| Sketch | Built |
+| --- | --- |
+| consulted inside `ExtentBuilder::push_chunk` | consulted in `build_streaming_with_predecessor`, which owns the running offset (`builder.logical_len()`) — `push_chunk` keeps its signature |
+| `hint_for(start, len) -> Option<ObjectId>` | `hint(start, len) -> ContentResult<Option<ObjectId>>`; the fallible part is the mapping-page read |
+| base supplied as a root | base supplied as `PredecessorBase` (a provider and a root); opening it costs one read and is what declines a base that is not chunked |
+
+The descriptor ceiling is `PREDECESSOR_DESCRIPTOR_LIMIT = 4_096`, exhaustion is not
+an error, and span order is enforced exactly as §14.5 proposes.
 
 **Why this is small.** The whole change is one producer:
 
@@ -265,9 +290,16 @@ not a finding.
 ### 14.9 What would finalize this paper
 
 1. Implement the cursor behind the existing 4-slot type, with no storage-format
-   change.
-2. Run §14.6's four cases, two arms, and record the whole retained graph.
+   change. — **done** for the complete-construction route (working tree at
+   `66bce8378` + the L4 change). It remains **not done** for `replace_chunked` and
+   `stream_combined`.
+2. Run §14.6's four cases, two arms, and record the whole retained graph. — **not
+   run.** One retained-history lane was measured instead; that reading is in
+   [the L4 receipt](../../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188c-20260920T000000Z/L4/README.md)
+   and is **not** the four-case plan this step asks for.
 3. Either promote this paper to a description of shipped behaviour, or delete it
    and record the rejection in the set's index.
 
 Until step 3 this paper stays a draft, and any number taken from it is an estimate.
+A number measured from the built cursor is a measurement of that lane, not of this
+paper's plan.

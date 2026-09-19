@@ -1,0 +1,27 @@
+{
+  "root": "/tmp/stage7-loc-data/v016",
+  "scopes": {
+    "core": {
+      "files": 0,
+      "lines": 0,
+      "crates": {}
+    },
+    "reference": {
+      "files": 193,
+      "lines": 65417,
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      }
+    }
+  },
+  "combined": 65417
+}

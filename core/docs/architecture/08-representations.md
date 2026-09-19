@@ -420,12 +420,16 @@ under root `crates/`. On this paper's subject the two are largely the same desig
 | Chunk depth | `depth >= 4` as a bare literal | 4, named + configurable | shared |
 | Predecessor slots | `prior_ids: [Option<ObjectId>; 4]` | `MAXIMUM_ADVISORY_PREDECESSORS = 4` | shared |
 | Fresh chunking hints | none | none | shared |
-| **Per-chunk positional hints** | **`PredecessorCursor`** | **absent** | **core differs** |
+| **Per-chunk positional hints** | **`PredecessorCursor`** | **`PredecessorCursor`** (`file/mapping/predecessor.rs`) | shared in kind, narrower in reach |
 
 The reference has exactly three product `DELETE`s and none reclaims superseded
 data; its Monitor computes `unreachable_objects` / `unreachable_bytes` and nothing
 acts on the number. **The storage economics in §13.3 are inherited, not
 introduced.** Core is a faithful port of them.
 
-The one substantive difference is the missing cursor, which is the subject of
-[`09-delta-hints.md`](09-delta-hints.md).
+The one substantive difference was the missing cursor, which is the subject of
+[`09-delta-hints.md`](09-delta-hints.md). The cursor now exists in `core/`, but it
+is consulted by the **complete-construction** route only: the reference attaches it
+to every emitted object that carries a span, while `replace_chunked` and
+`stream_combined` still pass no cursor. The reach of the two trees therefore still
+differs even though the mechanism no longer does.

@@ -16,6 +16,7 @@ use crate::cas::batch::PendingBatch;
 use crate::cas::owner::{MutationOwner, OutcomeCounters};
 use crate::cas::read::check_read_demand;
 use crate::cas::{finish, read, save};
+use crate::encoding::delta::candidates::Candidates;
 use crate::encoding::delta::read::ChainCounters;
 use crate::encoding::delta::select::DeltaCounters;
 use crate::encoding::pool::PoolIndex;
@@ -157,6 +158,15 @@ pub struct Store {
     /// invalidates it whole, and a reopened Store synchronizes it from the
     /// catalogue on first use.
     pool_index: Arc<Mutex<PoolIndex>>,
+    /// Store-owned bounded content-signature index, persisted in
+    /// `content_signatures`.
+    ///
+    /// **W2 (#188d).** Owned here rather than by a save, which is the whole point:
+    /// a per-save index can only propose a base from the objects that same save
+    /// admitted, so a cross-save match is impossible at any index size. `open`
+    /// reads the table back; a save appends to it inside the transaction that
+    /// publishes the objects the entries name; a failed save invalidates it whole.
+    content_index: Arc<Mutex<Candidates>>,
 }
 
 impl Store {
@@ -173,12 +183,16 @@ impl Store {
             let connection = connection::open(&path, true)?;
             let stored = schema::create(&connection, policy)?;
             let capacities = StorageCapacities::from_policy(stored)?;
+            // A Store this call just created has an empty index; the read is the
+            // same one `open` performs and is bounded by the table, which is empty.
+            let content_index = Candidates::load(&connection)?;
             drop(connection);
             Ok(Self {
                 path,
                 policy: stored,
                 capacities,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
+                content_index: Arc::new(Mutex::new(content_index)),
             })
         })
     }
@@ -190,12 +204,17 @@ impl Store {
             let connection = connection::open(&path, false)?;
             let stored = schema::validate(&connection, None)?;
             let capacities = StorageCapacities::from_policy(stored)?;
+            // The bounded load: at most `candidates::SLOTS` rows of 32-byte
+            // identity and 32-byte folded signature, read once for the lifetime of
+            // this handle rather than once per save.
+            let content_index = Candidates::load(&connection)?;
             drop(connection);
             Ok(Self {
                 path,
                 policy: stored,
                 capacities,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
+                content_index: Arc::new(Mutex::new(content_index)),
             })
         })
     }
@@ -228,6 +247,26 @@ impl Store {
         self.pool_index.lock().map(|index| index.len()).unwrap_or(0)
     }
 
+    /// Occupied slots of the Store-owned content-signature index.
+    ///
+    /// Reported live occupancy, not a test hook: the memory ledger needs the
+    /// simultaneous size of the bounded derivation the Store owns, and the
+    /// declared bound only says what it *may* hold.
+    pub fn content_index_entries(&self) -> usize {
+        self.content_index
+            .lock()
+            .map(|index| index.entries())
+            .unwrap_or(0)
+    }
+
+    /// Live bytes charged by the Store-owned content-signature index.
+    pub fn content_index_bytes(&self) -> usize {
+        self.content_index
+            .lock()
+            .map(|index| index.live_bytes())
+            .unwrap_or(0)
+    }
+
     /// Live bytes charged by the pooled-value ordered set.
     pub fn pool_index_bytes(&self) -> usize {
         self.pool_index
@@ -240,8 +279,12 @@ impl Store {
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
             let connection = connection::open(&self.path, false)?;
-            let owner =
-                MutationOwner::acquire(connection, self.capacities, Arc::clone(&self.pool_index))?;
+            let owner = MutationOwner::acquire(
+                connection,
+                self.capacities,
+                Arc::clone(&self.pool_index),
+                Arc::clone(&self.content_index),
+            )?;
             Ok(SaveOperation {
                 owner: Some(owner),
                 batch: PendingBatch::new(self.capacities),

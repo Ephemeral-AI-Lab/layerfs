@@ -1,0 +1,1347 @@
+{
+ "chunked_trajectories": {
+  "2e6167656e74732f6e6f7465732f61726368697665642f6d616e69666573742e6a736f6e": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   33799,
+   33799,
+   33799,
+   34638,
+   55418,
+   55830,
+   58320,
+   59174,
+   69242,
+   70986,
+   261753
+  ],
+  "646f63732f636f6e6669672d636174616c6f672e6d64": [
+   null,
+   34496,
+   49124,
+   59616,
+   79286,
+   89576,
+   95863,
+   96408,
+   103039,
+   105249,
+   114752,
+   120364,
+   122847,
+   140604,
+   148181,
+   148926,
+   152563
+  ],
+  "646f63732f636f6e6669672d636174616c6f672e7a682e6d64": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   120854,
+   123350,
+   141151,
+   148769,
+   149530,
+   153178
+  ],
+  "646f63732f636f726469732d636174616c6f672f73657276696365732e6d64": [
+   null,
+   19371,
+   17746,
+   21288,
+   80917,
+   102154,
+   106087,
+   119999,
+   131829,
+   138369,
+   146521,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "646f63732f636f726469732d70617065722e706466": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   1241221,
+   1241221,
+   1241221,
+   1241221,
+   1241221,
+   null,
+   null,
+   null,
+   null
+  ],
+  "646f63732f6d6f64756c652d67726170682e6d64": [
+   null,
+   14749,
+   24419,
+   30762,
+   53524,
+   61997,
+   71639,
+   77010,
+   85224,
+   88131,
+   95490,
+   102558,
+   111089,
+   128130,
+   152315,
+   98045,
+   99990
+  ],
+  "646f63732f6d6f64756c652d67726170682e7a682e6d64": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   102733,
+   111268,
+   128309,
+   152487,
+   98021,
+   99966
+  ],
+  "6578616d706c65732f6163702d6167656e742f74657374732f66697874757265732f6c6976652d6d6f64652d737769746368696e672d323032362d30372d30372e73657373696f6e2e6a736f6e6c": [
+   null,
+   null,
+   null,
+   null,
+   393789,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "6578616d706c65732f6163702d6167656e742f74657374732f736e617073686f74732f686f6f6b2d63632d706f7374746f6f6c2d626c6f636b2f73657373696f6e2e6a736f6e6c": [
+   null,
+   113897,
+   132394,
+   133001,
+   31857,
+   31857,
+   10864,
+   11475,
+   12274,
+   12758,
+   13157,
+   13157,
+   13157,
+   13187,
+   null,
+   null,
+   null
+  ],
+  "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473": [
+   null,
+   null,
+   null,
+   null,
+   27492,
+   38434,
+   51726,
+   80219,
+   118505,
+   116958,
+   130887,
+   138930,
+   141028,
+   150425,
+   153022,
+   150167,
+   156642
+  ],
+  "7061636b616765732f636f6e746578742f6167656e742d696e737472756374696f6e732f74657374732f6167656e742d696e737472756374696f6e732e737065632e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   197986,
+   198354,
+   200263,
+   201831
+  ],
+  "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473": [
+   null,
+   null,
+   null,
+   120689,
+   140063,
+   140933,
+   148752,
+   149151,
+   150256,
+   166319,
+   191193,
+   197544,
+   197755,
+   null,
+   null,
+   null,
+   null
+  ],
+  "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473": [
+   null,
+   null,
+   55613,
+   62546,
+   152610,
+   194432,
+   197469,
+   213895,
+   237902,
+   243224,
+   262865,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "7061636b616765732f6578706572696d656e74616c2f636f64652d72756e74696d652d707974686f6e2f70792f626f6f7473747261702e7079": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   138199,
+   138199
+  ],
+  "7061636b616765732f6578706572696d656e74616c2f636f64652d72756e74696d652d707974686f6e2f7372632f696e6465782e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   143808,
+   143808
+  ],
+  "7061636b616765732f6578706572696d656e74616c2f636f64652d72756e74696d652d707974686f6e2f74657374732f72756e74696d652e737065632e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   300784,
+   300784
+  ],
+  "7061636b616765732f657874656e73696f6e732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   369240,
+   431951,
+   443359,
+   459436
+  ],
+  "7061636b616765732f686f73742f61706970726f78792f7372632f6170692d70726f78792e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   35950,
+   54661,
+   72014,
+   100115,
+   116495,
+   122606,
+   151154,
+   160714,
+   162670,
+   19878,
+   null,
+   null
+  ],
+  "7061636b616765732f73656c662d6d6f64696669636174696f6e2f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   277126,
+   287739,
+   null,
+   null,
+   null,
+   null
+  ],
+  "7061636b616765732f7375626167656e742f7375626167656e742f74657374732f636f6e74696e756174696f6e2e737065632e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   74869,
+   87894,
+   87894,
+   116379,
+   123146,
+   126634,
+   143631,
+   159907
+  ],
+  "7061636b616765732f7479706572742f67656e657261746f722f7372632f616e616c797a65722e7473": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   84447,
+   84447,
+   131005,
+   131079,
+   132592,
+   134365,
+   135727,
+   135870,
+   135870
+  ],
+  "7061636b616765732f7479706572742f67656e657261746f722f74657374732f5f5f736e617073686f74735f5f2f747970652d6d6f64656c2e737065632e74732e736e6170": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   229217,
+   229217,
+   229337,
+   229337,
+   229389,
+   229389,
+   229389,
+   229389,
+   229389
+  ],
+  "7061636b616765732f75692f7475692f7372632f696e6465782e7473": [
+   null,
+   null,
+   null,
+   null,
+   99065,
+   132499,
+   62693,
+   66909,
+   70213,
+   80011,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "7061636b616765732f75692f7475692f74657374732f7475692e737065632e7473": [
+   null,
+   null,
+   null,
+   null,
+   93933,
+   152010,
+   197775,
+   215953,
+   242126,
+   279419,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "706e706d2d6c6f636b2e79616d6c": [
+   null,
+   232511,
+   270356,
+   383816,
+   476279,
+   504179,
+   539951,
+   558385,
+   586877,
+   592212,
+   609016,
+   642459,
+   661761,
+   698324,
+   763962,
+   744093,
+   841964
+  ],
+  "736372697074732f736e617073686f74732f7472616e736c6174696f6e2d70726f6d70742d76342f726571756573742d726573706f6e73652e65787065637465642e6a736f6e": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   106188,
+   114412,
+   116016,
+   119371,
+   119805,
+   125261,
+   133427,
+   129985,
+   136028,
+   37715,
+   37715,
+   37715
+  ],
+  "7961726e2e6c6f636b": [
+   169733,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ]
+ },
+ "corpus": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+ "crossings": {
+  "large_to_small": {
+   "base_bytes": 1002427,
+   "distinct_paths": 6,
+   "events": 7,
+   "result_bytes": 478194,
+   "rows": [
+    {
+     "base_bytes": 133001,
+     "from_state": 31,
+     "path": "6578616d706c65732f6163702d6167656e742f74657374732f736e617073686f74732f686f6f6b2d63632d706f7374746f6f6c2d626c6f636b2f73657373696f6e2e6a736f6e6c",
+     "result_bytes": 31857,
+     "to_state": 41
+    },
+    {
+     "base_bytes": 132499,
+     "from_state": 51,
+     "path": "7061636b616765732f75692f7475692f7372632f696e6465782e7473",
+     "result_bytes": 62693,
+     "to_state": 61
+    },
+    {
+     "base_bytes": 133427,
+     "from_state": 111,
+     "path": "736372697074732f736e617073686f74732f7472616e736c6174696f6e2d70726f6d70742d76342f726571756573742d726573706f6e73652e65787065637465642e6a736f6e",
+     "result_bytes": 129985,
+     "to_state": 121
+    },
+    {
+     "base_bytes": 136028,
+     "from_state": 131,
+     "path": "736372697074732f736e617073686f74732f7472616e736c6174696f6e2d70726f6d70742d76342f726571756573742d726573706f6e73652e65787065637465642e6a736f6e",
+     "result_bytes": 37715,
+     "to_state": 141
+    },
+    {
+     "base_bytes": 162670,
+     "from_state": 131,
+     "path": "7061636b616765732f686f73742f61706970726f78792f7372632f6170692d70726f78792e7473",
+     "result_bytes": 19878,
+     "to_state": 141
+    },
+    {
+     "base_bytes": 152315,
+     "from_state": 141,
+     "path": "646f63732f6d6f64756c652d67726170682e6d64",
+     "result_bytes": 98045,
+     "to_state": 151
+    },
+    {
+     "base_bytes": 152487,
+     "from_state": 141,
+     "path": "646f63732f6d6f64756c652d67726170682e7a682e6d64",
+     "result_bytes": 98021,
+     "to_state": 151
+    }
+   ]
+  },
+  "small_to_large": {
+   "base_bytes": 1950129,
+   "distinct_paths": 16,
+   "events": 17,
+   "result_bytes": 2523964,
+   "rows": [
+    {
+     "base_bytes": 113897,
+     "from_state": 11,
+     "path": "6578616d706c65732f6163702d6167656e742f74657374732f736e617073686f74732f686f6f6b2d63632d706f7374746f6f6c2d626c6f636b2f73657373696f6e2e6a736f6e6c",
+     "result_bytes": 132394,
+     "to_state": 21
+    },
+    {
+     "base_bytes": 120689,
+     "from_state": 31,
+     "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+     "result_bytes": 140063,
+     "to_state": 41
+    },
+    {
+     "base_bytes": 62546,
+     "from_state": 31,
+     "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+     "result_bytes": 152610,
+     "to_state": 41
+    },
+    {
+     "base_bytes": 93933,
+     "from_state": 41,
+     "path": "7061636b616765732f75692f7475692f74657374732f7475692e737065632e7473",
+     "result_bytes": 152010,
+     "to_state": 51
+    },
+    {
+     "base_bytes": 99065,
+     "from_state": 41,
+     "path": "7061636b616765732f75692f7475692f7372632f696e6465782e7473",
+     "result_bytes": 132499,
+     "to_state": 51
+    },
+    {
+     "base_bytes": 119999,
+     "from_state": 71,
+     "path": "646f63732f636f726469732d636174616c6f672f73657276696365732e6d64",
+     "result_bytes": 131829,
+     "to_state": 81
+    },
+    {
+     "base_bytes": 125261,
+     "from_state": 101,
+     "path": "736372697074732f736e617073686f74732f7472616e736c6174696f6e2d70726f6d70742d76342f726571756573742d726573706f6e73652e65787065637465642e6a736f6e",
+     "result_bytes": 133427,
+     "to_state": 111
+    },
+    {
+     "base_bytes": 130887,
+     "from_state": 101,
+     "path": "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473",
+     "result_bytes": 138930,
+     "to_state": 111
+    },
+    {
+     "base_bytes": 122606,
+     "from_state": 101,
+     "path": "7061636b616765732f686f73742f61706970726f78792f7372632f6170692d70726f78792e7473",
+     "result_bytes": 151154,
+     "to_state": 111
+    },
+    {
+     "base_bytes": 131005,
+     "from_state": 101,
+     "path": "7061636b616765732f7479706572742f67656e657261746f722f7372632f616e616c797a65722e7473",
+     "result_bytes": 131079,
+     "to_state": 111
+    },
+    {
+     "base_bytes": 129985,
+     "from_state": 121,
+     "path": "736372697074732f736e617073686f74732f7472616e736c6174696f6e2d70726f6d70742d76342f726571756573742d726573706f6e73652e65787065637465642e6a736f6e",
+     "result_bytes": 136028,
+     "to_state": 131
+    },
+    {
+     "base_bytes": 123350,
+     "from_state": 121,
+     "path": "646f63732f636f6e6669672d636174616c6f672e7a682e6d64",
+     "result_bytes": 141151,
+     "to_state": 131
+    },
+    {
+     "base_bytes": 122847,
+     "from_state": 121,
+     "path": "646f63732f636f6e6669672d636174616c6f672e6d64",
+     "result_bytes": 140604,
+     "to_state": 131
+    },
+    {
+     "base_bytes": 128130,
+     "from_state": 131,
+     "path": "646f63732f6d6f64756c652d67726170682e6d64",
+     "result_bytes": 152315,
+     "to_state": 141
+    },
+    {
+     "base_bytes": 128309,
+     "from_state": 131,
+     "path": "646f63732f6d6f64756c652d67726170682e7a682e6d64",
+     "result_bytes": 152487,
+     "to_state": 141
+    },
+    {
+     "base_bytes": 126634,
+     "from_state": 141,
+     "path": "7061636b616765732f7375626167656e742f7375626167656e742f74657374732f636f6e74696e756174696f6e2e737065632e7473",
+     "result_bytes": 143631,
+     "to_state": 151
+    },
+    {
+     "base_bytes": 70986,
+     "from_state": 151,
+     "path": "2e6167656e74732f6e6f7465732f61726368697665642f6d616e69666573742e6a736f6e",
+     "result_bytes": 261753,
+     "to_state": 157
+    }
+   ]
+  }
+ },
+ "cutoff_T": 131072,
+ "distinct_ever_chunked": 27,
+ "distinct_ever_whole": 16209,
+ "in_place_chunk_edits": {
+  "base_bytes": 17175208,
+  "distinct_paths": 16,
+  "events": 63,
+  "result_bytes": 18274423,
+  "rows": [
+   {
+    "base_bytes": 232511,
+    "from_state": 11,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 270356,
+    "to_state": 21
+   },
+   {
+    "base_bytes": 132394,
+    "from_state": 21,
+    "path": "6578616d706c65732f6163702d6167656e742f74657374732f736e617073686f74732f686f6f6b2d63632d706f7374746f6f6c2d626c6f636b2f73657373696f6e2e6a736f6e6c",
+    "result_bytes": 133001,
+    "to_state": 31
+   },
+   {
+    "base_bytes": 270356,
+    "from_state": 21,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 383816,
+    "to_state": 31
+   },
+   {
+    "base_bytes": 383816,
+    "from_state": 31,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 476279,
+    "to_state": 41
+   },
+   {
+    "base_bytes": 476279,
+    "from_state": 41,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 504179,
+    "to_state": 51
+   },
+   {
+    "base_bytes": 140063,
+    "from_state": 41,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 140933,
+    "to_state": 51
+   },
+   {
+    "base_bytes": 152610,
+    "from_state": 41,
+    "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 194432,
+    "to_state": 51
+   },
+   {
+    "base_bytes": 504179,
+    "from_state": 51,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 539951,
+    "to_state": 61
+   },
+   {
+    "base_bytes": 152010,
+    "from_state": 51,
+    "path": "7061636b616765732f75692f7475692f74657374732f7475692e737065632e7473",
+    "result_bytes": 197775,
+    "to_state": 61
+   },
+   {
+    "base_bytes": 140933,
+    "from_state": 51,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 148752,
+    "to_state": 61
+   },
+   {
+    "base_bytes": 194432,
+    "from_state": 51,
+    "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 197469,
+    "to_state": 61
+   },
+   {
+    "base_bytes": 539951,
+    "from_state": 61,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 558385,
+    "to_state": 71
+   },
+   {
+    "base_bytes": 197775,
+    "from_state": 61,
+    "path": "7061636b616765732f75692f7475692f74657374732f7475692e737065632e7473",
+    "result_bytes": 215953,
+    "to_state": 71
+   },
+   {
+    "base_bytes": 148752,
+    "from_state": 61,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 149151,
+    "to_state": 71
+   },
+   {
+    "base_bytes": 197469,
+    "from_state": 61,
+    "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 213895,
+    "to_state": 71
+   },
+   {
+    "base_bytes": 558385,
+    "from_state": 71,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 586877,
+    "to_state": 81
+   },
+   {
+    "base_bytes": 215953,
+    "from_state": 71,
+    "path": "7061636b616765732f75692f7475692f74657374732f7475692e737065632e7473",
+    "result_bytes": 242126,
+    "to_state": 81
+   },
+   {
+    "base_bytes": 149151,
+    "from_state": 71,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 150256,
+    "to_state": 81
+   },
+   {
+    "base_bytes": 213895,
+    "from_state": 71,
+    "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 237902,
+    "to_state": 81
+   },
+   {
+    "base_bytes": 237902,
+    "from_state": 81,
+    "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 243224,
+    "to_state": 91
+   },
+   {
+    "base_bytes": 150256,
+    "from_state": 81,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 166319,
+    "to_state": 91
+   },
+   {
+    "base_bytes": 586877,
+    "from_state": 81,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 592212,
+    "to_state": 91
+   },
+   {
+    "base_bytes": 242126,
+    "from_state": 81,
+    "path": "7061636b616765732f75692f7475692f74657374732f7475692e737065632e7473",
+    "result_bytes": 279419,
+    "to_state": 91
+   },
+   {
+    "base_bytes": 131829,
+    "from_state": 81,
+    "path": "646f63732f636f726469732d636174616c6f672f73657276696365732e6d64",
+    "result_bytes": 138369,
+    "to_state": 91
+   },
+   {
+    "base_bytes": 243224,
+    "from_state": 91,
+    "path": "7061636b616765732f636f726469732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 262865,
+    "to_state": 101
+   },
+   {
+    "base_bytes": 166319,
+    "from_state": 91,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 191193,
+    "to_state": 101
+   },
+   {
+    "base_bytes": 592212,
+    "from_state": 91,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 609016,
+    "to_state": 101
+   },
+   {
+    "base_bytes": 138369,
+    "from_state": 91,
+    "path": "646f63732f636f726469732d636174616c6f672f73657276696365732e6d64",
+    "result_bytes": 146521,
+    "to_state": 101
+   },
+   {
+    "base_bytes": 229217,
+    "from_state": 91,
+    "path": "7061636b616765732f7479706572742f67656e657261746f722f74657374732f5f5f736e617073686f74735f5f2f747970652d6d6f64656c2e737065632e74732e736e6170",
+    "result_bytes": 229337,
+    "to_state": 101
+   },
+   {
+    "base_bytes": 191193,
+    "from_state": 101,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 197544,
+    "to_state": 111
+   },
+   {
+    "base_bytes": 609016,
+    "from_state": 101,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 642459,
+    "to_state": 111
+   },
+   {
+    "base_bytes": 197544,
+    "from_state": 111,
+    "path": "7061636b616765732f636f6e746578742f776f726b73706163652d636f6e746578742f74657374732f776f726b73706163652d636f6e746578742e737065632e7473",
+    "result_bytes": 197755,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 642459,
+    "from_state": 111,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 661761,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 138930,
+    "from_state": 111,
+    "path": "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473",
+    "result_bytes": 141028,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 151154,
+    "from_state": 111,
+    "path": "7061636b616765732f686f73742f61706970726f78792f7372632f6170692d70726f78792e7473",
+    "result_bytes": 160714,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 277126,
+    "from_state": 111,
+    "path": "7061636b616765732f73656c662d6d6f64696669636174696f6e2f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 287739,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 131079,
+    "from_state": 111,
+    "path": "7061636b616765732f7479706572742f67656e657261746f722f7372632f616e616c797a65722e7473",
+    "result_bytes": 132592,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 229337,
+    "from_state": 111,
+    "path": "7061636b616765732f7479706572742f67656e657261746f722f74657374732f5f5f736e617073686f74735f5f2f747970652d6d6f64656c2e737065632e74732e736e6170",
+    "result_bytes": 229389,
+    "to_state": 121
+   },
+   {
+    "base_bytes": 661761,
+    "from_state": 121,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 698324,
+    "to_state": 131
+   },
+   {
+    "base_bytes": 141028,
+    "from_state": 121,
+    "path": "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473",
+    "result_bytes": 150425,
+    "to_state": 131
+   },
+   {
+    "base_bytes": 160714,
+    "from_state": 121,
+    "path": "7061636b616765732f686f73742f61706970726f78792f7372632f6170692d70726f78792e7473",
+    "result_bytes": 162670,
+    "to_state": 131
+   },
+   {
+    "base_bytes": 132592,
+    "from_state": 121,
+    "path": "7061636b616765732f7479706572742f67656e657261746f722f7372632f616e616c797a65722e7473",
+    "result_bytes": 134365,
+    "to_state": 131
+   },
+   {
+    "base_bytes": 197986,
+    "from_state": 131,
+    "path": "7061636b616765732f636f6e746578742f6167656e742d696e737472756374696f6e732f74657374732f6167656e742d696e737472756374696f6e732e737065632e7473",
+    "result_bytes": 198354,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 141151,
+    "from_state": 131,
+    "path": "646f63732f636f6e6669672d636174616c6f672e7a682e6d64",
+    "result_bytes": 148769,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 140604,
+    "from_state": 131,
+    "path": "646f63732f636f6e6669672d636174616c6f672e6d64",
+    "result_bytes": 148181,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 698324,
+    "from_state": 131,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 763962,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 150425,
+    "from_state": 131,
+    "path": "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473",
+    "result_bytes": 153022,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 134365,
+    "from_state": 131,
+    "path": "7061636b616765732f7479706572742f67656e657261746f722f7372632f616e616c797a65722e7473",
+    "result_bytes": 135727,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 369240,
+    "from_state": 131,
+    "path": "7061636b616765732f657874656e73696f6e732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 431951,
+    "to_state": 141
+   },
+   {
+    "base_bytes": 198354,
+    "from_state": 141,
+    "path": "7061636b616765732f636f6e746578742f6167656e742d696e737472756374696f6e732f74657374732f6167656e742d696e737472756374696f6e732e737065632e7473",
+    "result_bytes": 200263,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 148769,
+    "from_state": 141,
+    "path": "646f63732f636f6e6669672d636174616c6f672e7a682e6d64",
+    "result_bytes": 149530,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 148181,
+    "from_state": 141,
+    "path": "646f63732f636f6e6669672d636174616c6f672e6d64",
+    "result_bytes": 148926,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 763962,
+    "from_state": 141,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 744093,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 153022,
+    "from_state": 141,
+    "path": "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473",
+    "result_bytes": 150167,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 135727,
+    "from_state": 141,
+    "path": "7061636b616765732f7479706572742f67656e657261746f722f7372632f616e616c797a65722e7473",
+    "result_bytes": 135870,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 431951,
+    "from_state": 141,
+    "path": "7061636b616765732f657874656e73696f6e732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 443359,
+    "to_state": 151
+   },
+   {
+    "base_bytes": 200263,
+    "from_state": 151,
+    "path": "7061636b616765732f636f6e746578742f6167656e742d696e737472756374696f6e732f74657374732f6167656e742d696e737472756374696f6e732e737065632e7473",
+    "result_bytes": 201831,
+    "to_state": 157
+   },
+   {
+    "base_bytes": 149530,
+    "from_state": 151,
+    "path": "646f63732f636f6e6669672d636174616c6f672e7a682e6d64",
+    "result_bytes": 153178,
+    "to_state": 157
+   },
+   {
+    "base_bytes": 148926,
+    "from_state": 151,
+    "path": "646f63732f636f6e6669672d636174616c6f672e6d64",
+    "result_bytes": 152563,
+    "to_state": 157
+   },
+   {
+    "base_bytes": 143631,
+    "from_state": 151,
+    "path": "7061636b616765732f7375626167656e742f7375626167656e742f74657374732f636f6e74696e756174696f6e2e737065632e7473",
+    "result_bytes": 159907,
+    "to_state": 157
+   },
+   {
+    "base_bytes": 744093,
+    "from_state": 151,
+    "path": "706e706d2d6c6f636b2e79616d6c",
+    "result_bytes": 841964,
+    "to_state": 157
+   },
+   {
+    "base_bytes": 150167,
+    "from_state": 151,
+    "path": "7061636b616765732f636c69656e742f636f6e6e656374696f6e2f7372632f636c69656e742f666978747572652e7473",
+    "result_bytes": 156642,
+    "to_state": 157
+   },
+   {
+    "base_bytes": 443359,
+    "from_state": 151,
+    "path": "7061636b616765732f657874656e73696f6e732f746f6f6c2d636f726469732f7372632f6170692d636174616c6f672e7473",
+    "result_bytes": 459436,
+    "to_state": 157
+   }
+  ]
+ },
+ "selection": [
+  1,
+  11,
+  21,
+  31,
+  41,
+  51,
+  61,
+  71,
+  81,
+  91,
+  101,
+  111,
+  121,
+  131,
+  141,
+  151,
+  157
+ ],
+ "states": [
+  {
+   "chunked_bytes": 169733,
+   "chunked_files": 1,
+   "empty_files": 0,
+   "index": 1,
+   "regular_files": 272,
+   "sha": "ca4e1c3a1c61129bd95ee57dd744bc53c2e635bb",
+   "whole_bytes": 1329332,
+   "whole_files": 271
+  },
+  {
+   "chunked_bytes": 232511,
+   "chunked_files": 1,
+   "empty_files": 0,
+   "index": 11,
+   "regular_files": 869,
+   "sha": "d10761a5774cde7b05d09c393a798d42b90dc5ea",
+   "whole_bytes": 6440580,
+   "whole_files": 868
+  },
+  {
+   "chunked_bytes": 402750,
+   "chunked_files": 2,
+   "empty_files": 0,
+   "index": 21,
+   "regular_files": 1300,
+   "sha": "cc546c4580721a78c0276ffa8723523a74679e6a",
+   "whole_bytes": 9240834,
+   "whole_files": 1298
+  },
+  {
+   "chunked_bytes": 516817,
+   "chunked_files": 2,
+   "empty_files": 0,
+   "index": 31,
+   "regular_files": 1650,
+   "sha": "b50e02a2b33eae201e83b016b49aae4e50ab68ea",
+   "whole_bytes": 11367405,
+   "whole_files": 1648
+  },
+  {
+   "chunked_bytes": 1162741,
+   "chunked_files": 4,
+   "empty_files": 0,
+   "index": 41,
+   "regular_files": 2754,
+   "sha": "fa433356243c61f71eb20fc2ddc882f70401287b",
+   "whole_bytes": 17627677,
+   "whole_files": 2750
+  },
+  {
+   "chunked_bytes": 1124053,
+   "chunked_files": 5,
+   "empty_files": 0,
+   "index": 51,
+   "regular_files": 3454,
+   "sha": "5e4026d76835adf83d53fe151dfd3ef1695caf8c",
+   "whole_bytes": 20864539,
+   "whole_files": 3449
+  },
+  {
+   "chunked_bytes": 1083947,
+   "chunked_files": 4,
+   "empty_files": 1,
+   "index": 61,
+   "regular_files": 4531,
+   "sha": "cd88a339fa885be82194e1881f49bf8be46190fe",
+   "whole_bytes": 24917092,
+   "whole_files": 4527
+  },
+  {
+   "chunked_bytes": 1137384,
+   "chunked_files": 4,
+   "empty_files": 1,
+   "index": 71,
+   "regular_files": 4787,
+   "sha": "7135703a5ee6eb11d4cae49287d80c0252565ad1",
+   "whole_bytes": 26569190,
+   "whole_files": 4783
+  },
+  {
+   "chunked_bytes": 2819428,
+   "chunked_files": 7,
+   "empty_files": 1,
+   "index": 81,
+   "regular_files": 5387,
+   "sha": "c77f889a2a0ee25241bec763f9f3a7d8b88adcdc",
+   "whole_bytes": 30920722,
+   "whole_files": 5380
+  },
+  {
+   "chunked_bytes": 2889981,
+   "chunked_files": 7,
+   "empty_files": 1,
+   "index": 91,
+   "regular_files": 5731,
+   "sha": "81ac6db785e653c757b91a0c36c9bcc50f5c85f2",
+   "whole_bytes": 33358675,
+   "whole_files": 5724
+  },
+  {
+   "chunked_bytes": 2680153,
+   "chunked_files": 6,
+   "empty_files": 1,
+   "index": 101,
+   "regular_files": 6347,
+   "sha": "32bce339da84917b696f1387d8e7e8417c73c27d",
+   "whole_bytes": 37882249,
+   "whole_files": 6341
+  },
+  {
+   "chunked_bytes": 3142277,
+   "chunked_files": 9,
+   "empty_files": 1,
+   "index": 111,
+   "regular_files": 6820,
+   "sha": "4bee3f73ef887f35825fc8b155a0d6e36646d1f1",
+   "whole_bytes": 41245223,
+   "whole_files": 6811
+  },
+  {
+   "chunked_bytes": 3052199,
+   "chunked_files": 8,
+   "empty_files": 1,
+   "index": 121,
+   "regular_files": 7124,
+   "sha": "ba1b0e15fc75c2a6dffa047817a6c0c2c328e1e0",
+   "whole_bytes": 43684974,
+   "whole_files": 7116
+  },
+  {
+   "chunked_bytes": 2360182,
+   "chunked_files": 10,
+   "empty_files": 1,
+   "index": 131,
+   "regular_files": 7872,
+   "sha": "708a25a8a9362079185abb4f0c747cff4df74398",
+   "whole_bytes": 48549573,
+   "whole_files": 7862
+  },
+  {
+   "chunked_bytes": 2514157,
+   "chunked_files": 10,
+   "empty_files": 5,
+   "index": 141,
+   "regular_files": 8704,
+   "sha": "5a5e1b73733546a5880e1564bce60a43ac0e06b6",
+   "whole_bytes": 55270973,
+   "whole_files": 8694
+  },
+  {
+   "chunked_bytes": 2928019,
+   "chunked_files": 12,
+   "empty_files": 5,
+   "index": 151,
+   "regular_files": 8923,
+   "sha": "731f1268d13ed89fccb1e8841a42f3808858134d",
+   "whole_bytes": 58502325,
+   "whole_files": 8911
+  },
+  {
+   "chunked_bytes": 3335324,
+   "chunked_files": 13,
+   "empty_files": 5,
+   "index": 157,
+   "regular_files": 9404,
+   "sha": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+   "whole_bytes": 61685199,
+   "whole_files": 9391
+  }
+ ]
+}

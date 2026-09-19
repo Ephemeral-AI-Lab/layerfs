@@ -8,17 +8,23 @@ Release: [v0.1.7 checklist](../README.md), tracked by
 
 ## Start here
 
-- [**Stage 6 handoff (2026-09-19)**](stage-6-handoff.md): the routing for
-  [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) - qualify the
-  complete C1/C2 core for correctness, performance and memory. **One agent, no
-  subagents and no codex**; mechanically reproducible receipts replace the Stage 5
-  verifier-subagent mechanism. Its frozen case specification is
-  [`core/docs/benchmark/fs-bench-pro-storage-content/`](../../../../../core/docs/benchmark/fs-bench-pro-storage-content/)
-  - the contract, the C1 and C2 family registers, the four measurement axes, the
-  cache/copy discipline, the gates and oracles, and the implementation estimate -
-  and the harness is built at `core/benchmark/fs-bench-pro-storage-content/`.
-  Production LOC delta is expected to be **0**; benchmark Python files are exempt
-  from the product line ceilings.
+- [**Stage 7: cluster 1 + cluster 2 architecture review**](stage-7-architecture-review.md):
+  current assignment for [#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172).
+  Prioritize flexibility, pluggability and independent evolution; prove that a
+  consumer can adopt compatible optimized C1/C2 revisions without integration
+  logic changes. Replaces the former Stage 7 runtime implementation assignment.
+- **Subsequent implementation: pair 3 → pair 1 → pair 2.**
+  [#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181) establishes the
+  service/transport first, [#179](https://github.com/Ephemeral-AI-Lab/layerfs/issues/179)
+  builds Workspace/FUSE on it, then [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180)
+  adds history/Commit. See the [execution contract](../../../../../core/docs/architecture/proposal/README.md#implementation-order-pair-3-then-pair-1-then-pair-2):
+  short shared design input precedes pair 3, not parallel implementation.
+- [**Stage 6 closure**](../evidence/stage-6-round4c-20260919T000000Z/README.md):
+  [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) is closed at its
+  frozen scope. Its [handoff](stage-6-handoff.md) is historical;
+  [the harness follow-up](../evidence/stage-6-round5b-20260919T000000Z/README.md)
+  preserves the qualification and records the later harness work. Historical
+  runtime assignments to #172 are superseded by the Stage 7 review above.
 - [**Stage 5 closure (2026-09-18)**](stage-5-report.md#16-final-matrices-and-the-verification-pass-round-4-2026-09-18):
   the terminal handoff reached its terminal condition - 81 PASS / 0 FAIL /
   0 PARTIAL-INCOMPLETE / 1 NOT_RUN with a written owner disposition / 1
@@ -398,17 +404,16 @@ attribution and public end-to-end qualification as complementary evidence.
 Follow the shared proposal's measurement rules; no diagram or document grants a
 new benchmark exception, changed transaction boundary or performance claim.
 
-## Discussion order
+## Discussion and implementation order
 
-Finish the [remaining cluster 1/2 contracts](content-storage-co-design.md#remaining-co-design-decisions)
-first. Apply the handoff proposal to file construction and filesystem-tree ordering
-while closing its exact APIs and resource proofs. Workspace state and
-LayerStack/Branch/Commit workflows follow, then runtime and
-public integration. Only the integration boundary with these later owners is
-part of the present content-storage co-design.
-This is a discussion order; implementation sequencing follows the resulting
-dependency and compatibility analysis.
+Close the C1/C2 integration contract through [Stage 7](stage-7-architecture-review.md).
+For subsequent integration, use the [owner-directed execution contract](../../../../../core/docs/architecture/proposal/README.md#implementation-order-pair-3-then-pair-1-then-pair-2):
+**pair 3 service/transport → pair 1 Workspace/FUSE → pair 2 history/Commit**.
+Only the initial logical-operation, identity and acknowledgement agreement is
+shared before implementation. Pair 3 proves its endpoint with a test client;
+pair 1 consumes that endpoint; pair 2 adds logical publication semantics. This
+replaces the earlier proposed parallel implementation sequence.
 
-Create and link each cluster document when its discussion begins. The shared
-proposal remains the home for common principles; this index tracks the grouping
-and links; each cluster document owns its detailed decisions.
+The shared proposal remains the home for common principles; each cluster document
+owns its detailed decisions. Earlier core handoffs and measurement receipts retain
+their historical scope and do not establish runtime acceptance.

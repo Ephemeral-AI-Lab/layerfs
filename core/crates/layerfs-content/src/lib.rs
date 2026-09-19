@@ -24,9 +24,10 @@ pub mod policy;
 
 pub use error::{ContentError, ContentResult};
 pub use file::{
-    apply_edits, construct_bytes, construct_stream, encode_whole_file_payload, read_all,
-    read_all_bounded, read_range, whole_file_payload, ConstructedFile, Edit, EditRequest,
-    EditSource, EditStream, FileContent, FileView, Replacements, MAXIMUM_EDITS_PER_OPERATION,
+    apply_edits, construct_bytes, construct_bytes_with_predecessor, construct_stream,
+    encode_whole_file_payload, read_all, read_all_bounded, read_range, whole_file_payload,
+    ConstructedFile, Edit, EditRequest, EditSource, EditStream, FileContent, FileView,
+    PredecessorBase, Replacements, MAXIMUM_EDITS_PER_OPERATION,
 };
 pub use filesystem::inode::InodeChange;
 pub use filesystem::{

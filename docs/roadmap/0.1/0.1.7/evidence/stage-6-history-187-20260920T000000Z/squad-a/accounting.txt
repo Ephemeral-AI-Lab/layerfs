@@ -1,0 +1,57 @@
+==============================================================================
+A  v0.1.7  /tmp/base187/sample.sqlite
+B  v0.1.6  benchmark-results/repository-history/stride-10/deepseek-stride10/host-runtime/store.sqlite
+==============================================================================
+A v0.1.7  apparent    128864256   st_blocks*512    134537216   packs  502   pack BLOBs    119894291
+B v0.1.6  apparent     49315840   st_blocks*512     49336320   packs  357   pack BLOBs     46056732
+A v0.1.7  non-pack      8969965   pack framing       215664   group bodies    119678627
+B v0.1.6  non-pack      3259108   pack framing       196100   group bodies     45860632
+
+--- lane tables (stored = distinct group bodies; the v4 lanes are one
+    record per group, so a group body belongs to one object) ---
+A v0.1.7:
+   Ordinary          6786 obj     10405092 canonical      1022476 stored   10.18x
+   Native            1098 obj     22055499 canonical      5695678 stored    3.87x
+   WholeFile        44148 obj    348460709 canonical    110941054 stored    3.14x
+   PooledMetadata       0 obj            0 canonical      2019419 stored    0.00x
+   TOTAL            52032 obj    380921300 canonical    119678627 stored    3.18x
+B v0.1.6:
+   Ordinary          4847 obj      2013482 canonical       678339 stored    2.97x
+   Native            1098 obj     22055499 canonical      3958057 stored    5.57x
+   WholeFile        44141 obj    348460295 canonical     38983278 stored    8.94x
+   PooledMetadata    1636 obj      8033879 canonical      2240958 stored    3.59x
+   TOTAL            51722 obj    380563155 canonical     45860632 stored    8.30x
+
+--- whole-file (v4) lane ---
+   A v0.1.7  DELTA  18344 obj     82033173 canon  (23.54% of bytes)   FULL  25804 obj    266427536 canon
+   B v0.1.6  DELTA  35904 obj    285486222 canon  (81.93% of bytes)   FULL   8237 obj     62974073 canon
+
+--- per-class rates over the 44141 objects both Stores hold ---
+   v0.1.6 DELTA    285486222 canon ->   16310397 stored = 0.057131994 B/B (17.50x)
+   v0.1.6 FULL      62974073 canon ->   22672881 stored = 0.360035169 B/B (2.78x)
+   v0.1.7 DELTA     82033173 canon ->   17196162 stored = 0.209624489 B/B (4.77x)
+   v0.1.7 FULL     266427122 canon ->   93744546 stored = 0.351858119 B/B (2.84x)
+   FULL rate ratio v0.1.7/v0.1.6 = 0.977288   (below 1.0 means v0.1.7 is BETTER)
+
+--- confusion: v0.1.6 class (kind) x v0.1.7 class ---
+   kind0    -> DELTA    1260 obj      9079691 canonical
+   kind0    -> FULL     6977 obj     53894382 canonical
+   kind1    -> DELTA    4247 obj     13237572 canonical
+   kind1    -> FULL      549 obj      4517348 canonical
+   kind2    -> DELTA   12837 obj     59715910 canonical
+   kind2    -> FULL    18271 obj    208015392 canonical
+
+--- counterfactual: v0.1.7's own objects priced at v0.1.6's per-class rate ---
+   predicted stored     38983278   actual v0.1.7    110940708   residual     71957430
+
+--- reconciliation of the apparent-byte difference ---
+   apparent   A    128864256   B     49315840   delta     79548416  (2.6130x)
+   Native                  1737621
+   Ordinary                 344137
+   PooledMetadata          -221539
+   WholeFile              71957776
+   pack framing              19564
+   non-pack (SQLite)       5710857
+   SUM                    79548416   (check against 79548416)
+
+   whole-file share of the excess = 71957776 / 79548416 = 0.9046

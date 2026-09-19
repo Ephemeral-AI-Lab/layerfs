@@ -72,28 +72,75 @@ pair. Three pass that test; the rest of what has been discussed does not.
 ╚════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Why this order is strict
+### Implementation order: pair 3, then pair 1, then pair 2
+
+Owner direction, 2026-09-20: establish the operation-owner/service and transport
+foundation first, then build FUSE/Workspace on that endpoint, then add history.
+Pair numbers remain responsibility labels. The implementation order is **#181 →
+#179 → #180**, after the reviewed C1/C2 contract and a short initial operation
+agreement. This supersedes both the former strict 1 → 2 → 3 sequence and the
+earlier recommendation to implement all three pairs in parallel.
 
 ```text
-   PAIR 1  defines the OPERATION SET          #179
+   REVIEWED C1/C2 + SHORT INITIAL OPERATION CONTRACT
               │
               ▼
-   PAIR 2  defines what the operations MEAN   #180
+   PAIR 3  operation owner + transport       #181
+           prove with a test client, no FUSE required
               │
               ▼
-   PAIR 3  the link CARRIES both, under auth  #181
+   PAIR 1  Workspace accumulator + FUSE      #179
+           use the working service endpoint
+              │
+              ▼
+   PAIR 2  history + stage/Commit +          #180
+           conditional head publication
 ```
 
-The link carries what pairs 1 and 2 define. Writing history first would invent an
-interface the projection cannot use — the mistake of building a layer whose
-requirements were guessed.
+Pair 3's immediate target is **a Linux Docker `layerfs-daemon` connected to a
+host `layerfs-service`**, initially on the current macOS development host. Its
+other priority is an architecture portable to future cloud/serverless SQLite:
+keep bridge operations and C2 provider assumptions separate. The
+[pair 3 scope and acceptance](04-boundary-and-trust.md) requires source-backed
+portability analysis and actual Docker/host execution, not cloud implementation.
+Record the exact environment, endpoint and trust scope before implementing it.
+Pair 1 later adds FUSE and Workspace capabilities to the daemon.
+Keep C1/C2 together near storage and keep their object-provider/consumer calls
+local. A direct-call test does not qualify the selected cross-process deployment.
 
-### One cross-cutting warning
+**Design input is not parallel implementation.** Before pair 3 starts, obtain
+only the contract input it needs from the other pairs: initial logical reads and
+updates, stable input and explicit base roots, bounded request/result streams,
+authorization scope, and the meaning of saved-root success versus failure or
+unknown outcome. Pair 1's full accumulator and pair 2's full history engine are
+not prerequisites for this agreement. New-inode operations require allocator
+ownership/nonreuse semantics; an existing-file read/edit path can come first.
 
-**The tenancy decision inside pair 3 can invalidate pair 2's schema.** Per-tenant
-policy rows are not in the four tables core has today. So tenancy must be
-**answered directionally before pair 2 freezes a schema**, even though pair 3 is
-designed last. Schema changes are the expensive kind.
+| Implementation step | Deliverable required before moving on |
+| --- | --- |
+| **Pair 3 first** | Portable service/bridge/daemon boundaries and a documented future SQLite-provider path; actual Linux Docker daemon to host service using real C1/C2, authorization, bounded transfer and honest failures. A test driver proves read/update/save/new-root readback without FUSE. |
+| **Pair 1 second** | Workspace accumulation and overlay reads, resource/flush policy, handles and real Linux FUSE callbacks using the tested endpoint. Prove read → pending edit/read-your-write → bounded submit → saved-root readback. This is not yet logical Commit/history acceptance. |
+| **Pair 2 third** | History identities, staging, logical Commit, discard and conditional head publication composed with the working runtime/service. Add the corresponding protocol operations only after their semantics are defined; qualify the complete lifecycle. |
+
+Pair 3 implements the foundation needed by the initial deployment, not every
+future deployment or tenancy mechanism. Its early root-save result means C2
+finished saving the objects; it does not create a logical Commit, move a branch
+head or promise crash durability. Unknown acknowledgement is failure with unknown
+outcome, with no automatic resend or guessed rollback. Later history operation
+messages extend the same service under pair 2's explicit contract.
+
+Pair 3 supplies tenancy/identity direction before pair 2 freezes history schema.
+Pair 2 must also decide history metadata placement and how it composes with C2
+save completion; additional history tables or a shared transaction are not
+implicit Store capabilities. These early design dependencies do not move history
+implementation ahead of the service and Workspace.
+
+Stage 7 remains the C1/C2 architecture/replacement review, not runtime
+implementation. Reconcile its findings with the finalized core baseline and
+resolve/disposition those affecting the selected integration contract before
+using it. Neither this sequence nor historical Stage 6 results establish runtime
+qualification. The earlier [sequencing review](../../../../docs/roadmap/0.1/0.1.7/evidence/co-design-sequencing-20260920/README.md)
+is retained as research with the later owner direction appended.
 
 ## Contents
 

@@ -113,7 +113,11 @@ amendment that must precede it. The first is
 [`deferred/01-size-transition-delta-hints.md`](deferred/01-size-transition-delta-hints.md)
 — delta hints across the whole-file / chunked size transition, with the diagrams
 that keep the reference implementation, the `core/` gap and the declined
-cross-role ruling apart.
+cross-role ruling apart. The second is
+[`deferred/02-history-tier-floor-deferral.md`](deferred/02-history-tier-floor-deferral.md)
+— the retained-history tier floor: pack grouping, per-path frames and the
+one-stream bound, each with its access cost, recorded while the per-object-record
+tier (T1) is the only one under consideration.
 
 This paper adds the module map ([§8](#8-module-map)), what the set does not claim
 ([§10](#10-what-this-set-does-not-claim)) and the source index.

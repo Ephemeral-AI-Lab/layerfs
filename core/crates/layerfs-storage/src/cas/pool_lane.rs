@@ -323,7 +323,16 @@ impl MutationOwner {
             if location.role != ObjectRole::InodeLeaf {
                 continue;
             }
-            let Some(cost) = self.depths.cost_of(&self.connection, *id)? else {
+            // The walk reads each edge from its record through the owner's own
+            // pooled reader, whose pack cache the acquisition below reuses.
+            let pool = &mut self.pool_reader;
+            let cost = self.depths.cost_of(
+                &self.connection,
+                &mut self.decompression,
+                *id,
+                |connection, workspace, location| pool.stored_base(connection, workspace, location),
+            )?;
+            let Some(cost) = cost else {
                 continue;
             };
             if cost.depth >= depth_cap {

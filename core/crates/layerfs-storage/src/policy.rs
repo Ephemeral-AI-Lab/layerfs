@@ -23,8 +23,14 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// ordinary readers. Version 3 widened the persisted policy ranges to the
 /// supported configurable profile. Version 4 adds
 /// `store_policy.metadata_delta_max_depth`, the pooled-metadata dependency bound.
+/// Version 5 removes `objects.base_object_id`: the direct base identity is a
+/// property of the packed record, which already carries it, so the column was a
+/// second copy of the same fact. A version-4 Store is rejected rather than
+/// migrated, and the reader never guesses a base it cannot read from the record.
+/// Version 6 adds `content_signatures`, the persisted cross-save content index
+/// (`encoding/delta/candidates.rs`, the W2 section of `sql/schema.sql`).
 /// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 6;
 
 /// Declared storage schema identifier.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

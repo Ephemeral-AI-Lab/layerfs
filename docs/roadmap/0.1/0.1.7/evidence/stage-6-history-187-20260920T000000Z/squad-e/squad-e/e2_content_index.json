@@ -1,0 +1,64 @@
+{
+  "models": {
+    "P0 per-save, ring1024, refs8192  == the product today": {
+      "covered_canonical_bytes": 84902793,
+      "covered_cross_path": 18433,
+      "covered_cross_save_objects": 0,
+      "covered_objects": 18433,
+      "covered_same_path": 0,
+      "index_entries": 25752
+    },
+    "P1 per-save, ring1024, exact index": {
+      "covered_canonical_bytes": 91607869,
+      "covered_cross_path": 19023,
+      "covered_cross_save_objects": 0,
+      "covered_objects": 19023,
+      "covered_same_path": 0,
+      "index_entries": 25162
+    },
+    "P2 per-save, unbounded, exact index": {
+      "covered_canonical_bytes": 94373272,
+      "covered_cross_path": 19284,
+      "covered_cross_save_objects": 0,
+      "covered_objects": 19284,
+      "covered_same_path": 0,
+      "index_entries": 24903
+    },
+    "S1 persistent, ring1024, refs8192": {
+      "covered_canonical_bytes": 110466408,
+      "covered_cross_path": 18839,
+      "covered_cross_save_objects": 6418,
+      "covered_objects": 20632,
+      "covered_same_path": 1793,
+      "index_entries": 23552
+    },
+    "S2 persistent, ring1024, exact index": {
+      "covered_canonical_bytes": 119429418,
+      "covered_cross_path": 19626,
+      "covered_cross_save_objects": 7254,
+      "covered_objects": 21475,
+      "covered_same_path": 1849,
+      "index_entries": 22703
+    },
+    "S3 persistent, unbounded, exact index": {
+      "covered_canonical_bytes": 303595980,
+      "covered_cross_path": 24232,
+      "covered_cross_save_objects": 35187,
+      "covered_objects": 37200,
+      "covered_same_path": 12968,
+      "index_entries": 6948
+    }
+  },
+  "signature_lengths": {
+    "0": 24,
+    "2": 4,
+    "3": 3,
+    "4": 2,
+    "5": 1,
+    "6": 4,
+    "7": 3,
+    "8": 44107
+  },
+  "signatures_missing": 0,
+  "whole_file_occurrences": 45470
+}

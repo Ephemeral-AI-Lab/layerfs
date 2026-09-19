@@ -98,10 +98,17 @@ impl MutationOwner {
         if object.role() == ObjectRole::InodeLeaf {
             return self.select_pooled(object, advisory);
         }
+        // The index is Store-owned so that it survives the save; the lock is held
+        // for this one selection and never across a call into the codec or the
+        // database, so a save's own exclusivity is what orders the writers.
+        let mut candidates = self
+            .candidates
+            .lock()
+            .map_err(|_| StorageError::Integrity("candidate index lock"))?;
         let mut input = SelectInput {
             connection: &self.connection,
             capacities: &self.capacities,
-            candidates: &mut self.candidates,
+            candidates: &mut candidates,
             depths: &mut self.depths,
             packs: &mut self.pack_cache,
             decode: &mut self.decompression,
@@ -131,8 +138,11 @@ impl MutationOwner {
         self.chain_total
     }
 
-    /// Live bytes held by the bounded admitted-FULL winner cache.
+    /// Live bytes held by the bounded content-signature index.
     pub fn candidate_index_bytes(&self) -> usize {
-        self.candidates.live_bytes()
+        self.candidates
+            .lock()
+            .map(|index| index.live_bytes())
+            .unwrap_or(0)
     }
 }

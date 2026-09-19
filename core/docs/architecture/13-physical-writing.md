@@ -25,7 +25,7 @@ describes how bytes actually get *into* them:
         ▼
    ┌── CODEC ────────────────────────────────────────────────┐
    │  §18.2  CodecProfile · static contexts · workspaces      │
-   │         zstd level 3 (payload) / level 1 (group)         │
+   │         zstd level 3 (payload) / level 19 (group)        │
    └───────────────────────┬─────────────────────────────────┘
                            ▼
    ┌── FRAMING ──────────────────────────────────────────────┐
@@ -74,17 +74,32 @@ Every stage below is arranged to preserve that.
                           GROUP_LIMIT = 65,536 raw, GROUP_FRAME_LIMIT = +1024
 ```
 
-The frozen payload parameters, in the module's own words: *"level 3, a
-role-specific window log, a content-size field, a checksum, **no dictionary id and
-no workers**."* Nothing in the codec is configurable at run time beyond the
-policy-derived whole-file profile.
+The payload parameters, in the module's own words: *"level 3, a role-specific
+window log, a content-size field, a checksum, **no dictionary id and no workers**."*
+Nothing in the codec is configurable at run time beyond the policy-derived
+whole-file profile.
+
+**The group level is 19, and the payload level is 3, and both were chosen by
+measurement rather than inherited.** A payload-level sweep on the retained-history
+lane (`history-stride10`) measured the marginal return per CPU-second as
+**L3→L5 1,408,000 · L5→L7 1,176,879 · L7→L9 84,176** B/CPU-s: the knee is at 7 and
+level 9 — which the codec's own instrument had suggested — is the worst-value point
+on the lane curve. Payload 3 is kept, and it clears the storage gate at the lowest
+CPU measured. The group level is a separate constant: raising it 1→19 bought
+**270,336 B for about 1.0 s** on the same lane, which is what carries the gate.
+
+**The encode workspace is 16 MiB because 2 MiB is not enough.** A static context at
+level 9 returns `ZSTD_error_memory_allocation`, and the widest construction policy
+the public API accepts needs 13,100,048 B. The product's own
+`codec_frames::a_frame_beyond_the_profiles_window_is_refused` caught this as
+`Integrity("bounded Zstandard workspace unavailable")`.
 
 ### 18.2.2 Contexts live in caller-owned memory
 
 This is the structural decision in the codec, and it is not an optimisation detail:
 
 ```text
-   CompressionWorkspace   ENCODE_WORKSPACE_BYTES = 2 MiB, aligned
+   CompressionWorkspace   ENCODE_WORKSPACE_BYTES = 16 MiB, aligned
    DecompressionWorkspace DECODE_WORKSPACE_BYTES = 1 MiB, aligned
 
    ZSTD_initStaticCCtx / ZSTD_initStaticDCtx
@@ -100,7 +115,7 @@ Both workspaces are shared by **every role of one save** (encode) or **one read*
 
 The consequence for a receipt is that a codec call's memory is **declared and
 fixed**, not proportional to the payload: compressing a 16 MiB object and a 16 KiB
-object both use the same 2 MiB region.
+object both use the same 16 MiB region.
 
 ### 18.2.3 Prefix state never outlives its call
 
@@ -298,7 +313,7 @@ placed in one call, `W` = packs receiving groups in that call.
 
 | Stage | Time | Peak memory | Notes |
 | --- | --- | --- | --- |
-| `compress` / `decompress` | O(B) | **O(1)** — the 2 MiB / 1 MiB region | static context, charged up front |
+| `compress` / `decompress` | O(B) | **O(1)** — the 16 MiB / 1 MiB region | static context, charged up front |
 | `frame_group` | O(R + B) | O(B) — the body | `4 + 4R` framing |
 | `framed_group_length` | **O(1)** | O(1) | pure arithmetic on two numbers |
 | `assembled_length` | **O(groups)** | O(1) | loops summing `body_size`; the canonical predicate |

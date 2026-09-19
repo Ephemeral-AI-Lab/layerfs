@@ -1,0 +1,20 @@
+### 0.1.7  /tmp/base187/sample.sqlite
+    store /tmp/base187/sample.sqlite
+    packs 502   SUM(length(object_packs.data)) = 119894291   attributed = 119678627   residual = 215664
+    lane            base           objects      canonical         stored    ratio
+    Native          n/a               1098       22055499        5695678    3.87x
+    Ordinary        n/a               6786       10405092        1022476   10.18x
+    PooledMetadata  n/a                  0              0        2019419    0.00x
+    WholeFile       with-base        18344       82033173       17196162    4.77x
+    WholeFile       without-base     25804      266427536       93744892    2.84x
+    TOTAL                            52032      380921300      119678627    3.18x
+### 0.1.6  benchmark-results/repository-history/stride-10/deepseek-stride10/host-runtime/store.sqlite
+    store benchmark-results/repository-history/stride-10/deepseek-stride10/host-runtime/store.sqlite
+    packs 357   SUM(length(object_packs.data)) = 46056732   attributed = 45860632   residual = 196100
+    lane            base           objects      canonical         stored    ratio
+    CompactSmall    with-base        35904      285486222       16310397   17.50x
+    CompactSmall    without-base      8237       62974073       22672881    2.78x
+    Native          n/a               1098       22055499        3958057    5.57x
+    Ordinary        n/a               4847        2013482         678339    2.97x
+    PooledMetadata  n/a               1636        8033879        2240958    3.59x
+    TOTAL                            51722      380563155       45860632    8.30x

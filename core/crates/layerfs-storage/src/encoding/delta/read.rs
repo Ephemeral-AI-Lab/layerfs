@@ -161,7 +161,7 @@ impl<'a> Resolver<'a> {
         let mut current = root;
         loop {
             chain.push(current);
-            let Some(base) = current.base_object_id else {
+            let Some(base) = self.base_of(&current)? else {
                 break;
             };
             if chain.len() > usize::from(role_depth) {
@@ -203,6 +203,29 @@ impl<'a> Resolver<'a> {
             canonical = Some((decoded, verified));
         }
         canonical.ok_or(StorageError::ObjectMissing(id))
+    }
+
+    /// The direct base identity one stored locator names, or `None` when FULL.
+    ///
+    /// The pack body is read through this resolver's own cache, which the decode
+    /// pass below then reuses: a chain is walked and decoded against one copy of
+    /// each body, not two.
+    fn base_of(&mut self, location: &ObjectLocation) -> StorageResult<Option<ObjectId>> {
+        // The body is charged here, where it is fetched, and not inferred later
+        // from the cache: the walk now reads it, so a decode that follows is a
+        // cache hit and would otherwise report a read that never happened.
+        let (_, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
+        if fetched {
+            self.packs_read = self.packs_read.saturating_add(1);
+        }
+        stored_base(
+            self.connection,
+            self.packs,
+            self.groups,
+            self.workspace,
+            &mut self.counters.group_decodes,
+            location,
+        )
     }
 
     fn decode_at(
@@ -263,6 +286,143 @@ impl<'a> Resolver<'a> {
             self.groups,
             &mut self.counters.group_decodes,
         )
+    }
+}
+
+/// A chain walk's record reader over the caller's own pack cache.
+///
+/// Owner: the operation that walks. Bound: the caller's pack cache is bounded by
+/// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and the decoded-group cache by
+/// [`crate::policy::DECODED_GROUP_CACHE_BYTES`]. Live multiplicity: one per
+/// walking caller. Lifetime: the caller's. Release: both caches release
+/// themselves wholesale when the next body would cross their bound.
+pub struct ChainBases<'a> {
+    packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    groups: GroupCache,
+    group_decodes: u64,
+}
+
+impl<'a> ChainBases<'a> {
+    /// A walk over `packs`, with its own bounded decoded-group cache.
+    pub fn new(packs: &'a mut BTreeMap<i64, Vec<u8>>) -> Self {
+        Self {
+            packs,
+            groups: GroupCache::new(),
+            group_decodes: 0,
+        }
+    }
+
+    /// Ordinary-lane group bodies this walk decompressed.
+    ///
+    /// A walk that is not a read wave has no wave counter to charge, so it keeps
+    /// its own: the work is still reported, just by the caller that asked for it.
+    pub const fn group_decodes(&self) -> u64 {
+        self.group_decodes
+    }
+
+    /// The direct base identity `location` names, or `None` when it is FULL.
+    pub fn base_of(
+        &mut self,
+        connection: &Connection,
+        workspace: &mut DecompressionWorkspace,
+        location: &ObjectLocation,
+    ) -> StorageResult<Option<ObjectId>> {
+        stored_base(
+            connection,
+            self.packs,
+            &mut self.groups,
+            workspace,
+            &mut self.group_decodes,
+            location,
+        )
+    }
+}
+
+/// The direct base identity one stored locator names, read from its own record.
+///
+/// There is no base column: this is the single reader of a dependency edge. The
+/// pack body is fetched through `packs`, so a walk followed by a decode of the
+/// same chain pays for each body once. An element whose record cannot be parsed is
+/// an integrity failure, never a chain that silently ends.
+pub fn stored_base(
+    connection: &Connection,
+    packs: &mut BTreeMap<i64, Vec<u8>>,
+    groups: &mut GroupCache,
+    workspace: &mut DecompressionWorkspace,
+    group_decodes: &mut u64,
+    location: &ObjectLocation,
+) -> StorageResult<Option<ObjectId>> {
+    let header = {
+        let (pack, _) = pack_of(packs, connection, location.pack_id)?;
+        crate::pack::layout::parse_header(pack)?
+    };
+    let (pack, _) = pack_of(packs, connection, location.pack_id)?;
+    let view = crate::pack::layout::group_view(pack, header, location.group_number)?;
+    let selected = pack
+        .get(view.start..view.end)
+        .ok_or(StorageError::Integrity("group body range"))?;
+    match header.lane {
+        PackLane::Ordinary => {
+            let body: &[u8] = match view.codec {
+                crate::pack::layout::GroupCodec::Raw => selected,
+                crate::pack::layout::GroupCodec::Zstandard => {
+                    match groups.get(location.pack_id, location.group_number) {
+                        Some(cached) => cached,
+                        None => {
+                            let decompressed =
+                                workspace.decompress_group(selected, view.decoded_length)?;
+                            *group_decodes = group_decodes.saturating_add(1);
+                            groups.insert(location.pack_id, location.group_number, decompressed);
+                            groups
+                                .get(location.pack_id, location.group_number)
+                                .ok_or(StorageError::Integrity("decoded group cache"))?
+                        }
+                    }
+                }
+            };
+            if body.len() != view.decoded_length {
+                return Err(StorageError::Integrity("group body length"));
+            }
+            let record = crate::encoding::decode::framed_record(body, location.record_number)?;
+            crate::encoding::delta::record::stored_base(
+                PackLane::Ordinary,
+                record,
+                location.canonical_length,
+                location.role,
+            )
+        }
+        PackLane::WholeFile => {
+            if location.record_number != 0 {
+                return Err(StorageError::Integrity("compact record ordinal"));
+            }
+            crate::encoding::delta::record::stored_base(
+                PackLane::WholeFile,
+                selected,
+                location.canonical_length,
+                location.role,
+            )
+        }
+        PackLane::Native => {
+            let record = crate::encoding::decode::framed_record(selected, location.record_number)?;
+            crate::encoding::delta::record::stored_base(
+                PackLane::Native,
+                record,
+                location.canonical_length,
+                location.role,
+            )
+        }
+        PackLane::Singleton => {
+            let record = crate::encoding::decode::framed_record(selected, 0)?;
+            crate::encoding::delta::record::stored_base(
+                PackLane::Singleton,
+                record,
+                location.canonical_length,
+                location.role,
+            )
+        }
+        PackLane::PooledMetadata => Err(StorageError::Integrity(
+            "pooled metadata locator has no object record",
+        )),
     }
 }
 

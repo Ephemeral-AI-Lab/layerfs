@@ -10,6 +10,14 @@
 
 Parent: [`core/docs/architecture/`](../README.md). Source pin `ce2d738ff`.
 
+**Current sequencing:** this is pair 2's operational design input. Under the
+[2026-09-20 implementation order](README.md#implementation-order-pair-3-then-pair-1-then-pair-2),
+pair 3's service/transport is implemented first, pair 1's Workspace/FUSE second,
+and pair 2's history third. Early acknowledgement/allocation definitions inform
+the service contract; they do not require parallel implementation. The older
+concurrency sketches below remain proposals subject to the owner's no-retry,
+no-automatic-rebase and no-added-durability rules, not implementation instructions.
+
 ---
 
 ## 0. Why this document exists

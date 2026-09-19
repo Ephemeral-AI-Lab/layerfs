@@ -1,0 +1,31 @@
+{
+  "root": "/tmp/stage7-loc-data/head",
+  "scopes": {
+    "core": {
+      "files": 120,
+      "lines": 19519,
+      "crates": {
+        "layerfs-content": 12303,
+        "layerfs-storage": 6453,
+        "layerfs-telemetry": 763
+      }
+    },
+    "reference": {
+      "files": 193,
+      "lines": 65417,
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      }
+    }
+  },
+  "combined": 84936
+}

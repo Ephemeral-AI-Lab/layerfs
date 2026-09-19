@@ -31,14 +31,6 @@ pub struct ObjectRow {
     pub role: u8,
     /// Canonical object length.
     pub canonical_length: usize,
-    /// Direct delta base this record was selected against, when it has one.
-    ///
-    /// Absent for a FULL record and for a pooled leaf stored as FULL; present for
-    /// a PREFIX/DELTA record, whose base the owner records here so the dependency
-    /// edge is visible to readers and to cleanup. The earlier doc comment said
-    /// "always absent in this slice", which stopped being true when delta
-    /// selection landed.
-    pub base_object_id: Option<ObjectId>,
     /// Pack holding the record.
     pub pack_id: i64,
     /// Group ordinal inside the pack.
@@ -97,10 +89,13 @@ pub fn append_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> Stora
 }
 
 /// Columns one object row binds.
-const OBJECT_INSERT_PARAMETERS: usize = 7;
+///
+/// Six, not seven: the direct base identity is a property of the packed record
+/// and is not a column, so the writer binds nothing for it.
+const OBJECT_INSERT_PARAMETERS: usize = 6;
 /// SQL text one bound row contributes to a multi-row `INSERT`: its placeholder
-/// group `(?,?,?,?,?,?,?)` and the separating comma.
-const OBJECT_INSERT_ROW_SQL_BYTES: usize = 16;
+/// group `(?,?,?,?,?,?)` and the separating comma.
+const OBJECT_INSERT_ROW_SQL_BYTES: usize = 14;
 /// Most rows this writer will ever put in one statement.
 ///
 /// Not a tuning constant: a fixed cap keeps the prepared-statement cache bounded
@@ -152,10 +147,6 @@ pub fn insert_objects(connection: &Connection, rows: &[ObjectRow]) -> StorageRes
             parameters.push(Value::Blob(row.object_id.to_bytes().to_vec()));
             parameters.push(Value::Integer(i64::from(row.role)));
             parameters.push(Value::Integer(row.canonical_length as i64));
-            parameters.push(match row.base_object_id {
-                Some(id) => Value::Blob(id.to_bytes().to_vec()),
-                None => Value::Null,
-            });
             parameters.push(Value::Integer(row.pack_id));
             parameters.push(Value::Integer(row.group_number as i64));
             parameters.push(Value::Integer(row.record_number as i64));
@@ -179,7 +170,7 @@ pub fn insert_objects(connection: &Connection, rows: &[ObjectRow]) -> StorageRes
 fn object_insert_sql(rows: usize) -> String {
     let mut sql = String::from(
         "INSERT INTO objects \
-         (object_id, object_role, canonical_length, base_object_id, pack_id, group_number, record_number) VALUES ",
+         (object_id, object_role, canonical_length, pack_id, group_number, record_number) VALUES ",
     );
     for index in 0..rows {
         if index > 0 {

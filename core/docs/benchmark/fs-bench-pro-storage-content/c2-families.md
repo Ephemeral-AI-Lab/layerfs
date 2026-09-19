@@ -25,7 +25,7 @@ tuning the wrong one:
 
 | Cost centre | Where it lives | Evidence |
 | --- | --- | --- |
-| **encode / hash / frame / assemble** | BLAKE3 identity re-verify, zstd level 3, group framing, pack assembly — CPU + malloc | `SaveOutcome.full_records`, `packs_created`, `pack_appends` |
+| **encode / hash / frame / assemble** | BLAKE3 identity re-verify, zstd level 3 (payload) / 19 (group), group framing, pack assembly — CPU + malloc | `SaveOutcome.full_records`, `packs_created`, `pack_appends` |
 | **SQL statement + transaction shape** | one **multi-row `INSERT` per bound chunk** — the chunk is derived from the linked engine's own limits and capped at 128 rows (`sqlite/write.rs:109,119-133`), so the counter is charged where the statement is issued, not inferred from the row count; plus a transaction per 8,191 rows / 4 MiB−1 | `SaveOutcome.statements` (the counter an INSERT-batching change moves), `SaveOutcome.presence_queries` (batched to one query per wave), `SaveOutcome.commits`; **8,191 rows opens 31 transactions** |
 | **read path** | ceiling read, paged locator `SELECT`, chain resolve, windowed decode | `StoreReadCounters{objects, packs_read, pages, ceiling, edges, max_depth, canonical_bytes, group_decodes, opens}` (`cas/store.rs:88-119`) |
 

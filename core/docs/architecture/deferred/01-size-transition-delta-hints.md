@@ -62,10 +62,15 @@ Three states hold at the pin, and they are not the same claim:
    root is attached as an advisory predecessor in both directions, and a
    positional cursor supplies the base extents overlapping each newly emitted
    chunk — but only when the base itself is chunked.
-2. **`core/` carries the field and drops the producer.** `AdvisoryPredecessors`
-   crosses the C1/C2 boundary with four slots and provenance tags, and a
-   whole-file result is hinted at the base root; the chunk route hardcodes `None`,
-   and `PredecessorProvenance::ReusedRange` is never constructed by product code.
+2. **`core/` carries the field, and the cursor that fills it for complete
+   construction now exists.** `AdvisoryPredecessors` crosses the C1/C2 boundary
+   with four slots and provenance tags, and a whole-file result is hinted at the
+   base root. The **complete-construction** chunk route consults
+   `file/mapping/predecessor.rs` when the caller offers a base
+   (`construct_bytes_with_predecessor`); the **`apply_edits`** route
+   (`replace_chunked`, `stream_combined`) still passes no cursor, and
+   `PredecessorProvenance::ReusedRange` is still never constructed by product
+   code.
 3. **Neither tree admits a cross-role base**, so *at the transition itself* the
    hint cannot be used: a `FileState` base is ineligible for a `WholeFile` target
    and vice versa. The v0.1.7 design declines this on purpose and requires an
@@ -73,6 +78,10 @@ Three states hold at the pin, and they are not the same claim:
 
 State 1 is the subject of the [positional-hint proposal](../09-delta-hints.md)
 (chapter 14); state 3 is the part this paper records as **deferred**.
+
+The producer half of state 2 landed after the pin, so this paper was revised in the
+same change ([§3.1](#31-what-the-cursor-landing-changed)). **State 3 is unchanged:
+a whole-file base is still ineligible for a chunk and vice versa.**
 
 ## 2. The diagrams
 
@@ -134,7 +143,9 @@ the outcome in `core/crates/layerfs-storage/tests/edit_pipeline.rs:641`
 
    hint    candidate = B  (the old whole-file object)
              [ref]  set but INERT — only a small-content result consumes it
-             [core] nothing at all: push_chunk(chunk, None)   build.rs:326
+             [core] nothing at all on this route: stream_combined passes no
+                    cursor (apply.rs:407), and the complete-construction route
+                    that does have one declines B, because B is not chunked
 
    storage  every chunk is FULL on a first growth (CAS has nothing to match)
 ```
@@ -160,7 +171,8 @@ small-content objects (`:2836`).
             ≤ 4 ids, deduped, 4,096-descriptor cap, exhaustion is not an error
 
    [ref]   PredecessorCursor  rope/read.rs:368  + first_span per emitted object
-   [core]  absent — the planned file/mapping/predecessor.rs was never written
+   [core]  PredecessorCursor  file/mapping/predecessor.rs — written, and consulted
+           by the complete-construction route only
 ```
 
 **holds today** in the reference (`crates/layerfs-content/src/file/rope/read.rs:368`,
@@ -236,7 +248,7 @@ they are not measured by this paper and are not a saving forecast.
 
 ```text
                           core/ today        crates/ today         status
-   cursor, chunked base    absent             PredecessorCursor     ch. 14 proposal
+   cursor, chunked base    present            PredecessorCursor     shared
    per-chunk hint          left neighbour     overlapping extent    ref-only
    whole-file base hint    None               set, but inert        usable in neither
    cross-role candidate    rejected           rejected              open amendment
@@ -255,14 +267,39 @@ they are not measured by this paper and are not a saving forecast.
 | 7 | The reference has a bounded positional cursor over a chunked base | holds today | `crates/.../file/rope/read.rs:368`, `:395`; `objects.rs:2855` |
 | 8 | The reference attaches the previous root as the small predecessor in both directions | holds today | `objects.rs:3318`; delivered at `:2836-2840` |
 | 9 | The reference's cursor is not attached for a whole-file base | holds today | `objects.rs:3319-3324` |
-| 10 | Core lacks the cursor; the planned file was never created | holds today | [§13.7](../08-representations.md#137-how-the-reference-tree-compares-v016); Stage 4 file plan |
+| 10 | Core lacks the cursor; the planned file was never created | **was true at the pin; implemented at this revision** | [§3.1](#31-what-the-cursor-landing-changed) |
 | 11 | A usable cross-role base at the transition | **deferred** | declined in the v0.1.7 design, below |
-| 12 | Core should consult the cursor per emitted chunk | **proposed** | [chapter 14](../09-delta-hints.md) |
+| 12 | Core should consult the cursor per emitted chunk | **was proposed at the pin; holds today at this revision** | [§3.1](#31-what-the-cursor-landing-changed) |
+
+### 3.1 What the cursor landing changed
+
+Claims 10 and 12 moved after the pin. `core/crates/layerfs-content/src/file/mapping/predecessor.rs`
+now holds a bounded, forward-only `PredecessorCursor` over a stored chunked mapping,
+and `construct_bytes_with_predecessor` consults it once per emitted chunk. Three
+qualifications belong with that, and none of them is a cross-role admission:
+
+- **The `apply_edits` routes are unchanged.** `replace_chunked` still offers
+  `rightmost_payload(left)` for every chunk of a replacement, and
+  `stream_combined` still offers nothing; both reach `build_streaming` with no
+  cursor. The complete-construction route is the one that has a producer.
+- **A whole-file base is still declined.** The cursor opens the offered base root
+  and returns no correspondence when that root is not a chunked file state, so the
+  `small → large` crossing still stores every chunk FULL. This is the deferral, not
+  a partial implementation of it.
+- **`ReusedRange` is still never constructed.** A cursor hint is a reused range, and
+  `push_chunk` still tags whatever predecessor it is handed
+  `UnchangedPrefix`. Claim 6 is unchanged.
+
+The cursor half carried no amendment gate at the pin — §4 step 1 required none — so
+nothing was un-deferred to build it.
 
 ## 4. What would finalize this
 
 1. **Implement the cursor in `core/`** behind the existing four-slot type, with no
    storage-format change — [chapter 14 §14.9](../09-delta-hints.md#149-what-would-finalize-this-paper).
+   **Done at this revision** for the complete-construction route; the measured
+   reading and its residual are in
+   [the L4 receipt](../../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188c-20260920T000000Z/L4/README.md).
 2. **Measure the two arms** on the four cases chapter 14 §14.6 states, one sample
    per case per arm, accounting for the whole retained graph chronologically.
 3. **For the cross-role half only:** an owner amendment is required first. The
@@ -306,3 +343,8 @@ cross-role base pair, or removes the reference mechanism, this paper changes in 
 same commit — or is deleted, with the rejection recorded. Advancing the pin without
 a content change is allowed only when the change touches none of those, and must be
 said rather than done silently.
+
+**Revision record.** The cursor landed in `core/` in the working tree at
+`66bce8378` + the L4 change, so §1 state 2, G3, G4, G7, claims 10 and 12, §3.1 and
+§4 step 1 were revised in that same change. No cross-role pair was admitted, so the
+**deferral this paper records is unchanged** and the paper stays in `deferred/`.

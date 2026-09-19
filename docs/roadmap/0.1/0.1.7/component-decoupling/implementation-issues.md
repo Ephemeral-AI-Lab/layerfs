@@ -2,7 +2,7 @@
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 
-Parent: [#165 — implement the decoupled C1/C2 core with independent timing and qualified runtime integration](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165).
+Parent: [#165 — implement the decoupled C1/C2 core with independent timing and architecture review](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165).
 
 These are seven native GitHub sub-issues. Stage 0 is bundled with Stage 1;
 Stages 2–7 each have their own child. This is an execution breakdown, not seven
@@ -18,7 +18,7 @@ telemetry by [#161](https://github.com/Ephemeral-AI-Lab/layerfs/issues/161).
 | [#169](https://github.com/Ephemeral-AI-Lab/layerfs/issues/169) | Stage 4: implement localized file edits, decoded COW boundaries and size transitions | #167, #168 |
 | [#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) | Stage 5: implement independent filesystem trees, attributes and reference ordering | #168, #169 |
 | [#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171) | Stage 6: qualify the complete C1/C2 core for correctness, performance and memory | #166, #167, #168, #169, #170 |
-| [#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172) | Stage 7: integrate one qualified Workspace/FUSE and host-daemon runtime with the new core | #171 |
+| [#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172) | Stage 7: review cluster 1 + cluster 2 architecture flexibility, pluggability and independent evolution | #171 |
 
 ## First handoff: Stages 0–2
 
@@ -41,21 +41,34 @@ amendments with the exact source under review. The original recommendation was
 exclude tests/docs/examples/manifests/tooling and are not physical file ceilings.
 Actual results and misses must be reported, never hidden by weakening correctness.
 
-## Current handoff: Stage 6 qualification
+## Current handoff: Stage 7 architecture review
 
-**Work continues through the [Stage 6 handoff](stage-6-handoff.md)** for
-[#171](https://github.com/Ephemeral-AI-Lab/layerfs/issues/171). It qualifies the
-complete C1/C2 core against the frozen case specification under
-`core/docs/benchmark/fs-bench-pro-storage-content/`. One agent, **no subagents and no
-codex**; the production LOC delta is expected to be **0**.
-[#170](https://github.com/Ephemeral-AI-Lab/layerfs/issues/170) (Stage 5) is **closed**
-at its implemented scope, and #168/#169 are closed under their recorded scope and
-waivers. The frozen specification is committed before any harness code or collection,
-as the measurement contract requires.
+Use the [Stage 7 review assignment](stage-7-architecture-review.md) for
+[#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172). Owner direction,
+2026-09-20, replaces runtime implementation with a review of content and storage.
+Flexibility, pluggability and independent evolution are the first priority.
+The acceptance scenario keeps an integration consumer unchanged while compatible
+C1/C2 algorithm revisions developed in another worktree are substituted.
 
-The two family sub-issues [#182](https://github.com/Ephemeral-AI-Lab/layerfs/issues/182)
-(C1) and [#183](https://github.com/Ephemeral-AI-Lab/layerfs/issues/183) (C2) carry the
-family-level discussion; #171 is the acceptance issue.
+Stages 0–6 are closed at their recorded scope; see the
+[Stage 6 closure](../evidence/stage-6-round4c-20260919T000000Z/README.md).
+The [harness follow-up](../evidence/stage-6-round5b-20260919T000000Z/README.md)
+and separate retained-history claim retain their own evidence and dispositions.
+
+After the reviewed core contract, implement the co-design pairs in this order:
+
+| Order | Issue | Deliverable |
+| --- | --- | --- |
+| 1 | [#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181), pair 3 | Portable service/bridge architecture with a future SQLite-provider path; real Linux Docker daemon + host service using C1/C2, bounded transfer, authorization and failure checks |
+| 2 | [#179](https://github.com/Ephemeral-AI-Lab/layerfs/issues/179), pair 1 | Workspace accumulator and FUSE using the tested endpoint |
+| 3 | [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180), pair 2 | History, staging, logical Commit and conditional head publication |
+
+A short operation/identity/acknowledgement agreement precedes pair 3. It does not
+require parallel implementation or a complete FUSE/history engine. The
+[execution contract](../../../../../core/docs/architecture/proposal/README.md#implementation-order-pair-3-then-pair-1-then-pair-2)
+records the owner direction of 2026-09-20 and the acceptance boundary of each step.
+Earlier handoffs below describe the former plan; their references to #172 as
+runtime implementation are historical and superseded by this assignment.
 
 ## Prior handoff: Stage 5 terminal pass (historical)
 

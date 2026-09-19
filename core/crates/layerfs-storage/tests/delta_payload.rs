@@ -173,8 +173,13 @@ fn an_absent_or_ineligible_candidate_selects_full() {
     let chunk_base = chunk(&noise(20_000));
     let chunk_id = chunk_base.id();
     save_one(&store, chunk_base).expect("chunk save");
+    // A wholly different payload, not a near copy: a near copy would also be
+    // proposed by the persisted content index, and then the trial would be the
+    // index's outcome rather than this case's.
     let mut changed = raw.clone();
-    changed[0] ^= 0xff;
+    for byte in &mut changed {
+        *byte ^= 0xa5;
+    }
     let mismatched = with_predecessor(whole(&changed), chunk_id);
     let outcome = save_one(&store, mismatched).expect("save");
     assert_eq!(outcome.prefix_records, 0);

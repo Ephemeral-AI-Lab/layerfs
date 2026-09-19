@@ -2,6 +2,16 @@
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 
+Owner direction, 2026-09-20: Stage 7 is the
+[cluster 1 + cluster 2 architecture review](stage-7-architecture-review.md), with
+flexibility, pluggability and independent algorithm evolution as its top priority.
+The runtime sketches below inform subsequent co-design pairs; they are no longer
+a Stage 7 implementation assignment. Owner direction, 2026-09-20: implement
+**pair 3 (#181) service/transport first → pair 1 (#179) Workspace/FUSE → pair 2
+(#180) history/Commit**, after a short initial operation agreement. See the
+[execution contract](../../../../../core/docs/architecture/proposal/README.md#implementation-order-pair-3-then-pair-1-then-pair-2).
+Design input from the other pairs does not require parallel implementation.
+
 ## 1. Proposed folders and implementation rules
 
 ```text
@@ -466,7 +476,7 @@ does not satisfy the requirement.
 | 4. Known edits and transitions | Single edits, then decoded multi-edit frontier after finality proof | Exact no-op/partition/root behavior; localized I/O; small/large/empty boundaries and supported overrides |
 | 5. Filesystem tree/metadata | Sorted direct inode construction, attributes, compact reference ordering | Exact bindings/counts/topology; bounded ordering resources; large-directory and shared-key reads |
 | 6. Full C1/C2 qualification | Broaden schema/profile, capacity, receipt, failure/cleanup and memory proofs across all completed paths | Matched successful v0.1.6 operations, no missing cases, no retry/fallback, all required product checks |
-| 7. Runtime integration later | One concrete host/FUSE/workspace shape, then real process transport/provider if selected | Same core contracts, bounded full-system I/O/memory and correct acknowledgement; cloud remains unqualified until policy/provider fit |
+| 7. C1/C2 architecture review | Review both clusters for flexibility, pluggability and independent evolution | Source-backed boundary audit and unchanged-consumer substitution proof for compatible C1, C2 and paired revisions; subsequent implementation order: pair 3 #181 → pair 1 #179 → pair 2 #180 |
 
 ### Current Stage 3–4 adjustment
 

@@ -57,6 +57,14 @@ import sys
 import time
 from pathlib import Path
 
+# The three `history.*` lanes. They are **not** members of `smoke` or `full`:
+# `registry.rs` keeps them in a separate accessor so every count in `CONTRACT.md`
+# section 3 stays where it is, and the binary selects them by name. The runner
+# offers the same three names and nothing else, so a lane can never silently gain
+# or lose a row.
+HISTORY_LANES = ("history-stride10", "history-stride3", "history-stride1")
+LANE_CHOICES = ["smoke", "full", *HISTORY_LANES]
+
 HARNESS_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = HARNESS_ROOT.parents[2]
 sys.path.insert(0, str(HARNESS_ROOT / "shared"))
@@ -178,7 +186,20 @@ class ReuseRefused(Exception):
 # expectations. Every one of those changes the bytes a recipe produces, which is
 # exactly the case this version exists to declare. A v1 master is superseded rather
 # than consumed.
-FIXTURE_RECIPE_VERSION = "fs-bench-fixture-recipe-v2"
+#
+# v3 is the schema-identity bump. A prepared artifact *holds a Store*, and this
+# round changed that Store's schema identity (SCHEMA_VERSION 4 -> 6: the
+# `objects.base_object_id` column removed, the `content_signatures` table added).
+# The product refuses a Store whose `user_version` does not match, so a v2 master
+# now fails on load with `UnsupportedPolicy { field: "schema identity" }`.
+#
+# **The compatibility digest does not cover SCHEMA_VERSION** — it is the product
+# identity (both lockfiles) plus this constant — so without this bump `prune`
+# correctly kept the stale masters, `prepare` correctly reused them, and every row
+# that loads one failed. That is the exact case this version exists to declare:
+# what an artifact *holds* changed, so the recipe version says so. A v2 master is
+# superseded rather than consumed.
+FIXTURE_RECIPE_VERSION = "fs-bench-fixture-recipe-v3"
 
 
 def compatibility_digest(row: list[str], identity: receipt.Identity) -> str:
@@ -873,6 +894,10 @@ def run_case(
     declared_exception = case_id in DECLARED_EXCEPTIONS
     acquisition: dict[str, object] = {}
     command = [str(BINARY), "--case", case_id, "--out", str(case_dir)]
+    if case_id in HISTORY_LANES:
+        # Never defaulted inside the binary: the runner names the corpus it
+        # authenticated, and an absent one is a refusal rather than a fallback.
+        command += ["--corpus", str(history_corpus.DEFAULT_ROOT)]
     if prepared_of(case_id).strip("-"):
         artifact = artifact_root() / case_id
         acquisition = acquire(case_id, artifact_root(), identity, row_of(case_id))
@@ -923,8 +948,14 @@ def run_case(
         verification_started = time.monotonic_ns()
         verify_command = [
             str(BINARY), "--case", case_id, "--phase", "verify",
-            "--load-input", str(artifact_root() / case_id), "--out", str(case_dir),
+            "--out", str(case_dir),
         ]
+        if case_id in HISTORY_LANES:
+            verify_command += ["--corpus", str(history_corpus.DEFAULT_ROOT)]
+        elif prepared_of(case_id).strip("-"):
+            # A row with a prepared master is verified against it; a `history.*`
+            # row has no master — its input is the corpus and its Store.
+            verify_command += ["--load-input", str(artifact_root() / case_id)]
         if verification_mode == "sample":
             # The declared unit is the row's own: the runner does not know how many
             # members a delta row holds until the child says so, and the child reads
@@ -1733,7 +1764,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="verb", required=True)
 
     listing = sub.add_parser("list")
-    listing.add_argument("--lane", choices=["smoke", "full"], default="smoke")
+    listing.add_argument("--lane", choices=LANE_CHOICES, default="smoke")
     listing.add_argument("--format", choices=["tsv", "jsonl"], default="tsv")
     listing.set_defaults(function=cmd_list)
 
@@ -1743,7 +1774,7 @@ def main() -> int:
     prepare.set_defaults(function=cmd_prepare)
 
     perf = sub.add_parser("perf")
-    perf.add_argument("--lane", choices=["smoke", "full"], default="smoke")
+    perf.add_argument("--lane", choices=LANE_CHOICES, default="smoke")
     perf.add_argument("--out", required=True)
     perf.add_argument("--case", action="append")
     perf.add_argument("--no-build", action="store_true")

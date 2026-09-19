@@ -1,9 +1,14 @@
 //! Exact candidate schema creation and validation.
 //!
 //! Create writes the shipped schema and its single policy row. Open validates the
-//! schema identity, the four table shapes, the two required indexes and the
-//! persisted policy before any object work, and refuses a conflicting override.
-//! A schema that merely resembles another product's version is rejected.
+//! schema identity, the four table shapes and the persisted policy before any
+//! object work, and refuses a conflicting override. A schema that merely
+//! resembles another product's version is rejected.
+//!
+//! The declared column lists are exact, so a version-4 Store — whose `objects`
+//! row still carries `base_object_id` — fails the shape check and is refused at
+//! open rather than read through a reader that would have to guess whether the
+//! record or the column is authoritative.
 
 use rusqlite::Connection;
 
@@ -19,7 +24,11 @@ const POLICY_ROW: i64 = 1;
 const NO_PACKS_PUBLISHED: i64 = 0;
 
 /// Declared shape of one table: column names in declaration order.
-const REQUIRED_TABLES: [(&str, &[&str]); 4] = [
+///
+/// **`content_signatures` is the W2 squad's table (#188d).** It is required here
+/// because `Store::open` reads it back and a Store without it could not answer a
+/// candidate lookup at all; it is not optional and not a floor.
+const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
     (
         "store_policy",
         &[
@@ -49,16 +58,27 @@ const REQUIRED_TABLES: [(&str, &[&str]); 4] = [
             "object_id",
             "object_role",
             "canonical_length",
-            "base_object_id",
             "pack_id",
             "group_number",
             "record_number",
         ],
     ),
+    (
+        "content_signatures",
+        &["slot", "stamp", "object_id", "signature"],
+    ),
 ];
 
 /// Required secondary indexes or unique constraints, by SQLite object name.
-const REQUIRED_INDEXES: [&str; 2] = ["objects_locations", "objects_bases"];
+///
+/// **Empty by owner ruling C (R2, T1 #188).** The Store carried two secondary
+/// indexes and neither earned its bytes: `objects_bases` had no query consumer at
+/// all, and `objects_locations` served one bounded cleanup page query. A Store
+/// that still has them validates — the requirement is a floor, not an equality —
+/// so this change does **not** invalidate an existing Store and `SCHEMA_VERSION`
+/// stays at 4. What is required is checked by [`REQUIRED_TABLES`], which is where
+/// a reader's actual dependency lives.
+const REQUIRED_INDEXES: [&str; 0] = [];
 
 /// Creates a fresh Store with `policy` and returns the stored policy.
 pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<StoragePolicy> {
@@ -107,7 +127,8 @@ pub fn validate(
     let unexpected: i64 = connection.query_row(
         "SELECT COUNT(*) FROM sqlite_master \
          WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN \
-         ('store_policy','object_packs','metadata_value_groups','objects')",
+         ('store_policy','object_packs','metadata_value_groups','objects',\
+          'content_signatures')",
         [],
         |row| row.get(0),
     )?;

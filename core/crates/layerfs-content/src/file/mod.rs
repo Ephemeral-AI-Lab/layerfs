@@ -11,13 +11,14 @@ mod read;
 mod view;
 
 pub use content::{
-    classify, construct_bytes, construct_stream, encode_whole_file, encode_whole_file_payload,
-    inspect, whole_file_payload, ConstructedFile, FileContent,
+    classify, construct_bytes, construct_bytes_with_predecessor, construct_stream,
+    encode_whole_file, encode_whole_file_payload, inspect, whole_file_payload, ConstructedFile,
+    FileContent,
 };
 pub use edit::{
     apply_edits, Edit, EditCounters, EditObjects, EditRequest, EditSource, EditStream,
     Replacements, EDIT_DEFERRED_LIMIT, MAXIMUM_EDITS_PER_OPERATION,
 };
-pub use mapping::{ExtentBuilder, ReadCounters};
+pub use mapping::{ExtentBuilder, PredecessorBase, ReadCounters};
 pub use read::{read_all, read_all_bounded, read_range};
 pub use view::FileView;

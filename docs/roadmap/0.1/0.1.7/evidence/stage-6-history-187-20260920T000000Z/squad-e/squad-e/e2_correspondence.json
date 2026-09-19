@@ -1,0 +1,56 @@
+{
+  "a_per_path_map": {
+    "canonical_bytes_covered": 263452684,
+    "objects_reaching_an_ELIGIBLE_base": 29056,
+    "objects_with_a_version_at_all": 29063
+  },
+  "c_per_path_chain": {
+    "canonical_bytes_covered": 264029990,
+    "objects_reaching_an_ELIGIBLE_base": 29087,
+    "objects_with_a_version_at_all": 29087
+  },
+  "chunk_file_roots": 91,
+  "first_state_histogram": {
+    "1": 261,
+    "101": 3699,
+    "11": 800,
+    "111": 3492,
+    "121": 3420,
+    "131": 5047,
+    "141": 4923,
+    "151": 4099,
+    "157": 4344,
+    "21": 971,
+    "31": 1046,
+    "41": 2270,
+    "51": 1896,
+    "61": 2595,
+    "71": 1534,
+    "81": 1968,
+    "91": 1783
+  },
+  "selection": [
+    1,
+    11,
+    21,
+    31,
+    41,
+    51,
+    61,
+    71,
+    81,
+    91,
+    101,
+    111,
+    121,
+    131,
+    141,
+    151,
+    157
+  ],
+  "union_bytes": 371937306,
+  "union_oids": 44240,
+  "whole_file_canonical_bytes": 348460709,
+  "whole_file_content_bytes": 347445305,
+  "whole_file_objects": 44148
+}

@@ -14,7 +14,9 @@ use layerfs_content::{
     AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance,
 };
 use layerfs_storage::{StorageError, StoragePolicy, Store};
-use support::{create_store, disabled, noise, open_store, read_objects, save_one, TempDir};
+use support::{
+    create_store, disabled, forge_stored_base, noise, open_store, read_objects, save_one, TempDir,
+};
 
 fn value(kind: InodeKind, refs: u64, seed: u64) -> [u8; INODE_VALUE_BYTES] {
     let mut bytes = [0_u8; 32];
@@ -624,24 +626,34 @@ fn a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides() {
     assert!(accepted.len() >= 2, "no chain was built");
     let deepest = *accepted.last().expect("deepest accepted leaf");
 
+    assert!(
+        !accepted.contains(&refused),
+        "the refused leaf never joined the accepted chain"
+    );
+
     // Every chain the writer accepted is readable, including the deepest one.
     let (read, _) = read_objects(&store, &[deepest]).expect("deepest accepted chain");
     assert_eq!(ObjectId::for_bytes(&read[0]), deepest);
+
+    // A leaf the writer *did* accept, stored as a delta against the chain root.
+    // The refused leaf is a FULL record - the writer never gave it a base - and a
+    // FULL record cannot be handed an edge it never had, so the splice is built
+    // from a real delta and forged afterwards.
+    let root = accepted[0];
+    let mut spliced = carried.clone();
+    spliced[0] = value(InodeKind::RegularFile, 1, 77_777);
+    let splice = with_predecessor(leaf(1, &spliced), root);
+    let splice_id = splice.id();
+    let outcome = save_one(&store, splice).expect("splice leaf save");
+    assert_eq!(outcome.pool.delta_leaves, 1, "the splice leaf is a delta");
     drop(store);
 
-    // Splice the refused leaf onto the accepted chain: the reader's own work
-    // check must refuse the longer chain.
-    let connection = rusqlite::Connection::open(&path).expect("external connection");
-    let affected = connection
-        .execute(
-            "UPDATE objects SET base_object_id = ?2 WHERE object_id = ?1",
-            rusqlite::params![refused.to_bytes().to_vec(), deepest.to_bytes().to_vec()],
-        )
-        .expect("row change");
-    assert_eq!(affected, 1);
-    drop(connection);
+    // Splice that leaf onto the accepted chain: the reader's own work check must
+    // refuse the longer chain. The edge lives in the record, so the forgery
+    // rewrites the pack.
+    forge_stored_base(&path, splice_id, deepest);
     let reopened = open_store(&path);
-    let error = read_objects(&reopened, &[refused]).expect_err("a past-budget chain is refused");
+    let error = read_objects(&reopened, &[splice_id]).expect_err("a past-budget chain is refused");
     assert!(
         matches!(&error, StorageError::Integrity(what) if *what == "pooled chain work"),
         "expected the reader's work check, got {error}"

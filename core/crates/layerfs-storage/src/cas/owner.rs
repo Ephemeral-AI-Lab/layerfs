@@ -100,9 +100,15 @@ pub struct MutationOwner {
     pub(super) cleanup_attempted: bool,
     pub(super) quarantined: bool,
     pub(super) counters: OutcomeCounters,
-    /// Admitted-FULL winner cache: owned by this operation, bounded and dropped
-    /// with it, so a failed save can never leave a partly advanced cache usable.
-    pub(super) candidates: Candidates,
+    /// Store-owned bounded content-signature index.
+    ///
+    /// **W2 (#188d).** It is shared with the `Store` and persisted in
+    /// `content_signatures`, so it outlives this operation: an object one save
+    /// admitted is a candidate the next save can be offered. The `Store` also
+    /// keeps it across `open`, which is what makes the correspondence cross-save
+    /// rather than merely cross-operation. A failed save invalidates it whole - it
+    /// is disposable derivation and the table is authoritative.
+    pub(super) candidates: std::sync::Arc<std::sync::Mutex<Candidates>>,
     /// Bounded per-save dependency-depth cache.
     pub(super) depths: DepthCache,
     /// Pack bodies already read while acquiring delta bases in this operation.
