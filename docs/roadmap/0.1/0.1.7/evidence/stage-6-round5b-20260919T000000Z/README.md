@@ -25,13 +25,12 @@
 | Verification mode | `full` (the declared default for a whole-lane run) |
 | Fixture-recipe version | `fs-bench-fixture-recipe-v2` |
 
-> **A note on the tree.** Documentation-only commits follow the one this lane ran on: this
-> directory, the harness README and the round-5 handoff's forward pointer. **None changes a
-> compiled byte** — the harness binary sha256 above is the same before and after, and the
-> golden registry and expected tables are untouched — so the receipt names the commit the lane
-> actually ran on rather than a later one that would have produced the same run. The one
-> behavioural change that followed the first two lanes is the mode default in §6, and **this
-> lane is the one run after it**.
+> **A note on the tree.** Commits after the one this lane ran on are documentation only:
+> this directory, the harness README, the round-5 prompt and plan, and the round-5 handoff's
+> forward pointer. **None changes a compiled byte** — the harness binary sha256 above is the
+> same at the last commit as at the lane's — so the receipt names the commit the lane actually
+> ran on rather than a later one that would have produced the same run. The lane at
+> `4e0357b4d` is the one run after every behavioural change this round made.
 
 | Class | Rows | PASS | FAIL | NOT_RUN |
 | --- | ---: | ---: | ---: | ---: |
@@ -540,3 +539,60 @@ python3 tools/production_loc.py                                       # 84936 co
 | `quick-modes.json` | the mode ladder, the reuse path and the refusal paths |
 | `reused-proof.json` | `verify --reuse-pass`'s own record |
 | `experiments-E1-E4-W1-W2-W4.json` | E1–E4, W1, W2, W4 with their fields |
+
+## 10. Round closed
+
+**Round 5 is closed at `df3c6374c`.** Fifteen commits, all in `core/benchmark/**`, its
+documentation and the round's own planning documents; production LOC unchanged at 84936
+throughout. The tree is clean and the checks below are the ones that ran.
+
+| check | result |
+| --- | --- |
+| `cargo +1.85.1 test --locked --manifest-path core/Cargo.toml` | **474 passed / 0 failed** |
+| `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --all-targets -- -D warnings` | clean |
+| `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` | clean |
+| `core/tools/check_product_boundary.py` | PASS, 120 production files |
+| `core/tools` unit tests | 6 OK |
+| `cargo +1.85.1 test --locked --manifest-path <harness>/Cargo.toml` | **93 passed / 0 failed** |
+| `python3 -m unittest discover -s <harness>/shared` | 112 tests, OK |
+| `runner.py self-check` | PASS (lock parity 46 entries, 0 mismatches; registry, exceptions, golden) |
+| `runner.py perf --lane full` → `verify` → `report` → `calibrate` | 217/217 `PASS`, 0 disagreements, E1 `REFUTED` + six `SATISFIED` |
+| `shared/compare_runs.py` vs the round-5 closure run **and** vs the pre-round-5 baseline | `verdict IDENTICAL` both, **0 rows fell or rose** vs round 4c |
+| `tools/production_loc.py` | 84936 combined (core 19519 / reference 65417) |
+
+**Not run, and why.** `tools/preflight.sh` stays retired and no aggregate gate or workflow
+was added (owner decisions L21, L32). `cargo clippy` and `cargo fmt` are not gates for the
+**harness** workspace — it is not rustfmt-clean at HEAD across 24 files, most untouched by
+this round — so only the files this round touched were checked, and they are clean. A
+cross-build for a non-aarch64 target was attempted and could not complete: the target needs a
+C cross-compiler this host does not have, so the scalar fallback is verified at runtime
+through `Sha256::scalar()` rather than by a cross-build.
+
+**What the round closed, against the ten target lines it inherited:** seven were already met
+and stay met; the lane target is met with margin (137.650 s against 200 s); the preparation
+total is met (22.980 s countable against 25 s); the largest verification invocation is met
+(2.654 s against 5 s); and the three that were not met are resolved by owner direction —
+the per-row ceiling now excludes the declared acquisition, the acquisition ceiling is
+replaced by *reported, and it pays for itself within two lane runs*, and the quick-lane
+target is withdrawn.
+
+**What is open, and is the owner's.**
+
+1. **T1.** Three rows exceed the per-row preparation ceiling, worst 1.163 s countable, and
+   what is above it is the measured 500 MiB object-set load floor. A tier-scaled ceiling
+   would close the wording; nothing in the harness can close the floor.
+2. **The complete-command budget formula** — the last unchecked box in
+   [#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184), deferred by owner ruling 1
+   to a `CONTRACT.md` §4 change with a new §11 errata pin.
+3. **Two unwired axes.** `instruments::cpu_now()` and the 10 ms `RssSampler` are implemented
+   and self-checked and are wired to no row, so no receipt carries a CPU or an RSS reading
+   and storage is published for six rows only. §2.2. Wiring them would add evidence fields,
+   which this round's rules put out of scope.
+4. **15.567 GB of masters with no prune**, and two stale run directories in the gitignored
+   results tree. A prune verb would be new surface.
+
+**What a successor inherits.** A campaign whose lane is 137.650 s against 415.821 s before
+round 5, whose preparation is a quarter of what it was, whose oracle is pinned rather than
+self-consistent, whose every declaration has been checked against what the harness actually
+does — including two that were not true when this round started — and a receipt that names
+the four things it did not finish.
