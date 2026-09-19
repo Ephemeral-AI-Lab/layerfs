@@ -14,13 +14,14 @@ use layerfs_content::{
 };
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 
-use super::{seed_of, OpContext, OpError, OpOutcome};
+use super::{seed_of, OpContext, OpError, OpOutcome, Phase};
 use crate::fixture::{self, structured, STRUCTURED_ZERO_REGION};
 use crate::gates::{self, Gate, GateClass};
 use crate::registry::{Case, CountOp, EditOp, Route, Transition};
 use crate::support::instruments;
 use crate::support::trace::Kind;
 use crate::workload::oracle::{self, Expectation};
+use crate::workload::artifact::{Artifact, Member};
 use crate::workload::providers::{PairProvider, TreeStore};
 
 /// The 4 KiB replacement every edit family uses.
@@ -342,7 +343,137 @@ fn edit_replacement(op: EditOp, seed: u64) -> Vec<u8> {
 }
 
 /// C1-3: one fixed 64 KiB overwrite classified by its chunk-count effect.
+///
+/// **Phase split.** The base is a fixture, not the measurement: the row measures
+/// `apply_edits` over a 64 KiB window, and building the base means generating the
+/// file, running CDC over it and hashing 500 MiB to state the expectation the
+/// oracle compares against. All of that is acquisition, so the registry declares
+/// `Preparation::ObjectSet` and the base is acquired once.
 pub fn chunk_count(
+    case: &Case,
+    op: CountOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    match context.phase {
+        Phase::Prepare => chunk_count_prepare(case, op, context),
+        Phase::Perf => chunk_count_perf(case, op, context),
+        Phase::Verify => Err(OpError::Io(
+            "c1.cdc.chunk-count declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        )),
+    }
+}
+
+/// The fixture one chunk-count row is built from: the declared offsets, and the
+/// base shape the row's own direction needs.
+fn chunk_count_fixture(case: &Case, op: CountOp, seed: u64) -> (Vec<u8>, u64, u64, u64) {
+    let start = crate::families::c1_cdc::START;
+    let len = crate::families::c1_cdc::LEN;
+    let end = start + len;
+    // The specification fixes the offsets, not the base content. The two
+    // directions need two different bases at the same offsets: a zero run to grow
+    // the chunk count out of, and a chunk-dense window to shrink back into. The
+    // choice is declared here rather than hidden in a driver.
+    let base = match op {
+        CountOp::Decrease => {
+            let mut base = structured(case.bytes, seed, false);
+            base[start as usize..end as usize].copy_from_slice(&fixture::chunk_dense(len));
+            base
+        }
+        _ => structured(case.bytes, seed, true),
+    };
+    (base, start, end, len)
+}
+
+/// The replacement bytes one chunk-count row applies.
+fn chunk_count_replacement(op: CountOp, base: &[u8], start: u64, end: u64, len: u64, seed: u64) -> Vec<u8> {
+    match op {
+        CountOp::Preserve => base[start as usize..end as usize].to_vec(),
+        CountOp::Increase => fixture::noise(len, seed ^ 0x1111),
+        CountOp::Decrease => fixture::zeros(len),
+    }
+}
+
+/// C1-3 `prepare`: acquire the base once, with the expectation its oracle needs.
+fn chunk_count_prepare(
+    case: &Case,
+    op: CountOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
+    let seed = seed_of(case.id);
+    let policy = ConstructionPolicy::frozen_default();
+    let capacities = policy.capacities();
+    let (base, start, end, len) = chunk_count_fixture(case, op, seed);
+    let replacement = chunk_count_replacement(op, &base, start, end, len, seed);
+    let mut store = TreeStore::new();
+    let base_file = build_base(policy, &capacities, &base, &mut store)?;
+    let expectation = Expectation::spliced(&base, start, end, &replacement);
+    let ids = store.insertion_order().to_vec();
+    let mut artifact = Artifact::new(store);
+    artifact.members.push(Member {
+        ids,
+        root: base_file.root,
+        expectation: None,
+    });
+    artifact.values.set_scalar("base_len", base.len() as u64);
+    artifact.values.set_scalar("start", start);
+    artifact.values.set_scalar("end", end);
+    artifact.values.set_scalar("edit_len", len);
+    artifact.values.set_expectation("result", expectation);
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.base_bytes",
+        base.len() as i128,
+        "bytes",
+        "declared base bytes",
+    )?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_op: {op:?}"),
+            format!("prepare_base_bytes: {}", base.len()),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
+
+/// Reads one logical range of a prepared base through the product's read path.
+///
+/// Setup, never measurement: it recovers the fixture bytes a row's own recipe
+/// needs and the artifact does not persist, and it runs before the timer opens.
+/// The result feeds the mutation's *input*, so a wrong read is caught by the O2
+/// read-back rather than hidden.
+fn base_window(
+    store: &TreeStore,
+    root: ObjectId,
+    start: u64,
+    end: u64,
+) -> Result<Vec<u8>, OpError> {
+    let mut window: Vec<u8> = Vec::with_capacity((end - start) as usize);
+    let (result, _) = Timing::disabled("setup.window", |scope: &TimingScope<'_, Active>| {
+        layerfs_content::read_range(store, root, start..end, &mut window, scope.child("content"))
+    });
+    result.map_err(|error| OpError::Product(format!("{error:?}")))?;
+    Ok(window)
+}
+
+/// C1-3 `perf`: the measured edit against the prepared base.
+fn chunk_count_perf(
     case: &Case,
     op: CountOp,
     context: &mut OpContext<'_>,
@@ -353,57 +484,54 @@ pub fn chunk_count(
     let capacities = policy.capacities();
     let mut gates = Vec::new();
 
-    // The specification fixes the offsets, not the base content. The two
-    // directions need two different bases at the same offsets: a zero run to grow
-    // the chunk count out of, and a chunk-dense window to shrink back into. The
-    // choice is declared here rather than hidden in a driver.
-    let start = crate::families::c1_cdc::START;
-    let len = crate::families::c1_cdc::LEN;
-    let end = start + len;
-    // The decrease window is the declared chunk-dense run rather than plain noise.
-    // A 64 KiB noise window holds two or three extents under this profile, which is
-    // exactly what the 64 KiB zero run replacing it chunks to, so the direction the
-    // row's ID claims was a coin flip at this length: a fixture defect, reported as
-    // one, never a product finding. The dense run holds seven or eight, so the
-    // direction follows from the declared base rather than from luck.
-    let base = match op {
-        CountOp::Decrease => {
-            let mut base = structured(case.bytes, seed, false);
-            base[start as usize..end as usize]
-                .copy_from_slice(&fixture::chunk_dense(len));
-            base
-        }
-        _ => structured(case.bytes, seed, true),
+    let directory = context.artifact_directory()?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let base_member = artifact.base().map_err(OpError::Io)?;
+    let scalar = |name: &str| -> Result<u64, OpError> {
+        artifact
+            .values
+            .scalar(name)
+            .ok_or_else(|| OpError::Io(format!("the artifact declares no scalar {name:?}")))
     };
-    let replacement: Vec<u8> = match op {
-        CountOp::Preserve => base[start as usize..end as usize].to_vec(),
+    let base_len = scalar("base_len")?;
+    let start = scalar("start")?;
+    let len = scalar("edit_len")?;
+    let end = start + len;
+    let expectation = artifact
+        .values
+        .expectation("result")
+        .ok_or_else(|| OpError::Io("the artifact declares no result expectation".to_string()))?;
+    let store = &artifact.objects;
+    // The replacement is the mutation's own input. `preserve` replaces the window
+    // with itself, so it is recovered from the base through the product's read
+    // path; the other two directions are pure functions of the declared recipe.
+    let replacement = match op {
+        CountOp::Preserve => base_window(store, base_member.root, start, end)?,
         CountOp::Increase => fixture::noise(len, seed ^ 0x1111),
         CountOp::Decrease => fixture::zeros(len),
     };
+    let initial = extent_count_of(store, base_member.root)?;
 
-    let mut store = TreeStore::new();
-    let base_file = build_base(policy, &capacities, &base, &mut store)?;
-    let initial = extent_count_of(&store, base_file.root)?;
-    let stream = match EditStream::new(base.len() as u64, vec![Edit::new(start, end, len)]) {
+    let stream = match EditStream::new(base_len, vec![Edit::new(start, end, len)]) {
         Ok(stream) => stream,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
     let mut source = Replacements::new();
-    source.push(replacement.clone());
-    let expectation = Expectation::spliced(&base, start, end, &replacement);
+    source.push(replacement);
 
     instruments::heap_begin();
     let (measured, report) = super::measure("c1.chunk-count", |scope: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
         let request = EditRequest {
-            root: base_file.root,
+            root: base_member.root,
             edits: &stream,
             source: &source,
         };
         apply_edits(
             policy,
             &capacities,
-            &store,
+            store,
             request,
             &mut consumer,
             scope.child("edit"),
@@ -423,14 +551,14 @@ pub fn chunk_count(
     let mut result_store = TreeStore::new();
     let (replay, _) = Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
         let request = EditRequest {
-            root: base_file.root,
+            root: base_member.root,
             edits: &stream,
             source: &source,
         };
         apply_edits(
             policy,
             &capacities,
-            &store,
+            store,
             request,
             &mut result_store,
             scope.child("edit"),
@@ -440,7 +568,7 @@ pub fn chunk_count(
         Ok(file) => file,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
-    let oracle_provider = PairProvider::new(&result_store, &store);
+    let oracle_provider = PairProvider::new(&result_store, store);
     let final_count = extent_count_of(&oracle_provider, replay.root)?;
 
     context.trace.write_number(Kind::Counter, "chunk_count.initial_count", initial as i128, "extents", "FileState.extent_count of the base root")?;
@@ -469,9 +597,9 @@ pub fn chunk_count(
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o2-length",
-        measured_file.logical_len == base.len() as u64,
+        measured_file.logical_len == base_len,
         &format!("{} bytes", measured_file.logical_len),
-        &format!("{} bytes (a length-preserving overwrite)", base.len()),
+        &format!("{base_len} bytes (a length-preserving overwrite)"),
     ));
     let (readback, _) = Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
         oracle::read_back(&oracle_provider, replay.root, &expectation, scope.child("content"))
@@ -532,47 +660,142 @@ pub fn chunk_count(
             format!("edit_len: {len}"),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
             format!("heap_allocations: {}", heap.allocations),
-            "cache_state: warm-in-process-fixture; the base is built before the timed region".to_string(),
+            "cache_state: warm-in-process-fixture; the base is loaded from the prepared master before the timed region".to_string(),
             "oracle_phase: separate-unmeasured-replay".to_string(),
         ],
     })
 }
 
 /// C1-4/C1-5: one localized edit of a constructed base.
+///
+/// **Phase split.** The row measures `apply_edits` over a 4 KiB replacement; the
+/// base is a fixture. Building it means generating up to 500 MiB, running CDC over
+/// it and hashing it to state the expectation the oracle compares against — none
+/// of which is the claim. The registry declares `Preparation::ObjectSet`, so the
+/// base and its expectation are acquired once and every sample loads them.
 pub fn edit(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    match context.phase {
+        Phase::Prepare => edit_prepare(case, op, context),
+        Phase::Perf => edit_perf(case, op, context),
+        Phase::Verify => Err(OpError::Io(
+            "c1.edit declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        )),
+    }
+}
+
+/// C1-4/C1-5 `prepare`: acquire the base once, with the expectation its oracle needs.
+fn edit_prepare(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
+    let seed = seed_of(case.id);
+    let policy = ConstructionPolicy::frozen_default();
+    let capacities = policy.capacities();
+    let base = structured(case.bytes, seed, true);
+    let (start, end, replacement_len) = edit_range(op, base.len() as u64);
+    let replacement = edit_replacement(op, seed);
+    let mut store = TreeStore::new();
+    let base_file = build_base(policy, &capacities, &base, &mut store)?;
+    let expected_len = match EditStream::new(
+        base.len() as u64,
+        vec![Edit::new(start, end, replacement_len)],
+    ) {
+        Ok(stream) => match stream.edits().first().map(|edit| edit.apply_len(base.len() as u64)) {
+            Some(Ok(len)) => len,
+            Some(Err(error)) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), Vec::new())),
+            None => base.len() as u64,
+        },
+        Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), Vec::new())),
+    };
+    let expectation = Expectation::spliced(&base, start, end, &replacement);
+    let ids = store.insertion_order().to_vec();
+    let mut artifact = Artifact::new(store);
+    artifact.members.push(Member {
+        ids,
+        root: base_file.root,
+        expectation: None,
+    });
+    artifact.values.set_scalar("base_len", base.len() as u64);
+    artifact.values.set_scalar("start", start);
+    artifact.values.set_scalar("end", end);
+    artifact.values.set_scalar("replacement_len", replacement_len);
+    artifact.values.set_scalar("expected_len", expected_len);
+    artifact.values.set_expectation("result", expectation);
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.base_bytes",
+        base.len() as i128,
+        "bytes",
+        "declared base bytes",
+    )?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_op: {op:?}"),
+            format!("prepare_base_bytes: {}", base.len()),
+            format!("edit_range: {start}..{end} replacement_len {replacement_len}"),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
+
+/// C1-4/C1-5 `perf`: the measured edit against the prepared base.
+fn edit_perf(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
     context.create_output()?;
     let seed = seed_of(case.id);
     let policy = ConstructionPolicy::frozen_default();
     let capacities = policy.capacities();
     let mut gates = Vec::new();
 
-    let base = structured(case.bytes, seed, true);
-    let (start, end, replacement_len) = edit_range(op, base.len() as u64);
+    let directory = context.artifact_directory()?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let base_member = artifact.base().map_err(OpError::Io)?;
+    let scalar = |name: &str| -> Result<u64, OpError> {
+        artifact
+            .values
+            .scalar(name)
+            .ok_or_else(|| OpError::Io(format!("the artifact declares no scalar {name:?}")))
+    };
+    let base_len = scalar("base_len")?;
+    let start = scalar("start")?;
+    let end = scalar("end")?;
+    let replacement_len = scalar("replacement_len")?;
+    let expected_len = scalar("expected_len")?;
+    let expectation = artifact
+        .values
+        .expectation("result")
+        .ok_or_else(|| OpError::Io("the artifact declares no result expectation".to_string()))?;
+    let store = &artifact.objects;
     let replacement = edit_replacement(op, seed);
-    let mut store = TreeStore::new();
-    let base_file = build_base(policy, &capacities, &base, &mut store)?;
-    let base_extents = extent_count_of(&store, base_file.root)?;
-
-    let stream = match EditStream::new(base.len() as u64, vec![Edit::new(start, end, replacement_len)]) {
+    let stream = match EditStream::new(base_len, vec![Edit::new(start, end, replacement_len)]) {
         Ok(stream) => stream,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
     let mut source = Replacements::new();
     if replacement_len > 0 {
-        source.push(replacement.clone());
+        source.push(replacement);
     }
-    let expected_len = match stream.edits().first().map(|edit| edit.apply_len(base.len() as u64)) {
-        Some(Ok(len)) => len,
-        Some(Err(error)) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
-        None => base.len() as u64,
-    };
-    let expectation = Expectation::spliced(&base, start, end, &replacement);
+    let base_extents = extent_count_of(store, base_member.root)?;
 
     instruments::heap_begin();
     let (measured, report) = super::measure("c1.edit", |scope: &TimingScope<'_, Active>| {
         let mut consumer = DiscardingConsumer::new();
-        let request = EditRequest { root: base_file.root, edits: &stream, source: &source };
-        apply_edits(policy, &capacities, &store, request, &mut consumer, scope.child("edit"))
+        let request = EditRequest { root: base_member.root, edits: &stream, source: &source };
+        apply_edits(policy, &capacities, store, request, &mut consumer, scope.child("edit"))
             .map(|file| (file, consumer))
     });
     let heap = instruments::heap_end();
@@ -585,17 +808,17 @@ pub fn edit(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOu
 
     let mut result_store = TreeStore::new();
     let (replay, _) = Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
-        let request = EditRequest { root: base_file.root, edits: &stream, source: &source };
-        apply_edits(policy, &capacities, &store, request, &mut result_store, scope.child("edit"))
+        let request = EditRequest { root: base_member.root, edits: &stream, source: &source };
+        apply_edits(policy, &capacities, store, request, &mut result_store, scope.child("edit"))
     });
     let replay = match replay {
         Ok(file) => file,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
-    let oracle_provider = PairProvider::new(&result_store, &store);
+    let oracle_provider = PairProvider::new(&result_store, store);
     let final_extents = extent_count_of(&oracle_provider, replay.root)?;
 
-    context.trace.write_number(Kind::Counter, "edit.base_bytes", base.len() as i128, "bytes", "fixture recipe")?;
+    context.trace.write_number(Kind::Counter, "edit.base_bytes", base_len as i128, "bytes", "fixture recipe")?;
     context.trace.write_number(Kind::Counter, "edit.final_bytes", measured_file.logical_len as i128, "bytes", "ConstructedFile.logical_len")?;
     context.trace.write_number(Kind::Counter, "edit.expected_final_bytes", expected_len as i128, "bytes", "base - removed + replacement, computed by the oracle")?;
     context.trace.write_number(Kind::Counter, "edit.nodes_read", counters.nodes_read as i128, "nodes", "EditCounters.nodes_read")?;
@@ -632,9 +855,9 @@ pub fn edit(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOu
         gates.push(gates::require(
             GateClass::Correctness,
             "g1.o2-length-preserved",
-            measured_file.logical_len == base.len() as u64,
+            measured_file.logical_len == base_len,
             &format!("{} bytes", measured_file.logical_len),
-            &format!("{} bytes: the base length, byte-exactly", base.len()),
+            &format!("{base_len} bytes: the base length, byte-exactly"),
         ));
     }
     let (readback, _) = Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
@@ -672,7 +895,7 @@ pub fn edit(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOu
             format!("edit_range: {start}..{end} replacement_len {replacement_len}"),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
             format!("heap_allocations: {}", heap.allocations),
-            "cache_state: warm-in-process-fixture; the base is built before the timed region".to_string(),
+            "cache_state: warm-in-process-fixture; the base is loaded from the prepared master before the timed region".to_string(),
             "oracle_phase: separate-unmeasured-replay".to_string(),
         ],
     })

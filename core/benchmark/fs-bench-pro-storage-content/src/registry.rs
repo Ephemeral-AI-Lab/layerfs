@@ -59,6 +59,50 @@ pub enum CacheState {
     CreatedInSample,
 }
 
+/// What a row's fixture is, and therefore whether it must be acquired once.
+///
+/// `test_setup_and_cache_discipline.md` section 1 makes preparation fast and
+/// reusable and forbids repeating it before a sample; section 3 fixes what a
+/// prepared master is. **The declaration lives here rather than in the runner.**
+/// The runner used to keep a hand-maintained `PHASE_SPLIT_FAMILIES` set beside the
+/// drivers' own `oracle_phase` notes, so a family could gain a phase split in Rust
+/// and be silently acquired by nobody — or, worse, be acquired while its driver
+/// still built the fixture, which pays for the fixture twice.
+///
+/// A row that declares anything but [`Preparation::InProcess`] is handed an
+/// artifact by `runner.py prepare` through `--emit-input`, and every later phase
+/// loads it through `--load-input`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Preparation {
+    /// The fixture is built inside the row's one invocation. `c1.construct.*` is
+    /// the case that *must* stay here: the construction **is** the measured
+    /// operation, and preparing it would move the measurement into setup.
+    InProcess,
+    /// A prepared canonical object set, plus the named values the oracle reads.
+    ObjectSet,
+    /// A prepared base Store, plus the object set a mutation offers.
+    BaseStore,
+    /// A prepared filesystem input tree (`ops::fs_fixture::PreparedTree`).
+    InputTree,
+}
+
+impl Preparation {
+    /// The token the golden registry table carries, so a drift is visible in a diff.
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::InProcess => "-",
+            Self::ObjectSet => "object-set",
+            Self::BaseStore => "base-store",
+            Self::InputTree => "input-tree",
+        }
+    }
+
+    /// Whether the row is acquired before its performance invocation.
+    pub fn needs_master(self) -> bool {
+        !matches!(self, Self::InProcess)
+    }
+}
+
 /// Declared store state of a C2 row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StoreState {
@@ -354,6 +398,8 @@ pub struct Case {
     pub cache: CacheState,
     /// Declared store state.
     pub store: StoreState,
+    /// Declared preparation: whether the fixture is acquired once or built per run.
+    pub prepared: Preparation,
     /// The operation this row drives.
     pub shape: Shape,
 }
@@ -525,11 +571,11 @@ pub fn self_check() -> Vec<Mismatch> {
 /// recomputes this string and compares it with `include_str!`.
 pub fn render_tsv() -> String {
     let mut out = String::from(
-        "id\tfamily\tadmission\ttier\ttier_label\tprofile\tbytes\tentries\tsmoke\tcache\tstore\tshape\n",
+        "id\tfamily\tadmission\ttier\ttier_label\tprofile\tbytes\tentries\tsmoke\tcache\tstore\tshape\tprepared\n",
     );
     for case in cases() {
         out.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             case.id,
             case.family,
             match case.admission {
@@ -561,6 +607,7 @@ pub fn render_tsv() -> String {
                 StoreState::OpenedFromCopy => "opened-from-copy",
             },
             render_shape(case.shape),
+            case.prepared.token(),
         ));
     }
     out

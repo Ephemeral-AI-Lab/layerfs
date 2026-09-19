@@ -23,14 +23,14 @@ use layerfs_content::{
 use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope, TimingReport};
 
-use super::{seed_of, OpContext, OpError, OpOutcome};
+use super::{seed_of, OpContext, OpError, OpOutcome, Phase};
 use crate::fixture;
 use crate::gates::{self, Gate, GateClass};
 use crate::registry::{Case, DeltaOp, FootprintOp, LifecycleStep, ReuseOp};
 use crate::support::instruments;
 use crate::support::trace::Kind;
 use crate::workload::oracle::{self, Expectation};
-use crate::workload::artifact::{Artifact, Member};
+use crate::workload::artifact::{Artifact, Member, Values};
 use crate::workload::providers::TreeStore;
 
 /// The declared copy rung and its allocation attribution.
@@ -123,10 +123,41 @@ pub(super) fn prepare_sample(base: &Path, sample: &Path) -> Result<instruments::
     std::fs::copy(base, sample).map_err(|error| {
         OpError::Io(format!("{} -> {}: {error}", base.display(), sample.display()))
     })?;
+    // `std::fs::copy` copies the source's permission bits, and a sealed master is
+    // 0o444 by construction (`test_setup_and_cache_discipline.md` section 3). The
+    // sample is the row's own writable copy — section 4 step 4 of the same document
+    // is `chmod 0600` — so the copy is made writable here rather than left as a
+    // read-only alias of an immutable master, which the product correctly refuses.
+    set_owner_writable(sample)?;
     let report =
         instruments::de_warm(sample).map_err(|error| OpError::Io(format!("de-warm: {error}")))?;
     crate::support::phases::add_acquisition(started.elapsed().as_nanos() as u64);
     Ok(report)
+}
+
+/// Makes one file owner-readable and owner-writable, refusing anything else.
+fn set_owner_writable(path: &Path) -> Result<(), OpError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path)
+            .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?
+            .permissions()
+            .mode();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode | 0o600))
+            .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let mut permissions = std::fs::metadata(path)
+            .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?
+            .permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(path, permissions)
+            .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
+    }
+    Ok(())
 }
 
 /// Sidecar gates for a Store path: `journal_mode = MEMORY` leaves none.
@@ -317,39 +348,104 @@ pub fn lifecycle(
 }
 
 /// C2-2: cross-file reuse of supplied objects, one save operation.
+///
+/// **Phase split.** The row measures one `begin_save`/`accept`/`finish` against an
+/// empty Store; the member set is a fixture, and building it means generating up to
+/// 500 MiB and hashing every member to state the expectation the oracle compares
+/// against. The registry declares `Preparation::ObjectSet`, so the member set and
+/// its expectations are acquired once.
 pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    context.create_output()?;
-    let mut gates = Vec::new();
+    match context.phase {
+        Phase::Prepare => reuse_prepare(case, op, context),
+        Phase::Perf => reuse_perf(case, op, context),
+        Phase::Verify => Err(OpError::Io(
+            "c2.reuse.cross-file declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        )),
+    }
+}
+
+/// The member bytes one cross-file row offers, by profile.
+fn reuse_member_bytes(op: ReuseOp, index: u32, member_bytes: u64, seed: u64) -> Vec<u8> {
+    match op {
+        ReuseOp::Identical | ReuseOp::Base128 => fixture::noise(member_bytes, seed),
+        ReuseOp::Unique => fixture::noise(member_bytes, seed ^ (u64::from(index) << 8)),
+        ReuseOp::Local => {
+            let mut bytes = fixture::noise(member_bytes, seed);
+            let at = bytes.len() / 2;
+            let end = (at + 4096).min(bytes.len());
+            let patch = fixture::noise((end - at) as u64, seed ^ (u64::from(index) << 16));
+            bytes[at..end].copy_from_slice(&patch);
+            bytes
+        }
+    }
+}
+
+/// C2-2 `prepare`: acquire the member set once, with every expectation it gates.
+fn reuse_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
     let member_bytes = if case.bytes > 0 { case.bytes } else { 1 << 20 };
+    let mut objects = TreeStore::new();
+    let mut list: Vec<Member> = Vec::with_capacity(members as usize);
+    for index in 0..members {
+        let bytes = reuse_member_bytes(op, index, member_bytes, seed);
+        let (store, root) = objects_of(&bytes)?;
+        let ids = store.insertion_order().to_vec();
+        objects.absorb(&store);
+        list.push(Member {
+            ids,
+            root,
+            expectation: Some(Expectation::of(&bytes)),
+        });
+    }
+    let mut artifact = Artifact::new(objects);
+    artifact.members = list;
+    artifact.values.set_scalar("members", u64::from(members));
+    artifact.values.set_scalar("member_bytes", member_bytes);
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(Kind::Counter, "prepare.objects", written as i128, "objects", "distinct canonical objects the artifact holds")?;
+    context.trace.write_number(Kind::Counter, "prepare.members", artifact.members.len() as i128, "members", "member set the artifact declares")?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_op: {op:?}"),
+            format!("prepare_members: {members}"),
+            format!("prepare_member_bytes: {member_bytes}"),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
+
+/// C2-2 `perf`: the measured save against the prepared member set.
+fn reuse_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let directory = context.artifact_directory()?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let members = case.entries.max(1);
+    let member_bytes = artifact
+        .values
+        .scalar("member_bytes")
+        .ok_or_else(|| OpError::Io("the artifact declares no member_bytes".to_string()))?;
 
     // The member set is declared by the row's own profile, so the reuse equation
-    // below is falsifiable rather than descriptive.
-    // Each member keeps its recipe bytes, its object store and its root, so the
-    // oracle compares the logical bytes the recipe declares rather than the root
-    // object's own canonical framing.
-    let mut offered: Vec<(Vec<u8>, TreeStore, ObjectId)> = Vec::with_capacity(members as usize);
-    for index in 0..members {
-        let bytes = match op {
-            ReuseOp::Identical | ReuseOp::Base128 => fixture::noise(member_bytes, seed),
-            ReuseOp::Unique => fixture::noise(member_bytes, seed ^ (u64::from(index) << 8)),
-            ReuseOp::Local => {
-                let mut bytes = fixture::noise(member_bytes, seed);
-                let at = bytes.len() / 2;
-                let end = (at + 4096).min(bytes.len());
-                let patch = fixture::noise((end - at) as u64, seed ^ (u64::from(index) << 16));
-                bytes[at..end].copy_from_slice(&patch);
-                bytes
-            }
-        };
-        let (store, root) = objects_of(&bytes)?;
-        offered.push((bytes, store, root));
-    }
+    // below is falsifiable rather than descriptive. `accepted` and `distinct` are
+    // read off the artifact's own member lists: an identity is one the member
+    // offers, and the count is the same whether it is computed here or at
+    // acquisition.
     let mut accepted: u64 = 0;
     let mut distinct: Vec<ObjectId> = Vec::new();
-    for (_, store, _) in &offered {
-        for id in store.insertion_order() {
+    for member in &artifact.members {
+        for id in &member.ids {
             accepted += 1;
             if !distinct.contains(id) {
                 distinct.push(*id);
@@ -371,9 +467,10 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
     instruments::heap_begin();
     let (result, report) = super::measure("c2.reuse", |scope: &TimingScope<'_, Active>| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        for (_, member, _) in &offered {
-            for id in member.insertion_order() {
-                let object = member
+        for member in &artifact.members {
+            for id in &member.ids {
+                let object = artifact
+                    .objects
                     .cloned_object(*id)
                     .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
                 operation.accept(object)?;
@@ -438,7 +535,12 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
     // distinct pair once and then asserting that every member's pair is one of the
     // verified ones is **complete**: it covers every member, and it does not decode
     // the same 1 MiB 128 times to say so.
-    let roots: Vec<ObjectId> = offered.iter().map(|(_, _, root)| *root).collect();
+    //
+    // The expectation is the artifact's, derived from the fixture recipe at
+    // acquisition. Recomputing it here cost a second SHA-256 over every member's
+    // bytes - 1 GiB of harness hashing on the 500-entry tier - to arrive at a digest
+    // that was already known.
+    let roots: Vec<ObjectId> = artifact.members.iter().map(|member| member.root).collect();
     crate::workload::expected::publish(
         context.trace,
         "additions",
@@ -449,13 +551,21 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
     let mut pairs: Vec<(ObjectId, Expectation)> = Vec::new();
-    for (bytes, _member, root) in &offered {
-        let expectation = Expectation::of(bytes);
+    for member in &artifact.members {
+        let Some(expectation) = member.expectation else {
+            return Ok(unmeasured(
+                &OpError::Io(format!(
+                    "member {} carries no expectation; this row's oracle needs one",
+                    member.root
+                )),
+                gates,
+            ));
+        };
         if !pairs
             .iter()
-            .any(|(seen, seen_expectation)| *seen == *root && *seen_expectation == expectation)
+            .any(|(seen, seen_expectation)| *seen == member.root && *seen_expectation == expectation)
         {
-            pairs.push((*root, expectation));
+            pairs.push((member.root, expectation));
         }
     }
     let mut oracle_ok = true;
@@ -474,11 +584,12 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
             }
         }
     }
-    let covered = offered.iter().all(|(bytes, _member, root)| {
-        let expectation = Expectation::of(bytes);
-        pairs
-            .iter()
-            .any(|(seen, seen_expectation)| *seen == *root && *seen_expectation == expectation)
+    let covered = artifact.members.iter().all(|member| {
+        member.expectation.is_some_and(|expectation| {
+            pairs
+                .iter()
+                .any(|(seen, seen_expectation)| *seen == member.root && *seen_expectation == expectation)
+        })
     });
     context.trace.write_number(
         Kind::Counter,
@@ -490,7 +601,7 @@ pub fn reuse(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<Op
     let summary = format!(
         "{} distinct pair(s) read back byte-exact; every one of {} members covered",
         pairs.len(),
-        offered.len()
+        artifact.members.len()
     );
     gates.push(gates::require(
         GateClass::Correctness,
@@ -544,9 +655,49 @@ fn base_file_seed(seed: u64, index: u32) -> u64 {
 /// addition is an existing identity for every object it carries and a `unique` one
 /// shares nothing. That is why the equations differ from C2-2's — an `exact` save
 /// here must reuse *every* accepted object, not every duplicate after the first.
+///
+/// **Phase split.** The row measures one save against a prepared Store; both the
+/// base the Store already holds and the additions are fixtures. The registry
+/// declares `Preparation::BaseStore`, so the base Store, the addition set and every
+/// addition's expectation are acquired once.
 pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    context.create_output()?;
-    let mut gates = Vec::new();
+    match context.phase {
+        Phase::Prepare => workspace_prepare(case, op, context),
+        Phase::Perf => workspace_perf(case, op, context),
+        Phase::Verify => Err(OpError::Io(
+            "c2.reuse.workspace declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        )),
+    }
+}
+
+/// The addition bytes one workspace row offers, by profile.
+fn workspace_member_bytes(
+    op: ReuseOp,
+    index: u32,
+    base: &[u8],
+    member_bytes: u64,
+    seed: u64,
+) -> Vec<u8> {
+    match op {
+        ReuseOp::Identical => base.to_vec(),
+        ReuseOp::Local => {
+            let mut bytes = base.to_vec();
+            let at = bytes.len() / 2;
+            let end = (at + 4096).min(bytes.len());
+            let patch = fixture::noise((end - at) as u64, seed ^ (u64::from(index) << 16) ^ 0x10c4);
+            bytes[at..end].copy_from_slice(&patch);
+            bytes
+        }
+        ReuseOp::Unique | ReuseOp::Base128 => {
+            fixture::noise(member_bytes, seed ^ (u64::from(index) << 8) ^ 0x0d1d)
+        }
+    }
+}
+
+/// C2-4 `prepare`: acquire the base Store and the addition set once.
+fn workspace_prepare(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
     let member_bytes = if case.bytes > 0 { case.bytes } else { 1 << 20 };
@@ -564,31 +715,76 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
         base_bytes.push(bytes);
     }
 
-    let mut offered: Vec<(Vec<u8>, TreeStore, ObjectId)> = Vec::with_capacity(members as usize);
+    let mut objects = TreeStore::new();
+    objects.absorb(&base_store);
+    let mut list: Vec<Member> = Vec::with_capacity(members as usize);
     for index in 0..members {
         let base = &base_bytes[(index % base_files) as usize];
-        let bytes = match op {
-            ReuseOp::Identical => base.clone(),
-            ReuseOp::Local => {
-                let mut bytes = base.clone();
-                let at = bytes.len() / 2;
-                let end = (at + 4096).min(bytes.len());
-                let patch =
-                    fixture::noise((end - at) as u64, seed ^ (u64::from(index) << 16) ^ 0x10c4);
-                bytes[at..end].copy_from_slice(&patch);
-                bytes
-            }
-            ReuseOp::Unique | ReuseOp::Base128 => {
-                fixture::noise(member_bytes, seed ^ (u64::from(index) << 8) ^ 0x0d1d)
-            }
-        };
+        let bytes = workspace_member_bytes(op, index, base, member_bytes, seed);
         let (store, root) = objects_of(&bytes)?;
-        offered.push((bytes, store, root));
+        let ids = store.insertion_order().to_vec();
+        objects.absorb(&store);
+        list.push(Member {
+            ids,
+            root,
+            // The frozen oracle for this family is **O1 + O5** - *"root matches"*
+            // and the reuse counts - so no member expectation is read here either.
+            expectation: None,
+        });
     }
+    create_and_save_untimed(&Artifact::store_path(&directory), &base_store)?;
+    let mut artifact = Artifact::new(objects);
+    artifact.members = list;
+    artifact.values.set_scalar("members", u64::from(members));
+    artifact.values.set_scalar("member_bytes", member_bytes);
+    artifact.values.set_scalar("base_files", u64::from(base_files));
+    artifact.values.set_scalar("base_objects", base_store.len() as u64);
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(Kind::Counter, "prepare.objects", written as i128, "objects", "distinct canonical objects the artifact holds")?;
+    context.trace.write_number(Kind::Counter, "prepare.members", artifact.members.len() as i128, "members", "member set the artifact declares")?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_op: {op:?}"),
+            format!("prepare_members: {members}"),
+            format!("prepare_base_files: {base_files}"),
+            format!("prepare_member_bytes: {member_bytes}"),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
+
+/// C2-4 `perf`: the measured save against the prepared base Store.
+fn workspace_perf(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let directory = context.artifact_directory()?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let members = case.entries.max(1);
+    let member_bytes = artifact
+        .values
+        .scalar("member_bytes")
+        .ok_or_else(|| OpError::Io("the artifact declares no member_bytes".to_string()))?;
+    let base_files = artifact
+        .values
+        .scalar("base_files")
+        .ok_or_else(|| OpError::Io("the artifact declares no base_files".to_string()))?;
+    let base_objects = artifact
+        .values
+        .scalar("base_objects")
+        .ok_or_else(|| OpError::Io("the artifact declares no base_objects".to_string()))?;
+
     let mut accepted: u64 = 0;
     let mut distinct: Vec<ObjectId> = Vec::new();
-    for (_, store, _) in &offered {
-        for id in store.insertion_order() {
+    for member in &artifact.members {
+        for id in &member.ids {
             accepted += 1;
             if !distinct.contains(id) {
                 distinct.push(*id);
@@ -596,10 +792,8 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
         }
     }
 
-    let base = context.output.join("base.sqlite");
     let sample = context.output.join("sample.sqlite");
-    create_and_save_untimed(&base, &base_store)?;
-    let de_warm = prepare_sample(&base, &sample)?;
+    let de_warm = prepare_sample(&Artifact::store_path(&directory), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
     gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
 
@@ -610,9 +804,10 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
     instruments::heap_begin();
     let (result, report) = super::measure("c2.workspace", |scope: &TimingScope<'_, Active>| {
         let mut operation = store.begin_save(scope.child("storage.begin"))?;
-        for (_, member, _) in &offered {
-            for id in member.insertion_order() {
-                let object = member
+        for member in &artifact.members {
+            for id in &member.ids {
+                let object = artifact
+                    .objects
                     .cloned_object(*id)
                     .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
                 operation.accept(object)?;
@@ -627,8 +822,8 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
 
-    context.trace.write_number(Kind::Counter, "workspace.base_files", i128::from(base_files), "files", "harness-declared base file count")?;
-    context.trace.write_number(Kind::Counter, "workspace.base_objects", base_store.len() as i128, "objects", "objects the base Store already held")?;
+    context.trace.write_number(Kind::Counter, "workspace.base_files", base_files as i128, "files", "harness-declared base file count")?;
+    context.trace.write_number(Kind::Counter, "workspace.base_objects", base_objects as i128, "objects", "objects the base Store already held")?;
     context.trace.write_number(Kind::Counter, "workspace.accepted", accepted as i128, "objects", "harness-declared addition set")?;
     context.trace.write_number(Kind::Counter, "workspace.distinct", distinct.len() as i128, "objects", "harness-declared addition set")?;
     context.trace.write_number(Kind::Counter, "workspace.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
@@ -657,7 +852,7 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
             outcome.reused,
             outcome.inserted,
             base_files,
-            base_store.len()
+            base_objects
         ),
         match op {
             ReuseOp::Identical => {
@@ -686,7 +881,7 @@ pub fn workspace(case: &Case, op: ReuseOp, context: &mut OpContext<'_>) -> Resul
     // matches"* and the reuse counts - so the byte-exact read-back of every addition
     // was answering a question the oracle does not pose. The mechanism claim is
     // already gated above by `g2.reuse-equation`.
-    let roots: Vec<ObjectId> = offered.iter().map(|(_, _, root)| *root).collect();
+    let roots: Vec<ObjectId> = artifact.members.iter().map(|member| member.root).collect();
     crate::workload::expected::publish(
         context.trace,
         "additions",
@@ -751,8 +946,13 @@ fn delta_fixture(
     let mut objects = TreeStore::new();
     objects.absorb(&base);
     let mut list = Vec::with_capacity(members as usize);
+    // One scratch buffer for every member. `clone_from` reuses the allocation, so
+    // the per-member cost is the patch and the chunking rather than a fresh
+    // allocation of the whole base; 500 members of a 4 MiB base used to allocate
+    // and free 2 GB of scratch.
+    let mut member = base_bytes.clone();
     for index in 0..members {
-        let mut member = base_bytes.clone();
+        member.clone_from(&base_bytes);
         let len = member.len();
         match op {
             DeltaOp::Overwrite => {
@@ -795,18 +995,15 @@ fn delta_fixture(
         list.push(Member {
             ids,
             root,
-            expectation: Expectation::of(&member),
+            // The frozen oracle for this family is **O1 + O3** - *"root matches;
+            // chunk counts match"* - and its read-back was removed in round 5
+            // because the specification never asked for O2. No member expectation is
+            // therefore read, and hashing every member to record one cost the
+            // acquisition 2 GB of scalar SHA-256 for a value nothing consults.
+            expectation: None,
         });
     }
-    Ok((base, Artifact { objects, members: list }))
-}
-
-/// The artifact directory a delta row's phases share.
-fn delta_artifact(context: &OpContext<'_>) -> Result<PathBuf, OpError> {
-    context
-        .prepared_input
-        .clone()
-        .ok_or_else(|| OpError::Io("this row runs in phases and needs --emit-input/--load-input".to_string()))
+    Ok((base, Artifact { objects, members: list, values: Values::new() }))
 }
 
 /// C2-3 `prepare`: acquire the fixture once and write the artifact.
@@ -816,12 +1013,12 @@ fn delta_artifact(context: &OpContext<'_>) -> Result<PathBuf, OpError> {
 /// runner publishes its wall as `acquisition_wall_ns` outside the row's admission
 /// decision, exactly as owner decision D2 requires.
 fn delta_prepare(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    let directory = delta_artifact(context)?;
+    let directory = context.artifact_directory()?;
     let seed = seed_of(case.id);
     let members = case.entries.max(1);
     let bytes = if case.bytes > 0 { case.bytes } else { 4 << 20 };
     let (base, artifact) = delta_fixture(op, members, bytes, seed)?;
-    create_and_save_untimed(&directory.join("base.sqlite"), &base)?;
+    create_and_save_untimed(&Artifact::store_path(&directory), &base)?;
     let written = artifact
         .write(&directory)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
@@ -870,7 +1067,7 @@ fn delta_prepare(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Resul
 /// is charged to the 60 s verification budget rather than to this row's 15 s
 /// complete-command budget.
 fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    let directory = delta_artifact(context)?;
+    let directory = context.artifact_directory()?;
     context.create_output()?;
     let mut gates = Vec::new();
     let members = case.entries.max(1);
@@ -879,7 +1076,7 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
 
     let sample = context.output.join("sample.sqlite");
-    let de_warm = prepare_sample(&directory.join("base.sqlite"), &sample)?;
+    let de_warm = prepare_sample(&Artifact::store_path(&directory), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
     gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
 
@@ -959,7 +1156,7 @@ fn delta_perf(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<O
 /// unmeasured, byte-identical operation the measurement contract requires, and it
 /// is why the performance receipt can be honest about not containing one.
 fn delta_verify(case: &Case, op: DeltaOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    let directory = delta_artifact(context)?;
+    let directory = context.artifact_directory()?;
     let artifact = Artifact::read(&directory)
         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
     let sample = context.output.join("sample.sqlite");
@@ -1263,21 +1460,81 @@ pub fn small_file(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome,
 
 /// C2-7: independent read waves over a stored ladder.
 ///
-/// Driven through [`StoreProvider::read_wave`] and not through `Store::read_batch`,
-/// because only the provider's route reports `opens` as `1` on the opening wave and
-/// `0` afterwards; the direct route reports `1` unconditionally, so this cell would
-/// be ungateable on it.
+/// The O(1) claim gates on `opens`: one on the opening wave and zero afterwards,
+/// **but only through `StoreProvider::read_wave`**. The direct `Store::read_batch`
+/// route reports `opens: 1` unconditionally, so this cell is ungateable on that
+/// route and the case is driven through the provider. `pages` must equal
+/// `ceil(ids / 128)`.
+///
+/// **Phase split.** The row measures two read waves over a prepared Store. Building
+/// that Store means generating up to 500 MiB, chunking it and saving it — all
+/// setup — and hashing the same 500 MiB to state the expectation the oracle
+/// compares against. The registry declares `Preparation::BaseStore`, so the Store,
+/// the root identity and the expectation are acquired once. The object set is
+/// **not** persisted: the measured phase reads through the Store, and a harness
+/// provider it never consults has no business in its artifact.
 pub fn read_wave(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
-    context.create_output()?;
-    let mut gates = Vec::new();
+    match context.phase {
+        Phase::Prepare => read_wave_prepare(case, context),
+        Phase::Perf => read_wave_perf(case, context),
+        Phase::Verify => Err(OpError::Io(
+            "c2.read.waves declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        )),
+    }
+}
+
+/// C2-7 `prepare`: acquire the base Store and the identity its oracle reads.
+fn read_wave_prepare(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
     let bytes = fixture::noise(case.bytes, seed_of(case.id));
     let (objects, root) = objects_of(&bytes)?;
     let expectation = Expectation::of(&bytes);
+    let count = objects.len();
+    create_and_save_untimed(&Artifact::store_path(&directory), &objects)?;
+    let mut artifact = Artifact::new(TreeStore::new());
+    artifact.values.set_identity("root", root);
+    artifact.values.set_expectation("content", expectation);
+    artifact.values.set_scalar("objects", count as u64);
+    artifact.values.set_scalar("declared_bytes", case.bytes);
+    artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(Kind::Counter, "prepare.objects", count as i128, "objects", "distinct canonical objects the base Store holds")?;
+    context.trace.write_number(Kind::Counter, "prepare.base_bytes", case.bytes as i128, "bytes", "declared base bytes")?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_objects: {count}"),
+            format!("prepare_base_bytes: {}", case.bytes),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
 
-    let base_path = context.output.join("base.sqlite");
+/// C2-7 `perf`: the measured waves against a per-sample copy of the prepared Store.
+fn read_wave_perf(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let directory = context.artifact_directory()?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let root = artifact
+        .values
+        .identity("root")
+        .ok_or_else(|| OpError::Io("the artifact declares no root identity".to_string()))?;
+    let expectation = artifact
+        .values
+        .expectation("content")
+        .ok_or_else(|| OpError::Io("the artifact declares no content expectation".to_string()))?;
+    let objects = artifact.values.scalar("objects").unwrap_or(0);
+
     let sample = context.output.join("sample.sqlite");
-    create_and_save_untimed(&base_path, &objects)?;
-    let de_warm = prepare_sample(&base_path, &sample)?;
+    let de_warm = prepare_sample(&Artifact::store_path(&directory), &sample)?;
     gates.push(gates::residency_gate(Some(de_warm.resident_after)));
     gates.push(crate::gates::attribution_gate(crate::gates::Attribution::Exclusive));
 
@@ -1358,7 +1615,7 @@ pub fn read_wave(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, 
         gates,
         notes: vec![
             format!("declared_bytes: {}", case.bytes),
-            format!("objects: {}", objects.len()),
+            format!("objects: {objects}"),
             format!("store_state: opened-from-copy"),
             format!("copy_rung: {COPY_RUNG}"),
             format!("heap_charged_bytes: {}", heap.charged_bytes),
@@ -1623,19 +1880,32 @@ pub fn pool(case: &Case, cold: bool, context: &mut OpContext<'_>) -> Result<OpOu
 /// C2-5: footprint accounting. The bytes are measured by `shared/space.py` in
 /// verification mode, not here: the harness owns no SQL, and the number must be
 /// re-derived by a reader that did not produce it.
+///
+/// **Phase split.** The row measures one save of a supplied object set into an
+/// empty Store; the supplied set is a fixture. The `metadata-cardinality-100000`
+/// control builds 100,000 small objects, so the registry declares
+/// `Preparation::ObjectSet` and the set is acquired once. The Store is **not**
+/// prepared: it is empty, and an empty `Store::create` is part of the acquisition
+/// the row already pays for per sample.
 pub fn footprint(
     case: &Case,
     op: FootprintOp,
     context: &mut OpContext<'_>,
 ) -> Result<OpOutcome, OpError> {
-    context.create_output()?;
-    let mut gates = Vec::new();
-    let seed = seed_of(case.id);
+    match context.phase {
+        Phase::Prepare => footprint_prepare(case, op, context),
+        Phase::Perf => footprint_perf(case, op, context),
+        Phase::Verify => Err(OpError::Io(
+            "c2.footprint declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        )),
+    }
+}
+
+/// The supplied object set one footprint control declares.
+fn footprint_supplied(case: &Case, op: FootprintOp, seed: u64) -> Result<TreeStore, OpError> {
     let object_bytes = case.bytes;
     let entries = case.entries.max(1);
-
-    // The supplied object set: many distinct small objects, many metadata-heavy
-    // objects, or one large object, exactly as the row declares.
     let mut supplied = TreeStore::new();
     match op {
         FootprintOp::LargeObject => {
@@ -1659,6 +1929,43 @@ pub fn footprint(
             }
         }
     }
+    Ok(supplied)
+}
+
+/// C2-5 `prepare`: acquire the supplied object set once.
+fn footprint_prepare(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
+    let supplied = footprint_supplied(case, op, seed_of(case.id))?;
+    let count = supplied.len();
+    let artifact = Artifact::new(supplied);
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    artifact
+        .seal(&directory, case.id)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    context.trace.write_number(Kind::Counter, "prepare.objects", written as i128, "objects", "distinct canonical objects the artifact holds")?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_op: {op:?}"),
+            format!("prepare_objects: {count}"),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
+
+/// C2-5 `perf`: the measured save of the prepared object set.
+fn footprint_perf(case: &Case, op: FootprintOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+    context.create_output()?;
+    let mut gates = Vec::new();
+    let directory = context.artifact_directory()?;
+    let artifact = Artifact::read(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    let supplied = &artifact.objects;
+    let object_bytes = case.bytes;
+    let entries = case.entries.max(1);
 
     let base_path = context.output.join("base.sqlite");
     let sample = context.output.join("sample.sqlite");

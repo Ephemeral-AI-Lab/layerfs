@@ -163,6 +163,7 @@ def compose(
     case_dir: str | Path,
     invocation_walls: dict[str, int],
     expects_operation: bool = True,
+    reused_invocations: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Composes the six published phase fields for one case.
 
@@ -177,6 +178,15 @@ def compose(
     `complete_command_ns` is that wall and nothing else — the deferred verification
     invocation keeps its own 60 s budget, as `benchmark_rules.md` section 11
     requires.
+
+    `reused_invocations` names the invocations that **did not run**: `--reuse-pass`
+    accepted an identity-matched `PASS` receipt instead. Such an invocation has no
+    process wall and publishes no `phases-<invocation>.json`, so it must not appear
+    in `invocation_walls` — a wall with no phase file behind it is a reconciliation
+    failure, and reporting a deliberate, recorded omission as an unreconciled phase
+    would make `--reuse-pass` unusable on every lane that has a deferred oracle.
+    The omission is named in the reconciliation reason instead of being inferred from
+    a missing file.
     """
     case_dir = Path(case_dir)
     invocations: list[dict[str, object]] = []
@@ -232,9 +242,17 @@ def compose(
     for record in failed:
         problems.append(f"{record['invocation']}: {record['reason']}")
     totals["invocations"] = invocations
+    totals["reused_invocations"] = sorted(reused_invocations)
+    reason = "every declared phase reconciles with its wall"
+    if reused_invocations:
+        reason += (
+            "; "
+            + ", ".join(sorted(reused_invocations))
+            + " reused an identity-matched PASS receipt and published no phases"
+        )
     totals["reconciliation"] = {
         "status": "PASS" if not problems else "INCOMPLETE",
-        "reason": "; ".join(problems) if problems else "every declared phase reconciles with its wall",
+        "reason": "; ".join(problems) if problems else reason,
         "problems": problems,
         "tolerance_absolute_ns": TOLERANCE_ABSOLUTE_NS,
         "tolerance_fraction": f"1/{TOLERANCE_FRACTION_DENOMINATOR} of the wall",

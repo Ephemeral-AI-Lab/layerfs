@@ -40,6 +40,7 @@ What each verb guarantees
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -80,11 +81,13 @@ DECLARED_EXCEPTIONS = {
 }
 
 
-# Rows whose driver declares the three-phase split. The driver is the authority:
-# a row whose trace carries `oracle_phase: verify-invocation` is run in phases,
-# and one that does not is not, so this set only decides which cases the runner
-# acquires an artifact for before the performance invocation.
-PHASE_SPLIT_FAMILIES = {"c2.delta.cdc-locality"}
+# The registry column that declares whether a row's fixture is acquired once.
+# It is the **binary's own** declaration (`registry::Preparation`), read off the
+# same table the golden file pins, so no family list is maintained here by hand:
+# a family that gains a phase split in Rust is acquired without a second edit, and
+# a family that loses one stops being acquired. The driver remains the authority on
+# whether a row has a *deferred* oracle: that is read off the trace it wrote.
+PREPARED_COLUMN = 12
 
 # Verification budget, separate from the complete-command budget (benchmark_rules
 # section 11: performance and verifier timeouts MUST be separate and reported).
@@ -128,8 +131,16 @@ class ReuseRefused(Exception):
 
 # The declared fixture-recipe version. It is bumped when the *recipe* a family
 # builds its fixture from changes — the generator, the offsets, the profile, the
-# declared sizes. It is deliberately not the harness binary.
-FIXTURE_RECIPE_VERSION = "fs-bench-fixture-recipe-v1"
+# declared sizes — and when what an artifact *holds* for one changes. It is
+# deliberately not the harness binary.
+#
+# v2 is the packed artifact: the object set is one indexed payload file instead of
+# one file per object, the references and advisory predecessors are persisted
+# beside each object's role, and an artifact carries named scalars, identities and
+# expectations. Every one of those changes the bytes a recipe produces, which is
+# exactly the case this version exists to declare. A v1 master is superseded rather
+# than consumed.
+FIXTURE_RECIPE_VERSION = "fs-bench-fixture-recipe-v2"
 
 
 def compatibility_digest(row: list[str], identity: receipt.Identity) -> str:
@@ -154,6 +165,7 @@ def compatibility_digest(row: list[str], identity: receipt.Identity) -> str:
             "case_id": row[0],
             "family": row[1],
             "admission": row[2],
+            "prepared": row[PREPARED_COLUMN],
             "product_lock_sha256": identity.product_lock_sha256,
             "harness_lock_sha256": identity.harness_lock_sha256,
         },
@@ -299,15 +311,19 @@ def acquire(case_id: str, root: Path, identity: receipt.Identity, row: list[str]
     recorded = read_seal(marker)
     producer = recorded.get("producer_harness_sha256") or recorded.get("harness_sha256", "")
     if recorded.get("compatibility") == compatibility:
+        validation = validate_artifact(destination, recorded)
         return {
             "case_id": case_id,
-            "state": "reused",
+            "state": "reused" if validation["validation"] != "refused" else "not-produced",
+            "reason": validation.get("reason"),
             "artifact": str(destination),
             "compatibility": compatibility,
             "recipe_version": FIXTURE_RECIPE_VERSION,
             "producer_harness_sha256": producer,
             "producer_is_current_binary": producer == (identity.harness_binary_sha256 or ""),
             "producer_commit": recorded.get("producer_commit", ""),
+            "sealed_digest": recorded.get("manifest_sha256", ""),
+            **validation,
         }
     if destination.exists() and not marker.exists():
         return {
@@ -357,15 +373,149 @@ def acquire(case_id: str, root: Path, identity: receipt.Identity, row: list[str]
         "stderr": result.stderr.strip()[-500:],
     }
     if result.returncode == 0:
-        # The seal is the child's; the runner appends the provenance and the key.
-        # The producer binary is provenance, not the key, and the source commit is
-        # recorded beside it so a reader can name the build that produced the bytes.
+        # The completion marker is the child's; the runner appends the provenance,
+        # the key, the per-file digests and the seal. The producer binary is
+        # provenance, not the key, and the source commit is recorded beside it so a
+        # reader can name the build that produced the bytes.
+        sidecars = [
+            str(path.relative_to(destination))
+            for path in destination.rglob("*")
+            if path.suffix in {"-wal", "-shm", "-journal"}
+        ]
+        if sidecars:
+            record["state"] = "failed"
+            record["reason"] = f"unexpected Store sidecars in the artifact: {sidecars[:3]}"
+            record["exit_code"] = 1
+            return record
+        # The seal record is appended **before** the manifest is computed: the
+        # manifest describes every file of the artifact at its final size, and a
+        # record appended afterwards would leave `sealed.tsv` recorded one line
+        # short — which the reuse-time stat-identity check then reads as a resized
+        # master and refuses.
         with (destination / "sealed.tsv").open("a", encoding="utf-8") as handle:
             handle.write(f"compatibility\t{compatibility}\n")
             handle.write(f"recipe_version\t{FIXTURE_RECIPE_VERSION}\n")
             handle.write(f"producer_harness_sha256\t{identity.harness_binary_sha256 or ''}\n")
             handle.write(f"producer_commit\t{identity.source_commit}\n")
+            handle.write("validation\tsha256-per-file\n")
+        manifest = manifest_of(destination, case_id, compatibility)
+        receipt.write_append_only(destination / "manifest.json", manifest)
+        # The manifest's own digest is **not** appended to `sealed.tsv`: doing so
+        # would grow the file after the manifest recorded its size, and the reuse
+        # check would read the master as resized. It is published in the
+        # acquisition record (`manifest-<stamp>.json`) and re-derived on reuse.
+        manifest_sha256 = hashlib.sha256(
+            (destination / "manifest.json").read_bytes()
+        ).hexdigest()
+        seal_artifact(destination)
+        record["manifest_sha256"] = manifest_sha256
+        record["validation"] = "sha256-per-file"
+        record["data_bytes"] = manifest["data_bytes"]
+        record["files"] = len(manifest["files"])
     return record
+
+
+def artifact_files(destination: Path) -> list[Path]:
+    """Every file of one artifact except the manifest that describes them."""
+    return sorted(
+        path
+        for path in destination.rglob("*")
+        if path.is_file() and path.name != "manifest.json"
+    )
+
+
+def manifest_of(destination: Path, case_id: str, compatibility: str) -> dict[str, object]:
+    """Builds the artifact manifest: one sha256 and one size per file.
+
+    `test_setup_and_cache_discipline.md` section 3 fixes the build order as
+    *build -> validate (sha256 per file) -> seal -> write `manifest.json`*, and the
+    acquirer performs the validation. The digests are computed here rather than in
+    the child because `hashlib` is the accelerated implementation while the
+    harness's own SHA-256 is a scalar one, and a 500 MiB artifact hashed at the
+    harness's rate would cost more than the acquisition it is validating.
+    """
+    files: dict[str, dict[str, object]] = {}
+    data_bytes = 0
+    for path in artifact_files(destination):
+        # Streamed: a 500 MiB packed object set is read in bounded chunks rather
+        # than held whole beside the artifact it describes.
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as handle:
+            while chunk := handle.read(1 << 22):
+                digest.update(chunk)
+                size += len(chunk)
+        relative = str(path.relative_to(destination))
+        files[relative] = {"bytes": size, "sha256": digest.hexdigest()}
+        data_bytes += size
+    return {
+        "schema": "layerfs-prepared-manifest-v1",
+        "case_id": case_id,
+        "compatibility": compatibility,
+        "recipe_version": FIXTURE_RECIPE_VERSION,
+        "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "files": files,
+        "data_bytes": data_bytes,
+    }
+
+
+def seal_artifact(destination: Path) -> None:
+    """Removes the write bit from every file and directory of a sealed artifact.
+
+    `test_setup_and_cache_discipline.md` section 3: *seal: chmod removes 0o222
+    (immutable master)*. It is applied last, after the manifest and the seal
+    record are written, so a half-built entry is left writable and therefore
+    visibly unfinished.
+    """
+    for path in sorted(destination.rglob("*"), reverse=True):
+        mode = path.stat().st_mode & 0o777
+        os.chmod(path, mode & ~0o222)
+    os.chmod(destination, (destination.stat().st_mode & 0o777) & ~0o222)
+
+
+def validate_artifact(destination: Path, record: dict[str, object]) -> dict[str, object]:
+    """Checks a reused master against its own manifest without re-hashing it.
+
+    The rule is `test_setup_and_cache_discipline.md` section 3.1: *the master is
+    validated once per acquisition; its sealed digest is retained, so repeated
+    source rehashing per sample is unnecessary.* Reuse is not an acquisition, so
+    this is a stat-identity check — every file the manifest names must still be
+    there with the size it recorded — and the digest is retained in the record.
+
+    It is not the only integrity gate. Every object a later phase loads is
+    re-identified by `FinalizedObject::new` against the name the index stores it
+    under, so a corrupted payload is refused at load rather than silently used.
+    """
+    manifest_path = destination / "manifest.json"
+    if not manifest_path.exists():
+        return {"validation": "refused", "reason": "the artifact carries no manifest.json"}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != "layerfs-prepared-manifest-v1":
+        return {
+            "validation": "refused",
+            "reason": f"manifest schema {manifest.get('schema')!r}",
+        }
+    missing: list[str] = []
+    resized: list[str] = []
+    for relative, recorded in dict(manifest.get("files", {})).items():
+        path = destination / relative
+        if not path.exists():
+            missing.append(relative)
+        elif path.stat().st_size != int(recorded["bytes"]):
+            resized.append(relative)
+    if missing or resized:
+        return {
+            "validation": "refused",
+            "reason": f"{len(missing)} missing, {len(resized)} resized",
+            "missing": missing[:5],
+            "resized": resized[:5],
+        }
+    return {
+        "validation": "manifest-stat-identity",
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "data_bytes": int(manifest.get("data_bytes", 0)),
+        "files": len(manifest.get("files", {})),
+    }
 
 
 def load_reused_proof(path: str, identity: receipt.Identity, selection: list[str]) -> dict[str, object]:
@@ -487,12 +637,12 @@ def cmd_prepare(arguments: argparse.Namespace) -> int:
     selected = arguments.case or registry_rows()
     for case_id in selected:
         family = family_of(case_id)
-        if family not in PHASE_SPLIT_FAMILIES:
+        if not prepared_of(case_id).strip("-"):
             manifest["cases"].append(
                 {
                     "case_id": case_id,
                     "state": "not-produced",
-                    "reason": f"{family} does not declare a phase split; its fixture is built inside its one invocation",
+                    "reason": f"{family} declares no prepared master; its fixture is built inside its one invocation",
                 }
             )
             continue
@@ -510,6 +660,14 @@ def row_of(case_id: str) -> list[str]:
     raise RunnerError(f"{case_id} is not in the binary's registry")
 
 
+def prepared_of(case_id: str) -> str:
+    """The registry's own preparation declaration for one case, or `""`."""
+    for row in registry_table():
+        if row[0] == case_id:
+            return row[PREPARED_COLUMN] if len(row) > PREPARED_COLUMN else ""
+    return ""
+
+
 def family_of(case_id: str) -> str:
     """The family a case belongs to, read from the binary's own registry."""
     for row in registry_table():
@@ -518,15 +676,33 @@ def family_of(case_id: str) -> str:
     return ""
 
 
+_REGISTRY_TABLE: list[list[str]] | None = None
+
+
 def registry_table() -> list[list[str]]:
-    """The binary's registry as rows, so no family list is maintained by hand."""
-    result = subprocess.run(
-        [str(BINARY), "--list", "--format", "tsv", "--lane", "full"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return [line.split("\t") for line in result.stdout.splitlines() if "\t" in line][1:]
+    """The binary's whole registry as rows, so no family list is maintained by hand.
+
+    It is the binary's own `--emit-registry-tsv` rendering — the same table the
+    golden file pins and the registry self-check re-derives — rather than the
+    three-column `--list` summary, because the preparation declaration is one of
+    its columns and a summary that dropped it would put the decision back in a
+    hand-maintained list here. Read once per process and cached.
+    """
+    global _REGISTRY_TABLE
+    if _REGISTRY_TABLE is None:
+        temporary = HARNESS_ROOT / "target" / "registry-table.tsv"
+        temporary.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [str(BINARY), "--emit-registry-tsv", str(temporary)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RunnerError(f"the binary could not render its registry: {result.stderr.strip()}")
+        lines = temporary.read_text(encoding="utf-8").splitlines()
+        _REGISTRY_TABLE = [line.split("\t") for line in lines[1:] if "\t" in line]
+    return _REGISTRY_TABLE
 
 
 def run_case(
@@ -546,7 +722,7 @@ def run_case(
     declared_exception = case_id in DECLARED_EXCEPTIONS
     acquisition: dict[str, object] = {}
     command = [str(BINARY), "--case", case_id, "--out", str(case_dir)]
-    if family_of(case_id) in PHASE_SPLIT_FAMILIES:
+    if prepared_of(case_id).strip("-"):
         artifact = artifact_root() / case_id
         acquisition = acquire(case_id, artifact_root(), identity, row_of(case_id))
         command += ["--load-input", str(artifact)]
@@ -628,14 +804,24 @@ def run_case(
     # runner's process wall for each invocation. `complete_command_ns` stays the
     # performance invocation's wall, which is what the complete-command budget
     # classifies; the deferred verification invocation keeps its own 60 s budget.
+    # A reused verification ran no process, so it has no wall and published no
+    # `phases-verify.json`: it is named as a reuse rather than composed as an
+    # invocation. Everything else keeps its own invocation record.
     walls = {"perf": wall_ns}
+    reused_invocations: list[str] = []
     if verification:
-        walls["verify"] = int(verification["wall_ns"])
+        if verification.get("status") == "REUSED":
+            reused_invocations.append("verify")
+        else:
+            walls["verify"] = int(verification["wall_ns"])
     parsed = trace_module.read(case_dir / "trace.jsonl")
     # A row whose driver does not exist ran nothing, so it is not required to
     # publish an operation. Every row that did run a driver is.
     declared_phases = phases_module.compose(
-        case_dir, walls, expects_operation=parsed.status() != "NOT_RUN"
+        case_dir,
+        walls,
+        expects_operation=parsed.status() != "NOT_RUN",
+        reused_invocations=tuple(reused_invocations),
     )
     budget = receipt.budget(wall_ns, declared_exception)
     if verification.get("phase") == "verify":
@@ -1229,13 +1415,32 @@ def cmd_self_check(_: argparse.Namespace) -> int:
     return 0
 
 
+def calibration_artifact(case_id: str) -> str | None:
+    """The prepared master one calibration arm's child needs, acquired once.
+
+    A calibration arm drives a real registered case, and a case that declares a
+    prepared master needs one handed to it: `--load-input` is the only way its
+    driver reads a fixture, and a child started without it fails closed with
+    `NOT_RUN` rather than rebuilding the fixture inside the invocation the split
+    exists to keep it out of. Acquisition is untimed and once per digest, exactly
+    as `prepare` does it.
+    """
+    if not prepared_of(case_id).strip("-"):
+        return None
+    identity = receipt.identify(REPO_ROOT, HARNESS_ROOT, BINARY)
+    record = acquire(case_id, artifact_root(), identity, row_of(case_id))
+    if record.get("state") not in ("acquired", "reused"):
+        return None
+    return str(record["artifact"])
+
+
 def cmd_calibrate(arguments: argparse.Namespace) -> int:
     import experiments
 
     if not BINARY.exists():
         build()
     started = time.monotonic()
-    results = experiments.run_all(BINARY, REPO_ROOT)
+    results = experiments.run_all(BINARY, REPO_ROOT, artifact_of=calibration_artifact)
     document = {
         "schema": "layerfs-calibration-v1",
         "ran_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

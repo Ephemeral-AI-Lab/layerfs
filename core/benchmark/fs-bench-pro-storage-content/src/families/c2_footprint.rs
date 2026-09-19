@@ -8,7 +8,7 @@
 //! `pack_bodies <= database`.
 
 use super::{leak, CaseSpec};
-use crate::registry::{CacheState, Case, FootprintOp, Shape, StoreState};
+use crate::registry::{CacheState, Case, FootprintOp, Preparation, Shape, StoreState};
 
 /// Family identifier.
 pub const FAMILY: &str = "c2.footprint";
@@ -48,6 +48,7 @@ pub fn cases() -> Vec<Case> {
                 .profile(if id.ends_with("low-v1") { "low-v1" } else { "" })
                 .cache(CacheState::PreparedDewarmed)
                 .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::ObjectSet)
                 .smoke_if(id.ends_with("unique-100-low-v1"))
                 .build()
         })

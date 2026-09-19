@@ -143,6 +143,21 @@ impl OpContext<'_> {
         Ok(true)
     }
 
+    /// The artifact directory a phase-split row's phases share.
+    ///
+    /// A row whose registry declaration says it needs a master is handed one by
+    /// `runner.py prepare` through `--emit-input` (acquisition) or `--load-input`
+    /// (every later phase). A row that declares a master and is handed none is a
+    /// driver defect and fails closed with that reason rather than rebuilding the
+    /// fixture inside the invocation the phases exist to keep it out of.
+    pub fn artifact_directory(&self) -> Result<PathBuf, OpError> {
+        self.prepared_input.clone().ok_or_else(|| {
+            OpError::Io(
+                "this row declares a prepared master and needs --emit-input/--load-input".to_string(),
+            )
+        })
+    }
+
     /// Ensures the case's output directory exists.
     ///
     /// The append-only refusal lives in `main`, which owns the decision about

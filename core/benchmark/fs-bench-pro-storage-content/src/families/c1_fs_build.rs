@@ -7,7 +7,7 @@
 //! is that quotient and the total stays the declared one.
 
 use super::{leak, CaseSpec};
-use crate::registry::{CacheState, Case, Shape};
+use crate::registry::{CacheState, Case, Preparation, Shape};
 
 /// Family identifier.
 pub const FAMILY: &str = "c1.fs.build-scale";
@@ -40,6 +40,7 @@ pub fn cases() -> Vec<Case> {
                     .entry_tier(index, *files, if text { "text" } else { "binary" })
                     .profile(if text { "text-v1" } else { "" })
                     .cache(CacheState::WarmInProcessFixture)
+                    .prepared(Preparation::InputTree)
                     .smoke_if(index == 0 && !text)
                     .build(),
             );

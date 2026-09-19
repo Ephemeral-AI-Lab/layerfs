@@ -18,6 +18,7 @@ state, and the rung's status follows it.
 from __future__ import annotations
 
 import ctypes
+from collections.abc import Callable
 import hashlib
 import os
 import shutil
@@ -421,13 +422,41 @@ def e4_tree_fidelity(root: Path) -> Experiment:
 W2_SAVE_CASE = "dedup-cross-file-unique-10"
 
 
+def prepared_case(case_id: str) -> bool:
+    """Whether the registry declares a prepared master for one case.
+
+    Read from the golden registry table beside this module rather than from a list
+    kept here: a family that gains or loses a phase split must not also need a
+    second edit in the calibration arms.
+    """
+    table = Path(__file__).resolve().parent.parent / "tests" / "golden" / "registry.tsv"
+    for line in table.read_text(encoding="utf-8").splitlines()[1:]:
+        fields = line.split("\t")
+        if fields and fields[0] == case_id:
+            return len(fields) > 12 and fields[12] not in ("", "-")
+    return False
+
+
 def _run_child(
-    binary: Path, case_id: str, out: Path, store: Path | None = None
+    binary: Path,
+    case_id: str,
+    out: Path,
+    store: Path | None = None,
+    load_input: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """Runs one harness case as its own process."""
+    """Runs one harness case as its own process.
+
+    `load_input` hands the child the prepared master its registry row declares. A
+    row that declares one and is handed none fails closed with `NOT_RUN` — its
+    driver reads its fixture from the artifact and does not rebuild it inside the
+    invocation the phase split exists to keep it out of — so an arm that drives
+    such a case without this would report a product refusal that never happened.
+    """
     command = [str(binary), "--case", case_id, "--out", str(out)]
     if store is not None:
         command += ["--store", str(store)]
+    if load_input is not None:
+        command += ["--load-input", load_input]
     environment = dict(os.environ)
     environment["LAYERFS_CONSTRUCTION_WORKERS"] = "1"
     return subprocess.run(command, capture_output=True, text=True, check=False, env=environment)
@@ -501,7 +530,11 @@ def w1_watermark_refusal(root: Path, harness_binary: Path) -> Experiment:
     return experiment
 
 
-def w2_declared_process_kill(root: Path, harness_binary: Path) -> Experiment:
+def w2_declared_process_kill(
+    root: Path,
+    harness_binary: Path,
+    artifact_of: Callable[[str], str | None] | None = None,
+) -> Experiment:
     """W2: a declared process kill leaves a Store the product refuses to reuse.
 
     `CONTRACT.md` section 7 asks for the failure / unknown-outcome / cleanup bullet
@@ -540,15 +573,27 @@ def w2_declared_process_kill(root: Path, harness_binary: Path) -> Experiment:
     marker = root / "w2-held.marker"
     if marker.exists():
         marker.unlink()
+    master = artifact_of(W2_SAVE_CASE) if artifact_of is not None else None
+    if prepared_case(W2_SAVE_CASE) and master is None:
+        experiment.outcome = "REFUTED"
+        experiment.notes.append(
+            f"{W2_SAVE_CASE} declares a prepared master and none was acquired, so the "
+            "save the arm kills could not be started"
+        )
+        return experiment
+    experiment.fields["victim_load_input"] = master or ""
+    victim_command = [
+        str(harness_binary),
+        "--case", W2_SAVE_CASE,
+        "--out", str(victim_out),
+        "--hold-save", str(marker),
+        "--hold-at", "accept",
+        "--hold-ns", str(60 * 1_000_000_000),
+    ]
+    if master is not None:
+        victim_command += ["--load-input", master]
     child = subprocess.Popen(
-        [
-            str(harness_binary),
-            "--case", W2_SAVE_CASE,
-            "--out", str(victim_out),
-            "--hold-save", str(marker),
-            "--hold-at", "accept",
-            "--hold-ns", str(60 * 1_000_000_000),
-        ],
+        victim_command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -588,7 +633,7 @@ def w2_declared_process_kill(root: Path, harness_binary: Path) -> Experiment:
 
     # The control: the identical save, run to completion, no hold and no kill.
     control_out = root / "w2-control-run"
-    control_run = _run_child(harness_binary, W2_SAVE_CASE, control_out)
+    control_run = _run_child(harness_binary, W2_SAVE_CASE, control_out, load_input=master)
     experiment.fields["control_run_stdout"] = control_run.stdout.strip()
     control = control_out / "sample.sqlite"
     if not control.exists():
@@ -700,9 +745,19 @@ def w4_sealed_call_graph() -> Experiment:
 
 
 def run_all(
-    harness_binary: Path, repo_root: Path, work_root: Path | None = None
+    harness_binary: Path,
+    repo_root: Path,
+    work_root: Path | None = None,
+    artifact_of: Callable[[str], str | None] | None = None,
 ) -> list[Experiment]:
-    """Runs E1-E4 and the three designed arms, failures included."""
+    """Runs E1-E4 and the three designed arms, failures included.
+
+    `artifact_of` resolves the prepared master a calibration arm's child needs, and
+    acquires it once if it is missing. An arm that drives a registry case whose
+    fixture is a prepared master cannot start that child without one, and an arm
+    that silently ran a `NOT_RUN` child would report a product refusal that never
+    happened.
+    """
     results: list[Experiment] = []
     with tempfile.TemporaryDirectory(dir=str(work_root) if work_root else None) as directory:
         root = Path(directory)
@@ -711,7 +766,7 @@ def run_all(
         results.append(e3_quiescent_store(root, harness_binary, repo_root))
         results.append(e4_tree_fidelity(root))
         results.append(w1_watermark_refusal(root, harness_binary))
-        results.append(w2_declared_process_kill(root, harness_binary))
+        results.append(w2_declared_process_kill(root, harness_binary, artifact_of))
         results.append(w4_sealed_call_graph())
     return results
 

@@ -7,7 +7,7 @@
 //! 128 rather than the tier.
 
 use super::{leak, CaseSpec, ENTRY_LADDER};
-use crate::registry::{CacheState, Case, ReuseOp, Shape, StoreState};
+use crate::registry::{CacheState, Case, Preparation, ReuseOp, Shape, StoreState};
 
 /// Family identifier.
 pub const CROSS_FILE: &str = "c2.reuse.cross-file";
@@ -29,6 +29,7 @@ pub fn cross_file() -> Vec<Case> {
         .entry_tier(0, 1, "1")
         .cache(CacheState::PreparedDewarmed)
         .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::ObjectSet)
         .smoke()
         .build(),
     );
@@ -48,6 +49,7 @@ pub fn cross_file() -> Vec<Case> {
                 .entry_tier(index, *entries, label)
                 .cache(CacheState::PreparedDewarmed)
                 .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::ObjectSet)
                 .build(),
             );
         }
@@ -75,6 +77,7 @@ pub fn workspace() -> Vec<Case> {
                 .profile("compact-v2")
                 .cache(CacheState::PreparedDewarmed)
                 .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::BaseStore)
                 .smoke_if(index == 0 && name == "exact")
                 .build(),
             );
@@ -91,6 +94,7 @@ pub fn workspace() -> Vec<Case> {
             .profile("base128-v3")
             .cache(CacheState::PreparedDewarmed)
             .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::BaseStore)
             .build(),
         );
     }

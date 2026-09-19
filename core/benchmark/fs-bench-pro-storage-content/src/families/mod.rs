@@ -25,7 +25,7 @@ pub mod c2_reuse;
 pub mod component_primitives;
 pub mod pipeline;
 
-use crate::registry::{Admission, CacheState, Case, Shape, StoreState};
+use crate::registry::{Admission, CacheState, Case, Preparation, Shape, StoreState};
 
 /// Registry groups, in frozen cardinality order.
 ///
@@ -130,6 +130,7 @@ impl CaseSpec {
                 smoke: false,
                 cache: CacheState::WarmInProcessFixture,
                 store: StoreState::None,
+                prepared: Preparation::InProcess,
                 shape,
             },
         }
@@ -166,6 +167,12 @@ impl CaseSpec {
     /// Declared Store state.
     pub fn store(mut self, store: StoreState) -> Self {
         self.case.store = store;
+        self
+    }
+
+    /// Declared preparation: acquired once, or built inside the row's invocation.
+    pub fn prepared(mut self, prepared: Preparation) -> Self {
+        self.case.prepared = prepared;
         self
     }
 

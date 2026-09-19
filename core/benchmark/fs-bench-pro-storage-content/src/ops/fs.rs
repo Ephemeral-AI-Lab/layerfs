@@ -15,7 +15,8 @@
 //! construction, so the expectation comes from [`fs_fixture`] and never from the
 //! mutated Store.
 
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking};
 use layerfs_content::filesystem::{
@@ -27,11 +28,12 @@ use layerfs_content::{DiscardingConsumer, ObjectId};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 
 use super::fs_fixture::{PreparedTree, Recipe, ROOT_SERIAL};
-use super::{OpContext, OpError, OpOutcome};
+use super::{OpContext, OpError, OpOutcome, Phase};
 use crate::gates::{self, Gate, GateClass};
 use crate::registry::{Case, LocalityOp, TinyOp, TreeOp};
 use crate::support::instruments::{self, HeapWindow};
 use crate::support::trace::Kind;
+use crate::workload::artifact::{Artifact, Member};
 use crate::workload::providers::{PairProvider, SharedStore, TreeStore};
 
 /// Entries per listing page the O4 oracle reads.
@@ -571,6 +573,14 @@ pub fn locality(
 }
 
 /// C1-11: filesystem build only, at the declared ladder tier.
+///
+/// **Phase split.** The measured operation *is* the build, so the build must not
+/// be prepared — but the *input* it is handed is a fixture, and at the 100,000-file
+/// tier deriving it costs seconds of setup the row pays before its own timer. The
+/// registry declares `Preparation::InputTree`, so the input is acquired once and
+/// every later phase loads the same bytes. `ops::fs_fixture` already recomputes
+/// every derived view from the loaded input, so a loaded artifact cannot disagree
+/// with a built one about what it contains.
 pub fn fs_build(
     case: &Case,
     text: bool,
@@ -586,6 +596,15 @@ pub fn fs_build(
         directories,
         seed,
     };
+    if context.phase == Phase::Prepare {
+        return fs_build_prepare(case, &recipe, context);
+    }
+    if context.phase == Phase::Verify {
+        return Err(OpError::Io(
+            "c1.fs.build-scale declares an in-process oracle and has no deferred verification phase"
+                .to_string(),
+        ));
+    }
     let prepared = prepared_for(&recipe, context)?;
     if let Err(defect) = prepared.check() {
         return Ok(unmeasured(&OpError::Io(defect), Vec::new()));
@@ -598,7 +617,14 @@ pub fn fs_build(
     // `run_batched_build_row` carries the gate that says so with the batch sizes
     // it actually used. Exactly one gate owns the identifier per row.
     if prepared.bindings() > WALK_CEILING {
-        return run_batched_build_row(case, &prepared, scope, context, "fs_build");
+        // The chain is the input and the oracle, and it was acquired once. It is
+        // loaded here rather than replayed: replaying it inside the performance
+        // invocation charges the same 33 operations to preparation that the row
+        // then charges again to its own timer, and neither copy is the row's claim.
+        let artifact = Artifact::read(&context.artifact_directory()?)
+            .map_err(|error| OpError::Io(error))?;
+        let chain = chain_of(artifact)?;
+        return run_batched_build_row(case, &prepared, scope, context, "fs_build", &chain);
     }
     let gates = if case.entries >= WALK_CEILING as u32 {
         vec![gates::require(
@@ -735,6 +761,21 @@ fn fixture_chain(
     Ok((fixture, roots))
 }
 
+/// The fixture chain a batched build reads its bases from, and the roots it
+/// produced.
+///
+/// The chain is the **input** the measured batches read through and the **oracle**
+/// their roots are compared against. `ops::fs_build`'s acquisition builds it once
+/// and persists both halves: a row at the 100,000-file tier pays the same
+/// operations twice otherwise, once before its timer and once inside it, and the
+/// chain is neither the row's claim nor a measured result.
+struct PreparedChain {
+    /// The objects every batch's base names.
+    fixture: TreeStore,
+    /// The root each batch produced, in batch order.
+    roots: Vec<FilesystemRootId>,
+}
+
 /// A row whose measured phase builds a tree larger than one walk may charge.
 ///
 /// `MAXIMUM_WALK_ENTRIES` is charged once per whole-tree walk and a build states
@@ -749,12 +790,14 @@ fn run_batched_build_row(
     scope: layerfs_content::InodeScope,
     context: &mut OpContext<'_>,
     label: &'static str,
+    chain: &PreparedChain,
 ) -> Result<OpOutcome, OpError> {
     let batches = match prepared.batches(WALK_CEILING) {
         Ok(batches) => batches,
         Err(defect) => return Ok(unmeasured(&OpError::Io(defect), Vec::new())),
     };
-    let (fixture, fixture_roots) = fixture_chain(&batches, scope, context)?;
+    let fixture = &chain.fixture;
+    let fixture_roots = &chain.roots;
     let Some(fixture_root) = fixture_roots.last().copied() else {
         return Ok(unmeasured(
             &OpError::Io("the batch plan is empty".to_string()),
@@ -773,7 +816,7 @@ fn run_batched_build_row(
     let (outcome, report) = super::measure(label, |_timing: &TimingScope<'_, Active>| {
         let mut base = None;
         for (index, batch) in batches.iter().enumerate() {
-            let measured = measure_batch(batch, base, scope, &fixture, &mut backings[index])?;
+            let measured = measure_batch(batch, base, scope, fixture, &mut backings[index])?;
             roots.push(measured.result.root);
             objects.objects_read += measured.objects.objects_read;
             objects.read_waves += measured.objects.read_waves;
@@ -844,14 +887,14 @@ fn run_batched_build_row(
     gates.push(gates::require(
         GateClass::Correctness,
         "g1.o4-chain-roots",
-        roots == fixture_roots,
+        roots == *fixture_roots,
         &format!("{} batch roots reproduced", roots.len()),
         &format!(
             "{} roots from the unmeasured fixture chain",
             fixture_roots.len()
         ),
     ));
-    let listing = listings_match(&fixture, fixture_root, prepared)?;
+    let listing = listings_match(fixture, fixture_root, prepared)?;
     match listing {
         Ok(directories) => {
             context.trace.write_number(
@@ -911,6 +954,131 @@ fn ladder(files: u32) -> (u32, u64, u32) {
         10_000 => (10_000, 314_572_800, 100),
         other => (other, 524_288_000, 1_000),
     }
+}
+
+/// C1-11 `prepare`: acquire the input tree, and — for a tier above the walk
+/// ceiling — the fixture chain every batch's base is read from.
+///
+/// Nothing here is measured. The chain is built by the same product entry points
+/// the measured row uses, into an authenticating `TreeStore`, and both halves are
+/// persisted: the objects as the artifact's packed object set, the per-batch roots
+/// as its members. A later phase loads them instead of replaying them.
+fn fs_build_prepare(
+    case: &Case,
+    recipe: &Recipe,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    let directory = context.artifact_directory()?;
+    let prepared = prepared_for(recipe, context)?;
+    let scope = scope_of(recipe.seed);
+    let mut artifact = Artifact::new(TreeStore::new());
+    let mut chained = 0_usize;
+    if prepared.bindings() > WALK_CEILING {
+        let batches = match prepared.batches(WALK_CEILING) {
+            Ok(batches) => batches,
+            Err(defect) => return Ok(unmeasured(&OpError::Io(defect), Vec::new())),
+        };
+        let (fixture, roots) = fixture_chain(&batches, scope, context)?;
+        artifact = Artifact::new(fixture);
+        artifact.members = roots
+            .iter()
+            .map(|root| Member {
+                ids: Vec::new(),
+                // `FilesystemRootId` is a newtype over the root object's identity,
+                // so the persisted member root is the object the batch published.
+                root: root.0,
+                expectation: None,
+            })
+            .collect();
+        chained = batches.len();
+        artifact.values.set_scalar("chained", 1);
+        artifact.values.set_scalar("batches", chained as u64);
+    }
+    artifact.values.set_scalar("bindings", prepared.bindings() as u64);
+    artifact.values.set_scalar("entries", u64::from(recipe.entries));
+    let written = artifact
+        .write(&directory)
+        .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+    seal_input_tree(&directory, case.id, &prepared, &artifact)?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.bindings",
+        prepared.bindings() as i128,
+        "bindings",
+        "final bindings the prepared input states",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.entries",
+        i128::from(recipe.entries),
+        "files",
+        "regular files the prepared input declares",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "prepare.objects",
+        written as i128,
+        "objects",
+        "distinct canonical objects the artifact holds",
+    )?;
+    Ok(OpOutcome {
+        gates: Vec::new(),
+        notes: vec![
+            format!("prepare_recipe_profile: {}", recipe.profile),
+            format!("prepare_recipe_entries: {}", recipe.entries),
+            format!("prepare_recipe_directories: {}", recipe.directories),
+            format!("prepare_chained_batches: {chained}"),
+            format!("artifact: {}", directory.display()),
+            "acquisition: not a measured phase; charged to acquisition_wall_ns".to_string(),
+        ],
+    })
+}
+
+/// The chain a prepared artifact carries: its objects and its per-batch roots.
+fn chain_of(artifact: Artifact) -> Result<PreparedChain, OpError> {
+    if artifact.values.scalar("chained").unwrap_or(0) == 0 {
+        return Err(OpError::Io(
+            "this tier is above the walk ceiling and its artifact carries no prepared chain"
+                .to_string(),
+        ));
+    }
+    if artifact.members.is_empty() {
+        return Err(OpError::Io(
+            "the prepared chain declares no batch roots".to_string(),
+        ));
+    }
+    Ok(PreparedChain {
+        fixture: artifact.objects,
+        roots: artifact.members.iter().map(|member| FilesystemRootId(member.root)).collect(),
+    })
+}
+
+/// Writes the completion marker of a prepared filesystem input.
+///
+/// The object-set artifact has [`crate::workload::artifact::Artifact::seal`]; an
+/// input tree is not an object set, so it carries its own marker with the two
+/// numbers that identify it. `runner.py` covers both with the same manifest, the
+/// same compatibility key and the same seal, because both are one prepared master.
+fn seal_input_tree(
+    directory: &Path,
+    case_id: &str,
+    prepared: &PreparedTree,
+    artifact: &Artifact,
+) -> Result<(), OpError> {
+    let path = directory.join("sealed.tsv");
+    let mut file = std::fs::File::create(&path)
+        .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
+    for line in [
+        format!("case\t{case_id}"),
+        "kind\tinput-tree".to_string(),
+        format!("bindings\t{}", prepared.bindings()),
+        format!("entries\t{}", prepared.recipe.entries),
+        format!("objects\t{}", artifact.objects.len()),
+        format!("members\t{}", artifact.members.len()),
+    ] {
+        writeln!(file, "{line}").map_err(|error| OpError::Io(error.to_string()))?;
+    }
+    file.flush().map_err(|error| OpError::Io(error.to_string()))
 }
 
 /// Builds or loads the prepared input, honouring `--emit-input`/`--load-input`.

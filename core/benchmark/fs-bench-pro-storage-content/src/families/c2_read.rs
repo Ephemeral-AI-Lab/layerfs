@@ -7,7 +7,7 @@
 //! `ceil(ids / 128)`.
 
 use super::{leak, CaseSpec, BYTE_LADDER};
-use crate::registry::{CacheState, Case, Shape, StoreState};
+use crate::registry::{CacheState, Case, Preparation, Shape, StoreState};
 
 /// Family identifier.
 pub const FAMILY: &str = "c2.read.waves";
@@ -29,6 +29,7 @@ pub fn cases() -> Vec<Case> {
                 .profile(profile)
                 .cache(CacheState::PreparedDewarmed)
                 .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::BaseStore)
                 .smoke_if(index == 0)
                 .build()
         })

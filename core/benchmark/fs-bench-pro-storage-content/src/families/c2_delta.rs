@@ -9,7 +9,7 @@
 //! under its parent family.
 
 use super::{leak, CaseSpec, ENTRY_LADDER};
-use crate::registry::{CacheState, Case, DeltaOp, Shape, StoreState};
+use crate::registry::{CacheState, Case, DeltaOp, Preparation, Shape, StoreState};
 
 /// Family identifier.
 pub const CDC_LOCALITY: &str = "c2.delta.cdc-locality";
@@ -43,6 +43,7 @@ pub fn cdc_locality() -> Vec<Case> {
                 .entry_tier(index, *entries, label)
                 .cache(CacheState::PreparedDewarmed)
                 .store(StoreState::OpenedFromCopy)
+                .prepared(Preparation::BaseStore)
                 .smoke_if(index == 0 && name == "overwrite")
                 .build(),
             );

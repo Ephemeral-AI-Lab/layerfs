@@ -7,7 +7,7 @@
 //! a finding and reports `FAIL`, not a renamed case.
 
 use super::{leak, CaseSpec, BYTE_LADDER};
-use crate::registry::{CacheState, Case, CountOp, Shape};
+use crate::registry::{CacheState, Case, CountOp, Preparation, Shape};
 
 /// Family identifier.
 pub const FAMILY: &str = "c1.cdc.chunk-count";
@@ -38,6 +38,7 @@ pub fn cases() -> Vec<Case> {
                 )
                 .byte_tier(index, *bytes, label)
                 .cache(CacheState::WarmInProcessFixture)
+                .prepared(Preparation::ObjectSet)
                 .smoke_if(index == 0 && op == CountOp::Preserve)
                 .build(),
             );

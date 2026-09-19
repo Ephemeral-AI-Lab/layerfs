@@ -8,7 +8,7 @@
 //! byte-exact readback, so the oracle never reads the mutation's own output.
 
 use super::{leak, CaseSpec, BYTE_LADDER};
-use crate::registry::{CacheState, Case, EditOp, Shape};
+use crate::registry::{CacheState, Case, EditOp, Preparation, Shape};
 
 /// Family identifier.
 pub const LENGTH_PRESERVING: &str = "c1.edit.length-preserving";
@@ -41,6 +41,7 @@ pub fn length_preserving() -> Vec<Case> {
                 )
                 .byte_tier(index, *bytes, label)
                 .cache(CacheState::WarmInProcessFixture)
+                .prepared(Preparation::ObjectSet)
                 .smoke_if(index == 0 && name == "middle")
                 .build(),
             );
@@ -72,6 +73,7 @@ pub fn length_changing() -> Vec<Case> {
                 )
                 .byte_tier(index, *bytes, label)
                 .cache(CacheState::WarmInProcessFixture)
+                .prepared(Preparation::ObjectSet)
                 .smoke_if(index == 0 && name == "insert-middle-4k")
                 .build(),
             );
