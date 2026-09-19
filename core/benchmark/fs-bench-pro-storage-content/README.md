@@ -269,29 +269,46 @@ Recorded here so a reader is not misled by the sections above.
 
 **Still not true.**
 
-- **Six admission rows exceed the 1.0 s per-row preparation target** — four in one earlier
+- **Six admission rows exceed the 1.0 s per-row preparation ceiling** — four in one earlier
   lane of the same binary, because the boundary rows sit within a few per cent of it and flip
   across it between runs — and two of them (`payload-create-500m`,
-  `payload-create-chunked-500m`) are the rows the assignment forbids preparing. A prepared master is loaded by reading its packed object set and
-  re-identifying every object: at 500 MiB that is a ~0.5 GB read plus ~0.5 GB of BLAKE3,
-  before any other work in the phase. Lazy loading would break the declared
-  `warm-in-process-fixture` state. **T1 needs its ruling.**
-- **`prepare --lane full` is 143.5 s against its 90 s ceiling** (129.5 s of acquisition
-  over 118 masters, 15.567 GB; an independent cold re-run measured 139.4 s and 127.9 s),
-  having acquired six families' masters for the first time. Round 5 passed at 75.39 s only because only twenty
-  masters existed. The acquisition is untimed and once per compatibility digest, and it is
-  what makes the 200 s lane target reachable. **T2/T3 need their ruling.**
-- **The quick lane is not fast, and the quick *default* does not make it fast.** #184
-  section 10.3 (owner directive) fixes the default: *"Quick is the default for iteration
-  (`--lane smoke` and explicit `--case` runs); an admission run is `full` or declares itself
-  otherwise and is ineligible."* That rule is implemented — a whole-lane run resolves to
-  `full`, anything narrower to `sample`, and `--verify` wins — but the ≤ 70 s target is a
-  separate thing and is not met. `--verify none` skips the *deferred* verification
-  invocation, which only `c2.delta.cdc-locality` has: 0.829 s of a 176.3 s lane. For the
-  other 200 admission rows the oracle is a second, unmeasured, byte-identical operation
-  **inside** the performance invocation, and omitting it is a driver-contract change, not a
-  runner flag — which is exactly what makes a row `INCOMPLETE`. **Decision 3 needs its
-  ruling.**
+  `payload-create-chunked-500m`) are the rows the assignment forbids preparing.
+  **Amended by owner direction, 2026-09-19:** the ceiling excludes the declared
+  `acquisition_wall_ns`, which owner decision D2 already puts outside the row's admission
+  decision and which is a per-sample copy the harness makes rather than fixture work. That
+  takes `dedup-workspace-unique-500-compact-v2` from 1.243 s to about 0.9 s. **What remains
+  is a floor, not a defect:** a prepared master is loaded by reading its packed object set
+  and re-identifying every object — `FinalizedObject::new` hashes, and the harness cannot
+  skip that without a product change — which is 0.7–1.2 s at 500 MiB, and lazy loading would
+  break the declared `warm-in-process-fixture` state. Three rows therefore sit 3–4% over the
+  ceiling, inside the measurement's own spread, and are reported as over.
+- **`prepare --lane full` is 143.5 s** (129.5 s of acquisition over 118 masters, 15.567 GB;
+  an independent cold re-run measured 139.4 s and 127.9 s). **Amended by owner direction,
+  2026-09-19:** the `<= 90 s` ceiling is replaced by *reported, and it pays for itself within
+  two lane runs* — 129.5 s once against 98.2 s of lane preparation removed per run. Round 5
+  met 75.39 s **by not doing the work** (six families had no master), and a ceiling on a
+  once-per-digest acquisition creates that incentive.
+- **A whole-lane quick run is not faster than a whole-lane full run.** **Amended by owner
+  direction, 2026-09-19: the `<= 70 s` target is withdrawn.** It was derived from a ~106 s
+  verification saving that no longer exists — lane verification is 68.8 s and only 0.829 s of
+  it is skippable, because the deferred invocation exists for one family — and the rest is
+  required by the frozen per-family oracles and the pinned-constant gates, where omitting it
+  makes a row `INCOMPLETE` by the owner's own rule. The mode *default* the directive fixes is
+  implemented: #184 section 10.3 says *"Quick is the default for iteration (`--lane smoke` and
+  explicit `--case` runs); an admission run is `full` or declares itself otherwise and is
+  ineligible"*, so a whole-lane run resolves to `full` and anything narrower to `sample`,
+  with `--verify` winning. That is what makes iteration cheap — 0.6 s for the smoke lane,
+  0.1 s for one case, against 0.06 s for `verify --reuse-pass`.
+- **The harness's own SHA-256 is the floor under the last preparation item, and speeding it up
+  is blocked.** `payload-create-500m` and `payload-create-chunked-500m` spend 2.36 s and 2.33 s
+  almost entirely hashing their fixture at ≈0.24 GB/s, and a 3–4× faster SHA-256 with
+  identical output would take them under 1.0 s and the lane preparation under 25 s. It is not
+  done because the same `Sha256` is used **inside a timer** in one place —
+  `ops/fs.rs::run_traverse_row`, hashing each file's `content_root` for the traversal digest —
+  so a faster one would make `operation_ns` fall, which the round's most important guard
+  rejects. The in-timer work is 78,208 bytes across the whole lane: **0.32 ms**, or 4×10⁻⁶ of
+  `sum(operation_ns)`, and 0.87–2.70% of each of the eight affected rows. **This needs its own
+  ruling**, not a work item.
 - **`FilesystemRead::inode` (owner ruling 2) is not done.** It needs a product-source
   change and a test pinning both sides. Reported as a blocker rather than guessed at.
 - **The harness identity does not cover the harness's own Python.** A receipt names the Rust

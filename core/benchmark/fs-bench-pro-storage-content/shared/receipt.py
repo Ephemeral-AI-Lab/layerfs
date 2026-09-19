@@ -81,6 +81,7 @@ class Identity:
     harness_root: str
     harness_binary: str | None
     harness_binary_sha256: str | None
+    harness_python_sha256: str
     product_lock_sha256: str
     harness_lock_sha256: str
     registry_tsv_sha256: str
@@ -98,6 +99,7 @@ class Identity:
             "harness_root": self.harness_root,
             "harness_binary": self.harness_binary,
             "harness_binary_sha256": self.harness_binary_sha256,
+            "harness_python_sha256": self.harness_python_sha256,
             "product_lock_sha256": self.product_lock_sha256,
             "harness_lock_sha256": self.harness_lock_sha256,
             "registry_tsv_sha256": self.registry_tsv_sha256,
@@ -107,6 +109,32 @@ class Identity:
             "python": self.python,
             "started_utc": self.started_utc,
         }
+
+
+def harness_python_digest(harness_root: str | Path) -> str:
+    """One digest over the harness's own Python: `runner.py` and every `shared/*.py`.
+
+    A receipt names the Rust binary's sha256, both lockfiles and the registry table,
+    and **none of those covers the half of the harness that decides what a run
+    does**. The verification mode and its default, the acquisition decision, the
+    budget classification, the phase composition and the oracle's reader all live in
+    `runner.py` and `shared/`. Round 5b changed the default verification mode in
+    `runner.py` and every identity field stayed exactly where it was, so two runs
+    that could produce different statuses carried the same identity — and a reader
+    who trusted `harness_binary_sha256` would have been misled about the half it
+    does not name.
+
+    The digest is over `(path, sha256)` pairs in sorted path order, so a rename moves
+    it and an mtime change does not. It is computed from the files on disk, so a
+    dirty Python file moves it for the same reason a dirty Rust file moves the
+    source seal: the run is not the run the receipt claims.
+    """
+    harness_root = Path(harness_root)
+    entries: list[str] = []
+    for path in [harness_root / "runner.py", *sorted((harness_root / "shared").glob("*.py"))]:
+        if path.is_file():
+            entries.append(f"{path.relative_to(harness_root)}\t{sha256_file(path)}")
+    return sha256_bytes("\n".join(entries).encode("utf-8"))
 
 
 def identify(
@@ -128,6 +156,7 @@ def identify(
         harness_binary_sha256=(
             sha256_file(binary_path) if binary_path and binary_path.exists() else None
         ),
+        harness_python_sha256=harness_python_digest(harness_root),
         product_lock_sha256=sha256_file(repo_root / "core" / "Cargo.lock"),
         harness_lock_sha256=sha256_file(harness_root / "Cargo.lock"),
         registry_tsv_sha256=sha256_file(harness_root / "tests" / "golden" / "registry.tsv"),

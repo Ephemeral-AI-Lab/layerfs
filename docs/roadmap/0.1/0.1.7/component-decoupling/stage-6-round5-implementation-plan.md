@@ -734,6 +734,58 @@ on the per-row targets**, which are the robust ones: preparation `<= 1.0 s` at e
 tier (tight for the C1 edit 500 MiB rows), cleanup `<= 0.5 s`, and the golden number
 unchanged.
 
+### Amended by owner direction, 2026-09-19 (round 5b)
+
+Round 5b measured the preparation half and found three of these lines cannot both hold
+with what they are measured against. **The owner directed that the round-5b
+recommendation be applied**, so these three replace the lines above; every other line
+stands unchanged. The receipt that carries the measurements is
+[`../evidence/stage-6-round5b-20260919T000000Z/`](../evidence/stage-6-round5b-20260919T000000Z/README.md).
+
+1. **The per-row preparation ceiling excludes the declared acquisition.** `<= 1.0 s` is
+   unchanged, and it now measures what it was written to measure — fixture acquisition
+   and load — rather than the per-sample copy the harness makes. Owner decision D2
+   already puts `acquisition_wall_ns` *outside the row's admission decision*; it sat
+   inside `preparation_wall_ns` only because the copy is a subset of setup. Both fields
+   are still published and still summed for the lane. Measured: it takes
+   `dedup-workspace-unique-500-compact-v2` from 1.243 s to about 0.9 s.
+   **What is left is a floor, not a defect:** a prepared master is loaded by reading its
+   packed object set and re-identifying every object (`FinalizedObject::new` hashes, and
+   the harness cannot skip that without a product change), which is 0.7–1.2 s at 500 MiB.
+   Three rows therefore sit at 1.03–1.04 s against a 1.0 s ceiling — 3–4% over, and
+   inside the measurement's own spread, since three lanes of one binary measured four,
+   six and six rows over. They are reported as over, not as passes and not as misses.
+2. **`prepare --lane full <= 90 s` is replaced** by *reported, and it pays for itself
+   within two lane runs*. Round 5 met 75.39 s **by not doing the work** — six families had
+   no master, so there was nothing to acquire — and a ceiling on a once-per-digest
+   acquisition creates exactly that incentive. Measured: 129.5 s of acquisition once
+   against 98.2 s of lane preparation removed per run, so it breaks even at the second
+   run. It is still reported, with its size and its master count, in the prepare manifest
+   and in the receipt.
+3. **`lane, warm, quick mode <= 70 s` is withdrawn.** It was derived from a ~106 s
+   verification saving that no longer exists: lane verification is **68.8 s**, and only
+   **0.829 s** of it is skippable, because the deferred invocation exists for one family.
+   The rest is required by the frozen per-family oracles and by the pinned-constant
+   gates, and omitting it makes a row `INCOMPLETE` by the owner's own rule. Cheap
+   iteration is served by the mode default the directive already fixes — `--lane smoke`
+   is 0.6 s, an explicit `--case` 0.1 s — and by `verify --reuse-pass` at 0.06 s. **A
+   whole-lane quick run is not cheaper than a whole-lane full run**, and the ladder says
+   so rather than implying otherwise.
+
+**One route is blocked rather than ruled, and it needs its own ruling.** The two
+`c1.construct.*` 500 MiB rows spend 2.36 s and 2.33 s of preparation almost entirely
+hashing their fixture with the harness's scalar SHA-256 (≈0.24 GB/s, derived from round
+5b's own V6 measurement). A 3–4× faster SHA-256 with byte-identical output would take
+them under 1.0 s and the lane preparation under 25 s. It is **not done**, because the
+harness uses that same `Sha256` inside a timer in exactly one place —
+`ops/fs.rs::run_traverse_row`, hashing each file's `content_root` for the traversal
+digest — so making it faster would make `operation_ns` fall, which the round's most
+important guard rejects. The arithmetic: 78,208 bytes are hashed in-timer across the
+whole lane, **0.32 ms**, which is 4×10⁻⁶ of `sum(operation_ns)` and 0.87–2.70% of each
+of the eight affected rows' operations. A ruling that harness instrument work inside a
+timer may be made cheaper (it is the class `handoff_ns` exists to make visible) would
+unblock the largest remaining preparation item.
+
 
 ### 16.4 Rulings (owner, 2026-09-19) — do not re-open these
 

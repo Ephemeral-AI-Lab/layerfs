@@ -143,6 +143,10 @@ def sample_size(units: int) -> int:
 REUSED_PROOF_IDENTITY_FIELDS = (
     "source_commit",
     "harness_binary_sha256",
+    # The harness's own Python. It decides what a run *does* — the verification
+    # mode and its default, the acquisition decision, the phase composition — and a
+    # proof offered against a different `runner.py` is a proof of a different run.
+    "harness_python_sha256",
     "product_lock_sha256",
     "harness_lock_sha256",
     "registry_tsv_sha256",
