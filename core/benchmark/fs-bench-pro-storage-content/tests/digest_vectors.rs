@@ -161,3 +161,72 @@ fn two_agreeing_wrong_digests_would_still_compare_equal() {
         "identical digests on both sides must compare equal, however wrong they are"
     );
 }
+
+/// The accelerated route and the portable route compute the same function.
+///
+/// **Why a differential test and not just the published vectors.** The vectors are
+/// four inputs; the harness hashes 15.6 GB of fixtures per acquisition and every
+/// O2 read-back in the campaign. An accelerated path that agreed on `""`, `"abc"`
+/// and the two padding edges but diverged on some block alignment would make every
+/// gate that depends on it compare one wrong number with another — the exact blind
+/// spot this file's header describes. So the two routes are run side by side over
+/// every length class: each residue of a block, both padding edges, several blocks,
+/// and a length large enough to leave the vector loop's prologue.
+#[test]
+fn the_accelerated_and_scalar_routes_agree() {
+    let bytes: Vec<u8> = (0..70_000_u32)
+        .map(|index| (index.wrapping_mul(2_654_435_761) >> 13) as u8)
+        .collect();
+
+    // Every length up to three blocks, so every `buffered` residue and both
+    // padding edges are covered.
+    for length in 0..=192_usize {
+        assert_eq!(
+            sha256(&bytes[..length]),
+            {
+                let mut hasher = Sha256::scalar();
+                hasher.update(&bytes[..length]);
+                hasher.finish()
+            },
+            "the two routes disagree at {length} bytes"
+        );
+    }
+    // And lengths that cross the block loop's boundaries and the multi-block path.
+    for length in [
+        193, 255, 256, 257, 511, 512, 1_000, 4_096, 65_535, 65_536, 69_999, 70_000,
+    ] {
+        assert_eq!(
+            sha256(&bytes[..length]),
+            {
+                let mut hasher = Sha256::scalar();
+                hasher.update(&bytes[..length]);
+                hasher.finish()
+            },
+            "the two routes disagree at {length} bytes"
+        );
+    }
+    // A streamed update in irregular pieces must agree with one shot, on both
+    // routes: the harness feeds the hasher 64 bytes at a time inside a timer and
+    // 500 MiB at a time outside one.
+    for piece in [1_usize, 7, 63, 64, 65, 1_024, 4_097] {
+        let mut streamed = Sha256::new();
+        for chunk in bytes[..40_000].chunks(piece) {
+            streamed.update(chunk);
+        }
+        let mut scalar = Sha256::scalar();
+        for chunk in bytes[..40_000].chunks(piece) {
+            scalar.update(chunk);
+        }
+        let streamed_digest = streamed.finish();
+        let scalar_digest = scalar.finish();
+        assert_eq!(
+            streamed_digest, scalar_digest,
+            "the routes disagree when fed {piece} bytes at a time"
+        );
+        assert_eq!(
+            scalar_digest,
+            sha256(&bytes[..40_000]),
+            "a {piece}-byte stream disagrees with one shot"
+        );
+    }
+}

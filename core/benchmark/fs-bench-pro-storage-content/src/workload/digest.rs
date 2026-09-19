@@ -35,6 +35,8 @@ pub struct Sha256 {
     buffer: [u8; 64],
     buffered: usize,
     length_bytes: u64,
+    /// Whether this hasher is pinned to the portable route.
+    scalar: bool,
 }
 
 impl Default for Sha256 {
@@ -44,13 +46,31 @@ impl Default for Sha256 {
 }
 
 impl Sha256 {
-    /// Empty hasher.
+    /// Empty hasher, on the fastest route this host has.
     pub const fn new() -> Self {
         Self {
             state: H0,
             buffer: [0; 64],
             buffered: 0,
             length_bytes: 0,
+            scalar: false,
+        }
+    }
+
+    /// Empty hasher pinned to the portable route.
+    ///
+    /// It exists for two reasons, and both are about knowing the two routes agree
+    /// rather than assuming it. A differential test is the only way to check them
+    /// on inputs the published vectors do not cover, and a digest has to be
+    /// reproducible on a host without the `sha2` feature. Nothing in the harness
+    /// uses it on a measurement path.
+    pub const fn scalar() -> Self {
+        Self {
+            state: H0,
+            buffer: [0; 64],
+            buffered: 0,
+            length_bytes: 0,
+            scalar: true,
         }
     }
 
@@ -99,28 +119,42 @@ impl Sha256 {
         out
     }
 
+    /// Compresses one block, by the fastest route this host has.
+    ///
+    /// **The digest is the same either way.** FIPS 180-4 is FIPS 180-4, and
+    /// `tests/digest_vectors.rs` anchors both routes to the standard's own vectors,
+    /// while `tests/digest_vectors.rs::the_accelerated_and_scalar_routes_agree`
+    /// runs them side by side over every length class. A faster route is therefore
+    /// a change to what the harness *costs*, never to what it *computes* — which is
+    /// the only reason it is admissible at all.
     fn compress(&mut self, block: &[u8; 64]) {
+        if !self.scalar {
+            #[cfg(target_arch = "aarch64")]
+            {
+                // The feature test is a relaxed load of a cached bitmask, so the
+                // per-block cost of asking is a branch; the per-block cost of *not*
+                // asking is several times the compression.
+                if std::arch::is_aarch64_feature_detected!("sha2") {
+                    // SAFETY: the `sha2` feature was just detected at runtime, which
+                    // is the precondition `#[target_feature(enable = "sha2")]`
+                    // states.
+                    unsafe { compress_sha2(&mut self.state, block) };
+                    return;
+                }
+            }
+        }
+        self.compress_scalar(block);
+    }
+
+    /// The message schedule both routes use, so they cannot diverge.
+    ///
+    /// One function rather than two copies: the accelerated route differs in how it
+    /// *rounds*, never in what the schedule is, and two transcriptions of
+    /// `w[i] = σ1(w[i-2]) + w[i-7] + σ0(w[i-15]) + w[i-16]` are two chances to
+    /// disagree.
+    fn compress_scalar(&mut self, block: &[u8; 64]) {
         let mut schedule = [0_u32; 64];
-        for index in 0..16 {
-            schedule[index] = u32::from_be_bytes([
-                block[index * 4],
-                block[index * 4 + 1],
-                block[index * 4 + 2],
-                block[index * 4 + 3],
-            ]);
-        }
-        for index in 16..64 {
-            let s0 = schedule[index - 15].rotate_right(7)
-                ^ schedule[index - 15].rotate_right(18)
-                ^ (schedule[index - 15] >> 3);
-            let s1 = schedule[index - 2].rotate_right(17)
-                ^ schedule[index - 2].rotate_right(19)
-                ^ (schedule[index - 2] >> 10);
-            schedule[index] = schedule[index - 16]
-                .wrapping_add(s0)
-                .wrapping_add(schedule[index - 7])
-                .wrapping_add(s1);
-        }
+        schedule_of(block, &mut schedule);
         let mut work = self.state;
         for index in 0..64 {
             let s1 = work[4].rotate_right(6) ^ work[4].rotate_right(11) ^ work[4].rotate_right(25);
@@ -146,6 +180,72 @@ impl Sha256 {
             self.state[index] = self.state[index].wrapping_add(work[index]);
         }
     }
+}
+
+/// Expands one block into its sixty-four message words.
+fn schedule_of(block: &[u8; 64], schedule: &mut [u32; 64]) {
+    for index in 0..16 {
+        schedule[index] = u32::from_be_bytes([
+            block[index * 4],
+            block[index * 4 + 1],
+            block[index * 4 + 2],
+            block[index * 4 + 3],
+        ]);
+    }
+    for index in 16..64 {
+        let s0 = schedule[index - 15].rotate_right(7)
+            ^ schedule[index - 15].rotate_right(18)
+            ^ (schedule[index - 15] >> 3);
+        let s1 = schedule[index - 2].rotate_right(17)
+            ^ schedule[index - 2].rotate_right(19)
+            ^ (schedule[index - 2] >> 10);
+        schedule[index] = schedule[index - 16]
+            .wrapping_add(s0)
+            .wrapping_add(schedule[index - 7])
+            .wrapping_add(s1);
+    }
+}
+
+/// The same compression through the ARMv8 SHA-256 instructions.
+///
+/// `SHA256H` performs four rounds on the `a..d` half of the working state and
+/// `SHA256H2` the same four on the `e..h` half, taking the **pre-round** `a..d` as
+/// its second operand; the message schedule is computed here, in the same words the
+/// scalar route uses. On Apple silicon these are the difference between roughly
+/// 14 cycles per byte and roughly 2, and the harness hashes 15.6 GB of fixtures per
+/// acquisition and 500 MiB per `c1.construct.*` row.
+///
+/// # Safety
+///
+/// The caller must have established that the `sha2` feature is present, which is
+/// what `#[target_feature(enable = "sha2")]` states and what the dispatch in
+/// [`Sha256::compress`] detects.
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "sha2")]
+unsafe fn compress_sha2(state: &mut [u32; 8], block: &[u8; 64]) {
+    use std::arch::aarch64::{vaddq_u32, vld1q_u32, vsha256h2q_u32, vsha256hq_u32, vst1q_u32};
+
+    let mut schedule = [0_u32; 64];
+    schedule_of(block, &mut schedule);
+
+    let mut abcd = vld1q_u32(state.as_ptr());
+    let mut efgh = vld1q_u32(state.as_ptr().add(4));
+    for group in 0..16 {
+        let words = vld1q_u32(schedule.as_ptr().add(group * 4));
+        let constants = vld1q_u32(K.as_ptr().add(group * 4));
+        let round = vaddq_u32(words, constants);
+        let previous = abcd;
+        abcd = vsha256hq_u32(abcd, efgh, round);
+        efgh = vsha256h2q_u32(efgh, previous, round);
+    }
+    vst1q_u32(
+        state.as_mut_ptr(),
+        vaddq_u32(vld1q_u32(state.as_ptr()), abcd),
+    );
+    vst1q_u32(
+        state.as_mut_ptr().add(4),
+        vaddq_u32(vld1q_u32(state.as_ptr().add(4)), efgh),
+    );
 }
 
 /// Parses a 64-character hex digest, refusing anything else.
