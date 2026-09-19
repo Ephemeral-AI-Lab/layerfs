@@ -1,0 +1,239 @@
+{
+  "arms": {
+    "baseline": {
+      "c1": "66bce8378b5e9ecb1135b1636f8ee2ffac46ccf5",
+      "c1_source": "baseline",
+      "c2": "66bce8378b5e9ecb1135b1636f8ee2ffac46ccf5",
+      "c2_source": "baseline",
+      "example": {
+        "exit_code": 0,
+        "identity_lines": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns <elapsed> updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ],
+        "stdout": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns 4279334 updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ]
+      },
+      "layerfs-content_differs_from_revision": [],
+      "layerfs-storage_differs_from_revision": [],
+      "manifest_sha256": "f725ca0938b031dcace95e301a94bb70f3dcd2b93de87cc218de1881af15b974",
+      "test": {
+        "exit_code": 0,
+        "passed": true,
+        "tail": [
+          "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s",
+          "     Running unittests ../../consumer/cross_revision.rs (/tmp/subst/target/debug/deps/cross_revision-aa193eded218f40e)",
+          "     Running ../../consumer/core_pipeline.rs (/tmp/subst/target/debug/deps/core_pipeline-24d283a64c6ea03f)"
+        ]
+      },
+      "tree": "/tmp/subst/baseline"
+    },
+    "c1-only": {
+      "c1": "f8c3e3d5fa402e7044fbdf8042997aef483f1a9a",
+      "c1_source": "candidate",
+      "c2": "66bce8378b5e9ecb1135b1636f8ee2ffac46ccf5",
+      "c2_source": "baseline",
+      "example": {
+        "exit_code": 0,
+        "identity_lines": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns <elapsed> updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ],
+        "stdout": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns 4359833 updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ]
+      },
+      "layerfs-content_differs_from_revision": [],
+      "layerfs-storage_differs_from_revision": [],
+      "manifest_sha256": "daa3966741ceb99d73b4d2e3ce7beeb64356eada96f9f61555781ce381c0116e",
+      "test": {
+        "exit_code": 0,
+        "passed": true,
+        "tail": [
+          "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s",
+          "     Running unittests ../../consumer/cross_revision.rs (/tmp/subst/target/debug/deps/cross_revision-d5d7214da4d2b4ea)",
+          "     Running ../../consumer/core_pipeline.rs (/tmp/subst/target/debug/deps/core_pipeline-b9a7f4ce95848011)"
+        ]
+      },
+      "tree": "/tmp/subst/c1-only"
+    },
+    "c2-only": {
+      "c1": "66bce8378b5e9ecb1135b1636f8ee2ffac46ccf5",
+      "c1_source": "baseline",
+      "c2": "f8c3e3d5fa402e7044fbdf8042997aef483f1a9a",
+      "c2_source": "candidate",
+      "example": {
+        "exit_code": 0,
+        "identity_lines": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns <elapsed> updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ],
+        "stdout": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns 4540500 updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ]
+      },
+      "layerfs-content_differs_from_revision": [],
+      "layerfs-storage_differs_from_revision": [],
+      "manifest_sha256": "adf98815e15447643a6a4539b1535c2acd14622777122be352ccc5839a0dcf5e",
+      "test": {
+        "exit_code": 0,
+        "passed": true,
+        "tail": [
+          "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s",
+          "     Running unittests ../../consumer/cross_revision.rs (/tmp/subst/target/debug/deps/cross_revision-0c76b43e0ca85da8)",
+          "     Running ../../consumer/core_pipeline.rs (/tmp/subst/target/debug/deps/core_pipeline-145c7d043c07c72f)"
+        ]
+      },
+      "tree": "/tmp/subst/c2-only"
+    },
+    "combined": {
+      "c1": "f8c3e3d5fa402e7044fbdf8042997aef483f1a9a",
+      "c1_source": "candidate",
+      "c2": "f8c3e3d5fa402e7044fbdf8042997aef483f1a9a",
+      "c2_source": "candidate",
+      "example": {
+        "exit_code": 0,
+        "identity_lines": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns <elapsed> updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ],
+        "stdout": [
+          "arm candidate",
+          "files 2000 changes 200",
+          "sampled_changes 400",
+          "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+          "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+          "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+          "sample 0 elapsed_ns 4356750 updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+          "prepared_objects 49"
+        ]
+      },
+      "layerfs-content_differs_from_revision": [],
+      "layerfs-storage_differs_from_revision": [],
+      "manifest_sha256": "0aea85899a18530609d1a4ee16567ff3944b3a8cf7e842954e39011f128752cd",
+      "test": {
+        "exit_code": 0,
+        "passed": true,
+        "tail": [
+          "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s",
+          "     Running unittests ../../consumer/cross_revision.rs (/tmp/subst/target/debug/deps/cross_revision-e1a50da2bedb810e)",
+          "     Running ../../consumer/core_pipeline.rs (/tmp/subst/target/debug/deps/core_pipeline-62ed1a24f24c9b0f)"
+        ]
+      },
+      "tree": "/tmp/subst/combined"
+    }
+  },
+  "baseline_revision": "66bce8378b5e9ecb1135b1636f8ee2ffac46ccf5",
+  "candidate_revision": "f8c3e3d5fa402e7044fbdf8042997aef483f1a9a",
+  "canonical_identity": {
+    "baseline": [
+      "arm candidate",
+      "files 2000 changes 200",
+      "sampled_changes 400",
+      "base_directory 0f3e28a4ead18b088b69347edbb822cbccdfc7e1e20ac8e8a4d28740d1f04618",
+      "base_table 901887d3782ab556d4af5b10fbb3a395eb6ed9a3d6cd3e289b2060eaa3805a47",
+      "base_root 804eac63bc49309ee8f46fa9fb49dec86987d4a31b9a8235de46e7f4357bf729",
+      "sample 0 elapsed_ns <elapsed> updated_directory c212a72314b04995740a6ff79218454bfc6fdd66fe36417ebc718f38ca8260da table 0ae8ace749bce36c106c6fd12f78759dc74e6a4182c5ecd703ce5611c4dba510 root 8b6ee7767fc0a9669c7e4680a2f07f3df7afe6d8ab304683c4483a23953fa99f",
+      "prepared_objects 49"
+    ],
+    "identical_in_every_arm": true,
+    "lines_compared": 8
+  },
+  "consumer_source": {
+    "consumer/core_pipeline.rs": "f22fc3dd5441c05c2d215f56e7c934e7aa9d18f8a10b4882f31ed1f4d1b51c6f",
+    "consumer/cross_revision.rs": "18ff0a425be6e212fdc7e3056369ef1acc9a5eaaaa35e710a83ad67503b215cf",
+    "consumer/filesystem_primitives_candidate.rs": "1b50e9c5b908b0ead39e8531c8ae60bee7e007329f9547c4c9285494ab396580",
+    "consumer/support/filesystem.rs": "74340ebec9fd191eacb7d5c42e199d3b8cff5469b97c12e7ccfedeb47a510486",
+    "consumer/support/mod.rs": "0f944594b970e3be804ad75fb437e57d6f7793d1223e79c5feabcf4efcd06f89"
+  },
+  "cross_revision": {
+    "baseline-create->baseline-read": {
+      "create_exit_code": 0,
+      "create_stdout": "created root 0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796 payload 4096",
+      "read_exit_code": 0,
+      "read_refused": false,
+      "read_stdout": "read bytes 4096 digest eeeb77cc7780d9a01f4107d035751a0b43e2b500df4cef602b2d19484c58415e",
+      "reader": "baseline",
+      "root": "0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796",
+      "writer": "baseline"
+    },
+    "baseline-create->candidate-read": {
+      "create_exit_code": 0,
+      "create_stdout": "created root 0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796 payload 4096",
+      "read_exit_code": 3,
+      "read_refused": true,
+      "read_stdout": "refused-on-open unsupported storage policy: schema identity",
+      "reader": "combined",
+      "root": "0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796",
+      "writer": "baseline"
+    },
+    "candidate-create->baseline-read": {
+      "create_exit_code": 0,
+      "create_stdout": "created root 0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796 payload 4096",
+      "read_exit_code": 3,
+      "read_refused": true,
+      "read_stdout": "refused-on-open unsupported storage policy: schema identity",
+      "reader": "baseline",
+      "root": "0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796",
+      "writer": "combined"
+    },
+    "candidate-create->candidate-read": {
+      "create_exit_code": 0,
+      "create_stdout": "created root 0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796 payload 4096",
+      "read_exit_code": 0,
+      "read_refused": false,
+      "read_stdout": "read bytes 4096 digest eeeb77cc7780d9a01f4107d035751a0b43e2b500df4cef602b2d19484c58415e",
+      "reader": "combined",
+      "root": "0cff72f5583877480c89acac5150c2f5538ba8dc099fecd07815184dfcd2e796",
+      "writer": "combined"
+    }
+  },
+  "schema": "layerfs-substitution-matrix-v1",
+  "test_passed_in_every_arm": true
+}
