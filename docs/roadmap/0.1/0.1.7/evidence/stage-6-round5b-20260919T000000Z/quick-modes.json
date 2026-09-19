@@ -1,32 +1,70 @@
 {
  "schema": "layerfs-quick-modes-v1",
- "note": "The mode ladder and the reuse path, exercised on the twenty-case smoke lane. A sampled or omitted row is INCOMPLETE, never PASS; the deferred oracle exists only for c2.delta.cdc-locality, whose smoke representative is dedup-cdc-overwrite-1.",
+ "note": "The mode ladder, its declared default, and the reuse path, exercised on the twenty-case smoke lane. A sampled or omitted row is INCOMPLETE, never PASS; the deferred oracle exists only for c2.delta.cdc-locality, whose smoke representative is dedup-cdc-overwrite-1.",
+ "default_for_iteration": {
+  "rule": "#184 section 10.3: quick is the default for iteration (--lane smoke and explicit --case runs); an admission run is full or declares itself otherwise",
+  "smoke_lane_no_flag": {
+   "tally": {
+    "INCOMPLETE": 20
+   },
+   "wall_ns": 658038250,
+   "verification_mode": "sample"
+  },
+  "explicit_case_no_flag": {
+   "case_id": "dedup-cdc-overwrite-1",
+   "tally": {
+    "INCOMPLETE": 1
+   },
+   "verification_mode": "sample"
+  },
+  "whole_lane_no_flag": {
+   "tally": {
+    "PASS": 217,
+    "NOT_RUN": 3
+   },
+   "verification_mode": "full"
+  },
+  "explicit_flag_wins": {
+   "tally": {
+    "PASS": 20
+   },
+   "wall_ns": 763353208,
+   "verification_mode": "full"
+  }
+ },
  "verify_none": {
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 642144292,
+  "wall_ns": 617294042,
   "verification_mode": "none"
  },
  "verify_sample": {
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 616991750,
+  "wall_ns": 638225375,
   "verification_mode": "sample"
  },
- "perf_reuse_pass": {
+ "verify_full": {
   "tally": {
    "PASS": 20
   },
-  "wall_ns": 594621166,
+  "wall_ns": 763353208,
   "verification_mode": "full"
+ },
+ "perf_reuse_pass": {
+  "tally": {
+   "INCOMPLETE": 20
+  },
+  "wall_ns": 604228375,
+  "verification_mode": "sample"
  },
  "reuse_pass_note": "dedup-cdc-overwrite-1 is PASS with verification.status REUSED, the omission recorded on the row, and phases.reused_invocations == ['verify']; the other nineteen rows ran no deferred oracle and are unaffected.",
  "verify_reuse_pass": {
   "re_derived": 0,
   "cases": 220,
-  "source": "/tmp/r5c-final2/verification.json"
+  "source": "/tmp/r5c-final3/verification.json"
  },
  "refusals": [
   "a missing proof path: refused, [Errno 2] No such file or directory",

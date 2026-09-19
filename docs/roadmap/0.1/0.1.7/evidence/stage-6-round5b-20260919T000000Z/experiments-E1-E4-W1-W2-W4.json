@@ -6,14 +6,14 @@
         "clone_apparent_bytes": 67108864,
         "clone_blocks_bytes": 67108864,
         "clone_digest_after": "a6d599895bb59123a98c005635e8cac5eb8b80a2f91b9aabaa5441bec447ff5e",
-        "clone_ino": 822498942,
+        "clone_ino": 822510682,
         "clone_method": "apfs-clonefile-cow-v1",
         "distinct_inode": true,
-        "free_bytes_before": 189037821952,
+        "free_bytes_before": 185443270656,
         "master_bytes": 67108864,
         "master_digest_after": "9bb748eff0f8cf0d4340e92cc2191a704a9d2aea15e9e8214802afcc2ff0c060",
         "master_digest_before": "9bb748eff0f8cf0d4340e92cc2191a704a9d2aea15e9e8214802afcc2ff0c060",
-        "master_ino": 822498941,
+        "master_ino": 822510681,
         "master_unchanged": true,
         "used_bytes_far_below_file_size": false
       },
@@ -58,7 +58,7 @@
         "quick_check_before": "ok",
         "quick_check_clone": "ok",
         "sidecars": [],
-        "store_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmpcig0hc_9/e3-store/sample.sqlite"
+        "store_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/tmpgyxa8bpa/e3-store/sample.sqlite"
       },
       "notes": [],
       "outcome": "SATISFIED",
@@ -168,7 +168,7 @@
       "schema": "layerfs-experiment-v1"
     }
   ],
-  "ran_utc": "2026-09-19T01:59:16Z",
+  "ran_utc": "2026-09-19T02:17:24Z",
   "schema": "layerfs-calibration-v1",
-  "wall_ns": 1519214832
+  "wall_ns": 1584611042
 }

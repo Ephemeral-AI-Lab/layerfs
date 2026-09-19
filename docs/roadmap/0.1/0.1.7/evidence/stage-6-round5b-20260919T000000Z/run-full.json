@@ -22,45 +22,45 @@
     "product_lock_sha256": "bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991",
     "python": "3.14.3",
     "registry_tsv_sha256": "3f01abded44b973dee4d2a3a31364212cd742bce1b3f7800eb4e5a7b6d8f43e3",
-    "source_commit": "395d22cf1178b3b818d4f89bba017eb737d78568",
+    "source_commit": "603e415c43507f0a7860d36e4cebbd11a02722a5",
     "source_dirty": false,
     "source_dirty_files": [],
-    "started_utc": "2026-09-19T01:56:15Z"
+    "started_utc": "2026-09-19T02:14:20Z"
   },
   "lane": "full",
   "phases": {
     "admission": {
-      "acquisition_wall_ns": 65824718,
-      "cleanup_wall_ns": 80290,
-      "complete_command_ns": 172224887953,
-      "handoff_ns": 974519732,
-      "operation_ns": 75885388329,
-      "preparation_wall_ns": 26618746630,
-      "verification_invocation_ns": 801408542,
-      "verification_wall_ns": 68674663960
+      "acquisition_wall_ns": 72515419,
+      "cleanup_wall_ns": 81035,
+      "complete_command_ns": 174942488953,
+      "handoff_ns": 1048152595,
+      "operation_ns": 77741791539,
+      "preparation_wall_ns": 27173958917,
+      "verification_invocation_ns": 828749958,
+      "verification_wall_ns": 68833994494
     },
     "by_status": {
       "NOT_RUN": {
         "acquisition_wall_ns": 0,
-        "cleanup_wall_ns": 291,
-        "complete_command_ns": 14451000,
+        "cleanup_wall_ns": 84,
+        "complete_command_ns": 14601750,
         "handoff_ns": 0,
         "operation_ns": 0,
         "preparation_wall_ns": 0,
         "rows": 3,
         "verification_invocation_ns": 0,
-        "verification_wall_ns": 471541
+        "verification_wall_ns": 517791
       },
       "PASS": {
-        "acquisition_wall_ns": 65824718,
-        "cleanup_wall_ns": 80290,
-        "complete_command_ns": 172224887953,
-        "handoff_ns": 974519732,
-        "operation_ns": 75885388329,
-        "preparation_wall_ns": 26618746630,
+        "acquisition_wall_ns": 72515419,
+        "cleanup_wall_ns": 81035,
+        "complete_command_ns": 174942488953,
+        "handoff_ns": 1048152595,
+        "operation_ns": 77741791539,
+        "preparation_wall_ns": 27173958917,
         "rows": 217,
-        "verification_invocation_ns": 801408542,
-        "verification_wall_ns": 68674663960
+        "verification_invocation_ns": 828749958,
+        "verification_wall_ns": 68833994494
       }
     },
     "schema": "layerfs-lane-phases-v1",
@@ -82,7 +82,7 @@
   "reused_proof_identities": null,
   "reused_proof_omission": null,
   "rows": 220,
-  "run_dir": "/tmp/r5c-final2",
+  "run_dir": "/tmp/r5c-final3",
   "samples_per_case_per_arm": 1,
   "schema": "layerfs-core-run-v1",
   "selection": [
@@ -314,5 +314,5 @@
   },
   "verification_mode": "full",
   "verification_sample_rule": "",
-  "wall_ns": 173565791708
+  "wall_ns": 176348529917
 }
