@@ -52,7 +52,7 @@ reading between the children — untimed work that must not appear as product ti
 
 This forces the operation-window ruling that [#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184)
 §7.2 left open for a multi-operation row. It is owner decision 2 in the
-[README](README.md#7-owner-decisions-still-open).
+[README](README.md#7-owner-decisions--ruled-2026-09-19).
 
 ### 2.2 What is inside a child
 

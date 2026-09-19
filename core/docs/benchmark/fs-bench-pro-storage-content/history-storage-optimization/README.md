@@ -137,7 +137,37 @@ Matched Git comparators, cited rather than re-run: Git53 = 49,332,224 B, Git157 
 disagree, it wins. These documents never amend [`../CONTRACT.md`](../CONTRACT.md) or its 217
 admission rows.
 
-## 7. Owner decisions still open
+## 7. Owner decisions — ruled 2026-09-19
+
+All seven were ruled by the owner before the first product run of this family, as
+`docs/general/benchmark_rules.md` §1 requires. Until they were, the affected gates were
+proposals and no row measured under them was admission evidence. The rulings are recorded
+verbatim in
+[`docs/roadmap/0.1/0.1.7/retained-history-storage.md`](../../../../../docs/roadmap/0.1/0.1.7/retained-history-storage.md)
+§9, which is the roadmap-level specification this document set is subordinate to.
+
+| # | decision | ruling |
+| --: | --- | --- |
+| 1 | The per-lane and verification budgets, now that the family's budget is lifted | **Ruled as a procedure.** Both are declared at Phase 3 from the stride-10 baseline, recorded with their source, and frozen before any optimization work; the numbers cannot exist before that baseline. They are carried as **per-lane declared ceilings**, not as `DECLARED_EXCEPTIONS` entries — the exception list is capped at 25 s and cannot carry a 157-state run. A ceiling is never inflated after a valid miss. |
+| 2 | Is `operation_ns` the sum of the N named per-state children? | **Yes** — a root would include untimed corpus reading. `shared/phases.py`'s "two sources, one number" check becomes **lane-scoped** for this shape: `root >= Σ children`, with the difference published rather than absorbed. |
+| 3 | May a sampled row in this lane be `PASS`? | **Yes, this lane only, frozen before collection** — the O(1) counters that decide storage are read in full in every mode. The 217 keeps `full` and keeps forcing `sample` to `INCOMPLETE`. |
+| 4 | Sampled unit, and the selection rule | **The state's file manifest**, in corpus order; `max(1, ceil(n/10))` units by `index % 10 == 0`, **plus the first and last entry of every state**. The rule is **lane-scoped**: `sampled_indices` is used by the 217's `c2.delta.*` rows and no 217 `verification_selection` string may move. |
+| 5 | Are the §4 canonical totals gates or diagnostics? | **Gates** — identity, not performance. A mismatch is a `FAIL` and stops Phases 4 and 5. stride-10's are first-run pins, thereafter reproduced. |
+| 6 | Is the v0.1.6 timing comparison accepted as a labelled one-sided tripwire? | **Yes**, stated as in §5: published, labelled, never gate-deciding. |
+| 7 | Is the storage comparison against v0.1.6 accepted as a **gate**? | **Yes, and at all three sizes**: allocated below 49,344,512 B at 17 states, 64,024,576 B at 53 and 83,947,520 B at 157. Format preserved and content pinned, so this is an identity-anchored comparison, not a cross-generation performance pairing. |
+
+### 7.1 Ruled before these, and not re-opened
+
+**Family rulings (owner, 2026-09-19).** The family's budget is lifted and the lane ceilings are
+declared instead; the tiers are stride10 (smoke, P0), stride3 (intermediate, P0) and stride1
+(run only, **never optimized**); and this lane builds no prepared storage
+(`Preparation::InProcess`, nothing under `prepared/`).
+
+### 7.2 The earlier proposal table, for the record
+
+Verbatim from the committed proposal, so the ruling can be compared against what was
+proposed rather than restated after the fact. This table is the historical record and is
+not edited; the rulings in §7 supersede it.
 
 | # | decision | recommendation |
 | --: | --- | --- |
@@ -170,3 +200,24 @@ admission rows.
   attribution readings are taken by the runner's `verify` from a retained file, for the rows
   that gate them. This lane's whole claim is storage, so its reading must be taken inside the
   invocation, before and after the chain. `measurement.md` §4 is the fix.
+
+## 9. Errata
+
+Recorded rather than applied in place, per `../CONTRACT.md` §11's convention, because the five
+documents were committed before the corpus was read. Each correction below was verified against
+the corpus or the harness at `edb80addd` on 2026-09-19. The corrected text is in the document
+named in the last column; this table is the record of what changed and why.
+
+| # | The specification said | Verified against the corpus / harness | Corrected in |
+| --- | --- | --- | --- |
+| **E1** | `path-states` is not defined; `implementation-plan.md` §2.1 has `Corpus::pins()` return "path-states and cumulative logical bytes, for the pins", and `State.paths` is the only nearby counter | **The obvious readings are both wrong.** Summing `checkpoints[].files` gives 86,064 / 259,771 / 765,054 against pins of 101,477 / 306,861 / 904,143 — short by 17.9 / 18.1 / 18.2 %. The pins reproduce **exactly** as the entry count of `oracles/<sha>.json`, which counts files **and** directories (state 1: 276 files, 359 oracle entries, 83 directories). Cumulative logical bytes already match exactly under either reading. | §4 and §7 above; `implementation-plan.md` §2.1 |
+| **E2** | `implementation-plan.md` §2.1: `manifest.tsv` and `previous.tsv` parse as `hex path \t mode \t oid \t size` | The actual column order is `mode \t oid \t size \t hex path` (`100644\t6e28c773…\t3481\t2e6167…`). A parser written to the stated order reads the mode as a path and refuses every state. | `implementation-plan.md` §2.1 |
+| **E3** | `implementation-plan.md` §3 Phase 1 says "no registry change" but lists `history_declarations` passing among its exit criteria | `tests/history_declarations.rs` asserts the three rows exist, their ids, their `bytes`/`entries`, their `Preparation`/`StoreState` declarations and their lane membership. None of that is testable without the registry rows, which §3 Phase 3 owns ("the registry rows, the driver, the gates, the golden table"). | `implementation-plan.md` §3 Phase 1 and §2.4 |
+| **E4** | `implementation-plan.md` §2.1 has `Corpus::open` read `checkpoint-manifest.json` and `Corpus::oracle` read `oracles/<sha>.json`, and §2.8's modified-files table adds no dependency | **The harness has no JSON parser, and none may be added.** `shared/test_lock_parity.py` fails a *harness-only registry package*, so `serde_json` — which is absent from `core/Cargo.lock` — cannot be linked. The harness already hand-rolls SHA-256 for this reason (`workload/digest.rs`). | `implementation-plan.md` §2.1 |
+| **E5** | `implementation-plan.md` §2.8's modified-files table lists `shared/space.py` and `shared/analyze.py` | Owner ruling 2 (`operation_ns` = Σ children, not the root) also requires `shared/phases.py`: it currently **fails closed** unless `operation_ns == timing.json root.elapsed_ns`, and `ops::measure()` writes `timing.json` once per call with last-write-wins, publishing that call's root. | `implementation-plan.md` §2.8 |
+| **E6** | `measurement.md` §2: "`verify` re-derives all six from the raw artifacts" | True of the runner's own re-derivation. The **child's** `Timing` API is `Timing::record(name, …)` with `scope.child(name)`, so the chain needs one root with N named children, and the row's `operation_ns` is the sum of those children rather than that root. | `measurement.md` §2.1 |
+
+**E1 is the one that could have changed a verdict.** Had `path-states` been implemented as the
+manifest line count, all three Phase 1 pin checks would have failed against numbers that are
+correct, and the natural next move — adjusting the pins — is exactly the fixture tweak §4 and
+`implementation-plan.md` §4 forbid.

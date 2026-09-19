@@ -54,9 +54,10 @@ Not the object count, not the pack count, and never "the first ten".
 **Endpoints are included.** This lane requires the first and last manifest entry of every
 state in the sample, because that is where boundary defects live. The current implementation
 (`src/ops/mod.rs` `sampled_indices`) takes every tenth index with `take(ceil(n/10))`, which
-for 53 units yields 0, 10, 20, 30, 40, 50 and **omits the last**. That is owner decision 4 in
-the [README](README.md#7-owner-decisions-still-open); until it is ruled, a sample under this
-lane is not admission evidence.
+for 53 units yields 0, 10, 20, 30, 40, 50 and **omits the last**. Owner decision 4 in the
+[README](README.md#7-owner-decisions--ruled-2026-09-19) was **ruled on 2026-09-19**: the endpoints
+are added for this lane, and the rule is lane-scoped so that no 217-row `verification_selection`
+moves.
 
 The selection rule is named in the receipt, so a sample is reproducible from the receipt
 alone. Every receipt carries `verification_mode`, `verification_declared_units`,

@@ -78,6 +78,10 @@ impl Corpus {
     pub fn transition(&mut self, ordinal: usize) -> Result<Transition, HistoryError>;
     pub fn oracle(&self, state: &State) -> Result<Oracle, HistoryError>;
     /// Path-states and cumulative logical bytes, for the pins.
+    ///
+    /// `path_states` is the entry count of `oracles/<sha>.json` — files **and**
+    /// directories — and not `checkpoints[].files` or the `manifest.tsv` line
+    /// count, both of which are short by about 18 % (erratum E1).
     pub fn pins(&self) -> Pins;
 }
 ```
@@ -90,7 +94,8 @@ impl Corpus {
 | `open` | `manifest.tip == SOURCE_TIP` and `checkpoints.len() == 157` | `SourceTip`, `CheckpointCount` |
 | `open` | the selection is strictly ascending, starts at 1, ends at 157, and has the declared length | `SelectionShape` |
 | `open` | each selected `manifest_sha256` and oracle hash is recorded | `TreeManifest`, `OracleMissing` |
-| `transition` | `manifest.tsv` and `previous.tsv` parse as `hex path \t mode \t oid \t size` | `TreeManifest` |
+| `pins` | `path_states` is the **entry count of `oracles/<sha>.json`**, which counts files **and** directories (**erratum E1**); cumulative logical bytes come from the manifest | — |
+| `transition` | `manifest.tsv` and `previous.tsv` parse as `mode \t oid \t size \t hex path` (**erratum E2**; the column order in the first revision of this section was wrong) | `TreeManifest` |
 | `transition` | every blob served is re-hashed and equals both its oid and its `blob_digests` entry | `BlobIdentity` |
 | any | the corpus root exists and is readable | `CorpusMissing` |
 
@@ -101,6 +106,15 @@ default and no fallback: an unidentifiable blob is refused, never assumed.
 blobs *that transition* changed, but a state's tree references blobs introduced by earlier
 transitions. The reader therefore keeps a forward map across the whole selection and re-reads
 nothing. A state whose tree needs an oid the map lacks is `BlobIdentity`, not a partial tree.
+
+**A JSON reader is part of this file.** `checkpoint-manifest.json` and `oracles/<sha>.json` are
+JSON and the harness has no parser for them; none may be added, because
+`shared/test_lock_parity.py` fails a harness-only registry package and `serde_json` is absent
+from `core/Cargo.lock` (erratum E4). The harness already hand-rolls SHA-256 for the same reason
+(`workload/digest.rs`). The reader is written out here, strict and narrow: it accepts exactly the
+two documents above, refuses a duplicate key, a trailing comma, an unescaped control character
+and a non-UTF-8 string, and never allocates a value it does not need. It is not a general JSON
+library and must not grow into one.
 
 **Does not:** construct canonical objects, open a Store, call `Timing`, or mutate the corpus.
 Every path is opened read-only.
@@ -239,7 +253,11 @@ three rows**, evaluated by the runner from the three receipts. They are not driv
 **Fail-closed.** A state whose root or tree disagrees fails the row and increments
 `verify.disagreements`. The count is published; "156 of 157" is a failure, not a pass.
 
-### 2.4 `tests/history_declarations.rs` — new
+### 2.4 `tests/history_declarations.rs` — new, and **Phase 3** (erratum E3)
+
+Asserting the rows exist is not possible before the registry rows do, and the registry change is
+Phase 3's. Phase 1's exit criteria list this test by mistake in the first revision of §3; the
+corpus reader is Phase 1's deliverable and this test is Phase 3's.
 
 Asserts, without a corpus and without a product run:
 
@@ -311,6 +329,7 @@ SHA differs, or a tip that differs is a refusal with the reason.
 | `src/workload/mod.rs` | `pub mod history;` |
 | `src/workload/expected.rs` | include `history-expected.tsv` and expose its lookups; the 217 table is untouched |
 | `shared/space.py` | a `delta(before, after)` shape, and canonical bytes and objects grouped by `object_role` |
+| `shared/phases.py` | the lane-scoped reconciliation of owner ruling 2 (**erratum E5**): for a row whose `operation_ns` is the sum of named children, require `root >= Σ children` and publish the difference as the harness's own untimed work, instead of failing closed on `root == operation_ns`. Every other row keeps the existing exact check. |
 | `shared/analyze.py` | the report shape of [`measurement.md`](measurement.md) §5, and the two lane-level scaling claims |
 | `tests/golden/registry.tsv` | the three rows appear, so the golden comparison covers them |
 | `../CONTRACT.md`, `../README.md` | one line each: `history.*` is a separate claim under this document set, not an amendment |
@@ -342,7 +361,8 @@ registry change, no product run.
 Exit: the corpus authenticates against every identity in [`README.md`](README.md) §3; the three
 selections enumerate exactly 17/53/157 at the right indices; the path-state and logical-byte
 pins match — **101,477 / 561,010,345**, **306,861 / 1,676,767,835**, **904,143 /
-4,936,693,030**; an unidentifiable blob is refused; `history_declarations` passes.
+4,936,693,030**; an unidentifiable blob is refused. `history_declarations` is **not** part of this gate — it
+needs the registry rows, which Phase 3 owns (erratum E3).
 
 ### Phase 2 — the remaining harness gap
 

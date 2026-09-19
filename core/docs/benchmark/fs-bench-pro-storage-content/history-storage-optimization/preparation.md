@@ -67,7 +67,7 @@ read state k+1's changed blobs    untimed, harness
 This is why the row's `operation_ns` is the **sum of the named per-state children** and not the
 root: a root would silently include the harness's own corpus reading. The product's timing tree
 already supports named children, so this is a declaration rather than new machinery, and it is
-owner decision 2 in the [README](README.md#7-owner-decisions-still-open).
+owner decision 2 in the [README](README.md#7-owner-decisions--ruled-2026-09-19).
 
 Nothing is pre-loaded. A 157-state selection is 4.94 GB of cumulative logical bytes, and holding
 it resident would both defeat the memory claim and warm the pages the saves read.

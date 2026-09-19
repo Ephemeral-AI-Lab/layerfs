@@ -331,3 +331,20 @@ Stages 3-4 closeout: the component-decoupling batch under
 [#165](https://github.com/Ephemeral-AI-Lab/layerfs/issues/165) has a completion
 gate table with per-packet evidence, controls and the memory ledger in
 [`component-decoupling/stages-3-4-closeout-report.md`](component-decoupling/stages-3-4-closeout-report.md).
+
+**Stage 6 retains a second, separate claim (2026-09-19).**
+[#186](https://github.com/Ephemeral-AI-Lab/layerfs/issues/186), a sub-issue of
+[#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184), measures what it costs
+the C1/C2 core to retain a real repository history in one Store:
+`claim_kind = history-storage-efficiency`, three admission rows (`history-stride10` 17
+states, `history-stride3` 53, `history-stride1` 157) over the deepseek-harness
+checkpoint corpus. Its roadmap specification is
+[`retained-history-storage.md`](retained-history-storage.md) and its case documents are
+`core/docs/benchmark/fs-bench-pro-storage-content/history-storage-optimization/`. The
+group is **outside the 217**: it keeps its own lanes, its own cardinality of 3, its own
+golden table and its own verification mode, and it does not amend
+[`CONTRACT.md`](../../../../core/docs/benchmark/fs-bench-pro-storage-content/CONTRACT.md)
+or any 217-row verdict. It makes no Commit, LayerStack, Branch, FUSE, daemon or cgroup
+claim — Stage 7 ([#172](https://github.com/Ephemeral-AI-Lab/layerfs/issues/172)) owns
+that half. No row of this claim has been measured; the specification states no
+measurement.
