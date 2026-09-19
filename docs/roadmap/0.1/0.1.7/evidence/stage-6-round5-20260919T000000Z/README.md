@@ -78,11 +78,14 @@ the rows that publish one in **both** runs: **161 rows**.
 | --- | --- | ---: | ---: | ---: | ---: |
 | 161 common rows | round 4c | 245.867 s | 63.497 s | 182.369 s | **74.2%** |
 | 161 common rows | **round 5** | 239.998 s | 66.673 s | 173.325 s | **72.2%** |
-| whole lane | round 3b (150 rows publish) | 394.57 s | 39.151 s | 355.42 s | **90.1%** |
-| whole lane | **round 5 (217 rows publish)** | 259.303 s | 76.184 s | 183.119 s | **70.9%** |
+| whole lane (sum of per-row complete commands) | round 3b (150 rows publish) | 394.57 s | 39.151 s | 355.42 s | **90.1%** |
+| whole lane (sum of per-row complete commands) | **round 5 (217 rows publish)** | 260.141 s | 76.184 s | 183.956 s | **70.7%** |
 
-Round 4c's lane was **415.821 s**; round 5's is **263.776 s**, a **−36.6%** reduction. The
-operation total over the common rows **rose 5.0%**, which is the direction T4 requires.
+The two wall figures are different measurements and are both published: **263.776 s** is
+`run.json`'s wall for the whole `perf` invocation (identity, registry listing, golden check
+and per-case bookkeeping included), and **260.141 s** is the sum of the rows' own
+`complete_command_ns`. Round 4c's lane wall was **415.821 s**, so round 5's is **−36.6%**.
+The operation total over the common rows **rose 5.0%**, which is the direction T4 requires.
 
 ## 3. The falsifier: `operation_ns` did not fall
 
