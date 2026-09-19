@@ -112,6 +112,56 @@ ladder's `verify.units` / `verify.sampled`), `instrumentation` (75) and `resourc
 classified. Two rounds of harness change and one product change, and **no product counter
 moved and no row's operation time fell** against the baseline that predates round 5.
 
+### 2.2 Every published axis, per family
+
+Sums over the family's admission rows; the last two columns are maxima, because a heap
+peak and an allocated-bytes reading do not add. `operation` is the golden number.
+`per-row-phases.csv` carries all 217 rows with all eighteen published fields.
+
+| family | rows | preparation | acquisition | **operation** | verification | cleanup | handoff | max wall | max heap | max allocated |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `c1.cdc.chunk-count` | 12 | 2.634 s | 0.000 s | **0.003 s** | 4.536 s | 0.00001 s | 0.000 s | 2.270 s | 0.2 MB | 0.0 MB |
+| `c1.change-locality` | 12 | 0.005 s | 0.000 s | **0.003 s** | 0.006 s | 0.00000 s | 0.000 s | 0.008 s | 0.2 MB | 0.0 MB |
+| `c1.construct.chunked` | 4 | 0.990 s | 0.000 s | **0.859 s** | 2.282 s | 0.00000 s | 0.000 s | 3.400 s | 0.2 MB | 0.0 MB |
+| `c1.construct.whole-file` | 4 | 0.992 s | 0.000 s | **0.851 s** | 2.282 s | 0.00000 s | 0.000 s | 3.398 s | 0.1 MB | 0.0 MB |
+| `c1.edit.length-changing` | 32 | 6.948 s | 0.000 s | **0.004 s** | 10.579 s | 0.00002 s | 0.000 s | 1.858 s | 0.1 MB | 0.0 MB |
+| `c1.edit.length-preserving` | 12 | 2.619 s | 0.000 s | **0.002 s** | 4.017 s | 0.00001 s | 0.000 s | 1.831 s | 0.1 MB | 0.0 MB |
+| `c1.fs.build-scale` | 8 | 0.448 s | 0.000 s | **9.315 s** | 0.308 s | 0.00000 s | 0.000 s | 4.708 s | 2.5 MB | 0.0 MB |
+| `c1.many-tiny` | 20 | 0.017 s | 0.000 s | **0.023 s** | 0.006 s | 0.00000 s | 0.000 s | 0.022 s | 0.3 MB | 0.0 MB |
+| `c1.transition.boundary` | 7 | 0.003 s | 0.000 s | **0.005 s** | 0.011 s | 0.00000 s | 0.000 s | 0.015 s | 0.3 MB | 0.0 MB |
+| `c1.tree.construct-traverse` | 12 | 0.007 s | 0.000 s | **0.035 s** | 0.004 s | 0.00000 s | 0.000 s | 0.022 s | 0.2 MB | 0.0 MB |
+| `c1.tree.namespace-mutation` | 4 | 0.002 s | 0.000 s | **0.001 s** | 0.002 s | 0.00000 s | 0.000 s | 0.008 s | 0.2 MB | 0.0 MB |
+| `c2.delta.boundaries` | 21 | 0.199 s | 0.110 s | **0.018 s** | 0.015 s | 0.00000 s | 0.000 s | 0.028 s | 2.4 MB | 0.0 MB |
+| `c2.delta.cdc-locality` | 20 | 0.947 s | 0.251 s | **31.387 s** | 0.687 s | 0.00002 s | 0.631 s | 5.679 s | 8.9 MB | 0.0 MB |
+| `c2.delta.small-file` | 4 | 0.039 s | 0.021 s | **0.004 s** | 0.003 s | 0.00000 s | 0.000 s | 0.021 s | 2.7 MB | 0.0 MB |
+| `c2.footprint` | 6 | 2.844 s | 0.059 s | **20.428 s** | 0.292 s | 0.00000 s | 0.166 s | 10.240 s | 3.6 MB | 554.6 MB |
+| `c2.lifecycle` | 5 | 0.069 s | 0.025 s | **0.007 s** | 0.000 s | 0.00000 s | 0.000 s | 0.030 s | 2.2 MB | 0.0 MB |
+| `c2.pool.cold-warm` | 2 | 0.275 s | 0.017 s | **0.215 s** | 0.003 s | 0.00000 s | 0.001 s | 0.309 s | 9.3 MB | 0.0 MB |
+| `c2.read.waves` | 4 | 0.766 s | 0.725 s | **0.006 s** | 3.221 s | 0.00000 s | 0.000 s | 3.250 s | 1.3 MB | 0.0 MB |
+| `c2.reuse.cross-file` | 10 | 1.366 s | 0.063 s | **5.826 s** | 4.037 s | 0.00001 s | 0.085 s | 5.094 s | 6.0 MB | 0.0 MB |
+| `c2.reuse.workspace` | 14 | 4.521 s | 1.548 s | **7.931 s** | 0.062 s | 0.00001 s | 0.134 s | 3.927 s | 8.8 MB | 0.0 MB |
+| `pipeline.*` | 4 | 0.139 s | 0.034 s | **0.019 s** | 0.076 s | 0.00000 s | 0.000 s | 0.167 s | 4.7 MB | 0.0 MB |
+| **total / max** | **217** | **25.833 s** | **2.853 s** | **76.942 s** | **32.429 s** | **0.00009 s** | **1.017 s** | **10.240 s** | **9.3 MB** | **554.6 MB** |
+
+**Only two of the four axes the specification names are wired to a receipt.**
+
+- **Time** is complete: preparation, acquisition (a subset of preparation), operation,
+  verification, cleanup, handoff (a subset of operation) and the complete command, per row.
+- **Memory** is one number per row, `heap.peak_incremental_bytes`, from the counting
+  `GlobalAlloc` over the measured phase.
+- **Storage** is published for the six `c2.footprint` rows only, as `space.apparent_bytes`
+  and `space.allocated_bytes`. Every other row's Store size is not a published reading.
+  `c2.pool.cold-warm` publishes `pool.index_bytes` (1,228,800 bytes on both rows), but that
+  is a Store-owned counter, not a filesystem reading.
+- **CPU is not published at all.** `instruments::cpu_now()` reads
+  `getrusage(RUSAGE_SELF)` into `CpuReading { user_ns, system_ns, … }`, and
+  `tests/instruments_selfcheck.rs` proves it works — but **no driver calls it**, so no
+  receipt carries a CPU reading. The same is true of `RssSampler`, `RssBundle` and
+  `lifetime_peak_rss_bytes`: the harness's README describes the 10 ms RSS sampler as a bound
+  that makes an un-sampled row `INELIGIBLE`, and it is implemented and self-checked, but it
+  is wired to no row. `process_usage`/`ProcessUsage` are referenced nowhere outside their own
+  module. **That is a gap in the four-axis view, recorded here rather than papered over.**
+
 ## 3. What produced the preparation
 
 **Preparation, entirely.** Nothing was removed from a timed phase: the measured operation is
@@ -484,7 +534,8 @@ python3 tools/production_loc.py                                       # 84936 co
 | `verify-pass.json` | the re-derivation: 220 findings, 0 disagreements |
 | `compare-round5-vs-round5b.txt` | row-by-row, counter-by-counter against the round-5 closure run |
 | `compare-round4c-vs-round5b.txt` | the same against the pre-round-5 baseline, two rounds back |
-| `preparation-breakdown.txt` | `preparation_wall_ns` / `verification_wall_ns` / `operation_ns` for all 217 admission rows, worst first |
+| `preparation-breakdown.txt` | `preparation_wall_ns` / `acquisition_wall_ns` / `verification_wall_ns` / `operation_ns` for all 217 admission rows, worst first |
+| `per-row-phases.csv` | all 217 admission rows, all eighteen published fields, including the heap and space readings |
 | `prepare-summary.json` | the cold acquisition: 118 masters, 127.9 s, 15.567 GB, per family and per row |
 | `quick-modes.json` | the mode ladder, the reuse path and the refusal paths |
 | `reused-proof.json` | `verify --reuse-pass`'s own record |
