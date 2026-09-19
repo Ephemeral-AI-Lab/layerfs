@@ -183,7 +183,7 @@ fn ordered_predecessors_enabled() -> bool {
 ///
 /// **What turning it off costs, measured: 6,377,472 B.**
 ///
-/// ````
+/// ````text
 ///   fallback OFF (this default)   56,049,664 B   = 1.13653x v0.1.6   +6,733,824
 ///   fallback ON                   49,672,192 B   = 1.00723x v0.1.6     +356,352
 ///   v0.1.6                        49,315,840 B

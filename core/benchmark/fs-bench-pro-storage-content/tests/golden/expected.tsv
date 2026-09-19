@@ -1,6 +1,14 @@
 # fs-bench-expected-v1
 # case_id	label	value. Pinned by round 5 from the round-4c full lane
-# (counters) and round-5 harvest runs of the same tree (identity digests).
+# (counters) and a round-5 bootstrap run of the same tree (identity digests).
+# Re-baselined 2026-09-20 at 795fb1a2f: pooled-lane-cold counter:pool.commits
+# 19 -> 18, taken from run-20260920T-fix2 (217 PASS / 0 FAIL / 3 diagnostic
+# NOT_RUN, verification full). The codec's group level 1 -> 19 shrank the
+# rewritten packs, and write_pack charges the whole rewritten pack on every
+# append (cas/placement.rs, sqlite/write.rs::append_pack), so the transaction
+# byte counter crossed one fewer 4 MiB boundary and the save issued one fewer
+# COMMIT. Every other pinned key reproduced unchanged; the 50 counters the
+# harness publishes that this table never pinned are deliberately not added.
 # Regenerate with shared/pin_expected.py; never hand-edit a value.
 append-tail-4k-100m	counter:consumer.objects	4
 append-tail-4k-100m	counter:edit.base_bytes	104857600
@@ -1309,7 +1317,7 @@ pipeline-filesystem-build	counter:pipeline.inserted	33
 pipeline-filesystem-build	counter:pipeline.objects_emitted	33
 pipeline-filesystem-build	counter:pipeline.reused	0
 pipeline-filesystem-build	digest:filesystem_root	02b5b52b67547c2ea2fe98ac53bbf52a3d5df58946672a9643789319c54eab03
-pooled-lane-cold	counter:pool.commits	19
+pooled-lane-cold	counter:pool.commits	18
 pooled-lane-cold	counter:pool.declared_values	51200
 pooled-lane-cold	counter:pool.delta_leaves	0
 pooled-lane-cold	counter:pool.full_leaves	512
