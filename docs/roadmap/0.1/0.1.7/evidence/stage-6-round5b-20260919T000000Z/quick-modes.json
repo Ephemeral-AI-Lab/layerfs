@@ -50,11 +50,13 @@
  "verify_reuse_pass": {
   "re_derived": 0,
   "cases": 220,
-  "source": "/tmp/r5c-final5/verification.json"
+  "source": "/tmp/r5c-final5/verification.json",
+  "reused_proof_identities_include": "harness_python_sha256"
  },
  "refusals": [
   "a missing proof path: refused",
   "a run.json offered as a proof: refused, wrong schema",
   "a proof whose harness_python_sha256 differs: refused, the pair is not the pair"
- ]
+ ],
+ "reuse_identity_note": "perf --reuse-pass was measured at 5bf193ce1, the commit this receipt's lane ran on, with a proof from that same run; a later commit refuses it by design. verify --reuse-pass reads the pair the run recorded and still accepts it."
 }

@@ -344,8 +344,16 @@ a declared one.
 | `perf --lane smoke --reuse-pass <proof>` | **20 `PASS`**; `dedup-cdc-overwrite-1` carries `verification.status: REUSED`, the omission recorded, and `phases.reused_invocations == ["verify"]` |
 | `verify --run <lane> --reuse-pass <proof>` | 220 cases, **0 re-derived**, 0.06 s |
 
-Refusal paths exercised: a missing proof path and a `run.json` offered as a proof are both
-refused with their reason.
+Refusal paths exercised: a missing proof path, a `run.json` offered as a proof, and a proof
+whose `harness_python_sha256` differs are each refused with their reason. The new field is
+what makes the third possible — before it, a proof produced by a different `runner.py`
+matched on every field.
+
+**The two verbs compare against different identities, deliberately.** `verify --reuse-pass`
+reads the pair the **run** recorded, so a valid proof survives a later commit; `perf
+--reuse-pass` compares against the **current tree**, because the run it is about to produce
+is on that tree. A documentation-only commit after a lane therefore refuses its `perf` proof
+and accepts its `verify` proof, which is the correct answer in both directions.
 
 ### 6.3 Why the default is not the target
 

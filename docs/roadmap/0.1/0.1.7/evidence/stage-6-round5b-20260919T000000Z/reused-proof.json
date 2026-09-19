@@ -2,9 +2,9 @@
   "budget": {
     "declared_exception": false,
     "limit_ns": 60000000000,
-    "reason": "0.022 s",
+    "reason": "0.056 s",
     "status": "PASS",
-    "wall_ns": 22429792
+    "wall_ns": 55632208
   },
   "cases": 220,
   "disagreements": 0,
@@ -32,5 +32,5 @@
     "files_scanned": 0,
     "status": "REUSED"
   },
-  "wall_ns": 22429792
+  "wall_ns": 55632208
 }
