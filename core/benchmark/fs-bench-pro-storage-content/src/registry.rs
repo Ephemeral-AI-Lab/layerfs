@@ -169,6 +169,11 @@ pub enum Shape {
     Pipeline(PipelineOp),
     /// The three diagnostic matched-pair cases.
     Primitives(PrimitiveOp),
+    /// `history.*`: one whole repository-history selection, saved into one Store.
+    ///
+    /// Outside the 217, outside `--smoke` and outside `--lane full`; see
+    /// [`history_cases`].
+    History(crate::workload::history::Row),
 }
 
 /// Which C1 construction entry point a row uses.
@@ -423,6 +428,29 @@ pub fn cases() -> &'static [Case] {
     })
 }
 
+/// The `history.*` group: three rows, **outside the 217**.
+///
+/// A separate accessor rather than a member of [`cases`], because every count in
+/// `CONTRACT.md` §3 — `ADMISSION_CASES`, `REGISTERED_ROWS`, `FROZEN_CARDINALITY`,
+/// `SMOKE_CASES` — is derived from [`cases`] and must not move. `history.*` is a
+/// separate claim under its own document set, and `--lane full` does not select it.
+pub fn history_cases() -> &'static [Case] {
+    static HISTORY: OnceLock<Vec<Case>> = OnceLock::new();
+    HISTORY.get_or_init(families::history::cases)
+}
+
+/// The `history.*` group's frozen cardinality.
+pub const HISTORY_CARDINALITY: usize = 3;
+
+/// One `history.*` lane's rows: the lane name is the row id.
+pub fn history_lane(lane: &str) -> Vec<Case> {
+    history_cases()
+        .iter()
+        .copied()
+        .filter(|case| case.id == lane)
+        .collect()
+}
+
 /// Registered admission rows only.
 pub fn admission_cases() -> Vec<Case> {
     cases()
@@ -649,5 +677,6 @@ fn render_shape(shape: Shape) -> String {
         Shape::Pool { cold } => format!("pool:{}", if cold { "cold" } else { "warm" }),
         Shape::Pipeline(op) => format!("pipeline:{op:?}").to_lowercase(),
         Shape::Primitives(op) => format!("primitives:{op:?}").to_lowercase(),
+        Shape::History(row) => format!("history:{}", row.token()),
     }
 }

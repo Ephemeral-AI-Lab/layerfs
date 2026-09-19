@@ -1060,6 +1060,15 @@ def run_case(
     # declares none. The per-sample Store readings stay where they were, on the rows
     # that gate them.
     resources["artifact.data_bytes"] = int(acquisition.get("data_bytes", 0) or 0)
+    # The Store's own reading, in the delta shape, composed here rather than left to
+    # the runner's `verify`: the **role split** is what says whether a storage change
+    # moved content or metadata, and a row whose receipt does not carry it cannot be
+    # read for that question without a second invocation. `before` is absent for the
+    # 217 — they take no reading before their chain, and the block names that rather
+    # than inventing a zero — and the history lane takes one inside its invocation.
+    store = retained_store(case_dir)
+    if store is not None:
+        resources["space"] = space.delta(None, space.footprint(store)).as_fields()
 
     document: dict[str, object] = {
         "schema": receipt.SCHEMA,
@@ -1595,6 +1604,21 @@ def history_corpus_probe() -> list[str]:
                     f"{lane}: {field} is {document.get(field)}, pin says {pin[field]}"
                 )
     return failures
+
+
+def retained_store(case_dir: Path) -> Path | None:
+    """The Store a case left behind, or `None` when it retained none.
+
+    `sample.sqlite` is what a per-sample Store is called; `base.sqlite` is a prepared
+    base a row opened rather than created. Both are read the same way, and a row that
+    retained neither gets no `space` block rather than an empty one.
+    """
+    for name in ("sample.sqlite", "store.sqlite", "base.sqlite"):
+        candidate = case_dir / name
+        if candidate.is_file():
+            return candidate
+    found = sorted(case_dir.glob("*.sqlite"))
+    return found[0] if found else None
 
 
 def cmd_self_check(_: argparse.Namespace) -> int:

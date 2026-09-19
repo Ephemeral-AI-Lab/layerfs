@@ -87,7 +87,21 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 parsed.lane = match args.get(index).map(String::as_str) {
                     Some("smoke") => "smoke",
                     Some("full") => "full",
-                    other => return Err(format!("--lane expects smoke|full, got {other:?}")),
+                    // The three `history.*` lanes are named explicitly. They are not
+                    // reachable through `smoke` or `full`, and `history-stride1` is
+                    // never a default: `benchmark_rules.md` §15 forbids a default
+                    // invocation launching an endurance run.
+                    // `Row::id()` is `'static`, so the lane keeps `Args`' lifetime
+                    // without leaking the argv string.
+                    Some(lane) if HistoryRow::from_id(lane).is_some() => {
+                        HistoryRow::from_id(lane).expect("just matched").id()
+                    }
+                    other => {
+                        return Err(format!(
+                            "--lane expects smoke|full|history-stride10|history-stride3|\
+                             history-stride1, got {other:?}"
+                        ))
+                    }
                 };
             }
             "--format" => {
@@ -317,6 +331,24 @@ fn history_corpus(identifier: &str, parsed: &Args) -> ExitCode {
 }
 
 fn list(lane: &str, format: &str) {
+    // The `history.*` lanes are their own lanes and are **not** members of
+    // `--lane full` or `--smoke`: the group is outside the 217, and a lane that
+    // cannot fit a budget is recorded `NOT_RUN` rather than reached by a default
+    // invocation (`benchmark_rules.md` §15).
+    if HistoryRow::from_id(lane).is_some() {
+        for case in registry::history_lane(lane) {
+            println!(
+                "{}\t{}\t{}",
+                case.id,
+                case.family,
+                match case.admission {
+                    registry::Admission::Admission => "admission",
+                    registry::Admission::Diagnostic => "diagnostic",
+                }
+            );
+        }
+        return;
+    }
     let selected = if lane == "smoke" {
         registry::smoke_cases()
     } else {
@@ -357,6 +389,11 @@ fn self_check() -> ExitCode {
     println!("admission rows     : {}", registry::admission_cases().len());
     println!("diagnostic rows    : {}", registry::cases().len() - registry::admission_cases().len());
     println!("smoke lane         : {}", registry::smoke_cases().len());
+    // Outside the 217 and printed as its own line, so a reader cannot fold it in.
+    println!(
+        "history group      : {} (outside the 217)",
+        registry::history_cases().len()
+    );
     if let Ok(expected) = Expected::load() {
         let with_digest = registry::admission_cases()
             .iter()
@@ -394,7 +431,14 @@ fn self_check() -> ExitCode {
 /// from them. A child that published its own verdict would be the collector
 /// marking its own homework.
 fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
-    let Some(case) = registry::cases().iter().find(|case| case.id == identifier) else {
+    // The `history.*` group is resolved first and separately: it is not a member of
+    // `registry::cases()`, so a single lookup over the 220 would report a registered
+    // history row as unregistered.
+    let history = registry::history_cases()
+        .iter()
+        .find(|case| case.id == identifier);
+    let Some(case) = history.or_else(|| registry::cases().iter().find(|case| case.id == identifier))
+    else {
         eprintln!("fs-bench-storage-content: no registered case {identifier:?}");
         return ExitCode::from(2);
     };
@@ -480,6 +524,7 @@ fn run_case(identifier: &str, parsed: &Args) -> ExitCode {
         phase: parsed.phase,
         hold: parsed.hold.clone(),
         verify_sample: parsed.verify_sample,
+        corpus: parsed.corpus.clone(),
         trace: &mut trace,
     };
     let outcome = ops::run(case, &mut context);

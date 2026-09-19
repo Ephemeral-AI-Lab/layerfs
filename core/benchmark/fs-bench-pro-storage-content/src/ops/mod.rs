@@ -20,6 +20,7 @@ pub mod c1;
 pub mod c2;
 pub mod fs;
 pub mod fs_fixture;
+pub mod history;
 pub mod pipeline;
 
 use std::path::{Path, PathBuf};
@@ -104,6 +105,12 @@ pub struct OpContext<'a> {
     /// This is harness argv, like `--hold-save`: it selects how much of the oracle
     /// runs, and a row that sampled is `INCOMPLETE` in the receipt, never `PASS`.
     pub verify_sample: Option<usize>,
+    /// The retained-history corpus root, when the row needs one.
+    ///
+    /// Never defaulted: `preparation.md` §8 test 8 makes an absent `--corpus` a
+    /// refusal rather than a fallback, so a history row handed none fails closed
+    /// instead of reading whatever happens to be at a remembered path.
+    pub corpus: Option<PathBuf>,
     /// Trace writer for this case.
     pub trace: &'a mut TraceWriter,
 }
@@ -294,6 +301,7 @@ pub fn run(case: &Case, context: &mut OpContext<'_>) -> Result<OpOutcome, OpErro
         Shape::Tree(op) => fs::tree(case, op, context),
         Shape::Namespace => fs::namespace(case, context),
         Shape::Locality(op) => fs::locality(case, op, context),
+        Shape::History(row) => history::run(case, row, context),
         Shape::FsBuild { text } => fs::fs_build(case, text, context),
         Shape::Workspace(op) => c2::workspace(case, op, context),
         Shape::Pool { cold } => c2::pool(case, cold, context),

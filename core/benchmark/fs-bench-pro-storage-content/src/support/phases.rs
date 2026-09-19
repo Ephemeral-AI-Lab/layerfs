@@ -221,11 +221,20 @@ pub fn measured(operation_ns: u64, timing_json_bytes: u64) {
     let rss = crate::support::instruments::lifetime_peak_rss_bytes().unwrap_or(0);
     let mut held = clock();
     if held.measured.is_none() {
-        held.measured = Some(now);
         held.cpu_at_measured = cpu;
     }
+    // **Every** measured region moves the mark, and the published operation time
+    // **accumulates** (owner ruling 2, erratum E5). A row whose measured region is
+    // one `Timing::record` sees exactly the previous behaviour — one call sets the
+    // mark once and adds its nanoseconds to a zero — so no 217-row number moves. A
+    // row whose measured region is N named children gets the **sum** of those
+    // children, and a verification span that begins at the *last* child's close
+    // rather than at the first's. The earlier form kept the first mark and
+    // overwrote the operation time, so for such a row `operation_ns` was the last
+    // child alone and `verification_ns` silently swallowed children 2..N.
+    held.measured = Some(now);
     held.process_peak_rss_bytes = held.process_peak_rss_bytes.max(rss);
-    held.operation_ns = operation_ns;
+    held.operation_ns = held.operation_ns.saturating_add(operation_ns);
     held.timing_json_bytes = timing_json_bytes;
 }
 

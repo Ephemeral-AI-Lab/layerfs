@@ -23,6 +23,7 @@ pub mod c2_pool;
 pub mod c2_read;
 pub mod c2_reuse;
 pub mod component_primitives;
+pub mod history;
 pub mod pipeline;
 
 use crate::registry::{Admission, CacheState, Case, Preparation, Shape, StoreState};
@@ -149,6 +150,18 @@ impl CaseSpec {
         self.case.tier = index as u8;
         self.case.tier_label = label;
         self.case.entries = entries;
+        self
+    }
+
+    /// A fixed-configuration row: no position on a tier ladder.
+    ///
+    /// `u8::MAX` is the convention every family already uses for a row that is not
+    /// on a ladder (`CaseSpec::new` sets it), and it is restored here because
+    /// [`CaseSpec::byte_tier`] and [`CaseSpec::entry_tier`] each write `tier` — a
+    /// row that carries both axes would otherwise be filed at ladder position 0.
+    pub fn fixed(mut self) -> Self {
+        self.case.tier = u8::MAX;
+        self.case.tier_label = "";
         self
     }
 

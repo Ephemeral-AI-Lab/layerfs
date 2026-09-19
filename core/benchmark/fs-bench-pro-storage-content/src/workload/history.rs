@@ -425,6 +425,13 @@ pub struct Transition {
     pub changed: Vec<ChangedPath>,
     /// The bytes of every blob the changed paths reference, keyed by oid.
     pub blobs: BlobMap,
+    /// The state's **full** tree, in path order.
+    ///
+    /// A changed directory's update carries the *final* binding of every name it
+    /// changes, so the driver needs the state's whole tree and not only its delta.
+    /// It is bounded by the repository — 9,415 paths at the tip — and not by the
+    /// number of states, so it does not grow with the history.
+    pub tree: BTreeMap<Vec<u8>, TreeEntry>,
 }
 
 impl Transition {
@@ -784,11 +791,12 @@ impl Corpus {
             blobs.insert(*oid, bytes);
         }
 
-        self.previous = tree;
+        self.previous = tree.clone();
         Ok(Transition {
             state,
             changed,
             blobs,
+            tree,
         })
     }
 
@@ -1388,6 +1396,7 @@ mod tests {
                 },
             ],
             blobs: BlobMap::new(),
+            tree: BTreeMap::new(),
         };
         assert_eq!(transition.changed_bytes(), 18);
         assert_eq!(transition.count(Change::Added), 1);
