@@ -1,0 +1,35 @@
+{
+  "budget": {
+    "declared_exception": false,
+    "limit_ns": 60000000000,
+    "reason": "0.022 s",
+    "status": "PASS",
+    "wall_ns": 22498459
+  },
+  "cases": 220,
+  "disagreements": 0,
+  "findings": [],
+  "mode": "reused",
+  "omission": "verification was not re-derived: an identity-matched PASS receipt was accepted instead, for every case in this run",
+  "reused_proof": "/tmp/r5-final2/verification.json",
+  "reused_proof_identities": {
+    "construction_workers": "1",
+    "harness_binary_sha256": "fb967c78d304e6edbb423c4205882694c09da57c3e6728b6b47eba06f6a583b2",
+    "harness_lock_sha256": "f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e",
+    "product_lock_sha256": "bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991",
+    "registry_tsv_sha256": "5186d2f5e8574489ae91fe538c2e039f07406e03c558981e9ccceb1a82e685da",
+    "source_commit": "0ef2bed6ee8cf4838f861280bfbba6cab26261cd"
+  },
+  "reused_proof_verified_run": "/tmp/r5-final2",
+  "run_dir": "/tmp/r5-final2",
+  "runtime_tripwires": {
+    "status": "REUSED",
+    "stores_checked": 0
+  },
+  "schema": "layerfs-core-verification-v1",
+  "sealed_call_graph": {
+    "files_scanned": 0,
+    "status": "REUSED"
+  },
+  "wall_ns": 22498459
+}

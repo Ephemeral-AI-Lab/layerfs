@@ -52,10 +52,17 @@ separate timing and resource scopes. The harness names them:
 
 | | phase | what runs | state |
 | --- | --- | --- | --- |
-| a | preparation | acquire the fixture — build it, or copy/load a prepared artifact — and de-warm | partial: acquired per case for the families that declare a phase split, with `acquisition_wall_ns` recorded |
-| b | **work** | the operation the row claims | measured; `timing.json` is the product's own tree |
-| c | verification | the oracle: a second, byte-identical operation and its read-back | a separate unmeasured invocation for rows that declare it, with its own 60 s budget |
-| d | cleanup | destroy the per-case copy, close | not yet separated |
+| a | preparation | acquire the fixture — build it, or copy/load a prepared artifact — and de-warm | `preparation_wall_ns`, with the copy and de-warm also as `acquisition_wall_ns` |
+| b | **work** | the operation the row claims | `operation_ns`, the product's own telemetry root; the golden benchmark number |
+| c | verification | the oracle: a second, byte-identical operation and its read-back | `verification_wall_ns`; a separate unmeasured invocation for rows that declare it, with its own 60 s budget |
+| d | cleanup | destroy the per-case copy, close | `cleanup_wall_ns` |
+
+Each invocation writes one `phases-<invocation>.json` beside its trace, and the runner
+composes the six published fields from those files and the product's `timing.json`.
+`verify` re-derives them and fails closed when the declared phases do not reconcile with
+the process wall inside a declared tolerance. `handoff_ns` is published beside
+`operation_ns`, so harness work inside the measured region is visible rather than absorbed
+into the golden number.
 
 **What is inside the timer is fixed per case shape** by
 `test_setup_and_cache_discipline.md` §2.2 — a driver does not choose it:
@@ -90,7 +97,9 @@ benchmark-results/fs-bench-pro-storage-content/   gitignored, development runs
   <run>/<case_id>/
     timing.json      byte-verbatim product receipt (never edited)
     trace.jsonl      the harness trace, flat layerfs-trace-v1
-    receipt.json     derived: identity, gates, statuses, counters, budget
+    phases-perf.json     the phase spans the performance invocation observed
+    phases-verify.json   the same for a deferred verification invocation
+    receipt.json     derived: identity, gates, statuses, counters, phases, budget
   <run>/run.json       selection, identity, tally
   <run>/manifest.json  every retained file, hashed
   <run>/verification.json  the re-derivation, append-only
@@ -169,33 +178,71 @@ mismatches, and 0 product entries the harness does not link.
 
 ## What is not yet true here — see [#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184)
 
-Assigned to Stage 6 round 5, with the executable plan in
-[`stage-6-round5-implementation-plan.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-round5-implementation-plan.md).
-Recorded here so a reader is not misled by the sections above:
+Round 5 ([#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184), closure receipt at
+[`stage-6-round5-20260919T000000Z`](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-round5-20260919T000000Z/README.md))
+closed the accounting half of this section and left the preparation half open. Recorded here
+so a reader is not misled by the sections above.
 
-- **`operation_ns` is not published.** The budget still classifies the process wall, so
-  preparation and verification are billed to a performance budget; there is no
-  `preparation_wall_ns`, `verification_wall_ns`, `cleanup_wall_ns` or
-  `complete_command_ns`. Measured on the round-3b lane: 394.57 s of wall for 39.15 s of
-  operation.
-- **The phase split covers one family**, `c2.delta.cdc-locality`. The other fixture-heavy
-  families still build their fixture inside their single invocation, which is why 90% of
-  that lane is not measured operation.
-- **`--reuse-pass` does not exist**, although `AGENTS.md` §2 mandates it, and neither do
-  the verification modes `full` / `sample` / `none`. A sampled or omitted row will be
-  `INCOMPLETE`, **never `PASS`**, so an iteration run cannot be mistaken for admission
-  evidence.
-- **The report's `time max ms` column is the complete-command wall**, not the operation.
-  Read `timing.json` for operation time.
-- **56 of 217 passing rows publish no `timing.json`** at all, because `ops/fs.rs` does
-  not call `write_timing`: `c1.many-tiny` 20, `c1.tree.construct-traverse` 12,
-  `c1.change-locality` 12, `c1.fs.build-scale` 8, `c1.tree.namespace-mutation` 4.
-  The figure was 44 of 194 when this section was written; round 4b closed twelve more
-  rows that publish none (the eight `tiny-unlink`/`tiny-bulk-delete` and the four
-  `namespace-*` walk-ceiling tiers), so the gap grew with the pass count rather than
-  shrinking.
-- **The oracle over-verifies and may also under-verify.** Four C2 families do a
-  byte-exact read-back their frozen oracle does not require (`c2.delta.cdc-locality` is
-  O1 + O3), while the drivers gate "replay root == measured root" — self-consistency,
-  not O1's pinned expected root — and the delta counters are written without a gate
-  against pinned values, which is what O3 means.
+**Now true.**
+
+- **The four phases are published.** Every receipt carries `preparation_wall_ns`,
+  `acquisition_wall_ns`, `operation_ns`, `verification_wall_ns`, `cleanup_wall_ns`,
+  `handoff_ns` and `complete_command_ns`; the child publishes one
+  `phases-<invocation>.json` per invocation and `verify` re-derives all six from it and
+  from the product's own `timing.json`, failing closed outside a declared tolerance
+  (250 ms + 2%). The boundary between setup and the operation is the driver's own
+  `Timing::record`, reached through `ops::measure`, so no driver can choose it.
+- **`operation_ns` is the report's primary axis and the golden benchmark number**, and
+  `sum(operation_ns)` is published for the lane so a row that got faster at another row's
+  expense is visible.
+- **Every registered row writes `timing.json`.** `ops/fs.rs` never called `write_timing`,
+  so 56 of 217 passing rows published no operation time; `ops::measure` now writes it for
+  every row that measured something, and `g7.tree-complete` still gates completeness.
+- **The frozen oracle's O1 and O3 are pinned constants.**
+  `tests/golden/expected.tsv` (1,969 rows, `include_str!`-embedded so the harness binary's
+  own sha256 covers it) pins every published counter of every admission case and one
+  identity digest per row; `main` gates them and `verify` re-derives them from the row's
+  whole trace. The registry self-check asserts the coverage, so the pinned set cannot
+  shrink unnoticed.
+- **The read-back is gone from the four families whose oracle does not ask for O2**
+  (`c2.delta.cdc-locality` is O1 + O3, `c2.reuse.workspace` O1 + O5, `c2.footprint`
+  O6 + O1, `c2.pool.cold-warm` O1 + O3). They gate the pinned identity through the
+  product's own presence path instead of decoding a whole logical set to answer a question
+  the specification never posed. Where O2 **is** required, each distinct
+  `(root, expectation)` pair is verified once — complete, not sampled.
+- **`--reuse-pass` exists**, on both `verify` and `perf`, and fails closed on schema,
+  identity, hard-limit and wall mismatch with `reused_proof_identities` and an explicit
+  omission recorded.
+- **The mode ladder `full` / `sample` / `none` exists.** The sample is deterministic and
+  declared — `max(1, ceil(units/10))`, selected by `index % 10 == 0` — and every row in a
+  non-`full` mode is `INCOMPLETE`, never `PASS`, with the mode published in the receipt and
+  in the report header. An iteration run is not admission evidence.
+- **The prepared-master key is the product identity plus a declared fixture-recipe
+  version** (owner ruling 3). The producer binary is recorded as provenance and published,
+  never part of the key, so a measurement-plumbing-only harness change does not invalidate a
+  master. A master sealed under a different key — or with no key at all — is superseded
+  rather than consumed; round 4 consumed one.
+
+**Still not true.**
+
+- **Preparation is still rebuilt per run for six fixture-heavy families.** Only
+  `c2.delta.cdc-locality` has a prepared master. `c1.edit.*`, `c1.cdc.chunk-count`,
+  `c2.reuse.*`, `c2.read.waves`, `c2.footprint` and `c1.fs.build-scale` build their base
+  inside their one invocation, and they are **98.2 s of a 263.8 s lane**. The delta family
+  spends 0.19 s per row of preparation; that is what the others would reach with V9-V11,
+  which are not implemented. **34 of 217 rows exceed the 1.0 s per-row preparation target**
+  and the worst is 5.448 s.
+- **The quick mode is not fast.** `--verify none` skips the *deferred* verification
+  invocation, which only `c2.delta.cdc-locality` has: 254.6 s against 263.8 s. For the other
+  200 admission rows the oracle is a second, unmeasured, byte-identical operation inside the
+  performance invocation, and omitting it needs a driver change rather than a runner flag.
+- **The largest single verification invocation is 7.636 s**, against a 5 s target.
+  `c2.reuse.cross-file` carries it; the O2 read-back it needs is the cost.
+- **Expectation digests are not persisted for every family.** The delta family carries them
+  in its artifact; the others still call `Expectation::of` over fixture bytes.
+- **The harness identity does not cover the harness's own Python.** A receipt names the Rust
+  binary's sha256, both lockfiles and the registry table, but a Python-only harness change
+  leaves every one of them unchanged.
+- **The budget still classifies the complete-command wall**, and `elapsed_ns` still never
+  gate-decides. Round 5 published the operation number and made it the report's axis; making
+  it gate or drive the budget is a `CONTRACT.md` change and was not this round's.

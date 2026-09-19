@@ -1,0 +1,22 @@
+{
+  "none": {
+    "note": "the deferred verification invocation is skipped; the oracles that run inside a performance invocation are not, so the quick lane is not fast for the 200 rows whose oracle is in-process",
+    "rows": 220,
+    "sample_rule": "",
+    "tally": {
+      "INCOMPLETE": 220
+    },
+    "verification_mode": "none",
+    "wall_ns": 254642323375
+  },
+  "sample": {
+    "note": "the deferred verification invocation is skipped; the oracles that run inside a performance invocation are not, so the quick lane is not fast for the 200 rows whose oracle is in-process",
+    "rows": 220,
+    "sample_rule": "index % 10 == 0 in declaration order, max(1, ceil(units/10)) units",
+    "tally": {
+      "INCOMPLETE": 220
+    },
+    "verification_mode": "sample",
+    "wall_ns": 258382502250
+  }
+}

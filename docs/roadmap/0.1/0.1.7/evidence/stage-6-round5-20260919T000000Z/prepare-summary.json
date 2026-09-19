@@ -1,0 +1,34 @@
+{
+  "acquisition_wall_ns_total": 73835253288,
+  "cases_considered": 220,
+  "produced_or_reused": 20,
+  "producer_commit": "eedbaa5f891eae56fead3f6ff6035be549a02d31",
+  "recipe_version": "fs-bench-fixture-recipe-v1",
+  "schema": "layerfs-prepared-summary-v1",
+  "source_manifest": "manifest-2026-09-19T001532Z.json",
+  "states": {
+    "acquired": 20
+  },
+  "superseded": [
+    "dedup-cdc-overwrite-1",
+    "dedup-cdc-overwrite-10",
+    "dedup-cdc-overwrite-100",
+    "dedup-cdc-overwrite-500",
+    "dedup-cdc-insert-1",
+    "dedup-cdc-insert-10",
+    "dedup-cdc-insert-100",
+    "dedup-cdc-insert-500",
+    "dedup-cdc-delete-1",
+    "dedup-cdc-delete-10",
+    "dedup-cdc-delete-100",
+    "dedup-cdc-delete-500",
+    "dedup-cdc-common-body-1",
+    "dedup-cdc-common-body-10",
+    "dedup-cdc-common-body-100",
+    "dedup-cdc-common-body-500",
+    "dedup-cdc-scattered-1",
+    "dedup-cdc-scattered-10",
+    "dedup-cdc-scattered-100",
+    "dedup-cdc-scattered-500"
+  ]
+}
