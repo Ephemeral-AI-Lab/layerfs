@@ -126,6 +126,53 @@ class ReuseRefused(Exception):
     """A reused proof was offered and refused, with the reason."""
 
 
+# The declared fixture-recipe version. It is bumped when the *recipe* a family
+# builds its fixture from changes — the generator, the offsets, the profile, the
+# declared sizes. It is deliberately not the harness binary.
+FIXTURE_RECIPE_VERSION = "fs-bench-fixture-recipe-v1"
+
+
+def compatibility_digest(row: list[str], identity: receipt.Identity) -> str:
+    """The compatibility key of one prepared artifact.
+
+    Owner ruling 3 (2026-09-19): *the digest key is the product identity plus a
+    declared fixture-recipe version.* The producer binary is recorded in the seal as
+    **provenance** and validated on load; it is not part of the key. Including it
+    would invalidate every master on every harness edit, leave the campaign
+    permanently cold, and buy nothing: a measurement-plumbing change does not change
+    the bytes a recipe produces, and when it does, `FIXTURE_RECIPE_VERSION` is what
+    says so.
+
+    The key covers the case's own registry declaration, both lockfiles (the product
+    identity and the harness's dependency set) and the recipe version. Unknown or
+    missing input fails closed at the call site.
+    """
+    payload = json.dumps(
+        {
+            "schema": "layerfs-prepared-compatibility-v1",
+            "recipe_version": FIXTURE_RECIPE_VERSION,
+            "case_id": row[0],
+            "family": row[1],
+            "admission": row[2],
+            "product_lock_sha256": identity.product_lock_sha256,
+            "harness_lock_sha256": identity.harness_lock_sha256,
+        },
+        sort_keys=True,
+    )
+    return receipt.sha256_bytes(payload.encode("utf-8"))
+
+
+def read_seal(marker: Path) -> dict[str, str]:
+    """The key/value lines a sealed artifact carries."""
+    if not marker.exists():
+        return {}
+    recorded: dict[str, str] = {}
+    for line in marker.read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("\t")
+        recorded[key] = value
+    return recorded
+
+
 class RunnerError(Exception):
     """The run cannot proceed as asked."""
 
@@ -232,35 +279,50 @@ def artifact_root() -> Path:
     return RESULTS_ROOT / "prepared"
 
 
-def acquire(case_id: str, root: Path, harness_sha: str) -> dict[str, object]:
-    """Acquires one row's artifact once, keyed by the harness that produced it.
+def acquire(case_id: str, root: Path, identity: receipt.Identity, row: list[str]) -> dict[str, object]:
+    """Acquires one row's artifact once, keyed by its compatibility digest.
 
-    Reuse is refused when the sealed marker names a different harness binary: the
-    fixture is a function of the harness, so an artifact from another build is not
-    the same input. An entry that exists without a seal is an interrupted
-    acquisition and is not consumed.
+    Reuse is decided by the **compatibility digest**, never by the harness binary
+    (owner ruling 3). The producer binary and source commit are read off the seal and
+    published as provenance, so a reader can always tell which build produced the
+    bytes that were measured — and a measurement-plumbing-only harness change does
+    not throw the cache away.
+
+    An entry whose digest does not match, or which records no digest at all, is
+    **superseded**: it is moved aside rather than deleted, and a fresh acquisition
+    takes its place. An entry that exists without a seal is an interrupted
+    acquisition and is refused, not consumed.
     """
+    compatibility = compatibility_digest(row, identity)
     destination = root / case_id
     marker = destination / "sealed.tsv"
-    if marker.exists():
-        recorded = {}
-        for line in marker.read_text(encoding="utf-8").splitlines():
-            key, _, value = line.partition("\t")
-            recorded[key] = value
-        if recorded.get("harness_sha256") == harness_sha:
-            return {"case_id": case_id, "state": "reused", "artifact": str(destination)}
+    recorded = read_seal(marker)
+    producer = recorded.get("producer_harness_sha256") or recorded.get("harness_sha256", "")
+    if recorded.get("compatibility") == compatibility:
         return {
             "case_id": case_id,
-            "state": "stale",
-            "reason": "the sealed artifact names another harness binary",
+            "state": "reused",
             "artifact": str(destination),
+            "compatibility": compatibility,
+            "recipe_version": FIXTURE_RECIPE_VERSION,
+            "producer_harness_sha256": producer,
+            "producer_is_current_binary": producer == (identity.harness_binary_sha256 or ""),
+            "producer_commit": recorded.get("producer_commit", ""),
         }
-    if destination.exists():
+    if destination.exists() and not marker.exists():
         return {
             "case_id": case_id,
             "state": "not-produced",
             "reason": "an unsealed artifact directory exists; an interrupted acquisition is not consumed",
         }
+    superseded = None
+    if destination.exists():
+        superseded = str(
+            destination.with_name(
+                f"{case_id}.superseded-{compatibility[:12]}-{recorded.get('compatibility', 'unsealed')[:12]}"
+            )
+        )
+        os.rename(destination, superseded)
     destination.mkdir(parents=True)
     acquisition = destination / "acquisition"
     started = time.monotonic_ns()
@@ -277,113 +339,33 @@ def acquire(case_id: str, root: Path, harness_sha: str) -> dict[str, object]:
         "case_id": case_id,
         "state": "acquired" if result.returncode == 0 else "failed",
         "artifact": str(destination),
+        "compatibility": compatibility,
+        "recipe_version": FIXTURE_RECIPE_VERSION,
         "acquisition_wall_ns": wall_ns,
+        "producer_harness_sha256": identity.harness_binary_sha256 or "",
+        "producer_commit": identity.source_commit,
+        "superseded": superseded,
+        "superseded_reason": (
+            "the sealed artifact records no compatibility digest"
+            if superseded and not recorded.get("compatibility")
+            else "the sealed artifact names a different compatibility digest"
+            if superseded
+            else None
+        ),
         "exit_code": result.returncode,
         "stdout": result.stdout.strip()[-500:],
         "stderr": result.stderr.strip()[-500:],
     }
     if result.returncode == 0:
+        # The seal is the child's; the runner appends the provenance and the key.
+        # The producer binary is provenance, not the key, and the source commit is
+        # recorded beside it so a reader can name the build that produced the bytes.
         with (destination / "sealed.tsv").open("a", encoding="utf-8") as handle:
-            handle.write(f"harness_sha256\t{harness_sha}\n")
+            handle.write(f"compatibility\t{compatibility}\n")
+            handle.write(f"recipe_version\t{FIXTURE_RECIPE_VERSION}\n")
+            handle.write(f"producer_harness_sha256\t{identity.harness_binary_sha256 or ''}\n")
+            handle.write(f"producer_commit\t{identity.source_commit}\n")
     return record
-
-
-def load_reused_proof(path: str, identity: receipt.Identity, selection: list[str]) -> dict[str, object]:
-    """Validates a verification receipt offered in place of re-running verification.
-
-    Fails closed on every way the offer can be wrong, and each check exists because
-    accepting without it would let one tree's proof admit another tree's row:
-
-    * **schema** — it must be a `layerfs-core-verification-v1` document;
-    * **identity** — source commit, harness binary, both lockfiles, the registry
-      table and the worker count must all match the run about to be admitted;
-    * **hard limits** — the proof must record zero disagreements, a sealed
-      call-graph `PASS`, runtime tripwires `PASS` and a verification wall inside its
-      own 60 s budget;
-    * **coverage** — every selected case must appear with `status == PASS` and a
-      published status of `PASS`. A case the proof does not cover is not covered by
-      the omission either.
-
-    The caller records `reused_proof_identities` and the omission on every row it
-    covers, so the reuse is visible in the receipt rather than inferred from a
-    shorter wall time.
-    """
-    document = json.loads(Path(path).read_text(encoding="utf-8"))
-    if document.get("schema") != "layerfs-core-verification-v1":
-        raise ReuseRefused(f"{path}: schema {document.get('schema')!r} is not a verification receipt")
-    previous_run = Path(str(document.get("run_dir", ""))) / "run.json"
-    if not previous_run.exists():
-        raise ReuseRefused(f"{path}: the run it verified ({previous_run}) is not on disk")
-    previous = json.loads(previous_run.read_text(encoding="utf-8"))
-    previous_identity = dict(previous.get("identity", {}))
-    mismatched = [
-        field
-        for field in REUSED_PROOF_IDENTITY_FIELDS
-        if str(previous_identity.get(field)) != str(identity.as_fields().get(field))
-    ]
-    if mismatched:
-        raise ReuseRefused(
-            "the offered proof was produced on a different pair: "
-            + ", ".join(
-                f"{field} {previous_identity.get(field)!r} != {identity.as_fields().get(field)!r}"
-                for field in mismatched
-            )
-        )
-    if int(document.get("disagreements", 1)) != 0:
-        raise ReuseRefused(f"{path}: {document.get('disagreements')} disagreement(s) recorded")
-    call_graph = document.get("sealed_call_graph", {}) or {}
-    tripwires = document.get("runtime_tripwires", {}) or {}
-    if call_graph.get("status") != "PASS":
-        raise ReuseRefused(f"{path}: sealed call-graph is {call_graph.get('status')!r}")
-    if tripwires.get("status") != "PASS":
-        raise ReuseRefused(f"{path}: runtime tripwires are {tripwires.get('status')!r}")
-    wall_ns = int(document.get("wall_ns", 0))
-    if receipt.verification_budget(wall_ns).status != "PASS":
-        raise ReuseRefused(f"{path}: its own verification wall {wall_ns / 1e9:.3f} s exceeds the 60 s budget")
-    proofs: dict[str, dict[str, object]] = {}
-    for finding in document.get("findings", []) or []:
-        case_id = str(finding.get("case_id", ""))
-        if not case_id:
-            continue
-        if finding.get("status") != "PASS" or finding.get("published_status") != "PASS":
-            continue
-        phases = finding.get("phases", {}) or {}
-        if phases.get("status") != "PASS":
-            continue
-        proofs[case_id] = {
-            "proof": str(path),
-            "identities": {
-                field: previous_identity.get(field) for field in REUSED_PROOF_IDENTITY_FIELDS
-            },
-        }
-    # Coverage is required for every selected case the verified run actually ran. A
-    # row whose driver does not exist is `NOT_RUN` in both runs: it has no oracle to
-    # reuse, and requiring a proof for it would make `--reuse-pass` unusable on any
-    # lane that contains one.
-    previous_rows = previous_run.parent
-    measured = [
-        case_id
-        for case_id in selection
-        if (previous_rows / case_id / "receipt.json").exists()
-        and json.loads((previous_rows / case_id / "receipt.json").read_text(encoding="utf-8")).get(
-            "status"
-        )
-        != "NOT_RUN"
-    ]
-    uncovered = [case_id for case_id in measured if case_id not in proofs]
-    if uncovered:
-        raise ReuseRefused(
-            f"{path} covers no passing proof for {len(uncovered)} measured case(s): "
-            + ", ".join(uncovered[:5])
-        )
-    return {
-        "path": str(path),
-        "identities": {
-            field: previous_identity.get(field) for field in REUSED_PROOF_IDENTITY_FIELDS
-        },
-        "verified_run": str(previous_run.parent),
-        "cases": proofs,
-    }
 
 
 def cmd_prepare(arguments: argparse.Namespace) -> int:
@@ -392,12 +374,16 @@ def cmd_prepare(arguments: argparse.Namespace) -> int:
     root.mkdir(parents=True, exist_ok=True)
     if not BINARY.exists():
         build()
-    harness_sha = receipt.sha256_file(BINARY) if BINARY.exists() else ""
+    identity = receipt.identify(REPO_ROOT, HARNESS_ROOT, BINARY)
+    harness_sha = identity.harness_binary_sha256 or ""
     manifest = {
         "schema": "layerfs-prepared-manifest-v1",
         "root": str(root),
         "acquired_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "harness_sha256": harness_sha,
+        "producer_commit": identity.source_commit,
+        "recipe_version": FIXTURE_RECIPE_VERSION,
+        "key": "the product identity plus the declared fixture-recipe version; the producer binary is provenance",
         "cases": [],
     }
     selected = arguments.case or registry_rows()
@@ -412,10 +398,18 @@ def cmd_prepare(arguments: argparse.Namespace) -> int:
                 }
             )
             continue
-        manifest["cases"].append(acquire(case_id, root, harness_sha))
+        manifest["cases"].append(acquire(case_id, root, identity, row_of(case_id)))
     receipt.write_append_only(root / f"manifest-{manifest['acquired_utc'].replace(':', '')}.json", manifest)
     print(f"prepare: {len(manifest['cases'])} case(s) considered at {root}")
     return 0
+
+
+def row_of(case_id: str) -> list[str]:
+    """The registry row of one case, so the digest key is the declaration itself."""
+    for row in registry_table():
+        if row[0] == case_id:
+            return row
+    raise RunnerError(f"{case_id} is not in the binary's registry")
 
 
 def family_of(case_id: str) -> str:
@@ -456,7 +450,7 @@ def run_case(
     command = [str(BINARY), "--case", case_id, "--out", str(case_dir)]
     if family_of(case_id) in PHASE_SPLIT_FAMILIES:
         artifact = artifact_root() / case_id
-        acquisition = acquire(case_id, artifact_root(), identity.harness_binary_sha256 or "")
+        acquisition = acquire(case_id, artifact_root(), identity, row_of(case_id))
         command += ["--load-input", str(artifact)]
     started = time.monotonic_ns()
     result = subprocess.run(
