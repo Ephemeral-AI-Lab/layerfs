@@ -266,15 +266,22 @@ implementation (`core/crates/*/src` + runtime SQL), comments, blanks and tests e
 | Check | Result |
 | --- | --- |
 | `cargo +1.85.1 build --release --locked --manifest-path $H/Cargo.toml` | clean, no warnings |
-| `cargo +1.85.1 test --locked --manifest-path $H/Cargo.toml` | **13 test binaries, 0 failed** (84 before, plus `pinned_expectations`' 8) |
+| `cargo +1.85.1 test --locked --manifest-path $H/Cargo.toml` | **92 passed / 0 failed** across 13 test binaries (84 before, plus `pinned_expectations`' 8) |
 | `python3 -m unittest discover -s $H/shared -p 'test_*.py'` | OK, **112 tests** (106 before, plus the three new self-check wrappers) |
 | `python3 $H/runner.py self-check` | PASS — lock parity 46 entries / 0 mismatches, registry, exceptions (8 declared), golden, phases |
 | `python3 $H/runner.py verify --run <closure>` | 0 disagreements, call-graph PASS over 120 files, tripwires PASS over 159 stores |
 | `python3 $H/runner.py calibrate --out <closure>` | E1 `REFUTED`; E2/E3/E4/W1/W2/W4 `SATISFIED` |
 | `python3 core/tools/check_product_boundary.py` | PASS — 120 production Rust/SQL files scanned |
 | `python3 tools/production_loc.py` | 84936 combined, unchanged |
-| `cargo +1.85.1 test --locked --manifest-path core/Cargo.toml` | **not re-run**: no product source changed and the product lock is byte-identical to round 4c's |
-| `cargo +1.85.1 clippy` / `fmt` | **not run as a gate.** The harness workspace is not rustfmt-clean at HEAD (24 files, most of them untouched by this round) and has never been a clippy gate; this round did not change that and did not add one |
+| `cargo +1.85.1 test --locked --manifest-path core/Cargo.toml` | **473 passed / 0 failed** — unchanged from round 4c, as expected: no product source changed and the product lock is byte-identical |
+| `cargo +1.85.1 clippy` / `fmt` | **not run as a gate** (see below). The harness workspace is not rustfmt-clean at HEAD (24 files, most of them untouched by this round) and has never been a clippy gate; this round did not change that and did not add one |
+
+`cargo clippy` and `cargo fmt` are **not** gates for this workspace and were not made ones.
+The harness is not rustfmt-clean at HEAD — 24 files carry a diff, most of them untouched by
+this round — and running `fmt` over the whole workspace would bury a 5-commit round in a
+24-file reformat that changes no behaviour. The three files this round added are formatted;
+the rest of the workspace is left as it was found, and the harness's own declared checks are
+the ones above.
 
 `tools/preflight.sh` was not run and was not restored. No CI workflow, no aggregate gate and
 no wrapper was created.
