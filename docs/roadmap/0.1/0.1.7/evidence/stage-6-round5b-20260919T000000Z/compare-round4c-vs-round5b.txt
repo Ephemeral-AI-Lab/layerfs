@@ -1,14 +1,6 @@
-  instrumentation  append-tail-4k-100m                              counters.timing_json_bytes: 764 -> 761
   instrumentation  append-tail-4k-10m                               counters.timing_json_bytes: 764 -> 761
-  instrumentation  append-tail-4k-1m                                counters.timing_json_bytes: 762 -> 760
+  instrumentation  append-tail-4k-1m                                counters.timing_json_bytes: 762 -> 759
   instrumentation  append-tail-4k-500m                              counters.timing_json_bytes: 766 -> 763
-  instrumentation  dedup-cdc-boundary-16384-s1                      counters.timing_json_bytes: 211 -> 212
-  instrumentation  dedup-cdc-boundary-16384-s2                      counters.timing_json_bytes: 211 -> 212
-  instrumentation  dedup-cdc-boundary-16384-s3                      counters.timing_json_bytes: 211 -> 212
-  instrumentation  dedup-cdc-boundary-32768-s1                      counters.timing_json_bytes: 211 -> 212
-  instrumentation  dedup-cdc-boundary-32769-s1                      counters.timing_json_bytes: 211 -> 212
-  instrumentation  dedup-cdc-boundary-32769-s3                      counters.timing_json_bytes: 211 -> 212
-  instrumentation  dedup-cdc-boundary-8191-s1                       counters.timing_json_bytes: 211 -> 212
   instrumentation  dedup-cdc-common-body-1                          counters.timing_json_bytes: 210 -> 211
   added            dedup-cdc-common-body-1                          counters.verify.sampled: None -> 1
   added            dedup-cdc-common-body-1                          counters.verify.units: None -> 1
@@ -16,7 +8,6 @@
   added            dedup-cdc-common-body-10                         counters.verify.sampled: None -> 10
   added            dedup-cdc-common-body-10                         counters.verify.units: None -> 10
   resource-drift   dedup-cdc-common-body-10                         resources.heap.peak_incremental_bytes: 8324161 -> 8327329
-  instrumentation  dedup-cdc-common-body-100                        counters.timing_json_bytes: 211 -> 212
   added            dedup-cdc-common-body-100                        counters.verify.sampled: None -> 100
   added            dedup-cdc-common-body-100                        counters.verify.units: None -> 100
   resource-drift   dedup-cdc-common-body-100                        resources.heap.peak_incremental_bytes: 8581562 -> 8584530
@@ -30,7 +21,6 @@
   added            dedup-cdc-delete-10                              counters.verify.sampled: None -> 1
   added            dedup-cdc-delete-10                              counters.verify.units: None -> 1
   resource-drift   dedup-cdc-delete-10                              resources.heap.peak_incremental_bytes: 8096168 -> 8115520
-  instrumentation  dedup-cdc-delete-100                             counters.timing_json_bytes: 211 -> 212
   added            dedup-cdc-delete-100                             counters.verify.sampled: None -> 1
   added            dedup-cdc-delete-100                             counters.verify.units: None -> 1
   resource-drift   dedup-cdc-delete-100                             resources.heap.peak_incremental_bytes: 8137345 -> 8139041
@@ -58,7 +48,7 @@
   added            dedup-cdc-overwrite-10                           counters.verify.sampled: None -> 10
   added            dedup-cdc-overwrite-10                           counters.verify.units: None -> 10
   resource-drift   dedup-cdc-overwrite-10                           resources.heap.peak_incremental_bytes: 8560893 -> 8564605
-  instrumentation  dedup-cdc-overwrite-100                          counters.timing_json_bytes: 211 -> 213
+  instrumentation  dedup-cdc-overwrite-100                          counters.timing_json_bytes: 211 -> 212
   added            dedup-cdc-overwrite-100                          counters.verify.sampled: None -> 100
   added            dedup-cdc-overwrite-100                          counters.verify.units: None -> 100
   resource-drift   dedup-cdc-overwrite-100                          resources.heap.peak_incremental_bytes: 8534755 -> 8545339
@@ -90,22 +80,22 @@
   added            dedup-cross-file-unique-10                       counters.reuse.distinct_readbacks: None -> 10
   added            dedup-cross-file-unique-100                      counters.reuse.distinct_readbacks: None -> 100
   added            dedup-cross-file-unique-500                      counters.reuse.distinct_readbacks: None -> 500
-  resource-drift   dedup-workspace-exact-500-compact-v2             resources.heap.peak_incremental_bytes: 8273971 -> 8274259
-  resource-drift   dedup-workspace-local-100-compact-v2             resources.heap.peak_incremental_bytes: 8731391 -> 8731679
-  instrumentation  delete-middle-4k-100m                            counters.timing_json_bytes: 628 -> 626
+  instrumentation  dedup-workspace-local-1-compact-v2               counters.timing_json_bytes: 213 -> 214
+  instrumentation  delete-middle-4k-100m                            counters.timing_json_bytes: 628 -> 627
+  instrumentation  delete-middle-4k-10m                             counters.timing_json_bytes: 628 -> 626
   instrumentation  delete-middle-4k-1m                              counters.timing_json_bytes: 623 -> 622
   instrumentation  delete-middle-4k-500m                            counters.timing_json_bytes: 629 -> 627
-  instrumentation  grow-10m                                         counters.timing_json_bytes: 764 -> 762
+  instrumentation  grow-100m                                        counters.timing_json_bytes: 764 -> 763
+  instrumentation  grow-10m                                         counters.timing_json_bytes: 764 -> 763
   instrumentation  grow-1m                                          counters.timing_json_bytes: 762 -> 759
   instrumentation  grow-500m                                        counters.timing_json_bytes: 766 -> 763
-  instrumentation  insert-middle-4k-100m                            counters.timing_json_bytes: 766 -> 763
+  instrumentation  insert-middle-4k-100m                            counters.timing_json_bytes: 766 -> 762
   instrumentation  insert-middle-4k-10m                             counters.timing_json_bytes: 765 -> 762
   instrumentation  insert-middle-4k-500m                            counters.timing_json_bytes: 766 -> 763
-  instrumentation  lifecycle-abort                                  counters.timing_json_bytes: 276 -> 277
   resource-drift   lifecycle-abort                                  resources.heap.peak_incremental_bytes: 2221179 -> 2221177
+  instrumentation  lifecycle-begin-save                             counters.timing_json_bytes: 367 -> 366
   resource-drift   lifecycle-begin-save                             resources.heap.peak_incremental_bytes: 2221588 -> 2221586
   resource-drift   lifecycle-create                                 resources.heap.peak_incremental_bytes: 2792 -> 2790
-  instrumentation  lifecycle-finish-empty                           counters.timing_json_bytes: 276 -> 278
   resource-drift   lifecycle-finish-empty                           resources.heap.peak_incremental_bytes: 2220678 -> 2220676
   instrumentation  lifecycle-open                                   counters.timing_json_bytes: 141 -> 139
   resource-drift   lifecycle-open                                   resources.heap.peak_incremental_bytes: 2790 -> 2788
@@ -113,68 +103,64 @@
   resource-drift   namespace-10000-text-v1                          resources.heap.peak_incremental_bytes: 2525955 -> 2525937
   resource-drift   namespace-100000                                 resources.heap.peak_incremental_bytes: 2525892 -> 2525874
   resource-drift   namespace-100000-text-v1                         resources.heap.peak_incremental_bytes: 2525964 -> 2525946
-  instrumentation  overwrite-fixed-64k-chunk-count-decrease-100m    counters.timing_json_bytes: 908 -> 906
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-100m    counters.timing_json_bytes: 908 -> 907
   instrumentation  overwrite-fixed-64k-chunk-count-decrease-10m     counters.timing_json_bytes: 908 -> 907
-  instrumentation  overwrite-fixed-64k-chunk-count-decrease-1m      counters.timing_json_bytes: 905 -> 903
-  instrumentation  overwrite-fixed-64k-chunk-count-decrease-500m    counters.timing_json_bytes: 911 -> 908
-  instrumentation  overwrite-fixed-64k-chunk-count-increase-100m    counters.timing_json_bytes: 910 -> 909
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-1m      counters.timing_json_bytes: 905 -> 904
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-500m    counters.timing_json_bytes: 911 -> 909
+  instrumentation  overwrite-fixed-64k-chunk-count-increase-100m    counters.timing_json_bytes: 910 -> 907
   instrumentation  overwrite-fixed-64k-chunk-count-increase-10m     counters.timing_json_bytes: 909 -> 910
-  instrumentation  overwrite-fixed-64k-chunk-count-increase-1m      counters.timing_json_bytes: 905 -> 904
+  instrumentation  overwrite-fixed-64k-chunk-count-increase-1m      counters.timing_json_bytes: 905 -> 906
   instrumentation  overwrite-fixed-64k-chunk-count-preserve-100m    counters.timing_json_bytes: 560 -> 557
   resource-drift   overwrite-fixed-64k-chunk-count-preserve-100m    resources.heap.peak_incremental_bytes: 148956 -> 149084
-  instrumentation  overwrite-fixed-64k-chunk-count-preserve-10m     counters.timing_json_bytes: 559 -> 557
+  instrumentation  overwrite-fixed-64k-chunk-count-preserve-10m     counters.timing_json_bytes: 559 -> 561
   resource-drift   overwrite-fixed-64k-chunk-count-preserve-10m     resources.heap.peak_incremental_bytes: 154110 -> 154238
-  instrumentation  overwrite-fixed-64k-chunk-count-preserve-1m      counters.timing_json_bytes: 559 -> 558
+  instrumentation  overwrite-fixed-64k-chunk-count-preserve-1m      counters.timing_json_bytes: 559 -> 557
   resource-drift   overwrite-fixed-64k-chunk-count-preserve-1m      resources.heap.peak_incremental_bytes: 158888 -> 159016
   instrumentation  overwrite-fixed-64k-chunk-count-preserve-500m    counters.timing_json_bytes: 562 -> 557
   resource-drift   overwrite-fixed-64k-chunk-count-preserve-500m    resources.heap.peak_incremental_bytes: 172366 -> 172494
   instrumentation  overwrite-head-4k-100m                           counters.timing_json_bytes: 833 -> 831
   instrumentation  overwrite-head-4k-10m                            counters.timing_json_bytes: 832 -> 831
+  instrumentation  overwrite-head-4k-1m                             counters.timing_json_bytes: 827 -> 828
   instrumentation  overwrite-head-4k-500m                           counters.timing_json_bytes: 833 -> 831
   instrumentation  overwrite-middle-4k-100m                         counters.timing_json_bytes: 901 -> 899
   instrumentation  overwrite-middle-4k-10m                          counters.timing_json_bytes: 900 -> 899
-  instrumentation  overwrite-middle-4k-1m                           counters.timing_json_bytes: 893 -> 895
-  instrumentation  overwrite-middle-4k-500m                         counters.timing_json_bytes: 901 -> 900
+  instrumentation  overwrite-middle-4k-1m                           counters.timing_json_bytes: 893 -> 894
+  instrumentation  overwrite-middle-4k-500m                         counters.timing_json_bytes: 901 -> 899
   instrumentation  overwrite-tail-4k-100m                           counters.timing_json_bytes: 898 -> 896
-  instrumentation  overwrite-tail-4k-10m                            counters.timing_json_bytes: 898 -> 897
+  instrumentation  overwrite-tail-4k-10m                            counters.timing_json_bytes: 898 -> 896
   instrumentation  overwrite-tail-4k-1m                             counters.timing_json_bytes: 892 -> 893
-  instrumentation  overwrite-tail-4k-500m                           counters.timing_json_bytes: 900 -> 897
-  instrumentation  payload-create-1m-compact-v2                     counters.timing_json_bytes: 313 -> 312
+  instrumentation  overwrite-tail-4k-500m                           counters.timing_json_bytes: 900 -> 898
+  instrumentation  payload-create-100m                              counters.timing_json_bytes: 318 -> 319
+  instrumentation  payload-create-10m-compact-v2                    counters.timing_json_bytes: 315 -> 316
   instrumentation  payload-create-500m                              counters.timing_json_bytes: 318 -> 319
-  instrumentation  payload-create-chunked-100m                      counters.timing_json_bytes: 391 -> 390
-  instrumentation  payload-create-chunked-10m-compact-v2            counters.timing_json_bytes: 387 -> 388
   instrumentation  payload-create-chunked-1m-compact-v2             counters.timing_json_bytes: 385 -> 384
   instrumentation  payload-random-read-100m                         counters.timing_json_bytes: 416 -> 417
   instrumentation  payload-random-read-10m-compact-v2               counters.timing_json_bytes: 417 -> 414
   instrumentation  payload-random-read-1m-compact-v2                counters.timing_json_bytes: 413 -> 414
-  instrumentation  payload-random-read-500m                         counters.timing_json_bytes: 417 -> 419
+  instrumentation  pipeline-edits-chunked                           counters.timing_json_bytes: 1812 -> 1813
   resource-drift   pipeline-edits-chunked                           resources.heap.peak_incremental_bytes: 4698140 -> 4698138
-  instrumentation  pipeline-edits-large-to-small                    counters.timing_json_bytes: 1357 -> 1362
   resource-drift   pipeline-edits-large-to-small                    resources.heap.peak_incremental_bytes: 3850395 -> 3850393
-  instrumentation  pipeline-edits-small                             counters.timing_json_bytes: 1569 -> 1568
+  instrumentation  pipeline-edits-small                             counters.timing_json_bytes: 1569 -> 1570
   resource-drift   pipeline-edits-small                             resources.heap.peak_incremental_bytes: 4610034 -> 4610032
   resource-drift   pipeline-filesystem-build                        resources.heap.peak_incremental_bytes: 2611947 -> 2611945
   instrumentation  pooled-lane-cold                                 counters.timing_json_bytes: 211 -> 212
-  instrumentation  prepend-head-4k-100m                             counters.timing_json_bytes: 694 -> 692
+  instrumentation  prepend-head-4k-100m                             counters.timing_json_bytes: 694 -> 693
   instrumentation  prepend-head-4k-10m                              counters.timing_json_bytes: 694 -> 692
-  instrumentation  prepend-head-4k-1m                               counters.timing_json_bytes: 691 -> 690
+  instrumentation  prepend-head-4k-500m                             counters.timing_json_bytes: 696 -> 693
   instrumentation  shrink-100m                                      counters.timing_json_bytes: 626 -> 623
   instrumentation  shrink-10m                                       counters.timing_json_bytes: 624 -> 621
   instrumentation  shrink-1m                                        counters.timing_json_bytes: 622 -> 621
-  instrumentation  shrink-500m                                      counters.timing_json_bytes: 626 -> 624
-  instrumentation  small-file-delta-16384                           counters.timing_json_bytes: 213 -> 214
-  instrumentation  small-file-delta-65536                           counters.timing_json_bytes: 213 -> 214
-  resource-drift   store-footprint-large-object-500m                resources.space.allocated_bytes: 549158912 -> 549933056
-  instrumentation  store-footprint-metadata-cardinality-100-low-v1  counters.timing_json_bytes: 214 -> 215
-  resource-drift   store-footprint-metadata-cardinality-100000      resources.space.allocated_bytes: 553705472 -> 554446848
-  resource-drift   store-footprint-unique-100000                    resources.space.allocated_bytes: 554074112 -> 553803776
+  instrumentation  shrink-500m                                      counters.timing_json_bytes: 626 -> 625
+  resource-drift   store-footprint-large-object-500m                resources.space.allocated_bytes: 549158912 -> 534155264
+  resource-drift   store-footprint-metadata-cardinality-100000      resources.space.allocated_bytes: 553705472 -> 554541056
+  resource-drift   store-footprint-unique-100000                    resources.space.allocated_bytes: 554074112 -> 553881600
+  instrumentation  truncate-100m                                    counters.timing_json_bytes: 626 -> 623
   instrumentation  truncate-10m                                     counters.timing_json_bytes: 624 -> 621
-  instrumentation  truncate-1m                                      counters.timing_json_bytes: 620 -> 621
   instrumentation  truncate-500m                                    counters.timing_json_bytes: 626 -> 624
   instrumentation  v016-boundary-large-control-v1                   counters.timing_json_bytes: 314 -> 313
   instrumentation  v016-boundary-small-control-v1                   counters.timing_json_bytes: 382 -> 381
-  instrumentation  zero-extend-100m                                 counters.timing_json_bytes: 763 -> 762
-  instrumentation  zero-extend-10m                                  counters.timing_json_bytes: 763 -> 762
+  instrumentation  zero-extend-100m                                 counters.timing_json_bytes: 763 -> 760
+  instrumentation  zero-extend-10m                                  counters.timing_json_bytes: 763 -> 760
   instrumentation  zero-extend-1m                                   counters.timing_json_bytes: 759 -> 760
   instrumentation  zero-extend-500m                                 counters.timing_json_bytes: 766 -> 763
-compare: 220 -> 220 rows, {'instrumentation': 87, 'added': 50, 'resource-drift': 42}, verdict IDENTICAL
+compare: 220 -> 220 rows, {'instrumentation': 75, 'added': 50, 'resource-drift': 40}, verdict IDENTICAL

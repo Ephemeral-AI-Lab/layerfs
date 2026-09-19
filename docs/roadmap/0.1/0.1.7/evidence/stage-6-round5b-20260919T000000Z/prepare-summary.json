@@ -1,6 +1,6 @@
 {
  "schema": "layerfs-prepared-acquisition-summary-v1",
- "note": "The acquisition that produced the masters this campaign reuses, at the round-5b commit. The acquisition wall is untimed, once per compatibility digest, and outside every row's admission decision.",
+ "note": "The acquisition that produced the masters this campaign reuses. Untimed, once per compatibility digest, and outside every row's admission decision.",
  "harness_sha256": "72639666c8aaabfa4f0a7991aa223ae0e1e38b22712510bc641c7a69e9dd12c1",
  "recipe_version": "fs-bench-fixture-recipe-v2",
  "acquired": 118,

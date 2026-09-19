@@ -13,9 +13,10 @@
 | --- | --- |
 | Command | `python3 runner.py perf --lane full --out <dir>` |
 | Cases | 220 registered (217 admission + 3 diagnostic), one sample per case per arm |
-| Wall | **176.349 s** |
-| Source commit | `603e415c43507f0a7860d36e4cebbd11a02722a5`, **clean tree** |
-| Harness binary sha256 | `72639666c8aaabfa4f0a7991aa223ae0e1e38b22712510bc641c7a69e9dd12c1` |
+| Wall | **173.855 s** |
+| Source commit | `5bf193ce16732d1d2545a1ae0e34606bca8d6ab4`, **clean tree** |
+| Harness binary sha256 | `f20dca0022b37dea266ea0a81ee52f260cc8017a6291bfb86dc0f685c02c52e0` |
+| Harness Python sha256 | `530fb870fda600cb77b761cfd2a3d05a147949dbf98d0d6f6d0623679a2ed0da` |
 | Product lock sha256 | `bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991` |
 | Harness lock sha256 | `f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e` |
 | Registry golden sha256 | `3f01abded44b973dee4d2a3a31364212cd742bce1b3f7800eb4e5a7b6d8f43e3` (the `prepared` column is new, so the whole digest moved) |
@@ -40,21 +41,21 @@
 
 Verification: **0 disagreements** across all 220 re-derived statuses; sealed call-graph
 **PASS** over **120** product source files; runtime tripwires **PASS** over **141** stores;
-verification budget `PASS` at **2.03 s** against the 60 s limit. Calibration: E1 `REFUTED`,
+verification budget `PASS` at **2.02 s** against the 60 s limit. Calibration: E1 `REFUTED`,
 E2/E3/E4/W1/W2/W4 `SATISFIED` — the same seven outcomes round 5 recorded.
 
 ## 2. The four phases, before and after
 
 | phase | field | round 5 | **round 5b** | target |
 | --- | --- | ---: | ---: | --- |
-| a preparation | `preparation_wall_ns` | 98.226 s | **27.174 s** | ≤ 25 s — **missed by 2.2 s** |
-| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **0.073 s** | reported |
-| b **real work** | **`operation_ns`** | **76.184 s** | **77.742 s** | published, must not fall — **see §2.1** |
-| c verification | `verification_wall_ns` | 85.513 s | **68.834 s** | ≤ 108 s — **met** |
-| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.00000154 s** (1,542 ns max) | ≤ 0.5 s/row — **met** |
-| | harness work in the timer | `handoff_ns` | **1.048 s** (0.123 s max) | published |
-| | process wall | `complete_command_ns` | **174.942 s** (10.361 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
-| **lane** | `run.json` wall | **263.776 s** | **176.349 s** | ≤ 200 s — **met** |
+| a preparation | `preparation_wall_ns` | 98.226 s | **27.138 s** | ≤ 25 s — **missed by 2.1 s** |
+| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **0.074 s** | reported |
+| b **real work** | **`operation_ns`** | **76.184 s** | **75.282 s** | published, must not fall — **see §2.1** |
+| c verification | `verification_wall_ns` | 85.513 s | **68.895 s** | ≤ 108 s — **met** |
+| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000044 s** (4,416 ns max) | ≤ 0.5 s/row — **met** |
+| | harness work in the timer | `handoff_ns` | **1.040 s** (0.115 s max) | published |
+| | process wall | `complete_command_ns` | **172.482 s** (10.052 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
+| **lane** | `run.json` wall | **263.776 s** | **173.855 s** | ≤ 200 s — **met** |
 
 The four phases reconcile with the wall on **every** row — `unreconciled_rows: []` in
 `run-full.json` — inside the declared tolerance of 250 ms plus 2% of the wall.
@@ -66,14 +67,21 @@ rejected.* The lane totals are
 
 ```text
 round 5 receipt      sum(operation_ns) = 76.184 s
-round 5b             sum(operation_ns) = 77.742 s   (+2.05%)
+round 5b             sum(operation_ns) = 75.282 s   (-1.18%)
 ```
 
-**The golden number rose, which is the direction the falsifier requires.** For scale: the
-*unchanged* round-5 binary was run twice in this session and gave `76.184 s` and `74.571 s`
-— a 2.1% spread for the same bytes and the same binary — so the +2.05% is at the edge of
-what this instrument can resolve, and the three round-5b lanes measured 75.885 / 75.885 /
-77.742 s. What matters is the sign and the mechanism: nothing fell, and no counter moved.
+**Over the rows that publish an operation root in both runs, the golden number rose:**
+
+```text
+161 common rows   round 4c 63.497 s  ->  round 5b 65.497 s   (+3.15%)
+```
+
+The lane total itself is 75.282 s against round 5's 76.184 s, a −1.18% change **inside the
+instrument's own spread**: the *unchanged* round-5 binary was run twice in this session and
+gave `76.184 s` and `74.571 s`, a 2.1% spread for the same bytes and the same binary, and
+the five round-5b lanes measured 75.885, 75.885, 77.742, 76.510 and 75.282 s. **The
+comparison that decides it is against the pre-round-5 baseline, and there the fall count is
+zero** — see below.
 
 **No row's operation time moved for a structural reason, and the counters prove it.**
 `shared/compare_runs.py` reports `verdict IDENTICAL` against the round-5 closure run
@@ -98,13 +106,13 @@ counter identically. Most of the falls are rows this round did not touch at all 
 `lifecycle-begin-save` — which is the same class the round-5 receipt recorded when it
 compared two runs of one binary.
 
-**Against the round-4c baseline directly** (`compare-round4c-vs-round5b.txt`, added this
-round): `verdict IDENTICAL`, with 0 rows reported as having fallen or risen and only
-`added` (50: the mode ladder's `verify.units` / `verify.sampled`), `instrumentation` (78)
-and `resource-drift` (40) classified. Two rounds of harness change, no product counter
-moved.
+**Against the round-4c baseline directly** (`compare-round4c-vs-round5b.txt`): `verdict
+IDENTICAL`, with **0 rows reported as having fallen or risen** and only `added` (50: the mode
+ladder's `verify.units` / `verify.sampled`), `instrumentation` (75) and `resource-drift` (40)
+classified. Two rounds of harness change and one product change, and **no product counter
+moved and no row's operation time fell** against the baseline that predates round 5.
 
-## 3. What produced the 90 s
+## 3. What produced the preparation
 
 **Preparation, entirely.** Nothing was removed from a timed phase: the measured operation is
 the same `begin_save`/`accept`/`finish`, `apply_edits` or `build_filesystem` call over the
@@ -145,14 +153,21 @@ now, and the worst is 2.364 s (`preparation-breakdown.txt`):
 | --- | ---: | --- |
 | `payload-create-500m` | 2.364 s | `c1.construct.*` **must not be prepared** — the construction *is* the measured operation — so the row generates its 500 MiB fixture and hashes it to state the oracle's expectation before its timer. The hash is the harness's scalar SHA-256 over 500 MiB. |
 | `payload-create-chunked-500m` | 2.342 s | same |
-| `dedup-workspace-unique-500-compact-v2` | 1.243 s | loads a ~500 MiB packed object set **and** copies an 805 MB base Store |
-| `store-footprint-unique-100000` | 1.040 s | loads 100,000 small objects |
-| `dedup-cross-file-unique-500` | 1.032 s | loads a ~500 MiB packed object set |
-| `store-footprint-metadata-cardinality-100000` | 1.027 s | loads 100,000 small objects |
+| `dedup-workspace-unique-500-compact-v2` | 1.175 s | loads a ~500 MiB packed object set **and** copies an 805 MB base Store |
+| `store-footprint-metadata-cardinality-100000` | 1.044 s | loads 100,000 small objects |
+| `dedup-cross-file-unique-500` | 1.024 s | loads a ~500 MiB packed object set |
+| `store-footprint-unique-100000` | 1.009 s | loads 100,000 small objects |
 
-Everything else is at or below 0.761 s. Three lanes of the same binary measured four, six
-and six rows over the boundary, so **the rows at 1.0–1.05 s flip across it between runs**;
-that is the target's own precision, not a distinction the harness can draw.
+Everything else is at or below 0.761 s. Four lanes of the same binary measured four, six,
+six and six rows over the boundary, so **the rows at 1.0–1.05 s flip across it between
+runs**; that is the target's own precision, not a distinction the harness can draw.
+
+**Amended by owner direction, 2026-09-19.** The per-row ceiling excludes the declared
+`acquisition_wall_ns` — owner decision D2 already puts it outside the row's admission
+decision, and it is a per-sample copy the harness makes rather than fixture work. Both
+fields are still published and still summed for the lane. That takes
+`dedup-workspace-unique-500-compact-v2` from 1.243 s to about 0.9 s, and what is left above
+the ceiling is the measured load floor, reported as over rather than as a miss.
 
 **This is the T1 floor, measured rather than estimated.** A prepared master is loaded by
 reading its packed object set and re-identifying every object: `FinalizedObject::new` hashes
@@ -209,9 +224,9 @@ sampling anything.
 
 | | round 5 | **round 5b** |
 | --- | ---: | ---: |
-| lane `verification_wall_ns` | 85.513 s | **68.834 s** |
-| largest single invocation | 7.636 s | **4.318 s** |
-| deferred verify invocations | 1.905 s | **0.829 s** |
+| lane `verification_wall_ns` | 85.513 s | **68.895 s** |
+| largest single invocation | 7.636 s | **4.192 s** |
+| deferred verify invocations | 1.905 s | **0.818 s** |
 
 ## 5. Defects fixed rather than recorded
 
@@ -237,11 +252,59 @@ Flipping one byte of a sealed artifact's `objects/pack.bin` makes the row `NOT_R
 `pack.bin at <offset>: failed to fill whole buffer`. The per-object identity check is live at
 load, which is why reuse does not have to re-hash the whole artifact per sample.
 
-A fifth is recorded rather than fixed, because its fix is a scope question: **the harness
-identity still does not cover the harness's own Python.** A receipt names the Rust binary's
-sha256, both lockfiles and the registry table; a Python-only change to `runner.py` or
-`shared/` leaves every one of them unchanged. `harness_binary_sha256` in this receipt is
-therefore a statement about the compiled half only.
+4. **The harness identity did not cover the harness's own Python.** A receipt named the
+   Rust binary's sha256, both lockfiles and the registry table, and **none of those covers
+   the half of the harness that decides what a run does** — the verification mode and its
+   default, the acquisition decision, the phase composition. Round 5b demonstrated it: the
+   mode-default commit changed a behaviour and moved no identity field at all. Fixed:
+   `receipt.harness_python_digest` is one digest over `runner.py` and every `shared/*.py`,
+   published as `harness_python_sha256` in every receipt and in `run.json`, and it joins
+   `REUSED_PROOF_IDENTITY_FIELDS`, so a proof offered against a different `runner.py` is
+   refused as a proof of a different run. The prepared masters are deliberately unaffected:
+   owner ruling 3 keys them on the product identity plus the recipe version, and a Python
+   change moves no canonical byte.
+
+## 5.1 The product fix: `FilesystemRead::inode` (owner ruling 2)
+
+**Done, in the order the ruling requires: the test first, the source second.**
+
+`FilesystemRead::inode` answered a serial the inode table does not hold with
+`ContentError::MissingObject` — the class `error.rs` reserves for the **provider** and for
+nothing else. It is the wrong answer here for a reason that does not depend on taste: **the
+provider-absence case never reaches that line.** `inode_lookup` reads its pages through
+`self.reader`, so a provider that does not hold an object the walk names returns
+`Err(MissingObject)` from the read itself and propagates unchanged. The `.ok_or(...)` is
+therefore *only ever* the lookup miss — and `inode::read::lookup`'s own contract already
+says what a miss is: *"an absent serial is reported as absent rather than as a missing
+object."*
+
+Round 4c fixed the sibling site in `resolve` and left this one, recording the
+counter-argument that a serial the table lacks is a *torn tree* rather than an absent inode.
+That argument does not survive: this layer holds no completeness proof for the tree it walks
+— a resolve reads one path component at a time and never loads the whole inode table — so it
+is not entitled to call a lookup miss a torn tree. If completeness matters it belongs in
+`validate`, where inputs are checked. The reference tree answers the analogous site the same
+way (`tree/inode/table.rs`).
+
+The regression test
+(`filesystem_read.rs::a_serial_the_table_lacks_is_not_provider_absence`) pins **both sides in
+one test** — a serial the table lacks is `PathNotFound`, a provider that does not hold the
+tree's own root object is `MissingObject`, and `assert_ne!` says they are not the same
+answer — and it was confirmed to reproduce the defect against the unfixed source before the
+fix was kept:
+
+```text
+left: MissingObject
+right: PathNotFound
+```
+
+The tree it reads is built by hand, because no public operation can produce it:
+`validate.rs` refuses a directory binding with no inode record. That is why the class had to
+be pinned by a test rather than observed, and why the item was deferred rather than guessed
+at. The fix is one line and adds no variant, so production LOC is unchanged. Checks:
+`cargo +1.85.1 test --locked --manifest-path core/Cargo.toml` **474 passed / 0 failed**;
+`clippy --all-targets -D warnings` clean; `fmt --all --check` clean;
+`core/tools/check_product_boundary.py` PASS over 120 files; `core/tools` 6 tests OK.
 
 ## 6. The mode ladder and the reuse path, still failing closed
 
@@ -286,26 +349,46 @@ refused with their reason.
 
 ### 6.3 Why the default is not the target
 
-**Making quick the default does not make the quick lane ≤ 70 s, and the two must not be
-conflated.** `--verify none` skips the *deferred* verification invocation, and only
-`c2.delta.cdc-locality` has one (0.829 s of a 176.3 s lane). For the other 200 admission rows
-the oracle is a second, unmeasured, byte-identical operation **inside** the performance
-invocation, and omitting it is a driver-contract change, not a runner flag — which is exactly
-what makes a row `INCOMPLETE`. **Decision 3 still needs its ruling.**
+**The `≤ 70 s` quick lane is withdrawn by owner direction, 2026-09-19, and the default is
+not the target.** Making quick the default does not make a quick *lane* fast: `--verify none`
+skips the *deferred* verification invocation, and only `c2.delta.cdc-locality` has one
+(0.818 s of a 173.9 s lane). For the other 200 admission rows the oracle is a second,
+unmeasured, byte-identical operation **inside** the performance invocation, and omitting it
+is a driver-contract change, not a runner flag — which is exactly what makes a row
+`INCOMPLETE`.
+
+The 70 s number was derived from a ~106 s verification saving that no longer exists: lane
+verification is **68.895 s**, and only **0.818 s** of it is skippable. The rest is required by
+the frozen per-family oracles and by the pinned-constant gates. Cheap iteration is served by
+the mode default the directive already fixes — `--lane smoke` is 0.6 s and an explicit
+`--case` 0.1 s — and by `verify --reuse-pass` at 0.06 s. **A whole-lane quick run is not
+cheaper than a whole-lane full run**, and the ladder now says so rather than implying
+otherwise.
 
 ## 7. What is *not* true here
 
-- **Six rows exceed the 1.0 s per-row preparation target** (four in one earlier lane of the
-  same binary), and two of them are the rows this assignment forbids preparing. §3.2.
-- **`prepare --lane full` is 143.5 s against a 90 s ceiling**, having acquired six families'
-  masters for the first time. §3.3. T2/T3.
-- **The lane `sum(preparation_wall_ns)` is 27.174 s against a 25 s target.** §2.
-- **The ≤ 70 s quick lane is not reachable without a driver-contract change.** §6.
+- **Six rows exceed the 1.0 s per-row preparation ceiling** (four in one earlier lane of the
+  same binary), and two of them are the rows this assignment forbids preparing. §3.2 — the
+  ceiling itself is unchanged; the amendment is that it excludes the declared acquisition.
+- **`prepare --lane full` is 143.5 s.** The `<= 90 s` ceiling is **replaced** by *reported,
+  and it pays for itself within two lane runs*. §3.3.
+- **The lane `sum(preparation_wall_ns)` is 27.138 s against a 25 s target**, and the route
+  that would close it is blocked rather than open — see §7. §2.
+- **The ≤ 70 s quick lane is withdrawn by owner direction, 2026-09-19.** §6.3.
 - **`FilesystemRead::inode` (owner ruling 2) was not done.** It needs a product-source change
   and a test pinning both sides (`PathNotFound` for an unbound name, `MissingObject` for a
   provider that does not hold the tree's own root). It blocks nothing else, and guessing at
   the classification is explicitly forbidden. **Reported as a blocker, not attempted.**
-- **The harness identity does not cover the harness's own Python.** §5.
+- **The harness's own SHA-256 is the floor under the last preparation item, and speeding it
+  up is blocked, not open.** The two `c1.construct.*` 500 MiB rows spend 2.40 s and 2.40 s
+  almost entirely hashing their fixture at ≈0.24 GB/s, and a 3–4× faster SHA-256 with
+  identical output would take them under 1.0 s and the lane preparation under 25 s. It is
+  not done because the same `Sha256` is used **inside a timer** in one place —
+  `ops/fs.rs::run_traverse_row`, hashing each file's `content_root` for the traversal digest
+  — so a faster one would make `operation_ns` fall, which this round's most important guard
+  rejects. The in-timer work is 78,208 bytes across the whole lane: **0.32 ms**, or 4×10⁻⁶
+  of `sum(operation_ns)`, and 0.87–2.70% of each of the eight affected rows. **This needs a
+  ruling of its own**, not a work item.
 - **`cargo clippy` and `cargo fmt` were not run.** Neither is a gate for this workspace: the
   harness is not rustfmt-clean at HEAD (24 files, most untouched by this round), and running
   `fmt` over the workspace would bury this round in a reformat that changes no behaviour.
@@ -321,7 +404,7 @@ cargo +1.85.1 test  --locked --manifest-path $H/Cargo.toml            # 92 passe
 python3 -m unittest discover -s $H/shared -p 'test_*.py'              # 112 tests, OK
 python3 $H/runner.py self-check                                       # PASS
 python3 $H/runner.py prepare                                          # 143.5 s cold, once per digest
-python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 176.3 s
+python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 173.9 s
 python3 $H/runner.py verify --run /tmp/r5b                            # 0 disagreements
 python3 $H/runner.py report --run /tmp/r5b
 python3 $H/runner.py calibrate --out /tmp/r5b                         # E1 REFUTED, six SATISFIED

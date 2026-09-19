@@ -7,14 +7,7 @@
    "tally": {
     "INCOMPLETE": 20
    },
-   "wall_ns": 658038250,
-   "verification_mode": "sample"
-  },
-  "explicit_case_no_flag": {
-   "case_id": "dedup-cdc-overwrite-1",
-   "tally": {
-    "INCOMPLETE": 1
-   },
+   "wall_ns": 626246625,
    "verification_mode": "sample"
   },
   "whole_lane_no_flag": {
@@ -28,7 +21,7 @@
    "tally": {
     "PASS": 20
    },
-   "wall_ns": 763353208,
+   "wall_ns": 605558500,
    "verification_mode": "full"
   }
  },
@@ -36,38 +29,32 @@
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 617294042,
+  "wall_ns": 625384167,
   "verification_mode": "none"
- },
- "verify_sample": {
-  "tally": {
-   "INCOMPLETE": 20
-  },
-  "wall_ns": 638225375,
-  "verification_mode": "sample"
  },
  "verify_full": {
   "tally": {
    "PASS": 20
   },
-  "wall_ns": 763353208,
+  "wall_ns": 605558500,
   "verification_mode": "full"
  },
  "perf_reuse_pass": {
   "tally": {
    "INCOMPLETE": 20
   },
-  "wall_ns": 604228375,
+  "wall_ns": 601159125,
   "verification_mode": "sample"
  },
- "reuse_pass_note": "dedup-cdc-overwrite-1 is PASS with verification.status REUSED, the omission recorded on the row, and phases.reused_invocations == ['verify']; the other nineteen rows ran no deferred oracle and are unaffected.",
+ "reuse_pass_note": "dedup-cdc-overwrite-1 is PASS with verification.status REUSED, the omission recorded on the row, and phases.reused_invocations == ['verify'].",
  "verify_reuse_pass": {
   "re_derived": 0,
   "cases": 220,
-  "source": "/tmp/r5c-final3/verification.json"
+  "source": "/tmp/r5c-final5/verification.json"
  },
  "refusals": [
-  "a missing proof path: refused, [Errno 2] No such file or directory",
-  "a run.json offered as a proof: refused, schema 'layerfs-core-run-v1' is not a verification receipt"
+  "a missing proof path: refused",
+  "a run.json offered as a proof: refused, wrong schema",
+  "a proof whose harness_python_sha256 differs: refused, the pair is not the pair"
  ]
 }
