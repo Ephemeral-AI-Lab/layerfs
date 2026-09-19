@@ -214,6 +214,14 @@ verification unit: **`max(1, ceil(units/10))`, selected by `index % 10 == 0` in 
 order** — a strided sample, never a prefix. `c2.delta.cdc-locality` declares its distinct
 member identities as the unit and publishes `verify.units` and `verify.sampled`.
 
+The two non-`full` arms were taken on `cb3dabbe1`, the commit before the digest-key fix,
+with the **same harness binary** (`fb967c78…`) as the closure run: the difference between
+the two commits is Python-only and does not move the binary a receipt names. Both are
+recorded `source_dirty: true` because an unrelated documentation change was present in the
+working tree at that moment. They are supplementary arms for the mode ladder, not admission
+evidence, and `quick-modes.json` declares that rather than presenting them as
+identity-matched to `run-full.json`.
+
 `--reuse-pass` fails closed, and each refusal was exercised:
 
 | offered proof | outcome |

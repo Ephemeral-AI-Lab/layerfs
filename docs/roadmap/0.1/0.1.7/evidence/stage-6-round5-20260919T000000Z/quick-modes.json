@@ -1,18 +1,25 @@
 {
   "none": {
+    "harness_binary_sha256": "fb967c78d304e6edbb423c4205882694c09da57c3e6728b6b47eba06f6a583b2",
     "note": "the deferred verification invocation is skipped; the oracles that run inside a performance invocation are not, so the quick lane is not fast for the 200 rows whose oracle is in-process",
     "rows": 220,
     "sample_rule": "",
+    "source_commit": "cb3dabbe1b2e4130583a4f3a7d01c6a5c8a9bfe8",
+    "source_dirty": true,
     "tally": {
       "INCOMPLETE": 220
     },
     "verification_mode": "none",
     "wall_ns": 254642323375
   },
+  "note": "Both arms were taken on cb3dabbe1, the commit before the digest-key fix, with the same harness binary (fb967c78...) as the closure run: the difference between the two commits is Python-only and does not change the binary the receipts name. Both were recorded `source_dirty: true` because an unrelated documentation change was present in the working tree; they are supplementary arms for the mode ladder, not admission evidence, and they are declared here rather than presented as identity-matched to run-full.json.",
   "sample": {
+    "harness_binary_sha256": "fb967c78d304e6edbb423c4205882694c09da57c3e6728b6b47eba06f6a583b2",
     "note": "the deferred verification invocation is skipped; the oracles that run inside a performance invocation are not, so the quick lane is not fast for the 200 rows whose oracle is in-process",
     "rows": 220,
     "sample_rule": "index % 10 == 0 in declaration order, max(1, ceil(units/10)) units",
+    "source_commit": "cb3dabbe1b2e4130583a4f3a7d01c6a5c8a9bfe8",
+    "source_dirty": true,
     "tally": {
       "INCOMPLETE": 220
     },
