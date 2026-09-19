@@ -34,9 +34,10 @@ physical formats, and every declared limit with the check that enforces it. It i
 a source-backed description pinned to a commit — descriptive, not a contract, and
 carrying no performance or qualification claim.
 
-Start with the [index](docs/architecture/README.md), which maps the six papers.
-It describes **this** workspace; the reference tree under the repository-root
-`crates/` is a different product with different identifiers and formats.
+Start with the [index](docs/architecture/README.md), which maps the descriptive
+papers and the `proposal/` and `deferred/` subtrees beside them. It describes
+**this** workspace; the reference tree under the repository-root `crates/` is a
+different product with different identifiers and formats.
 
 ## Commands
 
@@ -88,12 +89,13 @@ independent review of the pinned snapshot; the completion gate table, the eviden
 round and the two open owner decisions are in
 [`stages-3-4-closeout-report.md`](../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-closeout-report.md).
 The three packages are C1 `layerfs-content`, C2 `layerfs-storage` and
-`layerfs-telemetry`. That closeout packet reported 10,983 production LOC for the
-snapshot it measured (`aa4b5a9e4`), and the batch tip recorded 11,058; **neither
-describes the current tree.** At `1884e3eca` the counter reports **18,792
-production lines across 116 files** (`layerfs-content` 11,917; `layerfs-storage`
-6,112; `layerfs-telemetry` 763), alongside the unchanged reference tree at 65,417
-and a combined 84,209. Counted with `tools/production_loc.py`, which excludes
-comments, blanks, tests, examples, docs and manifests, and includes shipped
-runtime SQL; a physical `wc -l` total is a different measure (24,493 here) and
-must not be quoted as this one.
+`layerfs-telemetry`. Three earlier figures are on record and **none of them
+describes the current tree**: the closeout packet reported 10,983 for the snapshot
+it measured (`aa4b5a9e4`), the batch tip recorded 11,058, and the architecture
+set's authoring pin (`1884e3eca`) counted 18,792 across 116 files. At `9f35c49ad`
+the counter reports **20,116 production lines across 121 files**
+(`layerfs-content` 12,512; `layerfs-storage` 6,841; `layerfs-telemetry` 763),
+alongside the unchanged reference tree at 65,417 and a combined 85,533. Counted
+with `tools/production_loc.py`, which excludes comments, blanks, tests, examples,
+docs and manifests, and includes shipped runtime SQL; a physical `wc -l` total is
+a different measure (26,831 at `9f35c49ad`) and must not be quoted as this one.

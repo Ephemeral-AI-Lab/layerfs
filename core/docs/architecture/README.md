@@ -8,10 +8,19 @@ Issue: [#175](https://github.com/Ephemeral-AI-Lab/layerfs/issues/175).
 Release: [v0.1.7](../../../docs/roadmap/0.1/0.1.7/README.md). Design discussion:
 [#160](https://github.com/Ephemeral-AI-Lab/layerfs/issues/160).
 
-- **Source pin:** every citation below was read at commit `1884e3eca`
-  (`fix(storage): complete the audited FFI inventory in the codec module doc`).
-  The tree was clean at that commit apart from in-flight Stage 5 evidence
-  documents under `docs/`; no file under `core/crates/*/src/` was modified.
+- **Source pin:** ten papers (chapters 1–15) were authored against `1884e3eca`
+  (`fix(storage): complete the audited FFI inventory in the codec module doc`) and
+  three (chapters 16–18) against `ce2d738ff`; each paper states its own pin in its
+  header. The tree was clean at `1884e3eca` apart from in-flight Stage 5 evidence
+  documents under `docs/`; no file under `core/crates/*/src/` was modified. The
+  set is maintained **in place**: a change under `crates/*/src/` or `crates/*/sql/`
+  that alters a described boundary, format, algorithm or named bound updates the
+  affected paper in the same commit, so that paper's citations were re-read at the
+  commit of its last update rather than at its authoring pin —
+  `git log -- core/docs/architecture` is the record. **The pin is deliberately not
+  advanced to `HEAD`:** no full re-read of every citation has been performed, and
+  this set does not claim one. That review is
+  [#191](https://github.com/Ephemeral-AI-Lab/layerfs/issues/191).
 - **Scope:** the **replacement** product under `core/` only. The reference tree
   under root `crates/` is a separate, isolated product and is *not* described here.
   Do not read these papers' identifiers, formats or figures as describing the
@@ -68,16 +77,24 @@ python3 tools/production_loc.py --detail
 For comparison at the same command: the reference tree counts 65,417 production
 lines, and the combined figure is 84,209.
 
+**These are authoring-pin figures, not a current size.** At `9f35c49ad` the same
+command reports **20,116 production lines across 121 files** (`layerfs-content`
+12,512; `layerfs-storage` 6,841; `layerfs-telemetry` 763), the reference tree
+unchanged at 65,417, combined **85,533**. Re-run the counter before quoting a
+size; this is exactly the drift that produced the corrections below.
+
 Two cautions on these numbers, because both have already caused drift:
 
-- Physical `wc -l` over `core/crates/*/src` gives 24,493 lines. That is a
-  *physical file-line* total including comments and blanks, not a production
-  count. **18,792 is the production figure; 24,493 is not a substitute for it.**
-- The figures published elsewhere for this workspace are stale.
-  [`core/README.md`](../../README.md) still states 10,983 LOC, which is
-  the Stages 3–4 packet snapshot at `aa4b5a9e4`; the
-  [closeout report](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-closeout-report.md) records 11,058 at that batch
-  tip. Neither describes the tree at `1884e3eca`.
+- Physical `wc -l` over `core/crates/*/src` gives 24,493 lines at the pin (26,831
+  at `9f35c49ad`). That is a *physical file-line* total including comments and
+  blanks, not a production count. **18,792 is the production figure; 24,493 is not
+  a substitute for it.**
+- The figures published elsewhere for this workspace were stale and have been
+  corrected. [`core/README.md`](../../README.md) stated 10,983 LOC, the
+  Stages 3–4 packet snapshot at `aa4b5a9e4`, and the
+  [closeout report](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stages-3-4-closeout-report.md)
+  records 11,058 at that batch tip; neither describes the tree at `1884e3eca`, and
+  `core/README.md` now carries the counter's current figure.
 
 ## Contents
 
@@ -241,10 +258,12 @@ Two things a reader should carry forward rather than assume:
    that an earlier revision wrote the value width and produced different object
    identities. Whether the gate is formally **closed** is a status question this
    document does not decide — check the Stage 5 acceptance record.
-2. **`core/README.md` is stale on size.** It states 10,983 LOC, which was the
-   Stages 3–4 packet snapshot at `aa4b5a9e4`; the tree at this pin counts 18,792
-   production lines. Correcting it is tracked by
-   [#175](https://github.com/Ephemeral-AI-Lab/layerfs/issues/175).
+2. **`core/README.md` size drift — corrected.** It stated 10,983 LOC, the
+   Stages 3–4 packet snapshot at `aa4b5a9e4`, while the tree at this pin counts
+   18,792 production lines. The correction landed under
+   [#175](https://github.com/Ephemeral-AI-Lab/layerfs/issues/175); the file now
+   carries the counter's current figure, and the table above stays the
+   authoring-pin count.
 
 ### Claims recorded as `unknown`
 
