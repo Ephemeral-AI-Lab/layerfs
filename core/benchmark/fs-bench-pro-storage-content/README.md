@@ -266,18 +266,19 @@ Recorded here so a reader is not misled by the sections above.
 
 **Still not true.**
 
-- **Six admission rows exceed the 1.0 s per-row preparation target**, and two of them
-  (`payload-create-500m`, `payload-create-chunked-500m`) are the rows the assignment
-  forbids preparing. A prepared master is loaded by reading its packed object set and
+- **Four admission rows exceed the 1.0 s per-row preparation target** — six in an earlier
+  lane of the same binary, because the boundary rows sit within a few per cent of it — and
+  two of them (`payload-create-500m`, `payload-create-chunked-500m`) are the rows the
+  assignment forbids preparing. A prepared master is loaded by reading its packed object set and
   re-identifying every object: at 500 MiB that is a ~0.5 GB read plus ~0.5 GB of BLAKE3,
   before any other work in the phase. Lazy loading would break the declared
   `warm-in-process-fixture` state. **T1 needs its ruling.**
-- **`prepare --lane full` is 143.5 s against its 90 s ceiling**, having acquired six
-  families' masters for the first time. Round 5 passed at 75.39 s only because only twenty
+- **`prepare --lane full` is 139.4 s against its 90 s ceiling** (127.9 s of acquisition
+  over 118 masters, 15.567 GB), having acquired six families' masters for the first time. Round 5 passed at 75.39 s only because only twenty
   masters existed. The acquisition is untimed and once per compatibility digest, and it is
   what makes the 200 s lane target reachable. **T2/T3 need their ruling.**
 - **The quick lane is not fast.** `--verify none` skips the *deferred* verification
-  invocation, which only `c2.delta.cdc-locality` has: 0.829 s of a 175 s lane. For the other
+  invocation, which only `c2.delta.cdc-locality` has: 0.801 s of a 173.6 s lane. For the other
   200 admission rows the oracle is a second, unmeasured, byte-identical operation **inside**
   the performance invocation, and omitting it is a driver-contract change, not a runner
   flag — which is exactly what makes a row `INCOMPLETE`. **Decision 3 needs its ruling.**

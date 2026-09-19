@@ -2,26 +2,26 @@
   "budget": {
     "declared_exception": false,
     "limit_ns": 60000000000,
-    "reason": "0.038 s",
+    "reason": "0.021 s",
     "status": "PASS",
-    "wall_ns": 37644959
+    "wall_ns": 20995625
   },
   "cases": 220,
   "disagreements": 0,
   "findings": [],
   "mode": "reused",
   "omission": "verification was not re-derived: an identity-matched PASS receipt was accepted instead, for every case in this run",
-  "reused_proof": "/tmp/r5c-final/verification.json",
+  "reused_proof": "/tmp/r5c-final2/verification.json",
   "reused_proof_identities": {
     "construction_workers": "1",
     "harness_binary_sha256": "72639666c8aaabfa4f0a7991aa223ae0e1e38b22712510bc641c7a69e9dd12c1",
     "harness_lock_sha256": "f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e",
     "product_lock_sha256": "bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991",
     "registry_tsv_sha256": "3f01abded44b973dee4d2a3a31364212cd742bce1b3f7800eb4e5a7b6d8f43e3",
-    "source_commit": "248a95cf9643062f2bc97a1865dfc3e6bee55391"
+    "source_commit": "395d22cf1178b3b818d4f89bba017eb737d78568"
   },
-  "reused_proof_verified_run": "/tmp/r5c-final",
-  "run_dir": "/tmp/r5c-final",
+  "reused_proof_verified_run": "/tmp/r5c-final2",
+  "run_dir": "/tmp/r5c-final2",
   "runtime_tripwires": {
     "status": "REUSED",
     "stores_checked": 0
@@ -31,5 +31,5 @@
     "files_scanned": 0,
     "status": "REUSED"
   },
-  "wall_ns": 37644959
+  "wall_ns": 20995625
 }

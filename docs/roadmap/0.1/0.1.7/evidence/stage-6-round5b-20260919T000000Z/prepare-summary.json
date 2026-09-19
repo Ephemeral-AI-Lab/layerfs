@@ -1,102 +1,140 @@
 {
  "schema": "layerfs-prepared-acquisition-summary-v1",
- "manifest": "benchmark-results/fs-bench-pro-storage-content/prepared/manifest-2026-09-19T013707Z.json",
- "recipe_version": "fs-bench-fixture-recipe-v2",
- "producer_commit": "f9992af838bc38f8c9ffcfd634de8a02a9745801",
+ "note": "A cold acquisition at the round-5b commit, into a fresh root: the masters the campaign reuses were produced by an identical run. The acquisition wall is untimed, once per compatibility digest, and outside every row's admission decision.",
+ "source_commit": "395d22cf1178b3b818d4f89bba017eb737d78568",
  "harness_sha256": "72639666c8aaabfa4f0a7991aa223ae0e1e38b22712510bc641c7a69e9dd12c1",
+ "recipe_version": "fs-bench-fixture-recipe-v2",
  "acquired": 118,
  "not_produced": 102,
- "acquisition_wall_ns_total": 129470892045,
- "data_bytes_total": 15567266142,
+ "acquisition_wall_ns_total": 127863783874,
+ "data_bytes_total": 15567257052,
+ "by_family": {
+  "c1.edit.length-changing": {
+   "acquisition_wall_ns": 33958807913,
+   "rows": 32
+  },
+  "c2.delta.cdc-locality": {
+   "acquisition_wall_ns": 20177928500,
+   "rows": 20
+  },
+  "c1.cdc.chunk-count": {
+   "acquisition_wall_ns": 13447771209,
+   "rows": 12
+  },
+  "c1.edit.length-preserving": {
+   "acquisition_wall_ns": 13375448749,
+   "rows": 12
+  },
+  "c2.reuse.workspace": {
+   "acquisition_wall_ns": 13073620792,
+   "rows": 14
+  },
+  "c2.reuse.cross-file": {
+   "acquisition_wall_ns": 12053596042,
+   "rows": 10
+  },
+  "c1.fs.build-scale": {
+   "acquisition_wall_ns": 10194437249,
+   "rows": 8
+  },
+  "c2.read.waves": {
+   "acquisition_wall_ns": 6781248958,
+   "rows": 4
+  },
+  "c2.footprint": {
+   "acquisition_wall_ns": 4800924459,
+   "rows": 6
+  }
+ },
  "largest": [
   {
    "case_id": "payload-random-read-500m",
-   "acquisition_wall_ns": 5514657417,
-   "data_bytes": 533245303,
-   "files": 8
-  },
-  {
-   "case_id": "namespace-100000",
-   "acquisition_wall_ns": 4725126208,
-   "data_bytes": 29964442,
+   "acquisition_wall_ns": 5500643541,
+   "data_bytes": 533245226,
    "files": 8
   },
   {
    "case_id": "namespace-100000-text-v1",
-   "acquisition_wall_ns": 4689742042,
-   "data_bytes": 29964466,
+   "acquisition_wall_ns": 4729242500,
+   "data_bytes": 29964389,
    "files": 8
   },
   {
-   "case_id": "overwrite-tail-4k-500m",
-   "acquisition_wall_ns": 3746478041,
-   "data_bytes": 531973507,
-   "files": 7
-  },
-  {
-   "case_id": "dedup-cross-file-unique-500",
-   "acquisition_wall_ns": 3671872417,
-   "data_bytes": 532396028,
-   "files": 7
-  },
-  {
-   "case_id": "prepend-head-4k-500m",
-   "acquisition_wall_ns": 3671723417,
-   "data_bytes": 531961304,
-   "files": 7
-  },
-  {
-   "case_id": "append-tail-4k-500m",
-   "acquisition_wall_ns": 3665939208,
-   "data_bytes": 531968743,
-   "files": 7
-  },
-  {
-   "case_id": "overwrite-fixed-64k-chunk-count-decrease-500m",
-   "acquisition_wall_ns": 3650359000,
-   "data_bytes": 531989905,
-   "files": 7
+   "case_id": "namespace-100000",
+   "acquisition_wall_ns": 4685238125,
+   "data_bytes": 29964365,
+   "files": 8
   },
   {
    "case_id": "overwrite-fixed-64k-chunk-count-preserve-500m",
-   "acquisition_wall_ns": 3635687000,
-   "data_bytes": 531979127,
+   "acquisition_wall_ns": 3707267375,
+   "data_bytes": 531979049,
    "files": 7
   },
   {
-   "case_id": "overwrite-middle-4k-500m",
-   "acquisition_wall_ns": 3615957917,
-   "data_bytes": 531955108,
-   "files": 7
-  },
-  {
-   "case_id": "insert-middle-4k-500m",
-   "acquisition_wall_ns": 3608793792,
-   "data_bytes": 531982065,
-   "files": 7
-  },
-  {
-   "case_id": "grow-500m",
-   "acquisition_wall_ns": 3604591667,
-   "data_bytes": 531965258,
-   "files": 7
-  },
-  {
-   "case_id": "delete-middle-4k-500m",
-   "acquisition_wall_ns": 3594649375,
-   "data_bytes": 531975878,
+   "case_id": "overwrite-head-4k-500m",
+   "acquisition_wall_ns": 3692457791,
+   "data_bytes": 531994249,
    "files": 7
   },
   {
    "case_id": "overwrite-fixed-64k-chunk-count-increase-500m",
-   "acquisition_wall_ns": 3592323041,
-   "data_bytes": 531968021,
+   "acquisition_wall_ns": 3650468333,
+   "data_bytes": 531967945,
+   "files": 7
+  },
+  {
+   "case_id": "overwrite-middle-4k-500m",
+   "acquisition_wall_ns": 3649255875,
+   "data_bytes": 531955031,
+   "files": 7
+  },
+  {
+   "case_id": "overwrite-fixed-64k-chunk-count-decrease-500m",
+   "acquisition_wall_ns": 3631173750,
+   "data_bytes": 531989828,
+   "files": 7
+  },
+  {
+   "case_id": "insert-middle-4k-500m",
+   "acquisition_wall_ns": 3629757917,
+   "data_bytes": 531981988,
+   "files": 7
+  },
+  {
+   "case_id": "overwrite-tail-4k-500m",
+   "acquisition_wall_ns": 3560995458,
+   "data_bytes": 531973429,
+   "files": 7
+  },
+  {
+   "case_id": "grow-500m",
+   "acquisition_wall_ns": 3554607083,
+   "data_bytes": 531965181,
+   "files": 7
+  },
+  {
+   "case_id": "dedup-cross-file-unique-500",
+   "acquisition_wall_ns": 3546908042,
+   "data_bytes": 532395952,
+   "files": 7
+  },
+  {
+   "case_id": "delete-middle-4k-500m",
+   "acquisition_wall_ns": 3511702750,
+   "data_bytes": 531975800,
+   "files": 7
+  },
+  {
+   "case_id": "append-tail-4k-500m",
+   "acquisition_wall_ns": 3509727500,
+   "data_bytes": 531968666,
    "files": 7
   },
   {
    "case_id": "zero-extend-500m",
-   "acquisition_wall_ns": 3573303000,
-   "data_bytes": 531969025,
+   "acquisition_wall_ns": 3476947791,
+   "data_bytes": 531968948,
    "files": 7
   }
  ]

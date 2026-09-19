@@ -1,7 +1,7 @@
 Stage 6 structural-complexity report
 ========================================================================
-run directory      : /tmp/r5c-final
-source commit      : 248a95cf9643062f2bc97a1865dfc3e6bee55391
+run directory      : /tmp/r5c-final2
+source commit      : 395d22cf1178b3b818d4f89bba017eb737d78568
 dirty tree         : False
 harness binary     : 72639666c8aaabfa4f0a7991aa223ae0e1e38b22712510bc641c7a69e9dd12c1
 workers            : 1
@@ -20,37 +20,37 @@ The four phases, for the lane
   declared operation. The complete-command wall is what the budget classifies, and the
   non-operation share is what the campaign pays for preparation, verification and cleanup.
   status      rows  preparation s  operation s  verification s  cleanup s  acquisition s     wall s
-  PASS         217         26.923       77.348          68.586      0.000          0.067    174.035
-  NOT_RUN        3          0.000        0.000           0.001      0.000          0.000      0.015
-  TOTAL        220         26.923       77.348          68.587      0.000          0.067    174.049
-  non-operation share: 96.701 s of 174.049 s = 55.6%
-  sum(operation_ns) = 77.348 s (the golden number; it must not fall)
+  PASS         217         26.619       75.885          68.675      0.000          0.066    172.225
+  NOT_RUN        3          0.000        0.000           0.000      0.000          0.000      0.014
+  TOTAL        220         26.619       75.885          68.675      0.000          0.066    172.239
+  non-operation share: 96.354 s of 172.239 s = 55.9%
+  sum(operation_ns) = 75.885 s (the golden number; it must not fall)
 
 Four axes, per family
 ------------------------------------------------------------------------
   family                           rows  pass  heap peak max  operation max ms  wall max ms  non-op %
-  c1.cdc.chunk-count                 12    12         199322               0.4       3374.7    100.0%
-  c1.change-locality                 12    12         189736               0.7         10.0     96.8%
-  c1.construct.chunked                4     4         226597             715.1       6581.3     89.2%
-  c1.construct.whole-file             4     4          95525             715.2       6955.1     89.6%
-  c1.edit.length-changing            32    32         100995               0.3       3397.3    100.0%
-  c1.edit.length-preserving          12    12         101283               0.4       3421.9    100.0%
-  c1.fs.build-scale                   8     8        2525937            4474.9       4839.3      8.0%
-  c1.many-tiny                       20    20         250903              14.6         25.3     87.9%
-  c1.transition.boundary              7     7         262623               1.5         22.6     93.2%
-  c1.tree.construct-traverse         12    12         189736              14.6         24.2     72.4%
-  c1.tree.namespace-mutation          4     4         189736               0.7          9.6     96.6%
-  c2.delta.boundaries                21    21        2355064               1.2         14.8     94.2%
-  c2.delta.cdc-locality              20    20        8854167            5348.0       5542.8      2.7%
-  c2.delta.small-file                 4     4        2748278               1.6         15.2     90.8%
-  c2.footprint                        6     6        3645566            9200.6      10394.3     13.4%
-  c2.lifecycle                        5     5        2221585               2.8         17.7     93.0%
-  c2.pool.cold-warm                   2     2        9325131             123.9        316.8     55.1%
-  c2.read.waves                       4     4        1308160               2.0       4241.9     99.9%
-  c2.reuse.cross-file                10    10        5964365            2361.9       6739.1     61.7%
-  c2.reuse.workspace                 14    14        8819902            2242.1       3510.2     30.0%
-  component.primitives                3     0              0               0.0          4.9    100.0%
-  pipeline.*                          4     4        4698137               5.4        207.5     94.5%
+  c1.cdc.chunk-count                 12    12         199322               0.5       3394.2    100.0%
+  c1.change-locality                 12    12         189736               0.7          8.5     96.4%
+  c1.construct.chunked                4     4         226597             696.0       6895.7     89.8%
+  c1.construct.whole-file             4     4          95525             713.7       7080.1     89.8%
+  c1.edit.length-changing            32    32         100995               0.3       3430.4    100.0%
+  c1.edit.length-preserving          12    12         101283               0.3       3402.0    100.0%
+  c1.fs.build-scale                   8     8        2525946            4381.5       4732.0      7.9%
+  c1.many-tiny                       20    20         250903              14.4         22.2     85.4%
+  c1.transition.boundary              7     7         262623               1.5         20.8     92.7%
+  c1.tree.construct-traverse         12    12         189736              14.5         22.1     69.0%
+  c1.tree.namespace-mutation          4     4         189736               0.7          9.5     96.4%
+  c2.delta.boundaries                21    21        2355064               4.8         15.9     93.1%
+  c2.delta.cdc-locality              20    20        8854167            5206.6       5408.1      2.8%
+  c2.delta.small-file                 4     4        2748278               1.7         15.8     92.7%
+  c2.footprint                        6     6        3645566            8744.9       9894.8     13.6%
+  c2.lifecycle                        5     5        2221586               2.8         16.9     92.5%
+  c2.pool.cold-warm                   2     2        9325131             107.9        290.7     56.2%
+  c2.read.waves                       4     4        1308160               2.6       4283.5     99.9%
+  c2.reuse.cross-file                10    10        5964365            2473.8       6698.6     60.9%
+  c2.reuse.workspace                 14    14        8819902            2212.1       3430.3     29.9%
+  component.primitives                3     0              0               0.0          5.0    100.0%
+  pipeline.*                          4     4        4698138               8.7        209.1     93.6%
 
 Scaling ladders (counters, heap and disk decide; time is diagnostic)
 ------------------------------------------------------------------------
