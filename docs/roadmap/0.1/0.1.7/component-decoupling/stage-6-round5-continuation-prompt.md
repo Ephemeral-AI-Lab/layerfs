@@ -11,6 +11,12 @@
 > reopen it. Rounds 1–4 and the round-5 prompt, plan and receipt are the historical record
 > and are not edited.
 
+> **Superseded, 2026-09-19.** This prompt's work is **done**: round 5b measured it and the
+> successor's assignment has moved on. The retained-history storage lane is a separate claim
+> under a separate contract — read
+> [`history-storage-prompt.md`](history-storage-prompt.md) instead. This document stays as
+> the historical entry point for the round-5 continuation and is not edited further.
+
 ---
 
 You are the Stage 6 round-5 continuation agent for LayerFS, working in

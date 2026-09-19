@@ -71,21 +71,25 @@ measured work into preparation, which is why this lane has no prepared artifact 
 
 | axis | instrument | status |
 | --- | --- | --- |
-| heap | counting `GlobalAlloc` → `heap.peak_incremental_bytes`, `heap_charged_bytes`, `heap_allocations` | exists — measured phase only |
-| RSS | 10 ms sampler → `phase_peak_bytes`, `incremental_peak_bytes` | exists — **wired to no row** |
-| lifetime RSS | `ru_maxrss` → `lifetime_peak_rss_bytes` | exists; a **lifetime** value, never substituted for a phase peak |
-| **CPU** | `CpuReading { user_ns, system_ns }` from `getrusage(RUSAGE_SELF)`, `cpu_now()` | **instrumented but never published** — no driver calls it |
+| heap | counting `GlobalAlloc` → `heap.peak_incremental_bytes`, `heap_charged_bytes`, `heap_allocations` | exists — the **precise phase** figure |
+| CPU | `getrusage(RUSAGE_SELF)` read at both phase boundaries → `cpu_user_ns`, `cpu_system_ns` in `phases-<invocation>.json`, composed into the receipt as `cpu.user_ns` / `cpu.system_ns` | **published**, since `2f8ebc90d` |
+| process RSS | the child's lifetime peak → `process_peak_rss_bytes`, composed as `rss.process_peak_bytes` | **published**, since `2f8ebc90d` |
+| sampled RSS | 10 ms `RssSampler` → `phase_peak_bytes`, `incremental_peak_bytes` | implemented and self-checked, **deliberately unwired** |
 | swaps | `swaps()` plus `gates::swap_gate` in every C1/C2 driver | exists |
 | disk | `st_blocks × 512`, `st_size`, `page_count`, `freelist_count`, `pack_bodies`, `object_rows`, `catalogue`, `schema_shape`, `quick_check`, `sidecars` | exists |
 | disk I/O | `disk_read_bytes` against `requested` | exists |
 
-The sampler's interval cannot cover a phase shorter than ~200 ms, so a missed sample or an
-excessive gap makes the peak **unavailable** and the row `INELIGIBLE` — never quietly fast.
+**Why the sampler stays unwired.** Its 10 ms interval cannot cover a phase under ~200 ms, which
+is most of the lane, and a sampling thread inside the measured region perturbs the thing it
+measures. The harness README's earlier claim that an un-sampled row is `INELIGIBLE` was
+corrected to say so rather than left standing.
 
-**Two gaps, and they have the same fix.** CPU time is never published, and the RSS sampler is
-wired to nothing. Both are closed by having each invocation bracket `cpu_now()` around every
-phase and start the sampler with it, publishing `cpu.user_ns`, `cpu.system_ns`,
-`phase_peak_bytes` and `incremental_peak_bytes`.
+**The RSS reading is a lifetime value**, named a *process* peak for exactly that reason —
+`AGENTS.md` §5 forbids quoting a lifetime counter as a phase reading. The counted allocator's
+`heap.peak_incremental_bytes` is the phase number beside it, and a claim about a phase's memory
+uses that one.
+
+**What is still missing for this lane** is the storage reading of §4, not the resource axes.
 
 **CPU is a diagnostic, like `operation_ns`.** `getrusage(RUSAGE_SELF)` is process-wide and
 cumulative, so a phase's CPU is a difference of two readings, and it is only meaningful
@@ -145,6 +149,23 @@ is not an option.
 A lifted budget is a **declared ceiling, not an absence of one**. `benchmark_rules.md` §11
 still applies in full: no timeout inflated after a valid miss, no tier shrunk, one sample per
 case per arm, budgets frozen before collection.
+
+**What the harness now classifies.** Since `2f8ebc90d`, `../CONTRACT.md` §4 fixes the
+complete-command budget as a formula rather than the raw wall:
+
+```text
+budgeted = declared_ns + LIFECYCLE_ALLOWANCE_NS
+declared_ns = preparation + operation + verification + cleanup
+LIFECYCLE_ALLOWANCE_NS = 250 ms   fork/exec/dyld, the trace header, gate assembly, teardown
+```
+
+recorded as erratum **E4** in §11 because the contract was frozen against the wall. The wall is
+still published as `complete_command_ns`, and the allowance cannot hide work: reconciliation
+independently requires `declared <= invocation <= wall` inside the declared tolerance, so a row
+whose unaccounted span exceeds it fails reconciliation first and is `INCOMPLETE`.
+
+For these three rows the family budget is lifted above that formula, and the lane ceiling is
+declared per lane.
 
 `benchmark_rules.md` §15 also governs what may run by default: `history-stride1` is explicitly
 selectable and **no default invocation launches it**.

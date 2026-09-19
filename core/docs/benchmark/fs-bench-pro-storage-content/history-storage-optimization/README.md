@@ -29,6 +29,33 @@ The selections are **independent workloads, not samples of one another**: stride
 stride-10 take direct transitions between selected states and never replay a skipped state,
 so their per-transition deltas are larger than stride-1's.
 
+### 1.1 Owner direction: the optimization tiers
+
+| tier | states | role | optimization | bug fix | how it runs |
+| --- | --: | --- | --- | --- | --- |
+| `history-stride10` | 17 | **smoke** | **P0** — the first place anything is tried | **P0** | the default iteration tier |
+| `history-stride3` | 53 | **intermediate** | **P0** — must also pass | **P0** | the second gate |
+| `history-stride1` | 157 | **run only** | **never optimized** | run to confirm | explicit, never a default |
+
+**Iteration runs one way:**
+
+```text
+iterate on stride10          P0, cheap reject
+  → confirm on stride3       P0, matched pairs
+    → run stride1 once       confirmation only, never tuned
+```
+
+**"Do not optimize stride1" forbids, concretely:** changing any constant, threshold, buffer,
+batch size or policy value *because of* a stride1 number; running stride1 more than once per
+candidate that has already passed the two lower tiers; and treating a stride1 result as a
+target to iterate on. A stride1 failure while both lower tiers pass is a **scaling finding**,
+investigated at stride10 and stride3 and reported — never patched at stride1. No n3, no re-run
+for a better number, no best-of at stride1.
+
+The tier-spanning falsifiers of [`measurement.md`](measurement.md) §7 are what catch such a
+finding early: per-state work time and peak heap must stay flat from 17 to 53 to 157 states,
+and under this policy a rise shows up at stride3, where it is P0.
+
 ## 2. What this claim may and may not support
 
 **May support:** the replacement C1/C2 core saves a real 157-checkpoint repository history
@@ -128,9 +155,18 @@ admission rows.
   v0.1.6 record; none is a measurement of the replacement product.
 - The harness has no `history.*` group, no corpus reader, no driver and no golden rows.
   `implementation-plan.md` is the work order.
-- **CPU time is instrumented but never published.** `cpu_now()` and `CpuReading` exist in
-  `src/support/instruments.rs` and no driver calls them; the RSS sampler is likewise wired
-  to no row. `measurement.md` §3 is the fix.
-- **Storage is published for the six `c2.footprint` rows only**, and is read by the runner's
-  `verify` from a retained file. This lane's whole claim is storage, so the reading must be
-  taken inside the invocation, before and after the chain.
+- **CPU and process RSS are published**, since `2f8ebc90d`: `cpu.user_ns` and `cpu.system_ns`
+  for the measured region, and `rss.process_peak_bytes` for the child. The RSS figure is a
+  *lifetime* number and is named a process peak for that reason; the counting allocator's
+  `heap.peak_incremental_bytes` stays the precise phase figure beside it. The 10 ms
+  `RssSampler` is deliberately unwired — it cannot cover a phase under ~200 ms and a sampling
+  thread inside the measured region perturbs what it measures.
+- **The complete-command budget classifies a formula, not the raw wall**, since `2f8ebc90d`:
+  `../CONTRACT.md` §4 fixes `declared_ns + LIFECYCLE_ALLOWANCE_NS` and §11 records it as
+  erratum **E4**. The wall is still published as `complete_command_ns`.
+- **The full Store reading is still published for the six `c2.footprint` rows only.** Since
+  `2f8ebc90d` every row carries `resources['artifact.data_bytes']` — the bytes its prepared
+  master occupies, or zero when it declares none — but the allocated, apparent, pack-body and
+  attribution readings are taken by the runner's `verify` from a retained file, for the rows
+  that gate them. This lane's whole claim is storage, so its reading must be taken inside the
+  invocation, before and after the chain. `measurement.md` §4 is the fix.
