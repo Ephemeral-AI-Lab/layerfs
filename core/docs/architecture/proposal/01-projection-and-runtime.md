@@ -3,8 +3,10 @@
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 >
 > **INITIALIZED — decisions open.** This document records the coupling, what is
-> already settled with its evidence, and every open decision. The design itself is
-> **not written**. Issue: [#179](https://github.com/Ephemeral-AI-Lab/layerfs/issues/179).
+> already settled with its evidence, and every open decision. The full mounted
+> filesystem design remains open; its proposed transport integration is recorded
+> [separately](service-daemon-transport/06-future-fuse-and-cloud.md).
+> Issue: [#179](https://github.com/Ephemeral-AI-Lab/layerfs/issues/179).
 
 Sibling pairs: [`03-history.md`](03-history.md) · [`04-boundary-and-trust.md`](04-boundary-and-trust.md).
 Folder index and conventions: [`README.md`](README.md).
@@ -36,8 +38,10 @@ noncanonical ordering. FUSE produces per-call, concurrent, unordered mutations.
 **Something must accumulate**, and what it must hold is a function of which
 callbacks FUSE delivers.
 
-The read half does not have this problem — `FilesystemRead` is already
-path-addressed, bounded and batch-capable, so reads map close to 1:1.
+`FilesystemRead` supplies path-addressed, bounded read operations. That maps
+responsibilities, not network requests: Workspace first serves local overlay/cache
+hits, and service queries should return the metadata needed together rather than
+requiring serialized resolve/stat calls. See the [legacy comparison](service-daemon-transport/05-v0.1.6-comparison.md).
 
 ## 2. What it produces
 
@@ -55,10 +59,10 @@ path-addressed, bounded and batch-capable, so reads map close to 1:1.
 | --- | --- |
 | **Workspace state lives consumer-side** | the owner must scale to N consumers × M workspaces without per-workspace memory; `FilesystemRead` is stateless given a root |
 | **The owner stays workspace-agnostic** | it serves "read root R" and "store these objects"; `InodeScope` is a 32-byte value inside a root, not session state |
-| **Reads map ~1:1** | `resolve` · `stat` · `list` (with continuation) · `read_range` · `readlink` · `read_portable` · `read_attribute` · `attribute_keys` all exist and are path-addressed |
+| **Logical read APIs exist** | `resolve` · `stat` · `list` (with continuation) · `read_range` · `readlink` · `read_portable` · `read_attribute` · `attribute_keys` are available; their existence does not require one remote call per FUSE callback or per internal API |
 | **Writes map 1:N** | `write`/`create`/`unlink`/`rename`/`setattr` accumulate; only a completed batch reaches C1 |
 | **Accumulate writes before saving** | Each FUSE write need not start a storage transaction. Base/object reads and a pressure-triggered flush must be accounted for separately; their exact callback behavior is part of this design. |
-| **The per-branch serializer is the merge, not the committer** | `workspace_stages` is one row per workspace; only the merge CAS serializes ([`02`](02-init-commit-and-concurrency.md) §9) |
+| **Branch-head publication and storage ownership are separate** | Future history defines conditional head publication; current C2 saves independently obey Store writer ownership. Pair 2 defines the history contract, and pair 1 must qualify read/control progress under actual storage contention. |
 
 ## 4. Open — every decision this pair must make
 
@@ -74,8 +78,10 @@ path-addressed, bounded and batch-capable, so reads map close to 1:1.
       and costs one kernel session; N mounts give isolation and cost N. The deciding
       question is whether one workspace may block its neighbours — the same question
       the single-writer discussion raised one level down.
-- [ ] **Where the accumulator lives.** Inside the FUSE implementation, or in a
-      separate runtime layer that a second projection (materialization) could share.
+- [ ] **Workspace implementation and limits.** The integration proposal places
+      mutable state in a transport-independent Workspace module and makes FUSE a
+      thin adapter. Specify its edit lowering, generation/reconciliation and backing
+      policy; extract a crate only when a real consumer/build boundary warrants it.
 - [ ] **The 4,096-binding ceiling as a product statement.** A directory whose
       effective subtree exceeds it can never be renamed, and the refusal is reported
       as a cycle-check work limit. That is user-visible and must be stated as a

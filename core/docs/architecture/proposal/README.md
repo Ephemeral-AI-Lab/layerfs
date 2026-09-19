@@ -150,6 +150,7 @@ is retained as research with the later owner direction appended.
 | [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | written — the operational half |
 | [`03-history.md`](03-history.md) | 2 | **initialized** — decisions open |
 | [`04-boundary-and-trust.md`](04-boundary-and-trust.md) | 3 | **initialized** — decisions open |
+| [`service-daemon-transport/`](service-daemon-transport/README.md) | 3 foundation; later 1 integration | detailed architecture, layout, operations and resource proposal — implementation/qualification open |
 
 **Not a pair, and deliberately absent:** storage placement. Where the owner's index
 and packs live is owner-internal and invisible to every consumer, so it neither

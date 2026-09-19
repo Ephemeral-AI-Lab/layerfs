@@ -17,16 +17,20 @@ Owner direction, 2026-09-20, sets two priorities:
    concrete SQLite provider. Document actual portability gaps and the future
    changes needed; do not claim a cloud backend already exists.
 2. **Implement and verify Linux Docker daemon + host service now.**
-   The initial development/acceptance target is a Linux container daemon connected
-   to the macOS host service in the current development environment. Record the
-   exact host/container setup, endpoint, authorization and limits used. Other
-   host platforms require their own qualification.
+   The main acceptance target uses **network delivery between separate processes**:
+   an actual Linux Docker daemon and the native macOS host service. Direct calls
+   are secondary semantic-parity checks and cannot replace this route. Record the
+   exact host/container setup, endpoint, authorization and limits used. Other host
+   platforms require their own qualification.
 
 Implementation remains **pair 3 → pair 1 → pair 2**, per the
 [execution contract](README.md#implementation-order-pair-3-then-pair-1-then-pair-2).
 Before implementing pair 3, agree only the initial operation inputs, results,
 identity and completion semantics with the later pairs. Their full implementation
-is not a prerequisite. Pair 3's scope is now specified; the detailed protocol,
+is not a prerequisite. Pair 3's scope is now specified. The detailed
+[service/daemon/transport design packet](service-daemon-transport/README.md)
+provides deployment diagrams, file boundaries, proposed operations and resource
+accounting, including the later pair 1 integration. Protocol freeze,
 implementation and acceptance evidence remain open.
 
 ## 2. Components and concrete topology
@@ -61,6 +65,18 @@ selected, authenticated transport. The daemon initiates the host connection so
 service operation does not require inbound access to each container. Record the
 real route; a container's localhost is not assumed to be the host endpoint.
 
+There is one bridge library with client/server endpoints and one selected native
+network carrier initially, plus direct invocation of the same service body. Keep
+one logical service and daemon implementation across native placements, using
+configuration and target builds rather than local/Docker/cloud forks. Managed
+runtime support still needs the separately reviewed carrier/provider/lifecycle
+adaptation; it is not a promise that the native binaries run unchanged anywhere.
+
+Service handlers receive a verified caller context and the shared logical request.
+They do not depend on daemon implementation types, Workspace internals or FUSE
+callbacks. The service authorizes and executes the operation; the bridge delivers
+its result and reports transport failure, without inventing storage success.
+
 One service may serve multiple daemons. Connection multiplicity does not promise
 concurrent C2 saves: obey the qualified Store ownership/admission rules and bound
 all queues. Any 1:N claim needs an actual multiple-daemon check.
@@ -78,6 +94,15 @@ all queues. Any 1:N claim needs an actual multiple-daemon check.
   partial frames, malformed inputs and unsupported protocol/profile values.
 - An external test driver supplying stable bytes, known edits and explicit roots.
   Use the same daemon client and service handlers that pair 1 will consume.
+
+The pair 3 driver runs on the host and submits through the real daemon's bounded
+stdin/stdout interface. No LayerFS/FUSE mount, `/dev/fuse`, host-directory bind
+mount or shared-data volume is needed or used. The container creates no Workspace
+directory or payload/spool/result files; it holds bounded transfer buffers.
+SQLite, fixtures and any required service scratch remain host-owned, with initial
+edit replay in capped service memory. Docker's ordinary image/runtime files are
+not excluded by this application-data rule. Pair 1 introduces actual Workspace
+backing and mounted filesystem behavior later.
 
 The initial operation surface covers read/inspect, complete-file construction and
 save, known file edits and save, and a filesystem update against a prepared base
