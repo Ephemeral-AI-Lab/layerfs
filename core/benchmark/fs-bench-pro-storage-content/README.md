@@ -38,7 +38,7 @@ trace; the runner derives a receipt from it and never edits either.
 | Verb | Guarantee |
 | --- | --- |
 | `list` | Prints the binary's own generated registry, so what is listed is what is registered. |
-| `prepare` | Acquires the prepared artifacts a selection needs, once. A family that declares a phase split is acquired for real, into `prepared/<case_id>/`, sealed with the producing harness digest; a family that does not is recorded `not-produced` **with that reason** rather than faked. The family is read from the binary's own registry, so no family list is maintained by hand. |
+| `prepare` | Acquires the prepared artifacts a selection needs, once. A row whose registry declaration names a master is acquired for real into `prepared/<case_id>/`, hashed per file, given a `manifest.json`, keyed by its compatibility digest and sealed read-only; a row that declares none is recorded `not-produced` **with that reason** rather than faked. The declaration is a column of the binary's own registry, so no family list is maintained by hand. |
 | `perf` | One sample per case per arm; fresh output; measurement lock held; complete-command budget enforced per case; a receipt that names the tree it ran on. A row whose driver declares `oracle_phase: verify-invocation` is run in phases: the performance invocation is budgeted on its own complete command, and verification is a **second, unmeasured invocation** charged to its own 60 s budget. |
 | `verify` | Re-reads the raw artifacts and re-derives flatness, sequence, worst-gate aggregation, budget classification, and — for C2 rows — the space and pack accounting read out of the Store file itself. |
 | `report` | Renders the ladders, bands and the four-axis view. Time is printed and never decides. |
@@ -91,8 +91,17 @@ mistaken for a prepared one.
 
 ```text
 benchmark-results/fs-bench-pro-storage-content/   gitignored, development runs
-  prepared/<case_id>/          the acquired artifact: objects/, base.sqlite, members.tsv,
-                               objects.tsv, sealed.tsv, acquisition/
+  prepared/<case_id>/          the acquired artifact, sealed and read-only:
+                                 manifest.json   per-file sha256/bytes, compatibility key
+                                 objects/pack.bin, objects/index.tsv
+                                                 the packed canonical object set: role,
+                                                 references and predecessors per object
+                                 members.tsv     the offered member set, with expectations
+                                 values.tsv      named scalars, identities, expectations
+                                 store.sqlite    the base Store, when the row opens a copy
+                                 prepared-tree.tsv  the filesystem input, for C1-11
+                                 sealed.tsv      completion marker + provenance
+                                 acquisition/    the acquisition invocation's own trace
   prepared/manifest-<stamp>.json   append-only acquisition record
   <run>/<case_id>/
     timing.json      byte-verbatim product receipt (never edited)
@@ -146,6 +155,11 @@ runs and is receipted, and is excluded from admission and from every count: unde
 twenty-one because `c2.delta.boundaries` is a registered sub-lane of a family, not
 a family, and `pipeline.*` is a registry group rather than a family.
 
+The golden table's `prepared` column is the registry's own declaration of whether a row's
+fixture is a **prepared master** (`-`, `object-set`, `base-store` or `input-tree`). 118 of
+220 rows declare one. `runner.py` reads that column to decide what to acquire and what to
+hand a measured child through `--load-input`, so no family list is maintained by hand.
+
 ### Two readings this harness had to fix, recorded rather than assumed
 
 * **The bracketed profile list is one case.** `c1-families.md` section 3.1 writes
@@ -178,10 +192,10 @@ mismatches, and 0 product entries the harness does not link.
 
 ## What is not yet true here — see [#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184)
 
-Round 5 ([#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184), closure receipt at
-[`stage-6-round5-20260919T000000Z`](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-round5-20260919T000000Z/README.md))
-closed the accounting half of this section and left the preparation half open. Recorded here
-so a reader is not misled by the sections above.
+Round 5 ([#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184)) closed the
+accounting half of this section. Round 5b closed the preparation half, in the receipt at
+[`stage-6-round5b-20260919T000000Z`](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-round5b-20260919T000000Z/README.md).
+Recorded here so a reader is not misled by the sections above.
 
 **Now true.**
 
@@ -212,40 +226,67 @@ so a reader is not misled by the sections above.
   `(root, expectation)` pair is verified once — complete, not sampled.
 - **`--reuse-pass` exists**, on both `verify` and `perf`, and fails closed on schema,
   identity, hard-limit and wall mismatch with `reused_proof_identities` and an explicit
-  omission recorded.
+  omission recorded. A reused invocation is named (`phases.reused_invocations`) rather than
+  composed as an invocation that published no phases.
 - **The mode ladder `full` / `sample` / `none` exists.** The sample is deterministic and
   declared — `max(1, ceil(units/10))`, selected by `index % 10 == 0` — and every row in a
   non-`full` mode is `INCOMPLETE`, never `PASS`, with the mode published in the receipt and
   in the report header. An iteration run is not admission evidence.
 - **The prepared-master key is the product identity plus a declared fixture-recipe
-  version** (owner ruling 3). The producer binary is recorded as provenance and published,
-  never part of the key, so a measurement-plumbing-only harness change does not invalidate a
-  master. A master sealed under a different key — or with no key at all — is superseded
-  rather than consumed; round 4 consumed one.
+  version** (owner ruling 3), now `fs-bench-fixture-recipe-v2`. The producer binary is
+  recorded as provenance and published, never part of the key, so a measurement-plumbing-only
+  harness change does not invalidate a master. A master sealed under a different key — or
+  with no key at all — is superseded rather than consumed.
+- **118 of 220 rows are acquired from a prepared master, and the registry declares which.**
+  `registry::Preparation` is a column of the golden registry table — `-`, `object-set`,
+  `base-store` or `input-tree` — so `runner.py` reads the acquisition decision off the
+  binary's own registry and the hand-maintained `PHASE_SPLIT_FAMILIES` set is deleted. A
+  family that gains or loses a phase split no longer needs a second edit in Python.
+- **The artifact is a packed object set with a manifest and a seal.**
+  `objects/pack.bin` plus `objects/index.tsv` replace one file per object; each object's
+  role, direct references and bounded advisory predecessors are persisted, so a loaded
+  artifact is the same object set the producer built. `runner.py` computes the per-file
+  sha256 with `hashlib`, writes `manifest.json`, records the compatibility key and applies
+  the seal (`chmod` minus `0o222`). A reused master is checked against its manifest by
+  stat-identity — reuse is not an acquisition — and every object is still re-identified at
+  load by `FinalizedObject::new`.
+- **Expectations are persisted.** Every family that gates a read-back computes its
+  expectation once, at acquisition, and every later phase reads it. Recomputing it inside
+  the performance invocation cost the harness's scalar SHA-256 a second pass over every
+  member — `dedup-cross-file-identical-500` spent 4.317 s of verification hashing 1 GiB to
+  re-derive a digest it already had. The two families that gate no read-back at all no
+  longer hash their members at all.
+- **`c1.construct.*` is not prepared.** The construction *is* the measured operation, and
+  preparing it would move the measurement into setup.
+- **`c1.fs.build-scale` above the walk ceiling loads its fixture chain rather than
+  replaying it.** The chain every batch reads its base from is built once at acquisition;
+  its objects are the artifact's packed object set and its per-batch roots are the
+  artifact's members. The measured chain is still compared against those roots, and the
+  final root is additionally pinned by `tests/golden/expected.tsv`.
 
-**Still not true.** The full status, the work items and the four decisions it needs are in
-[`stage-6-round5-handoff-20260919.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-round5-handoff-20260919.md);
-the successor's entry point is
-[`stage-6-round5-continuation-prompt.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/stage-6-round5-continuation-prompt.md).
+**Still not true.**
 
-- **Preparation is still rebuilt per run for six fixture-heavy families.** Only
-  `c2.delta.cdc-locality` has a prepared master. `c1.edit.*`, `c1.cdc.chunk-count`,
-  `c2.reuse.*`, `c2.read.waves`, `c2.footprint` and `c1.fs.build-scale` build their base
-  inside their one invocation, and they are **98.2 s of a 263.8 s lane**. The delta family
-  spends 0.19 s per row of preparation; that is what the others would reach with V9-V11,
-  which are not implemented. **34 of 217 rows exceed the 1.0 s per-row preparation target**
-  and the worst is 5.448 s.
-- **The quick mode is not fast.** `--verify none` skips the *deferred* verification
-  invocation, which only `c2.delta.cdc-locality` has: 254.6 s against 263.8 s. For the other
-  200 admission rows the oracle is a second, unmeasured, byte-identical operation inside the
-  performance invocation, and omitting it needs a driver change rather than a runner flag.
-- **The largest single verification invocation is 7.636 s**, against a 5 s target.
-  `c2.reuse.cross-file` carries it; the O2 read-back it needs is the cost.
-- **Expectation digests are not persisted for every family.** The delta family carries them
-  in its artifact; the others still call `Expectation::of` over fixture bytes.
+- **Six admission rows exceed the 1.0 s per-row preparation target**, and two of them
+  (`payload-create-500m`, `payload-create-chunked-500m`) are the rows the assignment
+  forbids preparing. A prepared master is loaded by reading its packed object set and
+  re-identifying every object: at 500 MiB that is a ~0.5 GB read plus ~0.5 GB of BLAKE3,
+  before any other work in the phase. Lazy loading would break the declared
+  `warm-in-process-fixture` state. **T1 needs its ruling.**
+- **`prepare --lane full` is 143.5 s against its 90 s ceiling**, having acquired six
+  families' masters for the first time. Round 5 passed at 75.39 s only because only twenty
+  masters existed. The acquisition is untimed and once per compatibility digest, and it is
+  what makes the 200 s lane target reachable. **T2/T3 need their ruling.**
+- **The quick lane is not fast.** `--verify none` skips the *deferred* verification
+  invocation, which only `c2.delta.cdc-locality` has: 0.829 s of a 175 s lane. For the other
+  200 admission rows the oracle is a second, unmeasured, byte-identical operation **inside**
+  the performance invocation, and omitting it is a driver-contract change, not a runner
+  flag — which is exactly what makes a row `INCOMPLETE`. **Decision 3 needs its ruling.**
+- **`FilesystemRead::inode` (owner ruling 2) is not done.** It needs a product-source
+  change and a test pinning both sides. Reported as a blocker rather than guessed at.
 - **The harness identity does not cover the harness's own Python.** A receipt names the Rust
   binary's sha256, both lockfiles and the registry table, but a Python-only harness change
-  leaves every one of them unchanged.
+  leaves every one of them unchanged. Stated so a reader is not misled by
+  `harness_binary_sha256`; fixing it is a scope question, not a defect in the round.
 - **The budget still classifies the complete-command wall**, and `elapsed_ns` still never
-  gate-decides. Round 5 published the operation number and made it the report's axis; making
-  it gate or drive the budget is a `CONTRACT.md` change and was not this round's.
+  gate-decides. Owner ruling 1: the golden number reports and does not gate, so making it
+  drive the budget is a `CONTRACT.md` change and is not this round's.

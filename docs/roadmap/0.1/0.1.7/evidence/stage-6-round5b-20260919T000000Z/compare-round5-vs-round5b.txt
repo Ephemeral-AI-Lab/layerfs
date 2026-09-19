@@ -1,0 +1,151 @@
+  instrumentation  append-tail-4k-100m                              counters.timing_json_bytes: 766 -> 762
+  operation-fell   append-tail-4k-100m                              operation_ns 110000 -> 74417 (-32.3%), beyond the +-17.6% same-binary spread
+  instrumentation  append-tail-4k-10m                               counters.timing_json_bytes: 764 -> 761
+  instrumentation  append-tail-4k-1m                                counters.timing_json_bytes: 762 -> 759
+  instrumentation  append-tail-4k-500m                              counters.timing_json_bytes: 766 -> 763
+  operation-fell   append-tail-4k-500m                              operation_ns 194833 -> 158750 (-18.5%), beyond the +-17.6% same-binary spread
+  operation-rose   dedup-cdc-boundary-0-s1                          operation_ns 451000 -> 819959 (+81.8%), beyond the +-17.6% same-binary spread
+  operation-rose   dedup-cdc-boundary-0-s2                          operation_ns 488542 -> 864500 (+77.0%), beyond the +-17.6% same-binary spread
+  operation-fell   dedup-cdc-boundary-1-s3                          operation_ns 684083 -> 446500 (-34.7%), beyond the +-17.6% same-binary spread
+  operation-rose   dedup-cdc-boundary-16384-s1                      operation_ns 796167 -> 968167 (+21.6%), beyond the +-17.6% same-binary spread
+  instrumentation  dedup-cdc-boundary-16384-s2                      counters.timing_json_bytes: 212 -> 211
+  operation-fell   dedup-cdc-boundary-16384-s2                      operation_ns 1161708 -> 768542 (-33.8%), beyond the +-17.6% same-binary spread
+  operation-rose   dedup-cdc-boundary-32768-s1                      operation_ns 743417 -> 936916 (+26.0%), beyond the +-17.6% same-binary spread
+  instrumentation  dedup-cdc-boundary-32768-s2                      counters.timing_json_bytes: 211 -> 212
+  operation-rose   dedup-cdc-boundary-32768-s2                      operation_ns 662750 -> 1093375 (+65.0%), beyond the +-17.6% same-binary spread
+  instrumentation  dedup-cdc-boundary-32769-s1                      counters.timing_json_bytes: 211 -> 212
+  operation-rose   dedup-cdc-boundary-32769-s1                      operation_ns 915833 -> 1184917 (+29.4%), beyond the +-17.6% same-binary spread
+  instrumentation  dedup-cdc-boundary-32769-s2                      counters.timing_json_bytes: 212 -> 211
+  operation-fell   dedup-cdc-boundary-32769-s2                      operation_ns 1165000 -> 958750 (-17.7%), beyond the +-17.6% same-binary spread
+  operation-fell   dedup-cdc-boundary-8191-s2                       operation_ns 943083 -> 578750 (-38.6%), beyond the +-17.6% same-binary spread
+  operation-rose   dedup-cdc-boundary-8192-s2                       operation_ns 474875 -> 764209 (+60.9%), beyond the +-17.6% same-binary spread
+  resource-drift   dedup-cdc-common-body-1                          resources.heap.peak_incremental_bytes: 8019358 -> 8032182
+  resource-drift   dedup-cdc-common-body-10                         resources.heap.peak_incremental_bytes: 8324161 -> 8327329
+  resource-drift   dedup-cdc-common-body-100                        resources.heap.peak_incremental_bytes: 8581562 -> 8584530
+  resource-drift   dedup-cdc-common-body-500                        resources.heap.peak_incremental_bytes: 8657456 -> 8660648
+  resource-drift   dedup-cdc-delete-1                               resources.heap.peak_incremental_bytes: 8077410 -> 8089534
+  resource-drift   dedup-cdc-delete-10                              resources.heap.peak_incremental_bytes: 8096168 -> 8115520
+  instrumentation  dedup-cdc-delete-100                             counters.timing_json_bytes: 212 -> 211
+  resource-drift   dedup-cdc-delete-100                             resources.heap.peak_incremental_bytes: 8137345 -> 8139041
+  resource-drift   dedup-cdc-delete-500                             resources.heap.peak_incremental_bytes: 8083551 -> 8104047
+  resource-drift   dedup-cdc-insert-1                               resources.heap.peak_incremental_bytes: 8015751 -> 8028207
+  resource-drift   dedup-cdc-insert-10                              resources.heap.peak_incremental_bytes: 8419074 -> 8433210
+  resource-drift   dedup-cdc-insert-100                             resources.heap.peak_incremental_bytes: 8547039 -> 8547415
+  resource-drift   dedup-cdc-insert-500                             resources.heap.peak_incremental_bytes: 8841079 -> 8854167
+  resource-drift   dedup-cdc-overwrite-1                            resources.heap.peak_incremental_bytes: 8149743 -> 8162191
+  resource-drift   dedup-cdc-overwrite-10                           resources.heap.peak_incremental_bytes: 8560893 -> 8564605
+  resource-drift   dedup-cdc-overwrite-100                          resources.heap.peak_incremental_bytes: 8534755 -> 8545339
+  resource-drift   dedup-cdc-overwrite-500                          resources.heap.peak_incremental_bytes: 8835696 -> 8838616
+  resource-drift   dedup-cdc-scattered-1                            resources.heap.peak_incremental_bytes: 8294688 -> 8307512
+  resource-drift   dedup-cdc-scattered-10                           resources.heap.peak_incremental_bytes: 8354365 -> 8357909
+  resource-drift   dedup-cdc-scattered-100                          resources.heap.peak_incremental_bytes: 8557725 -> 8573245
+  resource-drift   dedup-cdc-scattered-500                          resources.heap.peak_incremental_bytes: 8702857 -> 8716913
+  operation-rose   dedup-workspace-exact-1-compact-v2               operation_ns 4787250 -> 5636959 (+17.7%), beyond the +-17.6% same-binary spread
+  instrumentation  dedup-workspace-local-1-compact-v2               counters.timing_json_bytes: 213 -> 214
+  operation-rose   dedup-workspace-local-1-compact-v2               operation_ns 5810375 -> 7897208 (+35.9%), beyond the +-17.6% same-binary spread
+  operation-fell   dedup-workspace-unique-1-base128-v3              operation_ns 47968459 -> 26519041 (-44.7%), beyond the +-17.6% same-binary spread
+  operation-rose   dedup-workspace-unique-1-compact-v2              operation_ns 5263708 -> 7963000 (+51.3%), beyond the +-17.6% same-binary spread
+  operation-fell   dedup-workspace-unique-100-compact-v2            operation_ns 558314208 -> 457890709 (-18.0%), beyond the +-17.6% same-binary spread
+  instrumentation  delete-middle-4k-100m                            counters.timing_json_bytes: 631 -> 627
+  instrumentation  delete-middle-4k-10m                             counters.timing_json_bytes: 628 -> 626
+  operation-fell   delete-middle-4k-10m                             operation_ns 185417 -> 125500 (-32.3%), beyond the +-17.6% same-binary spread
+  operation-rose   delete-middle-4k-1m                              operation_ns 43917 -> 52917 (+20.5%), beyond the +-17.6% same-binary spread
+  instrumentation  delete-middle-4k-500m                            counters.timing_json_bytes: 629 -> 627
+  operation-rose   directory-content-scan-1-mixed-v4                operation_ns 10959 -> 16625 (+51.7%), beyond the +-17.6% same-binary spread
+  instrumentation  grow-100m                                        counters.timing_json_bytes: 766 -> 763
+  instrumentation  grow-10m                                         counters.timing_json_bytes: 766 -> 763
+  instrumentation  grow-1m                                          counters.timing_json_bytes: 760 -> 758
+  instrumentation  grow-500m                                        counters.timing_json_bytes: 767 -> 763
+  instrumentation  insert-middle-4k-100m                            counters.timing_json_bytes: 767 -> 763
+  instrumentation  insert-middle-4k-10m                             counters.timing_json_bytes: 765 -> 764
+  instrumentation  insert-middle-4k-1m                              counters.timing_json_bytes: 760 -> 759
+  operation-rose   insert-middle-4k-1m                              operation_ns 51000 -> 64500 (+26.5%), beyond the +-17.6% same-binary spread
+  instrumentation  insert-middle-4k-500m                            counters.timing_json_bytes: 767 -> 765
+  operation-fell   insert-middle-4k-500m                            operation_ns 354417 -> 258583 (-27.0%), beyond the +-17.6% same-binary spread
+  instrumentation  lifecycle-begin-save                             counters.timing_json_bytes: 367 -> 366
+  operation-fell   lifecycle-create                                 operation_ns 3498750 -> 2808125 (-19.7%), beyond the +-17.6% same-binary spread
+  operation-fell   namespace-subtree-relocate-delete-10-mixed-v4    operation_ns 67875 -> 52000 (-23.4%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-100m    counters.timing_json_bytes: 910 -> 906
+  operation-fell   overwrite-fixed-64k-chunk-count-decrease-100m    operation_ns 381042 -> 302875 (-20.5%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-10m     counters.timing_json_bytes: 910 -> 907
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-1m      counters.timing_json_bytes: 904 -> 905
+  instrumentation  overwrite-fixed-64k-chunk-count-decrease-500m    counters.timing_json_bytes: 911 -> 909
+  instrumentation  overwrite-fixed-64k-chunk-count-increase-100m    counters.timing_json_bytes: 911 -> 907
+  operation-fell   overwrite-fixed-64k-chunk-count-increase-100m    operation_ns 432542 -> 320708 (-25.9%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-fixed-64k-chunk-count-increase-1m      counters.timing_json_bytes: 908 -> 907
+  instrumentation  overwrite-fixed-64k-chunk-count-increase-500m    counters.timing_json_bytes: 911 -> 907
+  instrumentation  overwrite-fixed-64k-chunk-count-preserve-100m    counters.timing_json_bytes: 561 -> 557
+  resource-drift   overwrite-fixed-64k-chunk-count-preserve-100m    resources.heap.peak_incremental_bytes: 148956 -> 149084
+  operation-fell   overwrite-fixed-64k-chunk-count-preserve-100m    operation_ns 108167 -> 54417 (-49.7%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-fixed-64k-chunk-count-preserve-10m     counters.timing_json_bytes: 559 -> 557
+  resource-drift   overwrite-fixed-64k-chunk-count-preserve-10m     resources.heap.peak_incremental_bytes: 154110 -> 154238
+  operation-fell   overwrite-fixed-64k-chunk-count-preserve-10m     operation_ns 84625 -> 69583 (-17.8%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-fixed-64k-chunk-count-preserve-1m      counters.timing_json_bytes: 558 -> 557
+  resource-drift   overwrite-fixed-64k-chunk-count-preserve-1m      resources.heap.peak_incremental_bytes: 158888 -> 159016
+  instrumentation  overwrite-fixed-64k-chunk-count-preserve-500m    counters.timing_json_bytes: 563 -> 557
+  resource-drift   overwrite-fixed-64k-chunk-count-preserve-500m    resources.heap.peak_incremental_bytes: 172366 -> 172494
+  operation-fell   overwrite-fixed-64k-chunk-count-preserve-500m    operation_ns 136458 -> 87625 (-35.8%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-head-4k-100m                           counters.timing_json_bytes: 833 -> 831
+  operation-fell   overwrite-head-4k-100m                           operation_ns 218292 -> 173208 (-20.7%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-head-4k-10m                            counters.timing_json_bytes: 833 -> 831
+  operation-rose   overwrite-head-4k-10m                            operation_ns 156083 -> 193875 (+24.2%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-head-4k-1m                             counters.timing_json_bytes: 826 -> 827
+  instrumentation  overwrite-head-4k-500m                           counters.timing_json_bytes: 836 -> 832
+  operation-fell   overwrite-head-4k-500m                           operation_ns 342833 -> 278042 (-18.9%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-middle-4k-100m                         counters.timing_json_bytes: 901 -> 899
+  instrumentation  overwrite-middle-4k-10m                          counters.timing_json_bytes: 901 -> 898
+  operation-fell   overwrite-middle-4k-10m                          operation_ns 215417 -> 166625 (-22.7%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-middle-4k-500m                         counters.timing_json_bytes: 905 -> 902
+  instrumentation  overwrite-tail-4k-100m                           counters.timing_json_bytes: 899 -> 896
+  operation-fell   overwrite-tail-4k-100m                           operation_ns 215125 -> 159666 (-25.8%), beyond the +-17.6% same-binary spread
+  instrumentation  overwrite-tail-4k-10m                            counters.timing_json_bytes: 899 -> 896
+  instrumentation  overwrite-tail-4k-1m                             counters.timing_json_bytes: 894 -> 893
+  instrumentation  overwrite-tail-4k-500m                           counters.timing_json_bytes: 903 -> 897
+  operation-fell   overwrite-tail-4k-500m                           operation_ns 312958 -> 242958 (-22.4%), beyond the +-17.6% same-binary spread
+  instrumentation  payload-create-100m                              counters.timing_json_bytes: 319 -> 318
+  instrumentation  payload-create-chunked-1m-compact-v2             counters.timing_json_bytes: 385 -> 384
+  operation-fell   payload-random-read-100m                         operation_ns 2498042 -> 1678375 (-32.8%), beyond the +-17.6% same-binary spread
+  instrumentation  payload-random-read-10m-compact-v2               counters.timing_json_bytes: 417 -> 414
+  operation-fell   payload-random-read-10m-compact-v2               operation_ns 3293833 -> 844375 (-74.4%), beyond the +-17.6% same-binary spread
+  operation-rose   payload-random-read-1m-compact-v2                operation_ns 298917 -> 649250 (+117.2%), beyond the +-17.6% same-binary spread
+  operation-rose   payload-random-read-500m                         operation_ns 1693792 -> 2045083 (+20.7%), beyond the +-17.6% same-binary spread
+  instrumentation  pipeline-edits-chunked                           counters.timing_json_bytes: 1811 -> 1808
+  operation-fell   pipeline-edits-chunked                           operation_ns 9078541 -> 5379875 (-40.7%), beyond the +-17.6% same-binary spread
+  instrumentation  pipeline-edits-large-to-small                    counters.timing_json_bytes: 1357 -> 1358
+  instrumentation  pipeline-edits-small                             counters.timing_json_bytes: 1569 -> 1570
+  instrumentation  prepend-head-4k-100m                             counters.timing_json_bytes: 697 -> 692
+  instrumentation  prepend-head-4k-10m                              counters.timing_json_bytes: 695 -> 694
+  operation-rose   prepend-head-4k-10m                              operation_ns 75042 -> 107792 (+43.6%), beyond the +-17.6% same-binary spread
+  instrumentation  prepend-head-4k-1m                               counters.timing_json_bytes: 692 -> 691
+  instrumentation  prepend-head-4k-500m                             counters.timing_json_bytes: 697 -> 695
+  instrumentation  shrink-100m                                      counters.timing_json_bytes: 627 -> 623
+  operation-fell   shrink-100m                                      operation_ns 154167 -> 118500 (-23.1%), beyond the +-17.6% same-binary spread
+  instrumentation  shrink-10m                                       counters.timing_json_bytes: 624 -> 621
+  operation-fell   shrink-10m                                       operation_ns 88042 -> 66208 (-24.8%), beyond the +-17.6% same-binary spread
+  instrumentation  shrink-1m                                        counters.timing_json_bytes: 622 -> 620
+  instrumentation  shrink-500m                                      counters.timing_json_bytes: 627 -> 625
+  operation-fell   shrink-500m                                      operation_ns 208542 -> 153666 (-26.3%), beyond the +-17.6% same-binary spread
+  instrumentation  small-file-delta-1024                            counters.timing_json_bytes: 213 -> 214
+  operation-rose   small-file-delta-1024                            operation_ns 385958 -> 1052042 (+172.6%), beyond the +-17.6% same-binary spread
+  operation-rose   small-file-delta-16384                           operation_ns 1110000 -> 1562875 (+40.8%), beyond the +-17.6% same-binary spread
+  operation-fell   small-file-delta-65536                           operation_ns 1584500 -> 1204500 (-24.0%), beyond the +-17.6% same-binary spread
+  resource-drift   store-footprint-large-object-500m                resources.space.allocated_bytes: 545398784 -> 540078080
+  resource-drift   store-footprint-metadata-cardinality-100000      resources.space.allocated_bytes: 554135552 -> 554414080
+  operation-fell   tiny-bulk-create-1-mixed-v3                      operation_ns 122750 -> 46000 (-62.5%), beyond the +-17.6% same-binary spread
+  operation-rose   tiny-bulk-create-10-mixed-v3                     operation_ns 69375 -> 143000 (+106.1%), beyond the +-17.6% same-binary spread
+  operation-rose   tiny-bulk-create-100-mixed-v3                    operation_ns 226333 -> 309875 (+36.9%), beyond the +-17.6% same-binary spread
+  operation-rose   tiny-bulk-delete-500-mixed-v3                    operation_ns 1353375 -> 1829750 (+35.2%), beyond the +-17.6% same-binary spread
+  operation-rose   tiny-unlink-1-mixed-v4                           operation_ns 22375 -> 47500 (+112.3%), beyond the +-17.6% same-binary spread
+  operation-rose   tiny-unlink-100-compact-v2                       operation_ns 455041 -> 555292 (+22.0%), beyond the +-17.6% same-binary spread
+  operation-rose   tiny-unlink-500-compact-v2                       operation_ns 1362000 -> 1970916 (+44.7%), beyond the +-17.6% same-binary spread
+  instrumentation  truncate-100m                                    counters.timing_json_bytes: 627 -> 624
+  instrumentation  truncate-1m                                      counters.timing_json_bytes: 621 -> 622
+  instrumentation  truncate-500m                                    counters.timing_json_bytes: 627 -> 624
+  operation-rose   workspace-dense-rewrite-1-mixed-v4               operation_ns 49375 -> 63333 (+28.3%), beyond the +-17.6% same-binary spread
+  instrumentation  zero-extend-100m                                 counters.timing_json_bytes: 767 -> 761
+  operation-fell   zero-extend-100m                                 operation_ns 122375 -> 75750 (-38.1%), beyond the +-17.6% same-binary spread
+  instrumentation  zero-extend-10m                                  counters.timing_json_bytes: 764 -> 761
+  operation-fell   zero-extend-10m                                  operation_ns 84500 -> 64542 (-23.6%), beyond the +-17.6% same-binary spread
+  instrumentation  zero-extend-1m                                   counters.timing_json_bytes: 762 -> 760
+  instrumentation  zero-extend-500m                                 counters.timing_json_bytes: 766 -> 763
+compare: 220 -> 220 rows, {'instrumentation': 66, 'operation-fell': 32, 'operation-rose': 26, 'resource-drift': 26}, verdict IDENTICAL

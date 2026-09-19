@@ -1,0 +1,35 @@
+{
+ "schema": "layerfs-quick-modes-v1",
+ "note": "The mode ladder and the reuse path, exercised on the twenty-case smoke lane. A sampled or omitted row is INCOMPLETE, never PASS; the deferred oracle exists only for c2.delta.cdc-locality, whose smoke representative is dedup-cdc-overwrite-1.",
+ "verify_none": {
+  "tally": {
+   "INCOMPLETE": 20
+  },
+  "wall_ns": 630407125,
+  "verification_mode": "none"
+ },
+ "verify_sample": {
+  "tally": {
+   "INCOMPLETE": 20
+  },
+  "wall_ns": 616325458,
+  "verification_mode": "sample"
+ },
+ "perf_reuse_pass": {
+  "tally": {
+   "PASS": 20
+  },
+  "wall_ns": 577689917,
+  "verification_mode": "full"
+ },
+ "reuse_pass_note": "dedup-cdc-overwrite-1 is PASS with verification.status REUSED, the omission recorded on the row, and phases.reused_invocations == ['verify']; the other nineteen rows ran no deferred oracle and are unaffected.",
+ "verify_reuse_pass": {
+  "re_derived": 0,
+  "cases": 220,
+  "source": "/tmp/r5c-final/verification.json"
+ },
+ "refusals": [
+  "a missing proof path: refused, [Errno 2] No such file or directory",
+  "a run.json offered as a proof: refused, schema 'layerfs-core-run-v1' is not a verification receipt"
+ ]
+}

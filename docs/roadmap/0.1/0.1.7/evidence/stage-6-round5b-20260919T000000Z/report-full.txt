@@ -1,0 +1,85 @@
+Stage 6 structural-complexity report
+========================================================================
+run directory      : /tmp/r5c-final
+source commit      : 248a95cf9643062f2bc97a1865dfc3e6bee55391
+dirty tree         : False
+harness binary     : 72639666c8aaabfa4f0a7991aa223ae0e1e38b22712510bc641c7a69e9dd12c1
+workers            : 1
+lane               : full
+verification mode  : full
+
+Row statuses
+------------------------------------------------------------------------
+  PASS         217
+  NOT_RUN      3
+  TOTAL        220
+
+The four phases, for the lane
+------------------------------------------------------------------------
+  operation_ns is the golden benchmark number: the product's own telemetry root for the row's
+  declared operation. The complete-command wall is what the budget classifies, and the
+  non-operation share is what the campaign pays for preparation, verification and cleanup.
+  status      rows  preparation s  operation s  verification s  cleanup s  acquisition s     wall s
+  PASS         217         26.923       77.348          68.586      0.000          0.067    174.035
+  NOT_RUN        3          0.000        0.000           0.001      0.000          0.000      0.015
+  TOTAL        220         26.923       77.348          68.587      0.000          0.067    174.049
+  non-operation share: 96.701 s of 174.049 s = 55.6%
+  sum(operation_ns) = 77.348 s (the golden number; it must not fall)
+
+Four axes, per family
+------------------------------------------------------------------------
+  family                           rows  pass  heap peak max  operation max ms  wall max ms  non-op %
+  c1.cdc.chunk-count                 12    12         199322               0.4       3374.7    100.0%
+  c1.change-locality                 12    12         189736               0.7         10.0     96.8%
+  c1.construct.chunked                4     4         226597             715.1       6581.3     89.2%
+  c1.construct.whole-file             4     4          95525             715.2       6955.1     89.6%
+  c1.edit.length-changing            32    32         100995               0.3       3397.3    100.0%
+  c1.edit.length-preserving          12    12         101283               0.4       3421.9    100.0%
+  c1.fs.build-scale                   8     8        2525937            4474.9       4839.3      8.0%
+  c1.many-tiny                       20    20         250903              14.6         25.3     87.9%
+  c1.transition.boundary              7     7         262623               1.5         22.6     93.2%
+  c1.tree.construct-traverse         12    12         189736              14.6         24.2     72.4%
+  c1.tree.namespace-mutation          4     4         189736               0.7          9.6     96.6%
+  c2.delta.boundaries                21    21        2355064               1.2         14.8     94.2%
+  c2.delta.cdc-locality              20    20        8854167            5348.0       5542.8      2.7%
+  c2.delta.small-file                 4     4        2748278               1.6         15.2     90.8%
+  c2.footprint                        6     6        3645566            9200.6      10394.3     13.4%
+  c2.lifecycle                        5     5        2221585               2.8         17.7     93.0%
+  c2.pool.cold-warm                   2     2        9325131             123.9        316.8     55.1%
+  c2.read.waves                       4     4        1308160               2.0       4241.9     99.9%
+  c2.reuse.cross-file                10    10        5964365            2361.9       6739.1     61.7%
+  c2.reuse.workspace                 14    14        8819902            2242.1       3510.2     30.0%
+  component.primitives                3     0              0               0.0          4.9    100.0%
+  pipeline.*                          4     4        4698137               5.4        207.5     94.5%
+
+Scaling ladders (counters, heap and disk decide; time is diagnostic)
+------------------------------------------------------------------------
+  family                           claim       metric                             b                 per-doubling
+  c1.cdc.chunk-count               -           no scaling claim registered
+  c1.change-locality               O(n)        construct.objects                n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c1.construct.chunked             O(1)        heap.peak_incremental_bytes    0.019 1.021 PASS; 1.000 PASS; 1.029 PASS
+  c1.construct.whole-file          O(n)        heap.peak_incremental_bytes    0.045 1.049 FAIL; 1.000 FAIL; 1.073 FAIL
+  c1.edit.length-changing          O(n)        edit.payload_bytes             0.000 n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c1.edit.length-preserving        -           no scaling claim registered
+  c1.fs.build-scale                -           no scaling claim registered
+  c1.many-tiny                     -           no scaling claim registered
+  c1.transition.boundary           -           no scaling claim registered
+  c1.tree.construct-traverse       O(n log n)  construct.objects                n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c1.tree.namespace-mutation       -           no scaling claim registered
+  c2.delta.boundaries              -           no scaling claim registered
+  c2.delta.cdc-locality            -           no scaling claim registered
+  c2.delta.small-file              -           no scaling claim registered
+  c2.footprint                     O(n)        space.allocated_bytes            n/a n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor); n/a (zero divisor)
+  c2.lifecycle                     -           no scaling claim registered
+  c2.pool.cold-warm                -           no scaling claim registered
+  c2.read.waves                    O(1)        heap.peak_incremental_bytes    0.038 1.010 PASS; 1.047 PASS; 1.011 PASS
+  c2.reuse.cross-file              O(1)        reuse.inserted                 0.537 1.000 PASS; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; 0.510 FAIL; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE; 0.140 FAIL; INCOMPLETE INCOMPLETE; INCOMPLETE INCOMPLETE
+  c2.reuse.workspace               -           no scaling claim registered
+  component.primitives             -           no scaling claim registered
+  pipeline.*                       O(n)        construct.objects                n/a                            -
+
+Rows that are not PASS
+------------------------------------------------------------------------
+  NOT_RUN     component-primitives-edit                        
+  NOT_RUN     component-primitives-filesystem                  
+  NOT_RUN     component-primitives-payload                     
