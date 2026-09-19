@@ -8,5 +8,8 @@
 pub mod artifact;
 pub mod digest;
 pub mod expected;
+pub mod gitoid;
+pub mod history;
+pub mod json;
 pub mod oracle;
 pub mod providers;

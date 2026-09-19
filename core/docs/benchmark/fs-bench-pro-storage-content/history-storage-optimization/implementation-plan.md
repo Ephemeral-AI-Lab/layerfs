@@ -396,9 +396,18 @@ states; the storage readings and the attribution are published; every counter re
 `verify` re-derives all six phase numbers.
 
 **This phase also measures the baseline from which the tier budgets are declared.** The
-per-tier and verification budgets are fixed here and recorded with their source, before any
-optimization work — `benchmark_rules.md` §11 allows a target that needs an untouched baseline
-to be frozen after that baseline, but not after candidate sampling.
+per-tier **complete-command** budgets are fixed here and recorded with their source, before
+any optimization work — `benchmark_rules.md` §11 allows a target that needs an untouched
+baseline to be frozen after that baseline, but not after candidate sampling.
+
+The **verification** ceilings are already declared and are not derived here: **10 s** at 17
+states, **20 s** at 53, **30 s** at 157 (owner direction, 2026-09-19; roadmap specification
+§11.1). They are tighter than the 60 s contract default, which does not transfer in either
+direction — v0.1.6's read-back was 199.8 s at 53 states and 570.6 s at 157. What makes them
+reachable is fixed here too: O1 is a root read per state, O4 is metadata with no read-back,
+and **O2 is deduplicated by distinct object before it is sampled**, so an object shared by
+many states is decoded once rather than once per referencing file. A verifier that misses
+its ceiling is `TARGET_MISS` with its measured wall, never a shrunken sample.
 
 ### Phase 4 — `history-stride3` (53 states) — the P0 intermediate tier
 

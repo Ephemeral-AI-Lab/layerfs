@@ -1,0 +1,15 @@
+{
+  "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+  "tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+  "checkpoints": 157,
+  "root_mtime_ns": 1789438848610390588,
+  "sampled_mtimes": {
+    "inputs/ca4e1c3a1c61129bd95ee57dd744bc53c2e635bb/manifest.tsv": 1788795068836027552,
+    "inputs/c14948c531dac2ddc19fb4aa6f7a55771bc4c0e4/manifest.tsv": 1788795274784119743,
+    "inputs/b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed/manifest.tsv": 1788796279806260835,
+    "oracles/ca4e1c3a1c61129bd95ee57dd744bc53c2e635bb.json": 1788795068902333569,
+    "oracles/c14948c531dac2ddc19fb4aa6f7a55771bc4c0e4.json": 1788795274854965282,
+    "oracles/b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed.json": 1788796280840985196
+  },
+  "writable_files": 180725
+}

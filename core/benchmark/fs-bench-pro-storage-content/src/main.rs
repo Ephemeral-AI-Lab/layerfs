@@ -12,6 +12,7 @@ use fs_bench_storage_content::ops::{self, Hold, HoldPoint, OpContext, Phase};
 use fs_bench_storage_content::registry::{self, Admission};
 use fs_bench_storage_content::support::phases;
 use fs_bench_storage_content::workload::expected::Expected;
+use fs_bench_storage_content::workload::history::{self, Corpus, Row as HistoryRow};
 use fs_bench_storage_content::support::trace::{Kind, TraceWriter};
 
 /// Parsed command line. Unknown arguments are refused, never ignored: a typo that
@@ -32,6 +33,14 @@ struct Args {
     phase: Phase,
     hold: Option<Hold>,
     verify_sample: Option<usize>,
+    /// The retained-history corpus root. Never defaulted in the binary: the reader
+    /// is handed a path or it is handed nothing, and `preparation.md` §8 test 8
+    /// makes an absent corpus a refusal rather than a fallback.
+    corpus: Option<PathBuf>,
+    /// A `history.*` row to authenticate the corpus against, without running it.
+    history_corpus: Option<String>,
+    /// Whether the corpus probe also walks every transition.
+    history_walk: bool,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
@@ -50,12 +59,29 @@ fn parse(args: &[String]) -> Result<Args, String> {
         phase: Phase::Perf,
         hold: None,
         verify_sample: None,
+        corpus: None,
+        history_corpus: None,
+        history_walk: false,
     };
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
             "--list" => parsed.list = true,
             "--self-check" => parsed.self_check = true,
+            "--corpus" => {
+                index += 1;
+                parsed.corpus =
+                    Some(PathBuf::from(args.get(index).ok_or("--corpus expects a path")?));
+            }
+            "--history-corpus" => {
+                index += 1;
+                parsed.history_corpus = Some(
+                    args.get(index)
+                        .ok_or("--history-corpus expects a row id")?
+                        .clone(),
+                );
+            }
+            "--history-walk" => parsed.history_walk = true,
             "--lane" => {
                 index += 1;
                 parsed.lane = match args.get(index).map(String::as_str) {
@@ -183,6 +209,111 @@ fn parse(args: &[String]) -> Result<Args, String> {
         index += 1;
     }
     Ok(parsed)
+}
+
+/// Authenticates the retained-history corpus against one selection.
+///
+/// This is the Phase 1 probe: it proves the reader against the **real** corpus
+/// without running a product row. `runner.py self-check` calls it for the three
+/// rows, so a corpus that stopped authenticating is caught by the harness's own
+/// self-check rather than by a measurement that then has to be discarded.
+///
+/// It writes one JSON object to stdout and nothing else. `--history-walk` adds a
+/// full transition walk, which reads every changed blob in the selection — that is
+/// 1.7 GB of I/O for `history-stride1`, so it is **not** part of `self-check`.
+fn history_corpus(identifier: &str, parsed: &Args) -> ExitCode {
+    let Some(row) = HistoryRow::from_id(identifier) else {
+        eprintln!(
+            "fs-bench-storage-content: {identifier:?} is not a history.* row; \
+             expected one of history-stride10, history-stride3, history-stride1"
+        );
+        return ExitCode::from(2);
+    };
+    let Some(root) = &parsed.corpus else {
+        eprintln!("fs-bench-storage-content: --history-corpus requires --corpus PATH");
+        return ExitCode::from(2);
+    };
+    let mut corpus = match Corpus::open(root, row) {
+        Ok(corpus) => corpus,
+        Err(error) => {
+            eprintln!("fs-bench-storage-content: {}: {error}", error.name());
+            return ExitCode::FAILURE;
+        }
+    };
+    let pins = corpus.pins();
+
+    let states: Vec<String> = corpus
+        .states()
+        .iter()
+        .map(|state| {
+            format!(
+                "{{\"ordinal\":{},\"full157_index\":{},\"sha\":\"{}\",\"paths\":{},\
+                 \"logical_bytes\":{},\"oracle_sha256\":\"{}\"}}",
+                state.ordinal,
+                state.full157_index,
+                state.sha,
+                state.paths,
+                state.logical_bytes,
+                state.oracle_sha256
+            )
+        })
+        .collect();
+
+    let mut walk = String::new();
+    if parsed.history_walk {
+        let mut per_state = Vec::with_capacity(pins.states);
+        let mut blobs = 0u64;
+        let mut blob_bytes = 0u64;
+        for position in 0..pins.states {
+            let transition = match corpus.transition(position) {
+                Ok(transition) => transition,
+                Err(error) => {
+                    eprintln!("fs-bench-storage-content: {}: {error}", error.name());
+                    return ExitCode::FAILURE;
+                }
+            };
+            blobs += transition.blobs.len() as u64;
+            blob_bytes += transition
+                .blobs
+                .values()
+                .map(|bytes| bytes.len() as u64)
+                .sum::<u64>();
+            per_state.push(format!(
+                "{{\"ordinal\":{},\"added\":{},\"modified\":{},\"removed\":{},\
+                 \"metadata_only\":{},\"changed_paths\":{},\"changed_bytes\":{},\
+                 \"blobs\":{}}}",
+                transition.state.ordinal,
+                transition.count(history::Change::Added),
+                transition.count(history::Change::Modified),
+                transition.count(history::Change::Removed),
+                transition.count(history::Change::MetadataOnly),
+                transition.changed.len(),
+                transition.changed_bytes(),
+                transition.blobs.len()
+            ));
+        }
+        walk = format!(
+            ",\"walk\":{{\"blobs\":{blobs},\"blob_bytes\":{blob_bytes},\"per_state\":[{}]}}",
+            per_state.join(",")
+        );
+    }
+
+    println!(
+        "{{\"row\":\"{}\",\"states\":{},\"path_states\":{},\"logical_bytes\":{},\
+         \"manifest_files\":{},\"selection\":[{}],\"states_detail\":[{}]{walk}}}",
+        row.id(),
+        pins.states,
+        pins.path_states,
+        pins.logical_bytes,
+        pins.manifest_files,
+        row.selection()
+            .iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join(","),
+        states.join(",")
+    );
+    ExitCode::SUCCESS
 }
 
 fn list(lane: &str, format: &str) {
@@ -490,6 +621,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
         return ExitCode::SUCCESS;
+    }
+    if let Some(identifier) = &parsed.history_corpus {
+        return history_corpus(identifier, &parsed);
     }
     if parsed.self_check {
         return self_check();

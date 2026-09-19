@@ -63,6 +63,7 @@ sys.path.insert(0, str(HARNESS_ROOT / "shared"))
 
 import analyze  # noqa: E402
 import copyladder  # noqa: E402
+import history_corpus  # noqa: E402
 import invariants  # noqa: E402
 import phases as phases_module  # noqa: E402
 import receipt  # noqa: E402
@@ -1548,6 +1549,54 @@ def cmd_report(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def history_corpus_probe() -> list[str]:
+    """Runs the binary's corpus probe for the three `history.*` rows.
+
+    The probe authenticates the pinned corpus against every identity in the
+    specification's section 3 and checks the three pin pairs, **without running a
+    product row**. It is here rather than in the Rust unit tests because the reader's
+    own tests are hermetic — they must run on a machine that has never held a 2.3 GB
+    corpus — and a hermetic test cannot prove the real corpus authenticates.
+
+    An absent corpus is reported with its reason and is **not** a failure: the corpus
+    is a campaign input, not a harness dependency, and the 217-row self-check must
+    still run without it. A corpus that is present and does not authenticate is a
+    failure.
+    """
+    failures: list[str] = []
+    if not history_corpus.manifest_path(history_corpus.DEFAULT_ROOT).is_file():
+        print(f"  history-corpus SKIP ({history_corpus.DEFAULT_ROOT} is absent)")
+        return failures
+    for lane in history_corpus.SELECTIONS:
+        result = subprocess.run(
+            [
+                str(BINARY),
+                "--history-corpus",
+                lane,
+                "--corpus",
+                str(history_corpus.DEFAULT_ROOT),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            failures.append(f"{lane}: {result.stderr.strip()}")
+            continue
+        try:
+            document = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            failures.append(f"{lane}: the probe printed no document: {error}")
+            continue
+        pin = history_corpus.PINS[lane]
+        for field in ("states", "path_states", "logical_bytes"):
+            if document.get(field) != pin[field]:
+                failures.append(
+                    f"{lane}: {field} is {document.get(field)}, pin says {pin[field]}"
+                )
+    return failures
+
+
 def cmd_self_check(_: argparse.Namespace) -> int:
     failures: list[str] = []
     if not BINARY.exists():
@@ -1560,6 +1609,7 @@ def cmd_self_check(_: argparse.Namespace) -> int:
         "copyladder": copyladder.self_check(),
         "phases": phases_module.self_check(),
         "invariants": invariants.self_check(),
+        "history": history_corpus.self_check(),
     }
     for name, found in checks.items():
         if found:
@@ -1590,6 +1640,9 @@ def cmd_self_check(_: argparse.Namespace) -> int:
     print(f"  exceptions   {'PASS' if not unknown else 'FAIL'} ({len(DECLARED_EXCEPTIONS)} declared)")
     if unknown:
         failures.append(f"DECLARED_EXCEPTIONS names no registered case: {unknown}")
+    corpus = history_corpus_probe()
+    print(f"  corpus       {'PASS' if not corpus else 'FAIL'}")
+    failures.extend(corpus)
     golden = golden_matches()
     print(f"  golden       {'PASS' if golden else 'FAIL'}")
     if not golden:

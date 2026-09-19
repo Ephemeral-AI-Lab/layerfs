@@ -251,7 +251,7 @@ Ruled by the owner before the first product run, as `benchmark_rules.md` §1 req
 
 | # | decision | ruling |
 | --: | --- | --- |
-| 1 | per-lane and verification budgets, the family budget being lifted | **Ruled as a procedure.** The per-tier lane ceilings and the verification budget are declared at Phase 3 from the stride-10 baseline, recorded with their source, and frozen before any optimization work. The numbers cannot exist before that baseline by construction. `runner.py` carries them as **per-lane declared ceilings**, not as `DECLARED_EXCEPTIONS` entries — the exception list is capped at 25 s and cannot carry a 157-state run. A ceiling is never inflated after a valid miss. |
+| 1 | per-lane and verification budgets, the family budget being lifted | **Ruled.** The verification ceilings are **10 / 20 / 30 s** for stride10 / stride3 / stride1, declared by owner direction of 2026-09-19 before collection (§11.1). The per-tier **complete-command** ceilings are declared at Phase 3 from the stride-10 baseline, recorded with their source, and frozen before any optimization work; those numbers cannot exist before that baseline by construction. `runner.py` carries all of them as **per-lane declared ceilings**, not as `DECLARED_EXCEPTIONS` entries — the exception list is capped at 25 s and cannot carry a 157-state run. A ceiling is never inflated after a valid miss. |
 | 2 | is `operation_ns` the sum of the N named per-state children? | **Yes.** A root would include untimed corpus reading. The product's timing tree carries one named child per state and the row's `operation_ns` is their sum. `shared/phases.py`'s "two sources, one number" check is **lane-scoped** for this shape: it requires `root >= Σ children`, and the difference is the harness's own untimed work, published rather than absorbed. |
 | 3 | may a sampled row in this lane be `PASS`? | **Yes, for this lane only, frozen before collection**, because the storage counters are never sampled: the O(1) counters that decide storage are read in full in every mode. The 217 keeps `full` as its default and keeps forcing `sample` to `INCOMPLETE`. |
 | 4 | sampled unit and selection rule | **The state's file manifest** — the same list O4 compares — in corpus order. `max(1, ceil(n/10))` units selected by `index % 10 == 0`, **plus the first and last manifest entry of every state**, because that is where boundary defects live. The rule is **lane-scoped**: `sampled_indices` is used by the 217's `c2.delta.*` rows, and no 217 `verification_selection` string may move. |
@@ -287,8 +287,44 @@ constant**, not against a replay.
 | budget | rule |
 | --- | --- |
 | per-lane complete command | **declared at Phase 3** from the stride-10 baseline, recorded with its source, frozen before optimization |
-| verification | **declared at Phase 3**; the 60 s default does not transfer, because v0.1.6's 157-state read-back was 570.6 s |
+| verification | **declared now, by owner direction of 2026-09-19** — see §11.1 |
 | cleanup and lifecycle | still bounded — a row that leaks processes or disk still fails |
+
+### 11.1 Declared verification ceilings (owner direction, 2026-09-19)
+
+The verification invocation must be **fast**, and the ceiling is declared **before
+collection** rather than derived from a baseline:
+
+| row | states | `verification_wall_ns` ceiling |
+| --- | --: | --: |
+| `history-stride10` | 17 | **10 s** |
+| `history-stride3` | 53 | **20 s** |
+| `history-stride1` | 157 | **30 s** |
+
+This supersedes the "declared at Phase 3 from the stride-10 baseline" procedure for the
+verification axis only; the per-lane complete-command ceilings are still declared at
+Phase 3. The 60 s contract default does **not** transfer — v0.1.6's read-back was 199.8 s
+at 53 states and 570.6 s at 157 — and neither does it apply as a floor: these ceilings are
+tighter than it, and they are the ones that decide.
+
+`verification_wall_ns` is the **gate work** of the verification invocation: O1 over every
+state, O4 over every state, O2 over the deterministic sample, and the Store's O6 and O7
+readings. The verification invocation's own corpus and Store preparation is published
+separately as its `preparation_wall_ns`, exactly as the performance invocation's is; for
+`history-stride1` that is about 1.4 s of oracle authentication, so the ceilings hold under
+either reading.
+
+A row that exceeds its ceiling is **`TARGET_MISS` with its measured wall**, reported
+plainly. The ceiling is never inflated afterwards to turn a miss into a pass, and the
+workload is never shrunk to fit — `benchmark_rules.md` §11.
+
+**What makes these achievable**, and what Phase 3 must therefore build:
+
+- O1 is O(1) per state — a root read, not a tree walk;
+- O4 is metadata only, compared against the oracle, with **no read-back**;
+- O2 is deduplicated **by distinct object** before it is sampled, so consecutive states
+  that share most of their objects decode each object once, not once per referencing file;
+- O6 and O7 are O(1) `stat` and `PRAGMA` work.
 
 `benchmark_rules.md` §11 applies in full: no timeout inflated after a valid miss, no tier shrunk,
 one sample per case per arm, budgets frozen before collection. **`history-stride1` is explicitly
