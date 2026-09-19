@@ -1,19 +1,18 @@
 # Implementation plan and rollout
 
-> **Status:** Proposal; target LayerFS v0.1.7; not a released contract and not a
-> receipt. No figure in this document is a measurement.
+> **Status:** Proposal; target LayerFS v0.1.7; not a released contract and not a receipt.
+> No figure in this document is a measurement.
 
 ## 1. Scope
 
 **In:** the harness at
 [`core/benchmark/fs-bench-pro-storage-content/`](../../../../benchmark/fs-bench-pro-storage-content/)
 and this documentation. **Out:** every product source file. If a step appears to need a
-product change, stop and report it rather than widening a product API — `Store::path()`
-is already public, and that is enough for the runner to `stat` the Store.
+product change, stop and report it rather than widening a product API.
 
-Also out: the 217 admission rows. They keep their registry, their cardinality, their
-golden table, their `--lane full` composition and their `full` verification default.
-This campaign adds lanes, never members.
+Also out: the 217 admission rows. They keep their registry, cardinality, golden table,
+`--lane full` composition and `full` verification default. This lane adds a group and three
+lanes, never members.
 
 Paths below are relative to the harness root unless stated otherwise.
 
@@ -23,136 +22,141 @@ Paths below are relative to the harness root unless stated otherwise.
 
 | file | purpose |
 | --- | --- |
-| `src/workload/history.rs` | corpus reader: `manifest.tsv` / `previous.tsv`, forward blob accumulation across transitions, per-state tree and pinned `Expectation`, identity fails closed |
-| `src/families/history.rs` | the 227 rows: three lanes, `tier` = campaign index, `tier_label` = `full157_index`, `Shape::History`. Rows only — no bodies, per `families/mod.rs`'s rule |
-| `src/ops/history.rs` | the driver: load the prepared base and state objects, open the copy, construct, save, gates, phase marks, cleanup |
+| `src/workload/history.rs` | corpus reader: `checkpoint-manifest.json`, `manifest.tsv`, `previous.tsv`, forward blob accumulation, per-state oracle. Every identity fails closed |
+| `src/families/history.rs` | the three rows. Rows only — no bodies, per `families/mod.rs`'s rule |
+| `src/ops/history.rs` | the driver: authenticate, then the N per-state children (construct → `build_filesystem` → save), then close |
 
 ### New — Rust tests and golden
 
 | file | purpose |
 | --- | --- |
-| `tests/history_declarations.rs` | the declared rows match the corpus: 17/53/157, indices, tier labels, lane membership |
-| `tests/golden/history-expected.tsv` | pinned O1 roots, O3 counts and O6 attribution per row, embedded with `include_str!` so the harness identity covers it |
+| `tests/history_declarations.rs` | the declared rows match the corpus: three selections, state counts 17/53/157, the pinned path-state and logical-byte totals |
+| `tests/golden/history-expected.tsv` | pinned per-state roots, canonical totals and storage readings, embedded with `include_str!` so the harness identity covers it |
 
 ### New — Python
 
 | file | purpose |
 | --- | --- |
-| `shared/history_corpus.py` | corpus authentication and per-state/transition acquisition; fails closed on manifest SHA, tip, per-state hashes, oracle hashes and `blob_digests` |
-| `shared/history_chain.py` | lane → ordered states, base assignment, checkpoint spacing, chain compatibility digest |
-| `shared/test_history_corpus.py` | self-check for the above |
-| `shared/test_history_chain.py` | self-check for chain assignment, checkpoint arithmetic and digest stability |
+| `shared/history_corpus.py` | corpus authentication for the receipt: manifest SHA, pinned tip, per-lane pins. Fails closed |
+| `shared/test_history_corpus.py` | its self-check |
 
 ### Modified
 
 | file | change |
 | --- | --- |
-| `runner.py` | `--corpus`, the three lanes, chain-aware `prepare`, per-lane prepare budget, `sample` as the history default, preparation resource gates |
-| `src/main.rs` | the three lanes, `--corpus`, `--history-profile`; generalise `--emit-input`/`--load-input` to `--emit-prepared`/`--load-prepared`, keeping the old names as aliases |
-| `src/registry.rs` | `Shape::History`, the new group, lane membership, a second cardinality self-check array |
-| `src/families/mod.rs`, `src/ops/mod.rs`, `src/workload/mod.rs` | module registration and `Shape::History` dispatch |
-| `src/workload/artifact.rs` | carry the base Store and the chain identity in the artifact manifest |
-| `src/workload/expected.rs` | include the history pin table |
-| `src/gates.rs` | history gate helpers |
-| `src/support/phases.rs` | publish preparation's heap, RSS and data bytes |
+| `runner.py` | `--corpus`, the three lanes, the corpus identity in every receipt, the lifted budget for these rows, the storage delta in the derived receipt |
+| `src/main.rs` | `--corpus` and the three lanes |
+| `src/registry.rs` | `Shape::History`, the `history.*` group, lane membership, a cardinality self-check entry |
+| `src/families/mod.rs`, `src/ops/mod.rs`, `src/workload/mod.rs` | registration and `Shape::History` dispatch |
+| `src/support/phases.rs` | publish CPU user/system and RSS per phase |
 | `shared/phases.py` | read and reconcile those fields |
-| `shared/copyladder.py` | chain-level ENOSPC preflight; the two row classes |
-| `shared/space.py` | the pack-body split by `object_role`, and the cumulative retained-storage curve |
-| `shared/analyze.py` | the history report shape of [`measurement.md`](measurement.md) §4 |
-| `shared/pin_expected.py` | produce `history-expected.tsv` the same way it produces `expected.tsv` |
-| `tests/golden/registry.tsv` | the new rows appear, so the golden comparison covers them |
-| `../CONTRACT.md`, `../README.md` | a one-line pointer that the history lanes are a separate claim, not an amendment |
+| `shared/space.py` | the before/after delta shape, and canonical bytes and objects grouped by `object_role` |
+| `shared/analyze.py` | the history report shape of [`measurement.md`](measurement.md) §5 |
+| `src/workload/expected.rs` | include the history pin table |
+| `tests/golden/registry.tsv` | the three rows appear, so the golden comparison covers them |
+| `../CONTRACT.md`, `../README.md` | a one-line pointer that `history.*` is a separate claim, not an amendment |
 
-**Unchanged:** `ops/c1.rs`, `ops/c2.rs`, `ops/fs.rs`, `ops/fs_fixture.rs`,
-`ops/pipeline.rs`, all of `support/` except `phases.rs`, every existing family, and every
-existing golden row.
+**Unchanged:** `ops/c1.rs`, `ops/c2.rs`, `ops/fs.rs`, `ops/fs_fixture.rs`, `ops/pipeline.rs`,
+`workload/artifact.rs`, every existing family, and every existing golden row. This lane needs
+no artifact format, no copy ladder and no prepared root.
 
 ## 3. The rollout
 
-Six stages. A stage is entered only when the previous stage's exit gate has **PASSED**,
-and no stage is entered on an assumption.
+Seven phases. A phase is entered only when the previous phase's exit gate has **PASSED**.
 
-### Stage 0 — specification
+### Phase 0 — specification and rulings
 
 Deliverables: these five documents, the roadmap specification under
 `docs/roadmap/0.1/0.1.7/`, and the sub-issue.
 
-Exit: the README's six owner decisions are ruled, the lane and row IDs are frozen, and
-the pins of [`verification.md`](verification.md) §3 are written down. `benchmark_rules.md`
+Exit: the README's seven owner decisions are ruled, the three row IDs and lanes are frozen,
+and the pins of [`verification.md`](verification.md) §4 are written down. `benchmark_rules.md`
 §1 is explicit that a family measured before its specification exists is exploratory with
 `admission_eligible=false`, so no product run happens here.
 
-### Stage A — corpus and chain
+### Phase 1 — corpus reader
 
-Deliverables: `history_corpus.py`, `history_chain.py` and their self-checks. Python only;
-no registry change, no product run.
+Deliverables: `src/workload/history.rs`, `shared/history_corpus.py` and the self-checks. No
+registry change, no product run.
 
-Exit: the corpus authenticates against every identity in [`README.md`](README.md) §2; the
-three selections enumerate exactly 17/53/157 at the right indices; the corpus-derived
-pins match (**101,477 / 561,010,345**, **306,861 / 1,676,767,835**, **904,143 /
-4,936,693,030**); the chain ENOSPC preflight refuses a chain that will not fit.
+Exit: the corpus authenticates against every identity in [`README.md`](README.md) §3; the
+three selections enumerate exactly 17/53/157 at the right indices; the path-state and
+logical-byte pins match — **101,477 / 561,010,345**, **306,861 / 1,676,767,835**,
+**904,143 / 4,936,693,030**; a blob that does not identify is refused.
 
-### Stage R10 — stride-10 shakedown (17 rows)
+### Phase 2 — the two harness gaps
 
-The cheapest stage that exercises every mechanism: registry rows, corpus reader, driver,
-gates, golden table, one measured run, and the first published `cleanup_wall_ns` in the
-harness.
+Independent of the history rows, and each its own commit, so the 220 existing rows carry the
+change and are verified against it first:
 
-Exit: 17/17 rows `PASS`; corpus pins match; the storage curve is monotone in state index;
-every row's complete command ≤ 15 s; the per-row and per-lane preparation budgets
-**measured and declared**; R1 and R2 rows never pooled; `verify` reconciles every row;
-every save advances the Store watermark, so no state is a silent no-op.
+| | gap | fix |
+| --- | --- | --- |
+| 2a | CPU is dead code and the RSS sampler is wired to nothing | bracket `cpu_now()` and start the sampler per phase; publish `cpu.user_ns`, `cpu.system_ns`, `phase_peak_bytes`, `incremental_peak_bytes` |
+| 2b | storage is published for six rows only, read once from a retained file | the before/after delta shape and the `object_role` split in `space.py` |
 
-`history-stride10` has no recorded canonical total, so this stage's canonical numbers
-become the first-run pins of [`verification.md`](verification.md) §3(c).
+Exit: a full-lane re-run carries the new fields on every row, every pinned counter is
+unchanged, and `sum(operation_ns)` does not move.
 
-### Stage R3 — stride-3 development track (53 rows)
+### Phase 3 — `history-stride10` (17 states)
+
+The registry rows, the driver, the gates, the golden table, and the first measured run. The
+cheapest phase that exercises every mechanism.
+
+Exit: the row is `PASS`; corpus pins match; the final verification gate passes over all 17
+states; the storage readings and the attribution are published; every counter reconciles.
+
+**This phase also measures the baseline from which the lane budgets are declared.** The
+per-lane and verification budgets are fixed here and recorded with their source, before any
+optimization work begins — `benchmark_rules.md` §11 allows a target that needs an untouched
+baseline to be frozen after that baseline, but not after candidate sampling.
+
+### Phase 4 — `history-stride3` (53 states)
 
 Exit: canonical content **589,423,458 B / 73,476 objects**; **306,861** path-states;
-**1,676,767,835** logical bytes; the full attribution table reproduced; every counter
-consistent with R10's mechanism. R3 then becomes the default iteration lane for
-optimization candidates, as v0.1.6's own stride-3 contract made it the fast development
-track.
+**1,676,767,835** logical bytes; Store allocated **below** v0.1.6's 64,024,576 B; the
+allocated ÷ cumulative-logical ratio at or better than 26.2×; the full attribution table; the
+final verification gate passes over all 53 states.
 
-### Stage R1 — stride-1 qualification track (157 rows)
+### Phase 5 — `history-stride1` (157 states)
 
 Exit: canonical content **871,588,115 B / 104,705 objects**; **904,143** path-states;
-**4,936,693,030** logical bytes; lane wall and prepare-chain cost inside their declared
-budgets; explicitly selectable and never a default.
+**4,936,693,030** logical bytes; Store allocated **below** 83,947,520 B; ratio at or better
+than 58.8×; the declared lane budget met; the final verification gate passes over all 157
+states. Explicitly selectable and never a default.
 
-### Stage O — the optimization campaign
+### Phase 6 — the optimization campaign
 
-This is what the directory is named for. Promotion runs **one way only**:
+Promotion runs one way only, and never backwards:
 
 ```text
-candidate → R10 (cheap reject) → R3 (matched n3 alternating pairs) → R1 (final validation)
+candidate → stride10 (cheap reject) → stride3 (matched n3 alternating pairs) → stride1 (final validation)
 ```
 
-A candidate that skipped a stage is not promoted. Each ledger entry records the
-mechanism, the rung, the cache state, before/after allocated, apparent and canonical
-bytes, the category-gap delta, the read amplification, and the verdict — with negative
-outcomes preserved. The ledger is created at this stage as `optimization-ledger.md`
-beside these documents, mirroring the v0.1.6 campaign's
-`docs/roadmap/0.1/0.1.5/issue100/optimization-checklist-and-experiment-ledger.md`; it
-does not exist yet.
+Each ledger entry records the mechanism, before/after allocated, apparent and canonical bytes,
+the `object_role` split, the read amplification and the verdict — with negative outcomes
+preserved. The ledger is created at this phase as `optimization-ledger.md` beside these
+documents, mirroring the v0.1.6 campaign's
+`docs/roadmap/0.1/0.1.5/issue100/optimization-checklist-and-experiment-ledger.md`; it does not
+exist yet.
 
 ## 4. Stop rules
 
-- **A canonical pin that does not match at R3 or R1 stops the stage.** It is a finding
+- **A canonical pin that does not match at Phase 4 or 5 stops the phase.** It is a finding
   about the migration, not a fixture to adjust.
-- **`sum(operation_ns)` must not fall** when preparation is optimised. If it does,
-  measured work moved into setup and the change is rejected.
-- **A row that cannot fit its budget is `NOT_RUN`** with its measured wall and reason.
-  No tier is shrunk, no timeout inflated, no worker added.
-- **A residency gate failure is `INELIGIBLE`**, never a quiet pass.
-- **Nothing in a timed phase rebuilds a fixture**, and nothing reused is presented as a
-  cold claim.
+- **A Store allocated above v0.1.6's recorded bytes is a finding**, not a new baseline: the
+  core Store carries strictly less metadata, so it must land below.
+- **Per-state work time or peak heap that rises with the number of states is a finding** —
+  each save would be rescanning history, or the chain would not be streaming.
+- **A row that cannot fit its declared budget is reported with its measured wall.** The budget
+  was declared before the run; it is never inflated afterwards to turn a miss into a pass.
+- **A residency or reconciliation failure is `INELIGIBLE` or `INCOMPLETE`**, never a quiet
+  pass.
+- **Nothing in a timed region reads the corpus**, and no constructed object is supplied to a
+  measured child.
 
 ## 5. Production LOC accounting
 
-`core/tools/check_product_boundary.py` scans only `core/crates/*/src` and
-`core/crates/*/sql`, and the repository's LOC rule excludes benchmark harnesses from
-production LOC. Every commit in this campaign therefore reports the **production total
-unchanged, delta 0**, with harness lines stated separately. The 999-line ceiling does not
-bind here, though the harness's own convention of one cohesive module per concern still
-does.
+`core/tools/check_product_boundary.py` scans only `core/crates/*/src` and `core/crates/*/sql`,
+and the repository's LOC rule excludes benchmark harnesses from production LOC. Every commit
+in this campaign therefore reports the **production total unchanged, delta 0**, with harness
+lines stated separately.

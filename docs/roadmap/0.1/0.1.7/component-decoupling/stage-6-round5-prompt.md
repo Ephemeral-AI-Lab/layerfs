@@ -316,3 +316,43 @@ every counter identical to round 4c; preparation `<= 1.0 s` per row; `--reuse-pa
 the mode ladder working and failing closed; a fresh full lane into a **new** directory
 with `verify`, `report`, `calibrate` and a new dated round-5 evidence directory; the
 before/after non-operation share in one table; and the #184 checkboxes all holding.
+
+### Amended again by owner direction, 2026-09-19 (round 5b closure)
+
+Four further rulings. **These replace the lines above where they overlap; every other
+line stands.**
+
+4. **The per-row preparation ceiling is a formula, not a constant.**
+
+   ```text
+   countable = preparation_wall_ns - acquisition_wall_ns
+   ceiling   = 1.0 s + 2.0 ms per MiB of the artifact's declared data bytes
+   ```
+
+   `1.0 s` is the fixed overhead the target always meant; `2.0 ms/MiB` is the **measured**
+   load floor, because a prepared master is loaded by reading its packed object set and
+   re-identifying every object and `FinalizedObject::new` hashes. A row with no artifact
+   keeps the plain 1.0 s, and the axis is the **artifact's** bytes rather than the row's
+   declared payload — an entry-ladder row declares entries and no bytes while its master is
+   hundreds of MB. **Zero of 217 rows are over, tightest at 83%.** On a non-aarch64 host the
+   scalar SHA-256 makes the two `c1.construct.*` 500 MiB rows the tight case again.
+5. **The complete-command budget classifies a formula.** `budgeted = declared_ns + 250 ms`,
+   where `declared_ns` is the four phases, and `CONTRACT.md` §4 fixes it with erratum **E4**
+   in §11. The wall is still published as `complete_command_ns` and no longer decides:
+   process start-up and the runner's own bookkeeping belong to no phase, and charging them
+   to a case's budget billed preparation and verification to a *performance* budget instead
+   of to their own targets. The reconciliation still requires
+   `declared <= invocation <= wall`, so the allowance cannot hide work.
+6. **`runner.py prune` exists.** It removes what the current compatibility key no longer
+   accepts — superseded entries, entries sealed under a different key, unsealed directories
+   — and never a master the key still accepts, because removing one costs a full
+   re-acquisition. It holds the measurement lock and writes an append-only record.
+7. **The two axes no receipt carried are wired.** `cpu.user_ns` / `cpu.system_ns` for the
+   measured region, from `getrusage` at the phase boundary, and `rss.process_peak_bytes`
+   for the child — labelled a process figure because it is a lifetime number. Storage is
+   `artifact.data_bytes` per row. The 10 ms `RssSampler` stays unwired on purpose: it cannot
+   cover a phase under ~200 ms and a sampling thread perturbs what it measures.
+
+**What is still open**: nothing that a work item closes. The ceiling formula is
+host-specific at the top tier, and the two stale run directories in the results tree are
+evidence rather than garbage.

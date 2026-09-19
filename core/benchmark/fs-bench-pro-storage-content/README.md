@@ -39,7 +39,8 @@ trace; the runner derives a receipt from it and never edits either.
 | --- | --- |
 | `list` | Prints the binary's own generated registry, so what is listed is what is registered. |
 | `prepare` | Acquires the prepared artifacts a selection needs, once. A row whose registry declaration names a master is acquired for real into `prepared/<case_id>/`, hashed per file, given a `manifest.json`, keyed by its compatibility digest and sealed read-only; a row that declares none is recorded `not-produced` **with that reason** rather than faked. The declaration is a column of the binary's own registry, so no family list is maintained by hand. |
-| `perf` | One sample per case per arm; fresh output; measurement lock held; complete-command budget enforced per case; a receipt that names the tree it ran on. The verification mode defaults to `full` for a whole-lane run and to `sample` for iteration — `--lane smoke` or any explicit `--case` — and `--verify` always wins over that default. A row whose driver declares `oracle_phase: verify-invocation` is run in phases: the performance invocation is budgeted on its own complete command, and verification is a **second, unmeasured invocation** charged to its own 60 s budget. |
+| `perf` | One sample per case per arm; fresh output; measurement lock held; the complete-command budget enforced per case; a receipt that names the tree it ran on. **The budgeted quantity is a formula** — `declared_ns + 250 ms`, where `declared_ns` is preparation + operation + verification + cleanup — and not the runner's raw process wall, which is still published as `complete_command_ns` but no longer decides (`CONTRACT.md` §4, erratum E4). The verification mode defaults to `full` for a whole-lane run and to `sample` for iteration — `--lane smoke` or any explicit `--case` — and `--verify` always wins over that default. A row whose driver declares `oracle_phase: verify-invocation` is run in phases: the performance invocation is budgeted on its own complete command, and verification is a **second, unmeasured invocation** charged to its own 60 s budget. |
+| `prune` | Removes prepared artifacts the current compatibility key no longer accepts — superseded entries, entries sealed under a different key, unsealed directories — and **never** a master the current key still accepts. Holds the measurement lock, supports `--dry-run`, and writes an append-only record naming every entry and its reason. |
 | `verify` | Re-reads the raw artifacts and re-derives flatness, sequence, worst-gate aggregation, budget classification, and — for C2 rows — the space and pack accounting read out of the Store file itself. |
 | `report` | Renders the ladders, bands and the four-axis view. Time is printed and never decides. |
 | `self-check` | Runs every Python self-check, the registry self-check, the golden comparison and the lock-parity test. |
@@ -130,11 +131,21 @@ product, and every oracle is a **second, unmeasured, byte-identical operation**
 into a `TreeStore`. The two roots must match: a replay that failed to reproduce the
 measured operation is caught by a gate rather than trusted.
 
-**The counted instrument is the allocator, not RSS.** The counting `GlobalAlloc`
-gates the O(1)-memory claim; the 10 ms RSS sampler is a bound and an anomaly
-detector, because at that interval it cannot cover any phase under ~200 ms. A
-missed sample or an excessive gap makes the phase peak unavailable and the row
-`INELIGIBLE` — never quietly fast.
+**The counted instrument is the allocator, not RSS.** The counting `GlobalAlloc` gates the
+O(1)-memory claim and publishes `heap.peak_incremental_bytes` for the measured phase. The
+child's peak resident set is published beside it as `rss.process_peak_bytes`, from
+`getrusage(RUSAGE_SELF).ru_maxrss` — a **lifetime** figure for the whole child, labelled as
+one, which one child per case makes that case's bound. The measured region's own CPU is
+`cpu.user_ns` / `cpu.system_ns`, from two `getrusage` reads taken at the phase boundary,
+outside the region by construction.
+
+**The 10 ms `RssSampler` is implemented, self-checked, and wired to no row — deliberately.**
+An earlier revision of this paragraph claimed a missed sample or an excessive gap makes the
+phase peak unavailable and the row `INELIGIBLE`. That was never true, and it should not be:
+at a 10 ms interval the sampler cannot cover a phase under ~200 ms, which is most of this
+lane, and a sampling thread inside the measured region perturbs the thing it measures. A
+per-row sampler would buy a number it could not stand behind at the cost of the
+measurement, so `RssBundle::peak_is_usable` stays a tested primitive rather than a gate.
 
 **One clock.** `CLOCK_MONOTONIC_RAW` (id 4), Rust and Python alike. `Sigma self_ns
 == root.elapsed_ns` is a tautology of the product's own tree arithmetic and is
@@ -269,28 +280,36 @@ Recorded here so a reader is not misled by the sections above.
 
 **Still not true.**
 
-- **Six admission rows exceed the 1.0 s per-row preparation ceiling** — four in one earlier
-  lane of the same binary, because the boundary rows sit within a few per cent of it and flip
-  across it between runs — and two of them (`payload-create-500m`,
-  `payload-create-chunked-500m`) are the rows the assignment forbids preparing.
-  **Amended by owner direction, 2026-09-19:** the ceiling excludes the declared
-  `acquisition_wall_ns`, which owner decision D2 already puts outside the row's admission
-  decision and which is a per-sample copy the harness makes rather than fixture work. That
-  takes `dedup-workspace-unique-500-compact-v2` from 1.243 s to about 0.9 s. **What remains
-  is a floor, not a defect:** a prepared master is loaded by reading its packed object set
-  and re-identifying every object — `FinalizedObject::new` hashes, and the harness cannot
-  skip that without a product change — which is 0.7–1.2 s at 500 MiB, and lazy loading would
-  break the declared `warm-in-process-fixture` state. Three rows therefore sit 3–4% over the
-  ceiling, inside the measurement's own spread, and are reported as over.
+- **The per-row preparation ceiling is a formula, by owner direction on 2026-09-19**, and
+  every row is inside it:
+
+  ```text
+  countable = preparation_wall_ns - acquisition_wall_ns
+  ceiling   = 1.0 s + 2.0 ms per MiB of the artifact's declared data bytes
+  ```
+
+  The `1.0 s` is the fixed overhead the target always meant and the `2.0 ms/MiB` is the
+  **measured** load floor — a prepared master is loaded by reading its packed object set and
+  re-identifying every object, and `FinalizedObject::new` hashes, which the harness cannot
+  skip without a product change. A row with no artifact keeps the plain 1.0 s. The axis is
+  the **artifact's** bytes rather than the row's declared payload, because an entry-ladder
+  row like `dedup-workspace-unique-500-compact-v2` declares 500 entries and no bytes while
+  its master is 768 MB. **Zero of 217 rows are over, and the tightest is at 83%** — the two
+  `c1.construct.*` 500 MiB rows, which are the only rows whose preparation is dominated by
+  something other than a load.
+- **The formula is host-specific at the top.** The accelerated SHA-256 is aarch64-only; on
+  another architecture the scalar fallback runs at ~0.24 GB/s and those two rows would be
+  back over the plain 1.0 s. The fallback is correct, it is just slower.
 - **`prepare --lane full` is 143.5 s** (129.5 s of acquisition over 118 masters, 15.567 GB;
   an independent cold re-run measured 139.4 s and 127.9 s). **Amended by owner direction,
   2026-09-19:** the `<= 90 s` ceiling is replaced by *reported, and it pays for itself within
   two lane runs* — 129.5 s once against 98.2 s of lane preparation removed per run. Round 5
   met 75.39 s **by not doing the work** (six families had no master), and a ceiling on a
-  once-per-digest acquisition creates that incentive.
+  once-per-digest acquisition creates that incentive. `runner.py prune` keeps 118 masters
+  and reports what it keeps, so the cost is visible before it is paid.
 - **A whole-lane quick run is not faster than a whole-lane full run.** **Amended by owner
   direction, 2026-09-19: the `<= 70 s` target is withdrawn.** It was derived from a ~106 s
-  verification saving that no longer exists — lane verification is 68.8 s and only 0.829 s of
+  verification saving that no longer exists — lane verification is 32.4 s and only 0.8 s of
   it is skippable, because the deferred invocation exists for one family — and the rest is
   required by the frozen per-family oracles and the pinned-constant gates, where omitting it
   makes a row `INCOMPLETE` by the owner's own rule. The mode *default* the directive fixes is
@@ -299,22 +318,11 @@ Recorded here so a reader is not misled by the sections above.
   ineligible"*, so a whole-lane run resolves to `full` and anything narrower to `sample`,
   with `--verify` winning. That is what makes iteration cheap — 0.6 s for the smoke lane,
   0.1 s for one case, against 0.06 s for `verify --reuse-pass`.
-- **The harness's own SHA-256 is the floor under the last preparation item, and speeding it up
-  is blocked.** `payload-create-500m` and `payload-create-chunked-500m` spend 2.36 s and 2.33 s
-  almost entirely hashing their fixture at ≈0.24 GB/s, and a 3–4× faster SHA-256 with
-  identical output would take them under 1.0 s and the lane preparation under 25 s. It is not
-  done because the same `Sha256` is used **inside a timer** in one place —
-  `ops/fs.rs::run_traverse_row`, hashing each file's `content_root` for the traversal digest —
-  so a faster one would make `operation_ns` fall, which the round's most important guard
-  rejects. The in-timer work is 78,208 bytes across the whole lane: **0.32 ms**, or 4×10⁻⁶ of
-  `sum(operation_ns)`, and 0.87–2.70% of each of the eight affected rows. **This needs its own
-  ruling**, not a work item.
-- **`FilesystemRead::inode` (owner ruling 2) is not done.** It needs a product-source
-  change and a test pinning both sides. Reported as a blocker rather than guessed at.
-- **The harness identity does not cover the harness's own Python.** A receipt names the Rust
-  binary's sha256, both lockfiles and the registry table, but a Python-only harness change
-  leaves every one of them unchanged. Stated so a reader is not misled by
-  `harness_binary_sha256`; fixing it is a scope question, not a defect in the round.
-- **The budget still classifies the complete-command wall**, and `elapsed_ns` still never
-  gate-decides. Owner ruling 1: the golden number reports and does not gate, so making it
-  drive the budget is a `CONTRACT.md` change and is not this round's.
+- **One instrument is deliberately unwired.** The 10 ms `RssSampler` cannot cover a phase
+  under ~200 ms and a sampling thread inside the measured region perturbs what it measures,
+  so it stays a tested primitive rather than a gate. The paragraph above says so.
+- **A non-aarch64 cross-build could not be completed** — the target needs a C cross-compiler
+  this host lacks — so the scalar fallback is verified at runtime through `Sha256::scalar()`
+  rather than by a cross-build.
+- **`elapsed_ns` still never gate-decides.** Owner ruling 1: the golden number reports and
+  does not gate. Counters, heap, CPU, space and the per-row ceilings keep deciding.

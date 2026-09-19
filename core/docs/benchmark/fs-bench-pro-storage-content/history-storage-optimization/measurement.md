@@ -5,177 +5,189 @@
 > §6, §9, §10 and §11, and by
 > [`../memory_cpu_space_support.md`](../memory_cpu_space_support.md).
 
-## 1. The four phases, and the six published numbers
+## 1. The row shape
+
+One row per selection. One invocation. One Store, created inside the sample and grown in
+place:
+
+```text
+create the Store
+for each state k in the selection, in order:
+    read state k's changed bytes from the corpus      untimed
+      construct the changed content                   TIMED
+      build_filesystem against the previous root      TIMED
+      save                                            TIMED
+close
+```
+
+No base is prepared, no copy is taken, nothing is checkpointed. `store_state` is
+`CreatedInSample` and `cache_state` is `CreatedInSample`, matching `c2.save.*`'s declaration.
+`Store::create` is charged to state 1's child and published as its own counter, so the fixed
+cost is visible and subtractable.
+
+## 2. The four phases, and the six published numbers
 
 | | phase | what runs | published as | budgeted |
 | --- | --- | --- | --- | --- |
-| a | preparation | acquire the base (copy or load the master) + de-warm | `preparation_wall_ns`, with the copy/de-warm part also as `acquisition_wall_ns` | no — published only |
-| b | **work** | `Store::open` on the sample copy → construct state *k*'s files and directories → save → close | `operation_ns` (the product's own telemetry root) | **yes — the performance claim** |
-| c | verification | the oracle of [`verification.md`](verification.md) | `verification_wall_ns` | its own 60 s budget |
-| d | cleanup | destroy the per-case copy, close | `cleanup_wall_ns` | inside the complete-command wall |
-| | | process wall | `complete_command_ns` | the lifecycle and cleanup ceiling |
+| a | preparation | authenticate the corpus, resolve the selection, preflight disk | `preparation_wall_ns`; `acquisition_wall_ns` is **zero** | no — published only |
+| b | **work** | the N per-state children above | `operation_ns` — the **sum of the named children** | **yes — the performance claim** |
+| c | verification | the final gate of [`verification.md`](verification.md) §1, in its own invocation | `verification_wall_ns` | its own declared budget |
+| d | cleanup | destroy the Store, close | `cleanup_wall_ns` | inside the complete-command wall |
+| | | process wall | `complete_command_ns` | the declared lane ceiling |
 
-`handoff_ns` is published **beside** `operation_ns`, not inside it, so harness work that
-happens within the timed region is visible rather than absorbed. Measured precedent:
-the harness's object handoff was 0.162 s of a 4.997 s measured phase on
-`dedup-cdc-overwrite-500`.
-
-**Cleanup does not exist today**, because nothing is copied per case yet. This is the
-first family where it becomes real work: every row copies a base of tens to hundreds of
-megabytes and destroys it. It must be timed and bounded like the rest.
+`handoff_ns` is published **beside** `operation_ns`, not inside it, so harness work that falls
+within a timed region is visible rather than absorbed.
 
 `verify` re-derives all six from the raw artifacts and **fails closed**: if
-`preparation + operation + verification + cleanup` does not reconcile with the
-invocation, and the invocation with the process wall, inside the declared tolerance, the
-row is `INCOMPLETE` rather than quietly wrong. The tolerance is the harness's existing
-one — 250 ms plus 2 % of the wall — which covers process start and teardown and nothing
-else.
+`preparation + operation + verification + cleanup` does not reconcile with the invocation, and
+the invocation with the process wall, inside the declared tolerance, the row is `INCOMPLETE`
+rather than quietly wrong. The tolerance is the harness's existing one — 250 ms plus 2 % of
+the wall.
 
-## 2. The real work, and what is inside the timer
+### 2.1 Why `operation_ns` is the sum of the children
 
-Fixed per case shape, and the driver does not choose it. A history row runs **two
-product entry points in one timed region** — the shape `pipeline.*` already has:
+The product's timing tree carries **one named child per state**, and the row's `operation_ns`
+is their sum. It is not the root, because the root would include the harness's own corpus
+reading between the children — untimed work that must not appear as product time.
+
+This forces the operation-window ruling that [#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184)
+§7.2 left open for a multi-operation row. It is owner decision 2 in the
+[README](README.md#7-owner-decisions-still-open).
+
+### 2.2 What is inside a child
 
 ```text
-inside the timer   Store::open  +  build_filesystem  +  save  +  ack
-outside            corpus read · manifest decode · blob accumulation ·
-                   building state k-1 · copying the base · de-warm · the oracle
+construct the changed content      C1: the state's changed files
+build_filesystem                   C1: the tree update against the previous root
+save                               C2: begin_save, accept, finish
 ```
 
-**C1 half — `build_filesystem` / `update_filesystem`** over a `FilesystemInput`:
-
-| field | meaning |
-| --- | --- |
-| `base: Option<FilesystemRootId>` | the previous state's root, **read back from the Store** |
-| `scope`, `root_serial` | allocation scope and root serial |
-| `directories: &[DirectoryUpdate]` | final directory bindings, ordered by parent serial |
-| `inodes: &[InodeUpdate]` | typed final inode values, ordered by serial |
-| `new_inodes: &[u64]` | serials the caller's allocator just created |
-| `resources: FilesystemResources` | declared ceilings |
-
-The important line: the harness supplies the **declared final state**, and the product
-computes the delta against `base`. The harness's job is *translation* — corpus tree to
-update lists — and never diffing. A harness that computed the diff would be doing the
-product's work and the measurement would say nothing about the product.
-
-**C2 half — `Store::open` on the sample copy plus the save**, through the product's own
-`SaveHandoff` adapter ("lets C1 feed a save operation directly"). `CountingConsumer`
-counts what crossed on that same path, which is why `g2.handoff` compares *emitted*
-against *acknowledged* rather than trusting a number the save reports about itself.
-
-**The C1 half needs no new machinery.** `PreparedTree` (`ops/fs_fixture.rs`) already
-carries `directories`, `inodes`, `new_inodes`, `listings`, `files` and
-`directory_serials`, and already has `emit`, `load`, `input_parts()` and `check()`. The
-history row is `c1.fs.build-scale`'s shape with the tree coming from the corpus and the
-base being the previous state.
-
-Counters produced: `FilesystemUpdateCounters`, `SortedWork` (dirs and inodes),
-`ObjectWork`, `CdcCounters`, the delta counters (`prefix_selected`, `full_losses`,
-`no_candidate`, `work_exceeded`), `SaveCounters` and `StoreReadCounters`.
-
-A fixture is an **input**, never part of the measurement. A driver handed no prepared
-artifact fails closed with that reason rather than silently rebuilding — because a driver
-that builds its fixture inside the timer is measuring setup.
+`InodeUpdate.value` is `InodeValue { kind, namespace_ref_count, content_root, metadata_root }`
+— it references content **by id** and carries no bytes. So the content objects are not an
+input; they are what the measured child produces. Pre-supplying constructed objects would move
+measured work into preparation, which is why this lane has no prepared artifact at all.
 
 ## 3. Memory, CPU and disk — what is tracked, and the two gaps
 
 | axis | instrument | status |
 | --- | --- | --- |
-| heap | counting `GlobalAlloc` → `heap.peak_incremental_bytes`, `heap_charged_bytes`, `heap_allocations` | exists — **measured phase only** |
-| RSS | 10 ms sampler → `phase_peak_bytes`, `incremental_peak_bytes` | exists — measured phase only |
+| heap | counting `GlobalAlloc` → `heap.peak_incremental_bytes`, `heap_charged_bytes`, `heap_allocations` | exists — measured phase only |
+| RSS | 10 ms sampler → `phase_peak_bytes`, `incremental_peak_bytes` | exists — **wired to no row** |
 | lifetime RSS | `ru_maxrss` → `lifetime_peak_rss_bytes` | exists; a **lifetime** value, never substituted for a phase peak |
 | **CPU** | `CpuReading { user_ns, system_ns }` from `getrusage(RUSAGE_SELF)`, `cpu_now()` | **instrumented but never published** — no driver calls it |
 | swaps | `swaps()` plus `gates::swap_gate` in every C1/C2 driver | exists |
 | disk | `st_blocks × 512`, `st_size`, `page_count`, `freelist_count`, `pack_bodies`, `object_rows`, `catalogue`, `schema_shape`, `quick_check`, `sidecars` | exists |
-| disk I/O | `disk_read_bytes` against `requested`, for a de-warmed claim | exists |
+| disk I/O | `disk_read_bytes` against `requested` | exists |
 
 The sampler's interval cannot cover a phase shorter than ~200 ms, so a missed sample or an
-excessive gap makes the peak **unavailable** and the row `INELIGIBLE` — never quietly
-fast.
+excessive gap makes the peak **unavailable** and the row `INELIGIBLE` — never quietly fast.
 
-**Two gaps, and they have the same fix.** CPU time is never published, and preparation's
-memory is never published: `delta_prepare` (`ops/c2.rs:818`) emits three counters and
-nothing else. Both are closed by having the `prepare` and `perf` invocations bracket
-`cpu_now()` around each phase and publish `cpu.user_ns` / `cpu.system_ns`, plus
-`preparation_peak_heap_bytes` and `preparation_peak_rss_bytes` on the prepare invocation.
-See [`preparation.md`](preparation.md) §7.
+**Two gaps, and they have the same fix.** CPU time is never published, and the RSS sampler is
+wired to nothing. Both are closed by having each invocation bracket `cpu_now()` around every
+phase and start the sampler with it, publishing `cpu.user_ns`, `cpu.system_ns`,
+`phase_peak_bytes` and `incremental_peak_bytes`.
 
-**CPU is a diagnostic, like `operation_ns`.** `getrusage(RUSAGE_SELF)` is process-wide
-and cumulative, so a phase's CPU is a difference of two readings, and it is only
-meaningful because `AGENTS.md` §3.8 mandates a single construction worker. It never
-gate-decides; counters, heap and disk do.
+**CPU is a diagnostic, like `operation_ns`.** `getrusage(RUSAGE_SELF)` is process-wide and
+cumulative, so a phase's CPU is a difference of two readings, and it is only meaningful
+because `AGENTS.md` §3.8 mandates a single construction worker. It never gate-decides;
+counters, heap and disk do.
 
-## 4. The report shape
+## 4. The storage readings
 
-One row per lane, with the runtime columns dropped because they are Stage 7's claim:
+This lane's claim is storage, so the reading is part of the measurement and not an
+afterthought. It is taken **before and after the chain**, outside every timer, and published
+per row:
 
 ```text
-lane · states · rows
-canonical content bytes / objects          pinned, gated
-verified path-states / logical bytes       pinned, gated
-Store allocated / apparent                 O6
-attribution: pack bodies by role · sqlite non-pack · allocation difference
-sum(operation_ns) · median per state       the golden number
-preparation · acquisition · verification · cleanup · complete command
-peak incremental heap · phase peak RSS
-Git53 · Git157                             cited constants
-v0.1.6 Store allocated                     labelled reference point, not a comparison
+before:  the Store file as created            (allocated, apparent, page_count, freelist)
+after:   the same axes over the retained history
+         plus canonical bytes and objects by object_role, pack bodies, non-pack bytes
 ```
 
-`sum(operation_ns)` is published beside the per-row numbers so that a row which got
-faster at another row's expense is visible rather than averaged away. It is also the
-campaign's **falsifier**: if the operation total falls when preparation is optimised,
-measured work moved into setup and the change is rejected.
+A read-only SQLite open still faults pages in, so ordering matters — and here it is
+unconstrained, because nothing is de-warmed and nothing is copied. The readings are O(1)
+`stat` and `PRAGMA` work.
 
-The report's time axis is `operation_ns`. It is **never** the process wall under a time
-label — the 217-row harness shipped that defect (`shared/analyze.py` printed
-`max(row.wall_ns)` under the header `time max ms`), and this campaign does not inherit it.
+`space.py` already provides the primitives. What this lane adds is the **delta** shape — a
+before/after pair — and the `object_role` split, because the current reader is called once
+from `verify` against a retained file and reports only the end state.
 
-## 5. Lanes and budgets
+## 5. What the row reports
 
-| lane | rows | selection |
-| --- | --: | --- |
-| `history-stride10` | 17 | `range(1,158,10) ∪ {157}` |
-| `history-stride3` | 53 | `range(1,158,3)` |
-| `history-stride1` | 157 | all checkpoints |
+```text
+states · cumulative logical bytes                 pinned from the corpus
+canonical content bytes / objects                 from the Store, pinned
+Store allocated / apparent                        O6
+pack bodies · canonical bytes by role · non-pack · allocation difference
+ratio: cumulative logical ÷ allocated             the dedup claim
+ratio: allocated ÷ Git53 or Git157                cited constants
+preparation · acquisition · operation · verification · cleanup · complete command
+peak incremental heap · phase peak RSS · CPU user/system
+read amplification in verification
+```
 
-The 217-row `full` lane is **unchanged**: history rows are selected only by their own
-lane, so lane compositions stay comparable and round-5 baselines stay valid.
+"Auto-deduped" is one comparison: 4,936,693,030 logical bytes across 157 states retained in a
+single Store of *X* bytes. v0.1.6's recorded reference is 83,947,520 B — a **58.8×** ratio at
+157 states, 26.2× at 53.
 
-| budget | limit |
+## 6. Budgets
+
+The family's budget is **lifted by owner decision**: the ≤ 15 s per-row complete-command rule
+does not apply to these three rows, because the workload is a whole history and shrinking it
+is not an option.
+
+| budget | rule |
 | --- | --- |
-| complete command, per row | ≤ 15 s; declared exceptions ≤ 25 s |
-| verification, per row | ≤ 60 s, its own scope |
-| preparation | published, not budgeted per row; per-lane budget declared after stride-10 is measured |
+| per-lane complete command | **declared before collection**, fixed from the stride-10 measurement and recorded with its source |
+| verification | **declared before collection**; a full 157-state read-back was 570.6 s in v0.1.6, so the 60 s default does not transfer |
+| cleanup and lifecycle | still bounded — a row that leaks processes or disk still fails |
 
-No tier is shrunk, no timeout inflated and no worker added to make a row fit. A row that
-cannot fit is recorded as `NOT_RUN` with its measured wall and the reason.
+A lifted budget is a **declared ceiling, not an absence of one**. `benchmark_rules.md` §11
+still applies in full: no timeout inflated after a valid miss, no tier shrunk, one sample per
+case per arm, budgets frozen before collection.
 
-`benchmark_rules.md` §15 also governs what may run by default: a large-history lane is
-explicitly selectable and **no default invocation launches stride-1**.
+`benchmark_rules.md` §15 also governs what may run by default: `history-stride1` is explicitly
+selectable and **no default invocation launches it**.
 
-## 6. Sampling policy
+## 7. The falsifiers
 
-One sample per case per arm, fresh `--output` per run, receipts append-only, measurement
-lock held for the whole invocation. No n3 and no best-of selection; diagnostics are
-labelled as diagnostics and reported beside the gate sample.
+Time against v0.1.6 is a **one-sided tripwire**: this lane has no container, FUSE mount, spool
+or Commit envelope, so a speed-up is guaranteed by the surface change and proves nothing.
+Passing proves nothing; failing proves a flaw.
+
+The gates that can actually detect an algorithmic defect:
+
+| falsifier | a defect looks like |
+| --- | --- |
+| **allocated ÷ cumulative logical** | worse than v0.1.6's 26.2× (53 states) or 58.8× (157) — dedup or compression regressed |
+| **allocated vs Git53 / Git157** | worse than 1.298× / 1.489× — the gap to Git widened |
+| **allocated vs v0.1.6's recorded bytes** | above 64,024,576 B at 53 states or 83,947,520 B at 157, given the core Store carries strictly less metadata |
+| **per-state work time across the three rows** | cost per state rises with history length — each save is rescanning history |
+| **peak heap across the three rows** | heap grows with the number of states — the chain is not streaming |
+| **`delta.prefix_selected`, `reused`, `inserted`** | zero prefix selection — the delta path is not exercised. Round 5 found `delta.prefix_selected = 0` across all 20 `c2.delta.*` rows |
+| **read amplification** | decoded bytes far above requested — the read path decodes more than it serves |
+| **canonical content total** | anything other than the §4 pins — the migration is not faithful |
+
+## 8. Sampling policy
+
+One sample per case per arm, fresh `--output` per run, receipts append-only, measurement lock
+held for the whole invocation. No n3 and no best-of selection; diagnostics are labelled as
+diagnostics and reported beside the gate sample.
 
 For an optimization campaign the #118 regression rule applies prospectively: three fresh
-alternating pairs, median paired slowdown greater than `max(15 % of the control median,
-3 ms)` and at least two of three pairs slower. Every attempt is retained; no arm-only
-retry and no outlier deletion.
+alternating pairs, median paired slowdown greater than `max(15 % of the control median, 3 ms)`
+and at least two of three pairs slower. Every attempt is retained; no arm-only retry and no
+outlier deletion.
 
-## 7. Identity on every receipt
+## 9. Identity on every receipt
 
 | field | why |
 | --- | --- |
 | source commit and tree seal | a rebuilt artifact needs a rebuilt matched arm |
 | product seal, compilation seal, dependency seal | the product under test |
-| harness binary sha256 and harness lock sha256 | the harness is a measured input |
+| harness binary sha256 and harness Python sha256 | the harness is a measured input |
+| harness lock and product lock sha256 | dependency parity |
 | registry TSV sha256 | which rows ran |
-| **corpus manifest sha256 and pinned tip** | this campaign's external input |
+| **corpus manifest sha256 and pinned tip** | this lane's external input |
 | `construction_workers` | must be `1`; no run raises it |
-| `clone_method`, `allocation_attribution` | which rung, and whether allocated bytes are attributable |
-| `cache_state` | states are never pooled |
-
-A harness change invalidates the pair. A corpus change invalidates the prepared root.
+| `cache_state`, `store_state` | declared, never pooled |

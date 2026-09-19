@@ -1,225 +1,226 @@
-preparation / acquisition / verification / operation, ns, per admission row, round-5b full lane
-run: /tmp/r5c-final7 at 4e0357b4dd2aea655adcc090a69a34325fff4774
-the amended per-row ceiling excludes acquisition_wall_ns, so both are printed
+preparation / acquisition / verification / operation / cpu / rss, per admission row, round-5b full lane
+run: /tmp/r5c-final8 at 2f8ebc90d751d996bbc84581e1f8129690870c67
+the per-row ceiling is 1.0 s + 2 ms per MiB of the artifact's declared bytes; the ceiling and the
+countable preparation (preparation - acquisition) are printed beside it
 
-    1.387    0.224     0.016      2.509  dedup-workspace-unique-500-compact-v2              c2.reuse.workspace
-    1.056    0.015     0.128      9.035  store-footprint-metadata-cardinality-100000        c2.footprint
-    1.026    0.006     1.702      2.350  dedup-cross-file-unique-500                        c2.reuse.cross-file
-    0.989    0.005     0.121      8.831  store-footprint-unique-100000                      c2.footprint
-    0.810    0.000     1.866      0.704  payload-create-chunked-500m                        c1.construct.chunked
-    0.810    0.000     1.871      0.696  payload-create-500m                                c1.construct.whole-file
-    0.735    0.000     1.518      0.000  overwrite-fixed-64k-chunk-count-decrease-500m      c1.cdc.chunk-count
-    0.733    0.015     0.041      2.410  store-footprint-large-object-500m                  c2.footprint
-    0.728    0.000     1.113      0.000  overwrite-fixed-64k-chunk-count-increase-500m      c1.cdc.chunk-count
-    0.727    0.000     1.100      0.000  zero-extend-500m                                   c1.edit.length-changing
-    0.719    0.000     1.092      0.000  overwrite-tail-4k-500m                             c1.edit.length-preserving
-    0.718    0.000     1.125      0.000  shrink-500m                                        c1.edit.length-changing
-    0.718    0.000     1.096      0.000  overwrite-head-4k-500m                             c1.edit.length-preserving
-    0.714    0.000     1.129      0.000  grow-500m                                          c1.edit.length-changing
-    0.713    0.000     0.840      0.000  truncate-500m                                      c1.edit.length-changing
-    0.710    0.000     1.097      0.000  delete-middle-4k-500m                              c1.edit.length-changing
-    0.706    0.000     1.096      0.000  prepend-head-4k-500m                               c1.edit.length-changing
-    0.705    0.000     1.101      0.000  overwrite-middle-4k-500m                           c1.edit.length-preserving
-    0.698    0.000     1.096      0.000  overwrite-fixed-64k-chunk-count-preserve-500m      c1.cdc.chunk-count
-    0.697    0.000     1.097      0.000  insert-middle-4k-500m                              c1.edit.length-changing
-    0.697    0.000     1.108      0.000  append-tail-4k-500m                                c1.edit.length-changing
-    0.586    0.582     2.654      0.002  payload-random-read-500m                           c2.read.waves
-    0.513    0.155     0.007      0.636  dedup-workspace-unique-100-compact-v2              c2.reuse.workspace
-    0.457    0.184     0.006      1.639  dedup-workspace-exact-500-compact-v2               c2.reuse.workspace
-    0.457    0.153     0.007      1.787  dedup-workspace-local-500-compact-v2               c2.reuse.workspace
-    0.406    0.194     0.005      0.531  dedup-workspace-exact-100-compact-v2               c2.reuse.workspace
-    0.394    0.192     0.005      0.551  dedup-workspace-local-100-compact-v2               c2.reuse.workspace
-    0.380    0.204     0.005      0.014  dedup-workspace-unique-1-base128-v3                c2.reuse.workspace
-    0.360    0.164     0.006      0.080  dedup-workspace-unique-10-base128-v3               c2.reuse.workspace
-    0.202    0.015     0.187      5.464  dedup-cdc-scattered-500                            c2.delta.cdc-locality
-    0.202    0.000     0.142      4.357  namespace-100000                                   c1.fs.build-scale
-    0.199    0.000     0.143      4.300  namespace-100000-text-v1                           c1.fs.build-scale
-    0.195    0.011     0.002      0.105  pooled-lane-warm                                   c2.pool.cold-warm
-    0.169    0.006     0.334      0.568  dedup-cross-file-unique-100                        c2.reuse.cross-file
-    0.164    0.000     0.370      0.140  payload-create-100m                                c1.construct.whole-file
-    0.161    0.000     0.375      0.139  payload-create-chunked-100m                        c1.construct.chunked
-    0.145    0.000     0.168      0.000  truncate-100m                                      c1.edit.length-changing
-    0.144    0.000     0.225      0.000  shrink-100m                                        c1.edit.length-changing
-    0.142    0.000     0.218      0.000  overwrite-middle-4k-100m                           c1.edit.length-preserving
-    0.142    0.000     0.217      0.000  append-tail-4k-100m                                c1.edit.length-changing
-    0.142    0.000     0.218      0.000  overwrite-head-4k-100m                             c1.edit.length-preserving
-    0.141    0.000     0.226      0.000  grow-100m                                          c1.edit.length-changing
-    0.141    0.000     0.219      0.000  overwrite-tail-4k-100m                             c1.edit.length-preserving
-    0.141    0.000     0.298      0.000  overwrite-fixed-64k-chunk-count-decrease-100m      c1.cdc.chunk-count
-    0.141    0.000     0.300      0.000  zero-extend-100m                                   c1.edit.length-changing
-    0.140    0.000     0.220      0.000  overwrite-fixed-64k-chunk-count-increase-100m      c1.cdc.chunk-count
-    0.139    0.000     0.221      0.000  prepend-head-4k-100m                               c1.edit.length-changing
-    0.139    0.000     0.218      0.000  overwrite-fixed-64k-chunk-count-preserve-100m      c1.cdc.chunk-count
-    0.138    0.000     0.217      0.000  insert-middle-4k-100m                              c1.edit.length-changing
-    0.137    0.000     0.218      0.000  delete-middle-4k-100m                              c1.edit.length-changing
-    0.125    0.120     0.509      0.002  payload-random-read-100m                           c2.read.waves
-    0.118    0.012     0.109      5.223  dedup-cdc-insert-500                               c2.delta.cdc-locality
-    0.101    0.010     0.095      5.015  dedup-cdc-overwrite-500                            c2.delta.cdc-locality
-    0.094    0.016     0.058      0.006  pipeline-edits-chunked                             pipeline.*
-    0.080    0.006     0.002      0.110  pooled-lane-cold                                   c2.pool.cold-warm
-    0.063    0.012     0.051      4.991  dedup-cdc-common-body-500                          c2.delta.cdc-locality
-    0.054    0.012     0.042      1.061  dedup-cdc-scattered-100                            c2.delta.cdc-locality
-    0.050    0.018     0.001      0.056  dedup-workspace-unique-10-compact-v2               c2.reuse.workspace
-    0.045    0.016     0.051      0.001  payload-random-read-10m-compact-v2                 c2.read.waves
-    0.041    0.005     1.604      1.191  dedup-cross-file-mixed-500                         c2.reuse.cross-file
-    0.039    0.013     0.025      1.007  dedup-cdc-overwrite-100                            c2.delta.cdc-locality
-    0.038    0.010     0.029      1.071  dedup-cdc-insert-100                               c2.delta.cdc-locality
-    0.038    0.018     0.001      0.054  dedup-workspace-local-10-compact-v2                c2.reuse.workspace
-    0.037    0.019     0.001      0.053  dedup-workspace-exact-10-compact-v2                c2.reuse.workspace
-    0.035    0.011     0.024      4.863  dedup-cdc-delete-500                               c2.delta.cdc-locality
-    0.030    0.012     0.017      1.020  dedup-cdc-common-body-100                          c2.delta.cdc-locality
-    0.030    0.018     0.010      0.115  dedup-cdc-delete-10                                c2.delta.cdc-locality
-    0.028    0.018     0.009      0.023  dedup-cdc-scattered-1                              c2.delta.cdc-locality
-    0.026    0.017     0.010      0.024  dedup-cdc-insert-1                                 c2.delta.cdc-locality
-    0.026    0.012     0.011      0.983  dedup-cdc-delete-100                               c2.delta.cdc-locality
-    0.026    0.005     0.032      0.055  dedup-cross-file-unique-10                         c2.reuse.cross-file
-    0.026    0.015     0.010      0.021  dedup-cdc-delete-1                                 c2.delta.cdc-locality
-    0.025    0.006     0.004      0.229  dedup-cross-file-identical-100                     c2.reuse.cross-file
-    0.025    0.013     0.001      0.050  store-footprint-unique-100-low-v1                  c2.footprint
-    0.024    0.012     0.012      0.111  dedup-cdc-scattered-10                             c2.delta.cdc-locality
-    0.024    0.006     0.001      0.055  store-footprint-large-object-10m-low-v1            c2.footprint
-    0.024    0.012     0.010      0.117  dedup-cdc-overwrite-10                             c2.delta.cdc-locality
-    0.022    0.010     0.011      0.120  dedup-cdc-insert-10                                c2.delta.cdc-locality
-    0.021    0.014     0.004      0.027  dedup-cross-file-identical-10                      c2.reuse.cross-file
-    0.021    0.011     0.008      0.020  dedup-cdc-common-body-1                            c2.delta.cdc-locality
-    0.020    0.000     0.009      0.324  namespace-10000-text-v1                            c1.fs.build-scale
-    0.020    0.010     0.009      0.115  dedup-cdc-common-body-10                           c2.delta.cdc-locality
-    0.020    0.000     0.009      0.332  namespace-10000                                    c1.fs.build-scale
-    0.020    0.011     0.008      0.022  dedup-cdc-overwrite-1                              c2.delta.cdc-locality
-    0.018    0.013     0.001      0.001  dedup-cdc-boundary-0-s1                            c2.delta.boundaries
-    0.018    0.007     0.006      0.003  pipeline-edits-small                               pipeline.*
-    0.018    0.006     0.000      0.001  lifecycle-begin-save                               c2.lifecycle
-    0.018    0.007     0.000      0.001  lifecycle-finish-empty                             c2.lifecycle
-    0.017    0.005     0.000      0.001  lifecycle-abort                                    c2.lifecycle
-    0.017    0.006     0.004      1.134  dedup-cross-file-identical-500                     c2.reuse.cross-file
-    0.017    0.006     0.001      0.005  pipeline-edits-large-to-small                      pipeline.*
-    0.017    0.006     0.001      0.047  store-footprint-metadata-cardinality-100-low-v1    c2.footprint
-    0.017    0.000     0.037      0.014  payload-create-chunked-10m-compact-v2              c1.construct.chunked
-    0.017    0.008     0.001      0.007  dedup-workspace-local-1-compact-v2                 c2.reuse.workspace
-    0.016    0.000     0.038      0.014  payload-create-10m-compact-v2                      c1.construct.whole-file
-    0.016    0.007     0.000      0.001  lifecycle-open                                     c2.lifecycle
-    0.016    0.005     0.319      0.239  dedup-cross-file-mixed-100                         c2.reuse.cross-file
-    0.016    0.000     0.022      0.000  overwrite-fixed-64k-chunk-count-decrease-10m       c1.cdc.chunk-count
-    0.015    0.000     0.022      0.000  overwrite-tail-4k-10m                              c1.edit.length-preserving
-    0.015    0.000     0.028      0.000  append-tail-4k-10m                                 c1.edit.length-changing
-    0.015    0.000     0.022      0.000  overwrite-fixed-64k-chunk-count-preserve-10m       c1.cdc.chunk-count
-    0.015    0.000     0.022      0.000  overwrite-head-4k-10m                              c1.edit.length-preserving
-    0.015    0.000     0.022      0.000  overwrite-fixed-64k-chunk-count-increase-10m       c1.cdc.chunk-count
-    0.015    0.000     0.022      0.000  shrink-10m                                         c1.edit.length-changing
-    0.015    0.000     0.022      0.000  prepend-head-4k-10m                                c1.edit.length-changing
-    0.015    0.000     0.022      0.000  overwrite-middle-4k-10m                            c1.edit.length-preserving
-    0.015    0.000     0.022      0.000  delete-middle-4k-10m                               c1.edit.length-changing
-    0.015    0.000     0.023      0.000  grow-10m                                           c1.edit.length-changing
-    0.015    0.000     0.017      0.000  truncate-10m                                       c1.edit.length-changing
-    0.015    0.000     0.022      0.000  zero-extend-10m                                    c1.edit.length-changing
-    0.015    0.008     0.001      0.008  dedup-workspace-unique-1-compact-v2                c2.reuse.workspace
-    0.014    0.000     0.022      0.000  insert-middle-4k-10m                               c1.edit.length-changing
-    0.012    0.005     0.031      0.027  dedup-cross-file-mixed-10                          c2.reuse.cross-file
-    0.012    0.005     0.005      0.006  dedup-cross-file-anchor-1                          c2.reuse.cross-file
-    0.011    0.006     0.001      0.006  dedup-workspace-exact-1-compact-v2                 c2.reuse.workspace
-    0.011    0.007     0.006      0.001  payload-random-read-1m-compact-v2                  c2.read.waves
-    0.010    0.006     0.001      0.001  small-file-delta-16384                             c2.delta.small-file
-    0.010    0.005     0.011      0.005  pipeline-filesystem-build                          pipeline.*
-    0.010    0.005     0.001      0.001  dedup-cdc-boundary-32768-s2                        c2.delta.boundaries
-    0.010    0.005     0.001      0.001  dedup-cdc-boundary-8192-s1                         c2.delta.boundaries
-    0.010    0.005     0.001      0.001  small-file-delta-1024                              c2.delta.small-file
-    0.010    0.006     0.001      0.001  dedup-cdc-boundary-0-s3                            c2.delta.boundaries
-    0.010    0.006     0.001      0.001  dedup-cdc-boundary-8191-s2                         c2.delta.boundaries
-    0.010    0.005     0.001      0.001  dedup-cdc-boundary-16384-s2                        c2.delta.boundaries
-    0.010    0.005     0.001      0.001  dedup-cdc-boundary-8191-s3                         c2.delta.boundaries
-    0.010    0.005     0.001      0.002  small-file-delta-131071                            c2.delta.small-file
-    0.009    0.005     0.001      0.001  small-file-delta-65536                             c2.delta.small-file
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-32768-s1                        c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-8191-s1                         c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-32768-s3                        c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-8192-s2                         c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-8192-s3                         c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-1-s1                            c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-0-s2                            c2.delta.boundaries
-    0.009    0.005     0.001      0.001  dedup-cdc-boundary-16384-s3                        c2.delta.boundaries
-    0.008    0.005     0.001      0.001  dedup-cdc-boundary-32769-s2                        c2.delta.boundaries
-    0.008    0.004     0.001      0.001  dedup-cdc-boundary-16384-s1                        c2.delta.boundaries
-    0.008    0.005     0.001      0.001  dedup-cdc-boundary-1-s3                            c2.delta.boundaries
-    0.008    0.005     0.001      0.001  dedup-cdc-boundary-32769-s1                        c2.delta.boundaries
-    0.008    0.005     0.001      0.001  dedup-cdc-boundary-1-s2                            c2.delta.boundaries
-    0.008    0.005     0.001      0.001  dedup-cdc-boundary-32769-s3                        c2.delta.boundaries
-    0.003    0.000     0.000      0.001  tiny-unlink-500-compact-v2                         c1.many-tiny
-    0.003    0.000     0.000      0.001  tiny-bulk-delete-500-mixed-v3                      c1.many-tiny
-    0.003    0.000     0.002      0.001  namespace-1000-compact-v3                          c1.fs.build-scale
-    0.002    0.000     0.003      0.000  overwrite-fixed-64k-chunk-count-increase-1m        c1.cdc.chunk-count
-    0.002    0.000     0.002      0.000  append-tail-4k-1m                                  c1.edit.length-changing
-    0.002    0.000     0.002      0.000  overwrite-middle-4k-1m                             c1.edit.length-preserving
-    0.002    0.000     0.002      0.000  truncate-1m                                        c1.edit.length-changing
-    0.002    0.000     0.002      0.000  overwrite-fixed-64k-chunk-count-preserve-1m        c1.cdc.chunk-count
-    0.002    0.000     0.002      0.000  prepend-head-4k-1m                                 c1.edit.length-changing
-    0.002    0.000     0.002      0.000  overwrite-head-4k-1m                               c1.edit.length-preserving
-    0.002    0.000     0.002      0.000  overwrite-tail-4k-1m                               c1.edit.length-preserving
-    0.002    0.000     0.002      0.000  overwrite-fixed-64k-chunk-count-decrease-1m        c1.cdc.chunk-count
-    0.002    0.000     0.002      0.000  delete-middle-4k-1m                                c1.edit.length-changing
-    0.002    0.000     0.002      0.000  shrink-1m                                          c1.edit.length-changing
-    0.002    0.000     0.002      0.000  grow-1m                                            c1.edit.length-changing
-    0.002    0.000     0.002      0.000  zero-extend-1m                                     c1.edit.length-changing
-    0.002    0.000     0.002      0.000  insert-middle-4k-1m                                c1.edit.length-changing
-    0.002    0.000     0.004      0.001  payload-create-1m-compact-v2                       c1.construct.whole-file
-    0.002    0.000     0.002      0.001  namespace-1000-text-v1-compact-v3                  c1.fs.build-scale
-    0.002    0.000     0.004      0.001  payload-create-chunked-1m-compact-v2               c1.construct.chunked
-    0.002    0.000     0.000      0.014  directory-metadata-scan-500-compact-v2             c1.tree.construct-traverse
-    0.002    0.000     0.000      0.015  directory-content-scan-500-compact-v2              c1.tree.construct-traverse
-    0.002    0.000     0.000      0.015  tiny-stat-500-compact-v2                           c1.many-tiny
-    0.001    0.000     0.000      0.000  tiny-unlink-100-compact-v2                         c1.many-tiny
-    0.001    0.000     0.000      0.000  tiny-bulk-delete-100-mixed-v3                      c1.many-tiny
-    0.001    0.000     0.001      0.001  tiny-bulk-create-500-mixed-v3                      c1.many-tiny
-    0.001    0.000     0.001      0.001  namespace-subtree-relocate-delete-500-compact-v2   c1.tree.namespace-mutation
-    0.001    0.000     0.001      0.001  workspace-clean-commit-500-compact-v2              c1.change-locality
-    0.001    0.000     0.001      0.001  tiny-create-500-compact-v2                         c1.many-tiny
-    0.001    0.000     0.001      0.001  directory-construct-500-compact-v2                 c1.tree.construct-traverse
-    0.001    0.000     0.001      0.001  workspace-dense-rewrite-500-compact-v2             c1.change-locality
-    0.001    0.000     0.001      0.001  workspace-fixed-move-500-compact-v2                c1.change-locality
-    0.001    0.000     0.002      0.001  v016-boundary-roundtrip-v1                         c1.transition.boundary
-    0.001    0.000     0.000      0.000  namespace-100-compact-v3                           c1.fs.build-scale
-    0.001    0.000     0.002      0.001  v016-boundary-large-control-v1                     c1.transition.boundary
-    0.001    0.000     0.000      0.003  directory-content-scan-100-compact-v2              c1.tree.construct-traverse
-    0.001    0.000     0.000      0.003  tiny-stat-100-compact-v2                           c1.many-tiny
-    0.001    0.000     0.000      0.000  namespace-100-text-v1-compact-v3                   c1.fs.build-scale
-    0.001    0.000     0.000      0.003  directory-metadata-scan-100-compact-v2             c1.tree.construct-traverse
-    0.001    0.000     0.007      0.001  v016-boundary-alias-roundtrip-v1                   c1.transition.boundary
-    0.000    0.000     0.000      0.000  tiny-unlink-10-mixed-v4                            c1.many-tiny
-    0.000    0.000     0.001      0.000  namespace-subtree-relocate-delete-100-compact-v2   c1.tree.namespace-mutation
-    0.000    0.000     0.001      0.000  tiny-create-100-compact-v2                         c1.many-tiny
-    0.000    0.000     0.001      0.000  workspace-clean-commit-100-compact-v2              c1.change-locality
-    0.000    0.000     0.001      0.000  directory-construct-100-compact-v2                 c1.tree.construct-traverse
-    0.000    0.000     0.001      0.000  tiny-bulk-create-100-mixed-v3                      c1.many-tiny
-    0.000    0.000     0.001      0.000  workspace-dense-rewrite-100-compact-v2             c1.change-locality
-    0.000    0.000     0.000      0.000  tiny-bulk-delete-1-mixed-v3                        c1.many-tiny
-    0.000    0.000     0.000      0.000  workspace-fixed-move-100-compact-v2                c1.change-locality
-    0.000    0.000     0.000      0.000  tiny-bulk-delete-10-mixed-v3                       c1.many-tiny
-    0.000    0.000     0.000      0.000  directory-construct-1-mixed-v4                     c1.tree.construct-traverse
-    0.000    0.000     0.000      0.000  workspace-dense-rewrite-10-mixed-v4                c1.change-locality
-    0.000    0.000     0.000      0.000  v016-boundary-below-v1                             c1.transition.boundary
-    0.000    0.000     0.000      0.000  workspace-clean-commit-10-mixed-v4                 c1.change-locality
-    0.000    0.000     0.000      0.000  tiny-stat-1-mixed-v4                               c1.many-tiny
-    0.000    0.000     0.000      0.000  tiny-unlink-1-mixed-v4                             c1.many-tiny
-    0.000    0.000     0.000      0.000  v016-boundary-above-v1                             c1.transition.boundary
-    0.000    0.000     0.000      0.000  tiny-stat-10-mixed-v4                              c1.many-tiny
-    0.000    0.000     0.000      0.000  namespace-subtree-relocate-delete-10-mixed-v4      c1.tree.namespace-mutation
-    0.000    0.000     0.000      0.000  directory-content-scan-10-mixed-v4                 c1.tree.construct-traverse
-    0.000    0.000     0.000      0.000  directory-metadata-scan-10-mixed-v4                c1.tree.construct-traverse
-    0.000    0.000     0.000      0.000  tiny-create-1-mixed-v4                             c1.many-tiny
-    0.000    0.000     0.000      0.000  tiny-create-10-mixed-v4                            c1.many-tiny
-    0.000    0.000     0.000      0.000  v016-boundary-exact-v1                             c1.transition.boundary
-    0.000    0.000     0.000      0.000  directory-content-scan-1-mixed-v4                  c1.tree.construct-traverse
-    0.000    0.000     0.000      0.000  tiny-bulk-create-1-mixed-v3                        c1.many-tiny
-    0.000    0.000     0.000      0.000  tiny-bulk-create-10-mixed-v3                       c1.many-tiny
-    0.000    0.000     0.000      0.000  workspace-clean-commit-1-mixed-v4                  c1.change-locality
-    0.000    0.000     0.000      0.000  directory-metadata-scan-1-mixed-v4                 c1.tree.construct-traverse
-    0.000    0.000     0.000      0.000  v016-boundary-small-control-v1                     c1.transition.boundary
-    0.000    0.000     0.000      0.000  workspace-fixed-move-1-mixed-v4                    c1.change-locality
-    0.000    0.000     0.000      0.000  directory-construct-10-mixed-v4                    c1.tree.construct-traverse
-    0.000    0.000     0.000      0.000  workspace-fixed-move-10-mixed-v4                   c1.change-locality
-    0.000    0.000     0.000      0.000  namespace-subtree-relocate-delete-1-mixed-v4       c1.tree.namespace-mutation
-    0.000    0.000     0.000      0.000  workspace-dense-rewrite-1-mixed-v4                 c1.change-locality
-    0.000    0.000     0.000      0.003  lifecycle-create                                   c2.lifecycle
+    1.268    0.124     1.144    2.610     0.014      2.128     1039.5ms    834.9MB  dedup-workspace-unique-500-compact-v2              c2.reuse.workspace
+    1.032    0.015     1.017    2.072     0.105      8.724     7068.5ms    687.0MB  store-footprint-metadata-cardinality-100000        c2.footprint
+    1.009    0.007     1.002    2.065     1.652      2.032     1021.0ms    667.3MB  dedup-cross-file-unique-500                        c2.reuse.cross-file
+    0.994    0.006     0.989    2.072     0.111      8.371     6918.6ms    686.6MB  store-footprint-unique-100000                      c2.footprint
+    0.827    0.000     0.827    1.000     1.911      0.703      695.1ms    527.3MB  payload-create-chunked-500m                        c1.construct.chunked
+    0.824    0.000     0.824    1.000     1.909      0.702      694.1ms    527.1MB  payload-create-500m                                c1.construct.whole-file
+    0.725    0.000     0.725    2.064     0.850      0.000        0.2ms    644.8MB  truncate-500m                                      c1.edit.length-changing
+    0.725    0.013     0.712    2.061     0.040      2.194      997.0ms    661.3MB  store-footprint-large-object-500m                  c2.footprint
+    0.720    0.000     0.720    2.064     1.124      0.000        0.2ms    645.0MB  overwrite-tail-4k-500m                             c1.edit.length-preserving
+    0.719    0.000     0.719    2.064     1.109      0.000        0.1ms    644.6MB  zero-extend-500m                                   c1.edit.length-changing
+    0.718    0.000     0.718    2.064     1.107      0.000        0.2ms    645.1MB  append-tail-4k-500m                                c1.edit.length-changing
+    0.713    0.000     0.713    2.064     1.101      0.000        0.2ms    645.4MB  insert-middle-4k-500m                              c1.edit.length-changing
+    0.711    0.000     0.711    2.064     1.131      0.000        0.2ms    645.7MB  overwrite-head-4k-500m                             c1.edit.length-preserving
+    0.710    0.000     0.710    2.064     1.120      0.000        0.2ms    644.8MB  grow-500m                                          c1.edit.length-changing
+    0.710    0.000     0.710    2.064     1.203      0.000        0.1ms    644.8MB  shrink-500m                                        c1.edit.length-changing
+    0.709    0.000     0.709    2.064     1.120      0.000        0.1ms    645.1MB  prepend-head-4k-500m                               c1.edit.length-changing
+    0.709    0.000     0.709    2.064     1.103      0.000        0.3ms    645.3MB  overwrite-middle-4k-500m                           c1.edit.length-preserving
+    0.706    0.000     0.706    2.064     1.118      0.000        0.4ms    645.7MB  overwrite-fixed-64k-chunk-count-increase-500m      c1.cdc.chunk-count
+    0.705    0.000     0.705    2.064     1.109      0.000        0.2ms    645.5MB  delete-middle-4k-500m                              c1.edit.length-changing
+    0.704    0.000     0.704    2.064     1.112      0.000        0.1ms    645.0MB  overwrite-fixed-64k-chunk-count-preserve-500m      c1.cdc.chunk-count
+    0.700    0.000     0.700    2.064     1.112      0.000        0.4ms    645.8MB  overwrite-fixed-64k-chunk-count-decrease-500m      c1.cdc.chunk-count
+    0.532    0.527     0.005    2.066     2.958      0.003        0.4ms      5.6MB  payload-random-read-500m                           c2.read.waves
+    0.453    0.115     0.338    1.758     0.006      0.519      215.2ms    315.8MB  dedup-workspace-unique-100-compact-v2              c2.reuse.workspace
+    0.429    0.129     0.300    1.584     0.006      1.727     1276.7ms    217.2MB  dedup-workspace-local-500-compact-v2               c2.reuse.workspace
+    0.400    0.136     0.264    1.549     0.006      1.650     1222.7ms    192.6MB  dedup-workspace-exact-500-compact-v2               c2.reuse.workspace
+    0.337    0.136     0.202    1.554     0.006      0.528      259.7ms    200.0MB  dedup-workspace-local-100-compact-v2               c2.reuse.workspace
+    0.328    0.139     0.189    1.547     0.005      0.015        2.8ms    180.7MB  dedup-workspace-unique-1-base128-v3                c2.reuse.workspace
+    0.317    0.121     0.197    1.566     0.006      0.070       21.1ms    200.2MB  dedup-workspace-unique-10-base128-v3               c2.reuse.workspace
+    0.308    0.113     0.195    1.546     0.006      0.504      243.7ms    188.3MB  dedup-workspace-exact-100-compact-v2               c2.reuse.workspace
+    0.203    0.000     0.203    1.060     0.143      4.238     3531.8ms    115.8MB  namespace-100000                                   c1.fs.build-scale
+    0.201    0.000     0.201    1.060     0.143      4.291     3542.6ms    117.4MB  namespace-100000-text-v1                           c1.fs.build-scale
+    0.196    0.010     0.186    1.266     0.179      5.243     4882.9ms    190.4MB  dedup-cdc-scattered-500                            c2.delta.cdc-locality
+    0.185    0.009     0.176    1.000     0.002      0.110       91.0ms     32.7MB  pooled-lane-warm                                   c2.pool.cold-warm
+    0.164    0.000     0.164    1.000     0.377      0.140      138.7ms    107.8MB  payload-create-chunked-100m                        c1.construct.chunked
+    0.164    0.006     0.158    1.213     0.320      0.508      206.5ms    153.8MB  dedup-cross-file-unique-100                        c2.reuse.cross-file
+    0.164    0.000     0.164    1.000     0.373      0.140      138.4ms    107.6MB  payload-create-100m                                c1.construct.whole-file
+    0.147    0.000     0.147    1.213     0.168      0.000        0.1ms    135.4MB  truncate-100m                                      c1.edit.length-changing
+    0.144    0.000     0.144    1.213     0.218      0.000        0.1ms    134.7MB  zero-extend-100m                                   c1.edit.length-changing
+    0.144    0.000     0.144    1.213     0.221      0.000        0.3ms    135.3MB  overwrite-fixed-64k-chunk-count-decrease-100m      c1.cdc.chunk-count
+    0.143    0.000     0.143    1.213     0.255      0.000        0.1ms    135.6MB  shrink-100m                                        c1.edit.length-changing
+    0.143    0.000     0.143    1.213     0.218      0.000        0.2ms    135.1MB  overwrite-middle-4k-100m                           c1.edit.length-preserving
+    0.142    0.000     0.142    1.213     0.221      0.000        0.2ms    135.4MB  grow-100m                                          c1.edit.length-changing
+    0.142    0.000     0.142    1.213     0.217      0.000        0.1ms    135.4MB  append-tail-4k-100m                                c1.edit.length-changing
+    0.142    0.000     0.142    1.213     0.216      0.000        0.1ms    135.1MB  prepend-head-4k-100m                               c1.edit.length-changing
+    0.142    0.000     0.142    1.213     0.218      0.000        0.2ms    135.2MB  insert-middle-4k-100m                              c1.edit.length-changing
+    0.141    0.000     0.141    1.213     0.220      0.000        0.2ms    135.0MB  overwrite-tail-4k-100m                             c1.edit.length-preserving
+    0.141    0.000     0.141    1.213     0.217      0.000        0.3ms    135.5MB  overwrite-fixed-64k-chunk-count-increase-100m      c1.cdc.chunk-count
+    0.140    0.000     0.140    1.213     0.218      0.000        0.2ms    136.0MB  overwrite-head-4k-100m                             c1.edit.length-preserving
+    0.139    0.000     0.139    1.213     0.219      0.000        0.2ms    135.0MB  delete-middle-4k-100m                              c1.edit.length-changing
+    0.131    0.000     0.131    1.213     0.217      0.000        0.1ms    134.9MB  overwrite-fixed-64k-chunk-count-preserve-100m      c1.cdc.chunk-count
+    0.124    0.010     0.114    1.131     0.098      5.068     4811.9ms    113.9MB  dedup-cdc-overwrite-500                            c2.delta.cdc-locality
+    0.113    0.010     0.103    1.146     0.103      5.241     4977.2ms    123.3MB  dedup-cdc-insert-500                               c2.delta.cdc-locality
+    0.105    0.100     0.004    1.214     0.547      0.002        0.3ms      4.9MB  payload-random-read-100m                           c2.read.waves
+    0.099    0.014     0.085    1.000     0.061      0.008        1.8ms     44.0MB  pipeline-edits-chunked                             pipeline.*
+    0.083    0.008     0.075    1.000     0.002      0.103       89.4ms     25.2MB  pooled-lane-cold                                   c2.pool.cold-warm
+    0.066    0.012     0.054    1.065     0.056      4.964     4804.7ms     73.5MB  dedup-cdc-common-body-500                          c2.delta.cdc-locality
+    0.055    0.010     0.045    1.063     0.041      1.083      989.4ms     66.5MB  dedup-cdc-scattered-100                            c2.delta.cdc-locality
+    0.049    0.016     0.033    1.064     0.001      0.051       20.0ms     49.4MB  dedup-workspace-unique-10-compact-v2               c2.reuse.workspace
+    0.047    0.010     0.037    1.036     1.581      1.176     1101.5ms     46.5MB  dedup-cross-file-mixed-500                         c2.reuse.cross-file
+    0.039    0.011     0.028    1.043     0.027      1.052      991.4ms     58.4MB  dedup-cdc-insert-100                               c2.delta.cdc-locality
+    0.037    0.009     0.028    1.040     0.025      1.025      960.3ms     57.0MB  dedup-cdc-overwrite-100                            c2.delta.cdc-locality
+    0.037    0.013     0.024    1.031     0.022      4.785     4681.7ms     50.2MB  dedup-cdc-delete-500                               c2.delta.cdc-locality
+    0.036    0.016     0.019    1.044     0.001      0.054       26.1ms     41.4MB  dedup-workspace-local-10-compact-v2                c2.reuse.workspace
+    0.031    0.013     0.018    1.043     0.001      0.052       25.5ms     32.5MB  dedup-workspace-exact-10-compact-v2                c2.reuse.workspace
+    0.027    0.014     0.013    1.019     0.010      0.116      100.0ms     37.1MB  dedup-cdc-insert-10                                c2.delta.cdc-locality
+    0.026    0.008     0.018    1.027     0.017      1.000      960.0ms     49.7MB  dedup-cdc-common-body-100                          c2.delta.cdc-locality
+    0.026    0.005     0.021    1.021     0.001      0.052       21.7ms     38.0MB  store-footprint-large-object-10m-low-v1            c2.footprint
+    0.025    0.014     0.010    1.018     0.009      0.026       11.7ms     28.5MB  dedup-cdc-scattered-1                              c2.delta.cdc-locality
+    0.024    0.013     0.010    1.018     0.009      0.112       96.3ms     35.7MB  dedup-cdc-delete-10                                c2.delta.cdc-locality
+    0.023    0.014     0.010    1.017     0.009      0.021       10.5ms     23.4MB  dedup-cdc-common-body-1                            c2.delta.cdc-locality
+    0.023    0.011     0.012    1.020     0.011      0.973      934.9ms     35.0MB  dedup-cdc-delete-100                               c2.delta.cdc-locality
+    0.023    0.009     0.014    1.021     0.012      0.119      100.4ms     41.7MB  dedup-cdc-scattered-10                             c2.delta.cdc-locality
+    0.023    0.005     0.018    1.021     0.031      0.054       21.8ms     38.1MB  dedup-cross-file-unique-10                         c2.reuse.cross-file
+    0.023    0.011     0.012    1.011     0.001      0.047       33.5ms     26.6MB  store-footprint-unique-100-low-v1                  c2.footprint
+    0.023    0.012     0.010    1.018     0.010      0.026       12.0ms     26.8MB  dedup-cdc-insert-1                                 c2.delta.cdc-locality
+    0.022    0.013     0.010    1.017     0.008      0.021       10.2ms     23.3MB  dedup-cdc-delete-1                                 c2.delta.cdc-locality
+    0.022    0.015     0.007    1.002     0.004      0.030       23.3ms     15.1MB  dedup-cross-file-identical-10                      c2.reuse.cross-file
+    0.021    0.000     0.021    1.000     0.038      0.014       14.0ms     13.3MB  payload-create-10m-compact-v2                      c1.construct.whole-file
+    0.021    0.000     0.021    1.006     0.009      0.321      248.5ms     16.6MB  namespace-10000-text-v1                            c1.fs.build-scale
+    0.020    0.011     0.010    1.018     0.008      0.023       10.9ms     27.2MB  dedup-cdc-overwrite-1                              c2.delta.cdc-locality
+    0.020    0.000     0.020    1.006     0.009      0.319      248.9ms     16.7MB  namespace-10000                                    c1.fs.build-scale
+    0.020    0.009     0.011    1.020     0.011      0.114       97.3ms     32.8MB  dedup-cdc-overwrite-10                             c2.delta.cdc-locality
+    0.020    0.006     0.013    1.000     0.006      0.003        1.0ms     13.4MB  pipeline-edits-small                               pipeline.*
+    0.019    0.009     0.011    1.018     0.009      0.117       99.2ms     34.5MB  dedup-cdc-common-body-10                           c2.delta.cdc-locality
+    0.018    0.015     0.003    1.022     0.054      0.001        0.2ms      4.6MB  payload-random-read-10m-compact-v2                 c2.read.waves
+    0.018    0.006     0.012    1.011     0.001      0.046       32.3ms     25.0MB  store-footprint-metadata-cardinality-100-low-v1    c2.footprint
+    0.018    0.007     0.011    1.000     0.000      0.001        0.3ms     12.4MB  lifecycle-open                                     c2.lifecycle
+    0.017    0.007     0.011    1.000     0.001      0.006        1.8ms     12.0MB  pipeline-edits-large-to-small                      pipeline.*
+    0.017    0.005     0.011    1.008     0.309      0.235      221.1ms     25.3MB  dedup-cross-file-mixed-100                         c2.reuse.cross-file
+    0.017    0.000     0.017    1.000     0.038      0.014       13.9ms     13.4MB  payload-create-chunked-10m-compact-v2              c1.construct.chunked
+    0.016    0.000     0.016    1.021     0.026      0.000        0.1ms     20.1MB  grow-10m                                           c1.edit.length-changing
+    0.016    0.005     0.011    1.006     0.005      1.114     1103.4ms     16.1MB  dedup-cross-file-identical-500                     c2.reuse.cross-file
+    0.016    0.000     0.016    1.021     0.033      0.000        0.1ms     20.1MB  prepend-head-4k-10m                                c1.edit.length-changing
+    0.016    0.006     0.009    1.000     0.000      0.001        0.6ms     13.1MB  lifecycle-begin-save                               c2.lifecycle
+    0.016    0.000     0.016    1.021     0.022      0.000        0.1ms     20.0MB  shrink-10m                                         c1.edit.length-changing
+    0.016    0.000     0.016    1.021     0.028      0.000        0.1ms     20.2MB  overwrite-head-4k-10m                              c1.edit.length-preserving
+    0.016    0.000     0.016    1.021     0.025      0.000        0.1ms     20.1MB  truncate-10m                                       c1.edit.length-changing
+    0.016    0.000     0.016    1.021     0.022      0.000        0.1ms     20.0MB  delete-middle-4k-10m                               c1.edit.length-changing
+    0.016    0.000     0.016    1.021     0.022      0.000        0.1ms     20.0MB  zero-extend-10m                                    c1.edit.length-changing
+    0.015    0.000     0.015    1.021     0.023      0.000        0.3ms     20.3MB  overwrite-fixed-64k-chunk-count-increase-10m       c1.cdc.chunk-count
+    0.015    0.000     0.015    1.021     0.022      0.000        0.1ms     20.1MB  overwrite-tail-4k-10m                              c1.edit.length-preserving
+    0.015    0.000     0.015    1.021     0.022      0.000        0.1ms     20.0MB  append-tail-4k-10m                                 c1.edit.length-changing
+    0.015    0.008     0.007    1.007     0.001      0.006        2.4ms     15.2MB  dedup-workspace-unique-1-compact-v2                c2.reuse.workspace
+    0.015    0.000     0.015    1.021     0.022      0.000        0.2ms     20.2MB  overwrite-middle-4k-10m                            c1.edit.length-preserving
+    0.015    0.000     0.015    1.021     0.022      0.000        0.3ms     20.3MB  overwrite-fixed-64k-chunk-count-decrease-10m       c1.cdc.chunk-count
+    0.015    0.005     0.009    1.000     0.000      0.001        0.4ms     12.4MB  lifecycle-abort                                    c2.lifecycle
+    0.015    0.000     0.015    1.021     0.021      0.000        0.1ms     20.1MB  overwrite-fixed-64k-chunk-count-preserve-10m       c1.cdc.chunk-count
+    0.015    0.000     0.015    1.021     0.033      0.000        0.1ms     20.2MB  insert-middle-4k-10m                               c1.edit.length-changing
+    0.015    0.009     0.006    1.000     0.001      0.001        0.5ms      8.7MB  dedup-cdc-boundary-0-s1                            c2.delta.boundaries
+    0.014    0.005     0.010    1.000     0.000      0.001        0.6ms     12.6MB  lifecycle-finish-empty                             c2.lifecycle
+    0.014    0.008     0.006    1.005     0.001      0.007        2.9ms     12.6MB  dedup-workspace-local-1-compact-v2                 c2.reuse.workspace
+    0.013    0.006     0.007    1.003     0.032      0.029       22.7ms     17.8MB  dedup-cross-file-mixed-10                          c2.reuse.cross-file
+    0.012    0.007     0.005    1.004     0.001      0.006        2.8ms     12.4MB  dedup-workspace-exact-1-compact-v2                 c2.reuse.workspace
+    0.012    0.005     0.007    1.003     0.004      0.231      223.9ms     15.0MB  dedup-cross-file-identical-100                     c2.reuse.cross-file
+    0.012    0.006     0.006    1.000     0.001      0.001        0.4ms      6.3MB  dedup-cdc-boundary-0-s2                            c2.delta.boundaries
+    0.012    0.006     0.006    1.000     0.001      0.001        0.3ms      8.4MB  dedup-cdc-boundary-1-s1                            c2.delta.boundaries
+    0.011    0.005     0.006    1.000     0.001      0.001        0.4ms      6.3MB  dedup-cdc-boundary-0-s3                            c2.delta.boundaries
+    0.011    0.005     0.006    1.000     0.011      0.005        3.9ms      9.2MB  pipeline-filesystem-build                          pipeline.*
+    0.011    0.005     0.005    1.000     0.001      0.001        0.3ms      6.2MB  dedup-cdc-boundary-1-s2                            c2.delta.boundaries
+    0.010    0.005     0.006    1.002     0.004      0.006        2.2ms     12.7MB  dedup-cross-file-anchor-1                          c2.reuse.cross-file
+    0.010    0.005     0.005    1.000     0.001      0.001        0.3ms      7.2MB  dedup-cdc-boundary-1-s3                            c2.delta.boundaries
+    0.009    0.005     0.004    1.000     0.001      0.001        0.5ms      7.3MB  dedup-cdc-boundary-32768-s2                        c2.delta.boundaries
+    0.009    0.005     0.004    1.000     0.001      0.001        0.5ms      8.9MB  dedup-cdc-boundary-32769-s1                        c2.delta.boundaries
+    0.009    0.005     0.004    1.000     0.001      0.001        0.3ms      6.2MB  small-file-delta-16384                             c2.delta.small-file
+    0.009    0.005     0.004    1.000     0.001      0.001        0.2ms      6.0MB  small-file-delta-1024                              c2.delta.small-file
+    0.009    0.005     0.004    1.000     0.001      0.001        0.5ms      9.0MB  dedup-cdc-boundary-32769-s3                        c2.delta.boundaries
+    0.009    0.005     0.004    1.000     0.001      0.001        0.3ms      6.2MB  dedup-cdc-boundary-8192-s2                         c2.delta.boundaries
+    0.009    0.005     0.004    1.000     0.001      0.001        0.4ms      8.6MB  dedup-cdc-boundary-16384-s3                        c2.delta.boundaries
+    0.009    0.005     0.004    1.000     0.001      0.001        0.5ms      9.0MB  dedup-cdc-boundary-32768-s1                        c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.001        0.3ms      6.3MB  dedup-cdc-boundary-8192-s3                         c2.delta.boundaries
+    0.008    0.005     0.004    1.000     0.001      0.001        0.6ms      6.8MB  small-file-delta-65536                             c2.delta.small-file
+    0.008    0.004     0.004    1.000     0.001      0.001        0.5ms      8.9MB  dedup-cdc-boundary-32769-s2                        c2.delta.boundaries
+    0.008    0.005     0.003    1.002     0.007      0.000        0.2ms      4.5MB  payload-random-read-1m-compact-v2                  c2.read.waves
+    0.008    0.005     0.004    1.000     0.001      0.001        0.5ms      9.0MB  dedup-cdc-boundary-32768-s3                        c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.001        0.3ms      8.6MB  dedup-cdc-boundary-8191-s3                         c2.delta.boundaries
+    0.008    0.005     0.004    1.000     0.001      0.001        0.3ms      6.4MB  dedup-cdc-boundary-16384-s2                        c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.001        0.3ms      8.5MB  dedup-cdc-boundary-8192-s1                         c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.001        0.4ms      6.3MB  dedup-cdc-boundary-8191-s2                         c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.002        0.4ms      8.6MB  dedup-cdc-boundary-16384-s1                        c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.001        0.4ms      8.6MB  dedup-cdc-boundary-8191-s1                         c2.delta.boundaries
+    0.008    0.004     0.004    1.000     0.001      0.002        0.9ms      7.4MB  small-file-delta-131071                            c2.delta.small-file
+    0.003    0.000     0.003    1.000     0.000      0.001        1.3ms      4.5MB  tiny-unlink-500-compact-v2                         c1.many-tiny
+    0.003    0.000     0.003    1.000     0.000      0.001        1.3ms      4.3MB  tiny-bulk-delete-500-mixed-v3                      c1.many-tiny
+    0.003    0.000     0.003    1.002     0.003      0.000        0.2ms      5.4MB  overwrite-fixed-64k-chunk-count-increase-1m        c1.cdc.chunk-count
+    0.003    0.000     0.003    1.002     0.002      0.000        0.1ms      5.0MB  append-tail-4k-1m                                  c1.edit.length-changing
+    0.003    0.000     0.003    1.002     0.002      0.000        0.1ms      5.0MB  truncate-1m                                        c1.edit.length-changing
+    0.002    0.000     0.002    1.002     0.002      0.000        0.1ms      5.2MB  overwrite-fixed-64k-chunk-count-preserve-1m        c1.cdc.chunk-count
+    0.002    0.000     0.002    1.002     0.003      0.000        0.1ms      5.0MB  overwrite-tail-4k-1m                               c1.edit.length-preserving
+    0.002    0.000     0.002    1.002     0.002      0.000        0.2ms      5.4MB  overwrite-fixed-64k-chunk-count-decrease-1m        c1.cdc.chunk-count
+    0.002    0.000     0.002    1.002     0.002      0.000        0.1ms      5.1MB  overwrite-middle-4k-1m                             c1.edit.length-preserving
+    0.002    0.000     0.002    1.002     0.002      0.000        0.1ms      5.0MB  zero-extend-1m                                     c1.edit.length-changing
+    0.002    0.000     0.002    1.002     0.003      0.000        0.1ms      5.0MB  delete-middle-4k-1m                                c1.edit.length-changing
+    0.002    0.000     0.002    1.002     0.002      0.000        0.1ms      5.1MB  overwrite-head-4k-1m                               c1.edit.length-preserving
+    0.002    0.000     0.002    1.002     0.003      0.000        0.1ms      5.0MB  prepend-head-4k-1m                                 c1.edit.length-changing
+    0.002    0.000     0.002    1.002     0.003      0.000        0.1ms      4.9MB  shrink-1m                                          c1.edit.length-changing
+    0.002    0.000     0.002    1.002     0.002      0.000        0.1ms      5.0MB  insert-middle-4k-1m                                c1.edit.length-changing
+    0.002    0.000     0.002    1.002     0.003      0.000        0.1ms      5.0MB  grow-1m                                            c1.edit.length-changing
+    0.002    0.000     0.002    1.000     0.002      0.001        1.2ms      4.4MB  namespace-1000-compact-v3                          c1.fs.build-scale
+    0.002    0.000     0.002    1.000     0.004      0.002        1.4ms      3.6MB  payload-create-1m-compact-v2                       c1.construct.whole-file
+    0.002    0.000     0.002    1.000     0.002      0.001        1.2ms      4.3MB  namespace-1000-text-v1-compact-v3                  c1.fs.build-scale
+    0.002    0.000     0.002    1.000     0.004      0.001        1.4ms      3.7MB  payload-create-chunked-1m-compact-v2               c1.construct.chunked
+    0.002    0.000     0.002    1.000     0.000      0.014       14.0ms      4.2MB  directory-metadata-scan-500-compact-v2             c1.tree.construct-traverse
+    0.002    0.000     0.002    1.000     0.000      0.014       14.3ms      4.2MB  directory-content-scan-500-compact-v2              c1.tree.construct-traverse
+    0.002    0.000     0.002    1.000     0.000      0.014       14.2ms      4.1MB  tiny-stat-500-compact-v2                           c1.many-tiny
+    0.001    0.000     0.001    1.000     0.000      0.000        0.5ms      3.7MB  tiny-unlink-100-compact-v2                         c1.many-tiny
+    0.001    0.000     0.001    1.000     0.000      0.000        0.5ms      3.7MB  tiny-bulk-delete-100-mixed-v3                      c1.many-tiny
+    0.001    0.000     0.001    1.000     0.001      0.001        0.6ms      3.7MB  namespace-subtree-relocate-delete-500-compact-v2   c1.tree.namespace-mutation
+    0.001    0.000     0.001    1.000     0.001      0.001        0.6ms      3.7MB  workspace-fixed-move-500-compact-v2                c1.change-locality
+    0.001    0.000     0.001    1.000     0.001      0.001        0.6ms      3.8MB  workspace-clean-commit-500-compact-v2              c1.change-locality
+    0.001    0.000     0.001    1.000     0.001      0.001        0.7ms      3.8MB  tiny-create-500-compact-v2                         c1.many-tiny
+    0.001    0.000     0.001    1.000     0.001      0.001        0.7ms      3.8MB  directory-construct-500-compact-v2                 c1.tree.construct-traverse
+    0.001    0.000     0.001    1.000     0.001      0.001        0.6ms      3.8MB  workspace-dense-rewrite-500-compact-v2             c1.change-locality
+    0.001    0.000     0.001    1.000     0.001      0.001        0.6ms      3.7MB  tiny-bulk-create-500-mixed-v3                      c1.many-tiny
+    0.001    0.000     0.001    1.000     0.000      0.003        2.6ms      3.6MB  directory-content-scan-100-compact-v2              c1.tree.construct-traverse
+    0.001    0.000     0.001    1.000     0.000      0.003        2.6ms      3.6MB  tiny-stat-100-compact-v2                           c1.many-tiny
+    0.001    0.000     0.001    1.000     0.002      0.001        1.4ms      3.6MB  v016-boundary-roundtrip-v1                         c1.transition.boundary
+    0.001    0.000     0.001    1.000     0.000      0.003        2.6ms      3.5MB  directory-metadata-scan-100-compact-v2             c1.tree.construct-traverse
+    0.001    0.000     0.001    1.000     0.002      0.001        1.4ms      3.7MB  v016-boundary-large-control-v1                     c1.transition.boundary
+    0.001    0.000     0.001    1.000     0.009      0.001        1.4ms      3.7MB  v016-boundary-alias-roundtrip-v1                   c1.transition.boundary
+    0.001    0.000     0.001    1.000     0.000      0.000        0.1ms      3.1MB  namespace-100-compact-v3                           c1.fs.build-scale
+    0.001    0.000     0.001    1.000     0.000      0.000        0.1ms      3.1MB  namespace-100-text-v1-compact-v3                   c1.fs.build-scale
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  tiny-create-100-compact-v2                         c1.many-tiny
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  workspace-dense-rewrite-100-compact-v2             c1.change-locality
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  tiny-bulk-create-100-mixed-v3                      c1.many-tiny
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  namespace-subtree-relocate-delete-100-compact-v2   c1.tree.namespace-mutation
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  workspace-clean-commit-100-compact-v2              c1.change-locality
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  directory-construct-100-compact-v2                 c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.000        0.1ms      2.9MB  tiny-unlink-10-mixed-v4                            c1.many-tiny
+    0.000    0.000     0.000    1.000     0.001      0.000        0.2ms      3.2MB  workspace-fixed-move-100-compact-v2                c1.change-locality
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.9MB  tiny-bulk-delete-10-mixed-v3                       c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  directory-metadata-scan-1-mixed-v4                 c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.8MB  tiny-unlink-1-mixed-v4                             c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.8MB  tiny-bulk-delete-1-mixed-v3                        c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.1ms      2.8MB  directory-metadata-scan-10-mixed-v4                c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.000        0.1ms      2.9MB  directory-content-scan-10-mixed-v4                 c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.000        0.1ms      2.9MB  tiny-stat-10-mixed-v4                              c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  tiny-stat-1-mixed-v4                               c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.1ms      2.7MB  v016-boundary-below-v1                             c1.transition.boundary
+    0.000    0.000     0.000    1.000     0.000      0.000        0.2ms      2.6MB  v016-boundary-exact-v1                             c1.transition.boundary
+    0.000    0.000     0.000    1.000     0.000      0.000        0.1ms      2.7MB  tiny-bulk-create-10-mixed-v3                       c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.2MB  v016-boundary-small-control-v1                     c1.transition.boundary
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  tiny-create-1-mixed-v4                             c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  tiny-create-10-mixed-v4                            c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  workspace-clean-commit-10-mixed-v4                 c1.change-locality
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  directory-content-scan-1-mixed-v4                  c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.000        0.2ms      2.7MB  v016-boundary-above-v1                             c1.transition.boundary
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  workspace-dense-rewrite-1-mixed-v4                 c1.change-locality
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  namespace-subtree-relocate-delete-10-mixed-v4      c1.tree.namespace-mutation
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  workspace-dense-rewrite-10-mixed-v4                c1.change-locality
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  directory-construct-10-mixed-v4                    c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.003        0.9ms      3.2MB  lifecycle-create                                   c2.lifecycle
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.7MB  workspace-fixed-move-10-mixed-v4                   c1.change-locality
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  directory-construct-1-mixed-v4                     c1.tree.construct-traverse
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  namespace-subtree-relocate-delete-1-mixed-v4       c1.tree.namespace-mutation
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  tiny-bulk-create-1-mixed-v3                        c1.many-tiny
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  workspace-fixed-move-1-mixed-v4                    c1.change-locality
+    0.000    0.000     0.000    1.000     0.000      0.000        0.0ms      2.6MB  workspace-clean-commit-1-mixed-v4                  c1.change-locality
 
-rows 217; preparation total 25.833 s; acquisition total 2.853 s; countable preparation 22.980 s; verification total 32.429 s; operation total 76.942 s
-rows over 1.0 s preparation: 3
-rows over 1.0 s excluding acquisition: 3
+rows 217; preparation total 25.161 s; acquisition total 2.273 s; countable 22.888 s; verification total 32.436 s; operation total 74.534 s
+rows over the per-row ceiling: 0
+tightest row: (0.827101166, 'payload-create-chunked-500m')

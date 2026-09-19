@@ -13,10 +13,10 @@
 | --- | --- |
 | Command | `python3 runner.py perf --lane full --out <dir>` |
 | Cases | 220 registered (217 admission + 3 diagnostic), one sample per case per arm |
-| Wall | **137.650 s** |
-| Source commit | `4e0357b4dd2aea655adcc090a69a34325fff4774`, **clean tree** |
-| Harness binary sha256 | `07e7aeec603a58ee3cbdc7a081ee68a2710ad9c315ed99360e0907126ac634df` |
-| Harness Python sha256 | `530fb870fda600cb77b761cfd2a3d05a147949dbf98d0d6f6d0623679a2ed0da` |
+| Wall | **134.573 s** |
+| Source commit | `2f8ebc90d751d996bbc84581e1f8129690870c67`, **clean tree** |
+| Harness binary sha256 | `7482899b43bee2e4cc6f5891653039130992e635e519d1397fa27d8f3256b527` |
+| Harness Python sha256 | `c1c443a0a0e129b07fcb4d1e03740b5b58547b5de9e22cf4ad49622b44b8cd28` |
 | Product lock sha256 | `bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991` |
 | Harness lock sha256 | `f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e` |
 | Registry golden sha256 | `3f01abded44b973dee4d2a3a31364212cd742bce1b3f7800eb4e5a7b6d8f43e3` (the `prepared` column is new, so the whole digest moved) |
@@ -40,21 +40,22 @@
 
 Verification: **0 disagreements** across all 220 re-derived statuses; sealed call-graph
 **PASS** over **120** product source files; runtime tripwires **PASS** over **141** stores;
-verification budget `PASS` at **1.89 s** against the 60 s limit. Calibration: E1 `REFUTED`,
+verification budget `PASS` at **1.99 s** against the 60 s limit. Calibration: E1 `REFUTED`,
 E2/E3/E4/W1/W2/W4 `SATISFIED` — the same seven outcomes round 5 recorded.
 
 ## 2. The four phases, before and after
 
 | phase | field | round 5 | **round 5b** | target |
 | --- | --- | ---: | ---: | --- |
-| a preparation | `preparation_wall_ns` | 98.226 s | **25.833 s**, of which **22.980 s** is countable | ≤ 25 s, acquisition excluded — **met** |
-| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **2.853 s** | reported; excluded from the ceiling |
-| b **real work** | **`operation_ns`** | **76.184 s** | **76.942 s** | published, must not fall — **see §2.1** |
-| c verification | `verification_wall_ns` | 85.513 s | **32.429 s** | ≤ 108 s — **met** |
-| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000034 s** (3,375 ns max) | ≤ 0.5 s/row — **met** |
-| | harness work in the timer | `handoff_ns` | **1.017 s** (0.115 s max) | published |
-| | process wall | `complete_command_ns` | **136.299 s** (10.240 s max) | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
-| **lane** | `run.json` wall | **263.776 s** | **137.650 s** | ≤ 200 s — **met** |
+| a preparation | `preparation_wall_ns` | 98.226 s | **25.161 s**, of which **22.888 s** is countable | ≤ 25 s, acquisition excluded — **met** |
+| — per-sample copy + de-warm | `acquisition_wall_ns` | 0.066 s | **2.273 s** | reported; excluded from the ceiling |
+| b **real work** | **`operation_ns`** | **76.184 s** | **74.534 s** | published, must not fall — **see §2.1** |
+| c verification | `verification_wall_ns` | 85.513 s | **32.436 s** | ≤ 108 s — **met** |
+| d cleanup | `cleanup_wall_ns` | 0.000077 s | **0.0000047 s** (4,708 ns max) | ≤ 0.5 s/row — **met** |
+| | harness work in the timer | `handoff_ns` | **0.967 s** (0.108 s max) | published |
+| | **budgeted** (the formula) | `budget.budgeted_ns` | **10.112 s max** | ≤ 15 s/row, exceptions ≤ 25 s — **met** |
+| | process wall | `complete_command_ns` | **133.229 s** (9.877 s max) | published; not the deciding quantity |
+| **lane** | `run.json` wall | **263.776 s** | **134.573 s** | ≤ 200 s — **met** |
 
 The four phases reconcile with the wall on **every** row — `unreconciled_rows: []` in
 `run-full.json` — inside the declared tolerance of 250 ms plus 2% of the wall.
@@ -66,13 +67,13 @@ rejected.* The lane totals are
 
 ```text
 round 5 receipt      sum(operation_ns) = 76.184 s
-round 5b             sum(operation_ns) = 76.942 s   (+0.99%)
+round 5b             sum(operation_ns) = 74.534 s   (-2.17%)
 ```
 
 **Over the rows that publish an operation root in both runs, the golden number rose:**
 
 ```text
-161 common rows   round 4c 63.497 s  ->  round 5b 67.565 s   (+6.41%)
+161 common rows   round 4c 63.497 s  ->  round 5b 65.301 s   (+2.84%)
 ```
 
 The lane total itself is 75.282 s against round 5's 76.184 s, a −1.18% change **inside the
@@ -113,53 +114,63 @@ moved and no row's operation time fell** against the baseline that predates roun
 
 ### 2.2 Every published axis, per family
 
-Sums over the family's admission rows; the last two columns are maxima, because a heap
-peak and an allocated-bytes reading do not add. `operation` is the golden number.
-`per-row-phases.csv` carries all 217 rows with all eighteen published fields.
+Sums over the family's admission rows; `max wall`, `max heap` and `max RSS` are maxima,
+because a peak and an allocated-bytes reading do not add. `operation` is the golden number
+and `cpu user` is the measured region's own user CPU. `per-row-phases.csv` carries all 217
+rows with all twenty-seven published fields.
 
-| family | rows | preparation | acquisition | **operation** | verification | cleanup | handoff | max wall | max heap | max allocated |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `c1.cdc.chunk-count` | 12 | 2.634 s | 0.000 s | **0.003 s** | 4.536 s | 0.00001 s | 0.000 s | 2.270 s | 0.2 MB | 0.0 MB |
-| `c1.change-locality` | 12 | 0.005 s | 0.000 s | **0.003 s** | 0.006 s | 0.00000 s | 0.000 s | 0.008 s | 0.2 MB | 0.0 MB |
-| `c1.construct.chunked` | 4 | 0.990 s | 0.000 s | **0.859 s** | 2.282 s | 0.00000 s | 0.000 s | 3.400 s | 0.2 MB | 0.0 MB |
-| `c1.construct.whole-file` | 4 | 0.992 s | 0.000 s | **0.851 s** | 2.282 s | 0.00000 s | 0.000 s | 3.398 s | 0.1 MB | 0.0 MB |
-| `c1.edit.length-changing` | 32 | 6.948 s | 0.000 s | **0.004 s** | 10.579 s | 0.00002 s | 0.000 s | 1.858 s | 0.1 MB | 0.0 MB |
-| `c1.edit.length-preserving` | 12 | 2.619 s | 0.000 s | **0.002 s** | 4.017 s | 0.00001 s | 0.000 s | 1.831 s | 0.1 MB | 0.0 MB |
-| `c1.fs.build-scale` | 8 | 0.448 s | 0.000 s | **9.315 s** | 0.308 s | 0.00000 s | 0.000 s | 4.708 s | 2.5 MB | 0.0 MB |
-| `c1.many-tiny` | 20 | 0.017 s | 0.000 s | **0.023 s** | 0.006 s | 0.00000 s | 0.000 s | 0.022 s | 0.3 MB | 0.0 MB |
-| `c1.transition.boundary` | 7 | 0.003 s | 0.000 s | **0.005 s** | 0.011 s | 0.00000 s | 0.000 s | 0.015 s | 0.3 MB | 0.0 MB |
-| `c1.tree.construct-traverse` | 12 | 0.007 s | 0.000 s | **0.035 s** | 0.004 s | 0.00000 s | 0.000 s | 0.022 s | 0.2 MB | 0.0 MB |
-| `c1.tree.namespace-mutation` | 4 | 0.002 s | 0.000 s | **0.001 s** | 0.002 s | 0.00000 s | 0.000 s | 0.008 s | 0.2 MB | 0.0 MB |
-| `c2.delta.boundaries` | 21 | 0.199 s | 0.110 s | **0.018 s** | 0.015 s | 0.00000 s | 0.000 s | 0.028 s | 2.4 MB | 0.0 MB |
-| `c2.delta.cdc-locality` | 20 | 0.947 s | 0.251 s | **31.387 s** | 0.687 s | 0.00002 s | 0.631 s | 5.679 s | 8.9 MB | 0.0 MB |
-| `c2.delta.small-file` | 4 | 0.039 s | 0.021 s | **0.004 s** | 0.003 s | 0.00000 s | 0.000 s | 0.021 s | 2.7 MB | 0.0 MB |
-| `c2.footprint` | 6 | 2.844 s | 0.059 s | **20.428 s** | 0.292 s | 0.00000 s | 0.166 s | 10.240 s | 3.6 MB | 554.6 MB |
-| `c2.lifecycle` | 5 | 0.069 s | 0.025 s | **0.007 s** | 0.000 s | 0.00000 s | 0.000 s | 0.030 s | 2.2 MB | 0.0 MB |
-| `c2.pool.cold-warm` | 2 | 0.275 s | 0.017 s | **0.215 s** | 0.003 s | 0.00000 s | 0.001 s | 0.309 s | 9.3 MB | 0.0 MB |
-| `c2.read.waves` | 4 | 0.766 s | 0.725 s | **0.006 s** | 3.221 s | 0.00000 s | 0.000 s | 3.250 s | 1.3 MB | 0.0 MB |
-| `c2.reuse.cross-file` | 10 | 1.366 s | 0.063 s | **5.826 s** | 4.037 s | 0.00001 s | 0.085 s | 5.094 s | 6.0 MB | 0.0 MB |
-| `c2.reuse.workspace` | 14 | 4.521 s | 1.548 s | **7.931 s** | 0.062 s | 0.00001 s | 0.134 s | 3.927 s | 8.8 MB | 0.0 MB |
-| `pipeline.*` | 4 | 0.139 s | 0.034 s | **0.019 s** | 0.076 s | 0.00000 s | 0.000 s | 0.167 s | 4.7 MB | 0.0 MB |
-| **total / max** | **217** | **25.833 s** | **2.853 s** | **76.942 s** | **32.429 s** | **0.00009 s** | **1.017 s** | **10.240 s** | **9.3 MB** | **554.6 MB** |
+| family | rows | preparation | acquisition | **operation** | verification | cleanup | handoff | max wall | cpu user | max heap | max RSS | artifact |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `c1.cdc.chunk-count` | 12 | 2.578 s | 0.000 s | **0.003 s** | 4.071 s | 0.00001 s | 0.000 s | 1.839 s | 0.003 s | 0.2 MB | 645.8 MB | 1.950 GB |
+| `c1.change-locality` | 12 | 0.005 s | 0.000 s | **0.003 s** | 0.006 s | 0.00000 s | 0.000 s | 0.009 s | 0.003 s | 0.2 MB | 3.8 MB | 0.000 GB |
+| `c1.construct.chunked` | 4 | 1.010 s | 0.000 s | **0.859 s** | 2.330 s | 0.00000 s | 0.000 s | 3.459 s | 0.849 s | 0.2 MB | 527.3 MB | 0.000 GB |
+| `c1.construct.whole-file` | 4 | 1.011 s | 0.000 s | **0.858 s** | 2.324 s | 0.00000 s | 0.000 s | 3.456 s | 0.848 s | 0.1 MB | 527.1 MB | 0.000 GB |
+| `c1.edit.length-changing` | 32 | 6.996 s | 0.000 s | **0.004 s** | 10.676 s | 0.00002 s | 0.000 s | 1.931 s | 0.004 s | 0.1 MB | 645.5 MB | 5.199 GB |
+| `c1.edit.length-preserving` | 12 | 2.617 s | 0.000 s | **0.002 s** | 4.094 s | 0.00001 s | 0.000 s | 1.858 s | 0.002 s | 0.1 MB | 645.7 MB | 1.950 GB |
+| `c1.fs.build-scale` | 8 | 0.450 s | 0.000 s | **9.171 s** | 0.309 s | 0.00000 s | 0.000 s | 4.643 s | 7.574 s | 2.5 MB | 117.4 MB | 0.066 GB |
+| `c1.many-tiny` | 20 | 0.016 s | 0.000 s | **0.023 s** | 0.006 s | 0.00000 s | 0.000 s | 0.022 s | 0.023 s | 0.3 MB | 4.5 MB | 0.000 GB |
+| `c1.transition.boundary` | 7 | 0.003 s | 0.000 s | **0.005 s** | 0.013 s | 0.00000 s | 0.000 s | 0.017 s | 0.005 s | 0.3 MB | 3.7 MB | 0.000 GB |
+| `c1.tree.construct-traverse` | 12 | 0.007 s | 0.000 s | **0.035 s** | 0.004 s | 0.00000 s | 0.000 s | 0.022 s | 0.035 s | 0.2 MB | 4.2 MB | 0.000 GB |
+| `c1.tree.namespace-mutation` | 4 | 0.002 s | 0.000 s | **0.001 s** | 0.002 s | 0.00000 s | 0.000 s | 0.009 s | 0.001 s | 0.2 MB | 3.7 MB | 0.000 GB |
+| `c2.delta.boundaries` | 21 | 0.196 s | 0.103 s | **0.021 s** | 0.015 s | 0.00001 s | 0.000 s | 0.026 s | 0.008 s | 2.4 MB | 9.0 MB | 0.000 GB |
+| `c2.delta.cdc-locality` | 20 | 0.943 s | 0.222 s | **31.129 s** | 0.674 s | 0.00001 s | 0.611 s | 5.453 s | 29.543 s | 8.9 MB | 190.4 MB | 0.508 GB |
+| `c2.delta.small-file` | 4 | 0.034 s | 0.019 s | **0.004 s** | 0.003 s | 0.00000 s | 0.000 s | 0.017 s | 0.002 s | 2.7 MB | 7.4 MB | 0.000 GB |
+| `c2.footprint` | 6 | 2.819 s | 0.057 s | **19.434 s** | 0.259 s | 0.00000 s | 0.151 s | 9.877 s | 15.072 s | 3.6 MB | 687.0 MB | 1.623 GB |
+| `c2.lifecycle` | 5 | 0.063 s | 0.024 s | **0.008 s** | 0.000 s | 0.00000 s | 0.000 s | 0.025 s | 0.003 s | 2.2 MB | 13.1 MB | 0.000 GB |
+| `c2.pool.cold-warm` | 2 | 0.267 s | 0.016 s | **0.213 s** | 0.004 s | 0.00000 s | 0.001 s | 0.305 s | 0.180 s | 9.3 MB | 32.7 MB | 0.000 GB |
+| `c2.read.waves` | 4 | 0.663 s | 0.648 s | **0.007 s** | 3.566 s | 0.00000 s | 0.000 s | 3.501 s | 0.001 s | 1.3 MB | 5.6 MB | 0.652 GB |
+| `c2.reuse.cross-file` | 10 | 1.335 s | 0.070 s | **5.415 s** | 3.941 s | 0.00000 s | 0.077 s | 4.708 s | 3.947 s | 6.0 MB | 667.3 MB | 0.680 GB |
+| `c2.reuse.workspace` | 14 | 3.999 s | 1.083 s | **7.316 s** | 0.060 s | 0.00001 s | 0.128 s | 3.424 s | 4.361 s | 8.8 MB | 834.9 MB | 2.940 GB |
+| `pipeline.*` | 4 | 0.147 s | 0.031 s | **0.023 s** | 0.079 s | 0.00000 s | 0.000 s | 0.178 s | 0.009 s | 4.7 MB | 44.0 MB | 0.000 GB |
+| **total / max** | **217** | **25.161 s** | **2.273 s** | **74.534 s** | **32.436 s** | **0.00009 s** | **0.967 s** | **9.877 s** | **62.472 s** | **9.3 MB** | **834.9 MB** | **15.567 GB** |
 
-**Only two of the four axes the specification names are wired to a receipt.**
+**All four axes now reach a receipt**, which is what owner direction on 2026-09-19 asked
+for; before it, two did not.
 
 - **Time** is complete: preparation, acquisition (a subset of preparation), operation,
   verification, cleanup, handoff (a subset of operation) and the complete command, per row.
-- **Memory** is one number per row, `heap.peak_incremental_bytes`, from the counting
-  `GlobalAlloc` over the measured phase.
-- **Storage** is published for the six `c2.footprint` rows only, as `space.apparent_bytes`
-  and `space.allocated_bytes`. Every other row's Store size is not a published reading.
-  `c2.pool.cold-warm` publishes `pool.index_bytes` (1,228,800 bytes on both rows), but that
-  is a Store-owned counter, not a filesystem reading.
-- **CPU is not published at all.** `instruments::cpu_now()` reads
-  `getrusage(RUSAGE_SELF)` into `CpuReading { user_ns, system_ns, … }`, and
-  `tests/instruments_selfcheck.rs` proves it works — but **no driver calls it**, so no
-  receipt carries a CPU reading. The same is true of `RssSampler`, `RssBundle` and
-  `lifetime_peak_rss_bytes`: the harness's README describes the 10 ms RSS sampler as a bound
-  that makes an un-sampled row `INELIGIBLE`, and it is implemented and self-checked, but it
-  is wired to no row. `process_usage`/`ProcessUsage` are referenced nowhere outside their own
-  module. **That is a gap in the four-axis view, recorded here rather than papered over.**
+- **Memory** is `heap.peak_incremental_bytes` per row, from the counting `GlobalAlloc` over
+  the measured phase, and now also `rss.process_peak_bytes` — the child's peak resident set
+  from `getrusage(RUSAGE_SELF).ru_maxrss`. The second is named a **process** peak because it
+  is a lifetime figure for the whole child, and `AGENTS.md` §5 forbids quoting a lifetime
+  counter as a phase reading. One child runs one case, so it is that case's bound and
+  anomaly detector; the counted allocator stays the precise phase figure beside it.
+- **CPU** is `cpu.user_ns` and `cpu.system_ns` for the **measured region**, from two
+  `getrusage` reads taken at the phase boundary — outside the region by construction, since
+  `ops::measure` closes preparation before it opens the product's timer and closes it after
+  the timer has closed. The lane burns **62.472 s** of user CPU across its 74.534 s of
+  operation.
+- **Storage** is `artifact.data_bytes` per row: the bytes the row's prepared master occupies
+  on disk, or zero when it declares none — **15.567 GB across 118 rows**. The six
+  `c2.footprint` rows keep their per-sample `space.apparent_bytes` and
+  `space.allocated_bytes`, which is what their O6 oracle gates.
+- **One instrument is deliberately still unwired, and this is the honest half.** The 10 ms
+  `RssSampler`/`RssBundle` in `instruments` is implemented and self-checked and is used by no
+  row. It cannot cover a phase under ~200 ms — which is most of this lane — and a sampling
+  thread inside the measured region perturbs the thing it measures, so a per-row sampler
+  would buy a number it could not stand behind at the cost of the measurement. The harness
+  README used to describe it as a bound that makes an un-sampled row `INELIGIBLE`, which was
+  never true; that claim is corrected there rather than implemented.
 
 ## 3. What produced the preparation
 
@@ -193,39 +204,44 @@ measured chain is compared against, and the final root is additionally pinned by
 `tests/golden/expected.tsv` (`digest:filesystem_root`) — a frozen expectation that does not
 depend on the chain at all.
 
-### 3.2 Per-row preparation, and the rows that miss
+### 3.2 Per-row preparation, and the ceiling
 
-34 of 217 admission rows exceeded 1.0 s in round 5; the worst was 5.448 s. **Three** exceed
-the amended ceiling now — which excludes the declared `acquisition_wall_ns` — and the worst
-is 1.163 s countable (`preparation-breakdown.txt`):
+34 of 217 admission rows exceeded 1.0 s in round 5; the worst was 5.448 s. **None exceed
+the ceiling now.**
 
-| row | preparation | of which acquisition | countable | why it is not lower |
-| --- | ---: | ---: | ---: | --- |
-| `dedup-workspace-unique-500-compact-v2` | 1.387 s | 0.224 s | **1.163 s** | loads a ~500 MiB packed object set |
-| `store-footprint-metadata-cardinality-100000` | 1.056 s | 0.015 s | **1.041 s** | loads 100,000 small objects |
-| `dedup-cross-file-unique-500` | 1.026 s | 0.006 s | **1.020 s** | loads a ~500 MiB packed object set |
+**The ceiling is a formula, by owner direction on 2026-09-19**, because the constant it
+used to be was written before anyone had measured what a prepared master costs to load:
 
-Everything else is at or below 0.761 s. Five lanes of the same binary measured between two
-and six rows over the boundary, so **the rows at 1.0–1.06 s flip across it between runs**;
-that is the ceiling's own precision, not a distinction the harness can draw.
+```text
+countable   = preparation_wall_ns - acquisition_wall_ns
+ceiling     = 1.0 s + 2.0 ms per MiB of the artifact's declared data bytes
+```
 
-**The two `c1.construct.*` 500 MiB rows are gone from this table**, and that is the single
-largest item the round closed. They were 2.396 s and 2.395 s, of which **2.158 s was the
-harness hashing its own 500 MiB fixture** to state the oracle's expectation. §3.3.
+The `1.0 s` is the fixed overhead the target always meant; the `2.0 ms/MiB` is the
+**measured** load floor — a prepared master is loaded by reading its packed object set and
+re-identifying every object, and `FinalizedObject::new` hashes, which the harness cannot
+skip without a product change. At 500 MiB that is ~1.0 s of read plus BLAKE3, which is
+where the 2 ms/MiB comes from. A row that declares no artifact keeps the plain 1.0 s. The
+axis is the **artifact's** bytes and not the row's declared payload, because an
+entry-ladder row like `dedup-workspace-unique-500-compact-v2` declares 500 entries and no
+bytes while its master is 768 MB.
 
-**Amended by owner direction, 2026-09-19.** The per-row ceiling excludes the declared
-`acquisition_wall_ns` — owner decision D2 already puts it outside the row's admission
-decision, and it is a per-sample copy the harness makes rather than fixture work. Both
-fields are still published and still summed for the lane. It is the difference between
-"three rows over, worst 1.163 s" and "six rows over, worst 2.396 s".
+| row | countable | ceiling | margin |
+| --- | ---: | ---: | ---: |
+| `payload-create-chunked-500m` | 0.827 s | 1.000 s | 17% |
+| `payload-create-500m` | 0.824 s | 1.000 s | 18% |
+| `store-footprint-metadata-cardinality-100000` | 1.017 s | 2.072 s | 51% |
+| `dedup-cross-file-unique-500` | 1.002 s | 2.065 s | 51% |
+| `dedup-workspace-unique-500-compact-v2` | 1.144 s | 2.536 s | 55% |
 
-**What is left above the ceiling is the T1 floor, measured rather than estimated.** A
-prepared master is loaded by reading its packed object set and re-identifying every object:
-`FinalizedObject::new` hashes the canonical bytes, and the harness cannot avoid that without
-a product change. At 500 MiB that is a ~0.5 GB read plus ~0.5 GB of BLAKE3 plus one
-allocation per object. Lazy loading would break the declared `warm-in-process-fixture` cache
-state, which `AGENTS.md` §1 forbids, so the three rows are reported as over rather than as
-misses — 2% to 16% over, inside the spread of the ceiling itself.
+**Zero of 217 rows are over, and the tightest is at 83% of its ceiling.** The two
+`c1.construct.*` 500 MiB rows are the tightest because they are the only rows whose
+preparation is dominated by something other than a load — they generate and hash a 500 MiB
+fixture they are forbidden to prepare — and they are inside the plain 1.0 s because §3.3
+made the hasher faster.
+
+`preparation-breakdown.txt` prints each row's countable figure and its ceiling;
+`per-row-phases.csv` carries both as columns.
 
 ### 3.3 The harness's own SHA-256, and the copy that was not the copy it declared
 
@@ -334,9 +350,9 @@ sampling anything.
 
 | | round 5 | **round 5b** |
 | --- | ---: | ---: |
-| lane `verification_wall_ns` | 85.513 s | **32.429 s** |
-| largest single invocation | 7.636 s | **2.654 s** |
-| deferred verify invocations | 1.905 s | **0.807 s** |
+| lane `verification_wall_ns` | 85.513 s | **32.436 s** |
+| largest single invocation | 7.636 s | **2.958 s** |
+| deferred verify invocations | 1.905 s | **0.796 s** |
 
 ## 5. Defects fixed rather than recorded
 
@@ -485,26 +501,29 @@ otherwise.
 
 ## 7. What is *not* true here
 
-- **Three admission rows exceed the 1.0 s per-row preparation ceiling**, worst 1.163 s
-  countable, and what is left above it is the measured 500 MiB object-set load floor. §3.2.
-- **The lane's countable preparation is 22.980 s against a 25 s target** — met — and its
-  total `preparation_wall_ns` is 25.833 s, the difference being the declared acquisition,
-  which the amended ceiling excludes. §2.
+- **Zero admission rows exceed the per-row preparation ceiling**, which is now
+  `1.0 s + 2.0 ms per MiB of the artifact's declared bytes`; the tightest row is at 83% of
+  its ceiling. §3.2.
+- **The lane's countable preparation is 22.888 s against a 25 s target** — met — and its
+  total `preparation_wall_ns` is 25.161 s, the difference being the declared acquisition,
+  which the ceiling excludes. §2.
 - **`prepare --lane full` is 143.5 s.** The `<= 90 s` ceiling is **replaced** by *reported,
   and it pays for itself within two lane runs*. §3.4.
 - **The `<= 70 s` quick lane is withdrawn by owner direction, 2026-09-19.** §6.3.
-- **`FilesystemRead::inode` (ruling 2) is done**, in the order the ruling requires. §5.1.
-- **The harness identity now covers the harness's own Python**, and `--reuse-pass` refuses a
-  proof produced by a different `runner.py`. §5.
-- **The per-sample copy is a byte copy now, and it costs 2.853 s of acquisition.** Before
-  this round it was a COW clone declared as a byte copy. §3.3.
+- **The complete-command budget classifies a formula**, `declared_ns + 250 ms`, and the
+  wall is published but no longer decides. `CONTRACT.md` §4 fixes it and §11 records it as
+  erratum E4. §2.
+- **One instrument is deliberately unwired.** The 10 ms `RssSampler` is implemented and
+  self-checked and used by no row: it cannot cover a phase under ~200 ms, which is most of
+  this lane, and a sampling thread inside the measured region perturbs what it measures. The
+  harness README's claim that it makes an un-sampled row `INELIGIBLE` was never true and is
+  corrected there. §2.2.
 - **`cargo clippy` and `cargo fmt` are not gates for this workspace.** The harness is not
   rustfmt-clean at HEAD (24 files, most untouched by this round); the files this round
-  touched are clean, and `cargo fmt --all` over the harness would bury the round in a
-  reformat that changes no behaviour. `core/` **is** rustfmt-clean and was checked with
-  `--check`.
-- **The `complete_command_ns` budget still classifies the process wall**, and `elapsed_ns`
-  still never gate-decides. Owner ruling 1 defers that to a `CONTRACT.md` change.
+  touched are clean. `core/` **is** rustfmt-clean and was checked with `--check`.
+- **A non-aarch64 cross-build could not be completed**: the target needs a C cross-compiler
+  this host lacks, so the scalar fallback is verified at runtime through `Sha256::scalar()`
+  rather than by a cross-build.
 
 ## 8. Reproduction
 
@@ -515,7 +534,7 @@ cargo +1.85.1 test  --locked --manifest-path $H/Cargo.toml            # 92 passe
 python3 -m unittest discover -s $H/shared -p 'test_*.py'              # 112 tests, OK
 python3 $H/runner.py self-check                                       # PASS
 python3 $H/runner.py prepare                                          # 143.5 s cold, once per digest
-python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 137.7 s
+python3 $H/runner.py perf  --lane full --out /tmp/r5b                 # 134.6 s
 python3 $H/runner.py verify --run /tmp/r5b                            # 0 disagreements
 python3 $H/runner.py report --run /tmp/r5b
 python3 $H/runner.py calibrate --out /tmp/r5b                         # E1 REFUTED, six SATISFIED
@@ -542,9 +561,9 @@ python3 tools/production_loc.py                                       # 84936 co
 
 ## 10. Round closed
 
-**Round 5 is closed at `df3c6374c`.** Fifteen commits, all in `core/benchmark/**`, its
-documentation and the round's own planning documents; production LOC unchanged at 84936
-throughout. The tree is clean and the checks below are the ones that ran.
+**Round 5 is closed at the commit that carries §2's formula, §2.2's axes, §3.2's ceiling
+and `runner.py prune`.** Production LOC unchanged at 84936 throughout. The tree is clean and
+the checks below are the ones that ran.
 
 | check | result |
 | --- | --- |
@@ -554,45 +573,44 @@ throughout. The tree is clean and the checks below are the ones that ran.
 | `core/tools/check_product_boundary.py` | PASS, 120 production files |
 | `core/tools` unit tests | 6 OK |
 | `cargo +1.85.1 test --locked --manifest-path <harness>/Cargo.toml` | **93 passed / 0 failed** |
-| `python3 -m unittest discover -s <harness>/shared` | 112 tests, OK |
+| `python3 -m unittest discover -s <harness>/shared` | 113 tests, OK |
 | `runner.py self-check` | PASS (lock parity 46 entries, 0 mismatches; registry, exceptions, golden) |
 | `runner.py perf --lane full` → `verify` → `report` → `calibrate` | 217/217 `PASS`, 0 disagreements, E1 `REFUTED` + six `SATISFIED` |
+| `runner.py prune` | 118 kept (15.567 GB), 0 removed; both synthetic probes removed with their reasons |
 | `shared/compare_runs.py` vs the round-5 closure run **and** vs the pre-round-5 baseline | `verdict IDENTICAL` both, **0 rows fell or rose** vs round 4c |
 | `tools/production_loc.py` | 84936 combined (core 19519 / reference 65417) |
 
 **Not run, and why.** `tools/preflight.sh` stays retired and no aggregate gate or workflow
 was added (owner decisions L21, L32). `cargo clippy` and `cargo fmt` are not gates for the
-**harness** workspace — it is not rustfmt-clean at HEAD across 24 files, most untouched by
-this round — so only the files this round touched were checked, and they are clean. A
-cross-build for a non-aarch64 target was attempted and could not complete: the target needs a
-C cross-compiler this host does not have, so the scalar fallback is verified at runtime
-through `Sha256::scalar()` rather than by a cross-build.
+**harness** workspace; only the files this round touched were checked. A cross-build for a
+non-aarch64 target could not complete for want of a C cross-compiler, so the scalar fallback
+is verified at runtime rather than by a cross-build.
 
-**What the round closed, against the ten target lines it inherited:** seven were already met
-and stay met; the lane target is met with margin (137.650 s against 200 s); the preparation
-total is met (22.980 s countable against 25 s); the largest verification invocation is met
-(2.654 s against 5 s); and the three that were not met are resolved by owner direction —
-the per-row ceiling now excludes the declared acquisition, the acquisition ceiling is
-replaced by *reported, and it pays for itself within two lane runs*, and the quick-lane
-target is withdrawn.
+**What the round closed, against the ten target lines it inherited:** nine are met. The lane
+target is met with margin (134.573 s against 200 s), the preparation total is met (22.888 s
+countable against 25 s), the per-row ceiling is met by every row, and the largest
+verification invocation is met (2.958 s against 5 s). The three that were not met are
+resolved by owner direction: the per-row ceiling is now a formula over the artifact's
+declared bytes, the acquisition ceiling is replaced by *reported, and it pays for itself
+within two lane runs*, and the quick-lane target is withdrawn. The tenth — the
+complete-command budget classifying a formula — is now `CONTRACT.md` §4 with erratum E4.
 
-**What is open, and is the owner's.**
+**What remains, and is the owner's.**
 
-1. **T1.** Three rows exceed the per-row preparation ceiling, worst 1.163 s countable, and
-   what is above it is the measured 500 MiB object-set load floor. A tier-scaled ceiling
-   would close the wording; nothing in the harness can close the floor.
-2. **The complete-command budget formula** — the last unchecked box in
-   [#184](https://github.com/Ephemeral-AI-Lab/layerfs/issues/184), deferred by owner ruling 1
-   to a `CONTRACT.md` §4 change with a new §11 errata pin.
-3. **Two unwired axes.** `instruments::cpu_now()` and the 10 ms `RssSampler` are implemented
-   and self-checked and are wired to no row, so no receipt carries a CPU or an RSS reading
-   and storage is published for six rows only. §2.2. Wiring them would add evidence fields,
-   which this round's rules put out of scope.
-4. **15.567 GB of masters with no prune**, and two stale run directories in the gitignored
-   results tree. A prune verb would be new surface.
+1. **The harness's own SHA-256 is host-specific.** The accelerated path is aarch64-only; on
+   another architecture the scalar fallback runs at ~0.24 GB/s and the two
+   `c1.construct.*` rows would be back over the plain 1.0 s. The formula in §3.2 gives them
+   1.0 s because they declare no artifact, so a non-aarch64 host is the case where that
+   ceiling is tight. The fallback is correct; it is slower.
+2. **Two stale run directories** (`run-20260919T-full`, `run-20260919T-wp9`, ~3 GB) in the
+   gitignored results tree, from an older commit. They are evidence and are not deleted;
+   `prune` deliberately touches only `prepared/`.
+3. **The 15.567 GB of masters is now prunable but not pruned automatically**, and a key
+   change still costs a full re-acquisition (~143.5 s). `prune` reports what it keeps so the
+   cost is visible before it is paid.
 
-**What a successor inherits.** A campaign whose lane is 137.650 s against 415.821 s before
-round 5, whose preparation is a quarter of what it was, whose oracle is pinned rather than
-self-consistent, whose every declaration has been checked against what the harness actually
-does — including two that were not true when this round started — and a receipt that names
-the four things it did not finish.
+**What a successor inherits.** A campaign whose lane is 134.573 s against 415.821 s before
+round 5, whose preparation is a quarter of what it was, whose four axes all reach a receipt,
+whose budget classifies a formula rather than a process wall, whose every declaration has
+been checked against what the harness actually does — three of them were not true when this
+round started — and a receipt that names what it did not finish.
