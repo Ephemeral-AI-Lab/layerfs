@@ -30,12 +30,13 @@ production LOC   84936 combined (core 19519 / reference 65417), unchanged by eve
                  above: no product source changed in this round
 ```
 
-**One thing in the working tree is not this round's.** An unrelated documentation change — a
-new `core/docs/architecture/deferred/` paper with its index entry, plus
+**The tree is clean.** An unrelated documentation change — a new
+`core/docs/architecture/deferred/` paper with its index entry (tracked by #185), plus
 `core/docs/benchmark/fs-bench-pro-storage-content/history-storage-optimization/` — appeared
-during the round and was left uncommitted and untouched. It was set aside for the duration of
-the closure run so the seal is clean, and restored afterwards. **It still needs an owner
-ruling: commit it, or leave it.**
+during the round. It is not this round's work, it was left untouched, and it was set aside
+for the duration of the closure run so the seal is clean. **Owner ruling (2026-09-19): commit
+it, unmodified.** It is committed byte-identical in `575c6c9ae` and `9214557ce`; the per-file
+sha256s are in those commit messages. It is not evidence for any round-5 claim.
 
 ## 2. What landed, measured
 
@@ -172,9 +173,8 @@ successor spends time on it.
 
 - **The harness identity does not cover the harness's own Python.** A receipt names the Rust
   binary's sha256, both lockfiles and the registry table; a Python-only harness change leaves
-  every one of them unchanged. Outside this round's scope, and stated so a reader is not
-  misled by `harness_binary_sha256`.
-- **The unrelated documentation in the working tree** (§1) still needs a ruling.
+  every one of them unchanged. Stated so a reader is not misled by `harness_binary_sha256`;
+  fixing it is a scope question, not a defect in the round.
 
 ## 6. Standing constraint, not a blocker
 
@@ -190,6 +190,28 @@ python3 shared/pin_expected.py digests --run <run> --out <t.tsv>
 It is the reason the remaining work is hours rather than minutes, not a risk of failure.
 
 ## 7. Rules the successor inherits unchanged
+
+### 7.1 Defects may be fixed; features may not (owner ruling, 2026-09-19)
+
+**The continuation agent may fix defects it finds, within scope, and may not introduce new
+features.** Fixing a defect is preferred to recording it.
+
+- **In scope to fix:** any defect in `core/benchmark/**` or its documentation, **including a
+  pre-existing one** that the round merely exposed. Three were fixed in the first half
+  (56 rows publishing no operation time; a prepared master sealed by another binary being
+  consumed anyway; `load_reused_proof` deleted by a sibling commit) and a fourth is recorded
+  rather than fixed because its fix is a scope question, not a defect.
+- **Also in scope:** the items this assignment names — V6, V9, V10, V11 and the registry
+  declaration. They are the assignment, not new capability.
+- **Not in scope:** adding capability the breakdown does not name; changing the product's API
+  or behaviour beyond the scoped `FilesystemRead::inode` item; relaxing a gate, a limit or a
+  budget; widening the harness's surface with a new verb, a new evidence format or a new
+  aggregate. When a defect's fix would need one of those, **stop and report it as a blocker**
+  rather than widening the round.
+
+The guardrails below still decide whether a fix is admissible, and a bug fix is no exception:
+a defect that can only be fixed by making `operation_ns` fall, by moving a counter, by
+shrinking a workload or by relaxing a limit is not a bug fix — it is a blocker.
 
 - **No product source change.** `core/benchmark/**` plus harness documentation. If a step
   appears to need one, stop and report it. The one scoped exception is

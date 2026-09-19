@@ -36,11 +36,12 @@ E2/E3/E4 `SATISFIED`, W1/W2/W4 `SATISFIED` — the same six outcomes round 4c re
 
 **A note on the tree.** An unrelated documentation change (a new
 `core/docs/architecture/deferred/` paper and its index entry, plus
-`core/docs/benchmark/.../history-storage-optimization/`) was present in the working tree
-and is not this round's work. It was set aside for the duration of the run so the seal is
-clean, and restored immediately afterwards. It is documentation: it is outside
-`core/benchmark/**`, it is not compiled, and it does not move the harness binary hash the
-receipt names.
+`core/docs/benchmark/.../history-storage-optimization/`) was present in the working tree and
+is not this round's work. It was set aside for the duration of the run so the seal is clean,
+restored immediately afterwards, and committed unmodified on the owner's instruction in
+`575c6c9ae` and `9214557ce`. It is documentation: it is outside `core/benchmark/**`, it is
+not compiled, it does not move the harness binary hash the receipt names, and nothing in this
+receipt depends on it.
 
 ## 2. The four phases, published for the first time
 

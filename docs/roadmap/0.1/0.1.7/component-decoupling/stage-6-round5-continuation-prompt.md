@@ -52,9 +52,9 @@ HEAD   2df19949a  the round-5 first-half receipt, corrected
 production LOC   84936 combined (core 19519 / reference 65417)
 ```
 
-A closure run needs a **clean tree**. One unrelated documentation change is present in the
-working tree and is not yours — see the handoff §1. Take a ruling on it rather than
-committing or deleting it.
+The tree is clean. An unrelated documentation change that appeared during the first half has
+been committed unmodified on the owner's instruction (`575c6c9ae`, `9214557ce`) and is not
+yours to edit.
 
 ## Reproduce before you read code
 
@@ -123,6 +123,16 @@ and the unrelated documentation in the working tree.
 
 ## The rules that will decide your work
 
+- **Fix defects; do not add features** (owner ruling, 2026-09-19). A defect in
+  `core/benchmark/**` or its documentation — **including a pre-existing one this round merely
+  exposed** — is in scope to fix, and fixing it beats recording it. The items this assignment
+  names (V6, V9, V10, V11, the registry declaration) are the assignment, not new capability.
+  Out of scope: capability the breakdown does not name, any product API or behaviour change
+  beyond the scoped `FilesystemRead::inode` item, relaxing a gate, a limit or a budget, and
+  widening the harness's surface with a new verb, evidence format or aggregate. If a defect
+  can only be fixed that way, **stop and report it as a blocker**. A bug fix is not exempt
+  from the guardrails below: one that would make `operation_ns` fall, move a counter, shrink a
+  workload or relax a limit is a blocker, not a fix.
 - **No product source change.** This is `core/benchmark/**` plus harness documentation. The
   one scoped exception is decision 4 above, and it needs its own confirmation first.
 - **`operation_ns` must not fall.** T4 is a falsifier: if the golden number improves,
