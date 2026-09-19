@@ -25,6 +25,24 @@
 | Verification mode | `full` (the declared default for a whole-lane run) |
 | Fixture-recipe version | `fs-bench-fixture-recipe-v2` |
 
+> **A second workstream is editing this checkout, and one of this round's commits swept up
+> its files — reported rather than hidden.** The commit `66bc974d0` ("the round-5b receipt and
+> the four closures") carries, besides this round's documents, **five files under
+> `core/docs/benchmark/fs-bench-pro-storage-content/history-storage-optimization/`** (471
+> insertions, 614 deletions). They are not this round's work: they are another
+> workstream's, present in the working tree and being written *while this round ran*. The
+> cause is a `git add -A` in a checkout shared with that workstream; the correct staging is
+> explicit paths, and that is what every later commit in this round used. **Nothing is lost**
+> — that workstream's *newer* edits are still uncommitted and untouched — and the commit is
+> **not pushed** (`origin/main` is at `0654d3afd`, before this round), so it can be split
+> cleanly on the owner's word. It was not split here because a second agent shares this
+> index, and a `reset` racing its staging would destroy work that a misattributed commit does
+> not.
+>
+> **The lane itself is unaffected.** It started at `03:51:11Z` and the first write by that
+> workstream landed at `11:55:37` local, after it finished; `source_dirty` was false at the
+> run's own check, and none of those files is compiled or read by the harness.
+>
 > **A note on the tree.** Commits after the one this lane ran on are documentation only:
 > this directory, the harness README, the round-5 prompt and plan, and the round-5 handoff's
 > forward pointer. **None changes a compiled byte** — the harness binary sha256 above is the
