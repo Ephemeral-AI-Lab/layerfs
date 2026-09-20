@@ -1,0 +1,34 @@
+=== history-stride10
+  wall (complete command)               : 37.613 s
+  preparation (window + declared corpus): 17.766 s
+  operation (sum of children)           : 19.739 s
+  verification / cleanup                : 0.016 / 0.000001 s
+  declared phases sum                   : 37.521 s
+  child invocation wall                 : 37.547 s
+  reconciliation                        : PASS - every declared phase reconciles with its wall
+  budget, ordinary 15 s                 : NOT_RUN
+  budget, declared exception 25 s       : NOT_RUN
+  corpus read (declared, own record)    : 17.588 s
+  corpus files probed before first read : 45,338 (489,820,959 bytes, 62,319 pages)
+  corpus pages resident before first rd : 0
+  device bytes read across the chain    : 603,807,744
+  root_ns / children_ns                 : 37,339,162,500 / 19,738,993,418
+  retained candidate2 operation         : 19,888,424,711
+
+=== history-stride3
+  wall (complete command)               : 75.121 s
+  preparation (window + declared corpus): 26.033 s
+  operation (sum of children)           : 48.976 s
+  verification / cleanup                : 0.028 / 0.000001 s
+  declared phases sum                   : 75.038 s
+  child invocation wall                 : 75.085 s
+  reconciliation                        : PASS - every declared phase reconciles with its wall
+  budget, ordinary 15 s                 : NOT_RUN
+  budget, declared exception 25 s       : NOT_RUN
+  corpus read (declared, own record)    : 25.463 s
+  corpus files probed before first read : 78,439 (850,636,296 bytes, 107,780 pages)
+  corpus pages resident before first rd : 4,298
+  device bytes read across the chain    : 977,244,160
+  root_ns / children_ns                 : 74,463,634,542 / 48,976,026,830
+  retained candidate2 operation         : 49,501,013,748
+

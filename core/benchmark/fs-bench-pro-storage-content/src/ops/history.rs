@@ -65,7 +65,7 @@ use crate::registry::Case;
 use crate::support::{instruments, phases};
 use super::c1;
 use crate::support::trace::Kind;
-use crate::workload::history::{Change, Corpus, HistoryError, Row};
+use crate::workload::history::{read_probe, read_probe_begin, Change, Corpus, HistoryError, Row};
 use crate::workload::providers::TreeStore;
 
 /// The root directory's serial. `build_filesystem` requires it to be one of the
@@ -1537,6 +1537,15 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         ));
     }
 
+    // **The corpus-axis diagnostic.** Residency of the corpus files *before this
+    // invocation first reads them*, and the process's device reads across the
+    // chain. Both are diagnostics: nothing fails on them, nothing is de-warmed, and
+    // neither is a cold claim. They answer the one question the declared cache
+    // stance left open — whether the input pages were already resident when the
+    // operation started — by measuring it rather than assuming it.
+    read_probe_begin();
+    let disk_reads_before = instruments::process_usage();
+
     // **One root, N named children.** The corpus reading sits inside the root and
     // outside every child, so the row's `operation_ns` is the sum of the children
     // and not the root — owner ruling 2. The root is the whole chain including the
@@ -1581,7 +1590,13 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             } else {
                 BTreeMap::new()
             };
-            corpus_read_ns = corpus_read_ns.saturating_add(t_corpus.elapsed().as_nanos() as u64);
+            let corpus_span_ns = t_corpus.elapsed().as_nanos() as u64;
+            corpus_read_ns = corpus_read_ns.saturating_add(corpus_span_ns);
+            // Declared, not left between the phases. The span is inside the
+            // invocation and outside every measured child, so preparation is the
+            // phase that accounts for it, and `history.corpus_read_ns` publishes it
+            // in its own right so a reader can subtract it.
+            phases::add_preparation(corpus_span_ns);
             let ordinal = transition.state.ordinal;
             let mut peak_heap = 0u64;
             let outcome = root
@@ -2023,6 +2038,15 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
+    // The device half of the corpus diagnostic, from the same `rusage` instrument
+    // the cold contract uses. Process-wide, so corpus reads and the Store's own
+    // device traffic are one number here; it is not a gate.
+    let disk_read_bytes_chain = match (disk_reads_before, instruments::process_usage()) {
+        (Some(before), Some(after)) => {
+            Some(after.disk_read_bytes.saturating_sub(before.disk_read_bytes))
+        }
+        _ => None,
+    };
     drop(store);
 
     // The product's own timing tree, byte-verbatim, written **once** for the whole
@@ -2200,8 +2224,46 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         "history.corpus_read_ns",
         corpus_read_ns as i128,
         "ns",
-        "the harness's own corpus reading: inside the root, between the children, untimed",
+        "the harness's own corpus reading: inside the root, between the children, untimed, and attributed to the preparation phase so the declared phases account for the invocation",
     )?;
+    let probe = read_probe();
+    for (key, value, unit, basis) in [
+        (
+            "history.corpus.probe.files",
+            probe.files,
+            "files",
+            "distinct corpus files the chain read, probed for residency before their first read",
+        ),
+        (
+            "history.corpus.probe.bytes",
+            probe.length_bytes,
+            "bytes",
+            "the summed lengths of those files (diagnostic, not a gate)",
+        ),
+        (
+            "history.corpus.probe.pages",
+            probe.total_pages,
+            "pages",
+            "pages examined across those files (diagnostic, not a gate)",
+        ),
+        (
+            "history.corpus.probe.resident_pages",
+            probe.resident_pages,
+            "pages",
+            "pages resident before the first read: what an earlier run may have left, measured rather than assumed; nothing is de-warmed and this is not a cold claim",
+        ),
+    ] {
+        context.trace.write_number(Kind::Resource, key, value as i128, unit, basis)?;
+    }
+    if let Some(bytes) = disk_read_bytes_chain {
+        context.trace.write_number(
+            Kind::Resource,
+            "history.operation.disk_read_bytes",
+            bytes as i128,
+            "bytes",
+            "device bytes this process read across the chain, from rusage; process-wide, so corpus and Store reads are one number, and not a gate",
+        )?;
+    }
     context.trace.write_number(
         Kind::Counter,
         "history.children_ns",
@@ -2308,7 +2370,9 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             format!("history_path_states: {}", pins.path_states),
             "measured_region: construct + build/update + save, one named child per state".to_string(),
             "operation_ns: the sum of the named children, not the root".to_string(),
-            "corpus_reading: between the children, untimed".to_string(),
+            "corpus_reading: between the children, untimed, attributed to the preparation phase"
+                .to_string(),
+            "cache_diagnostic: corpus residency before the first read and process device reads; diagnostics, not gates, and not a cold claim".to_string(),
             "prepared: none (Preparation::InProcess)".to_string(),
             // The runner reads this to decide whether the row has a deferred
             // oracle. Without it the verify invocation is never scheduled and a
