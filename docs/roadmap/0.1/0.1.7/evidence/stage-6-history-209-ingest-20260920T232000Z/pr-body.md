@@ -35,4 +35,4 @@ The fixture is built immediately before the timed scopes and **dropped before th
 
 Production LOC: 25403 → 25403 (delta 0).
 
-Evidence: `docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-ingest-20260920T232000Z/` — raw stdout per row, both saved Stores with sha256, and the source retained as `measure_ingest.rs.txt`.
+Evidence: `docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-ingest-20260920T232000Z/` — raw stdout per row, the source retained as `measure_ingest.rs.txt`, the repeat row's Store (264 KiB), and the noise row's Store **by sha256 only**: that Store is 508.41 MB and GitHub rejects any file over 100 MB at push time, so it is retained on the measuring disk and not in the repository. That is the first #209 row too large to commit, and it is worth a policy decision before more rows at this scale are taken.
