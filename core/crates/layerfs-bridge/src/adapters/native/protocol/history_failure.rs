@@ -1,5 +1,6 @@
 //! Profile-selected history failure context; legacy failures keep three bytes.
-use super::response::{put_optional, put_stage, take_optional, take_stage};
+use super::metadata::{put_optional, take_optional};
+use super::response::{put_stage, take_stage};
 use super::{decode_failure, encode_failure, Decoder, Encoder};
 use crate::contract::*;
 

@@ -275,9 +275,6 @@ fn command_matches(command: &HistoryCommand, result: &HistoryResult) -> bool {
         (
             HistoryCommand::InitLayerStack { .. },
             HistoryResult::StackCreated(_)
-        ) | (
-            HistoryCommand::Fork { .. },
-            HistoryResult::BranchSnapshot(_)
         ) | (HistoryCommand::StageChanges(_), HistoryResult::Stage(_))
             | (
                 HistoryCommand::CommitStaged { .. } | HistoryCommand::Commit(_),

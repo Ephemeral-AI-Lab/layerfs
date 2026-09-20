@@ -1,4 +1,5 @@
 //! Closed terminal result encoding.
+use super::metadata::{put_optional, take_optional};
 use super::{Decoder, Encoder};
 use crate::contract::*;
 pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
@@ -89,19 +90,6 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
     Ok(e.finish())
 }
 
-pub(super) fn put_optional<const N: usize>(
-    e: &mut Encoder,
-    value: Option<&[u8; N]>,
-) -> Result<(), Failure> {
-    match value {
-        Some(value) => {
-            e.u8(1)?;
-            e.put(value)
-        }
-        None => e.u8(0),
-    }
-}
-
 fn put_stack(e: &mut Encoder, record: &StackWire) -> Result<(), Failure> {
     check_stack(record)?;
     e.put(&record.stack)?;
@@ -156,6 +144,38 @@ pub(super) fn put_stage(e: &mut Encoder, record: &StageWire) -> Result<(), Failu
     e.u64(record.generation)
 }
 
+// Share only the page envelope; each record codec retains its validation.
+fn put_page<T>(
+    e: &mut Encoder,
+    continuation: &[u8],
+    records: &[T],
+    put: fn(&mut Encoder, &T) -> Result<(), Failure>,
+) -> Result<(), Failure> {
+    e.blob(continuation)?;
+    if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    e.count(records.len())?;
+    for record in records {
+        put(e, record)?;
+    }
+    Ok(())
+}
+
+fn take_page<T>(
+    d: &mut Decoder<'_>,
+    minimum_width: usize,
+    take: fn(&mut Decoder<'_>) -> Result<T, Failure>,
+) -> Result<(Vec<u8>, Vec<T>), Failure> {
+    let continuation = d.blob(CURSOR_BYTES)?;
+    let count = d.count(PAGE_RECORDS as usize, minimum_width)?;
+    let mut records = Vec::with_capacity(count);
+    for _ in 0..count {
+        records.push(take(d)?);
+    }
+    Ok((continuation, records))
+}
+
 fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
     check_result(result)?;
     match result {
@@ -168,14 +188,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
             records,
         } => {
             e.u8(2)?;
-            e.blob(continuation)?;
-            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
-                return Err(Code::Capacity.into());
-            }
-            e.count(records.len())?;
-            for record in records {
-                put_stack(e, record)?;
-            }
+            put_page(e, continuation, records, put_stack)?;
         }
         HistoryResult::BranchSnapshot(snapshot) => {
             e.u8(3)?;
@@ -192,14 +205,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
             records,
         } => {
             e.u8(4)?;
-            e.blob(continuation)?;
-            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
-                return Err(Code::Capacity.into());
-            }
-            e.count(records.len())?;
-            for record in records {
-                put_branch(e, record)?;
-            }
+            put_page(e, continuation, records, put_branch)?;
         }
         HistoryResult::Commit(record) => {
             e.u8(6)?;
@@ -210,14 +216,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
             records,
         } => {
             e.u8(7)?;
-            e.blob(continuation)?;
-            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
-                return Err(Code::Capacity.into());
-            }
-            e.count(records.len())?;
-            for record in records {
-                put_commit(e, record)?;
-            }
+            put_page(e, continuation, records, put_commit)?;
         }
         HistoryResult::Layer(record) => {
             e.u8(8)?;
@@ -228,14 +227,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
             records,
         } => {
             e.u8(9)?;
-            e.blob(continuation)?;
-            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
-                return Err(Code::Capacity.into());
-            }
-            e.count(records.len())?;
-            for record in records {
-                put_layer(e, record)?;
-            }
+            put_page(e, continuation, records, put_layer)?;
         }
         HistoryResult::Stage(record) => {
             e.u8(10)?;
@@ -246,14 +238,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
             records,
         } => {
             e.u8(11)?;
-            e.blob(continuation)?;
-            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
-                return Err(Code::Capacity.into());
-            }
-            e.count(records.len())?;
-            for record in records {
-                put_stage(e, record)?;
-            }
+            put_page(e, continuation, records, put_stage)?;
         }
         HistoryResult::StackCreated(record) => {
             e.u8(12)?;
@@ -308,16 +293,6 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         }
     }
     Ok(())
-}
-
-pub(super) fn take_optional<const N: usize>(
-    d: &mut Decoder<'_>,
-) -> Result<Option<[u8; N]>, Failure> {
-    match d.u8()? {
-        0 => Ok(None),
-        1 => Ok(Some(d.take(N)?.try_into().map_err(|_| Code::InvalidInput)?)),
-        _ => Err(Code::InvalidInput.into()),
-    }
 }
 
 fn take_stack(d: &mut Decoder<'_>) -> Result<StackWire, Failure> {
@@ -393,12 +368,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
     Ok(match d.u8()? {
         1 => HistoryResult::Stack(take_stack(d)?),
         2 => {
-            let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 117)?;
-            let mut records = Vec::with_capacity(count);
-            for _ in 0..count {
-                records.push(take_stack(d)?);
-            }
+            let (continuation, records) = take_page(d, 117, take_stack)?;
             HistoryResult::Stacks {
                 continuation,
                 records,
@@ -414,12 +384,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
             root_serial: take_optional::<8>(d)?.map(u64::from_be_bytes),
         }),
         4 => {
-            let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 71)?;
-            let mut records = Vec::with_capacity(count);
-            for _ in 0..count {
-                records.push(take_branch(d)?);
-            }
+            let (continuation, records) = take_page(d, 71, take_branch)?;
             HistoryResult::Branches {
                 continuation,
                 records,
@@ -427,12 +392,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         }
         6 => HistoryResult::Commit(take_commit(d)?),
         7 => {
-            let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 116)?;
-            let mut records = Vec::with_capacity(count);
-            for _ in 0..count {
-                records.push(take_commit(d)?);
-            }
+            let (continuation, records) = take_page(d, 116, take_commit)?;
             HistoryResult::Commits {
                 continuation,
                 records,
@@ -440,12 +400,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         }
         8 => HistoryResult::Layer(take_layer(d)?),
         9 => {
-            let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 85)?;
-            let mut records = Vec::with_capacity(count);
-            for _ in 0..count {
-                records.push(take_layer(d)?);
-            }
+            let (continuation, records) = take_page(d, 85, take_layer)?;
             HistoryResult::Layers {
                 continuation,
                 records,
@@ -453,12 +408,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         }
         10 => HistoryResult::Stage(take_stage(d)?),
         11 => {
-            let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 309)?;
-            let mut records = Vec::with_capacity(count);
-            for _ in 0..count {
-                records.push(take_stage(d)?);
-            }
+            let (continuation, records) = take_page(d, 309, take_stage)?;
             HistoryResult::Stages {
                 continuation,
                 records,

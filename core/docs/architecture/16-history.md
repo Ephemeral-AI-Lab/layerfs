@@ -7,13 +7,15 @@
 Issue: [#210](https://github.com/Ephemeral-AI-Lab/layerfs/issues/210). Design
 parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 The [remediation handoff and qualification record](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-remediation-20260921/validation.md)
-records the current execution evidence and its gaps.
+records the execution evidence and its gaps; the subsequent
+[bridge consolidation](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-bridge-consolidation-20260921/implementation.md)
+records the internal codec refactor.
 Implementation specification and its pre-publication audit:
 [`proposal/commit-history/`](proposal/commit-history/).
 
-- **Source pin:** `f2021367e11f6433d1d9e055198cac5ad280f6c9`, the repaired
-  product commit. This pin-only update changes no production behavior. Reference
-  root `crates/` remains a separate implementation and schema.
+- **Source pin:** codec consolidation on `a4a144af8af9b46c3ce3100047466f4817332808`,
+  updated with the bridge source in this commit. The consolidation handoff pins
+  the resulting source and checks. Reference root `crates/` remains separate.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
@@ -284,6 +286,12 @@ History result codecs enforce the complete 16 KiB budget (tags, prefixes and
 continuation included) before growth/allocation. Page record minimum/maximum
 widths are Stack 117/179, Branch 71/166, Commit 116/149, Layer 85/168, Stage
 309/342 bytes. The 32 KiB request envelope and legacy limits remain unchanged.
+The native codecs share optional fixed-width primitives in `protocol/metadata.rs`
+and the five history page envelopes in `protocol/response.rs`. Record codecs
+retain their own validation and explicit minimum widths. Prepared-update and
+manifest decoders construct records in wire-field order. A frozen 46-case external
+fixture from a4a144af checks that this consolidation preserves encoded bytes.
+
 Candidate profile-2 compatibility changes are frozen in the
 [repaired boundary](proposal/commit-history/remediation-contract-20260921.md).
 BranchSnapshot appends optional root serial: GetBranch supplies a C1-validated

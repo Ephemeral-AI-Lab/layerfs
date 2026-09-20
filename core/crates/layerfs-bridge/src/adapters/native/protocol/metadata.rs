@@ -264,7 +264,10 @@ fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
 }
 
 /// Writes an optional fixed-width identity.
-fn put_optional<const N: usize>(e: &mut Encoder, value: Option<&[u8; N]>) -> Result<(), Failure> {
+pub(super) fn put_optional<const N: usize>(
+    e: &mut Encoder,
+    value: Option<&[u8; N]>,
+) -> Result<(), Failure> {
     match value {
         Some(value) => {
             e.u8(1)?;
@@ -275,7 +278,9 @@ fn put_optional<const N: usize>(e: &mut Encoder, value: Option<&[u8; N]>) -> Res
 }
 
 /// Reads an optional fixed-width identity.
-fn take_optional<const N: usize>(d: &mut Decoder<'_>) -> Result<Option<[u8; N]>, Failure> {
+pub(super) fn take_optional<const N: usize>(
+    d: &mut Decoder<'_>,
+) -> Result<Option<[u8; N]>, Failure> {
     match d.u8()? {
         0 => Ok(None),
         1 => Ok(Some(take_array::<N>(d)?)),
@@ -309,27 +314,17 @@ fn put_prepared(e: &mut Encoder, changes: &PreparedChanges) -> Result<(), Failur
 }
 
 fn take_prepared(d: &mut Decoder<'_>) -> Result<PreparedChanges, Failure> {
-    let workspace = take_array::<32>(d)?;
-    let branch = take_array::<17>(d)?;
-    let expected_head = take_optional::<33>(d)?;
-    let expected_base = take_array::<33>(d)?;
-    let generation = d.u64()?;
-    let base = d.root()?;
-    let scope = d.root()?;
-    let root_serial = d.u64()?;
-    let directories = take_directories(d)?;
-    let inodes = take_inodes(d)?;
     Ok(PreparedChanges {
-        workspace,
-        branch,
-        expected_head,
-        expected_base,
-        generation,
-        base,
-        scope,
-        root_serial,
-        directories,
-        inodes,
+        workspace: take_array::<32>(d)?,
+        branch: take_array::<17>(d)?,
+        expected_head: take_optional::<33>(d)?,
+        expected_base: take_array::<33>(d)?,
+        generation: d.u64()?,
+        base: d.root()?,
+        scope: d.root()?,
+        root_serial: d.u64()?,
+        directories: take_directories(d)?,
+        inodes: take_inodes(d)?,
     })
 }
 
@@ -343,13 +338,7 @@ fn put_manifest(e: &mut Encoder, entries: &[ManifestEntry]) -> Result<(), Failur
         e.u32(entry.mode)?;
         e.u64(entry.mtime_seconds as u64)?;
         e.u32(entry.mtime_nanoseconds)?;
-        match &entry.content {
-            Some(root) => {
-                e.u8(1)?;
-                e.put(root)?;
-            }
-            None => e.u8(0)?,
-        }
+        put_optional(e, entry.content.as_ref())?;
         e.blob(&entry.target)?;
     }
     Ok(())
@@ -366,27 +355,15 @@ fn take_manifest(d: &mut Decoder<'_>) -> Result<Vec<ManifestEntry>, Failure> {
     let count = d.count(MANIFEST_ENTRIES, MANIFEST_ENTRY_MINIMUM)?;
     let mut entries = Vec::with_capacity(count);
     for _ in 0..count {
-        let parent = d.u16()?;
-        let name = d.blob(255)?;
-        let kind = d.u8()?;
-        let mode = d.u32()?;
-        let mtime_seconds = d.u64()? as i64;
-        let mtime_nanoseconds = d.u32()?;
-        let content = match d.u8()? {
-            0 => None,
-            1 => Some(d.root()?),
-            _ => return Err(Code::InvalidInput.into()),
-        };
-        let target = d.blob(MANIFEST_TARGET_BYTES)?;
         entries.push(ManifestEntry {
-            parent,
-            name,
-            kind,
-            mode,
-            mtime_seconds,
-            mtime_nanoseconds,
-            content,
-            target,
+            parent: d.u16()?,
+            name: d.blob(255)?,
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+            content: take_optional::<32>(d)?,
+            target: d.blob(MANIFEST_TARGET_BYTES)?,
         });
     }
     Ok(entries)

@@ -964,3 +964,88 @@ fn invalid_terminal_reservation_and_descriptor_serial_are_refused() {
         .is_err()
     );
 }
+
+fn history_wire_fixtures() -> Vec<Vec<u8>> {
+    let mut cases: Vec<_> = every_query()
+        .into_iter()
+        .map(Operation::HistoryQuery)
+        .chain(every_command().into_iter().map(Operation::HistoryCommand))
+        .map(|operation| encode_request(&request(operation)).unwrap())
+        .collect();
+    cases.extend(
+        every_result()
+            .into_iter()
+            .map(|result| encode_response(&Response::History(Box::new(result))).unwrap()),
+    );
+    let request = request(Operation::HistoryCommand(HistoryCommand::CommitStaged {
+        workspace: [5; 32],
+        token: 7,
+    }));
+    for conflict in [
+        HistoryConflict::BranchMoved {
+            expected_head: None,
+            actual_head: Some(commit_id(1)),
+            expected_base: layer_id(1),
+            actual_base: layer_id(2),
+        },
+        HistoryConflict::StackMoved {
+            expected: layer_id(1),
+            actual: layer_id(2),
+        },
+        HistoryConflict::StageChanged {
+            expected: 7,
+            actual: Some(8),
+        },
+        HistoryConflict::BaseMismatch {
+            commit_base: layer_id(1),
+            branch_base: layer_id(2),
+        },
+    ] {
+        let code = if matches!(conflict, HistoryConflict::StageChanged { .. }) {
+            Code::StageChanged
+        } else {
+            Code::HeadMoved
+        };
+        let failure = Failure {
+            code,
+            unknown: false,
+            cleanup: None,
+            history: Some(Box::new(HistoryFailure {
+                conflict: Some(conflict),
+                stage: StageObservation::Retained(Box::new(stage_wire())),
+            })),
+        };
+        cases.push(encode_request_failure(&request, &failure).unwrap());
+    }
+    for stage in [
+        StageObservation::Unobserved,
+        StageObservation::Absent([5; 32]),
+        StageObservation::AcknowledgedUnknown(Box::new(stage_wire())),
+    ] {
+        let mut failure = Failure::from(Code::Busy);
+        failure.history = Some(Box::new(HistoryFailure {
+            conflict: None,
+            stage,
+        }));
+        cases.push(encode_request_failure(&request, &failure).unwrap());
+    }
+    cases
+}
+
+#[test]
+fn history_wire_bytes_match_pre_simplification_head() {
+    use std::fmt::Write;
+    let expected: Vec<_> = include_str!("fixtures/history-wire-a4a144af.hex")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .collect();
+    let actual = history_wire_fixtures();
+    assert_eq!(actual.len(), expected.len());
+    for (index, (bytes, expected)) in actual.iter().zip(expected).enumerate() {
+        let mut hex = String::new();
+        for byte in bytes {
+            write!(&mut hex, "{byte:02x}").unwrap();
+        }
+        assert_eq!(hex, expected, "wire case {index}");
+    }
+}
