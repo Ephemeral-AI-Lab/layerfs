@@ -1261,6 +1261,70 @@ impl<'a> Sampler<'a> {
     }
 }
 
+/// One state's changed-set composition, split by the operation that caused it.
+///
+/// The driver already computes every one of these - it walks the changed set to
+/// build the tree - and only the aggregate `changed_paths` and `changed_bytes` were
+/// ever published. Publishing the split is what lets a state's save cost be read
+/// against the operations that produced it: a *construct* offers content the Store
+/// may already hold, an *edit* offers content it usually does not, a *delete* offers
+/// no content at all, and `metadata_only` is counted and never dropped.
+#[derive(Default, Clone, Copy)]
+struct ChangeMix {
+    /// Paths added (a construct: new name, possibly existing content).
+    added_paths: u64,
+    /// Logical bytes of those paths.
+    added_bytes: u64,
+    /// Paths whose content changed (an edit or a rewrite).
+    modified_paths: u64,
+    /// Logical bytes of those paths.
+    modified_bytes: u64,
+    /// Paths whose mode changed and whose content did not.
+    metadata_paths: u64,
+    /// Paths removed (a delete). Bytes are the **previous** state's.
+    removed_paths: u64,
+    /// Logical bytes those removals carried before they were removed.
+    removed_bytes: u64,
+}
+
+impl ChangeMix {
+    fn of(transition: &crate::workload::history::Transition) -> Self {
+        use crate::workload::history::Change;
+        Self {
+            added_paths: transition.count(Change::Added) as u64,
+            added_bytes: transition.bytes(Change::Added),
+            modified_paths: transition.count(Change::Modified) as u64,
+            modified_bytes: transition.bytes(Change::Modified),
+            metadata_paths: transition.count(Change::MetadataOnly) as u64,
+            removed_paths: transition.count(Change::Removed) as u64,
+            removed_bytes: transition.bytes(Change::Removed),
+        }
+    }
+
+    fn add(&mut self, other: &Self) {
+        self.added_paths = self.added_paths.saturating_add(other.added_paths);
+        self.added_bytes = self.added_bytes.saturating_add(other.added_bytes);
+        self.modified_paths = self.modified_paths.saturating_add(other.modified_paths);
+        self.modified_bytes = self.modified_bytes.saturating_add(other.modified_bytes);
+        self.metadata_paths = self.metadata_paths.saturating_add(other.metadata_paths);
+        self.removed_paths = self.removed_paths.saturating_add(other.removed_paths);
+        self.removed_bytes = self.removed_bytes.saturating_add(other.removed_bytes);
+    }
+
+    /// `(suffix, value)` rows, published per state and in total.
+    fn rows(&self) -> [(&'static str, u64); 7] {
+        [
+            ("change.added_paths", self.added_paths),
+            ("change.added_bytes", self.added_bytes),
+            ("change.modified_paths", self.modified_paths),
+            ("change.modified_bytes", self.modified_bytes),
+            ("change.metadata_paths", self.metadata_paths),
+            ("change.removed_paths", self.removed_paths),
+            ("change.removed_bytes", self.removed_bytes),
+        ]
+    }
+}
+
 /// What one state's child produced, carried out of the measured region so the
 /// trace is written **after** the timer rather than inside it.
 struct StateOutcome {
@@ -1268,6 +1332,8 @@ struct StateOutcome {
     root: FilesystemRootId,
     changed_paths: usize,
     changed_bytes: u64,
+    /// The same changed set, split by the operation that caused it.
+    change_mix: ChangeMix,
     inserted: u64,
     objects: u64,
     peak_heap_bytes: u64,
@@ -1695,6 +1761,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut advisory_bases: u64 = 0;
     let mut prior_unavailable: u64 = 0;
     let mut totals = SaveTotals::default();
+    let mut change_totals = ChangeMix::default();
 
     let count = corpus.states().len();
     // Extra nodes fit stride10/stride3; stride1 remains the ordinary recording.
@@ -2178,6 +2245,11 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     let mut state_save = SaveTotals::default();
                     state_save.add(&saved);
                     totals.add(&saved);
+                    // Computed once here and carried on `StateOutcome`, so the
+                    // per-state trace rows and the whole-run totals are the same
+                    // numbers taken from the same walk of the changed set.
+                    let state_mix = ChangeMix::of(&transition);
+                    change_totals.add(&state_mix);
                     peak_heap = instruments::heap_end().peak_incremental_bytes;
                     previous_root = Some(built.root);
                     Ok(StateOutcome {
@@ -2185,6 +2257,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         root: built.root,
                         changed_paths: transition.changed.len(),
                         changed_bytes: transition.changed_bytes(),
+                        change_mix: state_mix,
                         inserted: saved.inserted,
                         objects: built.counters.objects.objects_emitted,
                         peak_heap_bytes: 0,
@@ -2264,6 +2337,24 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "bytes",
             "logical bytes this transition changed",
         )?;
+        for (suffix, value) in outcome.change_mix.rows() {
+            // Units differ by row: `*_paths` counts entries, `*_bytes` is logical
+            // volume. A removal's bytes are the previous state's size, so the two
+            // are published separately and never summed into a store figure.
+            let unit = if suffix.ends_with("_bytes") { "bytes" } else { "paths" };
+            let basis = if suffix.ends_with("_bytes") {
+                "logical size of the paths this transition added, modified or removed; a removal's bytes are the previous state's"
+            } else {
+                "entries this transition added, modified, removed or changed in mode only"
+            };
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("history.state.{}.{}", outcome.ordinal, suffix),
+                value as i128,
+                unit,
+                basis,
+            )?;
+        }
         context.trace.write_number(
             Kind::Counter,
             &format!("history.state.{}.inserted", outcome.ordinal),
@@ -2502,6 +2593,19 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             value as i128,
             "objects",
             "chain total of the save's own counters",
+        )?;
+    }
+    // The changed-set composition, totalled over every state: what the operations
+    // were, as opposed to what the save did about them. Published in its own group
+    // because the unit is `paths` or `bytes`, not the `objects` above.
+    for (key, value) in change_totals.rows() {
+        let unit = if key.ends_with("_bytes") { "bytes" } else { "paths" };
+        context.trace.write_number(
+            Kind::Counter,
+            &format!("delta.{key}"),
+            value as i128,
+            unit,
+            "whole-run changed-set composition, from the driver's own walk of each transition",
         )?;
     }
     // The save's own nanosecond split, totalled over every state. Seven disjoint

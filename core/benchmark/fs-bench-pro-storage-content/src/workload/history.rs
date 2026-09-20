@@ -452,6 +452,21 @@ impl Transition {
     pub fn count(&self, kind: Change) -> usize {
         self.changed.iter().filter(|entry| entry.kind == kind).count()
     }
+
+    /// Logical bytes of each kind, from the same `size` field `changed_bytes` sums.
+    ///
+    /// `changed_bytes` is the added+modified total; this is the same number split by
+    /// operation, plus the two kinds that contribute no content. A removal carries
+    /// the **previous** state's size, which is the byte volume a delete has to
+    /// reconcile and not content it has to store - published so the two can be told
+    /// apart, and never added into a store-volume figure.
+    pub fn bytes(&self, kind: Change) -> u64 {
+        self.changed
+            .iter()
+            .filter(|entry| entry.kind == kind)
+            .map(|entry| entry.size)
+            .sum()
+    }
 }
 
 /// One entry of a state's oracle.
