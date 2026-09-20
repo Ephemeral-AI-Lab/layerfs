@@ -12,3 +12,10 @@
             reconciliation PASS | outside the child's clock 46.3 ms | budget NOT_RUN / NOT_RUN | corpus resident 7,022 of 107,780
   delta   operation -11.828 s | accept_loop -0.085 s | filesystem -11.666 s
 
+=== history-stride1
+  baseline  wall 204.354 s | preparation  54.078 s | OPERATION 150.041 s | sub-phases not named in this recording (driver refuses above 53 states)
+            reconciliation PASS | outside the child's clock 88.4 ms | budget NOT_RUN / NOT_RUN | corpus resident 0 of 245,733
+  candidate wall 158.464 s | preparation  50.728 s | OPERATION 105.726 s | sub-phases not named in this recording (driver refuses above 53 states)
+            reconciliation PASS | outside the child's clock 1878.3 ms | budget NOT_RUN / NOT_RUN | corpus resident 12,131 of 245,733
+  delta   operation -44.314 s
+

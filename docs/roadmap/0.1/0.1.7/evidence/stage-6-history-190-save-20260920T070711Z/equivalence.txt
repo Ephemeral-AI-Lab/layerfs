@@ -24,3 +24,18 @@
   Store shape                     : {'packs': 437, 'pack_bytes': 56590252, 'ordinary_groups': 60052, 'objects': 72560, 'value_groups': 4225, 'singleton_groups': 59772}
   save counters identical between arms: True
 
+=== history-stride1
+  every state root equal          : True
+  state changed_bytes  equal      : True
+  state changed_paths  equal      : True
+  state objects        equal      : True
+  state inserted       equal      : True
+  state root           equal      : True
+  baseline  Store sha256 : 1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418  == recorded constant
+  candidate Store sha256 : 1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418  == recorded constant
+  byte-identical between arms     : True
+  Store shape                     : {'packs': 855, 'pack_bytes': 73043937, 'ordinary_groups': 75947, 'objects': 97788, 'value_groups': 9381, 'singleton_groups': 75404}
+  save counters identical between arms: True
+  verification baseline  (sampled, INCOMPLETE by construction): 53.982 s, 9,996 of 904,143 path-states, mismatches 0, missing 0, unexpected 0
+  verification candidate (sampled, INCOMPLETE by construction): 31.657 s, 9,996 of 904,143 path-states, mismatches 0, missing 0, unexpected 0
+

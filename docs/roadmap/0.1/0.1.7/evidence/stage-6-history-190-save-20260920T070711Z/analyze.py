@@ -27,10 +27,15 @@ import phases as phases_module  # noqa: E402
 import receipt  # noqa: E402
 
 ARMS = ("baseline", "candidate")
-CASES = ("history-stride10", "history-stride3")
+CASES = ("history-stride10", "history-stride3", "history-stride1")
 RECORDED_STORE = {
     "history-stride10": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
     "history-stride3": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+    # stride1 has no constant in the L42/L47 tables; this is the SHA256 of the
+    # retained campaign's own stride1 Store, recomputed from that run's artifact in
+    # the retained worktree. It was produced by the same product source as this
+    # round's baseline arm, so it is a cross-round check rather than a new constant.
+    "history-stride1": "1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418",
 }
 SAVE = (
     ("inserted", "objects written"),
@@ -116,6 +121,7 @@ def main() -> int:
             ordinary = receipt.budget(wall, False, declared_ns=declared)
             exception = receipt.budget(wall, True, declared_ns=declared)
             outer, _ = subphases(raw)
+            named = "storage.accept_loop" in outer
             report["runs"][f"{arm}-{case}"] = {
                 "wall_ns": wall,
                 "phases": {key: composed[key] for key in (
@@ -129,18 +135,23 @@ def main() -> int:
                 "subphases_ns": outer,
             }
             entry = report["runs"][f"{arm}-{case}"]
+            tail = (f"| accept_loop {outer.get('storage.accept_loop', 0) / 1e9:7.3f} s"
+                    f" | filesystem {outer.get('filesystem', 0) / 1e9:7.3f} s") if named else \
+                   "| sub-phases not named in this recording (driver refuses above 53 states)"
             lines.append(f"  {arm:9s} wall {wall / 1e9:7.3f} s | preparation"
                          f" {composed['preparation_wall_ns'] / 1e9:7.3f} s | OPERATION"
-                         f" {composed['operation_ns'] / 1e9:7.3f} s | accept_loop"
-                         f" {outer.get('storage.accept_loop', 0) / 1e9:7.3f} s | filesystem"
-                         f" {outer.get('filesystem', 0) / 1e9:7.3f} s")
+                         f" {composed['operation_ns'] / 1e9:7.3f} s {tail}")
             lines.append(f"            reconciliation {composed['reconciliation']['status']}"
                          f" | outside the child's clock {entry['outside_child_clock_ns'] / 1e6:.1f} ms"
                          f" | budget {ordinary.status} / {exception.status}"
                          f" | corpus resident {entry['corpus_resident_pages']:,}"
                          f" of {entry['corpus_pages']:,}")
         base, cand = (report["runs"][f"{arm}-{case}"] for arm in ARMS)
-        lines.append(f"  delta   operation"
+        if not named:
+            lines.append(f"  delta   operation"
+                         f" {cand['phases']['operation_ns'] / 1e9 - base['phases']['operation_ns'] / 1e9:+.3f} s")
+        else:
+            lines.append(f"  delta   operation"
                      f" {cand['phases']['operation_ns'] / 1e9 - base['phases']['operation_ns'] / 1e9:+.3f} s"
                      f" | accept_loop"
                      f" {(cand['subphases_ns'].get('storage.accept_loop', 0) - base['subphases_ns'].get('storage.accept_loop', 0)) / 1e9:+.3f} s"
@@ -196,6 +207,22 @@ def main() -> int:
                                 for o in ordinals) for name in INVARIANTS}
         stores = {arm: store_sha(CAMPAIGN / "runs" / f"{arm}-{case}" / "raw" / "sample.sqlite")
                   for arm in ARMS}
+        verification = {}
+        for arm in ARMS:
+            verify_receipt = CAMPAIGN / "runs" / f"{arm}-{case}" / "verify-receipt.json"
+            if not verify_receipt.exists():
+                continue
+            document = json.loads(verify_receipt.read_text())
+            rows = records(CAMPAIGN / "runs" / f"{arm}-{case}" / "raw" / "trace.jsonl")
+            verification[arm] = {
+                "wall_ns": document["wall_ns"], "sampled": True,
+                "compared": value(rows, "verify.compared"),
+                "path_states": value(rows, "verify.path_states"),
+                "mismatches": value(rows, "verify.mismatches"),
+                "missing": value(rows, "verify.missing"),
+                "unexpected": value(rows, "verify.unexpected"),
+                "files_read": value(rows, "verify.files_read"),
+            }
         uri = f"file:{CAMPAIGN / 'runs' / f'candidate-{case}' / 'raw' / 'sample.sqlite'}?mode=ro"
         with sqlite3.connect(uri, uri=True) as connection:
             packs, pack_bytes = connection.execute(
@@ -224,6 +251,17 @@ def main() -> int:
         equiv.append(f"  byte-identical between arms     : {stores['baseline'] == stores['candidate']}")
         equiv.append(f"  Store shape                     : {report['equivalence'][case]['store']}")
         equiv.append(f"  save counters identical between arms: {report['save'][case]['identical_between_arms']}")
+        if verification:
+            report["equivalence"][case]["verification"] = verification
+            report["equivalence"][case]["verification_equal_between_arms"] = (
+                verification.get("baseline") == verification.get("candidate"))
+            for arm in ARMS:
+                if arm in verification:
+                    v = verification[arm]
+                    equiv.append(f"  verification {arm:9s} (sampled, INCOMPLETE by construction):"
+                                 f" {v['wall_ns'] / 1e9:.3f} s, {v['compared']:,} of"
+                                 f" {v['path_states']:,} path-states, mismatches {v['mismatches']},"
+                                 f" missing {v['missing']}, unexpected {v['unexpected']}")
         equiv.append("")
 
     (CAMPAIGN / "analysis.json").write_text(json.dumps(report, indent=2, sort_keys=False) + "\n")

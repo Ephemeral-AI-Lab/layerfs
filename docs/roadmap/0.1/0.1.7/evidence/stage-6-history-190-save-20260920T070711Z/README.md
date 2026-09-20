@@ -212,3 +212,112 @@ python3 with_locks.py synthetic-append python3 append_cost.py
 * `stride1` was not sampled; the scaling claim is not asserted.
 * The v0.1.6 comparison is untouched, no pin was written, no budget class changed, no
   cap enlarged, no selection shrunk, no cold claim invented, and `#190` stays open.
+
+---
+
+## 10. stride1 measured: the other half of the scaling question
+
+L49 measured stride10 and stride3 and left stride1 unsampled, so the *finest* end of
+the scaling curve — the one the whole finding is named for — was unmeasured after the
+treatment. This addendum samples it on both arms, same protocol, same two binaries
+(no rebuild), the retained campaign's own declared 720 s diagnostic cap reused
+unchanged (its stride1 run used 28 % of it).
+
+### The curve, in L47's own units
+
+| versions | operation pre-fix | post-fix | ns per changed MB pre | post | change |
+|---:|---:|---:|---:|---:|---:|
+| 17 | 19.739 s | 16.908 s | 52,297,706 | 44,796,163 | **−14.3 %** |
+| 53 | 48.976 s | 36.810 s | 68,625,861 | 51,579,091 | **−24.8 %** |
+| 157 | 146.178 s | **105.726 s** | 84,996,709 | **61,475,883** | **−27.7 %** |
+
+* least-squares slope against ln(versions): **14,706,448 → 7,491,080 ns/MB per
+  e-fold (−49 %)**
+* finest against coarsest: **1.625× → 1.372×**
+* stride1 operation: **146.178 → 105.726 s (−40.45 s)**, wall 204.354 → 158.464 s
+
+So the treatment's benefit does grow with version count, in the order predicted: −14 %
+at 17 versions, −25 % at 53, −28 % at 157. The curve is **flattened by about half and
+is not flat**: at 157 versions a changed byte still costs 1.37× what it costs at 17,
+and the log-slope is still clearly positive.
+
+### The depth term at matched volume is now essentially untouched
+
+| row | band MB | pre | post | change |
+|---|---|---:|---:|---:|
+| stride10 | 14–22 | 1.22× (3/2) | 1.12× (3/2) | −8 % |
+| stride3 | 4–7 | 1.71× (8/2) | 1.52× (8/2) | −11 % |
+| stride3 | 7–10 | 2.31× (9/2) | 1.93× (9/2) | −16 % |
+| stride3 | 10–14 | 1.50× (3/6) | 1.53× (3/6) | +2 % |
+| stride3 | 14–22 | 1.66× (3/10) | 1.51× (3/10) | −9 % |
+| **stride1** | 4–7 | 1.58× (14/7) | **1.54×** (14/7) | −2 % |
+| **stride1** | 7–10 | 1.95× (21/14) | **1.84×** (21/14) | −6 % |
+| **stride1** | 10–14 | 1.56× (13/17) | **1.54×** (13/17) | −1 % |
+| **stride1** | 14–22 | 1.25× (8/16) | **1.32×** (8/16) | +6 % |
+
+Depth elasticity of the **state total** against ln(state), same basis for all three
+rows: stride10 12,461,811 → 8,201,141; stride3 17,892,411 → 11,130,816; stride1
+25,328,300 → **14,954,837** ns/MB per e-fold (−34 % / −38 % / −41 %).
+
+**Read together, those two tables say what was and was not removed.** The elasticity
+— how fast cost per byte grows down a chain — fell by a third to two-fifths. The
+matched-volume ratio — late states against early ones *at the same changed bytes* —
+barely moved at stride1 (−6 % to +6 %). So the treatment removed a large term that
+grows with depth in absolute terms, and left the within-chain residual that the bands
+isolate essentially intact.
+
+### Where the residual depth term is, and it is not a cache
+
+The save path publishes its own counters per state for the first time, and at 157
+versions they are unambiguous — per inserted object, early states against late ones:
+
+| | stride3 | **stride1** |
+|---|---:|---:|
+| chain objects read for trials | 1.09 → 2.74 (2.51×) | **2.04 → 6.32 (3.09×)** |
+| chain edges walked | 0.49 → 1.93 (3.93×) | **1.25 → 4.54 (3.62×)** |
+| prefix trials | 1.33× | 1.10× |
+| FULL preparations | 1.09× | 1.00× |
+| pack BLOB rewrites | 1.12× | 1.05× |
+| INSERT statements | 1.07× | 0.98× |
+| commits | 0.71× | 0.86× |
+
+Chain totals at stride1: 97,788 objects written, 78,619 FULL preparations, 70,710
+trials, **648,299 chain objects and 653.7 MB of encoded bytes read for trials**
+(stride10 read 107,628 objects and 133.9 MB for 4.6× less content), 84,473 pack
+appends, 1,797 commits. Per-state elapsed at stride1 correlates **+0.947** with chain
+objects and +0.938 with changed bytes, and only +0.444 with objects written.
+
+That is the residual depth term: **a trial must reconstruct the base it compresses
+against, and at 157 versions the chains are genuinely longer** (4.54 edges per object
+written late against 1.25 early). No cache scope or bound touches it — the bytes are
+distinct, the reads are required, and the work is the comparison the selection policy
+is defined to make. The next round's target is therefore this acquire-and-compare
+path, or the selection policy that decides how deep a chain to build, not another
+cache.
+
+### Equivalence and verification at stride1
+
+Every state root and content counter equal between arms; both Stores hash to
+`1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418` — the retained
+campaign's **own stride1 Store**, recomputed from its artifact in the retained
+worktree and used here as a cross-round constant, which makes this the third row whose
+bytes are provably unchanged by the treatment. Canonical/value-group inventory:
+97,788 objects, 75,947 ordinary groups, 9,381 value groups, 855 packs, 73,043,937
+pack bytes; 75,404 of the ordinary groups hold exactly one object.
+
+Identity-matched verification ran for both stride1 rows inside the 60 s hard budget:
+**9,996 of 904,143 path-states sampled, 0 mismatches, 0 missing, 0 unexpected**,
+identical counters between arms, both `g6.*` gates PASS — 53.982 s (baseline) against
+31.657 s (candidate).
+
+### A correction to §5
+
+§5 above concludes that the first execution of a freshly created executable "accounts
+for every observation in the family". The candidate's stride1 row shows **1,878.3 ms
+outside the child's clock on that binary's third execution**, so that claim is too
+strong: first-execution cost is *a* demonstrated cause (measured 0.7–2.0 s) and it
+explains both stride10 gaps in this round and L49's, but at least one further
+out-of-clock cost exists and is **unidentified**. Both stride1 rows reconcile PASS
+regardless — the tolerance is wall/50 there (3.2 s) against 0.97 s at stride10 — and
+no operation figure is affected, because the whole effect is outside the child's
+clock. It is recorded as an open question rather than re-explained.

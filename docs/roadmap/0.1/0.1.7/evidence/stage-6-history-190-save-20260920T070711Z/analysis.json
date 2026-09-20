@@ -144,6 +144,66 @@
         "harness.index": 186182586,
         "storage.finish": 1548583755
       }
+    },
+    "baseline-history-stride1": {
+      "wall_ns": 204353565333,
+      "phases": {
+        "preparation_wall_ns": 54078341206,
+        "operation_ns": 150040992089,
+        "verification_wall_ns": 61540375,
+        "cleanup_wall_ns": 625
+      },
+      "declared_ns": 204180874295,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 88409041,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 0,
+      "corpus_pages": 245733,
+      "subphases_ns": {
+        "content": 7265216659,
+        "store.create": 3973666,
+        "storage.begin": 85299665,
+        "storage.finish": 5052465164
+      }
+    },
+    "candidate-history-stride1": {
+      "wall_ns": 158464376500,
+      "phases": {
+        "preparation_wall_ns": 50728102374,
+        "operation_ns": 105726493875,
+        "verification_wall_ns": 45901042,
+        "cleanup_wall_ns": 583
+      },
+      "declared_ns": 156500497874,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 1878281959,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 12131,
+      "corpus_pages": 245733,
+      "subphases_ns": {
+        "content": 7266655495,
+        "store.create": 3832667,
+        "storage.begin": 86009454,
+        "storage.finish": 4896968295
+      }
     }
   },
   "save": {
@@ -278,6 +338,72 @@
         "save.commits": 0.01806775407779172
       },
       "identical_between_arms": true
+    },
+    "history-stride1": {
+      "totals": {
+        "inserted": 97788,
+        "save.reused": 121301,
+        "save.delta.prepared_full": 78619,
+        "save.delta.trials": 70710,
+        "save.delta.prefix_selected": 70637,
+        "save.prefix_records": 78695,
+        "save.full_records": 19093,
+        "save.chain.objects": 648299,
+        "save.chain.edges": 456142,
+        "save.chain.encoded_bytes": 653680552,
+        "save.pool.new_values": 82539,
+        "save.pool.reused_values": 616852,
+        "save.pool.groups": 9381,
+        "save.pool.leaves": 10681,
+        "save.statements": 75977,
+        "save.presence_queries": 723,
+        "save.packs_created": 855,
+        "save.pack_appends": 84473,
+        "save.commits": 1797
+      },
+      "per_object_early": {
+        "inserted": 1.0,
+        "save.reused": 0.0662751677852349,
+        "save.delta.prepared_full": 0.7600671140939598,
+        "save.delta.trials": 0.6166107382550335,
+        "save.delta.prefix_selected": 0.6115771812080537,
+        "save.prefix_records": 0.6325503355704698,
+        "save.full_records": 0.3674496644295302,
+        "save.chain.objects": 1.0830536912751678,
+        "save.chain.edges": 0.4001677852348993,
+        "save.chain.encoded_bytes": 1785.0545302013422,
+        "save.pool.new_values": 0.9362416107382551,
+        "save.pool.reused_values": 1.4253355704697988,
+        "save.pool.groups": 0.03859060402684564,
+        "save.pool.leaves": 0.03859060402684564,
+        "save.statements": 0.7558724832214765,
+        "save.presence_queries": 0.0050335570469798654,
+        "save.packs_created": 0.016778523489932886,
+        "save.pack_appends": 0.7768456375838926,
+        "save.commits": 0.02097315436241611
+      },
+      "per_object_late": {
+        "inserted": 1.0,
+        "save.reused": 2.8856742883807747,
+        "save.delta.prepared_full": 0.7995022554051953,
+        "save.delta.trials": 0.7435059884896562,
+        "save.delta.prefix_selected": 0.7428838077461503,
+        "save.prefix_records": 0.7973246228029243,
+        "save.full_records": 0.20267537719707576,
+        "save.chain.objects": 12.483434437704153,
+        "save.chain.edges": 8.852387618603204,
+        "save.chain.encoded_bytes": 10878.367708819413,
+        "save.pool.new_values": 0.836677554829678,
+        "save.pool.reused_values": 6.454347487945248,
+        "save.pool.groups": 0.0808834966557785,
+        "save.pool.leaves": 0.11743661533675533,
+        "save.statements": 0.7767926582672267,
+        "save.presence_queries": 0.006532897806812879,
+        "save.packs_created": 0.00591071706330689,
+        "save.pack_appends": 0.8514543474879452,
+        "save.commits": 0.01835433193342666
+      },
+      "identical_between_arms": true
     }
   },
   "equivalence": {
@@ -334,6 +460,56 @@
         "value_groups": 4225,
         "singleton_groups": 59772
       }
+    },
+    "history-stride1": {
+      "state_roots_equal": true,
+      "state_counters_equal": {
+        "changed_bytes": true,
+        "changed_paths": true,
+        "objects": true,
+        "inserted": true,
+        "root": true
+      },
+      "store_sha256": {
+        "baseline": "1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418",
+        "candidate": "1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418"
+      },
+      "store_matches_recorded_constant": {
+        "baseline": true,
+        "candidate": true
+      },
+      "store_identical_between_arms": true,
+      "store": {
+        "packs": 855,
+        "pack_bytes": 73043937,
+        "ordinary_groups": 75947,
+        "objects": 97788,
+        "value_groups": 9381,
+        "singleton_groups": 75404
+      },
+      "verification": {
+        "baseline": {
+          "wall_ns": 53981531042,
+          "sampled": true,
+          "compared": 9996,
+          "path_states": 904143,
+          "mismatches": 0,
+          "missing": 0,
+          "unexpected": 0,
+          "files_read": 8151
+        },
+        "candidate": {
+          "wall_ns": 31656713208,
+          "sampled": true,
+          "compared": 9996,
+          "path_states": 904143,
+          "mismatches": 0,
+          "missing": 0,
+          "unexpected": 0,
+          "files_read": 8151
+        }
+      },
+      "verification_equal_between_arms": false
     }
   }
 }

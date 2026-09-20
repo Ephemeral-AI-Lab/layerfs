@@ -46,3 +46,27 @@
 
   accept_loop per inserted object: 255.3 us (baseline, whole run); early states 2,959 objects, late states 11,955
 
+=== history-stride1: the save's own work, chain totals
+  counter                        baseline      candidate   per inserted object (early -> late)
+  objects written              97,788.00     97,788.00           1.0000 -> 1.0000         
+  occurrences served by an exact row    121,301.00    121,301.00           0.0663 -> 2.8857         
+  FULL alternatives compressed     78,619.00     78,619.00           0.7601 -> 0.7995         
+  prefix trials                70,710.00     70,710.00           0.6166 -> 0.7435         
+  trials that chose PREFIX     70,637.00     70,637.00           0.6116 -> 0.7429         
+  PREFIX records stored        78,695.00     78,695.00           0.6326 -> 0.7973         
+  FULL records stored          19,093.00     19,093.00           0.3674 -> 0.2027         
+  chain objects read for trials    648,299.00    648,299.00           1.0831 -> 12.4834        
+  chain edges walked          456,142.00    456,142.00           0.4002 -> 8.8524         
+  encoded bytes read for trials        653.68 MB        653.68 MB           0.0018 -> 0.0109         
+  values given a new ordinal     82,539.00     82,539.00           0.9362 -> 0.8367         
+  values reusing an ordinal    616,852.00    616,852.00           1.4253 -> 6.4543         
+  value groups written          9,381.00      9,381.00           0.0386 -> 0.0809         
+  pooled leaves admitted       10,681.00     10,681.00           0.0386 -> 0.1174         
+  INSERT statements            75,977.00     75,977.00           0.7559 -> 0.7768         
+  presence queries                723.00        723.00           0.0050 -> 0.0065         
+  packs created                   855.00        855.00           0.0168 -> 0.0059         
+  pack BLOB rewrites           84,473.00     84,473.00           0.7768 -> 0.8515         
+  commits                       1,797.00      1,797.00           0.0210 -> 0.0184         
+
+  accept_loop per inserted object: 0.0 us (baseline, whole run); early states 1,192 objects, late states 6,429
+
