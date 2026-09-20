@@ -24,17 +24,19 @@ fn store_counts(path: &std::path::Path) -> (i64, i64) {
 }
 
 #[test]
-fn a_second_save_cannot_acquire_ownership_while_the_first_holds_it() {
+fn two_private_saves_are_admitted_and_the_third_is_refused() {
     let dir = TempDir::new("owner");
     let path = dir.store_path("owner");
     let store = create_store(&path);
     let holder = disabled(|scope| store.begin_save(scope.child("storage.begin"))).unwrap();
-    let second = disabled(|scope| store.begin_save(scope.child("storage.begin")));
+    let second = disabled(|scope| store.begin_save(scope.child("storage.begin"))).unwrap();
+    let excess = disabled(|scope| store.begin_save(scope.child("storage.begin")));
     assert!(
-        matches!(second, Err(StorageError::OwnershipUnavailable)),
-        "a lost write lock must fail immediately"
+        matches!(excess, Err(StorageError::OwnershipUnavailable)),
+        "all persisted private save slots are occupied"
     );
     drop(holder);
+    drop(second);
     let third = disabled(|scope| store.begin_save(scope.child("storage.begin")));
     assert!(third.is_ok(), "ownership is available once it is released");
 }
@@ -255,7 +257,10 @@ fn an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook() {
     let store = create_store(&path);
     let operation = disabled(|scope| store.begin_save(scope.child("storage.begin"))).unwrap();
     let outcome = disabled(|scope| operation.finish(scope.child("storage.finish"))).unwrap();
-    assert_eq!(outcome.commits, 0);
+    assert_eq!(
+        outcome.commits, 2,
+        "slot acquisition and publication commit"
+    );
     assert_eq!(outcome.inserted, 0);
 }
 
@@ -288,16 +293,19 @@ fn cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement() {
     let store = create_store(&path);
     drop(store);
     let connection = open_connection(&path, false).expect("connection");
+    connection
+        .execute("INSERT INTO saves (save_id,active_slot) VALUES (1,1)", [])
+        .unwrap();
     let packs = 300_i64;
     for pack_id in 1..=packs {
         connection
             .execute(
-                "INSERT INTO object_packs (pack_id, data) VALUES (?1, zeroblob(1024))",
+                "INSERT INTO object_packs (pack_id, save_id, data) VALUES (?1, 1, zeroblob(1024))",
                 [pack_id],
             )
             .expect("pack row");
     }
-    let report = abandon(&connection, 0).expect("cleanup");
+    let report = abandon(&connection, 1, &std::sync::Mutex::new(())).expect("cleanup");
     assert_eq!(report.packs, packs as u64, "every owned pack is removed");
     assert!(
         report.pages >= 3,

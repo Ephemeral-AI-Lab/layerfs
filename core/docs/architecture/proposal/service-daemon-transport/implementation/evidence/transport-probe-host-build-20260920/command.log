@@ -1,0 +1,7 @@
+   Compiling libc v0.2.189
+   Compiling clang-sys v1.9.1
+   Compiling bindgen v0.72.1
+   Compiling libproc v0.14.11
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 10.38s

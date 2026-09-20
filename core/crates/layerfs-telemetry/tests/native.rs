@@ -351,3 +351,43 @@ fn independent_measurement_selection_and_aggregate_configuration() {
     .is_err());
     assert!(!path.exists());
 }
+
+#[test]
+fn concurrent_final_handles_release_the_owned_writer() {
+    use std::sync::{Arc, Barrier};
+    let path = directory();
+    let config = || {
+        let mut c = OutputConfig::forward();
+        c.mode = OutputMode::Local;
+        c.directory = Some(path.clone());
+        c
+    };
+    let output = Output::start(config()).unwrap();
+    let gate = Arc::new(Barrier::new(9));
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            let handle = output.clone();
+            let gate = gate.clone();
+            scope.spawn(move || {
+                gate.wait();
+                drop(handle);
+            });
+        }
+        drop(output);
+        gate.wait();
+    });
+    // Observe asynchronous writer teardown through its real exclusive namespace,
+    // with no private state or product-only test controls.
+    let end = Instant::now() + Duration::from_secs(1);
+    let reopened = loop {
+        match Output::start(config()) {
+            Ok(output) => break output,
+            Err(error) => {
+                assert!(Instant::now() < end, "last-owner teardown: {error}");
+                std::thread::park_timeout(Duration::from_millis(5));
+            }
+        }
+    };
+    reopened.shutdown(Duration::from_secs(1));
+    std::fs::remove_dir_all(path).unwrap();
+}

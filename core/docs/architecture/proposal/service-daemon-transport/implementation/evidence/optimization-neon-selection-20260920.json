@@ -1,0 +1,15 @@
+{
+  "status": "PROSPECTIVE_DIAGNOSTIC_NOT_QUALIFIED",
+  "reason": "One-second macOS native service sample during the retained failed 4 GiB diagnostic: 427/819 operation-thread samples in Receiver::read decrypt branch, 422 in published CipherChaChaPoly::decrypt; aggregate timings are not a throughput claim.",
+  "sample": "optimization-large-4096mib-diagnostic-20260920/service-sample.txt",
+  "candidate_flag": "--cfg=chacha20_force_neon",
+  "toolchain": "1.85.1",
+  "required_target_feature": "neon; rustc --print cfg reports it for aarch64-apple-darwin and aarch64-unknown-linux-musl",
+  "dependency": "locked published chacha20 0.9.1; source read only; no patch/vendor/fork/lock change",
+  "upstream_note": "The published docs label this flag nightly-only; compile and functional capability must be established on the selected stable toolchain before any artifact adoption.",
+  "files": {
+    "src/lib.rs": "4112893bb7a5eb6cdb269200c816befaeadecf7e932ab2612c0941b7f7d7c6c3",
+    "src/backends.rs": "497002020de5081a68736e9a86c73d68dcfe66ae77354f42e6041256bcd8ca68",
+    "src/backends/neon.rs": "5530258e3113dbcba6dbbda189621b5a3993fbdc0e1b88e342e27895274c9138"
+  }
+}

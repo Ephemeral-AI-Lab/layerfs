@@ -30,7 +30,10 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     // `offer` again, or the `objects` primary key refuses the second row.
     owner.sealed_rows.clear();
     let ids: Vec<ObjectId> = objects.iter().map(|object| object.id()).collect();
-    let locations = lookup::locations(owner.connection(), &ids, i64::MAX)?;
+    let locations = {
+        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+        lookup::locations(owner.connection(), &ids, i64::MAX)?
+    };
     let mut by_id: BTreeMap<ObjectId, lookup::ObjectLocation> = BTreeMap::new();
     for location in locations {
         by_id.insert(location.object_id, location);
@@ -40,15 +43,17 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     // offered objects carry is asked about together - the lookup pages its own
     // identifiers - so the check costs one query set per wave instead of one per
     // object that happens to name something outside it.
-    availability
-        .seed(
+    let queries = {
+        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+        availability.seed(
             owner.connection(),
             objects
                 .iter()
                 .flat_map(|object| object.references().iter().copied()),
             i64::MAX,
-        )
-        .map(|queries| owner.note_presence_queries(queries))?;
+        )?
+    };
+    owner.note_presence_queries(queries);
     // A wave may carry the same identity several times. The first occurrence
     // decides the row; every later occurrence still receives the required exact
     // comparison against the bytes that were actually prepared for this identity.
@@ -90,10 +95,11 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
                     owner.sealed_rows.contains(&object.id())
                 };
                 if sealed {
-                    let location = lookup::locations(owner.connection(), &[object.id()], i64::MAX)?
-                        .into_iter()
-                        .next()
-                        .ok_or(StorageError::Integrity("sealed identity has no row"))?;
+                    let location = {
+                        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+                        lookup::location(owner.connection(), object.id(), i64::MAX)?
+                            .ok_or(StorageError::Integrity("sealed identity has no row"))?
+                    };
                     membership::reuse_or_collide(owner, object, location)?;
                     owner.note_reuse();
                 } else {
@@ -103,5 +109,5 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
             }
         }
     }
-    Ok(())
+    owner.flush_candidates()
 }

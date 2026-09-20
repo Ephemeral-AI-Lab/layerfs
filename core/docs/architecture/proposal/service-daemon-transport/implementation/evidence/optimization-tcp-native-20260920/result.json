@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/debug/deps/native_connections-418cdfebd23ad2d6",
+    "--nocapture"
+  ],
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 1.9153399579954566,
+  "binary_sha256": "c8ce3cc1299c84028384d65ba807b1682b9ca63fb12da1d8e7669051a42356af",
+  "build_receipt": "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/optimization-tcp-build-20260920",
+  "scope": "macOS ordinary authenticated TCP lifecycle; 64 connections and refused connect; not Linux/Docker or multiwriter qualification"
+}

@@ -1,0 +1,26 @@
+# Replacement-product build profile.
+#
+# The native transport negotiates AES-GCM wherever its backend can be
+# accelerated (see core/crates/layerfs-bridge/src/adapters/native/connection.rs).
+# These are the crates' own documented cfg knobs plus the ARMv8 target features,
+# not patches: `aes_armv8` and `polyval_armv8` select the ARMv8 AES/PMULL
+# backends and `chacha20_force_neon` selects ChaCha20 NEON for the fallback suite;
+# `+aes,+sha2` is what makes them fast. Measured in the `--cpus=1` container at
+# 16 KiB messages: AES-GCM 1.39 GB/s with the target features against 0.54 GB/s
+# with the cfgs alone (the macOS host target already enables `+aes` by default,
+# which hides the difference there), and ChaCha20-Poly1305 0.68 GB/s with NEON
+# against 0.31 GB/s soft.
+#
+# Consequence, declared: an aarch64 product build requires the ARMv8 crypto
+# extension. The negotiated suite refuses a CPU without it rather than silently
+# running the soft implementation (0.111 GB/s for soft AES-GCM against 1.61 GB/s).
+#
+# An explicit RUSTFLAGS environment variable overrides this table, so a scripted
+# or container build that sets RUSTFLAGS must repeat these flags.
+[target.'cfg(target_arch = "aarch64")']
+rustflags = [
+    "--cfg", "aes_armv8",
+    "--cfg", "polyval_armv8",
+    "--cfg", "chacha20_force_neon",
+    "-C", "target-feature=+aes,+sha2",
+]

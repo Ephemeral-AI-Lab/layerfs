@@ -5,6 +5,7 @@
 pub mod cleanup;
 pub mod connection;
 pub mod lookup;
+pub mod ownership;
 pub mod pool;
 pub mod schema;
 pub mod write;

@@ -9,6 +9,12 @@ byte-compared before and after copying. C1/C2 basis is
 included. Core lock SHA-256: bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991. Rust 1.85.1; native arm64 macOS and
 arm64 Linux Docker. Dependency additions require a separately recorded final lock.
 
+The limits and source identities below describe the original candidate. The
+[optimization decisions](09-optimization-decisions.md) and
+[resource profile](10-resource-profile.md) supersede A=1, socket option admission,
+old frame/file/deadline limits and schema assumptions. Original receipts retain
+their original source scope.
+
 ## Selected carrier and trust
 
 Native ordered TCP with Noise_KK_25519_ChaChaPoly_BLAKE2s, using published
@@ -182,3 +188,31 @@ not raw libproc Mach ticks. The Docker coordinator uses distinct product and
 diagnostic attachments so unread diagnostics cannot stall CLI product demultiplexing.
 The [acceptance record](07-acceptance.md) states the remaining ENV05 and full-workspace
 proof gaps; implemented limits are not promoted to a measured maximum RSS claim.
+
+## Unqualified review attempt: configure sockets before connection
+
+The native macOS socket diagnostic observed four of 64 sockets retaining a
+392,384-byte receive buffer after successful `SO_RCVBUF=131072` **after** connect.
+That exceeds the unchanged 262,144-byte directional ceiling, so the old native
+client correctly returned Capacity but could refuse an otherwise valid attempt.
+`review-native-socket-diagnostic-20260920` records this separately from product
+or performance claims. This isolates an OS buffer observation capable of producing the Capacity
+refusal. The preconnect attempt also failed its native regression and is NOT
+qualified; it does not resolve the blocker.
+
+The rejected experiment set both buffers on its owned descriptor before connect
+or bind/listen, then revalidated connected/accepted descriptors. TCP connection
+uses one nonblocking connect/poll attempt with the same five-second allowance;
+there is no reconnect, mutation replay or larger buffer ceiling. Native `listen`
+requests a backlog of four, matching admitted sessions, and preserves address
+reuse for ordinary service reopen. Kernel pending/SYN/backlog metadata remain an
+OS-owned domain; the requested backlog is not a byte-memory or exact kernel-queue
+allocation guarantee. The application still owns at most four admitted/closing
+sessions plus its single accept/refusal slot, and operation admission remains A=1,
+Q=0. Nix's existing optional native dependency adds its `net` feature; no version,
+lockfile, third-party source or C2 transaction/compression profile is changed.
+
+The current optimization source removes this experimental helper and its `net`
+feature. It uses ordinary TCP with explicit accepted-socket mode; no option-size
+admission or universal kernel-memory ceiling remains. The original observation
+and failed regression remain unchanged recovery evidence.

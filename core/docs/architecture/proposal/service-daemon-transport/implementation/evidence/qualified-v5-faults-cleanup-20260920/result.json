@@ -1,0 +1,115 @@
+{
+  "selection": "cleanup",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "cleanup-failure-retains-original",
+      "status": "PASS",
+      "detail": {
+        "code": 10,
+        "unknown": false,
+        "cleanup_code": 8,
+        "input_sha256": "f4d8f1644a663f34bc527e8bfe53d663acf7817c2d38633c45ace441b7f514ee"
+      }
+    },
+    {
+      "name": "one-failed-cleanup-leaves-one-slot",
+      "status": "PASS",
+      "detail": {
+        "successful_empty_save": true
+      }
+    },
+    {
+      "name": "two-retained-owners-refuse-new-mutation",
+      "status": "PASS",
+      "detail": {
+        "code": "Ownership"
+      }
+    },
+    {
+      "name": "old-root-survives-cleanup-failure",
+      "status": "PASS",
+      "detail": {
+        "bytes": 8
+      }
+    }
+  ],
+  "status": "PASS",
+  "artifacts": {
+    "manifest": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/optimization-release-artifacts-v5-20260920.json",
+    "image_id": "sha256:e83bb5767c32b6a179aaccf3f5a588f7e2eb7b8dfa8eb35df526556a266425d3",
+    "profile": "release",
+    "runtime_sha256": "3d9e8b1a120dcca7b8931c88fd200371f9eed6a96e0b8be4b05bc79de95b1105",
+    "binaries": {
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/layerfs-service": "9bcfdb798b73cb9991bafd645d62b4a0bd0f4e4293256334ec0fab81beea265c",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/layerfs-daemon": "871898e445571c793f3bf9231c56ec43b06ae4ae94f815165b44c3c3fe8139ac",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/prepare_store": "9ecb9fdde354f4c64cd2a27815db3beb71d787dd24e2adf359e420f2646d91e1",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/direct": "10be3c501c504f1d70196344e2550aaabcd1f9d93433eb2cc13aeb2e4fa167f2",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/fault_peer": "a441697383cd20816e393a5e47c99711d5f9f286281f1e64cc37c33813d7844b",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/public_key": "3a91a01a947667bbc02267adf2d554890774379e7ab41d304b0ce68f94682994",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/aarch64-unknown-linux-musl/release/layerfs-daemon": "fba44de4257e78ddb1848b308134e31f89b78340ffe92547ab9a4a9fb67da1cd"
+    }
+  },
+  "setup": {
+    "master_sha256": "6f67ca6f931de849de7c36dff3f913c9ff58f0b57825d4cbde54b55a61de7a09",
+    "executable_sha256": "9ecb9fdde354f4c64cd2a27815db3beb71d787dd24e2adf359e420f2646d91e1",
+    "reused": true,
+    "clone_method": "closed independent writable byte copy; not an OS cache claim"
+  },
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=Some(Provider)"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=Some(Provider)"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Ownership unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "fc647e91aaf82cef9432f4c02e90aa246461b5cd",
+  "image": "layerfs-issue192-daemon-v5"
+}

@@ -1,11 +1,11 @@
-//! Configured Store authority and process-wide Q=0 admission.
+//! Configured Store authority and service-wide Q=0 admission.
 use crate::operation::dispatch;
-use layerfs_bridge::{adapters::native::connection::VerifiedPeer, contract::*};
+use layerfs_bridge::contract::*;
 use layerfs_storage::Store;
 use layerfs_telemetry::operation::{Diagnostic, OperationRecorder};
 use std::{
     io::{Read, Write},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -21,13 +21,13 @@ pub struct StoreAccess {
 }
 pub struct Service {
     stores: Vec<StoreAccess>,
-    active: AtomicBool,
+    active: AtomicUsize,
     recorder: OperationRecorder,
 }
-struct Active<'a>(&'a AtomicBool);
+struct Active<'a>(&'a AtomicUsize);
 impl Drop for Active<'_> {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
+        self.0.fetch_sub(1, Ordering::Release);
     }
 }
 impl Service {
@@ -48,7 +48,7 @@ impl Service {
         }
         Ok(Self {
             stores,
-            active: AtomicBool::new(false),
+            active: AtomicUsize::new(0),
             recorder,
         })
     }
@@ -62,8 +62,25 @@ impl Service {
         input: &mut dyn Read,
         output: &mut dyn Write,
     ) -> (Result<Response, Failure>, Diagnostic) {
+        let deadline = Instant::now() + Duration::from_millis(r.deadline_ms as u64);
+        self.handle_until(peer, r, input, output, deadline)
+    }
+
+    /// Shares the native adapter's local deadline with the authorized handler.
+    pub fn handle_until(
+        &self,
+        peer: &VerifiedPeer,
+        r: &Request,
+        input: &mut dyn Read,
+        output: &mut dyn Write,
+        deadline: Instant,
+    ) -> (Result<Response, Failure>, Diagnostic) {
+        let deadline = deadline.min(Instant::now() + Duration::from_millis(r.deadline_ms as u64));
         self.recorder.run(r.id, r.operation.label(), |scope| {
             r.validate()?;
+            if Instant::now() >= deadline {
+                return Err(Code::Deadline.into());
+            }
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_| Code::Denied)?
@@ -82,13 +99,14 @@ impl Service {
             }
             if self
                 .active
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+                    (active < MAX_OPERATIONS).then_some(active + 1)
+                })
                 .is_err()
             {
                 return Err(Code::Capacity.into());
             }
             let _active = Active(&self.active);
-            let deadline = Instant::now() + Duration::from_millis(r.deadline_ms as u64);
             dispatch(&store.store, r, input, output, deadline, scope)
         })
     }

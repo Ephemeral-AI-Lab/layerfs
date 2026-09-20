@@ -30,7 +30,7 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// Version 6 adds `content_signatures`, the persisted cross-save content index
 /// (`encoding/delta/candidates.rs`, the W2 section of `sql/schema.sql`).
 /// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 /// Declared storage schema identifier.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,6 +84,8 @@ pub const CLEANUP_PAGE_ROWS: usize = 128;
 /// demands a page's children at once. This is the declared ceiling for that
 /// demand, and the C1 provider inherits it.
 pub const READ_OBJECT_LIMIT: usize = 4_096;
+/// Total returned canonical bytes in one read wave, counting repeated demands.
+pub const READ_CANONICAL_BYTES_LIMIT: usize = 32 * 1024 * 1024;
 /// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
 /// bytes-role envelope and the 10-byte whole-file value header. The chunk lane's
 /// equivalent is 21 bytes, because a chunk value carries only its eight-byte

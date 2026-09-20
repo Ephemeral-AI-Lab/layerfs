@@ -21,14 +21,22 @@ pub struct Frame {
 }
 impl Frame {
     pub fn encode(&self) -> Result<Vec<u8>, Failure> {
+        let mut out = Vec::new();
+        self.encode_into(&mut out)?;
+        Ok(out)
+    }
+    /// Encodes into a caller-owned buffer so a hot path can reuse its scratch.
+    /// The buffer is cleared first and left holding exactly this frame.
+    pub fn encode_into(&self, out: &mut Vec<u8>) -> Result<(), Failure> {
         check(self.kind, self.bytes.len())?;
-        let mut out = Vec::with_capacity(HEADER + self.bytes.len());
+        out.clear();
+        out.reserve(HEADER + self.bytes.len());
         out.extend_from_slice(b"LFB1");
         out.extend_from_slice(&[self.kind as u8, 0, 0, 0]);
         out.extend_from_slice(&self.id.to_be_bytes());
         out.extend_from_slice(&(self.bytes.len() as u32).to_be_bytes());
         out.extend_from_slice(&self.bytes);
-        Ok(out)
+        Ok(())
     }
     pub fn read(reader: &mut impl Read) -> Result<Self, Failure> {
         Self::read_optional(reader)?.ok_or_else(|| Code::Io.into())
@@ -36,10 +44,16 @@ impl Frame {
     /// Clean EOF is accepted only between complete local submission frames.
     pub fn read_optional(reader: &mut impl Read) -> Result<Option<Self>, Failure> {
         let mut h = [0u8; HEADER];
-        if reader.read(&mut h[..1])? == 0 {
+        // The fixed header normally arrives in a single read; a clean end of stream
+        // is legal only before its first byte, so a zero-length first read is the
+        // one end-of-stream signal accepted here.
+        let first = reader.read(&mut h)?;
+        if first == 0 {
             return Ok(None);
         }
-        reader.read_exact(&mut h[1..])?;
+        if first < HEADER {
+            reader.read_exact(&mut h[first..])?;
+        }
         if &h[..4] != b"LFB1" || h[5..8] != [0, 0, 0] {
             return Err(Code::Unsupported.into());
         }

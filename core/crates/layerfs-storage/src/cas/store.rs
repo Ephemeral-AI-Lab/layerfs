@@ -1,10 +1,10 @@
-//! Public Store handle, the exclusive save operation and the C1 handoff adapter.
+//! Public Store handle, the private save operation and the C1 handoff adapter.
 //!
-//! A Store is a path plus the policy it was opened with. `begin_save` acquires
-//! exclusive write ownership once; `accept` takes finalized canonical objects
+//! A Store is a path plus the policy it was opened with. `begin_save` reserves
+//! one of two private save slots; `accept` takes finalized canonical objects
 //! under bounded batch limits; `finish` completes every remaining write and
 //! acknowledges the final transaction. Reads are independent bounded waves that
-//! capture their retained-pack ceiling once.
+//! capture publication scope and a pack range ceiling once.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -41,7 +41,7 @@ pub struct SaveOutcome {
     /// Write transactions acknowledged with `COMMIT`.
     ///
     /// Holding a `SaveOutcome` at all *is* the acknowledgement: `finish` returns
-    /// one only after the watermark transaction committed, and every other outcome
+    /// one only after its publication transaction committed, and every other outcome
     /// is a typed error. There is deliberately no boolean field for it - a field
     /// that can only ever hold one value cannot fail an assertion, and one used to
     /// sit here doing exactly that.
@@ -193,6 +193,7 @@ pub struct Store {
     path: PathBuf,
     policy: StoragePolicy,
     capacities: StorageCapacities,
+    arbitration: Arc<Mutex<()>>,
     /// Store-owned bounded ordered set of pooled value candidates.
     ///
     /// It is disposable derivation: the catalogue is authoritative, a failed save
@@ -222,16 +223,20 @@ impl Store {
             // An unsupported policy is rejected before the database file exists.
             let policy = policy.validated()?;
             let connection = connection::open(&path, true)?;
+            let arbitration = crate::sqlite::ownership::arbitration(&path)?;
+            let guard = crate::sqlite::ownership::lock(&arbitration)?;
             let stored = schema::create(&connection, policy)?;
             let capacities = StorageCapacities::from_policy(stored)?;
             // A Store this call just created has an empty index; the read is the
             // same one `open` performs and is bounded by the table, which is empty.
             let content_index = Candidates::load(&connection)?;
             drop(connection);
+            drop(guard);
             Ok(Self {
                 path,
                 policy: stored,
                 capacities,
+                arbitration,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
                 content_index: Arc::new(Mutex::new(content_index)),
             })
@@ -243,6 +248,8 @@ impl Store {
         scope.run(|_open| {
             let path = path.as_ref().to_path_buf();
             let connection = connection::open(&path, false)?;
+            let arbitration = crate::sqlite::ownership::arbitration(&path)?;
+            let guard = crate::sqlite::ownership::lock(&arbitration)?;
             let stored = schema::validate(&connection, None)?;
             let capacities = StorageCapacities::from_policy(stored)?;
             // The bounded load: at most `candidates::SLOTS` rows of 32-byte
@@ -250,10 +257,12 @@ impl Store {
             // this handle rather than once per save.
             let content_index = Candidates::load(&connection)?;
             drop(connection);
+            drop(guard);
             Ok(Self {
                 path,
                 policy: stored,
                 capacities,
+                arbitration,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
                 content_index: Arc::new(Mutex::new(content_index)),
             })
@@ -316,13 +325,14 @@ impl Store {
             .unwrap_or(0)
     }
 
-    /// Acquires exclusive write ownership for one save operation.
+    /// Reserves private ownership for one save; database transactions arbitrate separately.
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
             let connection = connection::open(&self.path, false)?;
             let owner = MutationOwner::acquire(
                 connection,
                 self.capacities,
+                Arc::clone(&self.arbitration),
                 Arc::clone(&self.pool_index),
                 Arc::clone(&self.content_index),
             )?;
@@ -346,9 +356,14 @@ impl Store {
         check_read_demand(ids, self.capacities.read_objects)?;
         scope.run(|read_scope| {
             let connection = connection::open(&self.path, false)?;
-            // The ceiling is the publication watermark: the last pack belonging to
-            // a COMPLETED save. Deriving it from MAX(pack_id) would let an
-            // unfinished save's early-committed packs leak into this read.
+            // Publication scope excludes every private save. The retained-pack
+            // ceiling is an additional range check, never visibility authority.
+            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            crate::sqlite::ownership::scope(
+                &connection,
+                0,
+                crate::sqlite::ownership::publication(&connection)?,
+            )?;
             let ceiling = schema::retained_pack_ceiling(&connection)?;
             let mut workspace = read_scope
                 .child("storage.decode")
@@ -400,13 +415,19 @@ impl Store {
             // work by passing a longer slice.
             check_read_demand(ids, self.capacities.read_objects)?;
             let connection = connection::open(&self.path, false)?;
+            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            crate::sqlite::ownership::scope(
+                &connection,
+                0,
+                crate::sqlite::ownership::publication(&connection)?,
+            )?;
             let ceiling = schema::retained_pack_ceiling(&connection)?;
             lookup::present(&connection, ids, ceiling)
         })
     }
 }
 
-/// One exclusive save operation with bounded acceptance.
+/// One independently owned save operation with bounded acceptance.
 pub struct SaveOperation {
     owner: Option<MutationOwner>,
     batch: PendingBatch,
@@ -447,6 +468,7 @@ impl SaveOperation {
     /// the operation.
     pub fn connection_profile(&self) -> StorageResult<SaveConnectionProfile> {
         let owner = self.owner.as_ref().ok_or(StorageError::Aborted)?;
+        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
         let connection = owner.connection();
         Ok(SaveConnectionProfile {
             page_size: connection::pragma_i64(connection, connection::Pragma::PageSize)?,
@@ -505,6 +527,12 @@ impl SaveOperation {
         // that holds a demanded identity and the query which follows it both happen
         // inside it. There is no inner child named after the caller's own node.
         scope.run(|_read| {
+            let pending_bytes = ids
+                .iter()
+                .filter_map(|id| self.batch.pending_canonical(*id))
+                .try_fold(0usize, |total, bytes| total.checked_add(bytes.len()))
+                .ok_or(StorageError::Integrity("pending read byte accounting"))?;
+            read::check_read_bytes(pending_bytes)?;
             let pending: Vec<(ObjectId, Vec<u8>)> = ids
                 .iter()
                 .filter_map(|id| {
@@ -533,6 +561,21 @@ impl SaveOperation {
                 Vec::new()
             } else {
                 let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
+                {
+                    let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+                    let lengths: std::collections::BTreeMap<_, _> =
+                        lookup::locations(owner.connection(), &remaining, i64::MAX)?
+                            .into_iter()
+                            .map(|row| (row.object_id, row.canonical_length))
+                            .collect();
+                    let total = remaining.iter().try_fold(pending_bytes, |total, id| {
+                        let length = lengths.get(id).ok_or(StorageError::ObjectMissing(*id))?;
+                        total
+                            .checked_add(*length)
+                            .ok_or(StorageError::Integrity("read byte accounting"))
+                    })?;
+                    read::check_read_bytes(total)?;
+                }
                 owner.read_batch(&remaining)?
             };
             // Both sources are already in demand order - the pending batch is a

@@ -43,7 +43,7 @@ fn fixed_framing_rejects_lengths_states_and_truncations() {
         })
         .is_err());
     let mut state = InputState::new(1, 8192);
-    for _ in 0..8192 {
+    for _ in 0..frame_budget(8192) {
         state
             .accept(&Frame {
                 kind: Kind::Body,
@@ -173,4 +173,45 @@ fn terminal_types_and_explicit_continuation_roundtrip() {
             value
         );
     }
+}
+
+#[test]
+fn remote_budget_only_shortens_the_declared_duration() {
+    let request = Request {
+        id: 1,
+        generation: 1,
+        store: 1,
+        profile: 1,
+        deadline_ms: 1000,
+        response_bytes: 0,
+        operation: Operation::ConstructFile { length: 0 },
+    };
+    let bytes = encode_request_with_budget(&request, 37).unwrap();
+    let remote = decode_request(request.id, &bytes).unwrap();
+    assert_eq!(remote.deadline_ms, 37);
+    assert_eq!(remote.operation, request.operation);
+    assert!(encode_request_with_budget(&request, 0).is_err());
+    assert!(encode_request_with_budget(&request, 1001).is_err());
+}
+
+#[test]
+fn declared_large_input_has_a_size_consistent_frame_and_time_budget() {
+    let mut request = Request {
+        id: 1,
+        generation: 1,
+        store: 1,
+        profile: 1,
+        deadline_ms: MAX_OPERATION_MS,
+        response_bytes: MAX_FILE,
+        operation: Operation::ConstructFile { length: MAX_FILE },
+    };
+    request.validate().unwrap();
+    assert!(frame_budget(MAX_FILE) > MAX_FILE / FRAME_BYTES as u64);
+    request.operation = Operation::ConstructFile {
+        length: MAX_FILE + 1,
+    };
+    assert_eq!(request.validate().unwrap_err().code, Code::Capacity);
+    request.operation = Operation::ConstructFile { length: 0 };
+    request.deadline_ms = MAX_OPERATION_MS + 1;
+    assert_eq!(request.validate().unwrap_err().code, Code::InvalidInput);
 }

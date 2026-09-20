@@ -53,7 +53,7 @@ pub fn run(
             telemetry
                 .recorder()
                 .run(request.id, request.operation.label(), |_| {
-                    client.call(&request, &mut input, &mut output)
+                    client.call_until(&request, &mut input, &mut output, deadline)
                 });
         telemetry.publish(diagnostic);
         match result {

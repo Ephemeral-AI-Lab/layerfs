@@ -106,12 +106,18 @@ impl Encoder {
     }
 }
 pub fn encode_request(r: &Request) -> Result<Vec<u8>, Failure> {
+    encode_request_with_budget(r, r.deadline_ms)
+}
+pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<u8>, Failure> {
     r.validate()?;
+    if remaining_ms == 0 || remaining_ms > r.deadline_ms {
+        return Err(Code::InvalidInput.into());
+    }
     let mut e = Encoder::default();
     e.u64(r.generation)?;
     e.u32(r.store)?;
     e.u16(r.profile)?;
-    e.u32(r.deadline_ms)?;
+    e.u32(remaining_ms)?;
     e.u64(r.response_bytes)?;
     e.u8(r.operation.opcode())?;
     match &r.operation {

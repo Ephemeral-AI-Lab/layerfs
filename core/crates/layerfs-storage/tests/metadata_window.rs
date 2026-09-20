@@ -17,7 +17,7 @@ use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::encoding::pool::PoolIndex;
 use layerfs_storage::policy::{METADATA_INDEX_VALUES, VALUES_PER_GROUP};
 use layerfs_storage::StorageError;
-use support::{create_store, open_store, read_objects, save_one, TempDir};
+use support::{create_store, disabled, open_store, read_objects, save_one, TempDir};
 
 fn value(seed: u64) -> [u8; INODE_VALUE_BYTES] {
     let mut bytes = [0_u8; 32];
@@ -142,18 +142,28 @@ fn crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window()
     let leaves = 1_312_u64;
     let mut first_id = None;
     let mut last_values = Vec::new();
-    for step in 0..leaves {
-        let values = (0..100_u64)
-            .map(|index| value(step * 100 + index))
-            .collect::<Vec<_>>();
-        if step == 0 {
-            first_id = Some(leaf(1, &values).id());
-        }
-        if step == leaves - 1 {
-            last_values = values.clone();
-        }
-        let object = leaf(step * 100 + 1, &values);
-        save_one(&store, object).expect("leaf");
+    // Stream the unchanged 131,200-value fixture through four saves: first
+    // leaf, remaining pre-boundary leaves, crossing leaf, and final leaf. This
+    // retains cross-save eviction while avoiding 1,312 workspace/transaction
+    // setups unrelated to the window contract. Every catalogue assertion stays.
+    for range in [0..1, 1..1_310, 1_310..1_311, 1_311..leaves] {
+        disabled(|scope| {
+            let mut save = store.begin_save(scope.child("setup.begin"))?;
+            for step in range {
+                let values = (0..100_u64)
+                    .map(|index| value(step * 100 + index))
+                    .collect::<Vec<_>>();
+                if step == 0 {
+                    first_id = Some(leaf(1, &values).id());
+                }
+                if step == leaves - 1 {
+                    last_values = values.clone();
+                }
+                save.accept(leaf(step * 100 + 1, &values))?;
+            }
+            save.finish(scope.child("setup.finish"))
+        })
+        .expect("fixture leaves");
     }
     let first_id = first_id.expect("first leaf identity");
     let rows = groups(&path);

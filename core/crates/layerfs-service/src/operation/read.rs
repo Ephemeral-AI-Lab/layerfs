@@ -36,6 +36,9 @@ pub fn read(
         } => {
             let view = FileView::open(&provider, id(root), scope.child("service.inspect"))
                 .map_err(content)?;
+            if view.logical_len() > MAX_FILE {
+                return Err(Code::Capacity.into());
+            }
             let representation = match view.content() {
                 layerfs_content::FileContent::WholeFile { .. } => 1,
                 layerfs_content::FileContent::Chunked(_) => 2,

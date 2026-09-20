@@ -14,13 +14,16 @@ impl Drop for Temp {
     }
 }
 fn fixture() -> (Temp, Service, VerifiedPeer) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let path = std::env::temp_dir().join(format!(
-        "layerfs-service-{}-{}",
+        "layerfs-service-{}-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir(&path).unwrap();
     let store = Timing::disabled("create", |s| {
@@ -212,9 +215,10 @@ fn authenticated_network_after_nonblocking_accept() {
         connection::{accept, connect, Peer},
         server::serve,
     };
-    use std::{net::TcpListener, thread};
+    use std::thread;
     let (_temp, service, peer) = fixture();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener =
+        layerfs_bridge::adapters::native::listen("127.0.0.1:0".parse().unwrap()).unwrap();
     listener.set_nonblocking(true).unwrap();
     let address = listener.local_addr().unwrap();
     let server_public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
@@ -242,8 +246,8 @@ fn authenticated_network_after_nonblocking_accept() {
             }],
         )
         .unwrap();
-        let _ = serve(connection, |peer, r, input, out| {
-            service.handle(peer, r, input, out).0
+        let _ = serve(connection, |peer, r, input, out, deadline| {
+            service.handle_until(peer, r, input, out, deadline).0
         });
     });
     let mut client = Client::new(connect(address, 1, &[7; 32], &server_public).unwrap()).unwrap();
@@ -258,4 +262,119 @@ fn authenticated_network_after_nonblocking_accept() {
     assert!(matches!(response, Response::Saved { length: 5, .. }));
     drop(client);
     handle.join().unwrap();
+}
+
+#[test]
+fn inherited_deadline_expires_before_direct_input_or_mutation() {
+    struct Unread;
+    impl std::io::Read for Unread {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            panic!("expired operation consumed input")
+        }
+    }
+    let (_temp, service, peer) = fixture();
+    let r = request(1, Operation::ConstructFile { length: 0 });
+    let failure = service
+        .handle_until(
+            &peer,
+            &r,
+            &mut Unread,
+            &mut std::io::sink(),
+            std::time::Instant::now(),
+        )
+        .0
+        .unwrap_err();
+    assert_eq!(failure.code, Code::Deadline);
+    assert!(!failure.unknown);
+    // Expiration cannot occupy the one currently supported operation slot.
+    assert!(service
+        .handle(&peer, &r, &mut Cursor::new([]), &mut std::io::sink())
+        .0
+        .is_ok());
+}
+
+#[test]
+fn two_writers_overlap_and_capacity_is_reclaimed_after_reverse_completion() {
+    use std::{io::Read, sync::mpsc, time::Duration};
+    struct Paused {
+        announced: Option<mpsc::Sender<()>>,
+        release: mpsc::Receiver<()>,
+        bytes: Cursor<Vec<u8>>,
+    }
+    impl Read for Paused {
+        fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+            if let Some(ready) = self.announced.take() {
+                ready.send(()).map_err(std::io::Error::other)?;
+                self.release
+                    .recv_timeout(Duration::from_secs(2))
+                    .map_err(std::io::Error::other)?;
+            }
+            self.bytes.read(out)
+        }
+    }
+    let (_temp, service, peer) = fixture();
+    let payload = vec![31; 4096];
+    let r = request(
+        1,
+        Operation::ConstructFile {
+            length: payload.len() as u64,
+        },
+    );
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (a_tx, a_rx) = mpsc::channel();
+    let (b_tx, b_rx) = mpsc::channel();
+    std::thread::scope(|threads| {
+        let mut a = Paused {
+            announced: Some(ready_tx.clone()),
+            release: a_rx,
+            bytes: Cursor::new(payload.clone()),
+        };
+        let mut b = Paused {
+            announced: Some(ready_tx),
+            release: b_rx,
+            bytes: Cursor::new(payload.clone()),
+        };
+        let shared = &service;
+        let request_ref = &r;
+        let first = threads.spawn(move || {
+            shared
+                .handle(&peer, request_ref, &mut a, &mut std::io::sink())
+                .0
+        });
+        let second = threads.spawn(move || {
+            shared
+                .handle(&peer, request_ref, &mut b, &mut std::io::sink())
+                .0
+        });
+        ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let refused = service
+            .handle(&peer, &r, &mut Cursor::new(&payload), &mut std::io::sink())
+            .0
+            .unwrap_err();
+        assert_eq!(refused.code, Code::Capacity);
+        b_tx.send(()).unwrap();
+        let Response::Saved { root: b_root, .. } = second.join().unwrap().unwrap() else {
+            panic!("saved")
+        };
+        let read = request(
+            2,
+            Operation::ReadFile {
+                root: b_root,
+                start: 0,
+                end: payload.len() as u64,
+            },
+        );
+        let mut output = Vec::new();
+        service
+            .handle(&peer, &read, &mut Cursor::new([]), &mut output)
+            .0
+            .unwrap();
+        assert_eq!(output, payload, "B is readable while A still owns a save");
+        a_tx.send(()).unwrap();
+        let Response::Saved { root: a_root, .. } = first.join().unwrap().unwrap() else {
+            panic!("saved")
+        };
+        assert_eq!(a_root, b_root);
+    });
 }

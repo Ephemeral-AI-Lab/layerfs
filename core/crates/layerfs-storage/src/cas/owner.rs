@@ -262,14 +262,18 @@ pub struct OutcomeCounters {
     pub profile: SaveProfile,
 }
 
-/// Exclusive writer state for one save operation.
+/// Private writer state for one save operation.
 pub struct MutationOwner {
     pub(super) connection: Connection,
+    pub(crate) arbitration: std::sync::Arc<std::sync::Mutex<()>>,
+    pub(super) save_id: i64,
+    pub(super) published_pool: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
+    pub(super) published_candidates: std::sync::Arc<std::sync::Mutex<Candidates>>,
     pub(super) capacities: StorageCapacities,
     pub(super) baseline_pack_id: i64,
     pub(super) next_pack_id: i64,
-    /// Highest pack id this save created; becomes the publication watermark on
-    /// acknowledgement and is left untouched on any failure.
+    /// Highest pack id this save created; contributes to the retained range on
+    /// publication. Visibility is determined by the save row, not this ceiling.
     pub(super) ceiling: i64,
     pub(super) placement: [LanePlacement; 5],
     pub(super) groups: [PendingGroup; 5],
@@ -328,7 +332,7 @@ pub struct MutationOwner {
     /// Bounded and reset per leaf; see `PENDING_VALUES_LIMIT`.
     pub(super) pending_values: BTreeMap<[u8; 73], u32>,
     /// Next ordinal this save may assign.
-    pub(super) next_ordinal: Option<u32>,
+    pub(super) next_ordinal: Option<u64>,
     /// True once the index was synchronized inside this save.
     pub(super) pool_synced: bool,
     /// Pooled representation outcomes of this save.
@@ -353,6 +357,7 @@ impl MutationOwner {
     /// demands is not copied again. Its pack cache is released on every pack write
     /// (`write_pack`), which is what makes that lifetime sound while the save runs.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
+        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
         let mut groups = crate::encoding::GroupCache::new();
         let (values, _) = crate::cas::read::read_objects(
             &self.connection,
@@ -375,6 +380,7 @@ impl MutationOwner {
     /// pooled reader's pack cache is released on every pack write, so no body it
     /// retains can predate a write to the pack it came from.
     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
+        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
         let value = {
             let mut groups = crate::encoding::GroupCache::new();
             let mut resolver = crate::encoding::delta::read::Resolver::new(

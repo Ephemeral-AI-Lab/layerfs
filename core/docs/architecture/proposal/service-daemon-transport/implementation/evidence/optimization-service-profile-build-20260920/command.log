@@ -1,0 +1,44 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-service)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon)
+error[E0373]: closure may outlive the current function, but it borrows `a`, which is owned by the current function
+   --> crates/layerfs-service/tests/direct.rs:337:35
+    |
+326 |     std::thread::scope(|threads| {
+    |                         ------- has type `&'1 Scope<'1, '_>`
+...
+337 |         let first = threads.spawn(|| service.handle(&peer, &r, &mut a, &mut std::io::sink()).0);
+    |                                   ^^ may outlive borrowed value `a` - `a` is borrowed here
+    |
+note: function requires argument type to outlive `'1`
+   --> crates/layerfs-service/tests/direct.rs:337:21
+    |
+337 |         let first = threads.spawn(|| service.handle(&peer, &r, &mut a, &mut std::io::sink()).0);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: to force the closure to take ownership of `a` (and any other referenced variables), use the `move` keyword
+    |
+337 |         let first = threads.spawn(move || service.handle(&peer, &r, &mut a, &mut std::io::sink()).0);
+    |                                   ++++
+
+error[E0373]: closure may outlive the current function, but it borrows `b`, which is owned by the current function
+   --> crates/layerfs-service/tests/direct.rs:338:36
+    |
+326 |     std::thread::scope(|threads| {
+    |                         ------- has type `&'1 Scope<'1, '_>`
+...
+338 |         let second = threads.spawn(|| service.handle(&peer, &r, &mut b, &mut std::io::sink()).0);
+    |                                    ^^ may outlive borrowed value `b` - `b` is borrowed here
+    |
+note: function requires argument type to outlive `'1`
+   --> crates/layerfs-service/tests/direct.rs:338:22
+    |
+338 |         let second = threads.spawn(|| service.handle(&peer, &r, &mut b, &mut std::io::sink()).0);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: to force the closure to take ownership of `b` (and any other referenced variables), use the `move` keyword
+    |
+338 |         let second = threads.spawn(move || service.handle(&peer, &r, &mut b, &mut std::io::sink()).0);
+    |                                    ++++
+
+For more information about this error, try `rustc --explain E0373`.
+error: could not compile `layerfs-service` (test "direct") due to 2 previous errors

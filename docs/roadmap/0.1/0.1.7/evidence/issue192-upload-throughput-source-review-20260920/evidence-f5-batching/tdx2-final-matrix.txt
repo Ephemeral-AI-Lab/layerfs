@@ -1,0 +1,6 @@
+case,payload_bytes,seconds,GBps,us_per_frame
+tcp-upload-1,1073741824,0.4831,2.2227,7.371
+tcp-download-1,1073741824,0.8977,1.1961,13.697
+noise-upload-1,1073741824,1.2463,0.8615,19.017
+noise-download-1,1073741824,1.3732,0.7819,20.953
+noise-upload-2,2147483648,1.0601,2.0257,8.088

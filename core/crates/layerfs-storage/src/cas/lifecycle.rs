@@ -1,13 +1,9 @@
-//! Acquisition, commit cadence, acknowledgement and terminal disposition.
-//!
-//! Ownership is taken once: a single `BEGIN IMMEDIATE` attempt, a baseline and
-//! the operation's cursors read under it, and a profile re-verified rather than
-//! trusted. The transaction is bounded by declared row and byte ceilings and
-//! acknowledged exactly once at the end, where the publication watermark advances
-//! in the same transaction as the writes it names. A failed operation has one
-//! cleanup attempt; an unproven one is quarantined instead.
-
+//! Save ownership outlives short transactions; only final publication exposes it.
 use rusqlite::Connection;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use crate::cas::dependencies::Availability;
 use crate::cas::owner::{MutationOwner, OutcomeCounters, SaveProfile};
@@ -17,81 +13,79 @@ use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::Candidates;
 use crate::encoding::delta::read::ChainCounters;
 use crate::encoding::delta::select::{DeltaCounters, DepthCache};
+use crate::encoding::pool::PoolIndex;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::pack::placement::LanePlacement;
 use crate::policy::StorageCapacities;
-use crate::sqlite::lookup;
-use crate::sqlite::write::{self, TransactionState};
-use std::collections::BTreeMap;
+use crate::sqlite::{
+    lookup, ownership,
+    write::{self, TransactionState},
+};
 use std::time::Instant;
 
 impl MutationOwner {
-    /// Acquires ownership once and establishes the operation's cursors.
+    /// Reserves one save slot, without retaining database write ownership.
     pub fn acquire(
         connection: Connection,
         capacities: StorageCapacities,
-        pool_index: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
-        candidates: std::sync::Arc<std::sync::Mutex<Candidates>>,
+        arbitration: Arc<Mutex<()>>,
+        published_pool: Arc<Mutex<PoolIndex>>,
+        published_candidates: Arc<Mutex<Candidates>>,
     ) -> StorageResult<Self> {
-        // The connection is caller-supplied at this seam, so its profile is
-        // re-verified rather than trusted: a write must never run on a
-        // connection with another journal mode, synchronous setting,
-        // foreign-key enforcement or busy timeout than the declared one.
+        let guard = ownership::lock(&arbitration)?;
         crate::sqlite::connection::verify_profile(&connection)?;
-        // Ownership first: the baseline and cursor are only meaningful when no
-        // other writer can publish a pack between reading them and using them.
-        write::begin_immediate(&connection)?;
         let baseline_pack_id = lookup::highest_pack_id(&connection)?;
-        let published = crate::sqlite::schema::retained_pack_ceiling(&connection)?;
-        if published != baseline_pack_id {
-            // Undeleted packs from a save whose cleanup did not complete. Writing
-            // now would have to guess their ownership, so the save is refused.
-            return Err(StorageError::UninspectedState {
-                ceiling: published,
-                highest_pack_id: baseline_pack_id,
-            });
-        }
-        let next_pack_id = baseline_pack_id
-            .checked_add(1)
-            .ok_or(StorageError::Integrity("pack identifier overflow"))?;
-        // The Store-owned content index is read back here, not at the call site,
-        // because it must be read inside the write acquisition that is about to
-        // use it. `Store::open` already loaded it, so this reads the table only
-        // after a failed save invalidated the slots.
-        {
-            let mut index = candidates
+        let (save_id, _) = ownership::acquire(&connection)?;
+        // Reserve before allocating writer workspaces. Capture published cache
+        // state under the same arbitration as the publication snapshot.
+        let indexes = (|| {
+            let pool = published_pool
                 .lock()
-                .map_err(|_| StorageError::Integrity("candidate index lock"))?;
-            if index.needs_load() {
-                index.reload(&connection)?;
+                .map_err(|_| StorageError::Integrity("pool index lock"))?
+                .clone();
+            let content = published_candidates
+                .lock()
+                .map_err(|_| StorageError::Integrity("candidate index lock"))?
+                .clone();
+            Ok((Arc::new(Mutex::new(pool)), Arc::new(Mutex::new(content))))
+        })();
+        drop(guard);
+        let prepared = indexes.and_then(|(pool, content)| {
+            Ok((
+                pool,
+                content,
+                CompressionWorkspace::new()?,
+                DecompressionWorkspace::new()?,
+            ))
+        });
+        let (pool_index, candidates, compression, decompression) = match prepared {
+            Ok(values) => values,
+            Err(original) => {
+                return match crate::sqlite::cleanup::abandon(&connection, save_id, &arbitration) {
+                    Ok(_) => Err(original),
+                    Err(cleanup) => Err(StorageError::CleanupFailed {
+                        original: Box::new(original),
+                        cleanup: Box::new(cleanup),
+                    }),
+                }
             }
-        }
-        let compression = CompressionWorkspace::new()?;
-        let decompression = DecompressionWorkspace::new()?;
+        };
         Ok(Self {
             connection,
             capacities,
+            arbitration,
+            save_id,
+            published_pool,
+            published_candidates,
             baseline_pack_id,
-            next_pack_id,
+            next_pack_id: 0,
             ceiling: baseline_pack_id,
-            placement: [
-                LanePlacement::new(),
-                LanePlacement::new(),
-                LanePlacement::new(),
-                LanePlacement::new(),
-                LanePlacement::new(),
-            ],
-            groups: [
-                PendingGroup::default(),
-                PendingGroup::default(),
-                PendingGroup::default(),
-                PendingGroup::default(),
-                PendingGroup::default(),
-            ],
+            placement: std::array::from_fn(|_| LanePlacement::new()),
+            groups: std::array::from_fn(|_| PendingGroup::default()),
             sealed_rows: Vec::new(),
-            transaction: TransactionState { rows: 1, bytes: 0 },
-            transaction_open: true,
+            transaction: TransactionState::default(),
+            transaction_open: false,
             compression,
             decompression,
             terminal: false,
@@ -99,6 +93,7 @@ impl MutationOwner {
             quarantined: false,
             counters: OutcomeCounters {
                 transactions: 1,
+                commits: 1,
                 ..OutcomeCounters::default()
             },
             profile: SaveProfile::default(),
@@ -120,44 +115,71 @@ impl MutationOwner {
         })
     }
 
-    /// Highest retained pack identifier before this operation.
+    /// Highest pack identifier observed when this save acquired its slot.
     pub fn baseline_pack_id(&self) -> i64 {
         self.baseline_pack_id
     }
 
-    /// Connection held by this owner; same-save reads use it directly.
+    /// Private connection: its scope excludes every foreign private save.
     pub fn connection(&self) -> &Connection {
         &self.connection
     }
 
-    /// Commits and lazily restarts the shared write transaction when it is full.
+    pub(super) fn begin_write(&mut self) -> StorageResult<()> {
+        write::begin_immediate(&self.connection)?;
+        self.transaction_open = true;
+        self.transaction = TransactionState::default();
+        self.next_pack_id = ownership::next_pack(&self.connection)?;
+        self.counters.transactions += 1;
+        Ok(())
+    }
+
+    /// Acknowledges one physical group; no transaction survives preparation.
     pub fn maybe_commit(&mut self) -> StorageResult<()> {
-        if self.transaction_open
-            && (self.transaction.rows >= self.capacities.transaction_rows
-                || self.transaction.bytes >= self.capacities.transaction_bytes)
-        {
+        if self.transaction_open {
             let started = Instant::now();
+            // Multi-writer: SQLite admits one writer per store file, and the other
+            // writer must not have to wait for this one's whole upload. A write
+            // transaction therefore never outlives the step that opened it under the
+            // arbitration lock, so every step commits before that lock is released.
+            // Batching stays inside a step; it cannot span steps.
+            ownership::advance_pack(&self.connection, self.next_pack_id)?;
             write::commit(&self.connection)?;
             SaveProfile::charge(&mut self.profile.commit_ns, started);
-            // Clear the flag before the re-acquire: if the lock is lost here, no
-            // transaction is open and cleanup must proceed to the deletion pass
-            // instead of trying to roll back a transaction that does not exist.
+            // Clear the flag before the next step re-acquires: if the lock is lost
+            // there, no transaction is open and cleanup proceeds to the deletion
+            // pass instead of rolling back a transaction that does not exist.
             self.transaction_open = false;
             self.counters.commits += 1;
-            let started = Instant::now();
-            write::begin_immediate(&self.connection)?;
-            SaveProfile::charge(&mut self.profile.commit_ns, started);
-            self.transaction_open = true;
-            self.transaction = TransactionState { rows: 1, bytes: 0 };
-            self.counters.transactions += 1;
         }
         Ok(())
     }
 
-    /// Completes every remaining group and acknowledges the final transaction.
-    ///
-    /// An operation whose last transaction holds no write at all is released with
-    /// `ROLLBACK`: no `COMMIT` is issued for an empty write.
+    pub(super) fn flush_candidates(&mut self) -> StorageResult<()> {
+        let arbitration = Arc::clone(&self.arbitration);
+        let _guard = ownership::lock(&arbitration)?;
+        // The save's own transaction is normally still open here: bounded commits
+        // re-acquire it. Opening a second one would nest, so only a caller that
+        // arrives with nothing open starts a transaction, and only that caller may
+        // roll it back when the index had nothing new to write.
+        let opened = !self.transaction_open;
+        if opened {
+            self.begin_write()?;
+        }
+        let written = self
+            .candidates
+            .lock()
+            .map_err(|_| StorageError::Integrity("candidate index lock"))?
+            .flush(&self.connection)?;
+        if written == 0 && opened {
+            write::rollback(&self.connection)?;
+            self.transaction_open = false;
+            return Ok(());
+        }
+        self.maybe_commit()
+    }
+
+    /// Finishes physical groups, then atomically publishes one save row.
     pub fn finish(&mut self) -> StorageResult<OutcomeCounters> {
         if self.terminal {
             return Err(StorageError::Aborted);
@@ -184,41 +206,14 @@ impl MutationOwner {
         for lane in PackLane::ALL {
             self.seal_group(lane, &mut availability)?;
         }
-        let pending_rows = self.transaction.rows.saturating_sub(1);
-        let has_pending = pending_rows > 0 || self.transaction.bytes > 0;
-        // A save that created no pack has nothing to publish. It releases its
-        // acquisition with ROLLBACK: no COMMIT is issued for an empty write.
-        let publishes = self.ceiling > self.baseline_pack_id;
+        let arbitration = Arc::clone(&self.arbitration);
+        let _guard = ownership::lock(&arbitration)?;
         if !self.transaction_open {
-            return Ok(self.counters);
+            self.begin_write()?;
         }
-        if !has_pending && !publishes {
-            let started = Instant::now();
-            write::rollback(&self.connection)?;
-            SaveProfile::charge(&mut self.profile.commit_ns, started);
-            self.transaction_open = false;
-            return Ok(self.counters);
-        }
-        if !has_pending {
-            // An earlier bounded commit already published this save's last packs.
-            // The watermark still needs its own acknowledgement, so the empty
-            // acquisition is released and a dedicated final transaction carries
-            // the publication. It is the last thing this save does; if it is lost,
-            // the packs stay unpublished and the Store is uninspected rather than
-            // silently exposed.
-            let started = Instant::now();
-            write::rollback(&self.connection)?;
-            SaveProfile::charge(&mut self.profile.commit_ns, started);
-            let started = Instant::now();
-            write::begin_immediate(&self.connection)?;
-            SaveProfile::charge(&mut self.profile.commit_ns, started);
-            self.counters.transactions += 1;
-        }
-        // **W2 (#188d).** The content index is written in the transaction that
-        // publishes the objects it names, and only the entries this save admitted
-        // are written. Either the save's output and its index both become visible,
-        // or neither does: a rolled-back transaction leaves the table exactly as
-        // the last acknowledged save left it.
+        // W2 (#188d): the content index is written in the transaction that publishes
+        // the objects it names, so a save's output and its index become visible
+        // together or not at all.
         let started = Instant::now();
         let flushed = {
             let mut index = self
@@ -229,23 +224,32 @@ impl MutationOwner {
         };
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         flushed?;
-        // The watermark names the packs this save created. It advances only here,
-        // so either the save's output and its watermark both become visible, or
-        // neither does.
-        let started = Instant::now();
-        let advanced =
-            crate::sqlite::schema::advance_retained_pack_ceiling(&self.connection, self.ceiling);
-        SaveProfile::charge(&mut self.profile.sql_ns, started);
-        advanced?;
+        // Multi-writer: the same transaction releases this save's slot by
+        // publishing it, and advances the pack allocation watermark so no other
+        // writer can hand out a pack id this save already used. Either the save's
+        // data, its index and its publication all become visible, or none does.
+        ownership::publish(&self.connection, self.save_id)?;
+        ownership::advance_pack(&self.connection, self.next_pack_id)?;
         let started = Instant::now();
         write::commit(&self.connection)?;
         SaveProfile::charge(&mut self.profile.commit_ns, started);
         self.counters.commits += 1;
         self.transaction_open = false;
+        // Only completed saves can seed the shared disposable candidate indexes.
+        // Concurrent publications can omit useful candidates, never expose private ones.
+        if let (Ok(mut shared), Ok(private)) = (self.published_pool.lock(), self.pool_index.lock())
+        {
+            *shared = private.clone();
+        }
+        if let (Ok(mut shared), Ok(private)) =
+            (self.published_candidates.lock(), self.candidates.lock())
+        {
+            *shared = private.clone();
+        }
         Ok(self.counters)
     }
 
-    /// Ends a failed operation with exactly one cleanup attempt.
+    /// One definite-failure cleanup, exclusively scoped to this save.
     pub fn abandon(&mut self) -> StorageResult<()> {
         if self.cleanup_attempted || self.quarantined {
             return Ok(());
@@ -253,49 +257,22 @@ impl MutationOwner {
         self.cleanup_attempted = true;
         self.terminal = true;
         if self.transaction_open {
+            let _guard = ownership::lock(&self.arbitration)?;
             write::rollback(&self.connection)?;
             self.transaction_open = false;
         }
-        crate::sqlite::cleanup::abandon(&self.connection, self.baseline_pack_id)?;
-        // An abandoned save published nothing, so the entries it admitted name
-        // objects that do not exist. The table is authoritative and was never
-        // written; the slots are dropped and read back by the next save.
-        self.invalidate_candidates();
+        crate::sqlite::cleanup::abandon(&self.connection, self.save_id, &self.arbitration)?;
         Ok(())
     }
 
-    /// Marks the operation terminal without touching storage.
-    ///
-    /// A failed save also invalidates the Store-owned pooled index: ordinals it
-    /// assigned may never have been committed, so the disposable derivation is
-    /// reset and rebuilt from the catalogue by the next save.
+    /// Stops this save; other saves' candidate state remains independent.
     pub fn mark_terminal(&mut self) {
         self.terminal = true;
-        if let Ok(mut index) = self.pool_index.lock() {
-            index.invalidate();
-        }
-        self.invalidate_candidates();
     }
 
-    /// Marks an unproven outcome: affected writes stop and nothing is deleted.
+    /// Preserves unknown persisted ownership without cleanup or replay.
     pub fn quarantine(&mut self) {
         self.terminal = true;
         self.quarantined = true;
-        if let Ok(mut index) = self.pool_index.lock() {
-            index.invalidate();
-        }
-        self.invalidate_candidates();
-    }
-
-    /// Drops the Store-owned content index back to "reload from the table".
-    ///
-    /// A failed save may have admitted entries for objects it never published, and
-    /// the flush that would have written them never committed. The table is
-    /// authoritative and the slots are disposable derivation, so the reset is
-    /// whole and the next save reads the table back rather than repairing anything.
-    fn invalidate_candidates(&mut self) {
-        if let Ok(mut index) = self.candidates.lock() {
-            index.invalidate();
-        }
     }
 }

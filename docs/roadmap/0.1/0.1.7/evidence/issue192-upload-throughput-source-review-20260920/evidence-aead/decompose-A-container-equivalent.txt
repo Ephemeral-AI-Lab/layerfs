@@ -1,0 +1,26 @@
+# config: decompose-A-container-equivalent
+# RUSTFLAGS="--cfg chacha20_force_neon -C target-feature=-aes,-sha2"
+# rustc: rustc 1.85.1 (4eb161250 2025-03-15) | host: Apple M3 Max, 14 cpus
+# command: RUSTFLAGS="--cfg chacha20_force_neon -C target-feature=-aes,-sha2" cargo run --release --offline --bin decompose
+warning: unused import: `KeyInit`
+  --> src/bin/decompose.rs:50:51
+   |
+50 |         use chacha20poly1305::aead::{AeadInPlace, KeyInit as _};
+   |                                                   ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `aeadbench` (bin "decompose") generated 1 warning
+arch=aarch64 features: neon=true aes=false sha2=false
+chacha20 keystream (NEON?)         size= 16384 B    1.016 GB/s  (   16.13 us/msg)
+poly1305 (soft on aarch64)         size= 16384 B    1.063 GB/s  (   15.41 us/msg)
+chacha20poly1305 in place          size= 16384 B    0.510 GB/s  (   32.11 us/msg)
+aes256gcm in place (armv8?)        size= 16384 B    0.114 GB/s  (  144.22 us/msg)
+aes128 ecb blocks (armv8?)         size= 16384 B    0.195 GB/s  (   83.98 us/msg)
+
+chacha20 keystream (NEON?)         size= 61440 B    1.027 GB/s  (   59.81 us/msg)
+poly1305 (soft on aarch64)         size= 61440 B    1.048 GB/s  (   58.61 us/msg)
+chacha20poly1305 in place          size= 61440 B    0.523 GB/s  (  117.50 us/msg)
+aes256gcm in place (armv8?)        size= 61440 B    0.112 GB/s  (  546.91 us/msg)
+aes128 ecb blocks (armv8?)         size= 61440 B    0.193 GB/s  (  318.65 us/msg)
+

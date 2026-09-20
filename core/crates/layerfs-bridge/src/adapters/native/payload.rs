@@ -49,7 +49,7 @@ pub struct Output<'a> {
     id: u64,
     maximum: u64,
     pub bytes: u64,
-    frames: usize,
+    frames: u64,
 }
 impl<'a> Output<'a> {
     pub fn new(send: &'a mut Sender, id: u64, maximum: u64) -> Self {
@@ -71,7 +71,7 @@ impl Write for Output<'_> {
                 .filter(|n| *n <= self.maximum)
                 .ok_or_else(|| io::Error::other("response bound"))?;
             self.frames += 1;
-            if self.frames > MAX_FRAMES {
+            if self.frames >= frame_budget(self.maximum) {
                 return Err(io::Error::other("response frame bound"));
             }
             self.send

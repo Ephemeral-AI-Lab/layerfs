@@ -21,7 +21,10 @@ pub fn open(path: &Path, create: bool) -> StorageResult<Connection> {
         OpenFlags::SQLITE_OPEN_READ_WRITE
     };
     let connection = Connection::open_with_flags(path, flags)?;
+    let arbitration = super::ownership::arbitration(path)?;
+    let _guard = super::ownership::lock(&arbitration)?;
     configure(&connection)?;
+    super::ownership::initialize_scope(&connection)?;
     Ok(connection)
 }
 

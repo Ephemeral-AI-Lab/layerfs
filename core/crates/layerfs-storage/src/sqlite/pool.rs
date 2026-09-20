@@ -94,9 +94,10 @@ pub fn group_for(connection: &Connection, ordinal: u32) -> StorageResult<Option<
         return Err(StorageError::Integrity("metadata ordinal"));
     }
     let mut statement = connection.prepare_cached(
-        "SELECT first_ordinal, count, pack_id, group_number, digest \
-         FROM metadata_value_groups WHERE first_ordinal <= ?1 \
-         ORDER BY first_ordinal DESC LIMIT 1",
+        "SELECT g.first_ordinal,g.count,g.pack_id,g.group_number,g.digest \
+         FROM metadata_value_groups g JOIN object_packs p USING(pack_id) JOIN saves s USING(save_id),temp.layerfs_read_scope r \
+         WHERE g.first_ordinal = (SELECT MAX(first_ordinal) FROM metadata_value_groups WHERE first_ordinal <= ?1) \
+         AND (p.save_id = r.save_id OR s.publication <= r.publication)",
     )?;
     let row = statement
         .query_row([i64::from(ordinal)], decode_group_row)
@@ -156,8 +157,9 @@ pub fn for_each_group(
     mut visit: impl FnMut(ValueGroupRow) -> StorageResult<()>,
 ) -> StorageResult<()> {
     let mut statement = connection.prepare_cached(
-        "SELECT first_ordinal, count, pack_id, group_number, digest \
-         FROM metadata_value_groups WHERE first_ordinal >= ?1 ORDER BY first_ordinal",
+        "SELECT g.first_ordinal,g.count,g.pack_id,g.group_number,g.digest \
+         FROM metadata_value_groups g JOIN object_packs p USING(pack_id) JOIN saves s USING(save_id),temp.layerfs_read_scope r \
+         WHERE g.first_ordinal >= ?1 AND (p.save_id = r.save_id OR s.publication <= r.publication) ORDER BY g.first_ordinal",
     )?;
     let mut rows = statement.query([i64::from(from.unwrap_or(FIRST_ORDINAL))])?;
     while let Some(row) = rows.next()? {
@@ -173,4 +175,13 @@ pub fn group_count(connection: &Connection) -> StorageResult<i64> {
             row.get(0)
         })?,
     )
+}
+
+/// First ordinal reserved in the bounded current candidate window.
+pub fn window_start(connection: &Connection) -> StorageResult<u32> {
+    Ok(connection.query_row(
+        "SELECT metadata_window_start FROM store_policy WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?)
 }

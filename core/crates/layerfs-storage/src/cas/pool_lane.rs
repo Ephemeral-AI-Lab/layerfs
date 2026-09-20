@@ -83,6 +83,7 @@ impl MutationOwner {
         let known: BTreeMap<[u8; INODE_VALUE_BYTES], u32> = if unknown.is_empty() {
             BTreeMap::new()
         } else {
+            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
             let mut index = self
                 .pool_index
                 .lock()
@@ -102,6 +103,24 @@ impl MutationOwner {
             SaveProfile::charge(&mut self.profile.resolve.pooled_ns, started);
             found?
         };
+        let fresh_count = unknown
+            .iter()
+            .filter(|value| !known.contains_key(*value))
+            .count();
+        if fresh_count != 0 {
+            let arbitration = std::sync::Arc::clone(&self.arbitration);
+            let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+            // Bounded commits re-acquire the save's transaction, so it is normally
+            // already open; only start one when this caller arrives without it.
+            if !self.transaction_open {
+                self.begin_write()?;
+            }
+            self.next_ordinal = Some(u64::from(crate::sqlite::ownership::reserve_ordinals(
+                &self.connection,
+                fresh_count,
+            )?));
+            self.maybe_commit()?;
+        }
         let mut ordinals = Vec::with_capacity(leaf.rows.len());
         let mut fresh: Vec<[u8; INODE_VALUE_BYTES]> = Vec::new();
         for row in &leaf.rows {
@@ -203,6 +222,7 @@ impl MutationOwner {
         if self.pool_synced {
             return Ok(());
         }
+        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
         let mut index = self
             .pool_index
             .lock()
@@ -225,13 +245,13 @@ impl MutationOwner {
     fn assign_ordinal(&mut self) -> StorageResult<u32> {
         let next = match self.next_ordinal {
             Some(next) => next,
-            None => crate::sqlite::pool::next_ordinal(&self.connection)?,
+            None => return Err(StorageError::Integrity("metadata ordinal reservation")),
         };
         let assigned = next
             .checked_add(1)
             .ok_or(StorageError::Integrity("metadata ordinal maximum"))?;
         self.next_ordinal = Some(assigned);
-        Ok(next)
+        u32::try_from(next).map_err(|_| StorageError::Integrity("metadata ordinal maximum"))
     }
 
     /// Builds and places the value groups of every new value of one leaf.
@@ -242,8 +262,10 @@ impl MutationOwner {
         let first = self
             .next_ordinal
             .ok_or(StorageError::Integrity("metadata ordinal cursor"))?
-            .checked_sub(fresh.len() as u32)
+            .checked_sub(fresh.len() as u64)
             .ok_or(StorageError::Integrity("metadata ordinal cursor"))?;
+        let first = u32::try_from(first)
+            .map_err(|_| StorageError::Integrity("metadata ordinal maximum"))?;
         let mut built = Vec::new();
         for (number, chunk) in fresh.chunks(crate::policy::VALUES_PER_GROUP).enumerate() {
             let canonical = chunk
@@ -263,6 +285,11 @@ impl MutationOwner {
         let lane = PackLane::PooledMetadata;
         let encoded: Vec<crate::pack::layout::EncodedGroup> =
             built.iter().map(|(_, group)| group.group.clone()).collect();
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+        if !self.transaction_open {
+            self.begin_write()?;
+        }
         let started = Instant::now();
         let writes =
             self.placement[lane.index()].select_many(lane, encoded, &mut self.next_pack_id);
@@ -306,6 +333,8 @@ impl MutationOwner {
                 .map_err(|_| StorageError::Integrity("pool index lock"))?;
             // The groups were built from `fresh` in order, so the values are handed
             // over as one cursor over that slice rather than re-derived per group.
+            let window_start = crate::sqlite::pool::window_start(&self.connection)?;
+            index.advance_window(window_start);
             let mut offset = 0_usize;
             for (first_ordinal, group) in &built {
                 let end = offset
@@ -314,7 +343,9 @@ impl MutationOwner {
                 let values = fresh
                     .get(offset..end)
                     .ok_or(StorageError::Integrity("metadata group values"))?;
-                index.note_group(*first_ordinal, values)?;
+                if *first_ordinal >= window_start {
+                    index.note_group(*first_ordinal, values)?;
+                }
                 offset = end;
             }
             if offset != fresh.len() {
@@ -337,6 +368,7 @@ impl MutationOwner {
         target_canonical: u64,
         target_encoded: u64,
     ) -> StorageResult<Option<(ObjectId, Vec<u8>)>> {
+        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
         let depth_cap = self.capacities.metadata_delta_max_depth;
         if depth_cap == 0 {
             return Ok(None);

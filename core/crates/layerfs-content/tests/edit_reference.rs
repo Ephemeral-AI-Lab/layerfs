@@ -92,50 +92,24 @@ fn patterned(len: usize) -> Vec<u8> {
         .collect()
 }
 
-/// The same extents: a deterministic fixture with exactly `wanted` extents.
+/// Recreate the sealed input bytes without rediscovering their lengths through
+/// dozens of candidate constructions. The oracle comparison still checks the
+/// exact base root, length, page partition, edits and surviving identities.
 fn file_with_extents(wanted: u64) -> Vec<u8> {
-    fn extents_at(length: usize) -> u64 {
-        let mut store = MemoryStore::new();
-        let policy = ConstructionPolicy::frozen_default();
-        let constructed = disabled_scope(|scope| {
-            construct_bytes(
-                policy,
-                &policy.capacities(),
-                &noise(length),
-                &mut store,
-                scope.child("content"),
-            )
-        })
-        .expect("build");
-        support::extent_count(&store, constructed.root)
-    }
-    let mut low = 0_usize;
-    let mut high = (wanted as usize) * 32_768 + 65_536;
-    while extents_at(high) < wanted {
-        low = high;
-        high *= 2;
-    }
-    while low + 1 < high {
-        let middle = (low + high) / 2;
-        if extents_at(middle) >= wanted {
-            high = middle;
-        } else {
-            low = middle;
+    let length = match wanted {
+        80 => load("join-80-100").edits[0].0,
+        100 => {
+            let join = load("join-80-100");
+            join.base_len - join.edits[0].0
         }
-    }
-    for candidate in [high, high + 1_024, high + 4_096, high + 16_384] {
-        if extents_at(candidate) == wanted {
-            return noise(candidate);
-        }
-    }
-    let mut candidate = high;
-    for _ in 0..512 {
-        candidate += 1_024;
-        if extents_at(candidate) == wanted {
-            return noise(candidate);
-        }
-    }
-    panic!("no input produced {wanted} extents");
+        140 => load("unequal-height-join").base_len,
+        180 => load("half-partition-90-90").base_len,
+        200 => load("height-growth").base_len,
+        300 => load("untouched-sibling").base_len,
+        400 => load("interior-multi-level").base_len,
+        _ => panic!("no sealed input with {wanted} extents"),
+    };
+    noise(usize::try_from(length).expect("fixture length"))
 }
 
 /// One raw edit: start, deleted length and replacement bytes.

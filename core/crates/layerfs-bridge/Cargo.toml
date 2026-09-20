@@ -20,3 +20,14 @@ required-features = ["native"]
 [[example]]
 name = "fault_peer"
 required-features = ["native"]
+
+[[example]]
+name = "socket_bounds"
+required-features = ["native"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(chacha20_force_neon)',
+    'cfg(aes_armv8)',
+    'cfg(polyval_armv8)',
+] }

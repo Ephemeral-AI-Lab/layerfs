@@ -1,0 +1,1 @@
+{"status": "PASS", "service_exit": 0, "active_saves": 2, "unfinished_handshakes": 2, "outcomes": [{"code": 12, "unknown": true}, {"code": 12, "unknown": true}], "shutdown_wall_seconds": 0.10010729199711932, "private_slots_after_known_cleanup": 0, "replay": false, "nonpreemptible_core_shutdown": "not forced by this cooperative-I/O case"}

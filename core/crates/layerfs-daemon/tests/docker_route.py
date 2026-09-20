@@ -4,10 +4,48 @@ import argparse, hashlib, json, os, select, socket, struct, subprocess, tempfile
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 TARGET = ROOT / "core/target"
+PROFILE = os.environ.get("LAYERFS_PROOF_PROFILE", "debug")
+if PROFILE not in ("debug", "release"):
+    raise ValueError("unsupported proof build profile")
+BIN = TARGET / PROFILE
+
+def prepared_fixture(destination):
+    """Reuse one closed master per exact fixture executable; copy writable bytes."""
+    executable=BIN/"examples/prepare_store"
+    key=hashlib.sha256(executable.read_bytes()).hexdigest()
+    folder=TARGET/"issue192-prepared"/key
+    manifest=folder/"fixture.json";master=folder/"store.sqlite"
+    reused=folder.exists()
+    if not reused:
+        folder.mkdir(parents=True)
+        fixture=json.loads(subprocess.check_output([executable,master],text=True))
+        digest=hashlib.sha256(master.read_bytes()).hexdigest()
+        manifest.write_text(json.dumps({"binary_sha256":key,"store_sha256":digest,"fixture":fixture},indent=2)+"\n")
+        master.chmod(0o400)
+    recorded=json.loads(manifest.read_text())
+    assert recorded["binary_sha256"]==key and hashlib.sha256(master.read_bytes()).hexdigest()==recorded["store_sha256"], "prepared master identity"
+    shutil.copyfile(master,destination)
+    return recorded["fixture"] | {"setup":{"master_sha256":recorded["store_sha256"],"executable_sha256":key,"reused":reused,"clone_method":"closed independent writable byte copy; not an OS cache claim"}}
+
+def verify_artifacts(image):
+    """Require a current-source manifest before a new product-route proof."""
+    path=os.environ.get("LAYERFS_PROOF_IDENTITIES")
+    if not path: raise ValueError("LAYERFS_PROOF_IDENTITIES is required")
+    recorded=json.loads(Path(path).read_text())
+    assert recorded["profile"]==PROFILE
+    for name,digest in recorded["runtime"].items():
+        assert hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==digest, name
+    for name,digest in recorded["binaries"].items():
+        assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest, name
+    selected=json.loads(subprocess.check_output(["docker","image","inspect",image],text=True))[0]
+    assert selected["Id"]==recorded["image_id"]
+    assert selected["Config"]["Labels"]["org.layerfs.binary-sha256"]==recorded["linux_daemon_sha256"]
+    return {"manifest":str(Path(path).resolve()),"image_id":selected["Id"],"profile":PROFILE,"runtime_sha256":recorded["runtime_sha256"],"binaries":recorded["binaries"]}
+
 def frame(kind, identity, data=b""):
     return b"LFB1" + struct.pack(">BBHQI", kind, 0, 0, identity, len(data)) + data
-def request(identity, opcode, data, store=1, deadline_ms=10000):
-    return frame(2, identity, struct.pack(">QIHIQB", 1, store, 1, deadline_ms, 64*1024*1024, opcode)+data)
+def request(identity, opcode, data, store=1, deadline_ms=10000,response_bytes=64*1024*1024):
+    return frame(2, identity, struct.pack(">QIHIQB", 1, store, 1, deadline_ms, response_bytes, opcode)+data)
 def read_exact(fd, count, end):
     output=bytearray()
     while len(output)<count:
@@ -16,8 +54,8 @@ def read_exact(fd, count, end):
         if not part: raise EOFError("terminal response missing")
         output.extend(part)
     return bytes(output)
-def receive(process):
-    end=time.monotonic()+12; digest=hashlib.sha256(); length=0
+def receive(process,timeout=12):
+    end=time.monotonic()+timeout; digest=hashlib.sha256(); length=0
     while True:
         h=read_exact(process.stdout.fileno(),20,end)
         assert h[:4]==b"LFB1"
@@ -83,6 +121,13 @@ def start_daemon(command,env,diagnostics,drain=True):
             part=stream.recv(1);assert part and len(header)<8192;header.extend(part)
         if header.startswith(b"HTTP/1.1 101"):break
         stream.close()
+        # Authentication/admission may refuse the daemon before its optional
+        # stderr attachment exists. Keep the real process outcome, not a fake
+        # harness failure or a log-file fallback.
+        state=subprocess.run(["docker","inspect","--format","{{.State.Status}}",name],capture_output=True,text=True)
+        if state.returncode==0 and state.stdout.strip() in ("exited","dead"):
+            child.diagnostics_stream=None
+            return child
         if not header.startswith(b"HTTP/1.1 404")or time.monotonic()>=deadline:raise RuntimeError("independent diagnostics attach failed: "+header.decode(errors="replace"))
         time.sleep(.01)
     stream.settimeout(None);child.diagnostics_stream=stream
@@ -90,21 +135,22 @@ def start_daemon(command,env,diagnostics,drain=True):
     return child
 def public(private):
     env=os.environ.copy();env["LAYERFS_PRIVATE_KEY"]=private
-    return subprocess.check_output([TARGET/"debug/examples/public_key"],env=env,text=True).strip()
+    return subprocess.check_output([BIN/"examples/public_key"],env=env,text=True).strip()
 def main():
     p=argparse.ArgumentParser();p.add_argument("--image",required=True);p.add_argument("--output",type=Path,required=True);p.add_argument("--telemetry",default="off");args=p.parse_args()
     args.output.mkdir(parents=True,exist_ok=False)
     evidence={"kind":"functional-deployment","performance":"NOT_RUN","image":args.image,"telemetry":args.telemetry,"cases":[],"cleanup":"INCOMPLETE"}
+    evidence["artifacts"]=verify_artifacts(args.image)
     service=None;daemon=None;diagnostics=[];container=None
     try:
         with tempfile.TemporaryDirectory(prefix="layerfs-issue192-") as temp:
             path=Path(temp)/"store.sqlite"
-            fixture=json.loads(subprocess.check_output([TARGET/"debug/examples/prepare_store",path],text=True));evidence["fixture"]=fixture
+            fixture=prepared_fixture(path);evidence["fixture"]=fixture
             direct_path=Path(temp)/"direct.sqlite";shutil.copyfile(path,direct_path);evidence["fixture_copy"]="closed independent byte copy"
             server_key=os.urandom(32).hex();client_key=os.urandom(32).hex();server_public=public(server_key);client_public=public(client_key)
             with socket.socket() as s:s.bind(("127.0.0.1",0));port=s.getsockname()[1]
             env=os.environ.copy();env.update(LAYERFS_PRIVATE_KEY=server_key,LAYERFS_PEERS=f"1,{client_public},{int(time.time())+3600},31",LAYERFS_STORE=str(path),LAYERFS_LISTEN=f"0.0.0.0:{port}",LAYERFS_TELEMETRY=args.telemetry,LAYERFS_RUN_ID="192",LAYERFS_NAMESPACE="1",LAYERFS_TELEMETRY_DIRECTORY=str(Path(temp)/"service-telemetry"))
-            service=subprocess.Popen([TARGET/"debug/layerfs-service"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            service=subprocess.Popen([BIN/"layerfs-service"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             evidence["service_pid"]=service.pid
             line=service.stderr.readline();assert b"ready" in line,line
             diagnostics.append(Diagnostics(service.stderr));evidence["ready"]=line.decode().strip()
@@ -183,7 +229,7 @@ def main():
             evidence["service_exit"]=service.returncode;evidence["daemon_exit"]=daemon.returncode
             assert service.returncode==daemon.returncode==0
             # Reopen the Store in a new native process and read via a new Docker daemon.
-            service=subprocess.Popen([TARGET/"debug/layerfs-service"],env={**env,"LAYERFS_PRIVATE_KEY":server_key,"LAYERFS_TELEMETRY_DIRECTORY":str(Path(temp)/"service-telemetry")},stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            service=subprocess.Popen([BIN/"layerfs-service"],env={**env,"LAYERFS_PRIVATE_KEY":server_key,"LAYERFS_TELEMETRY_DIRECTORY":str(Path(temp)/"service-telemetry")},stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             assert b"ready" in service.stderr.readline();diagnostics.append(Diagnostics(service.stderr))
             subprocess.run(["docker","rm",container],check=True,stdout=subprocess.DEVNULL)
             daemon=start_daemon(command,env,diagnostics)
@@ -192,7 +238,7 @@ def main():
             value=exchange(daemon,5,2,attached+b"\1"+struct.pack(">H",1)+b"g");assert value[0]==6 and value[1][18:50]==saved[1],value
             daemon.stdin.close();daemon.wait(timeout=4);service.stdin.write(b"q");service.stdin.flush();service.wait(timeout=4);assert daemon.returncode==service.returncode==0
             evidence["cases"].append({"id":"V14","selection":"new native service and new Docker daemon read old/new roots after ordinary Store reopen","status":"PASS","service_pid":service.pid})
-            direct=json.loads(subprocess.check_output([TARGET/"debug/examples/direct",direct_path,fixture["root"],fixture["scope"],fixture["metadata"]],env=env,text=True))
+            direct=json.loads(subprocess.check_output([BIN/"examples/direct",direct_path,fixture["root"],fixture["scope"],fixture["metadata"]],env=env,text=True))
             assert direct=={"file":root.hex(),"edited":edited.hex(),"tree":tree.hex(),"file_counts":file_counts,"edit_counts":edit_counts,"tree_counts":tree_counts},direct
             evidence["direct_parity"]=direct
             evidence["cases"].append({"id":"V17","selection":"all five operations, identical roots and save counts from an independent pristine Store copy","status":"PASS"})
@@ -234,6 +280,6 @@ def main():
         evidence["cleanup"]="PASS"
         evidence["source_head"]=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
         evidence["lock_sha256"]=hashlib.sha256((ROOT/"core/Cargo.lock").read_bytes()).hexdigest()
-        for name,path in {"service":TARGET/"debug/layerfs-service","daemon":TARGET/"aarch64-unknown-linux-musl/debug/layerfs-daemon"}.items():evidence[name+"_sha256"]=hashlib.sha256(path.read_bytes()).hexdigest()
+        for name,path in {"service":BIN/"layerfs-service","daemon":TARGET/"aarch64-unknown-linux-musl/debug/layerfs-daemon"}.items():evidence[name+"_sha256"]=hashlib.sha256(path.read_bytes()).hexdigest()
         (args.output/"result.json").write_text(json.dumps(evidence,indent=2)+"\n")
 if __name__=="__main__":main()

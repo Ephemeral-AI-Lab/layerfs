@@ -1,0 +1,19 @@
+{
+  "command": [
+    "env",
+    "LAYERFS_PROOF_PROFILE=release",
+    "python3",
+    "core/crates/layerfs-service/tests/interoperability.py"
+  ],
+  "class": "functional",
+  "budget_seconds": 20,
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 4.417413540999405,
+  "head": "0819f3f39833d477d9ed6d878a50691c3c046a83",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2,
+  "construction_workers": 1,
+  "source_unchanged": true,
+  "performance_claim": false
+}

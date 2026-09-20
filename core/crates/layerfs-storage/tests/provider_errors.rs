@@ -127,17 +127,21 @@ fn a_record_above_the_publication_watermark_is_not_reported_as_absence() {
         // an unfinished save's early-committed packs would leave them.
         let connection = rusqlite::Connection::open(&path).unwrap();
         connection
+            .execute("INSERT INTO saves(active_slot) VALUES(1)", [])
+            .unwrap();
+        let save = connection.last_insert_rowid();
+        connection
             .execute(
-                "INSERT INTO object_packs (pack_id, data) VALUES (?1, ?2)",
-                rusqlite::params![highest + 1, vec![0u8; 32]],
+                "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, ?3)",
+                rusqlite::params![highest + 1, vec![0u8; 32], save],
             )
             .unwrap();
         connection
             .execute(
                 "INSERT INTO objects \
-                 (object_id, object_role, canonical_length, pack_id, group_number, record_number) \
-                 VALUES (?1, 1, 100, ?2, 0, 0)",
-                rusqlite::params![unpublished.as_bytes(), highest + 1],
+                 (object_id, object_role, canonical_length, pack_id, group_number, record_number, save_id) \
+                 VALUES (?1, 1, 100, ?2, 0, 0, ?3)",
+                rusqlite::params![unpublished.as_bytes(), highest + 1, save],
             )
             .unwrap();
     }
@@ -146,7 +150,7 @@ fn a_record_above_the_publication_watermark_is_not_reported_as_absence() {
     let provider = layerfs_storage::StoreProvider::new(&store);
     match provider.read_canonical_batch(&[unpublished]) {
         Err(ContentError::ProviderFailure { what }) => {
-            assert_eq!(what, "record above the visibility ceiling");
+            assert_eq!(what, "record outside the publication scope");
         }
         Err(ContentError::MissingObject) => {
             panic!("an unpublished record reached C1 as absence")

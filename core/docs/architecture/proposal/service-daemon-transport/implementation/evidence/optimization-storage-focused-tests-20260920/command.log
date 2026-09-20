@@ -1,0 +1,66 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-0ff0aaf0cf2db559)
+
+running 16 tests
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_pooled_reader_releases_pack_bodies_when_the_store_writes ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-6f07af405ea2f299)
+
+running 9 tests
+test the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason ... ok
+test the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero ... ok
+test one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by ... ok
+test the_last_ordinal_can_be_published_and_the_next_reservation_is_refused ... ok
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_failed_save_cannot_change_the_published_candidate_set ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-32eddda0d3185caf)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.70s
+
+     Running tests/multi_writer.rs (core/target/debug/deps/multi_writer-4791483a07dffd52)
+
+running 5 tests
+test an_older_schema_is_refused_without_promotion ... ok
+test abort_removes_only_its_save_and_never_lends_a_foreign_dependency ... ok
+test unpublished_foreign_content_cannot_satisfy_a_dependency ... ok
+test separate_threads_prepare_and_finish_the_same_content_successfully ... ok
+test private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/provider_errors.rs (core/target/debug/deps/provider_errors-1be1962ed8df1017)
+
+running 3 tests
+test an_object_the_store_does_not_hold_is_absence ... ok
+test a_corrupt_pack_is_not_reported_as_absence ... ok
+test a_record_above_the_publication_watermark_is_not_reported_as_absence ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

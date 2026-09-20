@@ -5,15 +5,25 @@
 This describes the issue #192 implementation candidate for v0.1.7; it is not a
 released contract or performance qualification.
 
-Source basis: C2 `10b9d4a6cf9d88267d508cb010cc82950e080d77`, C1 with the committed
-`e54af84653cd1a22b3f26631dbd19eafb895a7b4` filesystem checkpoint (see the M0 record), reviewed packet
-`21f6af702919c23fafc88890361bef7bfb831140`, and runtime-source seal
-`1f226f29cd85875159921d670e92526887e466374a2da88fe0d437053cbf274c`
-([exact source inventory](proposal/service-daemon-transport/implementation/evidence/qualification-index-20260920.json)).
-The [M0 record](proposal/service-daemon-transport/implementation/06-m0-decisions.md)
-and [acceptance evidence](proposal/service-daemon-transport/implementation/evidence/)
-state exact selections, source/binary identities and incomplete proofs. Source
-changes here do not rewrite Stage 6 results or qualify #193 performance work.
+Source basis: optimization work after documentation checkpoint
+`0819f3f39833d477d9ed6d878a50691c3c046a83`, preserving the selected C1 production
+checkpoint and dependency lock. The
+[C2 schema-7 checkpoint](proposal/service-daemon-transport/implementation/evidence/optimization-c2-checkpoint-20260920.json)
+binds the tested storage prerequisites; source inventories in each new command
+receipt bind the subsequent service integration. The original implementation seal
+and image do not identify this revision. The
+[optimization decisions](proposal/service-daemon-transport/implementation/09-optimization-decisions.md)
+and [acceptance record](proposal/service-daemon-transport/implementation/07-acceptance.md)
+state exact selections and incomplete proofs. These changes do not rewrite Stage 6
+results or qualify #193 performance work.
+
+The optimization revision uses ordinary `TcpListener` and one
+`TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
+on accepted sockets. Socket option sizes are not admission criteria. The failed
+preconnect experiment and original observations remain archived in the handoff.
+The [C2 checkpoint](proposal/service-daemon-transport/implementation/evidence/optimization-c2-checkpoint-20260920.json)
+qualifies the storage prerequisite on macOS; the wider native/Docker profile still
+requires its own current-source evidence.
 
 ## Boundaries and public calls
 
@@ -29,11 +39,12 @@ Only a returned terminal success validates provisional read bytes.
 
 `layerfs-service::Service::handle` is the same direct and remote entry point. It
 records around authorization/admission, validates the request, binds authenticated
-public-key possession to configured Store/op grants, and acquires one process-wide
-active slot without waiting. Native configuration selects one Store (logical ID 1);
+public-key possession to configured Store/op grants, and acquires one
+of two active operation slots without waiting. Native configuration selects one Store (logical ID 1);
 the service facade admits at most four explicitly configured Store mappings.
 No request carries a native Store path or independent construction capacities.
-Direct callers construct `VerifiedPeer::from_private` using the same authorized
+`VerifiedPeer` belongs to the portable bridge contract and only trusted native
+entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
 
 A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. Complete
@@ -76,21 +87,33 @@ uses the same plaintext frame schema; credentials never come from those frames.
 There are four persistent/handshaking/closing sessions and one synchronous
 accept/refusal socket slot: **five application connection resources in total**.
 The acceptor's extra slot is counted, not hidden behind the four-session limit.
-At most four 2 MiB service thread stacks exist, and only one admitted handler can
-construct. Client upload uses one explicit 2 MiB stack. Closing owners retain their
-slots until their threads finish. Native socket send/receive buffers are requested
-at 128 KiB and verified not to exceed 256 KiB each (Linux reports doubled values).
-The OS listener backlog and kernel protocol metadata remain separate domains;
-application connection accounting is not a claim to limit incoming Internet SYNs.
+At most four 2 MiB service thread stacks exist, and at most two admitted handlers can
+construct, each with one producer. Client upload uses one explicit 2 MiB stack. Closing owners retain their
+slots until their threads finish or the executable exits. A session retains a
+socket shutdown clone with its worker. Shutdown stops admission, shuts down all
+live sockets, and collects completed workers for at most two seconds. If core work
+is still running, explicit process exit preserves an unresolved outcome; detached
+workers are not labelled cleanup. Kernel socket state, backlog, stack mappings
+and RSS are separate observed domains.
 
-Conservative application byte allowance per persistent connection is two 96 KiB
-directional payload/codec windows plus 256 KiB metadata/decoded expansion. The
-windows include input, frame, plaintext and ciphertext overlap; there is no queued
-whole-file body. The refusal slot has no payload codec allocations. Core memory,
-8 MiB edit replay, filesystem resources, sockets, stacks and allocator/OS overhead
-are additional. These are ownership bounds, not measured RSS or throughput.
+The [resource profile](proposal/service-daemon-transport/implementation/10-resource-profile.md)
+records the aggregate byte/count ownership vector. It admits four session owners
+and two complete operation owners, preserves 16 KiB body and 32 KiB metadata
+limits, and selects a 4 GiB construct/read-range limit. Edit replay remains 8 MiB.
+Frame work is bounded by `ceil(declared_bytes / 1024) + 257`, including boundary
+slack and a terminal frame. File size grows total work and persisted bytes, not a
+whole-file transport buffer.
 
-Operations have <=10 s absolute I/O budgets; handshake/idle is 5 s. Synchronous
+Requests select an overall budget up to 600 seconds and I/O also observes a
+five-second no-progress limit; handshake/idle is five seconds. Each process shares
+one connection activity timestamp between upload and response consumption, so
+productive upload traffic keeps its concurrent response wait alive. A blocked
+socket read may continue waiting when the other direction made progress; this
+does not reconnect, resend frames or replay a mutation. Complete silence remains
+bounded by five seconds, and the overall deadline never extends.
+Each process shares
+one absolute operation deadline through its layers. Only a remaining duration
+crosses the network, never an Instant. Synchronous
 core calls cannot universally be preempted mid-hash or mid-commit. A late known
 C2 success is not reclassified as an abort; a lost response remains unknown.
 The daemon observes stdin/stdout deadlines with poll and closes unsynchronized
@@ -132,10 +155,19 @@ capabilities or insufficient samples are unavailable. Cgroup fields are not yet
 collected; process RSS must not be relabelled as cgroup/anonymous/file/socket memory.
 
 `OutputConfig` bounds encoded bytes, queue count/capacity, aggregate rate/burst and
-segments. Current writes retain their queue charge. `Collector` has <=16 producer
+segments. `Output` handles share one owner whose final destruction stops its
+writer exactly once, including concurrent final-clone drops; the writer retains
+queue state but never its owner. Submissions recheck closure under the queue lock.
+Current writes retain their queue charge. `Collector` has <=16 producer
 slots; queued/in-flight records retain closing producer registrations. Fixed loss
 counters saturate and expose overflow. Actual acceptance coordinators separately
 bound their Python pipe decoders and retained diagnostic bytes.
+
+Ordinary native startup/configuration/error diagnostics use one best-effort write
+of at most 512 bytes and leave their dedicated stderr descriptor nonblocking.
+Both CLIs return explicit exit codes so Rust's default `Result` termination cannot
+block error cleanup behind an unread diagnostic pipe. Stderr must remain separate
+from protocol stdout. Regular-file OS calls are not claimed preemptible.
 
 Forward is structured `LFT1 ` JSON lines on stderr, independent of framed stdout.
 The Docker host coordinator must attach product stdout and diagnostics through
@@ -176,7 +208,7 @@ provider would replace C2's connection and grouped read/write execution and qual
 lifetime/transaction/resource semantics. It would preserve logical requests,
 canonical identities, input finality and outcome distinctions. No provider registry,
 cloud adapter, filesystem mount, Workspace, history or allocator is implemented.
-API compatibility, canonical compatibility and schema-6 persisted compatibility
+API compatibility, canonical compatibility and schema-7 persisted compatibility
 are separate checks. Independent algorithm substitution remains #172.
 
 The acceptance record must distinguish deterministic tests, real macOS/Linux

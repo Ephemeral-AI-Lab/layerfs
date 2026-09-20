@@ -5,7 +5,7 @@ pub struct InputState {
     id: u64,
     expected: u64,
     seen: u64,
-    frames: usize,
+    frames: u64,
     ended: bool,
 }
 impl InputState {
@@ -23,7 +23,7 @@ impl InputState {
     }
     pub fn accept(&mut self, f: &Frame) -> Result<(), Failure> {
         self.frames += 1;
-        if self.ended || f.id != self.id || self.frames > MAX_FRAMES {
+        if self.ended || f.id != self.id || self.frames > frame_budget(self.expected) {
             return Err(Code::InvalidInput.into());
         }
         match f.kind {

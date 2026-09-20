@@ -13,12 +13,16 @@ use layerfs_telemetry::timer::Timing;
 use nix::poll::{poll, PollFd, PollFlags};
 use std::{
     io,
-    net::TcpListener,
+    net::{Shutdown, TcpStream},
     os::fd::AsFd,
     sync::Arc,
     thread,
     time::{Duration, Instant},
 };
+struct Session {
+    socket: TcpStream,
+    worker: thread::JoinHandle<()>,
+}
 fn env(name: &str) -> Result<String, Failure> {
     let value = std::env::var(name).map_err(|_| Code::InvalidInput)?;
     if value.len() > 4096 {
@@ -60,9 +64,16 @@ pub fn run() -> Result<(), Failure> {
     let store = Timing::disabled("open", |s| Store::open(path, s.child("open")))
         .0
         .map_err(crate::operation::failure::storage)?;
-    let listener = TcpListener::bind(env("LAYERFS_LISTEN")?)?;
+    let listener = layerfs_bridge::adapters::native::listen(
+        env("LAYERFS_LISTEN")?
+            .parse()
+            .map_err(|_| Code::InvalidInput)?,
+    )?;
     listener.set_nonblocking(true)?;
-    eprintln!("layerfs-service ready {}", listener.local_addr()?);
+    layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
+        "layerfs-service ready {}\n",
+        listener.local_addr()?
+    ));
     let runtime = super::config::telemetry(1);
     let service = Arc::new(Service::new(
         vec![StoreAccess {
@@ -74,68 +85,90 @@ pub fn run() -> Result<(), Failure> {
     )?);
     let peers = Arc::new(peers);
     let stdin = io::stdin();
-    let mut threads: Vec<thread::JoinHandle<()>> = Vec::with_capacity(MAX_SESSIONS);
-    loop {
-        let mut i = 0;
-        while i < threads.len() {
-            if threads[i].is_finished() {
-                let handle = threads.swap_remove(i);
-                let _ = handle.join();
-            } else {
-                i += 1;
-            }
-        }
-        let mut fds = [
-            PollFd::new(listener.as_fd(), PollFlags::POLLIN),
-            PollFd::new(stdin.as_fd(), PollFlags::POLLIN),
-        ];
-        poll(&mut fds, 100u16).map_err(|_| Code::Io)?;
-        if fds[1]
-            .revents()
-            .is_some_and(|f| f.intersects(PollFlags::POLLIN | PollFlags::POLLHUP))
-        {
-            break;
-        }
-        if !fds[0]
-            .revents()
-            .is_some_and(|f| f.contains(PollFlags::POLLIN))
-        {
-            continue;
-        }
-        let (stream, _) = match listener.accept() {
-            Ok(v) => v,
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
-            Err(_) => return Err(Code::Io.into()),
-        };
-        if threads.len() == MAX_SESSIONS {
-            drop(stream);
-            continue;
-        }
-        let runtime = runtime.clone();
-        let service = Arc::clone(&service);
-        let peers = Arc::clone(&peers);
-        let handle = thread::Builder::new()
-            .name("layerfs-connection".into())
-            .stack_size(2 * 1024 * 1024)
-            .spawn(move || {
-                if let Ok(connection) = accept(stream, &private, &peers) {
-                    let _ = serve(connection, |peer, r, input, output| {
-                        let (result, diagnostic) = service.handle(peer, r, input, output);
-                        runtime.publish(diagnostic);
-                        result
-                    });
+    let mut sessions: Vec<Session> = Vec::with_capacity(MAX_SESSIONS);
+    let result = (|| {
+        loop {
+            let mut i = 0;
+            while i < sessions.len() {
+                if sessions[i].worker.is_finished() {
+                    let session = sessions.swap_remove(i);
+                    let _ = session.worker.join();
+                } else {
+                    i += 1;
                 }
-            })?;
-        threads.push(handle);
+            }
+            let mut fds = [
+                PollFd::new(listener.as_fd(), PollFlags::POLLIN),
+                PollFd::new(stdin.as_fd(), PollFlags::POLLIN),
+            ];
+            poll(&mut fds, 100u16).map_err(|_| Code::Io)?;
+            if fds[1]
+                .revents()
+                .is_some_and(|f| f.intersects(PollFlags::POLLIN | PollFlags::POLLHUP))
+            {
+                break;
+            }
+            if !fds[0]
+                .revents()
+                .is_some_and(|f| f.contains(PollFlags::POLLIN))
+            {
+                continue;
+            }
+            let (stream, _) = match listener.accept() {
+                Ok(v) => v,
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(_) => return Err(Code::Io.into()),
+            };
+            if sessions.len() == MAX_SESSIONS {
+                drop(stream);
+                continue;
+            }
+            let runtime = runtime.clone();
+            let service = Arc::clone(&service);
+            let peers = Arc::clone(&peers);
+            let socket = stream.try_clone()?;
+            let handle = thread::Builder::new()
+                .name("layerfs-connection".into())
+                .stack_size(2 * 1024 * 1024)
+                .spawn(move || {
+                    if let Ok(connection) = accept(stream, &private, &peers) {
+                        let _ = serve(connection, |peer, r, input, output, deadline| {
+                            let (result, diagnostic) =
+                                service.handle_until(peer, r, input, output, deadline);
+                            runtime.publish(diagnostic);
+                            result
+                        });
+                    }
+                })?;
+            sessions.push(Session {
+                socket,
+                worker: handle,
+            });
+        }
+        Ok(())
+    })();
+    // Stop admission, then interrupt handshake/input/output on every live owner.
+    // Shutdown clones share sockets; they are not additional connection slots.
+    drop(listener);
+    for session in &sessions {
+        let _ = session.socket.shutdown(Shutdown::Both);
     }
     let end = Instant::now() + Duration::from_secs(2);
-    for handle in threads {
-        while !handle.is_finished() && Instant::now() < end {
+    for session in &sessions {
+        while !session.worker.is_finished() && Instant::now() < end {
             thread::park_timeout(Duration::from_millis(10));
         }
-        if handle.is_finished() {
-            let _ = handle.join();
+        if !session.worker.is_finished() {
+            layerfs_bridge::adapters::native::pipe::diagnostic(
+                "layerfs-service: shutdown expired; operation outcomes unresolved\n",
+            );
+            // This is executable assembly. Keep all owners until explicit process
+            // exit; detaching a worker is not completion or proof of rollback.
+            std::process::exit(1);
         }
     }
-    Ok(())
+    for session in sessions {
+        let _ = session.worker.join();
+    }
+    result
 }

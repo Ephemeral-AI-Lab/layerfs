@@ -16,6 +16,7 @@ pub fn serve(
         &Request,
         &mut dyn Read,
         &mut dyn Write,
+        Instant,
     ) -> Result<Response, Failure>,
 ) -> Result<(), Failure> {
     let hello = connection.receive.read()?;
@@ -53,7 +54,13 @@ pub fn serve(
             request.operation.input_length()?,
         );
         let mut output = Output::new(&mut connection.send, request.id, request.response_bytes);
-        let result = handler(&connection.peer, &request, &mut input, &mut output);
+        let result = handler(
+            &connection.peer,
+            &request,
+            &mut input,
+            &mut output,
+            deadline,
+        );
         let result = match result {
             Ok(r) if input.complete() => Ok(r),
             Ok(_) => Err(Code::InvalidInput.into()),

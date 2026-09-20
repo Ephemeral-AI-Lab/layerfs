@@ -332,3 +332,56 @@ fn the_retained_footprint_reports_pack_bodies_and_database_bytes() {
         "one database file, no payload or spool file"
     );
 }
+
+#[test]
+fn repeated_read_demands_pay_their_full_returned_byte_cost_before_copying() {
+    let dir = TempDir::new("read-byte-cap");
+    let store = create_store(&dir.store_path("bounded"));
+    let object = whole_file_object(&vec![1; 131_000]);
+    let id = object.id();
+    let canonical = object.canonical_len();
+    let demands = vec![id; layerfs_storage::policy::READ_CANONICAL_BYTES_LIMIT / canonical + 1];
+    let mut save = disabled(|s| store.begin_save(s.child("begin"))).unwrap();
+    save.accept(object).unwrap();
+    let error = disabled(|s| save.read_batch(&demands, s.child("pending-read"))).unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::CapacityExceeded {
+            what: "storage.read_canonical_bytes",
+            ..
+        }
+    ));
+    disabled(|s| save.finish(s.child("finish"))).unwrap();
+    let error = read_objects(&store, &demands).unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::CapacityExceeded {
+            what: "storage.read_canonical_bytes",
+            ..
+        }
+    ));
+    assert!(read_objects(&store, &[id]).is_ok());
+}
+
+#[test]
+fn an_oversized_persisted_pack_is_refused_before_blob_materialization() {
+    let dir = TempDir::new("pack-read-byte-cap");
+    let path = dir.store_path("bounded");
+    let store = create_store(&path);
+    let (objects, root, _) = construct_file(b"retained");
+    save_all(&store, &objects).unwrap();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch("PRAGMA ignore_check_constraints=ON")
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE object_packs SET data=zeroblob(?1)",
+            [layerfs_storage::policy::SINGLETON_PACK_LIMIT as i64 + 1],
+        )
+        .unwrap();
+    assert!(matches!(
+        read_objects(&store, &[root]),
+        Err(StorageError::Integrity("pack row is missing"))
+    ));
+}

@@ -2,13 +2,20 @@
 use super::{Code, Failure};
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
-pub const MAX_FILE: u64 = 64 * 1024 * 1024;
+pub const MAX_FILE: u64 = 4 * 1024 * 1024 * 1024;
+pub const MAX_OPERATION_MS: u32 = 600_000;
+pub const IO_PROGRESS_MS: u64 = 5_000;
+/// Complete operation reservations; no queue or extra construction producer.
+pub const MAX_OPERATIONS: usize = 2;
 pub const MAX_REPLAY: u64 = 8 * 1024 * 1024;
 /// Persistent/handshaking/closing sessions; the acceptor owns one extra refusal slot.
 pub const MAX_SESSIONS: usize = 4;
 /// Total application connection slots, including the synchronous accept/refusal owner.
 pub const MAX_CONNECTIONS: usize = MAX_SESSIONS + 1;
-pub const MAX_FRAMES: usize = 8192;
+/// Includes boundary slack and one terminal; finite even for tiny-frame abuse.
+pub const fn frame_budget(bytes: u64) -> u64 {
+    bytes.div_ceil(1024).saturating_add(257)
+}
 pub type Root = [u8; 32];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -120,7 +127,7 @@ impl Request {
         if self.profile != 1 {
             return Err(Code::Unsupported.into());
         }
-        if self.id == 0 || self.deadline_ms == 0 || self.deadline_ms > 10000 {
+        if self.id == 0 || self.deadline_ms == 0 || self.deadline_ms > MAX_OPERATION_MS {
             return Err(invalid());
         }
         if self.response_bytes > MAX_FILE || self.operation.input_length()? > MAX_FILE {

@@ -207,7 +207,12 @@ fn observe_pooled_physical_decodes(elements: usize) {
         use layerfs_storage::encoding::delta::read::{ChainCounters, Resolver};
         use layerfs_storage::encoding::{DecompressionWorkspace, GroupCache};
 
-        let connection = rusqlite::Connection::open(&path).expect("external connection");
+        // The supported external reader: a second connection outside the product's
+        // session, opened through the Store's own opener so its read scope is initialized
+        // to "everything published". A raw rusqlite handle bypasses that scope and is not
+        // a supported reader of a Store file.
+        let connection =
+            layerfs_storage::sqlite::connection::open(&path, false).expect("external connection");
         let location = layerfs_storage::sqlite::lookup::location(&connection, id, i64::MAX)
             .expect("lookup")
             .expect("leaf locator");
@@ -1123,7 +1128,8 @@ fn the_pooled_value_cache_releases_at_its_declared_bound() {
             )
             .expect("watermark")
     };
-    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let connection =
+        layerfs_storage::sqlite::connection::open(&path, false).expect("scoped connection");
     let mut workspace = DecompressionWorkspace::new().expect("decode workspace");
     let mut reader = PoolReader::new();
     let mut peak_retained = 0_usize;
@@ -1196,7 +1202,8 @@ fn a_pooled_reader_releases_pack_bodies_when_the_store_writes() {
 
     let reopened = open_store(&path);
     let capacities = reopened.capacities();
-    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let connection =
+        layerfs_storage::sqlite::connection::open(&path, false).expect("scoped connection");
     let ceiling: i64 = connection
         .query_row(
             "SELECT retained_pack_ceiling FROM store_policy WHERE id = 1",

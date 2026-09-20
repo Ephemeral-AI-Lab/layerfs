@@ -18,6 +18,8 @@ pub enum StorageError {
     Engine(rusqlite::Error),
     /// The requested object is not stored.
     ObjectMissing(ObjectId),
+    /// The identity exists only in saves outside this reader's publication scope.
+    Unpublished(ObjectId),
     /// Stored bytes differ from the bytes offered under the same identity.
     Collision(ObjectId),
     /// A direct logical dependency is not stored and not in the current batch.
@@ -92,6 +94,9 @@ impl fmt::Display for StorageError {
             Self::Content(error) => write!(formatter, "content: {error}"),
             Self::Engine(error) => write!(formatter, "engine: {error}"),
             Self::ObjectMissing(id) => write!(formatter, "object {id} is not stored"),
+            Self::Unpublished(id) => {
+                write!(formatter, "object {id} is not published to this reader")
+            }
             Self::Collision(id) => write!(formatter, "identity collision for {id}"),
             Self::MissingDependency { object, reference } => {
                 write!(formatter, "{object} depends on missing {reference}")

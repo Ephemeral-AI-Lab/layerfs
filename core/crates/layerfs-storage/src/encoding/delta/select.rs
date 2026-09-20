@@ -200,6 +200,8 @@ impl DepthCache {
 pub struct SelectInput<'a> {
     /// Open write connection: candidate lookups and base reads use it.
     pub connection: &'a Connection,
+    /// Serializes database work, without holding write ownership during encoding.
+    pub arbitration: &'a std::sync::Mutex<()>,
     /// Accepted capacities: frames, depths and chain budgets.
     pub capacities: &'a StorageCapacities,
     /// Admitted-FULL winner cache.
@@ -368,6 +370,7 @@ pub fn select(
         // The walk reads each edge from its record through the selection's own
         // pack cache, which the acquisition of this same base already filled: the
         // bodies are fetched once, not once per walk and once per read.
+        let _guard = crate::sqlite::ownership::lock(input.arbitration)?;
         let mut bases = ChainBases::new(input.packs);
         let started = Instant::now();
         let base_cost = input.depths.cost_of(
@@ -433,6 +436,7 @@ fn eligible(
     role: ObjectRole,
     depth_cap: u8,
 ) -> StorageResult<bool> {
+    let _guard = crate::sqlite::ownership::lock(input.arbitration)?;
     let Some(location) = lookup::location(input.connection, id, i64::MAX)? else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
@@ -458,6 +462,7 @@ fn eligible(
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
+    let _guard = crate::sqlite::ownership::lock(input.arbitration)?;
     let started = Instant::now();
     let value = {
         let mut groups = crate::encoding::GroupCache::new();

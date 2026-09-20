@@ -51,35 +51,62 @@ fn id_value(id: ObjectId) -> Value {
     Value::Blob(id.to_bytes().to_vec())
 }
 
-/// Returns locations for the identifiers that are present, honouring a ceiling.
+/// Returns one deterministic eligible locator for each requested identifier.
 pub fn locations(
     connection: &Connection,
     ids: &[ObjectId],
     ceiling: i64,
 ) -> StorageResult<Vec<ObjectLocation>> {
+    let mut found = std::collections::BTreeMap::new();
+    for (location, _, eligible) in candidates(connection, ids, ceiling)? {
+        if eligible {
+            found.entry(location.object_id).or_insert(location);
+        }
+    }
+    Ok(found.into_values().collect())
+}
+
+pub(crate) fn candidates(
+    connection: &Connection,
+    ids: &[ObjectId],
+    ceiling: i64,
+) -> StorageResult<Vec<(ObjectLocation, i64, bool)>> {
     let mut found = Vec::new();
     for page in pages(ids) {
         let sql = format!(
-            "SELECT object_id, object_role, canonical_length, pack_id, group_number, record_number \
-             FROM objects WHERE object_id IN ({}) AND pack_id <= ?{}",
-            placeholders(page.len(), 1),
-            page.len() + 1
+            "SELECT o.object_id,o.object_role,o.canonical_length,o.pack_id,o.group_number,o.record_number,o.save_id,\
+             (o.save_id = r.save_id OR s.publication <= r.publication) \
+             FROM objects o JOIN saves s USING(save_id),temp.layerfs_read_scope r \
+             WHERE o.object_id IN ({}) AND o.pack_id <= ?{} ORDER BY o.object_id,o.save_id LIMIT ?{}",
+            placeholders(page.len(),1),page.len()+1,page.len()+2,
         );
         let mut parameters: Vec<Value> = page.iter().copied().map(id_value).collect();
         parameters.push(Value::Integer(ceiling));
+        parameters.push(Value::Integer(
+            (page.len() * super::ownership::SAVE_SLOTS + 1) as i64,
+        ));
         let mut statement = connection.prepare_cached(&sql)?;
-        let rows = statement.query_map(rusqlite::params_from_iter(parameters), |row| {
-            Ok((
-                row.get::<_, Vec<u8>>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(4)?,
-                row.get::<_, i64>(5)?,
-            ))
-        })?;
-        for row in rows {
-            found.push(decode_location(row?)?);
+        let mut rows = statement.query(rusqlite::params_from_iter(parameters))?;
+        let mut counts = std::collections::BTreeMap::new();
+        while let Some(row) = rows.next()? {
+            let location = decode_location((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))?;
+            let count = counts.entry(location.object_id).or_insert(0usize);
+            *count += 1;
+            if *count > super::ownership::SAVE_SLOTS {
+                return Err(StorageError::Integrity("object locator ownership bound"));
+            }
+            found.push((
+                location,
+                row.get(6)?,
+                row.get::<_, Option<bool>>(7)?.unwrap_or(false),
+            ));
         }
     }
     Ok(found)
@@ -118,38 +145,24 @@ fn decode_location(row: RawRow) -> StorageResult<ObjectLocation> {
     })
 }
 
-/// Returns the subset of `ids` that is present, without fetching locators.
+/// Returns present identities, excluding foreign private saves.
 pub fn present(
     connection: &Connection,
     ids: &[ObjectId],
     ceiling: i64,
 ) -> StorageResult<Vec<ObjectId>> {
-    let mut found = Vec::new();
-    for page in pages(ids) {
-        let sql = format!(
-            "SELECT object_id FROM objects WHERE object_id IN ({}) AND pack_id <= ?{}",
-            placeholders(page.len(), 1),
-            page.len() + 1
-        );
-        let mut parameters: Vec<Value> = page.iter().copied().map(id_value).collect();
-        parameters.push(Value::Integer(ceiling));
-        let mut statement = connection.prepare_cached(&sql)?;
-        let rows = statement.query_map(rusqlite::params_from_iter(parameters), |row| {
-            row.get::<_, Vec<u8>>(0)
-        })?;
-        for row in rows {
-            found.push(ObjectId::from_bytes(&row?)?);
-        }
-    }
-    Ok(found)
+    Ok(locations(connection, ids, ceiling)?
+        .into_iter()
+        .map(|location| location.object_id)
+        .collect())
 }
 
 /// Reads one pack BLOB by primary key.
 pub fn pack_bytes(connection: &Connection, pack_id: i64) -> StorageResult<Vec<u8>> {
     connection
         .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            [pack_id],
+            "SELECT p.data FROM object_packs p JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE p.pack_id = ?1 AND length(p.data) BETWEEN 32 AND ?2 AND (p.save_id = r.save_id OR s.publication <= r.publication)",
+            rusqlite::params![pack_id, crate::policy::SINGLETON_PACK_LIMIT as i64],
             |row| row.get::<_, Vec<u8>>(0),
         )
         .map_err(|error| match error {

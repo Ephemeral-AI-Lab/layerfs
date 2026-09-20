@@ -40,6 +40,7 @@ pub(super) struct PendingGroup {
     /// end offset per record - is projected through `framed_group_length` when the
     /// seal decision is made, so nothing here counts it once per record.
     pub(super) payload_len: usize,
+    pub(super) canonical_bytes: usize,
 }
 
 impl PendingGroup {
@@ -47,6 +48,7 @@ impl PendingGroup {
         self.records.clear();
         self.members.clear();
         self.payload_len = 0;
+        self.canonical_bytes = 0;
     }
 }
 
@@ -126,6 +128,11 @@ impl MutationOwner {
                 return Err(error);
             }
         };
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+        if !self.transaction_open {
+            self.begin_write()?;
+        }
         let started = Instant::now();
         let writes = self.placement[index].select_many(lane, vec![group], &mut self.next_pack_id);
         SaveProfile::charge(&mut self.profile.place_ns, started);
@@ -140,6 +147,16 @@ impl MutationOwner {
             .ok_or(StorageError::Integrity("placement produced no group"))?;
         if placed.records != pending.members.len() {
             return Err(StorageError::Integrity("placed record count"));
+        }
+        // Ordinary groups obey the preparation byte bound. A pre-existing
+        // singleton representation can own one larger canonical object, bounded
+        // by CANONICAL_LIMIT and SINGLETON_PACK_LIMIT, never a group of them.
+        if pending.members.len() as u64 + 4 > self.capacities.transaction_rows {
+            return Err(StorageError::CapacityExceeded {
+                what: "transaction rows",
+                limit: self.capacities.transaction_rows,
+                actual: pending.members.len() as u64 + 4,
+            });
         }
         self.write_pack(write)?;
         // The group's rows are inserted together: one statement per chunk the
@@ -162,6 +179,7 @@ impl MutationOwner {
         let statements = write::insert_objects(&self.connection, &rows);
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         let statements = statements?;
+        self.validate_candidates(&rows)?;
         self.counters.statements = self.counters.statements.saturating_add(statements);
         for member in &pending.members {
             if member.base_object_id.is_some() {
@@ -211,6 +229,10 @@ impl MutationOwner {
             self.counters.pack_appends += 1;
         }
         self.ceiling = self.ceiling.max(write.pack_id);
+        self.connection.execute(
+            "UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save_id = ?1 AND active_slot IS NOT NULL",
+            [self.save_id, write.pack_id],
+        )?;
         self.transaction.rows += 1;
         self.transaction.bytes += write.bytes.len() as u64;
         Ok(())

@@ -1,0 +1,14 @@
+# config: run-C-aes-armv8
+# RUSTFLAGS="--cfg chacha20_force_neon --cfg aes_armv8 -C target-feature=+aes,+sha2"
+# rustc: rustc 1.85.1 (4eb161250 2025-03-15)
+# command: RUSTFLAGS="--cfg chacha20_force_neon --cfg aes_armv8 -C target-feature=+aes,+sha2" cargo run --release --offline
+arch=aarch64 os=macos compile-time features: neon=true aes=true sha2=true avx2=false
+Noise_KK_25519_ChaChaPoly_BLAKE2s          msg=   4096 B  encrypt  0.466 GB/s (   8.80 us/msg)   decrypt  0.484 GB/s (   8.46 us/msg)
+Noise_KK_25519_AESGCM_SHA256               msg=   4096 B  encrypt  0.469 GB/s (   8.73 us/msg)   decrypt  0.477 GB/s (   8.58 us/msg)
+memcpy control                               msg=   4096 B  copy     56.407 GB/s
+Noise_KK_25519_ChaChaPoly_BLAKE2s          msg=  16384 B  encrypt  0.513 GB/s (  31.95 us/msg)   decrypt  0.505 GB/s (  32.43 us/msg)
+Noise_KK_25519_AESGCM_SHA256               msg=  16384 B  encrypt  0.492 GB/s (  33.27 us/msg)   decrypt  0.495 GB/s (  33.09 us/msg)
+memcpy control                               msg=  16384 B  copy     53.977 GB/s
+Noise_KK_25519_ChaChaPoly_BLAKE2s          msg=  61440 B  encrypt  0.521 GB/s ( 117.92 us/msg)   decrypt  0.519 GB/s ( 118.39 us/msg)
+Noise_KK_25519_AESGCM_SHA256               msg=  61440 B  encrypt  0.501 GB/s ( 122.62 us/msg)   decrypt  0.495 GB/s ( 124.00 us/msg)
+memcpy control                               msg=  61440 B  copy     32.733 GB/s

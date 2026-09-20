@@ -1,0 +1,20 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> crates/layerfs-storage/tests/persistence_failure.rs:300:18
+    |
+300 |     let report = abandon(&connection, 0).expect("cleanup");
+    |                  ^^^^^^^---------------- argument #3 of type `&Mutex<()>` is missing
+    |
+note: function defined here
+   --> /Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage/src/sqlite/cleanup.rs:18:8
+    |
+18  | pub fn abandon(connection:&Connection, save_id:i64, arbitration:&Mutex<()>) -> StorageResult<CleanupReport> {
+    |        ^^^^^^^
+help: provide the argument
+    |
+300 |     let report = abandon(&connection, 0, /* &Mutex<()> */).expect("cleanup");
+    |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `layerfs-storage` (test "persistence_failure") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

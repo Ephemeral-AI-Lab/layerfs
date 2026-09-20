@@ -1,0 +1,7 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.71s
+  Executable tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-0ff0aaf0cf2db559)
+  Executable tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-6f07af405ea2f299)
+  Executable tests/metadata_window.rs (core/target/debug/deps/metadata_window-32eddda0d3185caf)
+  Executable tests/multi_writer.rs (core/target/debug/deps/multi_writer-4791483a07dffd52)
+  Executable tests/provider_errors.rs (core/target/debug/deps/provider_errors-1be1962ed8df1017)

@@ -1,0 +1,11 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/direct.rs (core/target/debug/deps/direct-45e29669edfbe393)
+
+running 4 tests
+test inherited_deadline_expires_before_direct_input_or_mutation ... ok
+test authenticated_network_after_nonblocking_accept ... ok
+test denial_partial_and_invalid_inputs_never_succeed ... ok
+test construct_read_edit_inspect_and_reopen ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

@@ -3,6 +3,14 @@
 > **Status:** Research; source-backed description of the current tree. Informative,
 > not a product contract.
 
+The pending issue #192 schema 7 changes are described in
+[save ownership and publication](15-multi-writer-storage.md), based on
+`0819f3f39833d477d9ed6d878a50691c3c046a83`. That description supersedes the
+older exclusive-save, prefix-publication, shared-private-cache and cleanup rules
+below, and adds the returned-read byte bound and bounded ordinal window. The
+older source-pinned sections remain historical descriptions; they do not qualify
+the pending implementation or a performance change.
+
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).

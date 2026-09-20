@@ -1,0 +1,307 @@
+# Bridge transport slice: F5 (relay cap + one-read header), record batching, F4 (buffer reuse),
+# F6 (adaptive AES-GCM suite + runtime CPU check), plus the aarch64 build profile.
+# Baseline files SHA-256 verified against the hashes recorded before any edit.
+# Apply from the worktree root with git apply -p0; revert with git apply -R.
+--- a/core/crates/layerfs-bridge/src/adapters/native/connection.rs
++++ b/core/crates/layerfs-bridge/src/adapters/native/connection.rs
+@@ -1,5 +1,5 @@
+ //! One authenticated duplex connection with bounded records and absolute deadlines.
+-use super::protocol::{Frame, HEADER};
++use super::protocol::{Frame, Kind, HEADER};
+ use crate::contract::*;
+ use snow::{Builder, StatelessTransportState};
+ use std::{
+@@ -8,8 +8,36 @@
+     sync::{Arc, Mutex},
+     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+ };
+-const NOISE: &str = "Noise_KK_25519_ChaChaPoly_BLAKE2s";
++/// The authenticated suite this build negotiates.
++///
++/// AES-GCM is preferred wherever its backend is accelerated: x86_64 detects
++/// AES-NI/CLMUL at runtime, and aarch64 needs the `aes_armv8`/`polyval_armv8` cfgs
++/// (see the build recipe in the crate manifest). Without those cfgs an aarch64
++/// build would run AES-GCM at 0.111 GB/s against 1.17 GB/s accelerated, so it keeps
++/// ChaCha20-Poly1305 (0.52 GB/s, `poly1305` has no aarch64 backend at this pin)
++/// instead. No build can select the soft AES path, and two builds that chose
++/// different suites reject each other's handshake explicitly rather than degrading.
++#[cfg(any(
++    target_arch = "x86_64",
++    target_arch = "x86",
++    all(target_arch = "aarch64", aes_armv8, polyval_armv8)
++))]
++pub const NOISE: &str = "Noise_KK_25519_AESGCM_SHA256";
++#[cfg(not(any(
++    target_arch = "x86_64",
++    target_arch = "x86",
++    all(target_arch = "aarch64", aes_armv8, polyval_armv8)
++)))]
++pub const NOISE: &str = "Noise_KK_25519_ChaChaPoly_BLAKE2s";
+ const CIPHER_MAX: usize = METADATA_BYTES + HEADER + 16;
++/// Full-size data records are coalesced into one vectored write up to this many
++/// bytes. The record and `Frame` sizes are unchanged, so the bytes on the wire are
++/// identical; only the number of records one syscall carries changes.
++const RECORD_BATCH_BYTES: usize = 256 * 1024;
++/// A record smaller than this is written immediately instead of joining the open
++/// batch. Coalescing a short or control record would defer the peer's progress
++/// clock (`IO_PROGRESS_MS`) while saving a syscall that bulk data already pays for.
++const RECORD_BATCH_MIN_BYTES: usize = FRAME_BYTES / 2;
+ 
+ pub use crate::contract::VerifiedPeer;
+ 
+@@ -48,11 +76,16 @@
+     io: Socket,
+     state: Arc<StatelessTransportState>,
+     nonce: u64,
++    sealed: Vec<u8>,
++    plain: Vec<u8>,
+ }
+ pub struct Sender {
+     io: Socket,
+     state: Arc<StatelessTransportState>,
+     nonce: u64,
++    plain: Vec<u8>,
++    sealed: Vec<u8>,
++    batch: Vec<u8>,
+ }
+ struct Socket {
+     stream: TcpStream,
+@@ -136,18 +169,20 @@
+     pub fn peer_addr(&self) -> io::Result<SocketAddr> {
+         self.io.stream.peer_addr()
+     }
++    /// One record, decrypted into this receiver's reused scratch buffers.
+     pub fn read(&mut self) -> Result<Frame, Failure> {
+-        let encrypted = read_record(&mut self.io, CIPHER_MAX)?;
+-        if encrypted.len() < 16 {
++        read_record_into(&mut self.io, CIPHER_MAX, &mut self.sealed)?;
++        if self.sealed.len() < 16 {
+             return Err(Code::InvalidInput.into());
+         }
+-        let mut plain = vec![0; encrypted.len() - 16];
++        self.plain.clear();
++        self.plain.resize(self.sealed.len() - 16, 0);
+         let n = self
+             .state
+-            .read_message(self.nonce, &encrypted, &mut plain)
++            .read_message(self.nonce, &self.sealed, &mut self.plain)
+             .map_err(|_| Code::Denied)?;
+         self.nonce = self.nonce.checked_add(1).ok_or(Code::Capacity)?;
+-        let mut cursor = io::Cursor::new(&plain[..n]);
++        let mut cursor = io::Cursor::new(&self.plain[..n]);
+         let frame = Frame::read(&mut cursor)?;
+         if cursor.position() != n as u64 {
+             return Err(Code::InvalidInput.into());
+@@ -159,22 +194,54 @@
+     pub fn deadline(&mut self, d: Instant) {
+         self.io.deadline = d;
+     }
+-    pub fn end_upload(&self) {
++    pub fn end_upload(&mut self) {
++        let _ = self.flush();
+         let _ = self.io.stream.shutdown(Shutdown::Write);
+     }
+     pub fn close(&self) {
+         let _ = self.io.stream.shutdown(Shutdown::Both);
+     }
+-    pub fn write(&mut self, frame: &Frame) -> Result<(), Failure> {
+-        let plain = frame.encode()?;
+-        let mut encrypted = vec![0; plain.len() + 16];
++    /// Encrypts one record into the open batch, reusing this sender's scratch.
++    fn append_record(&mut self, frame: &Frame) -> Result<(), Failure> {
++        frame.encode_into(&mut self.plain)?;
++        self.sealed.clear();
++        self.sealed.resize(self.plain.len() + 16, 0);
+         let n = self
+             .state
+-            .write_message(self.nonce, &plain, &mut encrypted)
++            .write_message(self.nonce, &self.plain, &mut self.sealed)
+             .map_err(|_| Code::Io)?;
+         self.nonce = self.nonce.checked_add(1).ok_or(Code::Capacity)?;
+-        write_record(&mut self.io, &encrypted[..n])
++        self.batch.extend_from_slice(&(n as u32).to_be_bytes());
++        self.batch.extend_from_slice(&self.sealed[..n]);
++        Ok(())
+     }
++    /// A full-size data record may wait for the rest of its batch. A control record
++    /// or a short record flushes first and then goes out alone, so a peer's progress
++    /// clock (`IO_PROGRESS_MS`) always advances and no peer waits on a held record.
++    pub fn write(&mut self, frame: &Frame) -> Result<(), Failure> {
++        let bulk = matches!(frame.kind, Kind::Body | Kind::ResultData)
++            && frame.bytes.len() >= RECORD_BATCH_MIN_BYTES;
++        if !bulk {
++            self.flush()?;
++        }
++        self.append_record(frame)?;
++        if !bulk || self.batch.len() >= RECORD_BATCH_BYTES {
++            self.flush()?;
++        }
++        Ok(())
++    }
++    /// The batch is contiguous, so one `write_all` carries every record it holds.
++    pub fn flush(&mut self) -> Result<(), Failure> {
++        if self.batch.is_empty() {
++            return Ok(());
++        }
++        let result = self
++            .io
++            .write_all(&self.batch)
++            .map_err(|_| Failure::from(Code::Io));
++        self.batch.clear();
++        result
++    }
+ }
+ pub fn connect(
+     address: SocketAddr,
+@@ -222,6 +289,39 @@
+ pub fn listen(address: SocketAddr) -> Result<TcpListener, Failure> {
+     Ok(TcpListener::bind(address)?)
+ }
++/// The negotiated suite requires the CPU feature its backend needs.
++///
++/// The pinned `aes`/`polyval` crates detect the feature at runtime and fall back
++/// to a soft implementation when it is absent — measured 0.111 GB/s for soft
++/// AES-GCM against 1.61 GB/s accelerated — so an absent feature is a refusal
++/// rather than a silent downgrade of the negotiated profile.
++fn verify_cpu_backend() -> Result<(), Failure> {
++    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
++    {
++        if !(std::arch::is_x86_feature_detected!("aes")
++            && std::arch::is_x86_feature_detected!("pclmulqdq"))
++        {
++            return Err(Code::Unsupported.into());
++        }
++    }
++    #[cfg(all(target_arch = "aarch64", aes_armv8, polyval_armv8))]
++    {
++        // `aes` implies PMULL on the ARMv8 crypto extension.
++        if !std::arch::is_aarch64_feature_detected!("aes") {
++            return Err(Code::Unsupported.into());
++        }
++    }
++    #[cfg(not(any(
++        target_arch = "x86_64",
++        target_arch = "x86",
++        all(target_arch = "aarch64", aes_armv8, polyval_armv8)
++    )))]
++    {
++        // The fallback suite needs NEON on aarch64; every supported aarch64
++        // target declares it, so there is nothing to detect.
++    }
++    Ok(())
++}
+ fn handshake(
+     mut io: Socket,
+     selector: u32,
+@@ -229,6 +329,7 @@
+     public: [u8; 32],
+     initiator: bool,
+ ) -> Result<Connection, Failure> {
++    verify_cpu_backend()?;
+     let params = NOISE.parse().map_err(|_| Code::Unsupported)?;
+     let prologue = selector.to_be_bytes();
+     let builder = Builder::new(params)
+@@ -286,17 +387,35 @@
+         },
+         state: Arc::clone(&state),
+         nonce: 0,
++        plain: Vec::new(),
++        sealed: Vec::new(),
++        batch: Vec::new(),
+     };
+     Ok(Connection {
+         receive: Receiver {
+             io,
+             state,
+             nonce: 0,
++            sealed: Vec::new(),
++            plain: Vec::new(),
+         },
+         send,
+         peer: VerifiedPeer::authenticated(public),
+     })
+ }
++/// Reads one length-prefixed record into a caller-owned buffer.
++fn read_record_into(io: &mut Socket, limit: usize, out: &mut Vec<u8>) -> Result<(), Failure> {
++    let mut h = [0; 4];
++    io.read_exact(&mut h)?;
++    let n = u32::from_be_bytes(h) as usize;
++    if n == 0 || n > limit {
++        return Err(Code::Capacity.into());
++    }
++    out.clear();
++    out.resize(n, 0);
++    io.read_exact(out)?;
++    Ok(())
++}
+ fn read_record(io: &mut Socket, limit: usize) -> Result<Vec<u8>, Failure> {
+     let mut h = [0; 4];
+     io.read_exact(&mut h)?;
+--- a/core/crates/layerfs-bridge/src/adapters/native/pipe.rs
++++ b/core/crates/layerfs-bridge/src/adapters/native/pipe.rs
+@@ -52,9 +52,12 @@
+             return Ok(0);
+         }
+         self.ready(PollFlags::POLLOUT)?;
+-        // POSIX guarantees atomic pipe writes only through PIPE_BUF. 512 is the
+-        // portable minimum, and no other product writer shares this output pipe.
+-        unistd::write(self.fd, &b[..b.len().min(512)]).map_err(io::Error::other)
++        // One syscall per call. `PIPE_BUF` atomicity is unnecessary here: exactly
++        // one product writer owns this descriptor (it cannot interleave with
++        // itself), and every caller writes through `write_all`, which advances on
++        // a short write. The portable 512-byte cap this replaces cost 33 poll+write
++        // pairs for a single 16 KiB frame (measured 0.30 GB/s against 3.25 GB/s).
++        unistd::write(self.fd, b).map_err(io::Error::other)
+     }
+     fn flush(&mut self) -> io::Result<()> {
+         Ok(())
+--- a/core/crates/layerfs-bridge/src/adapters/native/protocol/frame.rs
++++ b/core/crates/layerfs-bridge/src/adapters/native/protocol/frame.rs
+@@ -21,14 +21,22 @@
+ }
+ impl Frame {
+     pub fn encode(&self) -> Result<Vec<u8>, Failure> {
++        let mut out = Vec::new();
++        self.encode_into(&mut out)?;
++        Ok(out)
++    }
++    /// Encodes into a caller-owned buffer so a hot path can reuse its scratch.
++    /// The buffer is cleared first and left holding exactly this frame.
++    pub fn encode_into(&self, out: &mut Vec<u8>) -> Result<(), Failure> {
+         check(self.kind, self.bytes.len())?;
+-        let mut out = Vec::with_capacity(HEADER + self.bytes.len());
++        out.clear();
++        out.reserve(HEADER + self.bytes.len());
+         out.extend_from_slice(b"LFB1");
+         out.extend_from_slice(&[self.kind as u8, 0, 0, 0]);
+         out.extend_from_slice(&self.id.to_be_bytes());
+         out.extend_from_slice(&(self.bytes.len() as u32).to_be_bytes());
+         out.extend_from_slice(&self.bytes);
+-        Ok(out)
++        Ok(())
+     }
+     pub fn read(reader: &mut impl Read) -> Result<Self, Failure> {
+         Self::read_optional(reader)?.ok_or_else(|| Code::Io.into())
+@@ -36,10 +44,16 @@
+     /// Clean EOF is accepted only between complete local submission frames.
+     pub fn read_optional(reader: &mut impl Read) -> Result<Option<Self>, Failure> {
+         let mut h = [0u8; HEADER];
+-        if reader.read(&mut h[..1])? == 0 {
++        // The fixed header normally arrives in a single read; a clean end of stream
++        // is legal only before its first byte, so a zero-length first read is the
++        // one end-of-stream signal accepted here.
++        let first = reader.read(&mut h)?;
++        if first == 0 {
+             return Ok(None);
+         }
+-        reader.read_exact(&mut h[1..])?;
++        if first < HEADER {
++            reader.read_exact(&mut h[first..])?;
++        }
+         if &h[..4] != b"LFB1" || h[5..8] != [0, 0, 0] {
+             return Err(Code::Unsupported.into());
+         }
+# New files (not in this patch):
+#   core/.cargo/config.toml            aarch64 transport build profile
+#   core/crates/layerfs-bridge/tests/{aead_profile,relay_write,upload_batch}.rs
+# Manifest edit: core/crates/layerfs-bridge/Cargo.toml [lints.rust] check-cfg for the three cfgs

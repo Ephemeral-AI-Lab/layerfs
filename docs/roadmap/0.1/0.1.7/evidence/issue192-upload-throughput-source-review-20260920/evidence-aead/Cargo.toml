@@ -1,0 +1,14 @@
+[package]
+name = "aeadbench"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+snow = "=0.9.6"
+chacha20poly1305 = "=0.10.1"
+aes-gcm = "=0.10.3"
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = false

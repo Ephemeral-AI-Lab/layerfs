@@ -1,0 +1,13 @@
+# E2c download: host server-send -> container client-recv (--cpus=1), 1 GiB per variant, single run
+# host: Apple M3 Max | image: layerfs-issue192-probe-75938:latest (arm64 linux, scratch)
+{"role":"container-client-recv","variant":"Plain16k","seconds":1.0839,"GBps":0.991,"us_per_unit":16.54,"calls_per_unit":1.00}
+{"role":"container-client-recv","variant":"Record2Setsockopt","seconds":1.0260,"GBps":1.047,"us_per_unit":15.65,"calls_per_unit":4.00}
+{"role":"container-client-recv","variant":"Record2","seconds":1.0494,"GBps":1.023,"us_per_unit":16.01,"calls_per_unit":2.00}
+{"role":"container-client-recv","variant":"Writev16k","seconds":1.0673,"GBps":1.006,"us_per_unit":16.29,"calls_per_unit":1.00}
+{"role":"container-client-recv","variant":"Record256k","seconds":1.0513,"GBps":1.021,"us_per_unit":256.66,"calls_per_unit":1.00}
+# host server view:
+{"role":"host-server-send","variant":"Plain16k","seconds":1.0776,"GBps":0.996,"us_per_unit":16.44,"calls_per_unit":1.00}
+{"role":"host-server-send","variant":"Record2Setsockopt","seconds":1.0216,"GBps":1.051,"us_per_unit":15.59,"calls_per_unit":4.00}
+{"role":"host-server-send","variant":"Record2","seconds":1.0476,"GBps":1.025,"us_per_unit":15.99,"calls_per_unit":2.00}
+{"role":"host-server-send","variant":"Writev16k","seconds":1.0650,"GBps":1.008,"us_per_unit":16.25,"calls_per_unit":1.00}
+{"role":"host-server-send","variant":"Record256k","seconds":1.0501,"GBps":1.022,"us_per_unit":256.38,"calls_per_unit":1.00}

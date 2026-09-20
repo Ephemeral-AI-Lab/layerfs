@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "core/crates/layerfs-daemon/tests/transport_diagnostic.py",
+    "--case",
+    "tdx1-noise-upload-1",
+    "--mode",
+    "perf",
+    "--output",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/tdx1-noise-upload-1-perf-v3-20260920"
+  ],
+  "class": "diagnostic",
+  "budget_seconds": 15,
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 6.431417624997266,
+  "head": "fc647e91aaf82cef9432f4c02e90aa246461b5cd",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2,
+  "construction_workers": 1,
+  "source_unchanged": true,
+  "performance_claim": false
+}

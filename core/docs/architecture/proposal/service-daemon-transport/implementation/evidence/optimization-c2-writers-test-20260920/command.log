@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/multi_writer.rs (core/target/debug/deps/multi_writer-4791483a07dffd52)
+
+running 2 tests
+test abort_removes_only_its_save_and_never_lends_a_foreign_dependency ... ok
+test private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

@@ -57,6 +57,11 @@ fn catalogue_preparation_preserves_current_rows_parameters_and_errors() {
         }))
         .unwrap();
 
+    // One preparation of the covering-row query issues two SELECT actions: the
+    // outer statement and its `MAX(first_ordinal)` subquery. That subquery is what
+    // keeps an unpublished covering group from silently falling back to an older
+    // visible one, so the events per preparation are counted, not assumed to be one.
+    const PER_PREPARATION: usize = 2;
     let first = group_for(&connection, 1).unwrap().unwrap();
     assert_eq!((first.first_ordinal, first.count), (1, 2));
     let replacement = ObjectId::for_bytes(b"new catalogue digest");
@@ -72,7 +77,7 @@ fn catalogue_preparation_preserves_current_rows_parameters_and_errors() {
         updated.digest, replacement,
         "reuse must not cache row contents"
     );
-    assert_eq!(preparations.load(Ordering::Relaxed), 1);
+    assert_eq!(preparations.load(Ordering::Relaxed), PER_PREPARATION);
 
     let second = group_for(&connection, 3).unwrap().unwrap();
     assert_eq!((second.first_ordinal, second.count), (3, 2));
@@ -94,9 +99,12 @@ fn catalogue_preparation_preserves_current_rows_parameters_and_errors() {
         Err(StorageError::Integrity("metadata ordinal"))
     ));
     assert_eq!(preparations.load(Ordering::Relaxed), before_invalid);
-    assert_eq!(before_invalid, 1);
+    assert_eq!(before_invalid, PER_PREPARATION);
     layerfs_storage::sqlite::pool::insert_group(&connection, &first).unwrap();
     assert_eq!(group_for(&connection, 1).unwrap(), Some(first));
-    assert_eq!(preparations.load(Ordering::Relaxed), 1);
-    println!("catalogue SELECT preparation events=1 for six helper queries; inserted row visible after absence");
+    assert_eq!(preparations.load(Ordering::Relaxed), PER_PREPARATION);
+    println!(
+        "catalogue SELECT preparation events={PER_PREPARATION} for six helper queries, \
+         i.e. one preparation; inserted row visible after absence"
+    );
 }

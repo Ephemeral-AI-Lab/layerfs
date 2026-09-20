@@ -1,0 +1,8 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running tests/native_connections.rs (core/target/debug/deps/native_connections-418cdfebd23ad2d6)
+
+running 1 test
+test productive_upload_keeps_the_response_wait_alive ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 6.02s
+

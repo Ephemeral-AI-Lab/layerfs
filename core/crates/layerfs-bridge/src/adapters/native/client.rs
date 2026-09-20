@@ -54,15 +54,35 @@ impl Client {
         source: &mut impl Source,
         output: &mut dyn Write,
     ) -> Result<Response, Failure> {
+        let deadline = Instant::now() + Duration::from_millis(r.deadline_ms as u64);
+        self.call_until(r, source, output, deadline)
+    }
+
+    /// Uses the caller's process-local deadline through upload and delivery.
+    /// The request can shorten this deadline, never extend it.
+    pub fn call_until(
+        &mut self,
+        r: &Request,
+        source: &mut impl Source,
+        output: &mut dyn Write,
+        deadline: Instant,
+    ) -> Result<Response, Failure> {
         r.validate()?;
         if self.closed || r.id <= self.previous {
             return Err(Code::InvalidInput.into());
         }
         self.previous = r.id;
-        let deadline = Instant::now() + Duration::from_millis(r.deadline_ms as u64);
+        let deadline = deadline.min(Instant::now() + Duration::from_millis(r.deadline_ms as u64));
         self.connection.send.deadline(deadline);
         self.connection.receive.deadline(deadline);
-        let metadata = encode_request(r)?;
+        // A duration crosses the wire, never an Instant. Metadata preparation
+        // consumes the same local budget; the remote peer starts its own clock.
+        let remaining_ms = deadline
+            .checked_duration_since(Instant::now())
+            .and_then(|remaining| u32::try_from(remaining.as_millis()).ok())
+            .filter(|remaining| *remaining > 0)
+            .ok_or(Code::Deadline)?;
+        let metadata = encode_request_with_budget(r, remaining_ms)?;
         // Once BEGIN is attempted, a transport failure cannot establish mutation abort.
         if self
             .connection
@@ -89,7 +109,7 @@ impl Client {
                     let result = (|| {
                         let mut buffer = [0u8; FRAME_BYTES];
                         let mut bytes = 0u64;
-                        let mut frames = 0;
+                        let mut frames = 0u64;
                         loop {
                             let n = source.read(&mut buffer, deadline, &cancel)?;
                             if n > buffer.len() {
@@ -106,7 +126,7 @@ impl Client {
                                 .filter(|v| *v <= expected)
                                 .ok_or(Code::InvalidInput)?;
                             frames += 1;
-                            if frames >= MAX_FRAMES {
+                            if frames >= frame_budget(expected) {
                                 return Err(Code::Capacity.into());
                             }
                             send.write(&Frame {
@@ -129,11 +149,11 @@ impl Client {
                 .map_err(|_| delivery(r))?;
             let response = (|| {
                 let mut bytes = 0u64;
-                let mut frames = 0;
+                let mut frames = 0u64;
                 loop {
                     let frame = receive.read().map_err(|_| delivery(r))?;
                     frames += 1;
-                    if frame.id != r.id || frames > MAX_FRAMES {
+                    if frame.id != r.id || frames > frame_budget(r.response_bytes) {
                         return Err(delivery(r));
                     }
                     match frame.kind {

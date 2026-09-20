@@ -23,7 +23,7 @@ use crate::error::{StorageError, StorageResult};
 /// `MissingObject` is the answer for absence and for nothing else, because a
 /// caller-authorized value root is allowed to name an object this Store does
 /// not hold (`admission-and-persistence.md`). Every other failure - a corrupt
-/// locator or pack, a record above the publication watermark, a capacity
+/// locator or pack, a private or out-of-range record, a capacity
 /// refusal, an engine failure - reaches C1 as a distinguishable
 /// [`ContentError::ProviderFailure`] instead of masquerading as absence, which
 /// is the distinction a later adapter needs between "this root is not in this
@@ -35,9 +35,11 @@ fn provider_error(error: StorageError) -> ContentError {
         StorageError::Integrity(what) => ContentError::ProviderFailure { what },
         StorageError::CapacityExceeded { what, .. } => ContentError::ProviderFailure { what },
         StorageError::UnsupportedPolicy { field } => ContentError::ProviderFailure { what: field },
-        StorageError::VisibilityCeiling { .. } => ContentError::ProviderFailure {
-            what: "record above the visibility ceiling",
-        },
+        StorageError::VisibilityCeiling { .. } | StorageError::Unpublished(_) => {
+            ContentError::ProviderFailure {
+                what: "record outside the publication scope",
+            }
+        }
         StorageError::Collision(_) => ContentError::ProviderFailure {
             what: "identity collision",
         },

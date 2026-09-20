@@ -1,0 +1,25 @@
+{
+  "case": "tdx1-tcp-download-1",
+  "mode": "verify",
+  "admission_eligible": false,
+  "status": "PASS",
+  "cleanup": "PASS",
+  "target_payload_bytes_per_second": 2000000000,
+  "cache_contract": "generated distinct input; every transmitted block filled inside transfer; no file-backed payload/cache/spool",
+  "scope": "bridge transport component; C1/C2 and daemon stdin/stdout excluded",
+  "oracle_and_corruption_self_check": "PASS",
+  "setup_ns": 255018959,
+  "transfer": {
+    "carrier": "tcp",
+    "direction": "download",
+    "streams": 1,
+    "payload_bytes": 1073741824,
+    "transfer_ns": 1027119000,
+    "payload_chunks": 65536,
+    "authentication_handshakes": 0,
+    "verified_bytes": 1073741824,
+    "admission_eligible": false
+  },
+  "cleanup_ns": 124742042,
+  "complete_command_ns": 1498357667
+}

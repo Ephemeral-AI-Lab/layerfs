@@ -34,9 +34,12 @@ impl MutationOwner {
         if self.terminal {
             return Err(StorageError::Aborted);
         }
-        let queries = availability.validate(&self.connection, object, i64::MAX, |id| {
-            self.pending_member(id)
-        })?;
+        let queries = {
+            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            availability.validate(&self.connection, object, i64::MAX, |id| {
+                self.pending_member(id)
+            })?
+        };
         self.counters.presence_queries = self.counters.presence_queries.saturating_add(queries);
         let record = self.select_record(object, advisory)?;
         let lane = record.lane;
@@ -65,10 +68,20 @@ impl MutationOwner {
                     )? > GROUP_TARGET
             }
         };
-        if must_seal {
+        if must_seal
+            || (occupied
+                && self.groups[index]
+                    .canonical_bytes
+                    .saturating_add(object.canonical_len())
+                    > self.capacities.batch_bytes as usize)
+        {
             self.seal_group(lane, availability)?;
         }
         let group = &mut self.groups[index];
+        group.canonical_bytes = group
+            .canonical_bytes
+            .checked_add(object.canonical_len())
+            .ok_or(StorageError::Integrity("group canonical bytes"))?;
         group.payload_len = group
             .payload_len
             .checked_add(record.record.len())
@@ -107,6 +120,7 @@ impl MutationOwner {
             .map_err(|_| StorageError::Integrity("candidate index lock"))?;
         let mut input = SelectInput {
             connection: &self.connection,
+            arbitration: &self.arbitration,
             capacities: &self.capacities,
             candidates: &mut candidates,
             depths: &mut self.depths,

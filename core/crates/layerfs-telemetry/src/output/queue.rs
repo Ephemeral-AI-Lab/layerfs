@@ -125,8 +125,11 @@ pub struct Loss {
 /// Shared producer handle. Clones share one queue and one writer.
 #[derive(Clone)]
 pub struct Output {
+    owner: Arc<Owner>,
+}
+struct Owner {
     shared: Arc<Shared>,
-    worker: Arc<Mutex<Option<JoinHandle<()>>>>,
+    worker: Mutex<Option<JoinHandle<()>>>,
 }
 impl Output {
     /// Starts explicit output after validation; failure is independent of product work.
@@ -163,8 +166,10 @@ impl Output {
             .stack_size(256 * 1024)
             .spawn(move || write_loop(owner, local))?;
         Ok(Self {
-            shared,
-            worker: Arc::new(Mutex::new(Some(worker))),
+            owner: Arc::new(Owner {
+                shared,
+                worker: Mutex::new(Some(worker)),
+            }),
         })
     }
     /// Nonblocking ownership transfer; capacity charges Vec allocation, not length.
@@ -176,7 +181,7 @@ impl Output {
         bytes: Vec<u8>,
         producer: Option<Arc<super::collector::Registration>>,
     ) {
-        let s = &self.shared;
+        let s = &self.owner.shared;
         let charge = bytes.capacity();
         if s.closed.load(Ordering::Acquire)
             || bytes.len() > s.config.record_bytes
@@ -189,6 +194,11 @@ impl Output {
             s.dropped.add(1);
             return;
         };
+        // Shutdown may have begun between the optimistic check and this lock.
+        if s.closed.load(Ordering::Acquire) {
+            s.dropped.add(1);
+            return;
+        }
         while q.bytes + charge > s.config.queue_bytes
             || q.records.len() + usize::from(q.active) >= s.config.queue_count
         {
@@ -209,23 +219,24 @@ impl Output {
     }
     /// Charges omitted detail without allocating a recursive failure report.
     pub fn omit(&self) {
-        self.shared.dropped.add(1);
+        self.owner.shared.dropped.add(1);
     }
     /// Fixed health snapshot; not a promise that output arrived at its destination.
     pub fn loss(&self) -> Loss {
         Loss {
-            dropped: self.shared.dropped.value(),
-            failed: self.shared.failed.value(),
-            overflow: self.shared.failed.overflowed() || self.shared.dropped.overflowed(),
+            dropped: self.owner.shared.dropped.value(),
+            failed: self.owner.shared.failed.value(),
+            overflow: self.owner.shared.failed.overflowed()
+                || self.owner.shared.dropped.overflowed(),
         }
     }
     /// Stops new output, attempts a bounded wait, then releases the join handle.
     /// Blocking local filesystem syscalls are not claimed to be preemptible.
     pub fn shutdown(&self, allowance: Duration) {
-        self.shared.closed.store(true, Ordering::Release);
-        self.shared.wake.notify_all();
+        self.owner.shared.closed.store(true, Ordering::Release);
+        self.owner.shared.wake.notify_all();
         let end = Instant::now() + allowance.min(Duration::from_secs(2));
-        if let Ok(mut slot) = self.worker.try_lock() {
+        if let Ok(mut slot) = self.owner.worker.try_lock() {
             if let Some(worker) = slot.take() {
                 while !worker.is_finished() && Instant::now() < end {
                     thread::park_timeout(Duration::from_millis(10));
@@ -235,17 +246,17 @@ impl Output {
                 }
             }
         }
-        self.shared.stop.store(true, Ordering::Release);
-        self.shared.wake.notify_all();
+        self.owner.shared.stop.store(true, Ordering::Release);
+        self.owner.shared.wake.notify_all();
     }
 }
-impl Drop for Output {
+impl Drop for Owner {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.worker) == 1 {
-            self.shared.closed.store(true, Ordering::Release);
-            self.shared.stop.store(true, Ordering::Release);
-            self.shared.wake.notify_all();
-        }
+        // Arc drops this owner exactly once, even when final handles disappear
+        // concurrently. The worker owns Shared, never Owner.
+        self.shared.closed.store(true, Ordering::Release);
+        self.shared.stop.store(true, Ordering::Release);
+        self.shared.wake.notify_all();
     }
 }
 fn write_loop(s: Arc<Shared>, mut local: Option<Local>) {

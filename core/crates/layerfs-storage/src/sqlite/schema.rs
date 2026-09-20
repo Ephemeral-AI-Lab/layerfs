@@ -28,7 +28,7 @@ const NO_PACKS_PUBLISHED: i64 = 0;
 /// **`content_signatures` is the W2 squad's table (#188d).** It is required here
 /// because `Store::open` reads it back and a Store without it could not answer a
 /// candidate lookup at all; it is not optional and not a floor.
-const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
+const REQUIRED_TABLES: [(&str, &[&str]); 6] = [
     (
         "store_policy",
         &[
@@ -38,10 +38,19 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
             "whole_file_delta_max_depth",
             "chunk_delta_max_depth",
             "metadata_delta_max_depth",
+            "publication_sequence",
             "retained_pack_ceiling",
+            "next_pack_id",
+            "next_ordinal",
+            "metadata_window_start",
+            "metadata_window_values",
         ],
     ),
-    ("object_packs", &["pack_id", "data"]),
+    (
+        "saves",
+        &["save_id", "active_slot", "publication", "pack_ceiling"],
+    ),
+    ("object_packs", &["pack_id", "save_id", "data"]),
     (
         "metadata_value_groups",
         &[
@@ -56,6 +65,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
         "objects",
         &[
             "object_id",
+            "save_id",
             "object_role",
             "canonical_length",
             "pack_id",
@@ -65,7 +75,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
     ),
     (
         "content_signatures",
-        &["slot", "stamp", "object_id", "signature"],
+        &["slot", "stamp", "object_id", "signature", "save_id"],
     ),
 ];
 
@@ -78,7 +88,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
 /// so this change does **not** invalidate an existing Store and `SCHEMA_VERSION`
 /// stays at 4. What is required is checked by [`REQUIRED_TABLES`], which is where
 /// a reader's actual dependency lives.
-const REQUIRED_INDEXES: [&str; 0] = [];
+const REQUIRED_INDEXES: [&str; 3] = ["packs_save", "objects_save", "signatures_save"];
 
 /// Creates a fresh Store with `policy` and returns the stored policy.
 pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<StoragePolicy> {
@@ -90,7 +100,7 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
     connection.execute(
         "INSERT INTO store_policy \
          (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, \
-          chunk_delta_max_depth, metadata_delta_max_depth, retained_pack_ceiling) \
+          chunk_delta_max_depth, metadata_delta_max_depth, publication_sequence) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         rusqlite::params![
             POLICY_ROW,
@@ -128,15 +138,15 @@ pub fn validate(
         "SELECT COUNT(*) FROM sqlite_master \
          WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN \
          ('store_policy','object_packs','metadata_value_groups','objects',\
-          'content_signatures')",
+          'content_signatures','saves')",
         [],
         |row| row.get(0),
     )?;
     if unexpected != 0 {
         return Err(StorageError::Integrity("unexpected table in Store"));
     }
-    // I1: the watermark can never be ahead of storage. A Store whose watermark
-    // exceeds its highest pack id has been corrupted or written out of band.
+    // The retained range cannot be ahead of physical storage. Publication
+    // eligibility is checked separately through the save catalog.
     let ceiling = retained_pack_ceiling(connection)?;
     let highest = crate::sqlite::lookup::highest_pack_id(connection)?;
     if ceiling > highest {
@@ -271,36 +281,13 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
         .validated()
 }
 
-/// Highest pack id belonging to a completed save.
+/// Highest published pack id; ownership filters still decide visibility below it.
 pub fn retained_pack_ceiling(connection: &Connection) -> StorageResult<i64> {
-    connection
-        .query_row(
-            "SELECT retained_pack_ceiling FROM store_policy WHERE id = ?1",
-            [POLICY_ROW],
-            |row| row.get(0),
-        )
-        .map_err(|error| match error {
-            rusqlite::Error::QueryReturnedNoRows => {
-                StorageError::Integrity("policy row is missing")
-            }
-            other => StorageError::Engine(other),
-        })
-}
-
-/// Advances the publication watermark inside the caller's open transaction.
-///
-/// The caller must hold write ownership; the caller also decides whether the
-/// advance shares the transaction that publishes the packs it names.
-pub fn advance_retained_pack_ceiling(connection: &Connection, ceiling: i64) -> StorageResult<()> {
-    let affected = connection.execute(
-        "UPDATE store_policy SET retained_pack_ceiling = ?2 \
-         WHERE id = ?1 AND retained_pack_ceiling < ?2",
-        rusqlite::params![POLICY_ROW, ceiling],
-    )?;
-    if affected > 1 {
-        return Err(StorageError::Integrity("watermark update cardinality"));
-    }
-    Ok(())
+    Ok(connection.query_row(
+        "SELECT retained_pack_ceiling FROM store_policy WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?)
 }
 
 /// Number of stored object rows; used to reject a non-empty create target.

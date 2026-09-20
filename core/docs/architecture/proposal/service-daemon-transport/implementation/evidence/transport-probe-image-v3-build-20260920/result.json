@@ -1,0 +1,17 @@
+{
+  "command": [
+    "python3",
+    "/tmp/layerfs-issue192-probe-image-v3.py"
+  ],
+  "class": "build",
+  "budget_seconds": 180,
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 0.5984688750031637,
+  "head": "fc647e91aaf82cef9432f4c02e90aa246461b5cd",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2,
+  "construction_workers": 1,
+  "source_unchanged": true,
+  "performance_claim": false
+}

@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 249, in <module>
+    if __name__=="__main__":main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 93, in main
+    assert excess[:2]==(7,b"\4\0\0"),excess
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (7, b'\x05\x00\x00', 0, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')

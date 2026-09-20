@@ -1,0 +1,11 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-service)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.33s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_bridge-54ebe816104fabaa)
+  Executable tests/native_connections.rs (core/target/debug/deps/native_connections-6a0f20ba93ed8e4b)
+  Executable tests/protocol.rs (core/target/debug/deps/protocol-f7148992e6ca9d53)
+  Executable unittests src/main.rs (core/target/debug/deps/layerfs_daemon-b58acca67e532de1)
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_service-0aa95484774172f6)
+  Executable unittests src/main.rs (core/target/debug/deps/layerfs_service-6593e98b5d611159)
+  Executable tests/direct.rs (core/target/debug/deps/direct-45e29669edfbe393)

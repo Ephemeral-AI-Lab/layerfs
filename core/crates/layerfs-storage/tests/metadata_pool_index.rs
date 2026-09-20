@@ -167,7 +167,7 @@ fn a_cold_store_synchronizes_from_the_catalogue_without_reassigning() {
 /// the failed save's own private values again, which is the only request that can
 /// reach the phantom ordinals the failed save had assigned.
 #[test]
-fn a_failed_save_leaves_no_usable_state_in_the_set() {
+fn a_failed_save_cannot_change_the_published_candidate_set() {
     let dir = TempDir::new("index-invalidate");
     let path = dir.store_path("index");
     let store = create_store(&path);
@@ -199,13 +199,12 @@ fn a_failed_save_leaves_no_usable_state_in_the_set() {
         matches!(error, StorageError::Content(_) | StorageError::Integrity(_)),
         "got {error}"
     );
-    // The failed attempt left the catalogue exactly as it was, and the retained
-    // set holds no entry at all.
+    // The failed attempt left the published catalogue and its candidate set intact.
     assert_eq!(ordinals(&path), retained_groups);
     assert_eq!(
         store.pool_index_entries(),
-        0,
-        "the failed save's ordinals must not survive in the set"
+        8,
+        "only the previously published ordinals remain"
     );
 
     // The same private values in a later save: every one of them is new, none of
@@ -219,7 +218,11 @@ fn a_failed_save_leaves_no_usable_state_in_the_set() {
         "no phantom ordinals were reused"
     );
     assert_eq!(outcome.pool.reused_values, 0);
-    assert_eq!(ordinals(&path), vec![(1, 8), (9, 8)]);
+    assert_eq!(
+        ordinals(&path),
+        vec![(1, 8), (17, 8)],
+        "aborted ordinal reservations are never reused"
+    );
     let (read, _) = read_objects(&store, &[first_id, second_id]).expect("read");
     assert_eq!(read.len(), 2);
     for (id, bytes) in [first_id, second_id].iter().zip(read) {
@@ -314,8 +317,11 @@ fn the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero() {
     drop(store);
     let connection = open_connection(&path, false).expect("connection");
     connection
+        .execute("INSERT INTO saves(save_id,active_slot) VALUES(1,1)", [])
+        .unwrap();
+    connection
         .execute(
-            "INSERT INTO object_packs (pack_id, data) VALUES (1, zeroblob(32))",
+            "INSERT INTO object_packs (pack_id, save_id, data) VALUES (1, 1, zeroblob(32))",
             [],
         )
         .expect("pack row");
@@ -374,8 +380,11 @@ fn the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason() {
     drop(store);
     let connection = open_connection(&path, false).expect("connection");
     connection
+        .execute("INSERT INTO saves(save_id,active_slot) VALUES(1,1)", [])
+        .unwrap();
+    connection
         .execute(
-            "INSERT INTO object_packs (pack_id, data) VALUES (1, zeroblob(32))",
+            "INSERT INTO object_packs (pack_id, save_id, data) VALUES (1, 1, zeroblob(32))",
             [],
         )
         .expect("pack row");
@@ -411,4 +420,29 @@ fn one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by() {
     assert_eq!(outcome.pool.leaves, 1);
     assert_eq!(outcome.pool.new_values, 100);
     assert_eq!(ordinals(&path), vec![(1, 100)]);
+}
+
+#[test]
+fn the_last_ordinal_can_be_published_and_the_next_reservation_is_refused() {
+    let dir = TempDir::new("ordinal-final-reservation");
+    let path = dir.store_path("last");
+    let store = create_store(&path);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE store_policy SET next_ordinal=?1,metadata_window_start=?1 WHERE id=1",
+            [i64::from(u32::MAX)],
+        )
+        .unwrap();
+    let first = leaf(&[value(1)]);
+    let id = first.id();
+    save_one(&store, first).unwrap();
+    assert_eq!(ordinals(&path), vec![(u32::MAX, 1)]);
+    assert_eq!(read_objects(&store, &[id]).unwrap().0.len(), 1);
+    let error = save_one(&store, leaf_from(2, &[value(2)])).unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::Integrity("metadata ordinal maximum")
+    ));
+    assert_eq!(read_objects(&store, &[id]).unwrap().0.len(), 1);
 }

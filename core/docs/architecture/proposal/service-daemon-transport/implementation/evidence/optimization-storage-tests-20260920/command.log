@@ -1,0 +1,440 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_storage-a7fab99e28621496)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cas_reuse.rs (core/target/debug/deps/cas_reuse-615fc44a64cd9189)
+
+running 13 tests
+test the_read_wave_does_not_hash_what_the_resolver_authenticated ... ok
+test a_directory_is_never_treated_as_a_store ... ok
+test repeated_identities_inside_one_batch_insert_once_and_reuse_the_rest ... ok
+test one_operation_can_save_two_files_into_shared_packs ... ok
+test resaving_the_same_object_reuses_its_row_without_a_new_pack ... ok
+test a_group_sealed_mid_wave_answers_its_other_members_from_that_wave ... ok
+test a_presence_query_is_charged_for_a_reference_outside_the_wave ... ok
+test a_locator_whose_identity_does_not_match_its_bytes_is_refused ... ok
+test a_repetitive_file_spanning_waves_inserts_once_per_distinct_identity ... ok
+test a_corrupted_stored_record_is_refused_before_its_identity_is_trusted ... ok
+test a_stored_row_with_a_short_length_is_rejected_without_reading_it ... ok
+test repeated_identity_across_batches_reuses_without_rewriting ... ok
+test a_batch_lookup_is_bounded_by_the_declared_read_ceiling ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/cas_roundtrip.rs (core/target/debug/deps/cas_roundtrip-7496ac347d036039)
+
+running 13 tests
+test malformed_store_identity_is_rejected ... ok
+test fresh_store_writes_the_declared_schema_identity ... ok
+test an_old_same_version_store_is_refused_at_open ... ok
+test a_pooled_session_opens_one_connection_for_every_wave ... ok
+test a_read_wave_is_bounded_by_the_declared_ceiling ... ok
+test missing_object_is_a_definite_failure ... ok
+test whole_file_object_survives_close_and_reopen ... ok
+test an_oversized_provider_demand_is_refused_before_the_session_opens ... ok
+test a_read_wave_reports_the_connection_it_opened ... ok
+test a_pooled_session_sees_a_save_that_completed_between_its_waves ... ok
+test a_disagreeing_role_declaration_is_refused_by_its_own_decoder ... ok
+test every_initial_role_round_trips ... ok
+test compressible_and_incompressible_payloads_round_trip ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/codec_frames.rs (core/target/debug/deps/codec_frames-b240e1f3fdfa5b9c)
+
+running 7 tests
+test a_declared_length_that_contradicts_the_frame_is_refused ... ok
+test a_frame_whose_checksum_no_longer_matches_is_refused ... ok
+test a_forged_declared_length_inside_the_header_is_refused_by_the_call_itself ... ok
+test every_truncation_of_a_valid_frame_is_refused_without_panicking ... ok
+test the_decode_arena_is_charged_only_when_a_frame_needs_it ... ok
+test a_valid_frame_round_trips_through_both_decode_entry_points ... ok
+test a_frame_beyond_the_profiles_window_is_refused ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/connection_profile.rs (core/target/debug/deps/connection_profile-5609de75ce8d8de3)
+
+running 6 tests
+test an_unconfigured_connection_is_refused_by_profile_verification ... ok
+test a_connection_with_a_busy_timeout_is_refused_by_profile_verification ... ok
+test a_configured_connection_passes_profile_verification ... ok
+test a_degraded_connection_is_refused_by_profile_verification ... ok
+test the_profile_reading_agrees_with_the_store_itself ... ok
+test a_save_reports_the_cache_profile_of_its_own_connection ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/content_index.rs (core/target/debug/deps/content_index-bc905329ad48e75c)
+
+running 5 tests
+test an_admitted_full_enters_the_index_and_is_written_in_the_saving_transaction ... ok
+test an_abandoned_save_leaves_no_entry_behind ... ok
+test the_index_is_cross_save_within_one_handle_as_well ... ok
+test the_index_outlives_the_handle_that_filled_it ... ok
+test a_stored_candidate_still_reads_back_through_the_reopened_index ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/core_pipeline.rs (core/target/debug/deps/core_pipeline-00da960c27629da2)
+
+running 6 tests
+test a_pipeline_input_failure_keeps_the_original_error_and_cleans_up ... ok
+test integrated_and_independent_runs_produce_the_same_roots ... ok
+test a_streamed_file_survives_construction_storage_and_readback ... ok
+test many_files_stream_through_one_save_with_bounded_batches ... ok
+test many_distinct_compressible_records_share_groups_and_read_back_identically ... ok
+test a_file_larger_than_five_mebibytes_survives_a_real_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/delta_chains.rs (core/target/debug/deps/delta_chains-2a960dcb7af50865)
+
+running 9 tests
+test an_unsupported_depth_is_rejected_before_any_store_exists ... ok
+test the_default_depths_are_the_documented_ones ... ok
+test a_cyclic_dependency_is_refused_by_chronology ... ok
+test the_save_reports_every_chain_it_acquired_not_only_the_last ... ok
+test a_wrong_role_dependency_is_rejected ... ok
+test a_reduced_depth_stops_at_its_own_boundary ... ok
+test a_corrupt_intermediate_is_rejected_during_reconstruction ... ok
+test a_chain_that_would_exceed_its_work_budget_is_never_stored ... ok
+test an_increased_depth_is_honoured_up_to_its_boundary ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/delta_payload.rs (core/target/debug/deps/delta_payload-c121a21fb4af9456)
+
+running 15 tests
+test an_absent_chunk_candidate_selects_full ... ok
+test an_unrelated_candidate_loses_the_cost_comparison ... ok
+test depth_zero_disables_prospective_delta_entirely ... ok
+test exact_reuse_is_decided_before_any_trial ... ok
+test an_explicit_predecessor_produces_a_readable_prefix_record ... ok
+test native_delta_uses_the_first_supplied_eligible_candidate_only ... ok
+test the_c1_handoff_reports_the_same_selection_as_a_direct_save ... ok
+test the_admitted_full_cache_supplies_a_candidate_within_one_save ... ok
+test an_absent_or_ineligible_candidate_selects_full ... ok
+test an_ineligible_chunk_candidate_selects_full ... ok
+test a_corrupt_base_fails_the_save_instead_of_selecting_full ... ok
+test a_delta_chain_is_resolved_iteratively_and_reaches_every_step ... ok
+test a_same_save_unsealed_chunk_predecessor_selects_full ... ok
+test the_chunk_lane_honours_its_own_depth_cap ... ok
+test a_fifty_link_chunk_chain_is_admitted_and_read ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-534e2c50661c798b)
+
+running 6 tests
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+test a_transition_charges_only_the_retained_base_at_the_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-1df770b30dc4a70f)
+
+running 4 tests
+test a_corrupted_pack_fails_the_read_without_touching_retained_state ... ok
+test a_tree_failure_inside_a_save_aborts_this_attempt_only ... ok
+test a_private_attempt_is_invisible_until_acknowledgement_and_absent_after_failure ... ok
+test a_late_external_constraint_fails_once_without_moving_the_watermark ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/filesystem_pipeline.rs (core/target/debug/deps/filesystem_pipeline-5dbd64003949dd4e)
+
+running 6 tests
+test a_caller_authorized_value_root_is_not_an_object_dependency ... ok
+test a_reopened_store_serves_an_update_of_the_saved_tree ... ok
+test a_real_tree_saves_reopens_and_reads_back_exactly ... ok
+test a_patch_saved_to_the_store_keeps_untouched_attribute_roots ... ok
+test the_integrated_body_agrees_with_itself_when_recording_is_disabled ... ok
+test the_saved_tree_reports_its_physical_footprint_and_reuses_it_unchanged ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/group_decodes.rs (core/target/debug/deps/group_decodes-fd28513a6bfd94ee)
+
+running 2 tests
+test the_decode_charge_is_per_read_and_not_per_store ... ok
+test a_decode_is_charged_once_per_distinct_group ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/memory_bounds.rs (core/target/debug/deps/memory_bounds-4065b9c39421ce46)
+
+running 9 tests
+test a_store_created_with_an_unsupported_policy_is_rejected_before_work ... ok
+test an_oversized_whole_file_record_is_rejected_against_its_declared_limit ... ok
+test an_oversized_chunk_record_is_rejected_against_its_declared_limit ... ok
+test repeated_read_demands_pay_their_full_returned_byte_cost_before_copying ... ok
+test the_supported_incompressible_singletons_are_stored_and_read_back ... ok
+test a_complete_file_singleton_never_creates_a_payload_file ... ok
+test a_large_input_is_reachable_only_through_its_own_singleton_path ... ok
+test the_retained_footprint_reports_pack_bodies_and_database_bytes ... ok
+test pending_ownership_stays_inside_the_declared_batch_bounds ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/metadata_chain.rs (core/target/debug/deps/metadata_chain-3444038bc1f286b1)
+
+running 2 tests
+test small_records_reach_the_depth_cap_and_the_next_edge_is_stored_in_full ... ok
+test maximal_records_hit_the_canonical_budget_before_the_depth_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/metadata_fingerprint_collision.rs (core/target/debug/deps/metadata_fingerprint_collision-942ca5d22b61ca80)
+
+running 2 tests
+test the_searched_pair_is_a_real_collision_of_valid_values ... ok
+test colliding_values_are_never_confused_through_the_store ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-0ff0aaf0cf2db559)
+
+running 16 tests
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_pooled_reader_releases_pack_bodies_when_the_store_writes ... FAILED
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... FAILED
+
+failures:
+
+---- a_pooled_reader_releases_pack_bodies_when_the_store_writes stdout ----
+
+thread 'a_pooled_reader_releases_pack_bodies_when_the_store_writes' panicked at crates/layerfs-storage/tests/metadata_pool.rs:893:14:
+catalogue: Engine(SqliteFailure(Error { code: Unknown, extended_code: 1 }, Some("no such table: temp.layerfs_read_scope")))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_pooled_value_cache_releases_at_its_declared_bound stdout ----
+
+thread 'the_pooled_value_cache_releases_at_its_declared_bound' panicked at crates/layerfs-storage/tests/metadata_pool.rs:807:14:
+locator: Engine(SqliteFailure(Error { code: Unknown, extended_code: 1 }, Some("no such table: temp.layerfs_read_scope")))
+
+
+failures:
+    a_pooled_reader_releases_pack_bodies_when_the_store_writes
+    the_pooled_value_cache_releases_at_its_declared_bound
+
+test result: FAILED. 14 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool`
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-6f07af405ea2f299)
+
+running 8 tests
+test the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero ... FAILED
+test the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason ... FAILED
+test one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by ... ok
+test a_failed_save_leaves_no_usable_state_in_the_set ... FAILED
+test a_failed_save_removes_its_private_value_groups ... ok
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+failures:
+
+---- the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero stdout ----
+
+thread 'the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero' panicked at crates/layerfs-storage/tests/metadata_pool_index.rs:321:10:
+pack row: SqliteFailure(Error { code: ConstraintViolation, extended_code: 1299 }, Some("NOT NULL constraint failed: object_packs.save_id"))
+
+---- the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason stdout ----
+
+thread 'the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason' panicked at crates/layerfs-storage/tests/metadata_pool_index.rs:381:10:
+pack row: SqliteFailure(Error { code: ConstraintViolation, extended_code: 1299 }, Some("NOT NULL constraint failed: object_packs.save_id"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_failed_save_leaves_no_usable_state_in_the_set stdout ----
+
+thread 'a_failed_save_leaves_no_usable_state_in_the_set' panicked at crates/layerfs-storage/tests/metadata_pool_index.rs:205:5:
+assertion `left == right` failed: the failed save's ordinals must not survive in the set
+  left: 8
+ right: 0
+
+
+failures:
+    a_failed_save_leaves_no_usable_state_in_the_set
+    the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason
+    the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero
+
+test result: FAILED. 5 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p layerfs-storage --test metadata_pool_index`
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-32eddda0d3185caf)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.46s
+
+     Running tests/multi_writer.rs (core/target/debug/deps/multi_writer-4791483a07dffd52)
+
+running 5 tests
+test an_older_schema_is_refused_without_promotion ... ok
+test abort_removes_only_its_save_and_never_lends_a_foreign_dependency ... ok
+test unpublished_foreign_content_cannot_satisfy_a_dependency ... ok
+test separate_threads_prepare_and_finish_the_same_content_successfully ... ok
+test private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/pack_locator.rs (core/target/debug/deps/pack_locator-b6db6664a2e7b592)
+
+running 9 tests
+test a_pack_never_assembles_past_its_lane_limit ... ok
+test append_reuses_a_pack_without_changing_record_ordinals ... ok
+test same_save_reads_see_accepted_objects_before_the_finish_barrier ... ok
+test a_locator_outside_the_group_directory_is_rejected ... ok
+test a_corrupt_pack_body_is_rejected_on_read ... ok
+test a_whole_file_record_is_stored_in_its_own_compact_pack ... ok
+test a_full_lane_starts_a_new_pack_and_keeps_existing_locators ... ok
+test the_placement_fit_probe_agrees_with_the_canonical_assembled_length ... ok
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-d5f3fbf0e689f082)
+
+running 8 tests
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test two_private_saves_are_admitted_and_the_third_is_refused ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/physical_formats.rs (core/target/debug/deps/physical_formats-e39c11f4d6d6e779)
+
+running 8 tests
+test the_lane_table_names_one_limit_per_lane ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+test an_ordinary_group_seals_on_the_framed_length_it_writes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/policy_capacity.rs (core/target/debug/deps/policy_capacity-f1cff10120b0076b)
+
+running 9 tests
+test a_larger_cutoff_keeps_the_chain_and_live_budgets_unchanged ... ok
+test a_deeper_configured_depth_never_widens_a_work_or_live_budget ... ok
+test the_minimum_supported_cutoff_is_the_published_minimum ... ok
+test the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts ... ok
+test the_pooled_metadata_depth_is_persisted_and_checked_separately ... ok
+test an_unsupported_or_conflicting_policy_is_rejected_before_mutation ... ok
+test every_supported_cutoff_is_persisted_and_reopened_unchanged ... ok
+test a_larger_incompressible_whole_file_record_uses_the_singleton_lane ... ok
+test boundaries_follow_the_configured_cutoff_not_a_frozen_one ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/provider_errors.rs (core/target/debug/deps/provider_errors-1be1962ed8df1017)
+
+running 3 tests
+test a_record_above_the_publication_watermark_is_not_reported_as_absence ... FAILED
+test an_object_the_store_does_not_hold_is_absence ... ok
+test a_corrupt_pack_is_not_reported_as_absence ... ok
+
+failures:
+
+---- a_record_above_the_publication_watermark_is_not_reported_as_absence stdout ----
+
+thread 'a_record_above_the_publication_watermark_is_not_reported_as_absence' panicked at crates/layerfs-storage/tests/provider_errors.rs:134:14:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: ConstraintViolation, extended_code: 1299 }, Some("NOT NULL constraint failed: object_packs.save_id"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_record_above_the_publication_watermark_is_not_reported_as_absence
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p layerfs-storage --test provider_errors`
+     Running tests/statement_batching.rs (core/target/debug/deps/statement_batching-450a3233ffb7e419)
+
+running 3 tests
+test the_insert_chunk_is_derived_from_the_engine_limits ... ok
+test the_statement_count_tracks_the_rows_and_not_a_constant ... ok
+test a_save_inserts_its_rows_in_bounded_statements ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/storage_limits.rs (core/target/debug/deps/storage_limits-8ef54677600b9ab0)
+
+running 5 tests
+test the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins ... ok
+test a_group_record_directory_is_accepted_at_its_bound_and_refused_over_it ... ok
+test a_group_body_is_accepted_at_its_bound_and_refused_over_it ... ok
+test the_group_count_ceiling_is_named_with_its_derivation ... ok
+test a_group_record_count_is_accepted_at_its_bound_and_refused_over_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timing.rs (core/target/debug/deps/timing-55e0ee7f8709889a)
+
+running 6 tests
+test a_failed_save_returns_the_original_error_with_a_recorded_tree ... ok
+test an_independent_save_reports_its_real_scopes ... ok
+test recording_and_disabled_storage_execution_agree_exactly ... ok
+test a_bounded_report_stays_inside_the_recorder_limits ... ok
+test a_content_read_attributes_its_mapping_waves_inside_the_callers_span ... ok
+test a_save_of_many_objects_records_regions_not_objects ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/visibility.rs (core/target/debug/deps/visibility-8a2ab73561a4582b)
+
+running 9 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test persisted_private_owners_consume_slots_without_guessing_cleanup ... ok
+test an_interrupted_save_keeps_its_slot_and_published_roots_remain_readable ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+   Doc-tests layerfs_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 3 targets failed:
+    `-p layerfs-storage --test metadata_pool`
+    `-p layerfs-storage --test metadata_pool_index`
+    `-p layerfs-storage --test provider_errors`

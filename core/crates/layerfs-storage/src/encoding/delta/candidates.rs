@@ -79,6 +79,7 @@ struct Entry {
 }
 
 /// Fixed-size, content-keyed, persisted candidate index for one Store.
+#[derive(Clone)]
 pub struct Candidates {
     slots: Box<[Option<Entry>]>,
     references: Box<[u16]>,
@@ -280,7 +281,7 @@ impl Candidates {
     /// live insertion sequence would have left there.
     fn read(&mut self, connection: &Connection) -> StorageResult<()> {
         let mut statement = connection
-            .prepare("SELECT stamp, object_id, signature FROM content_signatures ORDER BY stamp")?;
+            .prepare("SELECT c.stamp, c.object_id, c.signature FROM content_signatures c JOIN saves s USING(save_id), temp.layerfs_read_scope r WHERE c.save_id = r.save_id OR s.publication <= r.publication ORDER BY c.stamp")?;
         let mut rows = statement.query([])?;
         let mut retained = 0_usize;
         while let Some(row) = rows.next()? {
@@ -359,8 +360,8 @@ impl Candidates {
             .saturating_add(1)
             .max(self.stamp.saturating_sub(SLOTS as u64 - 1));
         let mut statement = connection.prepare_cached(
-            "INSERT OR REPLACE INTO content_signatures (slot, stamp, object_id, signature) \
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT OR REPLACE INTO content_signatures (slot, stamp, object_id, signature, save_id) \
+             VALUES (?1, ?2, ?3, ?4, (SELECT save_id FROM temp.layerfs_read_scope))",
         )?;
         let mut written = 0_usize;
         for value in start..=self.stamp {

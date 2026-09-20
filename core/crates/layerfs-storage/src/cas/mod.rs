@@ -3,6 +3,7 @@
 //! Entry module: declarations and re-exports only.
 
 mod batch;
+mod collision;
 mod dependencies;
 mod finish;
 mod lifecycle;

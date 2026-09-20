@@ -4,3 +4,4 @@ pub mod payload;
 pub mod pipe;
 pub mod protocol;
 pub mod server;
+pub use connection::listen;

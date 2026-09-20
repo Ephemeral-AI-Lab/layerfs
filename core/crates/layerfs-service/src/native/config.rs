@@ -14,7 +14,9 @@ pub fn telemetry(role: u8) -> Runtime {
         "local" => OutputMode::Local,
         "both" => OutputMode::Both,
         _ => {
-            eprintln!("telemetry initialization: unsupported mode");
+            layerfs_bridge::adapters::native::pipe::diagnostic(
+                "telemetry initialization: unsupported mode\n",
+            );
             return Runtime::disabled();
         }
     };
@@ -27,7 +29,9 @@ pub fn telemetry(role: u8) -> Runtime {
     {
         Some(v) => v,
         None => {
-            eprintln!("telemetry initialization: run identity required");
+            layerfs_bridge::adapters::native::pipe::diagnostic(
+                "telemetry initialization: run identity required\n",
+            );
             return Runtime::disabled();
         }
     };
@@ -38,7 +42,9 @@ pub fn telemetry(role: u8) -> Runtime {
     {
         Some(v) => v,
         None => {
-            eprintln!("telemetry initialization: namespace required");
+            layerfs_bridge::adapters::native::pipe::diagnostic(
+                "telemetry initialization: namespace required\n",
+            );
             return Runtime::disabled();
         }
     };
@@ -62,7 +68,9 @@ pub fn telemetry(role: u8) -> Runtime {
     }) {
         Ok(runtime) => runtime,
         Err(_) => {
-            eprintln!("telemetry initialization failed; disabled");
+            layerfs_bridge::adapters::native::pipe::diagnostic(
+                "telemetry initialization failed; disabled\n",
+            );
             Runtime::disabled()
         }
     }
