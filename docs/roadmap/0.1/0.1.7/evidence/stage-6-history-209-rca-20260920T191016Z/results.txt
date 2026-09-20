@@ -1,0 +1,39 @@
+#209 RCA — measured arms, stride10, one sample per case per arm, fresh --output each
+
+binary sha256
+  instr0          9c144be5e0f49ca394cc774b5cb2258f441c79d61e9e3ccc00faed634eaa3f20
+  c1nocommit      ef2cb79baed9708cf2ad88e1cab2d1ddf90a320a887280bc8a5d00d2786d3c87  instr0 with maybe_commit disabled
+  c2locator       e1da10abca4745035d3b751cd6246f69498188b8792cd311c72fed8a0130d698  instr0 with the locator ORDER BY/LIMIT removed
+  treatment       63ef5919ad5d11d1a09fe2b3bf54d179584af5a5a212a78be8f54e87f13cb597  a02168adb + the locator fix only (shipped)
+
+operation (ns)
+  instr0          33,115,967,834
+  c1nocommit      25,522,980,543
+  c2locator       25,629,727,541   (run c2locator-history-stride10)
+  treatment2      26,467,154,416   (run treatment2-history-stride10)
+
+workload counters (identical in all four arms, 31 compared)
+  commits 48,446 | statements 44,334 | pack_appends 45,794 | packs_created 255
+  reused 1,121 | full_records 12,952 | prefix_records 39,080
+  chain.objects 107,628 | pool.leaves 1,738
+
+saved Store sha256 (the run's own sample.sqlite)
+  instr0          7ea2fe6ccf13bc5aee7ba59bddef2d60d61d50d6b90329ee1488b1f096228358
+  c1nocommit      64de588056101d65a826a16afbdad81fb684f84769e96c92f5c3b252acec3f00
+  c2locator       7ea2fe6ccf13bc5aee7ba59bddef2d60d61d50d6b90329ee1488b1f096228358
+  treatment2      7ea2fe6ccf13bc5aee7ba59bddef2d60d61d50d6b90329ee1488b1f096228358
+
+engine attribution (instrumented arms only)
+  instr0      locator queries 380,380  locator ns 10,771,196,515  per query 28.32 us
+              boundary statements 97,028  COMMIT ns 2,808,655,706  BEGIN ns 433,005,900
+  c1nocommit  locator queries 380,380  locator ns  8,284,912,116  per query 21.78 us
+              boundary statements 68      COMMIT ns    65,838,002  BEGIN ns    327,167
+  c2locator   locator queries 380,380  locator ns  3,805,116,689  per query 10.00 us
+
+isolated SQL micro-benchmark, 30,000 calls, the run's own Store, journal MEMORY /
+synchronous OFF / temp_store MEMORY, one read scope row
+  previous model text (no join, no order, no limit)          4.559 us/call
+  new model text, publication scoping, no order/limit        3.488 us/call
+  new model text + ORDER BY o.object_id,o.save_id LIMIT ?   15.543 us/call
+  ORDER BY only                                              3.485 us/call
+  LIMIT only                                                13.840 us/call
