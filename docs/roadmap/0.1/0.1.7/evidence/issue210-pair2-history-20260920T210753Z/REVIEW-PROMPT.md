@@ -40,19 +40,25 @@ handoff with every claimed identity and result is [`HANDOFF.md`](HANDOFF.md) bes
 
 Worktree: `/Users/yifanxu/.codex/worktrees/pair2-history-implementation/layerfs`
 Branch: `codex/pair2-history-implementation`
-Reviewed tip: `6e310b2497bbb56371e3d5ec6459ea4e5a82cac2`
 Base (audited baseline): `a02168adbb1b02571941654919cefca12dbc1f42`
 Pull request: [#212](https://github.com/Ephemeral-AI-Lab/layerfs/pull/212)
 
-Begin by recording, in your output:
+**Reviewed revision: the head of that branch when you start.** Record it yourself — do not assume a
+hash from this document, because a documentation-only commit may have moved the head since it was
+written:
 
 ```sh
 git -C <worktree> rev-parse HEAD
 git -C <worktree> status --porcelain
+git -C <worktree> log --oneline a02168adbb1b02571941654919cefca12dbc1f42..HEAD
 ```
 
-If the tree is not at that commit or is dirty, stop and say so — every finding is pinned to a
-revision. Do not review a moving tree.
+If the tree is dirty, stop and say so — every finding is pinned to a revision, and you must not
+review a moving tree. The product commits are `018d9c366` (C5 history through the service),
+`572d61f03` (route driver plus a bounds fix), `daccb403a` (same-stack publication race) and
+`6e310b249` (codec coverage plus two bounds fixes). Commits after those that touch only `docs/` add
+no product code; confirm that with `git diff --stat <commit>^ <commit>` rather than taking it on
+trust.
 
 Read [`AGENTS.md`](../../../../../../AGENTS.md) and
 [`core/AGENTS.md`](../../../../../../core/AGENTS.md) before judging anything: they define product-source

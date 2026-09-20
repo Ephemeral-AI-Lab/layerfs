@@ -17,7 +17,8 @@ This document closes nothing. #179, #180, #192, #193 and #209 remain open and ar
 | Worktree | `/Users/yifanxu/.codex/worktrees/pair2-history-implementation/layerfs` (independent; source checkout untouched) |
 | Branch | `codex/pair2-history-implementation` |
 | Base (audited baseline) | `a02168adbb1b02571941654919cefca12dbc1f42` |
-| Commits | `018d9c366`, `572d61f03`, `daccb403a`, `6e310b249` (tip) |
+| Product commits | `018d9c366`, `572d61f03`, `daccb403a`, `6e310b249` |
+| Documentation commits after them | `4cbb8aecb` and later `docs/`-only commits; production LOC delta 0 |
 | Toolchain | `cargo +1.85.1` |
 | Lock delta | `core/Cargo.lock` gained exactly one package, `layerfs-history`; every other pin and checksum byte-identical |
 | `core/crates/layerfs-history/sql/schema-v1.sql` | `b95ae1749245b9047b007f031fa4d84bbb4d80f311fb8547060fd46da634fb95` |
@@ -38,7 +39,11 @@ exhaustive checked permission mapping, exhaustive semantic dispatch replacing `o
 complete request/result codecs, count/length validation, failure decoding and native-client
 response matching. The daemon's generic framed relay is reused unchanged.
 
-## Verification (re-run at `6e310b249`, clean working tree)
+## Verification
+
+Re-run at the product tip `6e310b249` with a clean working tree. The documentation commits after it
+touch no product source, so these results stand for the branch head as well; re-run them yourself
+before relying on them.
 
 | Command | Result |
 | --- | --- |
