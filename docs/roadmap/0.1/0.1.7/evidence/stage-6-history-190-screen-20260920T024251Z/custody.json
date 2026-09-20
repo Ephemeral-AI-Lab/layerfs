@@ -1,0 +1,26 @@
+[
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-screen-20260920T024251Z/binaries/baseline",
+    "bytes": 3584560,
+    "sha256": "5372121b9bd7650896038c32c9f41a3f03d14903d3bbb5ac001f4d2ce3624f74",
+    "custody": "local only; independent actual rehash reported in review.md"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-screen-20260920T024251Z/runs/baseline-history-stride10/raw/sample.sqlite",
+    "bytes": 49053696,
+    "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f",
+    "custody": "local only; independent actual rehash reported in review.md"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-screen-20260920T024251Z/binaries/candidate",
+    "bytes": 3585520,
+    "sha256": "79b181ee2e9657b8a84069909d8a6f5754b1474ac2e9f3e3f560cc226e00eb33",
+    "custody": "local only; independent actual rehash reported in review.md"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-screen-20260920T024251Z/runs/candidate-history-stride10/raw/sample.sqlite",
+    "bytes": 49053696,
+    "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f",
+    "custody": "local only; independent actual rehash reported in review.md"
+  }
+]

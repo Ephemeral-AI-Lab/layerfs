@@ -253,3 +253,13 @@ The owner authorized one attribution step and at most one low-complexity change.
 [Ledger L37](../0.1.6/evidence/issue151-experiment-ledger.md#l37--190-catalogue-statement-reuse-bounded-roi-round-2026-09-20) records the single-sample matched results, exact work proof and limits. Both operation samples improve, while stride10 complete-command wall regresses. Candidate verification meets both targets. The one-helper implementation is net −1 production LOC.
 
 **Stop optimization here.** No broader data/value cache, pack-query treatment, summaries or save streaming is included or recommended by this round. Existing O3 pins, cache qualification and historical timer tripwire remain separate open acceptance work. Earlier receipts retain their original results and misses.
+
+## Owner's one-second follow-up — 2026-09-20
+
+The owner reopened exploration and clarified that **one second is a worthwhile saving**. The earlier multi-second screening rule does not apply to future candidate decisions. Three subagents explored and tested within-batch New-row filtering in zero-count reference processing, with unchanged authenticated validation and bounds.
+
+[Ledger L38](../0.1.6/evidence/issue151-experiment-ledger.md#l38--190-zero-count-filter-tested-against-the-owners-one-second-bar-2026-09-20) records the one-sample pair, structural work proof, separate verification and independent review. The candidate failed the revised one-second criterion and was reverted with its temporary phase/test; archived patches and receipts remain. PRs #194/#195/#196 are unchanged. Both new allocation-target misses and the continuing O3/cache gaps are recorded plainly.
+
+No stride3 or full-suite continuation for this rejected variant. Future one-second candidates remain worthwhile when justified by measured removable work and proportionate complexity; this experiment establishes no such next candidate. Subtree summaries and save streaming remain untested and unjustified by this result.
+
+The owner additionally accepts small allocated-storage overages when they accompany worthwhile time reduction. Record the byte overage and time benefit together; preserve historical numeric misses and apply the conditional disposition. This does not rescue the rejected filter, whose speed difference is below one second.
