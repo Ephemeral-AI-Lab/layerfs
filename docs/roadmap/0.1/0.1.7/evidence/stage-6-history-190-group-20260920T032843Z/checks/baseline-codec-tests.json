@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-storage",
+    "--test",
+    "codec_frames",
+    "--test",
+    "physical_formats",
+    "--test",
+    "storage_limits",
+    "--test",
+    "pack_locator",
+    "--test",
+    "metadata_pool",
+    "--test",
+    "group_decodes"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "exit_code": 0,
+  "wall_ns": 16026884625,
+  "cargo_target_dir": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target",
+  "dependency_reuse": "existing incremental pinned-toolchain Cargo target"
+}

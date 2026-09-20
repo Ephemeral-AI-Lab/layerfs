@@ -1,0 +1,9 @@
+{
+  "product_differences": [
+    "core/crates/layerfs-storage/src/encoding/codec.rs"
+  ],
+  "same_harness": true,
+  "same_locks": true,
+  "baseline_sha256": "82fb535ddc74eb84aebfaac98d90058600331eb52ca8a8feffc5341b222a9d11",
+  "candidate_sha256": "13bcfe86598d3c13f902d6ab7d0a15d24f9ed26bb2c67dadbfe1a34ea6108a2d"
+}

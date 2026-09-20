@@ -10,6 +10,25 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #190 group compression profile (2026-09-20)
+
+This addition describes the working tree based on
+`605f6efc6a095a1b6335cbc5549dc0fda78ed9ab`; older sections retain their pins.
+`encoding::codec::GROUP_LEVEL` is 1 for ordinary and pooled value-group bodies.
+Payload records remain at level 3. The group window cap, content-size and
+checksum fields, dictionary policy, decode validation and canonical identities
+are unchanged. This is an encoding-effort choice within the existing format,
+not a schema or canonical-grammar migration.
+
+The caller-owned encode arena remains 16 MiB; this change does not resize the
+workspace, alter cache or transaction bounds, add workers, or expose a new
+configuration knob. Physical group/pack sizes and byte-based transaction cadence
+may change. Existing pooled physical-group reuse and catalogue statement reuse
+remain in place. Diagnostic time/space evidence and qualifications belong to
+[ledger L40](../../../docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md#l40--190-group-compression-level-1-live-pair-2026-09-20),
+not this architecture description.
+
+
 ### #190 pooled physical-group reads (2026-09-20)
 
 This addition describes the working tree based on merged parent-batching commit

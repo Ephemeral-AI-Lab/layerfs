@@ -1,0 +1,42 @@
+{
+  "checks": {
+    "core-tests": {
+      "exit_code": 0,
+      "wall_ns": 180493606459
+    },
+    "core-examples": {
+      "exit_code": 0,
+      "wall_ns": 6839201167
+    },
+    "core-clippy": {
+      "exit_code": 0,
+      "wall_ns": 2399458375
+    },
+    "core-fmt": {
+      "exit_code": 0,
+      "wall_ns": 1082625000
+    },
+    "boundary": {
+      "exit_code": 0,
+      "wall_ns": 83903166
+    },
+    "boundary-self-tests": {
+      "exit_code": 0,
+      "wall_ns": 82118667
+    },
+    "harness-tests": {
+      "exit_code": 0,
+      "wall_ns": 21944770250
+    },
+    "final-build": {
+      "exit_code": 0,
+      "wall_ns": 6287342792
+    }
+  },
+  "test_counts": {
+    "core-tests": 494,
+    "harness-tests": 117
+  },
+  "final_source_matches_measured_executable_code": true,
+  "final_binary_is_new_performance_sample": false
+}

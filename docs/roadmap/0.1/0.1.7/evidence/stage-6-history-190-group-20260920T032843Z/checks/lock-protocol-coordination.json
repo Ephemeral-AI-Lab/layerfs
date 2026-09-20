@@ -1,0 +1,11 @@
+{
+  "other_task": "01a0bc49-5721-78a1-8c8b-2b71a8b4166b",
+  "reported_cause": "The #192 helper acknowledged opening primary and history-parent-lookup private harness .measurement.lock paths with append+flock, whereas receipt.py uses O_CREAT|O_EXCL PID markers. This explains empty markers left after flock release.",
+  "correction_reported": "Both private paths removed from #192 helper; no lock file/process removed. Coordinator supplied both global flock paths/protocol.",
+  "global_flocks": [
+    "$TMPDIR/layerfs-infra-measurement.lock",
+    "/tmp/layerfs-infra-measurement.lock"
+  ],
+  "historical_receipts": "Original UNKNOWN labels and preserved empty files retained; subsequent reported cause appended, not retrospective receipt rewriting.",
+  "active_window": "#192 resource work idle while #190 stride3 pair runs"
+}
