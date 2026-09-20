@@ -229,10 +229,16 @@ impl MutationOwner {
             self.counters.pack_appends += 1;
         }
         self.ceiling = self.ceiling.max(write.pack_id);
-        self.connection.execute(
-            "UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save_id = ?1 AND active_slot IS NOT NULL",
-            [self.save_id, write.pack_id],
-        )?;
+        // The save's pack ceiling is read in exactly one place - `publish`, which
+        // folds it into the retained range in the transaction that publishes the
+        // save - and only a write that creates a pack can raise it. Re-asserting
+        // it on every append writes a value the row already holds.
+        if write.created {
+            self.connection.execute(
+                "UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save_id = ?1 AND active_slot IS NOT NULL",
+                [self.save_id, write.pack_id],
+            )?;
+        }
         self.transaction.rows += 1;
         self.transaction.bytes += write.bytes.len() as u64;
         Ok(())

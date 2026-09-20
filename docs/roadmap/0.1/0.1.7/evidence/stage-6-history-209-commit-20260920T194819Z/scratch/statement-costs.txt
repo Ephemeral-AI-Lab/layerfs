@@ -1,0 +1,12 @@
+append+watermark-new   commit_us=  89.62 (+  6.09) step_us= 142.76 (+ 10.44) pages/commit= 42.59
+append+ceiling-same    commit_us=  83.18 (+ -0.36) step_us= 135.49 (+  3.17) pages/commit= 41.59
+append+nextpack-read   commit_us=  86.13 (+  2.59) step_us= 137.30 (+  4.99) pages/commit= 41.59
+--- statement preparation, 200000 calls each, same connection ---
+prepare= 1113.4 ns  prepare_cached=   82.4 ns  | SELECT next_pack_id FROM store_policy WHERE id = 1
+prepare= 1938.9 ns  prepare_cached=   84.3 ns  | UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_
+prepare= 1957.3 ns  prepare_cached=   86.2 ns  | UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save
+prepare= 4731.3 ns  prepare_cached=  101.7 ns  | UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 57.90s
+

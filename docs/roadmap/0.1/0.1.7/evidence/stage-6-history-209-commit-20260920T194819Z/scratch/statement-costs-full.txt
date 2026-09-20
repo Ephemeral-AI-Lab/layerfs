@@ -1,0 +1,28 @@
+warning: unused import: `Path`
+  --> crates/layerfs-storage/tests/commit_cost_probe.rs:22:17
+   |
+22 | use std::path::{Path, PathBuf};
+   |                 ^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-storage` (test "commit_cost_probe") generated 1 warning (run `cargo fix --test "commit_cost_probe"` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.13s
+     Running tests/commit_cost_probe.rs (core/target/release/deps/commit_cost_probe-2a3cf2c7ec80a6d5)
+
+running 1 test
+test one_step_statement_costs ... --- per-step statements, 4 rounds x 20000 commits each ---
+append                 commit_us=  83.28 (+  0.00) step_us= 131.42 (+  0.00) pages/commit= 41.59
+append+watermark-same  commit_us=  83.73 (+  0.45) step_us= 135.69 (+  4.27) pages/commit= 41.59
+append+watermark-new   commit_us=  85.88 (+  2.59) step_us= 138.32 (+  6.90) pages/commit= 42.59
+append+ceiling-same    commit_us=  83.13 (+ -0.15) step_us= 135.15 (+  3.72) pages/commit= 41.59
+append+nextpack-read   commit_us=  84.97 (+  1.69) step_us= 136.13 (+  4.70) pages/commit= 41.59
+--- statement preparation, 200000 calls each, same connection ---
+prepare= 1106.7 ns  prepare_cached=   82.9 ns  | SELECT next_pack_id FROM store_policy WHERE id = 1
+prepare= 1966.1 ns  prepare_cached=   83.5 ns  | UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_
+prepare= 1926.4 ns  prepare_cached=   86.4 ns  | UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save
+prepare= 4723.4 ns  prepare_cached=  101.9 ns  | UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 57.34s
+

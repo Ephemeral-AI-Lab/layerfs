@@ -80,6 +80,7 @@ impl MutationOwner {
             published_candidates,
             baseline_pack_id,
             next_pack_id: 0,
+            committed_pack_id: 0,
             ceiling: baseline_pack_id,
             placement: std::array::from_fn(|_| LanePlacement::new()),
             groups: std::array::from_fn(|_| PendingGroup::default()),
@@ -130,7 +131,28 @@ impl MutationOwner {
         self.transaction_open = true;
         self.transaction = TransactionState::default();
         self.next_pack_id = ownership::next_pack(&self.connection)?;
+        // The value this transaction starts from is the value the row holds, so a
+        // step that allocates no pack has nothing to write back.
+        self.committed_pack_id = self.next_pack_id;
         self.counters.transactions += 1;
+        Ok(())
+    }
+
+    /// Writes the pack watermark back only when this transaction moved it.
+    ///
+    /// The watermark is what stops a second writer handing out a pack id this save
+    /// already used, so it must be correct at every step boundary, not merely at
+    /// publication: deferring it to publication is exactly the change that would
+    /// let a second writer collide, and `tests/pack_watermark.rs` fails on it. It
+    /// moves only when `LanePlacement` starts a new pack, and this transaction
+    /// re-read the row when it began, so writing the unchanged value back is a
+    /// statement whose result the row already holds - one statement, and one
+    /// dirtied page on a commit that has nothing to do with pack allocation.
+    fn advance_pack_if_moved(&mut self) -> StorageResult<()> {
+        if self.next_pack_id != self.committed_pack_id {
+            ownership::advance_pack(&self.connection, self.next_pack_id)?;
+            self.committed_pack_id = self.next_pack_id;
+        }
         Ok(())
     }
 
@@ -143,7 +165,7 @@ impl MutationOwner {
             // transaction therefore never outlives the step that opened it under the
             // arbitration lock, so every step commits before that lock is released.
             // Batching stays inside a step; it cannot span steps.
-            ownership::advance_pack(&self.connection, self.next_pack_id)?;
+            self.advance_pack_if_moved()?;
             write::commit(&self.connection)?;
             SaveProfile::charge(&mut self.profile.commit_ns, started);
             // Clear the flag before the next step re-acquires: if the lock is lost
@@ -229,7 +251,7 @@ impl MutationOwner {
         // writer can hand out a pack id this save already used. Either the save's
         // data, its index and its publication all become visible, or none does.
         ownership::publish(&self.connection, self.save_id)?;
-        ownership::advance_pack(&self.connection, self.next_pack_id)?;
+        self.advance_pack_if_moved()?;
         let started = Instant::now();
         write::commit(&self.connection)?;
         SaveProfile::charge(&mut self.profile.commit_ns, started);
