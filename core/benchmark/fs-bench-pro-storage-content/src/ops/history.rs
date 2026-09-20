@@ -1109,6 +1109,7 @@ struct StateOutcome {
     save_ns: u64,
     commits: u64,
     group_decodes: u64,
+    pooled_reads: layerfs_storage::encoding::pool::PoolReadCounters,
     connection_opens: u64,
     filesystem: FilesystemUpdateCounters,
     filesystem_reads: ReadCounters,
@@ -2004,6 +2005,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         save_ns,
                         commits: saved.commits,
                         group_decodes: provider.inner.group_decodes(),
+                        pooled_reads: provider.inner.pooled_read_counters(),
                         connection_opens: provider.inner.connection_opens(),
                         filesystem_reads: provider.counters(),
                         content_reads,
@@ -2106,6 +2108,28 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         "aggregate original provider calls; elapsed overlaps enclosing phase; bytes are returned canonical bytes, not disk/pack traffic",
                     )?;
                 }
+            }
+        }
+        if detailed {
+            let pooled = outcome.pooled_reads;
+            for (suffix, value, unit) in [
+                ("leaf_requests", pooled.leaf_requests, "count"),
+                ("chain_edges", pooled.chain_edges, "count"),
+                ("physical_record_calls", pooled.physical_record_calls, "count"),
+                ("physical_group_decodes", pooled.physical_group_decodes, "count"),
+                ("physical_group_decoded_bytes", pooled.physical_group_decoded_bytes, "bytes"),
+                ("physical_group_cache_hits", pooled.physical_group_cache_hits, "count"),
+                ("value_group_decodes", pooled.value_group_decodes, "count"),
+                ("pack_fetches", pooled.pack_fetches, "count"),
+                ("pack_bytes", pooled.pack_bytes, "bytes"),
+            ] {
+                context.trace.write_number(
+                    Kind::Resource,
+                    &format!("history.state.{}.filesystem.provider.pooled.{suffix}", outcome.ordinal),
+                    i128::from(value),
+                    unit,
+                    "successful provider waves; physical decodes are actual Zstd calls; value decodes include raw materialization; pack bytes are BLOB acquisitions, not disk traffic",
+                )?;
             }
         }
         let fs = outcome.filesystem;

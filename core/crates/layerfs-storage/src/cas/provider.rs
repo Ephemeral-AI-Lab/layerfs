@@ -77,6 +77,7 @@ pub struct StoreProvider<'a> {
     /// count, and an operation that issues many waves reads the sum here. It is
     /// the figure a decoded-group cache is measured against.
     group_decodes: Cell<u64>,
+    pooled: Cell<crate::encoding::pool::PoolReadCounters>,
 }
 
 impl<'a> StoreProvider<'a> {
@@ -87,6 +88,7 @@ impl<'a> StoreProvider<'a> {
             session: RefCell::new(None),
             opens: Cell::new(0),
             group_decodes: Cell::new(0),
+            pooled: Cell::new(crate::encoding::pool::PoolReadCounters::new()),
         }
     }
 
@@ -98,6 +100,11 @@ impl<'a> StoreProvider<'a> {
     /// Ordinary-lane group bodies every wave this provider issued decompressed.
     pub fn group_decodes(&self) -> u64 {
         self.group_decodes.get()
+    }
+
+    /// Pooled reconstruction work over every successful wave of this operation.
+    pub fn pooled_read_counters(&self) -> crate::encoding::pool::PoolReadCounters {
+        self.pooled.get()
     }
 
     /// Reads one wave through the operation's session.
@@ -127,6 +134,9 @@ impl<'a> StoreProvider<'a> {
             if opened {
                 self.opens.set(self.opens.get() + 1);
             }
+            let mut pooled = self.pooled.get();
+            pooled.accumulate(counters.pooled);
+            self.pooled.set(pooled);
             self.group_decodes
                 .set(self.group_decodes.get() + counters.group_decodes);
             Ok((
@@ -140,6 +150,7 @@ impl<'a> StoreProvider<'a> {
                     max_depth: counters.max_depth,
                     canonical_bytes: counters.canonical_bytes,
                     group_decodes: counters.group_decodes,
+                    pooled: counters.pooled,
                     opens: u64::from(opened),
                 },
             ))

@@ -102,6 +102,8 @@ pub struct StoreReadCounters {
     pub canonical_bytes: u64,
     /// Ordinary-lane group bodies decompressed by this wave.
     pub group_decodes: u64,
+    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+    pub pooled: crate::encoding::pool::PoolReadCounters,
     /// Connections this read opened.
     ///
     /// One `read_batch` call is one wave and opens one connection; a demand
@@ -334,6 +336,7 @@ impl Store {
                     max_depth: counters.max_depth,
                     canonical_bytes: counters.canonical_bytes,
                     group_decodes: counters.group_decodes,
+                    pooled: counters.pooled,
                     opens: 1,
                 },
             ))

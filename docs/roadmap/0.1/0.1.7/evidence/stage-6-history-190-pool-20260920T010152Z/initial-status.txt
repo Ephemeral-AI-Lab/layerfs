@@ -1,0 +1,8 @@
+## codex/history-pool-read...origin/main
+ M core/crates/layerfs-storage/src/cas/provider.rs
+ M core/crates/layerfs-storage/src/cas/read.rs
+ M core/crates/layerfs-storage/src/cas/store.rs
+ M core/crates/layerfs-storage/src/encoding/delta/read.rs
+ M core/crates/layerfs-storage/src/encoding/pool/mod.rs
+ M core/crates/layerfs-storage/src/encoding/pool/read.rs
+?? core/crates/layerfs-storage/src/encoding/pool/counters.rs

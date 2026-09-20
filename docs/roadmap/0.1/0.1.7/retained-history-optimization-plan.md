@@ -231,9 +231,16 @@ and [node reuse/validation](../../../../core/crates/layerfs-content/src/filesyst
 - [x] Confirm on stride3 and report storage, resources, correctness and timing separately.
 - [x] Independent review reproduces the final measurements and all residuals.
 
-Remaining issue acceptance is distinct from completion of this implementation
-campaign: stride3 verification misses its target, history golden pins are absent,
+At the parent-lookup checkpoint, remaining issue acceptance was distinct from
+implementation completion: stride3 verification missed its target, history golden pins were absent,
 cache admission is ineligible, and the historical tripwire is not declared resolved.
 
 Close #190 only with measured attribution and a documented disposition. This
 planned optimization sequence is not itself a closure or a performance claim.
+
+
+## Pooled-read continuation — 2026-09-20
+
+The owner directed continuation after parent-lookup PR#194. Three subagents implemented missing pooled-read telemetry, bounded physical-group reuse, and external correctness checks, with independent source/raw-evidence review. The existing512KiB session group cache is shared; no new cache, policy, codec, worker or format change. Details and exact measurements are in [ledger L36](../0.1.6/evidence/issue151-experiment-ledger.md#l36--190-pooled-physical-group-reuse-2026-09-20) and its linked evidence.
+
+The candidate meets stride10 and stride3 verification targets in this diagnostic. Historical operation parity, history pins and eligible cache admission remain open. The preserved parent-lookup checkpoint retains its original misses. No subtree summaries, save streaming, signature reuse or new-row filtering were added. Remaining read costs need measurement before choosing another treatment.

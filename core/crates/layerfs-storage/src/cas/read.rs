@@ -43,6 +43,8 @@ pub struct ReadCounters {
     /// and from `objects`: the defect this counter exists to price is one group
     /// decompression per **record** inside a pack that is read once.
     pub group_decodes: u64,
+    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+    pub pooled: crate::encoding::pool::PoolReadCounters,
 }
 
 /// Reads every requested object in demand order under one ceiling.
@@ -90,6 +92,7 @@ pub fn read_objects(
             let resolved = resolver.resolve_at(location)?;
             (resolved, resolver.packs_read())
         };
+        totals.pooled.accumulate(chain.pooled);
         totals.objects = totals.objects.saturating_add(chain.objects);
         totals.edges = totals.edges.saturating_add(chain.edges);
         totals.encoded_bytes = totals.encoded_bytes.saturating_add(chain.encoded_bytes);
@@ -110,6 +113,7 @@ pub fn read_objects(
     counters.max_depth = totals.max_depth;
     counters.canonical_bytes = totals.canonical_bytes;
     counters.group_decodes = totals.group_decodes;
+    counters.pooled = totals.pooled;
     Ok((values, counters))
 }
 

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--",
+    "--check"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "exit_code": 1,
+  "wall_ns": 44379375,
+  "cargo_target_dir": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target",
+  "dependency_reuse": "existing incremental pinned-toolchain Cargo target"
+}

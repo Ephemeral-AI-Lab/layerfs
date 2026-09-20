@@ -19,6 +19,46 @@ Chapter numbers are global to the set: this paper holds **chapter 15**.
 
 ## 15. Counters and receipts
 
+### #190 pooled-read instrumentation (2026-09-20)
+
+This addition describes the instrumentation working tree based on
+`9d82685f39460fabec6c810184d87adcccd53dc5`; earlier sections retain their separate
+source pins. It records work, not a measured speedup.
+
+`encoding::pool::PoolReadCounters` describes reconstruction work previously absent
+from the ordinary read counters. `ChainCounters`, `cas::ReadCounters` and
+`StoreReadCounters` expose it as `pooled`; `StoreProvider::pooled_read_counters()`
+accumulates it across successful waves. A directly owned `PoolReader` exposes
+its lifetime totals through `counters()`. These are fixed-size saturating integer
+counters; they do not change read results, cache ownership, visibility or budgets.
+
+| Field | Actual work counted |
+| --- | --- |
+| `leaf_requests` | Canonical pooled-leaf requests |
+| `chain_edges` | Pooled dependency edges followed |
+| `physical_record_calls` | Physical leaf-record extractions, including chain discovery and reconstruction |
+| `physical_group_decodes` | Successful Zstandard physical leaf-group decompressions |
+| `physical_group_decoded_bytes` | Bytes output by those decompressions |
+| `physical_group_cache_hits` | Avoided Zstandard physical group decompressions; raw groups do not charge hits |
+| `value_group_decodes` | Fresh value-group materializations, raw or compressed; not exclusively codec calls |
+| `pack_fetches` | Pooled pack BLOB fetches from SQLite |
+| `pack_bytes` | Bytes copied in those BLOB fetches, not physical disk I/O |
+
+The existing ordinary `group_decodes`, `packs_read`, `edges` and `max_depth`
+retain their previous meanings. They omit the pooled early-return path in
+`encoding/delta/read.rs`; pooled-leaf records reside in Ordinary packs but use a
+separate reconstruction algorithm. `pages` continues to count demand locator
+pages, not every dependency/catalogue query or SQLite B-tree page.
+
+In the instrumented baseline, `PoolReader` is still created per requested inode
+leaf. Its `leaf_body` extracts each chain record twice; each compressed physical
+group is decoded at both extractions. No reuse is introduced by the instrumentation itself. The subsequent #190
+candidate borrows the existing session decoded-group cache for pooled physical
+groups; these counters distinguish fewer decompressions from unchanged record
+extractions, chain edges, value-group materializations and pack BLOB copies.
+A fresh provider still captures the publication ceiling per wave and reuses the
+connection, decode workspace and ordinary decoded-group cache across waves.
+
 ### 15.1 Why this paper exists
 
 Every C1 and C2 operation returns typed counters describing the work it actually

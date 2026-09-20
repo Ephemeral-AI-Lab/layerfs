@@ -1,0 +1,265 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+    Checking fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/benchmark/fs-bench-pro-storage-content)
+error: variable does not need to be mutable
+    --> src/ops/history.rs:1525:9
+     |
+1525 |     let mut prior_unavailable: u64 = 0;
+     |         ----^^^^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `-D unused-mut` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(unused_mut)]`
+
+error: casting to the same type is unnecessary (`usize` -> `usize`)
+   --> src/ops/c1.rs:642:9
+    |
+642 |         (counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `counters.peak_deferred_bytes`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_cast
+    = note: `-D clippy::unnecessary-cast` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::unnecessary_cast)]`
+
+error: casting to the same type is unnecessary (`usize` -> `usize`)
+   --> src/ops/c1.rs:884:9
+    |
+884 |         (counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `counters.peak_deferred_bytes`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_cast
+
+error: using `map` over `inspect`
+    --> src/ops/c2.rs:1517:6
+     |
+1517 |     .map(|outcome| {
+     |      ^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+     = note: `-D clippy::manual-inspect` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::manual_inspect)]`
+help: try
+     |
+1517 ~     .inspect(|outcome| {
+1518 ~         let _ = case;
+     |
+
+error: manual implementation of `Option::map`
+    --> src/ops/c2.rs:1571:19
+     |
+1571 |       let sampled = match context.verify_sample {
+     |  ___________________^
+1572 | |         None => None,
+1573 | |         Some(requested) => Some(crate::ops::sampled_indices(all.len(), requested)),
+1574 | |     };
+     | |_____^ help: try: `context.verify_sample.map(|requested| crate::ops::sampled_indices(all.len(), requested))`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_map
+     = note: `-D clippy::manual-map` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::manual_map)]`
+
+error: using `map` over `inspect`
+    --> src/ops/c2.rs:2514:6
+     |
+2514 |     .map(|outcome| {
+     |      ^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+help: try
+     |
+2514 ~     .inspect(|outcome| {
+2515 ~         let _ = case;
+     |
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> src/ops/fs.rs:435:13
+    |
+435 |             &"g1.o4-inode-table",
+    |             ^^^^^^^^^^^^^^^^^^^^ help: change this to: `"g1.o4-inode-table"`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+    = note: `-D clippy::needless-borrow` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrow)]`
+
+error: redundant closure
+   --> src/ops/fs.rs:625:22
+    |
+625 |             .map_err(|error| OpError::Io(error))?;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the function itself: `OpError::Io`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure
+    = note: `-D clippy::redundant-closure` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::redundant_closure)]`
+
+error: using `map` over `inspect`
+   --> src/ops/fs.rs:943:6
+    |
+943 |     .map(|outcome| {
+    |      ^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+help: try
+    |
+943 ~     .inspect(|outcome| {
+944 ~         let _ = case;
+    |
+
+error: using `map` over `inspect`
+    --> src/ops/fs.rs:1171:6
+     |
+1171 |     .map(|outcome| {
+     |      ^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+help: try
+     |
+1171 ~     .inspect(|outcome| {
+1172 ~         let _ = case;
+     |
+
+error: using `map` over `inspect`
+    --> src/ops/fs.rs:1306:6
+     |
+1306 |     .map(|outcome| {
+     |      ^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+help: try
+     |
+1306 ~     .inspect(|outcome| {
+1307 ~         let _ = case;
+     |
+
+error: using `map` over `inspect`
+    --> src/ops/fs.rs:1548:6
+     |
+1548 |     .map(|outcome| {
+     |      ^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+help: try
+     |
+1548 ~     .inspect(|outcome| {
+1549 ~         let _ = case;
+     |
+
+error: very complex type used. Consider factoring parts into `type` definitions
+    --> src/ops/history.rs:1608:68
+     |
+1608 |   ...                   |content: &TimingScope<'_, Active>| -> Result<
+     |  ______________________________________________________________^
+1609 | | ...                       (
+1610 | | ...                           BTreeMap<Vec<u8>, ObjectId>,
+1611 | | ...                           BTreeMap<ObjectId, [u64; 8]>,
+1612 | | ...                       ),
+1613 | | ...                       OpError,
+1614 | | ...                   > {
+     | |_______________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+     = note: `-D clippy::type-complexity` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: this loop never actually loops
+    --> src/ops/history.rs:1855:33
+     |
+1855 | / ...                   for candidate in &eligible {
+1856 | | ...                       let depth = index
+1857 | | ...                           .path_of
+1858 | | ...                           .get(candidate)
+...    |
+1864 | | ...                       break;
+1865 | | ...                   }
+     | |_______________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#never_loop
+     = note: `#[deny(clippy::never_loop)]` on by default
+help: if you need the first element of the iterator, try writing
+     |
+1855 |                                 if let Some(candidate) = eligible.iter().next() {
+     |                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error: useless conversion to the same type: `u64`
+   --> src/ops/pipeline.rs:292:24
+    |
+292 |         emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider removing `u64::from()`: `outcome.inserted`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+    = note: `-D clippy::useless-conversion` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_conversion)]`
+
+error: useless conversion to the same type: `u64`
+   --> src/ops/pipeline.rs:292:54
+    |
+292 |         emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,
+    |                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider removing `u64::from()`: `outcome.reused`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+
+error: useless conversion to the same type: `u64`
+   --> src/ops/pipeline.rs:474:24
+    |
+474 |         emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider removing `u64::from()`: `outcome.inserted`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+
+error: useless conversion to the same type: `u64`
+   --> src/ops/pipeline.rs:474:54
+    |
+474 |         emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,
+    |                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider removing `u64::from()`: `outcome.reused`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+
+error: using `map` over `inspect`
+   --> src/ops/pipeline.rs:553:6
+    |
+553 |     .map(|outcome| {
+    |      ^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_inspect
+help: try
+    |
+553 ~     .inspect(|outcome| {
+554 ~         let _ = case;
+    |
+
+error: useless use of `format!`
+   --> src/support/phases.rs:341:19
+    |
+341 |     out.push_str(&format!("  \"schema\": \"layerfs-phases-v1\",\n"));
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using `.to_string()`: `"  \"schema\": \"layerfs-phases-v1\",\n".to_string()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_format
+    = note: `-D clippy::useless-format` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_format)]`
+
+error: the loop variable `index` is used to index `work`
+   --> src/workload/digest.rs:179:22
+    |
+179 |         for index in 0..8 {
+    |                      ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+179 |         for (index, <item>) in work.iter().enumerate() {
+    |             ~~~~~~~~~~~~~~~    ~~~~~~~~~~~~~~~~~~~~~~~
+
+error: very complex type used. Consider factoring parts into `type` definitions
+   --> src/workload/history.rs:712:10
+    |
+712 |     ) -> Result<BTreeMap<Vec<u8>, ([u8; 20], u16)>, HistoryError> {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+
+error: could not compile `fs-bench-pro-storage-content` (lib) due to 22 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `fs-bench-pro-storage-content` (lib test) due to 22 previous errors

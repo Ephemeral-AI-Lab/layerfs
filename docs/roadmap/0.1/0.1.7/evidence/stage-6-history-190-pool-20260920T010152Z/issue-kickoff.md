@@ -1,0 +1,5 @@
+Proceeding with the next #190 optimization from merged PR #194: **pooled physical-group decoding**. Three subagents own production telemetry/bounded reuse, external regression tests, and independent correctness review. No secondary optimization is included.
+
+First freeze instrumentation in both arms and count actual pooled decompressions/decoded bytes, record extractions, value materializations and pack BLOB acquisition. Then test minimal bounded reuse while preserving validation, visibility, memory limits and decoded-work refusals. One sample per arm on stride10, followed by stride3 confirmation if correctness and reduced work hold. Same120/240s diagnostic limits,60s verification hard limit,10/20s verification targets, one construction worker, fresh outputs and serialized locks. Cache remains uncontrolled and admission-INELIGIBLE. No speedup is claimed before measurement.
+
+Baseline production LOC85582 (reference65417, core20165). Instrumentation and treatment deltas will be reported separately. Subtree summaries, signature reuse and pack-write coalescing remain outside this experiment.

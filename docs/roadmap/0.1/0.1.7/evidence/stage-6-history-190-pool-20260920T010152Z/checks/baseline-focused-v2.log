@@ -1,0 +1,14 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.46s
+     Running tests/metadata_pool.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 2 tests
+pooled physical fixture: elements=1 wave=1 PoolReadCounters { leaf_requests: 1, chain_edges: 0, physical_record_calls: 2, physical_group_decodes: 2, physical_group_decoded_bytes: 2506, physical_group_cache_hits: 0, value_group_decodes: 1, pack_fetches: 2, pack_bytes: 7120 }
+pooled physical fixture: elements=1 wave=2 PoolReadCounters { leaf_requests: 1, chain_edges: 0, physical_record_calls: 2, physical_group_decodes: 2, physical_group_decoded_bytes: 2506, physical_group_cache_hits: 0, value_group_decodes: 1, pack_fetches: 2, pack_bytes: 7120 }
+test a_compressed_full_pooled_leaf_reports_its_physical_decode_work ... ok
+pooled physical fixture: elements=4 wave=1 PoolReadCounters { leaf_requests: 1, chain_edges: 3, physical_record_calls: 8, physical_group_decodes: 2, physical_group_decoded_bytes: 2506, physical_group_cache_hits: 0, value_group_decodes: 4, pack_fetches: 8, pack_bytes: 7856 }
+pooled physical fixture: elements=4 wave=2 PoolReadCounters { leaf_requests: 1, chain_edges: 3, physical_record_calls: 8, physical_group_decodes: 2, physical_group_decoded_bytes: 2506, physical_group_cache_hits: 0, value_group_decodes: 4, pack_fetches: 8, pack_bytes: 7856 }
+test a_pooled_delta_chain_reports_its_physical_decode_work ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.08s
+
