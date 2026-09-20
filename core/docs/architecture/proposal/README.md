@@ -74,6 +74,14 @@ pair. Three pass that test; the rest of what has been discussed does not.
 
 ### Implementation order: pair 3, then pair 1, then pair 2
 
+**Updated pair-2 implementation recommendation, 2026-09-21:** pair 3 and its
+schema-7 multi-writer implementation have landed. Implement the independent
+history/service capability described in the
+[pair-2 specification](commit-history/implementation.md) before full writable
+pair-1 integration. A test client supplies its initial consumer; no FUSE mount or
+live Workspace is required. The following 2026-09-20 sequence is retained as
+historical planning context and is superseded for that implementation handoff.
+
 Owner direction, 2026-09-20: establish the operation-owner/service and transport
 foundation first, then build FUSE/Workspace on that endpoint, then add history.
 Pair numbers remain responsibility labels. The implementation order is **#181 →
@@ -147,8 +155,9 @@ is retained as research with the later owner direction appended.
 | Document | Pair | State |
 | --- | --- | --- |
 | [`01-projection-and-runtime.md`](01-projection-and-runtime.md) | 1 | **initialized** — decisions open |
-| [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | written — the operational half |
-| [`03-history.md`](03-history.md) | 2 | **initialized** — decisions open |
+| [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | historical operational/concurrency exploration; current spec linked at entry |
+| [`03-history.md`](03-history.md) | 2 | current history overview and implementation handoff |
+| [`commit-history/implementation.md`](commit-history/implementation.md) | 2 | concrete operations, schema, file/LOC plan, diagrams and acceptance; implementation NOT_RUN |
 | [`04-boundary-and-trust.md`](04-boundary-and-trust.md) | 3 | **initialized** — decisions open |
 | [`service-daemon-transport/`](service-daemon-transport/README.md) | 3 foundation; later 1 integration | detailed architecture, layout, operations and resource proposal — implementation/qualification open |
 
