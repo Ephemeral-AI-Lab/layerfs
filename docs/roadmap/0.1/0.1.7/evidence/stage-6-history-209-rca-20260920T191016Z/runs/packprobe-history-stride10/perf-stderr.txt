@@ -1,0 +1,17 @@
+pack_probe calls=268 created=5 appended=263 bytes=33120694 evict_ns=35792 body_ns=8092368 ceiling_ns=1153360
+pack_probe calls=826 created=10 appended=816 bytes=97152142 evict_ns=55837 body_ns=24553215 ceiling_ns=3173512
+pack_probe calls=1006 created=9 appended=997 bytes=123287568 evict_ns=48825 body_ns=31095235 ceiling_ns=4078673
+pack_probe calls=1089 created=8 appended=1081 bytes=115981940 evict_ns=70806 body_ns=32357380 ceiling_ns=4765208
+pack_probe calls=2341 created=14 appended=2327 bytes=271559184 evict_ns=114341 body_ns=64982841 ceiling_ns=8682557
+pack_probe calls=1977 created=12 appended=1965 bytes=250161452 evict_ns=84392 body_ns=60027241 ceiling_ns=7389313
+pack_probe calls=2701 created=14 appended=2687 bytes=302201371 evict_ns=127633 body_ns=74491674 ceiling_ns=10108436
+pack_probe calls=1628 created=10 appended=1618 bytes=129922544 evict_ns=92186 body_ns=36910871 ceiling_ns=6006651
+pack_probe calls=2092 created=14 appended=2078 bytes=260884054 evict_ns=134475 body_ns=63736617 ceiling_ns=8153728
+pack_probe calls=1901 created=11 appended=1890 bytes=183643686 evict_ns=129425 body_ns=49458460 ceiling_ns=7271773
+pack_probe calls=3830 created=19 appended=3811 bytes=388756783 evict_ns=247320 body_ns=110339389 ceiling_ns=15833768
+pack_probe calls=3634 created=19 appended=3615 bytes=255210607 evict_ns=247825 body_ns=85723704 ceiling_ns=14831594
+pack_probe calls=3561 created=17 appended=3544 bytes=269512692 evict_ns=187052 body_ns=80802144 ceiling_ns=13320497
+pack_probe calls=5224 created=25 appended=5199 bytes=466114129 evict_ns=291336 body_ns=140672550 ceiling_ns=21409660
+pack_probe calls=5116 created=26 appended=5090 bytes=605585892 evict_ns=331256 body_ns=162216073 ceiling_ns=20582640
+pack_probe calls=4301 created=21 appended=4280 bytes=337137655 evict_ns=301833 body_ns=109391145 ceiling_ns=17389527
+pack_probe calls=4554 created=21 appended=4533 bytes=397513795 evict_ns=299773 body_ns=120034849 ceiling_ns=17935053

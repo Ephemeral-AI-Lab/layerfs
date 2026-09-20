@@ -21,7 +21,9 @@ cadence: eliminating every step commit recovers **7.59 s**. The two are not addi
 they are the *same* 380,380 queries, slowed by two independent mechanisms, and the
 locator fix removes the larger of the two per query. `resolve_ns` is a **symptom**, not a
 second root: it is 10.411 s of a 22.255 s accept span, and **10.771 s of engine-measured
-locator time sits inside it**.
+locator time sits inside it**. And with the cadence also removed — which multi-writer
+does not permit — the same source reads **17.950 s**, so the two effects account for
+**15.17 s of the 16.76 s** and **what is genuinely unexplained is 1.59 s**.
 
 **Multi-writer capability is retained and measured.** The shipped model still commits at
 every step; the second writer still streams (three concurrent rounds over the 24 MiB pair plus five
@@ -182,47 +184,44 @@ round produced a single `OwnershipUnavailable`.** Throughput is therefore the
 operation's own: the two writers contend for the same SQLite write lock by design, and
 what the model buys is that neither is refused.
 
-## 6. What remains unexplained — stated, not worked around
+## 6. What remains — measured, and corrected by the addendum
 
-The treatment recovers **6.65 s of the 16.76 s** on the matched clean-arm pair
-(33.116 -> 26.467 s) and **7.49 s** on the strictly matched instrumented pair
-(33.116 -> 25.630 s). **10.11 s remains** against the held previous-model figure of
-16.360 s. It is not one thing, and this round can price only part of it:
+> **The ≈4.8 s of "uncharged accept growth" this section first carried has been
+> withdrawn, and the `write_pack` hypothesis it named has been refuted at 1.440 s.**
+> See [`pack-write-addendum.md`](pack-write-addendum.md). The table below is the
+> corrected accounting. The number that matters is **1.59 s**, not 10.1 s.
 
-| term | measured | how |
+With **both** effects removed — the locator `LIMIT` fixed *and* step commits disabled —
+the operation reads **17.950 s** against the held previous-model figure of **16.360 s**:
+
+| arm | operation | vs 16.360 s | vs shipped 33.116 s |
+| --- | ---: | ---: | ---: |
+| `instr0` — shipped model | 33.116 s | +16.756 s (2.02×) | — |
+| `treatment2` — the locator fix, shipped cadence | **26.467 s** | +10.107 s (1.62×) | **−6.649 s (−20.1 %)** |
+| `packprobe-nocommit` — locator fix **and** no step commits | **17.950 s** | **+1.590 s (1.10×)** | **−15.166 s (−45.8 %)** |
+
+The two effects therefore account for **15.17 s of the 16.76 s**. The shipped arm still
+reads 26.467 s because what remains is the cadence, and the cadence is a contract:
+
+| cost | seconds | removable? |
 | --- | ---: | --- |
-| `commit_ns` growth | **+2.72 s** | 0.437 s (previous model, retained) -> 3.154 s, same 48,446 commits |
-| `resolve_ns`, `full_ns`, `sql_ns`, `place_ns`, `commit_ns` — all seven buckets together | **+4.09 s** | 6.79 s of buckets in the retained #205 instrumented arm -> 14.818 s |
-| `filesystem` | **+3.35 s** | 3.439 s -> 6.788 s |
-| **unnamed accept** — the increase inside `storage.accept_loop` that the seven buckets do not charge | **+4.8 s** | accept grew 8.949 -> 16.875 s (**+7.93 s**); 3.94 s of that is inside the buckets and 0.26 s is `commit_ns`+`sql_ns`, which leaves ≈4.8 s uncharged. The arm's own remainder is 3.499 s of a 22.255 s span, against 2.057 s of a 16.875 s span |
+| locator `LIMIT` | 6.65 (clean pair) / 7.49 (instrumented pair) | **removed** — this round's one treatment |
+| `commit_ns` | 3.154 s shipped against 0.060 s unbounded | no: the transaction must close before the lock is released |
+| per-step engine work the seven buckets do not name | ≈2.6 s (remainder 3.499 s shipped, 0.850 s unbounded) | no: a consequence of the same cadence |
+| **everything else** | **1.59 s** | **unexplained — the only part left** |
 
-The three terms do not sum to 10.11 s and must not be added: `commit_ns` sits inside
-the bucket row, and both `filesystem` and the unnamed remainder are measured against
-the retained arm rather than against `instr0`.
+`filesystem` also grew 3.439 → 6.788 s and is **outside this RCA's scope**; it is the
+tree-metadata term the earlier rounds attributed to `validate`/`directories`, it is
+39 % of the treatment arm's operation, and no bucket here covers it. The regression the
+handoff measured is an *operation* regression, so a complete account has to include it;
+this round did not measure it and does not attribute it.
 
-**The largest uncharged candidate, named as a hypothesis and not as a result**, is
-`cas/placement.rs::write_pack`. Every pack append UPDATEd `object_packs` with the whole
-pack body (45,794 times in this run) and the call is charged to no bucket. This run's
-own Store holds 255 packs totalling **45,298,203 bytes** (average 177,640, maximum
-262,112), so the appends rewrite on the order of 8.1 GB of BLOB for a 49 MB Store. That
-is arithmetic over the retained counters, **not a time measurement**: the round that
-tests it has to charge `write_pack` and separate the BLOB update from the pack-directory
-read. It is also the most likely mechanism behind the `commit_ns` growth above, since
-the dirty page set a `COMMIT` writes is that same body.
-
-`filesystem` is outside this RCA's scope. It is the tree-metadata term the earlier
-rounds attributed to `validate`/`directories`, it is 39 % of the treatment arm's
-operation, and no bucket here covers it. The regression the handoff measured is an
-*operation* regression, so a complete account of all 16.76 s has to include it; this
-round did not measure it and does not attribute it.
-
-Finally, **`full_ns` and `sql_ns` moved without the workload moving.** `full_ns` reads
-2.436 s in `instr0`, 1.691 s in `c2locator` and 1.732 s in `treatment2`, while
-`full_records`, `prepared_full` and every other counter are identical in all three;
-`sql_ns` reads 1.864 / 1.889 / 1.995 s. The movement is confined to the two arms that
-share a build, so it is not attributable to the treatment; it is recorded as
-between-sample variance in the class L53 reported for this machine, and **no number
-here rests on it.**
+`write_pack` was the largest uncharged candidate and is now measured, not hypothesised:
+**1.440 s** of 46,049 calls writing 4.18 GiB of pack body, of which only 0.22 s was
+uncharged. `full_ns` and `sql_ns` still move without any counter moving (2.436 / 1.691 /
+1.732 s and 1.864 / 1.889 / 1.995 s); the movement is confined to arms sharing a build,
+so it is recorded as between-sample variance in the class L53 reported for this machine,
+and **no number here rests on it.**
 
 ## 7. Equivalence and custody
 
