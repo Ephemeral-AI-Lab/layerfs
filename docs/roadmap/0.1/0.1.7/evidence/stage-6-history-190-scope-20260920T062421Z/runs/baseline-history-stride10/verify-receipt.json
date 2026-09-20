@@ -1,0 +1,30 @@
+{
+  "schema": "h190-pooled-scope-verification-v1",
+  "arm": "baseline",
+  "case": "history-stride10",
+  "command": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-qual/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "--case",
+    "history-stride10",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-scope-20260920T062421Z/runs/baseline-history-stride10/raw",
+    "--phase",
+    "verify"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-qual",
+  "limit_ns": 60000000000,
+  "binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-qual/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+  "binary_sha256": "190424195506d4d54b24d253b483986d9aadf542fe125ae61225d833c2102ab1",
+  "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "corpus_manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+  "store_sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+  "trace_sha256_before": "d245ca762b2de77189cea220dc95ba0c4b13fb67af47b5e28ba892548c30b950",
+  "purpose": "identity-matched, sampled read-back of the Store the measured invocation wrote; the row it produces is INCOMPLETE by construction",
+  "sampled": true,
+  "wall_ns": 4681167500,
+  "exit_code": 0,
+  "timed_out": false,
+  "trace_sha256_after": "4e4e25480493d477b497a7f0680f237fcc75384ea0964fd0ad3290246f1c7492"
+}
