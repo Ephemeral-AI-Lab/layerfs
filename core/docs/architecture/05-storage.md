@@ -10,6 +10,33 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #190 pooled physical-group reads (2026-09-20)
+
+This addition describes the working tree based on merged parent-batching commit
+`9d82685f39460fabec6c810184d87adcccd53dc5`; the older sections retain their source
+pin. No on-disk format, writer behavior, resource limit or release claim changes.
+
+A Store read's `Resolver` borrows the existing `ReadSession` decoded `GroupCache`
+when reconstructing pooled inode leaves. Physical leaf groups live in Ordinary
+packs. Their compressed bodies are now decoded once while retained, then reused
+across both chain passes and subsequent requests. The cache remains bounded by
+`DECODED_GROUP_CACHE_BYTES` (512 KiB) and clears wholesale on overflow; no second
+physical-group cache or broader canonical-object cache is introduced.
+
+Every extraction still fetches its current bounded pack view and checks lane,
+group boundaries, decoded length, record framing and record length. The cached
+entry refuses roots above the current publication ceiling before consulting the
+cache; dependency locations remain constrained by that same ceiling. Final
+canonical identity authentication and per-chain canonical/encoded work charges
+remain unchanged.
+
+`PoolReader` itself remains fresh per requested leaf: its value-group cache,
+pack cache and decoded-work accounting retain their previous lifetime and bounds.
+Public `leaf_body`, `leaf_canonical` and `stored_base` still take the uncached
+physical-group route, so writer-owned readers and pack invalidation are unchanged.
+Only successful Zstandard decompressions avoided by the borrowed cache count as
+`physical_group_cache_hits`; raw groups do not produce such hits.
+
 ### 6.1 The Store handle
 
 `core/crates/layerfs-storage/src/cas/store.rs`

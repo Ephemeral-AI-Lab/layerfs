@@ -1,0 +1,37 @@
+{
+  "status": "retained immutable local evidence; excluded from Git",
+  "retention": "four Stores and two executables only; retain for #190 review, no automatic deletion or worktree cleanup",
+  "sha256_basis": "performance receipts and independent reviewer actual rehash after verification",
+  "files": [
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/binaries/baseline",
+      "size_bytes": 3584416,
+      "sha256": "a27b740fc7e92b61a600c9764b46ed3522c3ed229466c077daa2bad441b0f734"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/runs/baseline-history-stride10/raw/sample.sqlite",
+      "size_bytes": 49053696,
+      "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/runs/baseline-history-stride3/raw/sample.sqlite",
+      "size_bytes": 61767680,
+      "sha256": "cfb74bc9b1db6c9470129613283a8f4afa3b139c2819ae7bd7a4f14e548ecdb5"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/binaries/candidate",
+      "size_bytes": 3584352,
+      "sha256": "0cfa938be11a61625da8fd4ef4306657860d6e9e548986983b9f9b3e34b375f8"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/runs/candidate-history-stride10/raw/sample.sqlite",
+      "size_bytes": 49053696,
+      "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f"
+    },
+    {
+      "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/runs/candidate-history-stride3/raw/sample.sqlite",
+      "size_bytes": 61767680,
+      "sha256": "cfb74bc9b1db6c9470129613283a8f4afa3b139c2819ae7bd7a4f14e548ecdb5"
+    }
+  ]
+}

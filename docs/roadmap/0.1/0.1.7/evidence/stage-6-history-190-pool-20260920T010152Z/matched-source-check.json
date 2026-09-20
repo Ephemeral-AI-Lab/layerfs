@@ -1,0 +1,8 @@
+{
+  "harness_equal": true,
+  "dependency_locks_equal": true,
+  "product_differences": [
+    "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+    "core/crates/layerfs-storage/src/encoding/pool/read.rs"
+  ]
+}

@@ -42,6 +42,8 @@ pub struct ChainCounters {
     /// counts group bodies, not record frames: every other lane decodes a
     /// per-record frame and charges nothing here.
     pub group_decodes: u64,
+    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+    pub pooled: crate::encoding::pool::PoolReadCounters,
 }
 
 /// One read wave's chain resolver: shared pack cache, ceiling and counters.
@@ -139,12 +141,13 @@ impl<'a> Resolver<'a> {
             // from pooled COPY/INSERT instructions and the ordinals are resolved
             // through authenticated value groups.
             let mut pool = crate::encoding::pool::PoolReader::new();
-            let canonical = pool.leaf_canonical(
+            let canonical = pool.leaf_canonical_with_groups(
                 self.connection,
                 self.capacities,
                 self.ceiling,
                 self.workspace,
                 root,
+                Some(self.groups),
             )?;
             if ObjectId::for_bytes(&canonical) != id {
                 return Err(StorageError::Integrity("pooled leaf identity"));
@@ -154,6 +157,7 @@ impl<'a> Resolver<'a> {
                 .counters
                 .canonical_bytes
                 .saturating_add(canonical.len() as u64);
+            self.counters.pooled = pool.counters();
             return Ok((canonical, id));
         }
         let role_depth = self.capacities.delta_depth_for_role(root.role);
@@ -432,6 +436,7 @@ pub fn stored_base(
 /// several reports their sum, so a counter named for the save is not quietly the
 /// last chain's.
 pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
+    total.pooled.accumulate(chain.pooled);
     total.objects = total.objects.saturating_add(chain.objects);
     total.edges = total.edges.saturating_add(chain.edges);
     total.encoded_bytes = total.encoded_bytes.saturating_add(chain.encoded_bytes);

@@ -62,6 +62,303 @@ fn canonical_of(object: &FinalizedObject) -> Vec<u8> {
     object.canonical().to_vec()
 }
 
+/// Read the physical fixture shape without assuming every pooled delta compresses.
+fn compressed_leaf_groups(path: &std::path::Path, ids: &[ObjectId]) -> (u64, u64) {
+    use layerfs_storage::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
+
+    let connection = rusqlite::Connection::open(path).expect("external connection");
+    let mut groups = std::collections::BTreeSet::new();
+    let mut compressed = 0;
+    let mut decoded_bytes = 0;
+    for id in ids {
+        let (pack_id, group_number): (i64, i64) = connection
+            .query_row(
+                "SELECT pack_id, group_number FROM objects WHERE object_id = ?1",
+                [id.as_bytes().as_slice()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("leaf locator");
+        assert!(
+            groups.insert((pack_id, group_number)),
+            "distinct save groups"
+        );
+        let pack: Vec<u8> = connection
+            .query_row(
+                "SELECT data FROM object_packs WHERE pack_id = ?1",
+                [pack_id],
+                |row| row.get(0),
+            )
+            .expect("pack");
+        let header = parse_header(&pack).expect("header");
+        assert_eq!(header.lane, PackLane::Ordinary);
+        let view = group_view(
+            &pack,
+            header,
+            usize::try_from(group_number).expect("nonnegative group ordinal"),
+        )
+        .expect("leaf group");
+        if view.codec == GroupCodec::Zstandard {
+            compressed += 1;
+            decoded_bytes += view.decoded_length as u64;
+        }
+    }
+    (compressed, decoded_bytes)
+}
+
+fn observe_pooled_physical_decodes(elements: usize) {
+    use layerfs_storage::StoreProvider;
+
+    let dir = TempDir::new("pooled-physical-decodes");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    let mut values = (0..MAXIMUM_LEAF_ROWS as u64)
+        .map(|index| value(InodeKind::RegularFile, 1, index))
+        .collect::<Vec<_>>();
+    let mut ids = Vec::new();
+    let mut expected = Vec::new();
+    for step in 0..elements {
+        values[step] = value(InodeKind::RegularFile, 1, 10_000 + step as u64);
+        let object = match ids.last().copied() {
+            Some(base) => with_predecessor(leaf(1, &values), base),
+            None => leaf(1, &values),
+        };
+        ids.push(object.id());
+        expected = canonical_of(&object);
+        let outcome = save_one(&store, object).expect("leaf save");
+        assert_eq!(outcome.pool.full_leaves, u64::from(step == 0));
+        assert_eq!(outcome.pool.delta_leaves, u64::from(step != 0));
+    }
+    drop(store);
+    let (compressed, decoded_bytes) = compressed_leaf_groups(&path, &ids);
+    assert!(
+        compressed > 0,
+        "fixture must exercise physical decompression"
+    );
+    let reopened = open_store(&path);
+    let provider = StoreProvider::new(&reopened);
+    let id = *ids.last().expect("leaf");
+    let mut first_value_decodes = None;
+    for wave in 1..=2 {
+        let (read, counters) =
+            disabled(|scope| provider.read_wave(&[id], scope.child("storage.read")))
+                .expect("canonical read");
+        assert_eq!(read, vec![expected.clone()]);
+        assert_eq!(ObjectId::for_bytes(&read[0]), id);
+        let pooled = counters.pooled;
+        assert_eq!(pooled.leaf_requests, 1);
+        assert_eq!(pooled.chain_edges, elements as u64 - 1);
+        assert_eq!(pooled.physical_record_calls, 2 * elements as u64);
+        let first_wave = u64::from(wave == 1);
+        assert_eq!(pooled.physical_group_decodes, first_wave * compressed);
+        assert_eq!(
+            pooled.physical_group_decoded_bytes,
+            first_wave * decoded_bytes
+        );
+        assert_eq!(
+            pooled.physical_group_cache_hits,
+            (2 - first_wave) * compressed
+        );
+        assert!(pooled.value_group_decodes > 0);
+        assert_eq!(
+            *first_value_decodes.get_or_insert(pooled.value_group_decodes),
+            pooled.value_group_decodes,
+            "physical group reuse must not retain pooled values across leaves"
+        );
+        assert!(pooled.pack_fetches > 0);
+        assert!(pooled.pack_bytes > 0);
+        let cumulative = provider.pooled_read_counters();
+        assert_eq!(cumulative.leaf_requests, wave);
+        assert_eq!(
+            cumulative.physical_group_decodes, compressed,
+            "the existing bounded session cache retains physical groups"
+        );
+        println!("pooled physical fixture: elements={elements} wave={wave} {pooled:?}");
+    }
+
+    // The public resolver accepts explicit capacities and the same GroupCache
+    // used by provider sessions. Compare warm and cold refusals without exposing
+    // the private ReadSession or adding any product test hook.
+    {
+        use layerfs_storage::encoding::delta::read::{ChainCounters, Resolver};
+        use layerfs_storage::encoding::{DecompressionWorkspace, GroupCache};
+
+        let connection = rusqlite::Connection::open(&path).expect("external connection");
+        let location = layerfs_storage::sqlite::lookup::location(&connection, id, i64::MAX)
+            .expect("lookup")
+            .expect("leaf locator");
+        let resolve = |capacities: &layerfs_storage::StorageCapacities, groups: &mut GroupCache| {
+            let mut packs = std::collections::BTreeMap::new();
+            let mut decode = DecompressionWorkspace::new().expect("decode");
+            let mut counters = ChainCounters::default();
+            Resolver::new(
+                &connection,
+                i64::MAX,
+                capacities,
+                &mut packs,
+                groups,
+                &mut decode,
+                &mut counters,
+            )
+            .resolve_at(location)
+        };
+        let capacities = reopened.capacities();
+        let mut cached = GroupCache::new();
+        resolve(&capacities, &mut cached).expect("populate physical group cache");
+        assert!(cached.retained_bytes() > 0);
+        for encoded_limit in [false, true] {
+            let mut restricted = capacities;
+            if encoded_limit {
+                restricted.metadata_chain_encoded_limit = 1;
+            } else {
+                restricted.metadata_chain_canonical_limit = 1;
+            }
+            let warm = resolve(&restricted, &mut cached).expect_err("warm work refusal");
+            let cold = resolve(&restricted, &mut GroupCache::new()).expect_err("cold work refusal");
+            assert!(matches!(warm, StorageError::Integrity("pooled chain work")));
+            assert_eq!(format!("{warm:?}"), format!("{cold:?}"));
+        }
+    }
+
+    // Cache hits must still validate the current locator's record ordinal.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    connection
+        .execute(
+            "UPDATE objects SET record_number = 999 WHERE object_id = ?1",
+            [id.as_bytes().as_slice()],
+        )
+        .expect("damage locator");
+    let error = disabled(|scope| provider.read_wave(&[id], scope.child("bad.record")))
+        .expect_err("cached group must not hide a damaged record ordinal");
+    assert!(matches!(error, StorageError::Integrity(_)), "{error}");
+
+    // A wave must recheck publication before consulting an already decoded group.
+    connection
+        .execute(
+            "UPDATE store_policy SET retained_pack_ceiling = 0 WHERE id = 1",
+            [],
+        )
+        .expect("lower publication ceiling");
+    let error = disabled(|scope| provider.read_wave(&[id], scope.child("hidden.record")))
+        .expect_err("cached pooled group must respect the current ceiling");
+    assert!(
+        matches!(error, StorageError::VisibilityCeiling { .. }),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_compressed_full_pooled_leaf_reports_its_physical_decode_work() {
+    observe_pooled_physical_decodes(1);
+}
+
+#[test]
+fn a_pooled_delta_chain_reports_its_physical_decode_work() {
+    observe_pooled_physical_decodes(4);
+}
+
+#[test]
+fn pooled_physical_groups_evict_at_the_existing_decoded_byte_bound() {
+    use layerfs_storage::encoding::{group_records, CompressionWorkspace, DecompressionWorkspace};
+    use layerfs_storage::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
+    use layerfs_storage::pack::{assemble, build_group};
+    use layerfs_storage::StoreProvider;
+
+    let dir = TempDir::new("pooled-physical-eviction");
+    let path = dir.store_path("pool");
+    let store = disabled(|scope| {
+        Store::create(
+            &path,
+            StoragePolicy::frozen_default().with_metadata_depth(16),
+            scope.child("store"),
+        )
+    })
+    .expect("store");
+    let mut ids = Vec::new();
+    let mut expected = Vec::new();
+    for step in 0..10 {
+        let object = leaf(1, &[value(InodeKind::RegularFile, 1, step)]);
+        let object = match ids.last().copied() {
+            Some(base) => with_predecessor(object, base),
+            None => object,
+        };
+        ids.push(object.id());
+        expected = canonical_of(&object);
+        let outcome = save_one(&store, object).expect("save chain element");
+        assert_eq!(outcome.pool.delta_leaves, u64::from(step != 0));
+    }
+    drop(store);
+
+    // Preserve each real leaf record and append a framed, unreferenced padding
+    // record. Ten distinct 60KiB groups exceed the 512KiB decoded cache while
+    // the ten one-row canonical leaves remain well inside chain-work budgets.
+    let connection = rusqlite::Connection::open(&path).expect("external connection");
+    let mut encode = CompressionWorkspace::new().expect("encode");
+    let mut decode = DecompressionWorkspace::new().expect("decode");
+    let mut total_decoded = 0;
+    for id in &ids {
+        let pack_id: i64 = connection
+            .query_row(
+                "SELECT pack_id FROM objects WHERE object_id = ?1",
+                [id.as_bytes().as_slice()],
+                |row| row.get(0),
+            )
+            .expect("locator");
+        let bytes: Vec<u8> = connection
+            .query_row(
+                "SELECT data FROM object_packs WHERE pack_id = ?1",
+                [pack_id],
+                |row| row.get(0),
+            )
+            .expect("pack");
+        let header = parse_header(&bytes).expect("header");
+        assert_eq!(header.lane, PackLane::Ordinary);
+        assert_eq!(header.group_count, 1, "each save has one leaf group");
+        let view = group_view(&bytes, header, 0).expect("group");
+        let body = match view.codec {
+            GroupCodec::Raw => bytes[view.start..view.end].to_vec(),
+            GroupCodec::Zstandard => decode
+                .decompress_group(&bytes[view.start..view.end], view.decoded_length)
+                .expect("group decompression"),
+        };
+        let mut records = group_records(&body)
+            .expect("records")
+            .into_iter()
+            .map(<[u8]>::to_vec)
+            .collect::<Vec<_>>();
+        assert_eq!(records.len(), 1);
+        records.push(vec![0x55; 60_000]);
+        let group =
+            build_group(PackLane::Ordinary, &records, Some(&mut encode)).expect("padded group");
+        let padded = assemble(PackLane::Ordinary, &[group]).expect("padded pack");
+        let view = group_view(&padded, parse_header(&padded).unwrap(), 0).unwrap();
+        assert_eq!(view.codec, GroupCodec::Zstandard);
+        assert!((60_000..=65_536).contains(&view.decoded_length));
+        total_decoded += view.decoded_length;
+        connection
+            .execute(
+                "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
+                rusqlite::params![pack_id, padded],
+            )
+            .expect("replace physical framing");
+    }
+    assert!(total_decoded > layerfs_storage::policy::DECODED_GROUP_CACHE_BYTES);
+    drop(connection);
+    let reopened = open_store(&path);
+    let provider = StoreProvider::new(&reopened);
+    let id = *ids.last().unwrap();
+    let (read, counters) = disabled(|scope| provider.read_wave(&[id], scope.child("read")))
+        .expect("read through cache eviction");
+    assert_eq!(read, vec![expected]);
+    assert_eq!(ObjectId::for_bytes(&read[0]), id);
+    assert_eq!(counters.pooled.chain_edges, 9);
+    assert_eq!(counters.pooled.physical_record_calls, 20);
+    // Eight groups fit. Discovery clears on its ninth group, retaining two for
+    // reverse reconstruction; the other eight must actually decompress again.
+    assert_eq!(counters.pooled.physical_group_decodes, 18);
+    assert_eq!(counters.pooled.physical_group_cache_hits, 2);
+    println!("pooled physical eviction: {:?}", counters.pooled);
+}
+
 #[test]
 fn a_supplied_leaf_round_trips_through_sqlite_and_reopen() {
     let dir = TempDir::new("pool-roundtrip");

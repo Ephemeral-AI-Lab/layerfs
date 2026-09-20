@@ -1,0 +1,12 @@
+{
+  "command": [
+    "collect.py",
+    "baseline",
+    "history-stride10",
+    "--mode",
+    "verify"
+  ],
+  "status": "DEFERRED_LOCK_HELD",
+  "sample_started": false,
+  "reason": "shared flock held by another owner; no process interrupted"
+}
