@@ -321,3 +321,36 @@ out-of-clock cost exists and is **unidentified**. Both stride1 rows reconcile PA
 regardless — the tolerance is wall/50 there (3.2 s) against 0.97 s at stride10 — and
 no operation figure is affected, because the whole effect is outside the child's
 clock. It is recorded as an open question rather than re-explained.
+
+---
+
+## 11. Correction (added 2026-09-20): `save.chain.*` is resolution work, not "work for trials"
+
+§3 and §10 label `save.chain.objects` and `save.chain.edges` as read "for trials".
+That is wrong, and the corrected reading changes which optimization the numbers point
+at. `SaveOutcome.chain` is `MutationOwner::chain_total`, which accumulates **every**
+resolved chain in the operation: a selection's acquisition
+(`encoding/delta/select.rs::acquire`) *and* a reuse or membership resolution —
+`cas/membership.rs::stored_canonical` calls `MutationOwner::resolve_location`, which
+does `accumulate(&mut self.chain_total, self.chain)` at `cas/owner.rs`. Every
+occurrence that finds an existing row reconstructs that row's chain to compare the
+stored bytes with the offered bytes, and all of that lands in the same counter.
+
+At 157 versions the two sources are:
+
+| per inserted object, early → late (stride1) | early | late | ratio |
+|---|---:|---:|---:|
+| resolution events from **reuse** (`save.reused`) | 0.1121 | **1.0321** | **9.21×** |
+| resolution events from **trials** (`save.delta.trials`) | 0.6773 | 0.7451 | 1.10× |
+| chain objects per resolution **event** | 2.59 | 3.56 | 1.37× |
+| `save.chain.objects` | 2.0427 | 6.3183 | 3.09× |
+| per-state elapsed vs `save.chain.objects` / `.edges` | +0.947 / +0.948 | | |
+| per-state elapsed vs `save.reused` / `save.delta.trials` / `inserted` | +0.805 / +0.409 / +0.444 | | |
+
+Resolution work is still the term that tracks the cost (+0.947), and chains are still
+longer late — but the growth is dominated by the **number of resolutions**, and nine
+tenths of that growth is *reuse verification* (9.21×), not trials (1.10×). The
+recommendation in §6 and §10 should therefore be read as "the resolution path", with
+the reuse comparison as its largest depth-driven component rather than the trial's
+acquire-and-compare. The measurements themselves are unchanged; only the
+interpretation was wrong, and it is corrected here rather than in place.
