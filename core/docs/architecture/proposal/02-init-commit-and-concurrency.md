@@ -10,6 +10,16 @@
 
 Parent: [`core/docs/architecture/`](../README.md). Source pin `ce2d738ff`.
 
+**Current handoff, 2026-09-21:** use the
+[pair-2 implementation specification](commit-history/implementation.md).
+The discussion below is retained as the earlier design exploration, not current
+implementation instructions. C2 now has schema 7 and two private saves per Store;
+save-owned locators/publication replace the old prefix-only assumptions. C1/C2
+stay service-local. Stage precedes Commit/Branch CAS; add-layer separately CASes
+LayerStack head. The new specification owns metadata placement, exact stages,
+allocation continuity, no-retry behavior and the independent service-first scope.
+Its one-attempt policy supersedes the old automatic queue/backoff sketch below.
+
 **Current sequencing:** this is pair 2's operational design input. Under the
 [2026-09-20 implementation order](README.md#implementation-order-pair-3-then-pair-1-then-pair-2),
 pair 3's service/transport is implemented first, pair 1's Workspace/FUSE second,
