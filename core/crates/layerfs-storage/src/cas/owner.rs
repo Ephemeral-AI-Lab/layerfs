@@ -272,6 +272,13 @@ pub struct MutationOwner {
     pub(super) capacities: StorageCapacities,
     pub(super) baseline_pack_id: i64,
     pub(super) next_pack_id: i64,
+    /// `store_policy.next_pack_id` as this connection last read or wrote it.
+    ///
+    /// The watermark only has to be written back when it moved: `begin_write`
+    /// re-reads it under the write lock, and only `LanePlacement` allocating a
+    /// pack moves it. Writing the unchanged value back is a statement whose
+    /// result the row already holds, on every step, for the whole operation.
+    pub(super) committed_pack_id: i64,
     /// Highest pack id this save created; contributes to the retained range on
     /// publication. Visibility is determined by the save row, not this ceiling.
     pub(super) ceiling: i64,

@@ -1,0 +1,82 @@
+//! Measurement-only probe: the widths the varying-width statements are issued at.
+//!
+//! **Diagnostic only; removed before this round's commit.** Enabled only by
+//! `LAYERFS_STORAGE_CACHE_PROBE=1`, it reads no Store state, changes no statement,
+//! and is never on by default. It exists to answer one question the round's
+//! pre-registration needs: the prepared-statement cache is a 16-entry LRU, and two
+//! of the texts the product caches vary with the call - the locator's carries one
+//! placeholder per page width and the object insert one per chunk size. How many
+//! distinct widths does a run actually issue?
+
+use std::collections::BTreeMap;
+use std::sync::{Mutex, OnceLock};
+
+/// One call site's observed widths.
+#[derive(Default)]
+pub struct Widths {
+    calls: u64,
+    identifiers: u64,
+    seen: BTreeMap<usize, u64>,
+}
+
+static LOCATOR: OnceLock<Mutex<Widths>> = OnceLock::new();
+static OBJECT_INSERT: OnceLock<Mutex<Widths>> = OnceLock::new();
+
+/// True when the probe is enabled; read once.
+pub fn enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        matches!(
+            std::env::var("LAYERFS_STORAGE_CACHE_PROBE").as_deref(),
+            Ok("1")
+        )
+    })
+}
+
+/// Records one call site's width.
+pub fn note(site: &OnceLock<Mutex<Widths>>, width: usize, identifiers: u64) {
+    if !enabled() {
+        return;
+    }
+    if let Ok(mut state) = site.get_or_init(|| Mutex::new(Widths::default())).lock() {
+        state.calls += 1;
+        state.identifiers += identifiers;
+        *state.seen.entry(width).or_insert(0) += 1;
+    }
+}
+
+/// The locator call site.
+pub fn locator(width: usize, identifiers: u64) {
+    note(&LOCATOR, width, identifiers);
+}
+
+/// The object-insert call site.
+pub fn object_insert(width: usize, identifiers: u64) {
+    note(&OBJECT_INSERT, width, identifiers);
+}
+
+/// Prints the observed widths; called once per save, enabled only by the probe.
+pub fn report() {
+    if !enabled() {
+        return;
+    }
+    for (name, site) in [("locator", &LOCATOR), ("object_insert", &OBJECT_INSERT)] {
+        let Ok(state) = site.get_or_init(|| Mutex::new(Widths::default())).lock() else {
+            continue;
+        };
+        let mut histogram: Vec<(usize, u64)> = state.seen.iter().map(|(k, v)| (*k, *v)).collect();
+        histogram.sort_by_key(|(width, count)| (std::cmp::Reverse(*count), *width));
+        let top: Vec<String> = histogram
+            .iter()
+            .take(8)
+            .map(|(width, count)| format!("{width}x{count}"))
+            .collect();
+        eprintln!(
+            "cache-probe {name}: calls={} identifiers={} distinct_widths={} top={}",
+            state.calls,
+            state.identifiers,
+            state.seen.len(),
+            top.join(" "),
+        );
+    }
+}

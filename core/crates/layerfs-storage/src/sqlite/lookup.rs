@@ -77,14 +77,11 @@ pub(crate) fn candidates(
             "SELECT o.object_id,o.object_role,o.canonical_length,o.pack_id,o.group_number,o.record_number,o.save_id,\
              (o.save_id = r.save_id OR s.publication <= r.publication) \
              FROM objects o JOIN saves s USING(save_id),temp.layerfs_read_scope r \
-             WHERE o.object_id IN ({}) AND o.pack_id <= ?{} ORDER BY o.object_id,o.save_id LIMIT ?{}",
-            placeholders(page.len(),1),page.len()+1,page.len()+2,
+             WHERE o.object_id IN ({}) AND o.pack_id <= ?{}",
+            placeholders(page.len(),1),page.len()+1,
         );
         let mut parameters: Vec<Value> = page.iter().copied().map(id_value).collect();
         parameters.push(Value::Integer(ceiling));
-        parameters.push(Value::Integer(
-            (page.len() * super::ownership::SAVE_SLOTS + 1) as i64,
-        ));
         let mut statement = connection.prepare_cached(&sql)?;
         let mut rows = statement.query(rusqlite::params_from_iter(parameters))?;
         let mut counts = std::collections::BTreeMap::new();

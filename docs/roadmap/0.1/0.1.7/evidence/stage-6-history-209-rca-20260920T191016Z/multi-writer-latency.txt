@@ -1,0 +1,54 @@
+#209 RCA — the second writer, measured on the shipped step size
+
+Instrument: `core/crates/layerfs-storage/tests/step_latency_probe.rs` (removed after
+this round; source retained in `step_latency_probe.rs.txt`). Same binary, same
+payload, same two writers. `solo` is one writer into a fresh Store; `pair` is two
+writers into a fresh Store, each writing the same 24 MiB payload (1,306 objects),
+started together. Each arm reports the wall time of every one of that writer's own
+`accept` calls plus its `finish`, in microseconds.
+
+    n=1 objects=1306
+    solo/a: calls=1307 mean=  134.4us p50=0.0us p90=0.4us p99= 3976.3us max= 5479.2us >=1ms=50 >=10ms=0
+    pair/a: calls=1307 mean=  413.2us p50=0.0us p90=0.5us p99=10987.8us max=30653.8us >=1ms=50 >=10ms=32
+    pair/b: calls=1307 mean=  409.8us p50=0.0us p90=0.3us p99=10955.2us max=33222.0us >=1ms=50 >=10ms=33
+
+    n=1 objects=1306
+    solo/a: calls=1307 mean=  120.4us p50=0.0us p90=0.2us p99= 3540.3us max= 4355.5us >=1ms=50 >=10ms=0
+    pair/a: calls=1307 mean=  407.2us p50=0.0us p90=0.3us p99=10569.6us max=37633.7us >=1ms=50 >=10ms=26
+    pair/b: calls=1307 mean=  380.6us p50=0.0us p90=0.3us p99=10386.8us max=12468.2us >=1ms=50 >=10ms=24
+
+    n=1 objects=1306
+    solo/a: calls=1307 mean=  132.6us p50=0.0us p90=0.3us p99= 3563.3us max=16106.7us >=1ms=50 >=10ms=1
+    pair/a: calls=1307 mean=  399.7us p50=0.0us p90=0.3us p99=11172.2us max=17077.6us >=1ms=50 >=10ms=27
+    pair/b: calls=1307 mean=  403.9us p50=0.0us p90=0.4us p99=11101.1us max=18635.7us >=1ms=50 >=10ms=28
+
+**Both writers completed in every round. Zero `OwnershipUnavailable`.**
+
+Reading it. 1,290 of the 1,306 calls are sub-millisecond; the 50 that are not are the
+group seals, each of which widens the step and rewrites a whole pack body. The step a
+second writer cannot enter is therefore **p50 0.4 us / p95 ~4 ms / p99 ~11 ms / worst
+observed 37.6 ms**. The one writer that owns no lock at that moment pays that step as
+its own latency: `pair` mean 400-413 us against `solo` 120-134 us for the same calls.
+
+## The step cannot simply be widened: it fails, it does not wait
+
+`maybe_commit` was given an explicit, default-1 lever
+(`LAYERFS_STORAGE_COMMIT_EVERY`, measurement-only, removed after this round) that
+commits the save's transaction once per N steps instead of once per step. That is
+exactly "hold the arbitration lock across more appends".
+
+    COMMIT_EVERY=1        both writers finish, 0 OwnershipUnavailable, 5/5 rounds
+    COMMIT_EVERY=8        FAILED in round 0
+    COMMIT_EVERY=64       FAILED in round 0
+    COMMIT_EVERY=100000   FAILED in round 0
+
+    panicked: called `Result::unwrap()` on an `Err` value:
+    CleanupFailed { original: OwnershipUnavailable, cleanup: OwnershipUnavailable }
+
+The failure is `OwnershipUnavailable`, not a longer wait. SQLite admits one writer per
+Store file and the product's `busy_timeout` is **zero** by declared profile, so a
+second writer arriving while a transaction is still open is refused immediately; its
+own cleanup then needs the lock it cannot get and the save fails as a cleanup failure.
+**A widened step does not cost the second writer time, it costs the second writer the
+save.** The step boundary is therefore not a tuning parameter: it is the largest unit
+of work that can be serialized without destroying the capability the model bought.

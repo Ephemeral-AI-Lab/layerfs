@@ -1,0 +1,1045 @@
+store: /tmp/rca209/row-store.sqlite
+sqlite3: 3.51.0 2025-06-12 13:14:41 f0ca7bba1c5e232e5d279fad6338121ab55af0c8c68c84cdfb18ba5114dcaapl (64-bit)
+
+== profile and store facts ==
+pragma.page_count: 12663
+pragma.freelist_count: 38
+pragma.page_size: 4096
+pragma.cache_size: 2000
+pragma.cache_spill: 20000
+pragma.mmap_size: 
+pragma.auto_vacuum: 0
+objects.count: 52032
+packs.count: 255
+packs.body_bytes: 45298203
+packs.max_body: 262112
+stat1.present: 0
+
+== S2.next_pack ==
+call site: sqlite/ownership.rs:131 next_pack (query_row, prepared fresh per call)
+sql: SELECT next_pack_id FROM store_policy WHERE id = 1
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+1 x Column; 1 x Goto; 1 x Halt; 1 x Init; 1 x Integer; 1 x OpenRead; 1 x ResultRow; 1 x SeekRowid; 1 x Transaction
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     7     0                    0   Start at 7
+1     OpenRead       0     2     0     9              0   root=2 iDb=0; store_policy
+2     Integer        1     1     0                    0   r[1]=1
+3     SeekRowid      0     6     1                    0   intkey=r[1]
+4     Column         0     8     2     1              0   r[2]=store_policy.next_pack_id
+5     ResultRow      2     1     0                    0   output=r[2]
+6     Halt           0     0     0                    0   
+7     Transaction    0     0     9     0              1   usesStmtJournal=0
+8     Goto           0     1     0                    0
+
+== S3.insert_pack ==
+call site: sqlite/write.rs:69 insert_pack (execute, prepared fresh per call)
+sql: INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SCALAR SUBQUERY 1
+   `--SCAN temp.layerfs_read_scope
+-- opcode histogram (EXPLAIN) --
+5 x Halt; 5 x Integer; 3 x SCopy; 2 x Goto; 2 x HaltIfNull; 2 x IntCopy; 2 x MakeRecord; 2 x MustBeInt; 2 x Noop; 2 x NotExists; 2 x OpenRead; 2 x OpenWrite; 2 x Transaction; 2 x Variable; 1 x BeginSubrtn; 1 x Close; 1 x Column; 1 x Copy; 1 x DecrJumpZero; 1 x Gt; 1 x IdxInsert; 1 x Init; 1 x Insert; 1 x IsNull; 1 x Le; 1 x Lt; 1 x NewRowid; 1 x Next; 1 x NotNull; 1 x Null; 1 x Once; 1 x PureFunc; 1 x Return; 1 x Rewind; 1 x SoftNull; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     51    0                    0   Start at 51
+1     OpenWrite      1     7     0     3              0   root=7 iDb=0; object_packs
+2     OpenWrite      2     8     0     k(3,,,)        0   root=8 iDb=0; packs_save
+3     SoftNull       2     0     0                    0   r[2]=NULL
+4     BeginSubrtn    0     10    0                    0   r[10]=NULL
+5       Once           0     13    0                    0   
+6       Null           0     11    11                   0   r[11..11]=NULL; Init subquery result
+7       Integer        1     12    0                    0   r[12]=1; LIMIT counter
+8       OpenRead       0     2     1     1              0   root=2 iDb=1; layerfs_read_scope
+9       Rewind         0     13    0                    0   
+10        Column         0     0     11                   0   r[11]= cursor 0 column 0
+11        DecrJumpZero   12    13    0                    0   if (--r[12])==0 goto 13
+12      Next           0     10    0                    1   
+13    Return         10    5     1                    0   
+14    Copy           11    3     0                    0   r[3]=r[11]
+15    Variable       2     4     0                    0   r[4]=parameter(2)
+16    Variable       1     1     0                    0   r[1]=parameter(1)
+17    NotNull        1     19    0                    0   if r[1]!=NULL goto 19
+18    NewRowid       1     1     0                    0   r[1]=rowid
+19    MustBeInt      1     0     0                    0   
+20    HaltIfNull     1299  2     3     object_packs.save_id 1   if r[3]=null halt
+21    HaltIfNull     1299  2     4     object_packs.data 1   if r[4]=null halt
+22    TypeCheck      2     3     0     object_packs   0   typecheck(r[2..4])
+23    Gt             14    25    1                    84  if r[1]>r[14] goto 25
+24    Halt           275   2     0     pack_id > 0    3   
+25    SCopy          4     15    0                    0   r[15]=r[4]
+26    PureFunc       0     15    13    length(1)      4   r[13]=func(r[15])
+27    Lt             16    29    13                   64  if r[13]<r[16] goto 29
+28    Le             17    30    13                   80  if r[13]<=r[17] goto 30
+29    Halt           275   2     0     length(data) BETWEEN 32 AND 16781312 3   
+30    Integer        0     18    0                    0   r[18]=0; trigger count
+31    Noop           0     0     0                    0   uniqueness check for ROWID
+32    NotExists      1     34    1                    0   intkey=r[1]
+33    Halt           1555  2     0     object_packs.pack_id 2   
+34    Noop           0     0     0                    0   prep index packs_save
+35    SCopy          3     6     0                    0   r[6]=r[3]; save_id
+36    IntCopy        1     7     0                    0   r[7]=r[1]; rowid
+37    IntCopy        1     8     0                    0   r[8]=r[1]; rowid
+38    MakeRecord     6     3     5                    0   r[5]=mkrec(r[6..8]); for packs_save
+39    MakeRecord     2     3     9                    0   r[9]=mkrec(r[2..4])
+40    IsNull         3     47    0                    0   if r[3]==NULL goto 47
+41    SCopy          3     13    0                    0   r[13]=r[3]
+42    MustBeInt      13    46    0                    0   
+43    OpenRead       3     3     0     4              0   root=3 iDb=0; saves
+44    NotExists      3     46    13                   0   intkey=r[13]
+45    Goto           0     47    0                    0   
+46    Halt           787   2     0                    4   
+47    Close          3     0     0                    0   
+48    IdxInsert      2     5     6     3              16  key=r[5]
+49    Insert         1     9     1     object_packs   49  intkey=r[1] data=r[9]
+50    Halt           0     0     0                    0   
+51    Transaction    0     1     9     0              1   usesStmtJournal=0
+52    Transaction    1     0     1     0              1   usesStmtJournal=0
+53    Integer        0     14    0                    0   r[14]=0
+54    Integer        32    16    0                    0   r[16]=32
+55    Integer        16781312 17    0                    0   r[17]=16781312
+56    Goto           0     1     0                    0
+
+== S4.append_pack ==
+call site: sqlite/write.rs:81 append_pack (execute, prepared fresh per call)
+sql: UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SEARCH object_packs USING INTEGER PRIMARY KEY (rowid=?)
+|--SCALAR SUBQUERY 1
+|  `--SCAN temp.layerfs_read_scope
+`--CORRELATED SCALAR SUBQUERY 2
+   `--SEARCH saves USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+7 x Integer; 5 x Column; 3 x Null; 2 x BeginSubrtn; 2 x DecrJumpZero; 2 x Halt; 2 x OpenRead; 2 x Return; 2 x SeekRowid; 2 x Transaction; 2 x Variable; 1 x Delete; 1 x Goto; 1 x HaltIfNull; 1 x IfNot; 1 x Init; 1 x Insert; 1 x IsNull; 1 x Le; 1 x Lt; 1 x MakeRecord; 1 x Ne; 1 x Next; 1 x Noop; 1 x NotNull; 1 x Once; 1 x OpenWrite; 1 x PureFunc; 1 x Rewind; 1 x Rowid; 1 x SCopy; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     47    0                    0   Start at 47
+1     Null           0     1     2                    0   r[1..2]=NULL
+2     Noop           4     0     1                    0   
+3     OpenWrite      0     7     0     3              0   root=7 iDb=0; object_packs
+4     Variable       1     6     0                    0   r[6]=parameter(1)
+5     SeekRowid      0     31    6                    0   intkey=r[6]
+6     Column         0     1     7                    0   r[7]= cursor 0 column 1
+7     BeginSubrtn    0     9     0                    0   r[9]=NULL
+8       Once           0     16    0                    0   
+9       Null           0     10    10                   0   r[10..10]=NULL; Init subquery result
+10      Integer        1     11    0                    0   r[11]=1; LIMIT counter
+11      OpenRead       2     2     1     1              0   root=2 iDb=1; layerfs_read_scope
+12      Rewind         2     16    0                    0   
+13        Column         2     0     10                   0   r[10]= cursor 2 column 0
+14        DecrJumpZero   11    16    0                    0   if (--r[11])==0 goto 16
+15      Next           2     13    0                    1   
+16    Return         9     8     1                    0   
+17    Ne             10    31    7     BINARY-8       83  if r[7]!=r[10] goto 31
+18    BeginSubrtn    0     12    0                    0   r[12]=NULL
+19      Integer        0     13    0                    0   r[13]=0; Init EXISTS result
+20      Integer        1     14    0                    0   r[14]=1; LIMIT counter
+21      OpenRead       3     3     0     3              0   root=3 iDb=0; saves
+22      Column         0     1     15                   0   r[15]= cursor 0 column 1
+23      SeekRowid      3     28    15                   0   intkey=r[15]
+24      Column         3     2     8                    128 r[8]= cursor 3 column 2
+25      NotNull        8     28    0                    0   if r[8]!=NULL goto 28
+26      Integer        1     13    0                    0   r[13]=1
+27      DecrJumpZero   14    28    0                    0   if (--r[14])==0 goto 28
+28    Return         12    19    1                    0   
+29    IfNot          13    31    1                    0   
+30    Rowid          0     2     0                    0   r[2]= rowid of 0
+31    IsNull         2     46    0                    0   if r[2]==NULL goto 46
+32    Null           0     3     0                    0   r[3]=NULL
+33    Column         0     1     4                    0   r[4]= cursor 0 column 1
+34    Variable       2     5     0                    0   r[5]=parameter(2)
+35    HaltIfNull     1299  2     5     object_packs.data 1   if r[5]=null halt
+36    TypeCheck      3     3     0     object_packs   0   typecheck(r[3..5])
+37    SCopy          5     17    0                    0   r[17]=r[5]
+38    PureFunc       0     17    7     length(1)      4   r[7]=func(r[17])
+39    Lt             18    41    7                    64  if r[7]<r[18] goto 41
+40    Le             19    42    7                    80  if r[7]<=r[19] goto 42
+41    Halt           275   2     0     length(data) BETWEEN 32 AND 16781312 3   
+42    Integer        0     20    0                    0   r[20]=0; trigger count
+43    MakeRecord     3     3     1                    0   r[1]=mkrec(r[3..5])
+44    Delete         0     68    2     object_packs   0   
+45    Insert         0     1     2     object_packs   5   intkey=r[2] data=r[1]
+46    Halt           0     0     0                    0   
+47    Transaction    0     1     9     0              1   usesStmtJournal=0
+48    Transaction    1     0     1     0              1   usesStmtJournal=0
+49    Integer        32    18    0                    0   r[18]=32
+50    Integer        16781312 19    0                    0   r[19]=16781312
+51    Goto           0     1     0                    0
+
+== S5.insert_objects_1 ==
+call site: sqlite/write.rs:171 object_insert_sql(1) (prepare_cached)
+sql: INSERT INTO objects (object_id, object_role, canonical_length, pack_id, group_number, record_number, save_id) VALUES (?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope))
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SCALAR SUBQUERY 1
+   `--SCAN temp.layerfs_read_scope
+-- opcode histogram (EXPLAIN) --
+12 x SCopy; 10 x Integer; 9 x Halt; 7 x HaltIfNull; 6 x Variable; 5 x Lt; 3 x Goto; 3 x Le; 3 x OpenRead; 2 x Close; 2 x IdxInsert; 2 x IsNull; 2 x MakeRecord; 2 x MustBeInt; 2 x Noop; 2 x NotExists; 2 x Null; 2 x OpenWrite; 2 x Transaction; 1 x BeginSubrtn; 1 x Column; 1 x Copy; 1 x DecrJumpZero; 1 x Eq; 1 x Init; 1 x Insert; 1 x Next; 1 x NoConflict; 1 x Once; 1 x PureFunc; 1 x Return; 1 x Rewind; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     82    0                    0   Start at 82
+1     OpenWrite      2     12    0     k(2,,)         0   root=12 iDb=0; objects_save
+2     OpenWrite      3     11    0     k(2,,)         0   root=11 iDb=0; sqlite_autoindex_objects_1
+3     Variable       1     2     0                    0   r[2]=parameter(1)
+4     BeginSubrtn    0     21    0                    0   r[21]=NULL
+5       Once           0     13    0                    0   
+6       Null           0     22    22                   0   r[22..22]=NULL; Init subquery result
+7       Integer        1     23    0                    0   r[23]=1; LIMIT counter
+8       OpenRead       0     2     1     1              0   root=2 iDb=1; layerfs_read_scope
+9       Rewind         0     13    0                    0   
+10        Column         0     0     22                   0   r[22]= cursor 0 column 0
+11        DecrJumpZero   23    13    0                    0   if (--r[23])==0 goto 13
+12      Next           0     10    0                    1   
+13    Return         21    5     1                    0   
+14    Copy           22    3     0                    0   r[3]=r[22]
+15    Variable       2     4     0                    0   r[4]=parameter(2)
+16    Variable       3     5     0                    0   r[5]=parameter(3)
+17    Variable       4     6     0                    0   r[6]=parameter(4)
+18    Variable       5     7     0                    0   r[7]=parameter(5)
+19    Variable       6     8     0                    0   r[8]=parameter(6)
+20    Null           0     1     0                    0   r[1]=NULL
+21    HaltIfNull     1299  2     2     objects.object_id 1   if r[2]=null halt
+22    HaltIfNull     1299  2     3     objects.save_id 1   if r[3]=null halt
+23    HaltIfNull     1299  2     4     objects.object_role 1   if r[4]=null halt
+24    HaltIfNull     1299  2     5     objects.canonical_length 1   if r[5]=null halt
+25    HaltIfNull     1299  2     6     objects.pack_id 1   if r[6]=null halt
+26    HaltIfNull     1299  2     7     objects.group_number 1   if r[7]=null halt
+27    HaltIfNull     1299  2     8     objects.record_number 1   if r[8]=null halt
+28    TypeCheck      2     7     0     objects        0   typecheck(r[2..8])
+29    SCopy          2     25    0                    0   r[25]=r[2]
+30    PureFunc       0     25    24    length(1)      4   r[24]=func(r[25])
+31    Eq             26    33    24                   80  if r[24]==r[26] goto 33
+32    Halt           275   2     0     length(object_id) = 32 3   
+33    Lt             27    35    4     BINARY-8       68  if r[4]<r[27] goto 35
+34    Le             28    36    4     BINARY-8       84  if r[4]<=r[28] goto 36
+35    Halt           275   2     0     object_role BETWEEN 1 AND 13 3   
+36    Le             29    38    5     BINARY-8       68  if r[5]<=r[29] goto 38
+37    Le             30    39    5     BINARY-8       84  if r[5]<=r[30] goto 39
+38    Halt           275   2     0     canonical_length > 0 AND canonical_length <= 16777216 3   
+39    Lt             29    41    7     BINARY-8       68  if r[7]<r[29] goto 41
+40    Lt             31    42    7     BINARY-8       84  if r[7]<r[31] goto 42
+41    Halt           275   2     0     group_number >= 0 AND group_number < 256 3   
+42    Lt             29    44    8     BINARY-8       68  if r[8]<r[29] goto 44
+43    Lt             32    45    8     BINARY-8       84  if r[8]<r[32] goto 45
+44    Halt           275   2     0     record_number >= 0 AND record_number < 8191 3   
+45    Integer        0     33    0                    0   r[33]=0; trigger count
+46    Noop           0     0     0                    0   prep index objects_save
+47    SCopy          3     10    0                    0   r[10]=r[3]; save_id
+48    SCopy          2     11    0                    0   r[11]=r[2]; object_id
+49    MakeRecord     10    2     9                    0   r[9]=mkrec(r[10..11]); for objects_save
+50    Noop           0     0     0                    0   prep index sqlite_autoindex_objects_1
+51    SCopy          2     13    0                    0   r[13]=r[2]; object_id
+52    SCopy          3     14    0                    0   r[14]=r[3]; save_id
+53    SCopy          4     15    0                    0   r[15]=r[4]; object_role
+54    SCopy          5     16    0                    0   r[16]=r[5]; canonical_length
+55    SCopy          6     17    0                    0   r[17]=r[6]; pack_id
+56    SCopy          7     18    0                    0   r[18]=r[7]; group_number
+57    SCopy          8     19    0                    0   r[19]=r[8]; record_number
+58    MakeRecord     13    7     12                   0   r[12]=mkrec(r[13..19]); for sqlite_autoindex_objects_1
+59    NoConflict     3     61    13    2              0   key=r[13..14]
+60    Halt           1555  2     0     objects.object_id, objects.save_id 2   
+61    IsNull         6     68    0                    0   if r[6]==NULL goto 68
+62    SCopy          6     24    0                    0   r[24]=r[6]
+63    MustBeInt      24    67    0                    0   
+64    OpenRead       4     7     0     3              0   root=7 iDb=0; object_packs
+65    NotExists      4     67    24                   0   intkey=r[24]
+66    Goto           0     68    0                    0   
+67    Halt           787   2     0                    4   
+68    Close          4     0     0                    0   
+69    IsNull         3     76    0                    0   if r[3]==NULL goto 76
+70    SCopy          3     24    0                    0   r[24]=r[3]
+71    MustBeInt      24    75    0                    0   
+72    OpenRead       5     3     0     4              0   root=3 iDb=0; saves
+73    NotExists      5     75    24                   0   intkey=r[24]
+74    Goto           0     76    0                    0   
+75    Halt           787   2     0                    4   
+76    Close          5     0     0                    0   
+77    IdxInsert      2     9     10    2              16  key=r[9]
+78    Integer        0     24    0                    0   r[24]=0
+79    Insert         3     12    24    objects        64  intkey=r[24] data=r[12]
+80    IdxInsert      3     12    13    2              17  key=r[12]
+81    Halt           0     0     0                    0   
+82    Transaction    0     1     9     0              1   usesStmtJournal=0
+83    Transaction    1     0     1     0              1   usesStmtJournal=0
+84    Integer        32    26    0                    0   r[26]=32
+85    Integer        1     27    0                    0   r[27]=1
+86    Integer        13    28    0                    0   r[28]=13
+87    Integer        0     29    0                    0   r[29]=0
+88    Integer        16777216 30    0                    0   r[30]=16777216
+89    Integer        256   31    0                    0   r[31]=256
+90    Integer        8191  32    0                    0   r[32]=8191
+91    Goto           0     1     0                    0
+
+== S6.ceiling ==
+call site: cas/placement.rs:238 write_pack, on the write that creates a pack
+sql: UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save_id = ?1 AND active_slot IS NOT NULL
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SEARCH saves USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+4 x Column; 2 x Halt; 2 x Integer; 2 x IsNull; 2 x Null; 2 x Variable; 1 x CollSeq; 1 x Delete; 1 x Function; 1 x Ge; 1 x Goto; 1 x HaltIfNull; 1 x Init; 1 x Insert; 1 x MakeRecord; 1 x Noop; 1 x OpenWrite; 1 x Rowid; 1 x SeekRowid; 1 x Transaction; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     25    0                    0   Start at 25
+1     Null           0     1     2                    0   r[1..2]=NULL
+2     Noop           3     0     1                    0   
+3     OpenWrite      0     3     0     4              0   root=3 iDb=0; saves
+4     Variable       1     7     0                    0   r[7]=parameter(1)
+5     SeekRowid      0     9     7                    0   intkey=r[7]
+6     Column         0     1     8                    128 r[8]= cursor 0 column 1
+7     IsNull         8     9     0                    0   if r[8]==NULL goto 9
+8     Rowid          0     2     0                    0   r[2]= rowid of 0
+9     IsNull         2     24    0                    0   if r[2]==NULL goto 24
+10    Null           0     3     0                    0   r[3]=NULL
+11    Column         0     1     4                    0   r[4]= cursor 0 column 1
+12    Column         0     2     5                    0   r[5]= cursor 0 column 2
+13    Column         0     3     9     0              0   r[9]=saves.pack_ceiling
+14    CollSeq        0     0     0     BINARY-8       0   
+15    Function       2     9     6     max(-3)        0   r[6]=func(r[9..10])
+16    HaltIfNull     1299  2     6     saves.pack_ceiling 1   if r[6]=null halt
+17    TypeCheck      3     4     0     saves          0   typecheck(r[3..6])
+18    Ge             11    20    6     BINARY-8       84  if r[6]>=r[11] goto 20
+19    Halt           275   2     0     pack_ceiling >= 0 3   
+20    Integer        0     12    0                    0   r[12]=0; trigger count
+21    MakeRecord     3     4     1                    0   r[1]=mkrec(r[3..6])
+22    Delete         0     68    2     saves          0   
+23    Insert         0     1     2     saves          5   intkey=r[2] data=r[1]
+24    Halt           0     0     0                    0   
+25    Transaction    0     1     9     0              1   usesStmtJournal=0
+26    Variable       2     10    0                    0   r[10]=parameter(2)
+27    Integer        0     11    0                    0   r[11]=0
+28    Goto           0     1     0                    0
+
+== S7.advance_pack ==
+call site: sqlite/ownership.rs:139 advance_pack
+sql: UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_pack_id <= ?1
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+11 x Column; 2 x Gt; 2 x Halt; 2 x Integer; 2 x Null; 2 x Variable; 1 x Delete; 1 x Goto; 1 x HaltIfNull; 1 x Init; 1 x Insert; 1 x IsNull; 1 x MakeRecord; 1 x Noop; 1 x OpenWrite; 1 x Rowid; 1 x SeekRowid; 1 x Transaction; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     30    0                    0   Start at 30
+1     Null           0     1     2                    0   r[1..2]=NULL
+2     Noop           1     0     1                    0   
+3     OpenWrite      0     2     0     12             0   root=2 iDb=0; store_policy
+4     Integer        1     15    0                    0   r[15]=1
+5     SeekRowid      0     9     15                   0   intkey=r[15]
+6     Column         0     8     16    1              0   r[16]=store_policy.next_pack_id
+7     Gt             17    9     16    BINARY-8       84  if r[16]>r[17] goto 9
+8     Rowid          0     2     0                    0   r[2]= rowid of 0
+9     IsNull         2     29    0                    0   if r[2]==NULL goto 29
+10    Null           0     3     0                    0   r[3]=NULL
+11    Column         0     1     4                    0   r[4]= cursor 0 column 1
+12    Column         0     2     5                    0   r[5]= cursor 0 column 2
+13    Column         0     3     6                    0   r[6]= cursor 0 column 3
+14    Column         0     4     7                    0   r[7]= cursor 0 column 4
+15    Column         0     5     8                    0   r[8]= cursor 0 column 5
+16    Column         0     6     9     0              0   r[9]=store_policy.publication_sequence
+17    Column         0     7     10    0              0   r[10]=store_policy.retained_pack_ceiling
+18    Variable       1     11    0                    0   r[11]=parameter(1)
+19    Column         0     9     12    1              0   r[12]=store_policy.next_ordinal
+20    Column         0     10    13    1              0   r[13]=store_policy.metadata_window_start
+21    Column         0     11    14    0              0   r[14]=store_policy.metadata_window_values
+22    HaltIfNull     1299  2     11    store_policy.next_pack_id 1   if r[11]=null halt
+23    TypeCheck      3     12    0     store_policy   0   typecheck(r[3..14])
+24    Gt             18    26    11    BINARY-8       84  if r[11]>r[18] goto 26
+25    Halt           275   2     0     next_pack_id > 0 3   
+26    MakeRecord     3     12    1                    0   r[1]=mkrec(r[3..14])
+27    Delete         0     68    2     store_policy   0   
+28    Insert         0     1     2     store_policy   5   intkey=r[2] data=r[1]
+29    Halt           0     0     0                    0   
+30    Transaction    0     1     9     0              1   usesStmtJournal=0
+31    Variable       1     17    0                    0   r[17]=parameter(1)
+32    Integer        0     18    0                    0   r[18]=0
+33    Goto           0     1     0                    0
+
+== S8.publish_policy ==
+call site: sqlite/ownership.rs:110 publish (once per save)
+sql: UPDATE store_policy SET publication_sequence = publication_sequence + 1, retained_pack_ceiling = MAX(retained_pack_ceiling, (SELECT pack_ceiling FROM saves WHERE save_id = ?1)) WHERE id = 1 AND publication_sequence < 9223372036854775807
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)
+`--SCALAR SUBQUERY 1
+   `--SEARCH saves USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+13 x Column; 4 x Integer; 3 x Ge; 3 x Halt; 3 x Null; 2 x HaltIfNull; 2 x SeekRowid; 1 x Add; 1 x BeginSubrtn; 1 x CollSeq; 1 x DecrJumpZero; 1 x Delete; 1 x Function; 1 x Goto; 1 x Init; 1 x Insert; 1 x Int64; 1 x IsNull; 1 x MakeRecord; 1 x Noop; 1 x Once; 1 x OpenRead; 1 x OpenWrite; 1 x Return; 1 x Rowid; 1 x SCopy; 1 x Transaction; 1 x TypeCheck; 1 x Variable
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     47    0                    0   Start at 47
+1     Null           0     1     2                    0   r[1..2]=NULL
+2     Noop           2     0     1                    0   
+3     OpenWrite      0     2     0     12             0   root=2 iDb=0; store_policy
+4     Integer        1     15    0                    0   r[15]=1
+5     SeekRowid      0     9     15                   0   intkey=r[15]
+6     Column         0     6     16    0              0   r[16]=store_policy.publication_sequence
+7     Ge             17    9     16    BINARY-8       84  if r[16]>=r[17] goto 9
+8     Rowid          0     2     0                    0   r[2]= rowid of 0
+9     IsNull         2     46    0                    0   if r[2]==NULL goto 46
+10    Null           0     3     0                    0   r[3]=NULL
+11    Column         0     1     4                    0   r[4]= cursor 0 column 1
+12    Column         0     2     5                    0   r[5]= cursor 0 column 2
+13    Column         0     3     6                    0   r[6]= cursor 0 column 3
+14    Column         0     4     7                    0   r[7]= cursor 0 column 4
+15    Column         0     5     8                    0   r[8]= cursor 0 column 5
+16    Column         0     6     16    0              0   r[16]=store_policy.publication_sequence
+17    Add            18    16    9                    0   r[9]=r[18]+r[16]
+18    Column         0     7     19    0              0   r[19]=store_policy.retained_pack_ceiling
+19    BeginSubrtn    0     21    0                    0   r[21]=NULL
+20      Once           0     28    0                    0   
+21      Null           0     22    22                   0   r[22..22]=NULL; Init subquery result
+22      Integer        1     23    0                    0   r[23]=1; LIMIT counter
+23      OpenRead       1     3     0     4              0   root=3 iDb=0; saves
+24      Variable       1     24    0                    0   r[24]=parameter(1)
+25      SeekRowid      1     28    24                   0   intkey=r[24]
+26      Column         1     3     22    0              0   r[22]=saves.pack_ceiling
+27      DecrJumpZero   23    28    0                    0   if (--r[23])==0 goto 28
+28    Return         21    20    1                    0   
+29    SCopy          22    20    0                    0   r[20]=r[22]
+30    CollSeq        0     0     0     BINARY-8       0   
+31    Function       0     19    10    max(-3)        0   r[10]=func(r[19..20])
+32    Column         0     8     11    1              0   r[11]=store_policy.next_pack_id
+33    Column         0     9     12    1              0   r[12]=store_policy.next_ordinal
+34    Column         0     10    13    1              0   r[13]=store_policy.metadata_window_start
+35    Column         0     11    14    0              0   r[14]=store_policy.metadata_window_values
+36    HaltIfNull     1299  2     9     store_policy.publication_sequence 1   if r[9]=null halt
+37    HaltIfNull     1299  2     10    store_policy.retained_pack_ceiling 1   if r[10]=null halt
+38    TypeCheck      3     12    0     store_policy   0   typecheck(r[3..14])
+39    Ge             26    41    9     BINARY-8       84  if r[9]>=r[26] goto 41
+40    Halt           275   2     0     publication_sequence >= 0 3   
+41    Ge             26    43    10    BINARY-8       84  if r[10]>=r[26] goto 43
+42    Halt           275   2     0     retained_pack_ceiling >= 0 3   
+43    MakeRecord     3     12    1                    0   r[1]=mkrec(r[3..14])
+44    Delete         0     68    2     store_policy   0   
+45    Insert         0     1     2     store_policy   5   intkey=r[2] data=r[1]
+46    Halt           0     0     0                    0   
+47    Transaction    0     1     9     0              1   usesStmtJournal=0
+48    Int64          0     17    0     9223372036854775807 0   r[17]=9223372036854775807
+49    Integer        1     18    0                    0   r[18]=1
+50    Integer        0     26    0                    0   r[26]=0
+51    Goto           0     1     0                    0
+
+== S9.publish_save ==
+call site: sqlite/ownership.rs:118 publish (once per save)
+sql: UPDATE saves SET active_slot = NULL, publication = (SELECT publication_sequence FROM store_policy WHERE id = 1) WHERE save_id = ?1 AND active_slot IS NOT NULL AND publication IS NULL
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SEARCH saves USING INTEGER PRIMARY KEY (rowid=?)
+`--SCALAR SUBQUERY 1
+   `--SEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+10 x Integer; 6 x Column; 6 x Halt; 4 x IsNull; 4 x Null; 3 x MakeRecord; 3 x Noop; 3 x OpenWrite; 2 x Eq; 2 x IdxDelete; 2 x IdxInsert; 2 x IdxRowid; 2 x IntCopy; 2 x NoConflict; 2 x Rowid; 2 x SCopy; 2 x SeekRowid; 1 x BeginSubrtn; 1 x Copy; 1 x DecrJumpZero; 1 x Delete; 1 x Goto; 1 x Gt; 1 x Init; 1 x Insert; 1 x Le; 1 x Lt; 1 x Ne; 1 x NotNull; 1 x Once; 1 x OpenRead; 1 x Return; 1 x Transaction; 1 x TypeCheck; 1 x Variable
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     70    0                    0   Start at 70
+1     Null           0     7     8                    0   r[7..8]=NULL
+2     Noop           4     0     7                    0   
+3     OpenWrite      0     3     0     4              0   root=3 iDb=0; saves
+4     Variable       1     13    0                    0   r[13]=parameter(1)
+5     SeekRowid      0     11    13                   0   intkey=r[13]
+6     Column         0     1     14                   128 r[14]= cursor 0 column 1
+7     IsNull         14    11    0                    0   if r[14]==NULL goto 11
+8     Column         0     2     14                   128 r[14]= cursor 0 column 2
+9     NotNull        14    11    0                    0   if r[14]!=NULL goto 11
+10    Rowid          0     8     0                    0   r[8]= rowid of 0
+11    OpenWrite      1     5     0     k(2,,)         0   root=5 iDb=0; sqlite_autoindex_saves_2
+12    OpenWrite      2     4     0     k(2,,)         0   root=4 iDb=0; sqlite_autoindex_saves_1
+13    IsNull         8     69    0                    0   if r[8]==NULL goto 69
+14    Null           0     9     0                    0   r[9]=NULL
+15    Null           0     10    0                    0   r[10]=NULL
+16    BeginSubrtn    0     15    0                    0   r[15]=NULL
+17      Once           0     25    0                    0   
+18      Null           0     16    16                   0   r[16..16]=NULL; Init subquery result
+19      Integer        1     17    0                    0   r[17]=1; LIMIT counter
+20      OpenRead       3     2     0     7              0   root=2 iDb=0; store_policy
+21      Integer        1     18    0                    0   r[18]=1
+22      SeekRowid      3     25    18                   0   intkey=r[18]
+23      Column         3     6     16    0              0   r[16]=store_policy.publication_sequence
+24      DecrJumpZero   17    25    0                    0   if (--r[17])==0 goto 25
+25    Return         15    17    1                    0   
+26    Copy           16    11    0                    0   r[11]=r[16]
+27    Column         0     3     12    0              0   r[12]=saves.pack_ceiling
+28    TypeCheck      9     4     0     saves          0   typecheck(r[9..12])
+29    Lt             20    31    10    BINARY-8       68  if r[10]<r[20] goto 31
+30    Le             21    32    10    BINARY-8       84  if r[10]<=r[21] goto 32
+31    Halt           275   2     0     active_slot BETWEEN 1 AND 2 3   
+32    Gt             22    34    11    BINARY-8       84  if r[11]>r[22] goto 34
+33    Halt           275   2     0     publication > 0 3   
+34    Integer        1     19    0                    0   r[19]=1
+35    IsNull         10    37    0                    0   if r[10]==NULL goto 37
+36    Integer        0     19    0                    0   r[19]=0
+37    Integer        1     23    0                    0   r[23]=1
+38    IsNull         11    40    0                    0   if r[11]==NULL goto 40
+39    Integer        0     23    0                    0   r[23]=0
+40    Ne             23    42    19                   80  if r[19]!=r[23] goto 42
+41    Halt           275   2     0     (active_slot IS NULL) != (publication IS NULL) 3   
+42    Integer        0     25    0                    0   r[25]=0; trigger count
+43    Noop           0     0     0                    0   prep index sqlite_autoindex_saves_2
+44    SCopy          11    2     0                    0   r[2]=r[11]; publication
+45    IntCopy        8     3     0                    0   r[3]=r[8]; rowid
+46    MakeRecord     2     2     1                    0   r[1]=mkrec(r[2..3]); for sqlite_autoindex_saves_2
+47    NoConflict     1     51    2     1              0   key=r[2]
+48    IdxRowid       1     23    0                    0   r[23]=rowid
+49    Eq             23    51    8                    144 if r[8]==r[23] goto 51
+50    Halt           2067  2     0     saves.publication 2   
+51    Noop           0     0     0                    0   prep index sqlite_autoindex_saves_1
+52    SCopy          10    5     0                    0   r[5]=r[10]; active_slot
+53    IntCopy        8     6     0                    0   r[6]=r[8]; rowid
+54    MakeRecord     5     2     4                    0   r[4]=mkrec(r[5..6]); for sqlite_autoindex_saves_1
+55    NoConflict     2     59    5     1              0   key=r[5]
+56    IdxRowid       2     23    0                    0   r[23]=rowid
+57    Eq             23    59    8                    144 if r[8]==r[23] goto 59
+58    Halt           2067  2     0     saves.active_slot 2   
+59    MakeRecord     9     4     7                    0   r[7]=mkrec(r[9..12])
+60    Column         0     2     26                   0   r[26]= cursor 0 column 2
+61    Rowid          0     27    0                    0   r[27]=saves.rowid
+62    IdxDelete      1     26    2                    1   key=r[26..27]
+63    Column         0     1     26                   0   r[26]= cursor 0 column 1
+64    IdxDelete      2     26    2                    1   key=r[26..27]
+65    Delete         0     68    8     saves          0   
+66    IdxInsert      1     1     2     2              0   key=r[1]
+67    IdxInsert      2     4     5     2              0   key=r[4]
+68    Insert         0     7     8     saves          5   intkey=r[8] data=r[7]
+69    Halt           0     0     0                    0   
+70    Transaction    0     1     9     0              1   usesStmtJournal=0
+71    Integer        1     20    0                    0   r[20]=1
+72    Integer        2     21    0                    0   r[21]=2
+73    Integer        0     22    0                    0   r[22]=0
+74    Goto           0     1     0                    0
+
+== S10.acquire_slot ==
+call site: sqlite/ownership.rs:91 acquire (once per save)
+sql: SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM saves WHERE active_slot = 1) THEN 1 WHEN NOT EXISTS (SELECT 1 FROM saves WHERE active_slot = 2) THEN 2 END
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SCAN CONSTANT ROW
+|--SCALAR SUBQUERY 1
+|  `--SEARCH saves USING COVERING INDEX sqlite_autoindex_saves_1 (active_slot=?)
+`--SCALAR SUBQUERY 2
+   `--SEARCH saves USING COVERING INDEX sqlite_autoindex_saves_1 (active_slot=?)
+-- opcode histogram (EXPLAIN) --
+10 x Integer; 3 x Goto; 2 x BeginSubrtn; 2 x DecrJumpZero; 2 x IdxGT; 2 x If; 2 x Once; 2 x OpenRead; 2 x Return; 2 x SeekGE; 1 x Halt; 1 x Init; 1 x Null; 1 x ResultRow; 1 x Transaction
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     32    0                    0   Start at 32
+1     BeginSubrtn    0     3     0                    0   r[3]=NULL
+2       Once           0     11    0                    0   
+3       Integer        0     4     0                    0   r[4]=0; Init EXISTS result
+4       Integer        1     5     0                    0   r[5]=1; LIMIT counter
+5       OpenRead       2     4     0     k(2,,)         2   root=4 iDb=0; sqlite_autoindex_saves_1
+6       Integer        1     6     0                    0   r[6]=1
+7       SeekGE         2     11    6     1              0   key=r[6]
+8       IdxGT          2     11    6     1              0   key=r[6]
+9       Integer        1     4     0                    0   r[4]=1
+10      DecrJumpZero   5     11    0                    0   if (--r[5])==0 goto 11
+11    Return         3     2     1                    0   
+12    If             4     15    1                    0   
+13    Integer        1     1     0                    0   r[1]=1
+14    Goto           0     30    0                    0   
+15    BeginSubrtn    0     8     0                    0   r[8]=NULL
+16      Once           0     25    0                    0   
+17      Integer        0     9     0                    0   r[9]=0; Init EXISTS result
+18      Integer        1     10    0                    0   r[10]=1; LIMIT counter
+19      OpenRead       3     4     0     k(2,,)         2   root=4 iDb=0; sqlite_autoindex_saves_1
+20      Integer        2     11    0                    0   r[11]=2
+21      SeekGE         3     25    11    1              0   key=r[11]
+22      IdxGT          3     25    11    1              0   key=r[11]
+23      Integer        1     9     0                    0   r[9]=1
+24      DecrJumpZero   10    25    0                    0   if (--r[10])==0 goto 25
+25    Return         8     16    1                    0   
+26    If             9     29    1                    0   
+27    Integer        2     1     0                    0   r[1]=2
+28    Goto           0     30    0                    0   
+29    Null           0     1     0                    0   r[1]=NULL
+30    ResultRow      1     1     0                    0   output=r[1]
+31    Halt           0     0     0                    0   
+32    Transaction    0     0     9     0              1   usesStmtJournal=0
+33    Goto           0     1     0                    0
+
+== S11.insert_save ==
+call site: sqlite/ownership.rs:102 acquire (once per save)
+sql: INSERT INTO saves (active_slot) VALUES (?1)
+-- EXPLAIN QUERY PLAN --
+
+-- opcode histogram (EXPLAIN) --
+10 x Integer; 7 x Halt; 4 x MakeRecord; 4 x OpenWrite; 2 x Close; 2 x Column; 2 x Goto; 2 x IdxInsert; 2 x Insert; 2 x IntCopy; 2 x IsNull; 2 x Le; 2 x Ne; 2 x NewRowid; 2 x NoConflict; 2 x Noop; 2 x Null; 2 x SCopy; 1 x AddImm; 1 x Copy; 1 x Ge; 1 x Gt; 1 x HaltIfNull; 1 x Init; 1 x Lt; 1 x MemMax; 1 x Next; 1 x NotNull; 1 x OpenRead; 1 x Rewind; 1 x Rowid; 1 x SoftNull; 1 x String8; 1 x Transaction; 1 x TypeCheck; 1 x Variable
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     50    0                    0   Start at 50
+1     OpenWrite      0     3     0     4              0   root=3 iDb=0; saves
+2     OpenWrite      1     5     0     k(2,,)         0   root=5 iDb=0; sqlite_autoindex_saves_2
+3     OpenWrite      2     4     0     k(2,,)         0   root=4 iDb=0; sqlite_autoindex_saves_1
+4     SoftNull       6     0     0                    0   r[6]=NULL
+5     Variable       1     7     0                    0   r[7]=parameter(1)
+6     NewRowid       0     5     2                    0   r[5]=rowid
+7     MemMax         2     5     0                    0   r[2]=max(r[2],r[5])
+8     HaltIfNull     1299  2     9     saves.pack_ceiling 1   if r[9]=null halt
+9     TypeCheck      6     4     0     saves          0   typecheck(r[6..9])
+10    Lt             18    12    7     BINARY-8       68  if r[7]<r[18] goto 12
+11    Le             19    13    7     BINARY-8       84  if r[7]<=r[19] goto 13
+12    Halt           275   2     0     active_slot BETWEEN 1 AND 2 3   
+13    Gt             20    15    8     BINARY-8       84  if r[8]>r[20] goto 15
+14    Halt           275   2     0     publication > 0 3   
+15    Ge             20    17    9     BINARY-8       84  if r[9]>=r[20] goto 17
+16    Halt           275   2     0     pack_ceiling >= 0 3   
+17    Integer        1     17    0                    0   r[17]=1
+18    IsNull         7     20    0                    0   if r[7]==NULL goto 20
+19    Integer        0     17    0                    0   r[17]=0
+20    Integer        1     21    0                    0   r[21]=1
+21    IsNull         8     23    0                    0   if r[8]==NULL goto 23
+22    Integer        0     21    0                    0   r[21]=0
+23    Ne             21    25    17                   80  if r[17]!=r[21] goto 25
+24    Halt           275   2     0     (active_slot IS NULL) != (publication IS NULL) 3   
+25    Integer        0     23    0                    0   r[23]=0; trigger count
+26    Noop           0     0     0                    0   prep index sqlite_autoindex_saves_2
+27    SCopy          8     11    0                    0   r[11]=r[8]; publication
+28    IntCopy        5     12    0                    0   r[12]=r[5]; rowid
+29    MakeRecord     11    2     10                   0   r[10]=mkrec(r[11..12]); for sqlite_autoindex_saves_2
+30    NoConflict     1     32    11    1              0   key=r[11]
+31    Halt           2067  2     0     saves.publication 2   
+32    Noop           0     0     0                    0   prep index sqlite_autoindex_saves_1
+33    SCopy          7     14    0                    0   r[14]=r[7]; active_slot
+34    IntCopy        5     15    0                    0   r[15]=r[5]; rowid
+35    MakeRecord     14    2     13                   0   r[13]=mkrec(r[14..15]); for sqlite_autoindex_saves_1
+36    NoConflict     2     38    14    1              0   key=r[14]
+37    Halt           2067  2     0     saves.active_slot 2   
+38    MakeRecord     6     4     16                   0   r[16]=mkrec(r[6..9])
+39    IdxInsert      1     10    11    2              16  key=r[10]
+40    IdxInsert      2     13    14    2              16  key=r[13]
+41    Insert         0     16    5     saves          57  intkey=r[5] data=r[16]
+42    Le             4     49    2                    0   if r[2]<=r[4] goto 49
+43    OpenWrite      0     6     0     2              0   root=6 iDb=0; sqlite_sequence
+44    NotNull        3     46    0                    0   if r[3]!=NULL goto 46
+45    NewRowid       0     3     0                    0   r[3]=rowid
+46    MakeRecord     1     2     21                   0   r[21]=mkrec(r[1..2])
+47    Insert         0     21    3                    8   intkey=r[3] data=r[21]
+48    Close          0     0     0                    0   
+49    Halt           0     0     0                    0   
+50    Transaction    0     1     9     0              1   usesStmtJournal=0
+51    OpenRead       0     6     0     2              0   root=6 iDb=0; sqlite_sequence
+52    String8        0     1     0     saves          0   r[1]='saves'
+53    Null           0     2     4                    0   r[2..4]=NULL
+54    Rewind         0     63    0                    0   
+55      Column         0     0     2                    0   r[2]= cursor 0 column 0
+56      Ne             1     62    2                    16  if r[2]!=r[1] goto 62
+57      Rowid          0     3     0                    0   r[3]= rowid of 0
+58      Column         0     1     2                    0   r[2]= cursor 0 column 1
+59      AddImm         2     0     0                    0   r[2]=r[2]+0
+60      Copy           2     4     0                    0   r[4]=r[2]
+61      Goto           0     64    0                    0   
+62    Next           0     55    0                    0   
+63    Integer        0     2     0                    0   r[2]=0
+64    Close          0     0     0                    0   
+65    Null           0     8     0                    0   r[8]=NULL
+66    Integer        0     9     0                    0   r[9]=0
+67    Integer        1     18    0                    0   r[18]=1
+68    Integer        2     19    0                    0   r[19]=2
+69    Integer        0     20    0                    0   r[20]=0
+70    Goto           0     1     0                    0
+
+== S12.next_ordinal ==
+call site: sqlite/ownership.rs:150 reserve_ordinals
+sql: SELECT next_ordinal FROM store_policy WHERE id = 1
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+1 x Column; 1 x Goto; 1 x Halt; 1 x Init; 1 x Integer; 1 x OpenRead; 1 x ResultRow; 1 x SeekRowid; 1 x Transaction
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     7     0                    0   Start at 7
+1     OpenRead       0     2     0     10             0   root=2 iDb=0; store_policy
+2     Integer        1     1     0                    0   r[1]=1
+3     SeekRowid      0     6     1                    0   intkey=r[1]
+4     Column         0     9     2     1              0   r[2]=store_policy.next_ordinal
+5     ResultRow      2     1     0                    0   output=r[2]
+6     Halt           0     0     0                    0   
+7     Transaction    0     0     9     0              1   usesStmtJournal=0
+8     Goto           0     1     0                    0
+
+== S13.reserve_ordinals ==
+call site: sqlite/ownership.rs:159 reserve_ordinals
+sql: UPDATE store_policy SET next_ordinal = ?1, metadata_window_start = CASE WHEN metadata_window_values + ?2 > 131072 THEN ?3 ELSE metadata_window_start END, metadata_window_values = CASE WHEN metadata_window_values + ?2 > 131072 THEN ?2 ELSE metadata_window_values + ?2 END WHERE id = 1
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SEARCH store_policy USING INTEGER PRIMARY KEY (rowid=?)
+-- opcode histogram (EXPLAIN) --
+12 x Column; 4 x Halt; 4 x Integer; 4 x Le; 4 x Variable; 3 x Add; 3 x Goto; 3 x HaltIfNull; 2 x Lt; 2 x Null; 1 x Delete; 1 x Gt; 1 x Init; 1 x Insert; 1 x Int64; 1 x IsNull; 1 x MakeRecord; 1 x Noop; 1 x OpenWrite; 1 x Rowid; 1 x SeekRowid; 1 x Transaction; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     47    0                    0   Start at 47
+1     Null           0     1     2                    0   r[1..2]=NULL
+2     Noop           1     0     1                    0   
+3     OpenWrite      0     2     0     12             0   root=2 iDb=0; store_policy
+4     Integer        1     15    0                    0   r[15]=1
+5     SeekRowid      0     7     15                   0   intkey=r[15]
+6     Rowid          0     2     0                    0   r[2]= rowid of 0
+7     IsNull         2     46    0                    0   if r[2]==NULL goto 46
+8     Null           0     3     0                    0   r[3]=NULL
+9     Column         0     1     4                    0   r[4]= cursor 0 column 1
+10    Column         0     2     5                    0   r[5]= cursor 0 column 2
+11    Column         0     3     6                    0   r[6]= cursor 0 column 3
+12    Column         0     4     7                    0   r[7]= cursor 0 column 4
+13    Column         0     5     8                    0   r[8]= cursor 0 column 5
+14    Column         0     6     9     0              0   r[9]=store_policy.publication_sequence
+15    Column         0     7     10    0              0   r[10]=store_policy.retained_pack_ceiling
+16    Column         0     8     11    1              0   r[11]=store_policy.next_pack_id
+17    Variable       1     12    0                    0   r[12]=parameter(1)
+18    Column         0     11    17    0              0   r[17]=store_policy.metadata_window_values
+19    Add            18    17    16                   0   r[16]=r[18]+r[17]
+20    Le             19    23    16                   80  if r[16]<=r[19] goto 23
+21    Variable       3     13    0                    0   r[13]=parameter(3)
+22    Goto           0     24    0                    0   
+23    Column         0     10    13    1              0   r[13]=store_policy.metadata_window_start
+24    Column         0     11    17    0              0   r[17]=store_policy.metadata_window_values
+25    Add            18    17    16                   0   r[16]=r[18]+r[17]
+26    Le             19    29    16                   80  if r[16]<=r[19] goto 29
+27    Variable       2     14    0                    0   r[14]=parameter(2)
+28    Goto           0     31    0                    0   
+29    Column         0     11    16    0              0   r[16]=store_policy.metadata_window_values
+30    Add            18    16    14                   0   r[14]=r[18]+r[16]
+31    HaltIfNull     1299  2     12    store_policy.next_ordinal 1   if r[12]=null halt
+32    HaltIfNull     1299  2     13    store_policy.metadata_window_start 1   if r[13]=null halt
+33    HaltIfNull     1299  2     14    store_policy.metadata_window_values 1   if r[14]=null halt
+34    TypeCheck      3     12    0     store_policy   0   typecheck(r[3..14])
+35    Lt             20    37    12    BINARY-8       68  if r[12]<r[20] goto 37
+36    Le             21    38    12    BINARY-8       84  if r[12]<=r[21] goto 38
+37    Halt           275   2     0     next_ordinal BETWEEN 1 AND 4294967296 3   
+38    Gt             22    40    13    BINARY-8       84  if r[13]>r[22] goto 40
+39    Halt           275   2     0     metadata_window_start > 0 3   
+40    Lt             22    42    14    BINARY-8       68  if r[14]<r[22] goto 42
+41    Le             19    43    14    BINARY-8       84  if r[14]<=r[19] goto 43
+42    Halt           275   2     0     metadata_window_values BETWEEN 0 AND 131072 3   
+43    MakeRecord     3     12    1                    0   r[1]=mkrec(r[3..14])
+44    Delete         0     68    2     store_policy   0   
+45    Insert         0     1     2     store_policy   5   intkey=r[2] data=r[1]
+46    Halt           0     0     0                    0   
+47    Transaction    0     1     9     0              1   usesStmtJournal=0
+48    Variable       2     18    0                    0   r[18]=parameter(2)
+49    Integer        131072 19    0                    0   r[19]=131072
+50    Integer        1     20    0                    0   r[20]=1
+51    Int64          0     21    0     4294967296     0   r[21]=4294967296
+52    Integer        0     22    0                    0   r[22]=0
+53    Goto           0     1     0                    0
+
+== S14.insert_value_group ==
+call site: sqlite/pool.rs:75 write_value_groups (shape; see call site)
+sql: INSERT INTO metadata_value_groups (first_ordinal, count, pack_id, group_number, digest, save_id) VALUES (?1,?2,?3,?4,?5,(SELECT save_id FROM temp.layerfs_read_scope))
+-- EXPLAIN QUERY PLAN --
+
+-- opcode histogram (EXPLAIN) --
+
+-- EXPLAIN listing --
+
+
+== S15.pool_latest ==
+call site: sqlite/pool.rs:46 latest reservation window
+sql: SELECT COALESCE(MAX(first_ordinal + count), ?1) FROM metadata_value_groups WHERE first_ordinal > (SELECT MAX(first_ordinal) FROM metadata_value_groups) - ?2
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SEARCH metadata_value_groups USING INTEGER PRIMARY KEY (rowid>?)
+`--SCALAR SUBQUERY 1
+   `--SEARCH metadata_value_groups
+-- opcode histogram (EXPLAIN) --
+3 x Null; 2 x AggFinal; 2 x AggStep; 2 x CollSeq; 2 x Goto; 2 x OpenRead; 2 x Rowid; 2 x Variable; 1 x Add; 1 x BeginSubrtn; 1 x Column; 1 x Copy; 1 x DecrJumpZero; 1 x Halt; 1 x Init; 1 x Integer; 1 x Last; 1 x Next; 1 x NotNull; 1 x Once; 1 x Prev; 1 x ResultRow; 1 x Return; 1 x SCopy; 1 x SeekGT; 1 x Subtract; 1 x Transaction
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     33    0                    0   Start at 33
+1     Null           0     1     3                    0   r[1..3]=NULL
+2     OpenRead       0     9     0     2              0   root=9 iDb=0; metadata_value_groups
+3     BeginSubrtn    0     6     0                    0   r[6]=NULL
+4       Once           0     18    0                    0   
+5       Null           0     7     7                    0   r[7..7]=NULL; Init subquery result
+6       Integer        1     8     0                    0   r[8]=1; LIMIT counter
+7       Null           0     9     10                   0   r[9..10]=NULL
+8       OpenRead       1     9     0     0              0   root=9 iDb=0; metadata_value_groups
+9       Last           1     15    0                    0   
+10        Rowid          1     11    0                    0   r[11]=metadata_value_groups.rowid
+11        CollSeq        0     0     0     BINARY-8       0   
+12        AggStep        0     11    10    max(1)         1   accum=r[10] step(r[11])
+13        Goto           0     15    0                    0   
+14      Prev           1     10    0                    1   
+15      AggFinal       10    1     0     max(1)         0   accum=r[10] N=1
+16      Copy           10    7     0                    0   r[7]=r[10]
+17      DecrJumpZero   8     18    0                    0   if (--r[8])==0 goto 18
+18    Return         6     4     1                    0   
+19    Subtract       12    7     4                    0   r[4]=r[7]-r[12]
+20    SeekGT         0     27    4                    0   key=r[4]; pk
+21      Rowid          0     5     0                    0   r[5]=metadata_value_groups.rowid
+22      Column         0     1     13                   0   r[13]= cursor 0 column 1
+23      Add            13    5     4                    0   r[4]=r[13]+r[5]
+24      CollSeq        0     0     0     BINARY-8       0   
+25      AggStep        0     4     3     max(1)         1   accum=r[3] step(r[4])
+26    Next           0     21    0                    0   
+27    AggFinal       3     1     0     max(1)         0   accum=r[3] N=1
+28    SCopy          3     14    0                    0   r[14]=r[3]
+29    NotNull        14    31    0                    0   if r[14]!=NULL goto 31
+30    Variable       1     14    0                    0   r[14]=parameter(1)
+31    ResultRow      14    1     0                    0   output=r[14]
+32    Halt           0     0     0                    0   
+33    Transaction    0     0     9     0              1   usesStmtJournal=0
+34    Variable       2     12    0                    0   r[12]=parameter(2)
+35    Goto           0     1     0                    0
+
+== S16.locator_1 ==
+call site: sqlite/lookup.rs:76 candidates (prepare_cached; 380,444 calls a run, resolve_ns)
+sql: SELECT o.object_id,o.object_role,o.canonical_length,o.pack_id,o.group_number,o.record_number,o.save_id,(o.save_id = r.save_id OR s.publication <= r.publication) FROM objects o JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE o.object_id IN (?) AND o.pack_id <= ?2
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SEARCH o USING PRIMARY KEY (object_id=?)
+|--SEARCH s USING INTEGER PRIMARY KEY (rowid=?)
+`--SCAN r
+-- opcode histogram (EXPLAIN) --
+13 x Column; 3 x OpenRead; 2 x Integer; 2 x Next; 2 x Transaction; 2 x Variable; 2 x ZeroOrNull; 1 x Eq; 1 x Goto; 1 x Gt; 1 x Halt; 1 x IdxGT; 1 x Init; 1 x IsNull; 1 x Le; 1 x Or; 1 x ResultRow; 1 x Rewind; 1 x SeekGE; 1 x SeekRowid
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     35    0                    0   Start at 35
+1     OpenRead       3     11    0     k(2,,)         2   root=11 iDb=0; sqlite_autoindex_objects_1
+2     OpenRead       1     3     0     3              0   root=3 iDb=0; saves
+3     OpenRead       2     2     1     2              0   root=2 iDb=1; layerfs_read_scope
+4     Variable       1     1     0                    0   r[1]=parameter(1)
+5     IsNull         1     34    0                    0   if r[1]==NULL goto 34
+6     SeekGE         3     34    1     1              0   key=r[1]
+7       IdxGT          3     34    1     1              0   key=r[1]
+8       Column         3     4     2                    0   r[2]= cursor 3 column 4
+9       Gt             3     33    2     BINARY-8       84  if r[2]>r[3] goto 33
+10      Column         3     1     4                    0   r[4]= cursor 3 column 1
+11      SeekRowid      1     33    4                    0   intkey=r[4]
+12      Rewind         2     34    0                    0   
+13        Column         3     0     5                    0   r[5]= cursor 3 column 0
+14        Column         3     2     6                    0   r[6]= cursor 3 column 2
+15        Column         3     3     7                    0   r[7]= cursor 3 column 3
+16        Column         3     4     8                    0   r[8]= cursor 3 column 4
+17        Column         3     5     9                    0   r[9]= cursor 3 column 5
+18        Column         3     6     10                   0   r[10]= cursor 3 column 6
+19        Column         3     1     11                   0   r[11]= cursor 3 column 1
+20        Column         3     1     13                   0   r[13]= cursor 3 column 1
+21        Column         2     0     14                   0   r[14]= cursor 2 column 0
+22        Integer        1     2     0                    0   r[2]=1
+23        Eq             14    25    13    BINARY-8       67  if r[13]==r[14] goto 25
+24        ZeroOrNull     13    2     14                   0   r[2] = 0 OR NULL
+25        Column         1     2     13                   0   r[13]= cursor 1 column 2
+26        Column         2     1     15                   0   r[15]= cursor 2 column 1
+27        Integer        1     14    0                    0   r[14]=1
+28        Le             15    30    13    BINARY-8       67  if r[13]<=r[15] goto 30
+29        ZeroOrNull     13    14    15                   0   r[14] = 0 OR NULL
+30        Or             14    2     12                   0   r[12]=(r[14] || r[2])
+31        ResultRow      5     8     0                    0   output=r[5..12]
+32      Next           2     13    0                    1   
+33    Next           3     7     0                    0   
+34    Halt           0     0     0                    0   
+35    Transaction    0     0     9     0              1   usesStmtJournal=0
+36    Transaction    1     0     1     0              1   usesStmtJournal=0
+37    Variable       2     3     0                    0   r[3]=parameter(2)
+38    Goto           0     1     0                    0
+
+== S17.pack_bytes ==
+call site: sqlite/lookup.rs:161 pack_bytes
+sql: SELECT p.data FROM object_packs p JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE p.pack_id = ?1 AND length(p.data) BETWEEN 32 AND ?2 AND (p.save_id = r.save_id OR s.publication <= r.publication)
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SEARCH p USING INTEGER PRIMARY KEY (rowid=?)
+|--SEARCH s USING INTEGER PRIMARY KEY (rowid=?)
+`--SCAN r
+-- opcode histogram (EXPLAIN) --
+7 x Column; 3 x OpenRead; 2 x Gt; 2 x SeekRowid; 2 x Transaction; 2 x Variable; 1 x Eq; 1 x Function; 1 x Goto; 1 x Halt; 1 x Init; 1 x Integer; 1 x Lt; 1 x Next; 1 x ResultRow; 1 x Rewind
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     23    0                    0   Start at 23
+1     OpenRead       0     7     0     3              0   root=7 iDb=0; object_packs
+2     OpenRead       1     3     0     3              0   root=3 iDb=0; saves
+3     OpenRead       2     2     1     2              0   root=2 iDb=1; layerfs_read_scope
+4     Variable       1     1     0                    0   r[1]=parameter(1)
+5     SeekRowid      0     22    1                    0   intkey=r[1]
+6     Column         0     2     3                    64  r[3]= cursor 0 column 2
+7     Function       0     3     2     length(1)      0   r[2]=func(r[3])
+8     Lt             4     22    2                    80  if r[2]<r[4] goto 22
+9     Gt             5     22    2                    80  if r[2]>r[5] goto 22
+10    Column         0     1     6                    0   r[6]= cursor 0 column 1
+11    SeekRowid      1     22    6                    0   intkey=r[6]
+12    Rewind         2     22    0                    0   
+13      Column         0     1     2                    0   r[2]= cursor 0 column 1
+14      Column         2     0     3                    0   r[3]= cursor 2 column 0
+15      Eq             3     19    2     BINARY-8       67  if r[2]==r[3] goto 19
+16      Column         1     2     3                    0   r[3]= cursor 1 column 2
+17      Column         2     1     2                    0   r[2]= cursor 2 column 1
+18      Gt             2     21    3     BINARY-8       83  if r[3]>r[2] goto 21
+19      Column         0     2     7                    0   r[7]= cursor 0 column 2
+20      ResultRow      7     1     0                    0   output=r[7]
+21    Next           2     13    0                    1   
+22    Halt           0     0     0                    0   
+23    Transaction    0     0     9     0              1   usesStmtJournal=0
+24    Transaction    1     0     1     0              1   usesStmtJournal=0
+25    Integer        32    4     0                    0   r[4]=32
+26    Variable       2     5     0                    0   r[5]=parameter(2)
+27    Goto           0     1     0                    0
+
+== S18.candidate_index_read ==
+call site: encoding/delta/candidates.rs:284 index flush read
+sql: SELECT c.stamp, c.object_id, c.signature FROM content_signatures c JOIN saves s USING(save_id), temp.layerfs_read_scope r WHERE c.save_id = r.save_id OR s.publication <= r.publication ORDER BY c.stamp
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+|--SCAN c
+|--SEARCH s USING INTEGER PRIMARY KEY (rowid=?)
+|--SCAN r
+`--USE TEMP B-TREE FOR ORDER BY
+-- opcode histogram (EXPLAIN) --
+11 x Column; 3 x OpenRead; 2 x Next; 2 x Rewind; 2 x Transaction; 1 x Eq; 1 x Goto; 1 x Gt; 1 x Halt; 1 x Init; 1 x MakeRecord; 1 x OpenPseudo; 1 x ResultRow; 1 x SeekRowid; 1 x SorterData; 1 x SorterInsert; 1 x SorterNext; 1 x SorterOpen; 1 x SorterSort
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     31    0                    0   Start at 31
+1     SorterOpen     3     5     0     k(1,B)         0   
+2     OpenRead       0     13    0     5              0   root=13 iDb=0; content_signatures
+3     OpenRead       1     3     0     3              0   root=3 iDb=0; saves
+4     OpenRead       2     2     1     2              0   root=2 iDb=1; layerfs_read_scope
+5     Rewind         0     22    0                    0   
+6       Column         0     4     1                    0   r[1]= cursor 0 column 4
+7       SeekRowid      1     21    1                    0   intkey=r[1]
+8       Rewind         2     22    0                    0   
+9         Column         0     4     2                    0   r[2]= cursor 0 column 4
+10        Column         2     0     3                    0   r[3]= cursor 2 column 0
+11        Eq             3     15    2     BINARY-8       67  if r[2]==r[3] goto 15
+12        Column         1     2     3                    0   r[3]= cursor 1 column 2
+13        Column         2     1     2                    0   r[2]= cursor 2 column 1
+14        Gt             2     20    3     BINARY-8       83  if r[3]>r[2] goto 20
+15        Column         0     2     5                    0   r[5]= cursor 0 column 2
+16        Column         0     3     6                    0   r[6]= cursor 0 column 3
+17        Column         0     1     4                    0   r[4]= cursor 0 column 1
+18        MakeRecord     4     3     8                    0   r[8]=mkrec(r[4..6])
+19        SorterInsert   3     8     4     3              0   key=r[8]
+20      Next           2     9     0                    1   
+21    Next           0     6     0                    1   
+22    OpenPseudo     4     9     5                    0   5 columns in r[9]
+23    SorterSort     3     30    0                    0   
+24      SorterData     3     9     4                    0   r[9]=data
+25      Column         4     2     7                    0   r[7]=c.signature
+26      Column         4     1     6                    0   r[6]=c.object_id
+27      Column         4     0     5                    0   r[5]=c.stamp
+28      ResultRow      5     3     0                    0   output=r[5..7]
+29    SorterNext     3     24    0                    0   
+30    Halt           0     0     0                    0   
+31    Transaction    0     0     9     0              1   usesStmtJournal=0
+32    Transaction    1     0     1     0              1   usesStmtJournal=0
+33    Goto           0     1     0                    0
+
+== S19.candidate_index_write ==
+call site: encoding/delta/candidates.rs:363 index flush write
+sql: INSERT OR REPLACE INTO content_signatures (slot, stamp, object_id, signature, save_id) VALUES (?1, ?2, ?3, ?4, (SELECT save_id FROM temp.layerfs_read_scope))
+-- EXPLAIN QUERY PLAN --
+QUERY PLAN
+`--SCALAR SUBQUERY 1
+   `--SCAN temp.layerfs_read_scope
+-- opcode histogram (EXPLAIN) --
+6 x Halt; 5 x Integer; 5 x SCopy; 4 x HaltIfNull; 4 x NotExists; 4 x Variable; 3 x Column; 3 x Goto; 3 x MustBeInt; 3 x OpenRead; 2 x Close; 2 x Copy; 2 x Eq; 2 x FkCounter; 2 x IntCopy; 2 x IsNull; 2 x MakeRecord; 2 x Noop; 2 x OpenWrite; 2 x PureFunc; 2 x Rowid; 2 x Transaction; 1 x AddImm; 1 x BeginSubrtn; 1 x DecrJumpZero; 1 x Delete; 1 x FkIfZero; 1 x Gt; 1 x IdxDelete; 1 x IdxInsert; 1 x IfNot; 1 x Init; 1 x Insert; 1 x Le; 1 x Lt; 1 x NewRowid; 1 x Next; 1 x NotNull; 1 x Null; 1 x Once; 1 x Return; 1 x Rewind; 1 x SoftNull; 1 x TypeCheck
+-- EXPLAIN listing --
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     80    0                    0   Start at 80
+1     OpenWrite      1     13    0     5              0   root=13 iDb=0; content_signatures
+2     OpenWrite      2     14    0     k(3,,,)        0   root=14 iDb=0; signatures_save
+3     SoftNull       2     0     0                    0   r[2]=NULL
+4     Variable       2     3     0                    0   r[3]=parameter(2)
+5     Variable       3     4     0                    0   r[4]=parameter(3)
+6     Variable       4     5     0                    0   r[5]=parameter(4)
+7     BeginSubrtn    0     12    0                    0   r[12]=NULL
+8       Once           0     16    0                    0   
+9       Null           0     13    13                   0   r[13..13]=NULL; Init subquery result
+10      Integer        1     14    0                    0   r[14]=1; LIMIT counter
+11      OpenRead       0     2     1     1              0   root=2 iDb=1; layerfs_read_scope
+12      Rewind         0     16    0                    0   
+13        Column         0     0     13                   0   r[13]= cursor 0 column 0
+14        DecrJumpZero   14    16    0                    0   if (--r[14])==0 goto 16
+15      Next           0     13    0                    1   
+16    Return         12    8     1                    0   
+17    Copy           13    6     0                    0   r[6]=r[13]
+18    Variable       1     1     0                    0   r[1]=parameter(1)
+19    NotNull        1     21    0                    0   if r[1]!=NULL goto 21
+20    NewRowid       1     1     0                    0   r[1]=rowid
+21    MustBeInt      1     0     0                    0   
+22    HaltIfNull     1299  2     3     content_signatures.stamp 1   if r[3]=null halt
+23    HaltIfNull     1299  2     4     content_signatures.object_id 1   if r[4]=null halt
+24    HaltIfNull     1299  2     5     content_signatures.signature 1   if r[5]=null halt
+25    HaltIfNull     1299  2     6     content_signatures.save_id 1   if r[6]=null halt
+26    TypeCheck      2     5     0     content_signatures 0   typecheck(r[2..6])
+27    Lt             16    29    1                    68  if r[1]<r[16] goto 29
+28    Le             17    30    1                    84  if r[1]<=r[17] goto 30
+29    Halt           275   2     0     slot BETWEEN 0 AND 8191 3   
+30    Gt             16    32    3     BINARY-8       84  if r[3]>r[16] goto 32
+31    Halt           275   2     0     stamp > 0      3   
+32    SCopy          4     18    0                    0   r[18]=r[4]
+33    PureFunc       0     18    15    length(1)      4   r[15]=func(r[18])
+34    Eq             19    36    15                   80  if r[15]==r[19] goto 36
+35    Halt           275   2     0     length(object_id) = 32 3   
+36    SCopy          5     18    0                    0   r[18]=r[5]
+37    PureFunc       0     18    15    length(1)      4   r[15]=func(r[18])
+38    Eq             19    40    15                   80  if r[15]==r[19] goto 40
+39    Halt           275   2     0     length(signature) = 32 3   
+40    Integer        0     20    0                    0   r[20]=0; trigger count
+41    Noop           0     0     0                    0   uniqueness check for ROWID
+42    NotExists      1     60    1                    0   intkey=r[1]
+43    Copy           1     21    0                    0   r[21]=r[1]
+44    Column         1     4     26                   0   r[26]= cursor 1 column 4
+45    FkIfZero       0     53    0                    0   if fkctr[0]==0 goto 53
+46    IsNull         26    53    0                    0   if r[26]==NULL goto 53
+47    SCopy          26    15    0                    0   r[15]=r[26]
+48    MustBeInt      15    52    0                    0   
+49    OpenRead       3     3     0     4              0   root=3 iDb=0; saves
+50    NotExists      3     52    15                   0   intkey=r[15]
+51    Goto           0     53    0                    0   
+52    FkCounter      0     -1    0                    0   fkctr[0]+=-1
+53    Close          3     0     0                    0   
+54    Column         1     4     27                   0   r[27]= cursor 1 column 4
+55    Rowid          1     28    0                    0   r[28]=content_signatures.rowid
+56    Rowid          1     29    0                    0   r[29]=content_signatures.rowid
+57    IdxDelete      2     27    3                    1   key=r[27..29]
+58    Delete         1     0     0     content_signatures 0   
+59    AddImm         20    1     0                    0   r[20]=r[20]+1
+60    Noop           0     0     0                    0   prep index signatures_save
+61    SCopy          6     8     0                    0   r[8]=r[6]; save_id
+62    IntCopy        1     9     0                    0   r[9]=r[1]; rowid
+63    IntCopy        1     10    0                    0   r[10]=r[1]; rowid
+64    MakeRecord     8     3     7                    0   r[7]=mkrec(r[8..10]); for signatures_save
+65    IfNot          20    68    0                    0   
+66    NotExists      1     68    1                    0   intkey=r[1]
+67    Halt           1555  2     0     content_signatures.slot 2   
+68    MakeRecord     2     5     11                   0   r[11]=mkrec(r[2..6])
+69    IsNull         6     76    0                    0   if r[6]==NULL goto 76
+70    SCopy          6     15    0                    0   r[15]=r[6]
+71    MustBeInt      15    75    0                    0   
+72    OpenRead       4     3     0     4              0   root=3 iDb=0; saves
+73    NotExists      4     75    15                   0   intkey=r[15]
+74    Goto           0     76    0                    0   
+75    FkCounter      0     1     0                    0   fkctr[0]+=1
+76    Close          4     0     0                    0   
+77    IdxInsert      2     7     8     3              16  key=r[7]
+78    Insert         1     11    1     content_signatures 49  intkey=r[1] data=r[11]
+79    Halt           0     0     0                    0   
+80    Transaction    0     1     9     0              1   usesStmtJournal=1
+81    Transaction    1     0     1     0              1   usesStmtJournal=1
+82    Integer        0     16    0                    0   r[16]=0
+83    Integer        8191  17    0                    0   r[17]=8191
+84    Integer        32    19    0                    0   r[19]=32
+85    Goto           0     1     0                    0
+

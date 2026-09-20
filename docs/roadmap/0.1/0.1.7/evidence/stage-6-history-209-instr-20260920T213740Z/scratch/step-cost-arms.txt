@@ -1,0 +1,21 @@
+store=/tmp/rca209/probe-store.sqlite rounds=3000 body_bytes=96000 growth=1450 cap=262112 sqlite=3.51.0
+pack 1 body before: 261595 bytes
+arm                                           us per call
+begin_immediate+rollback                            4.035
+begin_immediate+commit                              4.321
+begin_deferred+commit                               0.504
+prepare pack UPDATE (fresh)                         4.782
+prepare+bind TRANSIENT (no step)                    8.843
+prepare+bind STATIC (no step)                       4.823
+bind TRANSIENT only                                 3.678
+bind STATIC only                                    0.060
+full step (BEGIN+append+COMMIT, TRANSIENT)        117.064
+full step (STATIC bind)                           112.938
+next_pack (prepare+step+fresh)                      3.595
+next_pack (step only, prepared)                     5.293
+step with STATIC bind (repeat of 9)               109.919
+step, prepared handle (repeat of 9)               109.467
+step, pack text parsed per call (TRANSIENT)       121.556
+step, pack text parsed per call (STATIC)          120.468
+pack 1 body after: 125638 bytes
+step arm: 45000 commits, 45000 rows changed, 2076195 pages written, 46.14 pages/commit, 16335495000 vm steps

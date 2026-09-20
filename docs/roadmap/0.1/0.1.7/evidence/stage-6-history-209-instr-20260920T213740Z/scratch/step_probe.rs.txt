@@ -1,0 +1,498 @@
+//! Measurement-only step instrumentation for the #209 commit-time RCA.
+//!
+//! **Temporary**: this module exists to answer one bounded question with SQLite's own
+//! instruments and is removed before the round's commit. It is enabled only when
+//! LAYERFS_STORAGE_RCA_PROBE=1 was set when the process started, and it changes no
+//! product behaviour: the hook is a read-only observer on the save's own connection.
+//!
+//! Two instruments, and no call site in the SQL layer needs to know about either:
+//!
+//! * **SQLITE_TRACE_PROFILE** on the save's own connection. SQLite reports, once per
+//!   completed statement execution, the statement's own runtime in nanoseconds **and**
+//!   the live sqlite3_stmt_status counters of that very handle. That is section 2.2
+//!   (per statement: FULLSCAN_STEP, SORT, AUTOINDEX, VM_STEP, RUN, REPREPARE) and
+//!   section 2.5 (a per-statement charge split) in one observer. The engine's runtime
+//!   excludes parsing, so its difference from the product's own sql_ns is the parse.
+//! * **sqlite3_db_status / sqlite3_status** sampled around each COMMIT and around the
+//!   whole save: pages written (CACHE_WRITE), pages spilled (CACHE_SPILL), cache
+//!   hit/miss, cache and statement heap, the process page-cache counters, and the
+//!   Store file's own page_count / freelist_count.
+//!
+//! Cumulative counters on a *cached* handle are differenced by RUN, which counts how
+//! many times the handle has run: an event whose RUN is not greater than the last one
+//! seen for that same statement text is a different (freshly prepared) handle, and its
+//! counters are already per-execution. The differencing state is keyed by the statement
+//! **text**, not by the bucket, because two SQL texts whose placeholder count differs
+//! alternate inside one bucket (the locator and the object insert) and would otherwise
+//! be differenced against each other.
+
+use std::cell::RefCell;
+use std::ffi::c_int;
+use std::sync::OnceLock;
+use std::time::Instant;
+
+use rusqlite::ffi;
+use rusqlite::trace::{TraceEvent, TraceEventCodes};
+use rusqlite::{Connection, StatementStatus};
+
+/// SQL-text buckets, in publication order.
+///
+/// The key is a literal prefix of the statement text the product sends; the last
+/// bucket is the remainder and is expected to be empty or near it.
+pub const BUCKETS: [&str; 21] = [
+    "begin",
+    "commit",
+    "rollback",
+    "next_pack",
+    "insert_pack",
+    "append_pack",
+    "insert_objects",
+    "ceiling",
+    "advance_pack",
+    "publish_policy",
+    "publish_save",
+    "ordinal_select",
+    "ordinal_update",
+    "value_group",
+    "pool_latest",
+    "locator",
+    "pack_bytes",
+    "candidates_read",
+    "candidates_write",
+    "scope",
+    "other",
+];
+
+const PREFIXES: [&str; 20] = [
+    "BEGIN IMMEDIATE",
+    "COMMIT",
+    "ROLLBACK",
+    "SELECT next_pack_id",
+    "INSERT INTO object_packs",
+    "UPDATE object_packs",
+    "INSERT INTO objects",
+    "UPDATE saves SET pack_ceiling",
+    "UPDATE store_policy SET next_pack_id",
+    "UPDATE store_policy SET publication_sequence",
+    "UPDATE saves SET active_slot = NULL",
+    "SELECT next_ordinal",
+    "UPDATE store_policy SET next_ordinal",
+    "INSERT INTO metadata_value_groups",
+    "SELECT COALESCE(MAX(first_ordinal",
+    "SELECT o.object_id",
+    "SELECT p.data",
+    "SELECT c.stamp",
+    "INSERT OR REPLACE INTO content_signatures",
+    "UPDATE temp.layerfs_read_scope",
+];
+
+/// Per-bucket aggregates of the engine's own instruments.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct BucketCounters {
+    /// Statement executions the connection reported.
+    pub calls: u64,
+    /// The engine's own runtime for those executions, excluding preparation.
+    pub engine_ns: u64,
+    /// SQLITE_STMTSTATUS_FULLSCAN_STEP: a full scan hidden inside a statement.
+    pub fullscan_steps: u64,
+    /// SQLITE_STMTSTATUS_SORT.
+    pub sorts: u64,
+    /// SQLITE_STMTSTATUS_AUTOINDEX.
+    pub autoindexes: u64,
+    /// SQLITE_STMTSTATUS_VM_STEP: VDBE opcodes executed.
+    pub vm_steps: u64,
+    /// SQLITE_STMTSTATUS_REPREPARE.
+    pub reprepares: u64,
+    /// SQLITE_STMTSTATUS_RUN.
+    pub runs: u64,
+}
+
+/// Everything the RCA probes accumulate for one save.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StepProbe {
+    /// Per-statement engine charges, one entry per BUCKETS.
+    pub buckets: [BucketCounters; 21],
+    /// Pages written to the database file from this save's connection.
+    pub cache_write: u64,
+    /// Pages spilled early by the page cache.
+    pub cache_spill: u64,
+    /// Page-cache hits on this connection.
+    pub cache_hit: u64,
+    /// Page-cache misses on this connection.
+    pub cache_miss: u64,
+    /// Heap bytes the connection's page caches hold at the end of the save.
+    pub cache_used_end: u64,
+    /// Heap bytes the connection's prepared statements hold at the end of the save.
+    pub stmt_used_end: u64,
+    /// Deferred foreign-key violations outstanding at the end of the save.
+    pub deferred_fk_end: u64,
+    /// Process-wide page-cache pages in use at the end of the save.
+    pub process_pages_used_end: u64,
+    /// Process-wide page-cache capacity in pages at the end of the save.
+    pub process_pages_size_end: u64,
+    /// Process-wide page-cache overflow heap at the end of the save.
+    pub process_pages_overflow_end: u64,
+    /// Process-wide heap in use at the end of the save.
+    pub process_heap_end: u64,
+    /// Store pages at the start of the save.
+    pub page_count_start: u64,
+    /// Store pages at the end of the save.
+    pub page_count_end: u64,
+    /// Free-list pages at the start of the save.
+    pub freelist_start: u64,
+    /// Free-list pages at the end of the save.
+    pub freelist_end: u64,
+    /// Commits this save issued.
+    pub commits: u64,
+    /// Pages the connection wrote across those commits, summed.
+    pub pages_at_commit: u64,
+    /// Largest page count one commit wrote.
+    pub pages_at_commit_max: u64,
+    /// Pack-body bytes handed to insert_pack / append_pack.
+    pub pack_payload_bytes: u64,
+    /// ceil(body / 4096) summed over those same calls.
+    pub pack_payload_pages: u64,
+    /// Pack appends.
+    pub appends: u64,
+    /// Pack creations.
+    pub creates: u64,
+    /// Wall nanoseconds in BEGIN IMMEDIATE.
+    pub begin_ns: u64,
+    /// Wall nanoseconds in the SELECT next_pack_id that begins a step.
+    pub next_pack_ns: u64,
+    /// Wall nanoseconds in the per-step watermark UPDATE.
+    pub advance_ns: u64,
+    /// Wall nanoseconds in the COMMIT statement alone.
+    pub commit_statement_ns: u64,
+    /// Pack-body lookups the delta and pooled caches served from memory.
+    pub pack_cache_hits: u64,
+    /// Pack-body lookups that reached the connection.
+    pub pack_cache_misses: u64,
+    /// Distinct pack identifiers those lookups named.
+    pub pack_cache_distinct: u64,
+    /// Times a cache was released wholesale because the next body would cross
+    /// `DEPENDENCY_PACK_CACHE_BYTES`.
+    pub pack_cache_clears: u64,
+}
+
+/// True when the probe was requested for this process.
+pub fn enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var_os("LAYERFS_STORAGE_RCA_PROBE")
+            .is_some_and(|value| value == std::ffi::OsStr::new("1"))
+    })
+}
+
+/// True when the step's own SQL texts are issued from prepared handles.
+///
+/// The Q3 lever, and **the arm convention L59 used**: unset is the treatment (the
+/// six texts the step issues go through the connection's prepared-statement cache
+/// once instead of being parsed per call) and `=0` restores the parsed-per-call
+/// behaviour, so `=0` is the **control**.
+pub fn statement_cache_enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        !std::env::var_os("LAYERFS_STORAGE_STATEMENT_CACHE")
+            .is_some_and(|value| value == std::ffi::OsStr::new("0"))
+    })
+}
+
+/// Installs the per-statement observer on one save's own connection.
+///
+/// Clears the accumulator, so the figures a save publishes are that save's own.
+pub fn install(connection: &Connection) {
+    if !enabled() {
+        return;
+    }
+    HOOK.with(|hook| *hook.borrow_mut() = Hook::default());
+    connection.trace_v2(TraceEventCodes::SQLITE_TRACE_PROFILE, Some(profile_event));
+}
+
+/// Copies the accumulated per-statement charges into the save's probe.
+pub fn collect(probe: &mut StepProbe) {
+    if !enabled() {
+        return;
+    }
+    HOOK.with(|hook| {
+        let hook = hook.borrow();
+        probe.buckets = hook.counters;
+        probe.pack_cache_hits = hook.pack_hits;
+        probe.pack_cache_misses = hook.pack_misses;
+        probe.pack_cache_distinct = hook.packs_seen.len() as u64;
+        probe.pack_cache_clears = hook.pack_clears;
+    });
+}
+
+/// Records one pack-body cache lookup, and the identity it named.
+///
+/// Called from the two caches that hold whole pack bodies, so the round can say
+/// whether the 4 MiB bound is thrashing rather than assume it.
+pub fn note_pack_lookup(pack_id: i64, hit: bool, cleared: bool) {
+    if !enabled() {
+        return;
+    }
+    HOOK.with(|hook| {
+        let mut hook = hook.borrow_mut();
+        hook.packs_seen.insert(pack_id);
+        if hit {
+            hook.pack_hits += 1;
+        } else {
+            hook.pack_misses += 1;
+        }
+        if cleared {
+            hook.pack_clears += 1;
+        }
+    });
+}
+
+fn bucket_of(sql: &str) -> usize {
+    PREFIXES
+        .iter()
+        .position(|prefix| sql.starts_with(prefix))
+        .unwrap_or(BUCKETS.len() - 1)
+}
+
+fn profile_event(event: TraceEvent<'_>) {
+    let TraceEvent::Profile(statement, duration) = event else {
+        return;
+    };
+    let sql = statement.sql();
+    let bucket = bucket_of(&sql);
+    let run = i64::from(statement.get_status(StatementStatus::Run));
+    let current = [
+        i64::from(statement.get_status(StatementStatus::FullscanStep)),
+        i64::from(statement.get_status(StatementStatus::Sort)),
+        i64::from(statement.get_status(StatementStatus::AutoIndex)),
+        i64::from(statement.get_status(StatementStatus::VmStep)),
+        i64::from(statement.get_status(StatementStatus::RePrepare)),
+        i64::from(statement.get_status(StatementStatus::Run)),
+    ];
+    HOOK.with(|hook| {
+        let mut hook = hook.borrow_mut();
+        let entry = hook.handles.entry(sql.to_string()).or_default();
+        let fresh = run <= entry.0;
+        let mut delta = [0_u64; 6];
+        for slot in 0..6 {
+            let previous = if fresh { 0 } else { entry.1[slot] };
+            delta[slot] = u64::try_from(current[slot] - previous).unwrap_or(0);
+        }
+        entry.0 = run;
+        entry.1 = current;
+        let counters = &mut hook.counters[bucket];
+        counters.calls += 1;
+        counters.engine_ns += duration.as_nanos() as u64;
+        counters.fullscan_steps += delta[0];
+        counters.sorts += delta[1];
+        counters.autoindexes += delta[2];
+        counters.vm_steps += delta[3];
+        counters.reprepares += delta[4];
+        counters.runs += delta[5];
+    });
+}
+
+/// One live statement's last-seen RUN count and cumulative statuses.
+#[derive(Default)]
+struct HandleState(i64, [i64; 6]);
+
+#[derive(Default)]
+struct Hook {
+    counters: [BucketCounters; 21],
+    handles: std::collections::HashMap<String, HandleState>,
+    packs_seen: std::collections::HashSet<i64>,
+    pack_hits: u64,
+    pack_misses: u64,
+    pack_clears: u64,
+}
+
+thread_local! {
+    static HOOK: RefCell<Hook> = RefCell::new(Hook::default());
+}
+
+/// One sqlite3_db_status reading, current value only.
+///
+/// The crate denies unsafe code and audits one FFI module; this temporary probe
+/// file is deleted with the instrument before the round's commit, so the product
+/// keeps exactly that one audited surface.
+#[allow(unsafe_code)]
+pub fn db_status(connection: &Connection, op: c_int) -> i64 {
+    let mut current: c_int = 0;
+    let mut highwater: c_int = 0;
+    // SAFETY: the handle belongs to this connection and outlives the call.
+    unsafe {
+        ffi::sqlite3_db_status(connection.handle(), op, &mut current, &mut highwater, 0);
+    }
+    i64::from(current)
+}
+
+/// One sqlite3_status reading: current and high-water, process-wide.
+#[allow(unsafe_code)]
+pub fn process_status(op: c_int) -> (i64, i64) {
+    let mut current: c_int = 0;
+    let mut highwater: c_int = 0;
+    // SAFETY: sqlite3_status writes only to the two out-parameters.
+    unsafe {
+        ffi::sqlite3_status(op, &mut current, &mut highwater, 0);
+    }
+    (i64::from(current), i64::from(highwater))
+}
+
+/// Pages written to the database file from this connection's cache.
+pub fn pages_written(connection: &Connection) -> i64 {
+    db_status(connection, ffi::SQLITE_DBSTATUS_CACHE_WRITE)
+}
+
+impl StepProbe {
+    /// Adds another save's probe figures into this one.
+    pub fn accumulate(&mut self, other: &Self) {
+        for (slot, counters) in self.buckets.iter_mut().zip(other.buckets.iter()) {
+            slot.calls = slot.calls.saturating_add(counters.calls);
+            slot.engine_ns = slot.engine_ns.saturating_add(counters.engine_ns);
+            slot.fullscan_steps = slot.fullscan_steps.saturating_add(counters.fullscan_steps);
+            slot.sorts = slot.sorts.saturating_add(counters.sorts);
+            slot.autoindexes = slot.autoindexes.saturating_add(counters.autoindexes);
+            slot.vm_steps = slot.vm_steps.saturating_add(counters.vm_steps);
+            slot.reprepares = slot.reprepares.saturating_add(counters.reprepares);
+            slot.runs = slot.runs.saturating_add(counters.runs);
+        }
+        self.cache_write = self.cache_write.saturating_add(other.cache_write);
+        self.cache_spill = self.cache_spill.saturating_add(other.cache_spill);
+        self.cache_hit = self.cache_hit.saturating_add(other.cache_hit);
+        self.cache_miss = self.cache_miss.saturating_add(other.cache_miss);
+        self.cache_used_end = other.cache_used_end;
+        self.stmt_used_end = other.stmt_used_end;
+        self.deferred_fk_end = other.deferred_fk_end;
+        self.process_pages_used_end = other.process_pages_used_end;
+        self.process_pages_size_end = other.process_pages_size_end;
+        self.process_pages_overflow_end = other.process_pages_overflow_end;
+        self.process_heap_end = other.process_heap_end;
+        self.page_count_start = other.page_count_start;
+        self.page_count_end = other.page_count_end;
+        self.freelist_start = other.freelist_start;
+        self.freelist_end = other.freelist_end;
+        self.pack_cache_hits = self.pack_cache_hits.saturating_add(other.pack_cache_hits);
+        self.pack_cache_misses = self.pack_cache_misses.saturating_add(other.pack_cache_misses);
+        self.pack_cache_distinct = self.pack_cache_distinct.max(other.pack_cache_distinct);
+        self.pack_cache_clears = self.pack_cache_clears.saturating_add(other.pack_cache_clears);
+        self.commits = self.commits.saturating_add(other.commits);
+        self.pages_at_commit = self.pages_at_commit.saturating_add(other.pages_at_commit);
+        self.pages_at_commit_max = self.pages_at_commit_max.max(other.pages_at_commit_max);
+        self.pack_payload_bytes = self.pack_payload_bytes.saturating_add(other.pack_payload_bytes);
+        self.pack_payload_pages = self.pack_payload_pages.saturating_add(other.pack_payload_pages);
+        self.appends = self.appends.saturating_add(other.appends);
+        self.creates = self.creates.saturating_add(other.creates);
+        self.begin_ns = self.begin_ns.saturating_add(other.begin_ns);
+        self.next_pack_ns = self.next_pack_ns.saturating_add(other.next_pack_ns);
+        self.advance_ns = self.advance_ns.saturating_add(other.advance_ns);
+        self.commit_statement_ns = self
+            .commit_statement_ns
+            .saturating_add(other.commit_statement_ns);
+    }
+
+    /// True when this save is instrumented.
+    fn active(&self) -> bool {
+        enabled()
+    }
+
+    /// Records the Store's own page accounting at the start of a save.
+    pub fn start_save(&mut self, connection: &Connection) {
+        if !self.active() {
+            return;
+        }
+        self.page_count_start = pragma(connection, "PRAGMA page_count");
+        self.freelist_start = pragma(connection, "PRAGMA freelist_count");
+    }
+
+    /// Records the save's own engine accounting once the save has finished.
+    pub fn finish_save(&mut self, connection: &Connection) {
+        if !self.active() {
+            return;
+        }
+        collect(self);
+        self.cache_write = u64::try_from(pages_written(connection)).unwrap_or(0);
+        self.cache_spill =
+            u64::try_from(db_status(connection, ffi::SQLITE_DBSTATUS_CACHE_SPILL)).unwrap_or(0);
+        self.cache_hit =
+            u64::try_from(db_status(connection, ffi::SQLITE_DBSTATUS_CACHE_HIT)).unwrap_or(0);
+        self.cache_miss =
+            u64::try_from(db_status(connection, ffi::SQLITE_DBSTATUS_CACHE_MISS)).unwrap_or(0);
+        self.cache_used_end =
+            u64::try_from(db_status(connection, ffi::SQLITE_DBSTATUS_CACHE_USED)).unwrap_or(0);
+        self.stmt_used_end =
+            u64::try_from(db_status(connection, ffi::SQLITE_DBSTATUS_STMT_USED)).unwrap_or(0);
+        self.deferred_fk_end =
+            u64::try_from(db_status(connection, ffi::SQLITE_DBSTATUS_DEFERRED_FKS)).unwrap_or(0);
+        let (used, _) = process_status(ffi::SQLITE_STATUS_PAGECACHE_USED);
+        let (size, _) = process_status(ffi::SQLITE_STATUS_PAGECACHE_SIZE);
+        let (overflow, _) = process_status(ffi::SQLITE_STATUS_PAGECACHE_OVERFLOW);
+        let (heap, _) = process_status(ffi::SQLITE_STATUS_MEMORY_USED);
+        self.process_pages_used_end = u64::try_from(used).unwrap_or(0);
+        self.process_pages_size_end = u64::try_from(size).unwrap_or(0);
+        self.process_pages_overflow_end = u64::try_from(overflow).unwrap_or(0);
+        self.process_heap_end = u64::try_from(heap).unwrap_or(0);
+        self.page_count_end = pragma(connection, "PRAGMA page_count");
+        self.freelist_end = pragma(connection, "PRAGMA freelist_count");
+    }
+
+    /// Charges BEGIN IMMEDIATE.
+    pub fn charge_begin(&mut self, started: Instant) {
+        self.begin_ns += elapsed_ns(started);
+    }
+
+    /// Charges the SELECT next_pack_id that opens a step.
+    pub fn charge_next_pack(&mut self, started: Instant) {
+        self.next_pack_ns += elapsed_ns(started);
+    }
+
+    /// Charges the per-step watermark UPDATE.
+    pub fn charge_advance(&mut self, started: Instant) {
+        self.advance_ns += elapsed_ns(started);
+    }
+
+    /// Opens one commit's page-accounting window.
+    pub fn commit_pages_before(&self, connection: &Connection) -> i64 {
+        if self.active() {
+            pages_written(connection)
+        } else {
+            0
+        }
+    }
+
+    /// Closes one commit's window: its own wall time and the pages it wrote.
+    pub fn charge_commit(&mut self, connection: &Connection, started: Instant, before: i64) {
+        if !self.active() {
+            return;
+        }
+        self.commits += 1;
+        self.commit_statement_ns += elapsed_ns(started);
+        let written = u64::try_from(pages_written(connection) - before).unwrap_or(0);
+        self.pages_at_commit += written;
+        self.pages_at_commit_max = self.pages_at_commit_max.max(written);
+    }
+
+    /// Records the pack body a write handed the engine.
+    pub fn charge_pack_body(&mut self, bytes: usize, created: bool) {
+        if !self.active() {
+            return;
+        }
+        self.pack_payload_bytes += bytes as u64;
+        self.pack_payload_pages += (bytes as u64).div_ceil(4096);
+        if created {
+            self.creates += 1;
+        } else {
+            self.appends += 1;
+        }
+    }
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
+fn pragma(connection: &Connection, sql: &str) -> u64 {
+    connection
+        .query_row(sql, [], |row| row.get::<_, i64>(0))
+        .ok()
+        .and_then(|value| u64::try_from(value).ok())
+        .unwrap_or(0)
+}

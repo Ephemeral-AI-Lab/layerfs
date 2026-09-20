@@ -1,0 +1,34 @@
+cache-probe locator: calls=537 identifiers=913 distinct_widths=6 top=1x532 17x1 56x1 73x1 107x1 128x1
+cache-probe object_insert: calls=261 identifiers=364 distinct_widths=3 top=1x259 8x1 97x1
+cache-probe locator: calls=5806 identifiers=7330 distinct_widths=21 top=1x5764 2x18 73x3 128x3 7x2 13x1 17x1 23x1
+cache-probe object_insert: calls=1067 identifiers=1460 distinct_widths=8 top=1x1059 128x2 5x1 7x1 8x1 12x1 16x1 97x1
+cache-probe locator: calls=11407 identifiers=14260 distinct_widths=41 top=1x11292 2x62 3x4 128x4 73x3 7x2 40x2 45x2
+cache-probe object_insert: calls=2043 identifiers=2657 distinct_widths=11 top=1x2030 128x3 12x2 5x1 6x1 7x1 8x1 10x1
+cache-probe locator: calls=18366 identifiers=22676 distinct_widths=54 top=1x18151 2x127 3x12 128x5 73x4 7x3 32x3 45x3
+cache-probe object_insert: calls=3095 identifiers=3915 distinct_widths=14 top=1x3076 128x4 6x2 10x2 12x2 3x1 5x1 7x1
+cache-probe locator: calls=33823 identifiers=41258 distinct_widths=68 top=1x33462 2x216 3x21 128x11 7x4 39x4 45x4 59x4
+cache-probe object_insert: calls=5375 identifiers=6757 distinct_widths=20 top=1x5345 128x6 12x3 5x2 6x2 7x2 10x2 2x1
+cache-probe locator: calls=46089 identifiers=56173 distinct_widths=83 top=1x45562 2x300 3x47 128x14 4x12 7x7 45x5 57x5
+cache-probe object_insert: calls=7279 identifiers=8982 distinct_widths=26 top=1x7241 128x7 12x3 5x2 6x2 7x2 8x2 10x2
+cache-probe locator: calls=64150 identifiers=77856 distinct_widths=94 top=1x63426 2x396 3x91 128x19 4x16 7x7 56x6 45x5
+cache-probe object_insert: calls=9885 identifiers=12112 distinct_widths=31 top=1x9836 128x9 12x4 6x3 9x3 5x2 7x2 8x2
+cache-probe locator: calls=76705 identifiers=92792 distinct_widths=100 top=1x75806 2x472 3x120 4x45 128x20 7x8 5x6 8x6
+cache-probe object_insert: calls=11425 identifiers=13916 distinct_widths=32 top=1x11370 128x10 12x4 6x3 9x3 25x3 2x2 5x2
+cache-probe locator: calls=93647 identifiers=112822 distinct_widths=103 top=1x92556 2x535 3x166 4x75 128x21 7x9 8x7 56x7
+cache-probe object_insert: calls=13414 identifiers=16324 distinct_widths=38 top=1x13339 128x11 2x5 3x5 9x5 12x4 6x3 7x3
+cache-probe locator: calls=110985 identifiers=132895 distinct_widths=109 top=1x109707 2x580 3x232 4x95 128x24 5x10 6x9 7x9
+cache-probe object_insert: calls=15205 identifiers=18392 distinct_widths=40 top=1x15122 128x11 2x5 3x5 9x5 12x4 20x4 4x3
+cache-probe locator: calls=143225 identifiers=170013 distinct_widths=117 top=1x141631 2x774 3x264 4x108 128x29 5x14 7x12 56x10
+cache-probe object_insert: calls=18914 identifiers=22545 distinct_widths=44 top=1x18821 128x12 2x5 3x5 9x5 20x5 6x4 7x4
+cache-probe locator: calls=176562 identifiers=208387 distinct_widths=121 top=1x174644 2x958 3x305 4x126 128x34 5x17 7x12 57x12
+cache-probe object_insert: calls=22421 identifiers=26574 distinct_widths=48 top=1x22313 128x13 9x7 3x6 20x6 2x5 7x5 8x5
+cache-probe locator: calls=209023 identifiers=245664 distinct_widths=122 top=1x206740 2x1179 3x358 4x133 128x37 5x20 7x14 56x13
+cache-probe object_insert: calls=25851 identifiers=30437 distinct_widths=50 top=1x25734 128x14 9x7 3x6 20x6 2x5 7x5 8x5
+cache-probe locator: calls=256805 identifiers=300426 distinct_widths=123 top=1x254096 2x1440 3x402 4x145 128x46 5x25 6x16 7x15
+cache-probe object_insert: calls=30917 identifiers=36312 distinct_widths=54 top=1x30781 128x16 9x8 8x7 2x6 3x6 20x6 7x5
+cache-probe locator: calls=302238 identifiers=353036 distinct_widths=123 top=1x299066 2x1726 3x452 4x160 128x53 5x28 6x22 7x17
+cache-probe object_insert: calls=35854 identifiers=42196 distinct_widths=60 top=1x35700 128x19 8x8 9x8 2x6 3x6 10x6 20x6
+cache-probe locator: calls=341541 identifiers=398484 distinct_widths=125 top=1x337927 2x1950 3x528 4x184 128x59 5x37 6x23 7x21
+cache-probe object_insert: calls=39972 identifiers=47063 distinct_widths=64 top=1x39799 128x21 8x9 6x8 9x8 2x7 10x7 3x6
+cache-probe locator: calls=380444 identifiers=443574 distinct_widths=126 top=1x376398 2x2141 3x627 4x214 128x67 5x50 6x25 8x23
+cache-probe object_insert: calls=44334 identifiers=52032 distinct_widths=68 top=1x44143 128x22 6x9 8x9 2x8 9x8 10x8 5x7
