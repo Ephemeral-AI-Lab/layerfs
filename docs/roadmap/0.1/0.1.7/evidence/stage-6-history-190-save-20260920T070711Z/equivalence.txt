@@ -1,0 +1,26 @@
+=== history-stride10
+  every state root equal          : True
+  state changed_bytes  equal      : True
+  state changed_paths  equal      : True
+  state objects        equal      : True
+  state inserted       equal      : True
+  state root           equal      : True
+  baseline  Store sha256 : 4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487  == recorded constant
+  candidate Store sha256 : 4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487  == recorded constant
+  byte-identical between arms     : True
+  Store shape                     : {'packs': 255, 'pack_bytes': 45297954, 'ordinary_groups': 44309, 'objects': 52032, 'value_groups': 1737, 'singleton_groups': 44142}
+  save counters identical between arms: True
+
+=== history-stride3
+  every state root equal          : True
+  state changed_bytes  equal      : True
+  state changed_paths  equal      : True
+  state objects        equal      : True
+  state inserted       equal      : True
+  state root           equal      : True
+  baseline  Store sha256 : f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e  == recorded constant
+  candidate Store sha256 : f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e  == recorded constant
+  byte-identical between arms     : True
+  Store shape                     : {'packs': 437, 'pack_bytes': 56590252, 'ordinary_groups': 60052, 'objects': 72560, 'value_groups': 4225, 'singleton_groups': 59772}
+  save counters identical between arms: True
+

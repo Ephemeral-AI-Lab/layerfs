@@ -1,0 +1,17 @@
+{
+  "schema": "h190-scope-lock-v1",
+  "label": "synthetic-append",
+  "command": [
+    "python3",
+    "append_cost.py"
+  ],
+  "utc": "2026-09-20T07:18:33Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T07:18:33Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 1301363709
+}

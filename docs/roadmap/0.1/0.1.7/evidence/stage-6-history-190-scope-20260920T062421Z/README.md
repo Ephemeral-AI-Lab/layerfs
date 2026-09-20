@@ -299,3 +299,20 @@ caps (120 s / 240 s) — not admission budgets, not promoted, not enlarged after
   operation.
 * No pin was written, no budget class changed, no cap enlarged, no selection shrunk,
   no cold claim invented, and `#190` stays open.
+
+---
+
+## Correction (added by the L50 round, 2026-09-20): the reconciliation gap is explained
+
+§5 above says the 1.883 s outside the child's clock on `candidate-history-stride10`
+"was not identified" and offers machine state as a hypothesis. It is now measured,
+and the probe that appeared to rule out first-execution cost was wrong because it ran
+*after* the first execution: a freshly created executable's **first** run costs
+0.7–2.0 s on this machine before `main` (1,959.5 / 669.4 ms first, 34.8–38.9 ms
+afterwards), entirely outside `phases::begin`. That explains this round's candidate
+gap and also L47's and this round's baseline gaps, which were ~0.07 s because those
+binaries had already run. Nothing in the retention decision changes — it rested on
+the operation, the `filesystem` sub-phase and the counter collapse, all inside the
+child's clock, and this round reproduces the operation delta (−2.754 s → −2.730 s)
+under a different harness source. See
+[L50's report](../stage-6-history-190-save-20260920T070711Z/README.md) §5.

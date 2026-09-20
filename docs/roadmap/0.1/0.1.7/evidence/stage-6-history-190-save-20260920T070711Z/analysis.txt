@@ -1,0 +1,14 @@
+=== history-stride10
+  baseline  wall  40.411 s | preparation  18.694 s | OPERATION  19.638 s | accept_loop   9.134 s | filesystem   8.077 s
+            reconciliation INCOMPLETE | outside the child's clock 2017.6 ms | budget NOT_RUN / NOT_RUN | corpus resident 0 of 62,319
+  candidate wall  36.072 s | preparation  17.287 s | OPERATION  16.908 s | accept_loop   9.164 s | filesystem   5.323 s
+            reconciliation INCOMPLETE | outside the child's clock 1822.9 ms | budget NOT_RUN / NOT_RUN | corpus resident 5,141 of 62,319
+  delta   operation -2.730 s | accept_loop +0.030 s | filesystem -2.754 s
+
+=== history-stride3
+  baseline  wall  74.380 s | preparation  25.627 s | OPERATION  48.638 s | accept_loop  18.526 s | filesystem  24.679 s
+            reconciliation PASS | outside the child's clock 36.6 ms | budget NOT_RUN / NOT_RUN | corpus resident 4,298 of 107,780
+  candidate wall  61.902 s | preparation  24.964 s | OPERATION  36.810 s | accept_loop  18.441 s | filesystem  13.013 s
+            reconciliation PASS | outside the child's clock 46.3 ms | budget NOT_RUN / NOT_RUN | corpus resident 7,022 of 107,780
+  delta   operation -11.828 s | accept_loop -0.085 s | filesystem -11.666 s
+

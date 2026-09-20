@@ -1,0 +1,48 @@
+=== history-stride10: the save's own work, chain totals
+  counter                        baseline      candidate   per inserted object (early -> late)
+  objects written              52,032.00     52,032.00           1.0000 -> 1.0000         
+  occurrences served by an exact row      1,121.00      1,121.00           0.0057 -> 0.0276         
+  FULL alternatives compressed     45,239.00     45,239.00           0.8288 -> 0.8773         
+  prefix trials                38,230.00     38,230.00           0.6000 -> 0.7776         
+  trials that chose PREFIX     38,163.00     38,163.00           0.5983 -> 0.7760         
+  PREFIX records stored        39,080.00     39,080.00           0.6079 -> 0.7924         
+  FULL records stored          12,952.00     12,952.00           0.3921 -> 0.2076         
+  chain objects read for trials    107,628.00    107,628.00           1.0388 -> 2.4091         
+  chain edges walked           68,256.00     68,256.00           0.4330 -> 1.6034         
+  encoded bytes read for trials        133.88 MB        133.88 MB           0.0018 -> 0.0028         
+  values given a new ordinal     48,925.00     48,925.00           0.9516 -> 0.9407         
+  values reusing an ordinal     53,355.00     53,355.00           0.5342 -> 1.0386         
+  value groups written          1,737.00      1,737.00           0.0265 -> 0.0335         
+  pooled leaves admitted        1,738.00      1,738.00           0.0265 -> 0.0335         
+  INSERT statements            44,331.00     44,331.00           0.8143 -> 0.8606         
+  presence queries                112.00        112.00           0.0021 -> 0.0019         
+  packs created                   255.00        255.00           0.0061 -> 0.0043         
+  pack BLOB rewrites           45,791.00     45,791.00           0.8338 -> 0.8894         
+  commits                       1,149.00      1,149.00           0.0252 -> 0.0210         
+
+  accept_loop per inserted object: 175.5 us (baseline, whole run); early states 8,618 objects, late states 25,458
+
+=== history-stride3: the save's own work, chain totals
+  counter                        baseline      candidate   per inserted object (early -> late)
+  objects written              72,560.00     72,560.00           1.0000 -> 1.0000         
+  occurrences served by an exact row     21,653.00     21,653.00           0.0101 -> 0.0246         
+  FULL alternatives compressed     61,766.00     61,766.00           0.7928 -> 0.8660         
+  prefix trials                54,397.00     54,397.00           0.5887 -> 0.7994         
+  trials that chose PREFIX     54,333.00     54,333.00           0.5870 -> 0.7990         
+  PREFIX records stored        57,539.00     57,539.00           0.6046 -> 0.8448         
+  FULL records stored          15,021.00     15,021.00           0.3954 -> 0.1552         
+  chain objects read for trials    235,563.00    235,563.00           1.0889 -> 2.8139         
+  chain edges walked          159,442.00    159,442.00           0.4900 -> 1.9885         
+  encoded bytes read for trials        266.71 MB        266.71 MB           0.0019 -> 0.0034         
+  values given a new ordinal     65,528.00     65,528.00           0.9449 -> 0.8928         
+  values reusing an ordinal    216,158.00    216,158.00           0.9618 -> 3.1989         
+  value groups written          4,225.00      4,225.00           0.0321 -> 0.0634         
+  pooled leaves admitted        4,442.00      4,442.00           0.0321 -> 0.0642         
+  INSERT statements            60,076.00     60,076.00           0.7793 -> 0.8371         
+  presence queries                286.00        286.00           0.0037 -> 0.0035         
+  packs created                   437.00        437.00           0.0101 -> 0.0048         
+  pack BLOB rewrites           63,840.00     63,840.00           0.8009 -> 0.8955         
+  commits                       1,471.00      1,471.00           0.0267 -> 0.0181         
+
+  accept_loop per inserted object: 255.3 us (baseline, whole run); early states 2,959 objects, late states 11,955
+

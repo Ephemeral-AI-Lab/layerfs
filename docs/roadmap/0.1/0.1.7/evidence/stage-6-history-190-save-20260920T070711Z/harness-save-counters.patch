@@ -1,0 +1,228 @@
+diff --git a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+index 7ff2a9994..d84565404 100644
+--- a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
++++ b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+@@ -307,11 +307,19 @@ fn advisory_depth_limit() -> u8 {
+         .unwrap_or(u8::MAX)
+ }
+ 
+-/// Chain totals of the save counters this row did not previously publish.
++/// The save counters this row did not previously publish, per state and in total.
+ ///
+ /// "Cannot see it" and "sees it and declines it" were indistinguishable without
+ /// these: the selection counters live in `DeltaCounters`, which `SaveOutcome`
+-/// already carries, and nothing read them.
++/// already carries, and nothing read them. The `#190` save-attribution round needs
++/// the same figures **per state**, because the question there is which part of
++/// `storage.accept_loop` grows with chain depth - a chain total cannot answer it.
++///
++/// Nothing here is new product instrumentation: every field is read from the
++/// `SaveOutcome` the product already returns, at the same place and with the same
++/// lifetime the existing `delta.*` totals used. The struct is a plain accumulator
++/// so one state's figures can be published after the measured region closes, which
++/// is where the rest of this driver's counters are written.
+ #[derive(Default, Clone, Copy)]
+ struct SaveTotals {
+     reused: u64,
+@@ -319,6 +327,10 @@ struct SaveTotals {
+     full_records: u64,
+     prefix_records: u64,
+     packs_created: u64,
++    pack_appends: u64,
++    commits: u64,
++    statements: u64,
++    presence_queries: u64,
+     prepared_full: u64,
+     trials: u64,
+     prefix_selected: u64,
+@@ -327,6 +339,20 @@ struct SaveTotals {
+     absent_candidates: u64,
+     ineligible_candidates: u64,
+     work_exceeded: u64,
++    chain_objects: u64,
++    chain_edges: u64,
++    chain_encoded_bytes: u64,
++    chain_canonical_bytes: u64,
++    chain_max_depth: u64,
++    chain_group_decodes: u64,
++    pool_leaves: u64,
++    pool_new_values: u64,
++    pool_reused_values: u64,
++    pool_groups: u64,
++    pool_delta_leaves: u64,
++    pool_full_leaves: u64,
++    pool_trials: u64,
++    pool_work_exceeded: u64,
+ }
+ 
+ impl SaveTotals {
+@@ -336,6 +362,12 @@ impl SaveTotals {
+         self.full_records = self.full_records.saturating_add(saved.full_records);
+         self.prefix_records = self.prefix_records.saturating_add(saved.prefix_records);
+         self.packs_created = self.packs_created.saturating_add(saved.packs_created);
++        self.pack_appends = self.pack_appends.saturating_add(saved.pack_appends);
++        self.commits = self.commits.saturating_add(saved.commits);
++        self.statements = self.statements.saturating_add(saved.statements);
++        self.presence_queries = self
++            .presence_queries
++            .saturating_add(saved.presence_queries);
+         let delta = saved.delta;
+         self.prepared_full = self.prepared_full.saturating_add(delta.prepared_full);
+         self.trials = self.trials.saturating_add(delta.trials);
+@@ -349,6 +381,79 @@ impl SaveTotals {
+             .ineligible_candidates
+             .saturating_add(delta.ineligible_candidates);
+         self.work_exceeded = self.work_exceeded.saturating_add(delta.work_exceeded);
++        let chain = saved.chain;
++        self.chain_objects = self.chain_objects.saturating_add(chain.objects);
++        self.chain_edges = self.chain_edges.saturating_add(chain.edges);
++        self.chain_encoded_bytes = self
++            .chain_encoded_bytes
++            .saturating_add(chain.encoded_bytes);
++        self.chain_canonical_bytes = self
++            .chain_canonical_bytes
++            .saturating_add(chain.canonical_bytes);
++        self.chain_max_depth = self.chain_max_depth.max(chain.max_depth);
++        self.chain_group_decodes = self
++            .chain_group_decodes
++            .saturating_add(chain.group_decodes);
++        let pool = saved.pool;
++        self.pool_leaves = self.pool_leaves.saturating_add(pool.leaves);
++        self.pool_new_values = self.pool_new_values.saturating_add(pool.new_values);
++        self.pool_reused_values = self
++            .pool_reused_values
++            .saturating_add(pool.reused_values);
++        self.pool_groups = self.pool_groups.saturating_add(pool.groups);
++        self.pool_delta_leaves = self.pool_delta_leaves.saturating_add(pool.delta_leaves);
++        self.pool_full_leaves = self.pool_full_leaves.saturating_add(pool.full_leaves);
++        self.pool_trials = self.pool_trials.saturating_add(pool.trials);
++        self.pool_work_exceeded = self
++            .pool_work_exceeded
++            .saturating_add(pool.work_exceeded);
++    }
++
++    /// The same figures as trace rows: `(suffix, value, unit)`.
++    ///
++    /// `inserted` and `commits` are deliberately absent - this row already
++    /// publishes them as `history.state.<n>.inserted` and `.save.commits`, and a
++    /// key written twice would make a reader's first-match lookup ambiguous.
++    fn rows(&self) -> [(&'static str, u64, &'static str); 29] {
++        [
++            ("save.reused", self.reused, "objects"),
++            ("save.full_records", self.full_records, "objects"),
++            ("save.prefix_records", self.prefix_records, "objects"),
++            ("save.packs_created", self.packs_created, "packs"),
++            ("save.pack_appends", self.pack_appends, "packs"),
++            ("save.statements", self.statements, "statements"),
++            ("save.presence_queries", self.presence_queries, "queries"),
++            ("save.delta.prepared_full", self.prepared_full, "objects"),
++            ("save.delta.trials", self.trials, "trials"),
++            ("save.delta.prefix_selected", self.prefix_selected, "objects"),
++            ("save.delta.full_losses", self.full_losses, "objects"),
++            ("save.delta.no_candidate", self.no_candidate, "objects"),
++            ("save.delta.absent_candidates", self.absent_candidates, "objects"),
++            (
++                "save.delta.ineligible_candidates",
++                self.ineligible_candidates,
++                "objects",
++            ),
++            ("save.delta.work_exceeded", self.work_exceeded, "objects"),
++            ("save.chain.objects", self.chain_objects, "objects"),
++            ("save.chain.edges", self.chain_edges, "edges"),
++            ("save.chain.encoded_bytes", self.chain_encoded_bytes, "bytes"),
++            (
++                "save.chain.canonical_bytes",
++                self.chain_canonical_bytes,
++                "bytes",
++            ),
++            ("save.chain.max_depth", self.chain_max_depth, "edges"),
++            ("save.chain.group_decodes", self.chain_group_decodes, "count"),
++            ("save.pool.leaves", self.pool_leaves, "objects"),
++            ("save.pool.new_values", self.pool_new_values, "values"),
++            ("save.pool.reused_values", self.pool_reused_values, "values"),
++            ("save.pool.groups", self.pool_groups, "groups"),
++            ("save.pool.delta_leaves", self.pool_delta_leaves, "objects"),
++            ("save.pool.full_leaves", self.pool_full_leaves, "objects"),
++            ("save.pool.trials", self.pool_trials, "trials"),
++            ("save.pool.work_exceeded", self.pool_work_exceeded, "objects"),
++        ]
+     }
+ }
+ 
+@@ -1108,6 +1213,8 @@ struct StateOutcome {
+     build_ns: u64,
+     save_ns: u64,
+     commits: u64,
++    /// This state's save counters, published after the measured region closes.
++    save: SaveTotals,
+     group_decodes: u64,
+     pooled_reads: layerfs_storage::encoding::pool::PoolReadCounters,
+     connection_opens: u64,
+@@ -2004,6 +2111,8 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                         .finish(child.child("storage.finish"))
+                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                     let save_ns = t_save.elapsed().as_nanos() as u64;
++                    let mut state_save = SaveTotals::default();
++                    state_save.add(&saved);
+                     totals.add(&saved);
+                     peak_heap = instruments::heap_end().peak_incremental_bytes;
+                     previous_root = Some(built.root);
+@@ -2019,6 +2128,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                         build_ns,
+                         save_ns,
+                         commits: saved.commits,
++                        save: state_save,
+                         group_decodes: provider.inner.group_decodes(),
+                         pooled_reads: provider.inner.pooled_read_counters(),
+                         connection_opens: provider.inner.connection_opens(),
+@@ -2186,6 +2296,19 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                 "public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed",
+             )?;
+         }
++        // The save's own counters, per state. `storage.accept_loop` is one span and
++        // several kinds of work; these are the product's figures for which kinds
++        // happened, so a cost that grows with depth can be attributed to one of
++        // them instead of to the span's name.
++        for (suffix, value, unit) in outcome.save.rows() {
++            context.trace.write_number(
++                Kind::Counter,
++                &format!("history.state.{}.{suffix}", outcome.ordinal),
++                i128::from(value),
++                unit,
++                "SaveOutcome's own counters for this state; work counters, not times",
++            )?;
++        }
+         for (suffix, nanos, basis) in [
+             ("input_ns", outcome.input_ns, "harness input assembly inside the child"),
+             ("build_ns", outcome.build_ns, "build/update_filesystem"),
+@@ -2283,6 +2406,9 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+         ("delta.full_records", totals.full_records),
+         ("delta.prefix_records", totals.prefix_records),
+         ("delta.packs_created", totals.packs_created),
++        ("delta.pack_appends", totals.pack_appends),
++        ("delta.statements", totals.statements),
++        ("delta.presence_queries", totals.presence_queries),
+         ("delta.prepared_full", totals.prepared_full),
+         ("delta.trials", totals.trials),
+         ("delta.prefix_selected", totals.prefix_selected),
+@@ -2291,6 +2417,20 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+         ("delta.absent_candidates", totals.absent_candidates),
+         ("delta.ineligible_candidates", totals.ineligible_candidates),
+         ("delta.work_exceeded", totals.work_exceeded),
++        ("delta.chain_objects", totals.chain_objects),
++        ("delta.chain_edges", totals.chain_edges),
++        ("delta.chain_encoded_bytes", totals.chain_encoded_bytes),
++        ("delta.chain_canonical_bytes", totals.chain_canonical_bytes),
++        ("delta.chain_max_depth", totals.chain_max_depth),
++        ("delta.chain_group_decodes", totals.chain_group_decodes),
++        ("delta.pool_leaves", totals.pool_leaves),
++        ("delta.pool_new_values", totals.pool_new_values),
++        ("delta.pool_reused_values", totals.pool_reused_values),
++        ("delta.pool_groups", totals.pool_groups),
++        ("delta.pool_delta_leaves", totals.pool_delta_leaves),
++        ("delta.pool_full_leaves", totals.pool_full_leaves),
++        ("delta.pool_trials", totals.pool_trials),
++        ("delta.pool_work_exceeded", totals.pool_work_exceeded),
+     ] {
+         context.trace.write_number(
+             Kind::Counter,
