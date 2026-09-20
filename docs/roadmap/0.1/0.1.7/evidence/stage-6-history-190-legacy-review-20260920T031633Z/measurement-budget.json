@@ -1,0 +1,20 @@
+{
+  "source_receipt": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-screen-20260920T024251Z/results.json",
+  "receipt_sha256": "00e5d293b9c6f5e1fbbd94e27a27ecca2e261afb186f1cfbb5ccfc4701ebb851",
+  "operation_ns": 22615178250,
+  "exclusive_partition_ns": {
+    "content": 1618536750,
+    "filesystem.provider": 8572820583,
+    "filesystem.outside_provider": 963765457,
+    "storage": 11120818665,
+    "remaining_child_work": 339236795
+  },
+  "one_second_fraction_of_interval": {
+    "content": 0.6178420106926827,
+    "filesystem.provider": 0.1166477229189902,
+    "filesystem.outside_provider": 1.0375968475906894,
+    "storage": 0.08992143745201514,
+    "remaining_child_work": 2.9477934432200965
+  },
+  "status": "existing diagnostic reused for review, no new measurement; fractions are required removal shares, not expected savings"
+}
