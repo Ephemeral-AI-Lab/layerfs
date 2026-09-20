@@ -1,0 +1,22 @@
+> Status: Research; informative and not a product contract.
+
+## Step 4 — correctness, work reduction and stride3 confirmation complete
+
+One frozen-harness diagnostic sample per arm/case; uncontrolled cache, no cold/release admission claim.
+
+| Selection | Baseline operation ns | Candidate operation ns | Difference ns | Read waves before→after | Objects before→after |
+|---|---:|---:|---:|---:|---:|
+|history-stride10|47,161,768,126|27,386,866,665|-19,774,901,461|110,715→66,616|117,533→74,279|
+|history-stride3|125,277,281,254|79,607,320,336|-45,669,960,918|210,380→111,853|230,323→135,296|
+
+All17 and53 state roots match baseline. Both final Store files are byte-for-byte identical to their respective baselines; all retained save decision counters and transaction counts match (1,149/1,470 commits). Non-provider filesystem work counters are unchanged. This isolates the delivered change to reduced repeated parent acquisition, not skipped canonical/validation work or altered stored content.
+
+Correctness:490 core tests and117 harness tests pass; examples compile/test, core Clippyalltargets-Dwarnings, core fmt, boundary guard and self-tests pass. Four focused parent tests pass; all56 constrained quota outcomes exactly equal baseline. Earlier rejected-v1 regression and obsolete work-count assertion failure remain retained. The materialization expectation changed107→104waves and303→300objects because one repeated three-page parent path is eliminated; widebatch/inodepage/goldenroot assertions are unchanged.
+
+**Sampled read-back:** stride10 baseline8,124,985,000ns / candidate8,000,840,000ns,1,083 compared each, zero mismatches/missing/unexpected. Stride3 baseline29,241,424,750ns / candidate29,978,286,084ns,3,377 compared each, zero disagreements. Both stride3 verifier rows remain TARGET_MISS against20s; all fit60s hard wall. This is sampled, not exhaustive read-back.
+
+**Storage:** apparent bytes unchanged49,053,696 and61,767,680. Baseline stride10 allocated49,688,576 exceeds49,344,512 (FAIL); candidate49,192,960 is below. Baseline/candidate stride3 allocated62,402,560/62,103,552 are below64,024,576. Since paired database bytes are identical, allocated differences are not claimed as an algorithmic storage saving. Raw O3 pinned-counters remains INCOMPLETE on all four performance rows.
+
+**Final production LOC:** reference65,417→65,417(0); core20,116→20,165(+49); combined85,533→85,582(+49). Same production-only counter, runtimeSQL included; tests/docs/harness excluded. One product file changes, no new dependency/format/worker policy. No commit yet.
+
+Raw/derived evidence, identity manifests and per-state CSVs: `docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/`. Independent reviewer has reproduced both performance comparisons; final custody review follows.

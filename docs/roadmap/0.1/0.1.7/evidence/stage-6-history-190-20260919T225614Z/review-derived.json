@@ -1,0 +1,214 @@
+{
+  "status": "archival reproduction, not measurement",
+  "core": {
+    "operation": 32566067669,
+    "content": 1115152085,
+    "store_create": 2469708,
+    "input": 65188166,
+    "build": 23520347667,
+    "save": 7769904041,
+    "residual": 93006002
+  },
+  "core_root": 44831509917,
+  "core_root_minus_operation": 12265442248,
+  "legacy": {
+    "commit": 11370679212,
+    "exec": 59717921250,
+    "transfer": 18588473754,
+    "work_residual": 6766980825,
+    "lifecycle_residual": 44874000
+  },
+  "core_minus_legacy_commit": 21195388457,
+  "core_divided_legacy_commit": 2.8640389075994275,
+  "core_median": 1564124750,
+  "legacy_median": 564295292,
+  "core_rows": [
+    {
+      "state": 1,
+      "checkpoint": 1,
+      "operation": 37022000,
+      "content": 4696250,
+      "store_create": 2469708,
+      "input": 340291,
+      "build": 531750,
+      "save": 28739167,
+      "residual": 244834
+    },
+    {
+      "state": 2,
+      "checkpoint": 11,
+      "operation": 194775084,
+      "content": 18745917,
+      "store_create": 0,
+      "input": 1120167,
+      "build": 73406916,
+      "save": 99639833,
+      "residual": 1862251
+    },
+    {
+      "state": 3,
+      "checkpoint": 21,
+      "operation": 277627000,
+      "content": 25980000,
+      "store_create": 0,
+      "input": 1166583,
+      "build": 125935458,
+      "save": 122972584,
+      "residual": 1572375
+    },
+    {
+      "state": 4,
+      "checkpoint": 31,
+      "operation": 438791750,
+      "content": 27665958,
+      "store_create": 0,
+      "input": 1477084,
+      "build": 271863750,
+      "save": 135908917,
+      "residual": 1876041
+    },
+    {
+      "state": 5,
+      "checkpoint": 41,
+      "operation": 903992167,
+      "content": 50678667,
+      "store_create": 0,
+      "input": 2849417,
+      "build": 556033125,
+      "save": 291628791,
+      "residual": 2802167
+    },
+    {
+      "state": 6,
+      "checkpoint": 51,
+      "operation": 942292000,
+      "content": 46803125,
+      "store_create": 0,
+      "input": 2472416,
+      "build": 616797625,
+      "save": 273296958,
+      "residual": 2921876
+    },
+    {
+      "state": 7,
+      "checkpoint": 61,
+      "operation": 1333462416,
+      "content": 53088042,
+      "store_create": 0,
+      "input": 3323416,
+      "build": 894872625,
+      "save": 378592500,
+      "residual": 3585833
+    },
+    {
+      "state": 8,
+      "checkpoint": 71,
+      "operation": 1351428917,
+      "content": 38340708,
+      "store_create": 0,
+      "input": 2723667,
+      "build": 1043704334,
+      "save": 263737833,
+      "residual": 2922375
+    },
+    {
+      "state": 9,
+      "checkpoint": 81,
+      "operation": 1564124750,
+      "content": 56873792,
+      "store_create": 0,
+      "input": 3450750,
+      "build": 1113079125,
+      "save": 386441917,
+      "residual": 4279166
+    },
+    {
+      "state": 10,
+      "checkpoint": 91,
+      "operation": 1694802708,
+      "content": 51117375,
+      "store_create": 0,
+      "input": 3072750,
+      "build": 1277410833,
+      "save": 359594958,
+      "residual": 3606792
+    },
+    {
+      "state": 11,
+      "checkpoint": 101,
+      "operation": 2919255834,
+      "content": 83469250,
+      "store_create": 0,
+      "input": 5054042,
+      "build": 2232000542,
+      "save": 592539041,
+      "residual": 6192959
+    },
+    {
+      "state": 12,
+      "checkpoint": 111,
+      "operation": 2931409834,
+      "content": 91436792,
+      "store_create": 0,
+      "input": 5463250,
+      "build": 2191169625,
+      "save": 632330167,
+      "residual": 11010000
+    },
+    {
+      "state": 13,
+      "checkpoint": 121,
+      "operation": 3243867708,
+      "content": 90358875,
+      "store_create": 0,
+      "input": 5223250,
+      "build": 2456608125,
+      "save": 684358458,
+      "residual": 7319000
+    },
+    {
+      "state": 14,
+      "checkpoint": 131,
+      "operation": 3971637542,
+      "content": 122183917,
+      "store_create": 0,
+      "input": 7038583,
+      "build": 2918463000,
+      "save": 912738208,
+      "residual": 11213834
+    },
+    {
+      "state": 15,
+      "checkpoint": 141,
+      "operation": 3906736584,
+      "content": 131850417,
+      "store_create": 0,
+      "input": 8020666,
+      "build": 2777986542,
+      "save": 976061209,
+      "residual": 12817750
+    },
+    {
+      "state": 16,
+      "checkpoint": 151,
+      "operation": 3284932750,
+      "content": 108359000,
+      "store_create": 0,
+      "input": 5856750,
+      "build": 2376118625,
+      "save": 783523083,
+      "residual": 11075292
+    },
+    {
+      "state": 17,
+      "checkpoint": 157,
+      "operation": 3569908625,
+      "content": 113504000,
+      "store_create": 0,
+      "input": 6535084,
+      "build": 2594365667,
+      "save": 847800417,
+      "residual": 7703457
+    }
+  ]
+}

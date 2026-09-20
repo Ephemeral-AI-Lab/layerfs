@@ -1,0 +1,16 @@
+{
+  "schema": "h190-context-clarification-v1",
+  "initial_context_json_status_captured_after_s1_started": true,
+  "pre_campaign_product_changes": false,
+  "pre_campaign_unrelated_changes": [
+    "core/docs/architecture/proposal/04-boundary-and-trust.md",
+    "core/docs/architecture/proposal/service-daemon-transport/01-architecture-and-portability.md",
+    "core/docs/architecture/proposal/service-daemon-transport/02-file-layout-and-boundaries.md",
+    "core/docs/architecture/proposal/service-daemon-transport/03-operations-and-transport.md",
+    "core/docs/architecture/proposal/service-daemon-transport/06-future-fuse-and-cloud.md",
+    "core/docs/architecture/proposal/service-daemon-transport/README.md",
+    "core/docs/architecture/proposal/service-daemon-transport/07-public-operations.md"
+  ],
+  "product_diff_795fb1a2f_to_HEAD": "",
+  "note": "initial-context.json records initial evidence collection, not the earlier pre-agent git status. Unrelated architecture edits are preserved."
+}

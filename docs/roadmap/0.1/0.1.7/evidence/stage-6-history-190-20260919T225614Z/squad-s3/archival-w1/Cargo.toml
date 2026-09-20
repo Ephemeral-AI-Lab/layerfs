@@ -1,0 +1,12 @@
+[package]
+name = "w1codec"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+zstd-sys = { version = "=2.0.16", default-features = false, features = ["experimental"] }
+libc = "=0.2.183"
+
+[profile.release]
+opt-level = 3
+debug = false

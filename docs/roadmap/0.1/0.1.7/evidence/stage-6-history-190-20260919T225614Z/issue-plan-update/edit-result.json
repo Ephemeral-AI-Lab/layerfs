@@ -1,0 +1,17 @@
+{
+  "command": [
+    "gh",
+    "issue",
+    "edit",
+    "190",
+    "--repo",
+    "Ephemeral-AI-Lab/layerfs",
+    "--title",
+    "v0.1.7: investigate and optimize retained-history measured-operation cost",
+    "--body-file",
+    "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-20260919T225614Z/issue-plan-update/planned-body.md"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "Post \"https://api.github.com/graphql\": net/http: TLS handshake timeout\n"
+}

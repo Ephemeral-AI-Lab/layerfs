@@ -1,0 +1,22 @@
+{
+  "observed_at_utc": "2026-09-19T23:03:23.118404+00:00",
+  "kind": "read-only protocol observation, not measurement eligibility",
+  "uptime": "7:03  up  5:05, 2 users, load averages: 5.24 4.92 4.54",
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": null,
+    "LAYERFS_HISTORY_ADVISORY": null,
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": null,
+    "LAYERFS_HISTORY_DECLARED_ONLY": null,
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": null,
+    "LAYERFS_HISTORY_FALLBACK_CANDIDATES": null,
+    "LAYERFS_HISTORY_FULL_PRODUCER": null,
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": null,
+    "LAYERFS_HISTORY_DEPTH_LIMIT": null,
+    "LAYERFS_HISTORY_PHASES": null
+  },
+  "tmpdir": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/",
+  "relevant_processes": [
+    "56437  1859   0.0 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+  ],
+  "core_lock": "absent"
+}

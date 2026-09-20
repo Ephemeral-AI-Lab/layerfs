@@ -384,3 +384,11 @@ claim — subsequent integration design belongs to the co-design pairs
 [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180) and
 [#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181). The specification
 itself states no measurement; subsequent evidence and dispositions belong to #186.
+
+**Retained-history operation optimization (#190).** Follow the
+[ordered optimization plan](retained-history-optimization-plan.md): measure the
+tree-update phases, then target repeated inode lookups with bounded batching and
+reuse; confirm on stride3 before considering deeper tree or streaming changes.
+The plan links the investigation ledger and evidence, preserves the distinction
+between proposed changes and measured causes, and records outstanding diagnostic
+ceilings and product-change rulings. It makes no new qualification claim.

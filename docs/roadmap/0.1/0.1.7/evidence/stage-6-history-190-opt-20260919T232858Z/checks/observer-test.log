@@ -1,0 +1,73 @@
+   Compiling fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content)
+warning: variable does not need to be mutable
+    --> src/ops/history.rs:1524:9
+     |
+1524 |     let mut prior_unavailable: u64 = 0;
+     |         ----^^^^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:11:5
+   |
+11 |     pub waves: u64,
+   |     ^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> src/lib.rs:16:9
+   |
+16 | #![deny(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:12:5
+   |
+12 |     pub requested_objects: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:13:5
+   |
+13 |     pub returned_objects: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:14:5
+   |
+14 |     pub returned_bytes: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:15:5
+   |
+15 |     pub failed_waves: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:16:5
+   |
+16 |     pub elapsed_ns: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a struct field
+  --> src/ops/history_reads.rs:21:5
+   |
+21 |     pub inner: P,
+   |     ^^^^^^^^^^^^
+
+error: missing documentation for an associated function
+  --> src/ops/history_reads.rs:27:5
+   |
+27 |     pub fn new(inner: P, enabled: bool) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing documentation for a method
+  --> src/ops/history_reads.rs:31:5
+   |
+31 |     pub fn counters(&self) -> ReadCounters {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `fs-bench-pro-storage-content` (lib) generated 1 warning
+error: could not compile `fs-bench-pro-storage-content` (lib) due to 9 previous errors; 1 warning emitted

@@ -1,0 +1,27 @@
+{
+  "identity.json": {
+    "retained": "identity.json.gz",
+    "sha256": "c9226e18440098457cfb58db2a082aa31ba80fccf061b6515b685cbac17f8257",
+    "bytes": 5895330
+  },
+  "performance-manifest.json": {
+    "retained": "performance-manifest.json.gz",
+    "sha256": "90962c6c2c4f7b5002bfc831c41546829aefea4dd8e661da5e6a3bd43e84de90",
+    "bytes": 5145
+  },
+  "performance-summary.json": {
+    "retained": "performance-summary.json.gz",
+    "sha256": "9cc0c07ef7225a66ae3eaab558ab464c1ab79c2f7fee682f756d3379f64b6f9c",
+    "bytes": 125
+  },
+  "deepseek-stride10/performance.jsonl": {
+    "retained": "deepseek-stride10--performance.jsonl.gz",
+    "sha256": "e5dfa8bb845e88975b5e54c41f6be8e54884feba68acf4625db6a8cbc6ab6949",
+    "bytes": 485799
+  },
+  "deepseek-stride10/performance-result.json": {
+    "retained": "deepseek-stride10--performance-result.json.gz",
+    "sha256": "e7571f003fd72e1d7348a3d093a3e2dc8752326afe1c80ab48c723b26c5d4445",
+    "bytes": 6345368
+  }
+}

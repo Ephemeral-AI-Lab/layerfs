@@ -1,0 +1,198 @@
+[
+  {
+    "file": "src/ops/history.rs",
+    "current_line": 1524,
+    "text": "let mut prior_unavailable: u64 = 0;",
+    "head_matching_lines": [
+      1498
+    ]
+  },
+  {
+    "file": "src/ops/c1.rs",
+    "current_line": 642,
+    "text": "(counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,",
+    "head_matching_lines": [
+      642,
+      884
+    ]
+  },
+  {
+    "file": "src/ops/c1.rs",
+    "current_line": 884,
+    "text": "(counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,",
+    "head_matching_lines": [
+      642,
+      884
+    ]
+  },
+  {
+    "file": "src/ops/c2.rs",
+    "current_line": 1517,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      1517,
+      2514
+    ]
+  },
+  {
+    "file": "src/ops/c2.rs",
+    "current_line": 1571,
+    "text": "let sampled = match context.verify_sample {",
+    "head_matching_lines": [
+      1571
+    ]
+  },
+  {
+    "file": "src/ops/c2.rs",
+    "current_line": 2514,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      1517,
+      2514
+    ]
+  },
+  {
+    "file": "src/ops/fs.rs",
+    "current_line": 435,
+    "text": "&\"g1.o4-inode-table\",",
+    "head_matching_lines": [
+      435
+    ]
+  },
+  {
+    "file": "src/ops/fs.rs",
+    "current_line": 625,
+    "text": ".map_err(|error| OpError::Io(error))?;",
+    "head_matching_lines": [
+      625
+    ]
+  },
+  {
+    "file": "src/ops/fs.rs",
+    "current_line": 943,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      943,
+      1171,
+      1306,
+      1548
+    ]
+  },
+  {
+    "file": "src/ops/fs.rs",
+    "current_line": 1171,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      943,
+      1171,
+      1306,
+      1548
+    ]
+  },
+  {
+    "file": "src/ops/fs.rs",
+    "current_line": 1306,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      943,
+      1171,
+      1306,
+      1548
+    ]
+  },
+  {
+    "file": "src/ops/fs.rs",
+    "current_line": 1548,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      943,
+      1171,
+      1306,
+      1548
+    ]
+  },
+  {
+    "file": "src/ops/history.rs",
+    "current_line": 1607,
+    "text": "|content: &TimingScope<'_, Active>| -> Result<",
+    "head_matching_lines": [
+      1570
+    ]
+  },
+  {
+    "file": "src/ops/history.rs",
+    "current_line": 1854,
+    "text": "for candidate in &eligible {",
+    "head_matching_lines": [
+      1813
+    ]
+  },
+  {
+    "file": "src/ops/pipeline.rs",
+    "current_line": 292,
+    "text": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "head_matching_lines": [
+      292,
+      474
+    ]
+  },
+  {
+    "file": "src/ops/pipeline.rs",
+    "current_line": 292,
+    "text": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "head_matching_lines": [
+      292,
+      474
+    ]
+  },
+  {
+    "file": "src/ops/pipeline.rs",
+    "current_line": 474,
+    "text": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "head_matching_lines": [
+      292,
+      474
+    ]
+  },
+  {
+    "file": "src/ops/pipeline.rs",
+    "current_line": 474,
+    "text": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "head_matching_lines": [
+      292,
+      474
+    ]
+  },
+  {
+    "file": "src/ops/pipeline.rs",
+    "current_line": 553,
+    "text": ".map(|outcome| {",
+    "head_matching_lines": [
+      553
+    ]
+  },
+  {
+    "file": "src/support/phases.rs",
+    "current_line": 341,
+    "text": "out.push_str(&format!(\"  \\\"schema\\\": \\\"layerfs-phases-v1\\\",\\n\"));",
+    "head_matching_lines": [
+      341
+    ]
+  },
+  {
+    "file": "src/workload/digest.rs",
+    "current_line": 179,
+    "text": "for index in 0..8 {",
+    "head_matching_lines": [
+      179
+    ]
+  },
+  {
+    "file": "src/workload/history.rs",
+    "current_line": 712,
+    "text": ") -> Result<BTreeMap<Vec<u8>, ([u8; 20], u16)>, HistoryError> {",
+    "head_matching_lines": [
+      712
+    ]
+  }
+]

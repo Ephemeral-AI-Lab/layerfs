@@ -1,0 +1,31 @@
+{
+  "combined": 85549,
+  "root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "scopes": {
+    "core": {
+      "crates": {
+        "layerfs-content": 12528,
+        "layerfs-storage": 6841,
+        "layerfs-telemetry": 763
+      },
+      "files": 121,
+      "lines": 20132
+    },
+    "reference": {
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      },
+      "files": 193,
+      "lines": 65417
+    }
+  }
+}

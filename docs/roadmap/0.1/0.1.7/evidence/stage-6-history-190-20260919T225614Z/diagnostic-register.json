@@ -1,0 +1,50 @@
+{
+  "schema": "h190-diagnostic-register-v1",
+  "admission_eligible": false,
+  "runs": [
+    {
+      "case": "history-stride10",
+      "arm": "phase-attribution",
+      "status": "NOT_RUN",
+      "wall_ns": null,
+      "cited_prior_invocation_ns": 44999165042,
+      "reason": "No frozen diagnostic ceiling resolves handoff 15/25 s instruction against explicit raw-driver rerun. Owner clarification pending; not a measured miss."
+    },
+    {
+      "case": "history-stride3",
+      "arm": "phase-attribution-confirmation",
+      "status": "NOT_RUN",
+      "wall_ns": null,
+      "cited_prior_wall_seconds": 97.9,
+      "reason": "Same pending ceiling; prior97.9 is prose not retained successful receipt."
+    },
+    {
+      "case": "history-stride10",
+      "arm": "group-level1-vs19",
+      "status": "NOT_RUN",
+      "wall_ns": null,
+      "reason": "GROUP_LEVEL private product constant; no product changes authorized."
+    },
+    {
+      "case": "history-stride10",
+      "arm": "worker1-vs-reference",
+      "status": "NOT_RUN",
+      "wall_ns": null,
+      "reason": "Raw driver has no worker-count lever; reference actual count not retained. Changing env alone is not treatment."
+    },
+    {
+      "case": "history-stride10",
+      "arm": "persisted-index-toggle",
+      "status": "NOT_RUN",
+      "wall_ns": null,
+      "reason": "No public Store index-disable lever; producer advisory switches change semantic inputs."
+    },
+    {
+      "case": "history-stride1",
+      "arm": "all",
+      "status": "NOT_RUN",
+      "wall_ns": null,
+      "reason": "Outside selected investigation; no optimization or measurement scheduled."
+    }
+  ]
+}

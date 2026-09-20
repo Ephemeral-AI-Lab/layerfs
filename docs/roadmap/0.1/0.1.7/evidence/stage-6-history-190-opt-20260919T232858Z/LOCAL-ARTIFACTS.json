@@ -1,0 +1,42 @@
+{
+  "schema": "history190-local-artifacts-v1",
+  "policy": "Root .gitignore keeps large benchmark databases local; numerical raw traces, receipts, hashes and independent review are committed. Original immutable files are preserved at these paths.",
+  "artifacts": [
+    {
+      "repo_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/binaries/candidate-f3afbe222248aa1040004dd09095b63cd94dc6a8f919f48c18a99f3ce42b916e",
+      "local_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/binaries/candidate-f3afbe222248aa1040004dd09095b63cd94dc6a8f919f48c18a99f3ce42b916e",
+      "bytes": 3583920,
+      "sha256": "f3afbe222248aa1040004dd09095b63cd94dc6a8f919f48c18a99f3ce42b916e"
+    },
+    {
+      "repo_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/binaries/baseline-c5826d20f217a73ed4d814b82c3f8d8cdcaaa7af94ead18c0291918c88d4a855",
+      "local_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/binaries/baseline-c5826d20f217a73ed4d814b82c3f8d8cdcaaa7af94ead18c0291918c88d4a855",
+      "bytes": 3566736,
+      "sha256": "c5826d20f217a73ed4d814b82c3f8d8cdcaaa7af94ead18c0291918c88d4a855"
+    },
+    {
+      "repo_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/candidate-history-stride10/raw/sample.sqlite",
+      "local_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/candidate-history-stride10/raw/sample.sqlite",
+      "bytes": 49053696,
+      "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f"
+    },
+    {
+      "repo_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/candidate-history-stride3/raw/sample.sqlite",
+      "local_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/candidate-history-stride3/raw/sample.sqlite",
+      "bytes": 61767680,
+      "sha256": "cfb74bc9b1db6c9470129613283a8f4afa3b139c2819ae7bd7a4f14e548ecdb5"
+    },
+    {
+      "repo_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/baseline-history-stride3/raw/sample.sqlite",
+      "local_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/baseline-history-stride3/raw/sample.sqlite",
+      "bytes": 61767680,
+      "sha256": "cfb74bc9b1db6c9470129613283a8f4afa3b139c2819ae7bd7a4f14e548ecdb5"
+    },
+    {
+      "repo_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/baseline-history-stride10/raw/sample.sqlite",
+      "local_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/runs/baseline-history-stride10/raw/sample.sqlite",
+      "bytes": 49053696,
+      "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f"
+    }
+  ]
+}

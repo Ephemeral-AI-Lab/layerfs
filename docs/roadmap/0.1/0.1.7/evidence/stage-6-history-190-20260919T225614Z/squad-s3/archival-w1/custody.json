@@ -1,0 +1,86 @@
+[
+  {
+    "origin": "/tmp/w1/armA_sweep.txt",
+    "retained": "armA_sweep.txt",
+    "bytes": 1970,
+    "sha256": "27bd9f520eee7cedd69b94118934affe9a06adba5f995bc9334cc436e2758434",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1/rest2.txt",
+    "retained": "rest2.txt",
+    "bytes": 1498,
+    "sha256": "f4a88edcda6e79fc6cb50be01d27b9651f8df848421db40805eb6b0257270588",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1/armA_sweep.sh",
+    "retained": "armA_sweep.sh",
+    "bytes": 1109,
+    "sha256": "110be984ac206529cfe607c3e2fa94086d29f4a85b50b29e5b1ffe7890825921",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1/rest2.sh",
+    "retained": "rest2.sh",
+    "bytes": 734,
+    "sha256": "f8395242bef20fb9562aab1e2293fe52568b1845d2482f9992b20f11bd79ed33",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1codec/src/main.rs",
+    "retained": "main.rs",
+    "bytes": 28246,
+    "sha256": "925f00c831917c093ab6b11e40546c4e9aa880ef70926a6634d18840e9ec06a6",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1codec/Cargo.toml",
+    "retained": "Cargo.toml",
+    "bytes": 233,
+    "sha256": "cd5c035948738b05105a43d8bd72cae5d546c81ebf00c23d4edc1983fa0ac9b9",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1codec/Cargo.lock",
+    "retained": "Cargo.lock",
+    "bytes": 2326,
+    "sha256": "ca72e698b250b88f9f7ab1b5ab050b278f84623fd7a8bfe06009bf9096ba7d77",
+    "custody": "copied during #190; historical generation identity unsealed"
+  },
+  {
+    "origin": "/tmp/w1/armA/groups_ordinary.bin",
+    "retained": null,
+    "bytes": 3027618,
+    "sha256": "63a22d685b58290e1ec12e49d1e822c1767a03b4daa0d9f7f494af6a65212572",
+    "custody": "hash observed during #190; does not establish historical run identity; payload not copied"
+  },
+  {
+    "origin": "/tmp/w1/armA/groups_pooled-metadata.bin",
+    "retained": null,
+    "bytes": 4857475,
+    "sha256": "a112c3ca526a694478bf324a228be95973262e332f07a2ba592fcd56564a1b98",
+    "custody": "hash observed during #190; does not establish historical run identity; payload not copied"
+  },
+  {
+    "origin": "/tmp/w1/b0/groups_ordinary.bin",
+    "retained": null,
+    "bytes": 3027618,
+    "sha256": "63a22d685b58290e1ec12e49d1e822c1767a03b4daa0d9f7f494af6a65212572",
+    "custody": "hash observed during #190; does not establish historical run identity; payload not copied"
+  },
+  {
+    "origin": "/tmp/w1/b0/groups_pooled-metadata.bin",
+    "retained": null,
+    "bytes": 4857475,
+    "sha256": "a112c3ca526a694478bf324a228be95973262e332f07a2ba592fcd56564a1b98",
+    "custody": "hash observed during #190; does not establish historical run identity; payload not copied"
+  },
+  {
+    "origin": "/tmp/w1codec/target/release/w1codec",
+    "retained": null,
+    "bytes": 969376,
+    "sha256": "1694eecd49608a433be561dbc5d067fb19eb7bec79ba710a68e6d338b645028a",
+    "custody": "hash observed during #190; does not establish historical run identity; payload not copied"
+  }
+]

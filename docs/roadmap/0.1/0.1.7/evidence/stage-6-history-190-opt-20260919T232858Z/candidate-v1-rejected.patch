@@ -1,0 +1,331 @@
+diff --git a/core/crates/layerfs-content/src/filesystem/update.rs b/core/crates/layerfs-content/src/filesystem/update.rs
+index a40b517c2..2c8bc184f 100644
+--- a/core/crates/layerfs-content/src/filesystem/update.rs
++++ b/core/crates/layerfs-content/src/filesystem/update.rs
+@@ -16,7 +16,9 @@ use crate::filesystem::directory::update::apply_bindings;
+ use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
+ use crate::filesystem::inode::update::apply_inode_values;
+ use crate::filesystem::input::FilesystemInput;
+-use crate::filesystem::objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
++use crate::filesystem::objects::{
++    FilesystemObjects, FilesystemPhases, ObjectWork, MAXIMUM_READ_DEMANDS,
++};
+ use crate::filesystem::references::backing::OrderingBacking;
+ use crate::filesystem::references::reduce::{PendingState, ReferenceReducer, ReferenceWork};
+ use crate::filesystem::references::release::{release_zero_count, ReleaseWork};
+@@ -25,7 +27,7 @@ use crate::filesystem::sorted::finish::DirectoryRoot;
+ use crate::filesystem::sorted::SortedWork;
+ use crate::filesystem::validate::{self, ValidationWork};
+ use crate::object::inode_leaf::{InodeKind, InodeValue};
+-use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectId, ObjectRole};
++use crate::object::{AuthenticatedObjects, FinalizedObject, ObjectRole};
+ 
+ /// Work one complete filesystem operation performed.
+ #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+@@ -175,129 +177,143 @@ fn run_body<'b>(
+     );
+     reducer.check_backing_capacity()?;
+     register_values(&mut reducer, input, &unreachable)?;
+-    let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
+     phases.phase("directories", || -> ContentResult<()> {
+-        for update in input.directories {
+-            if unreachable.contains_key(&update.parent) {
+-                // Nothing binds this directory in the result, so no page of it
+-                // is worth building. Its bindings are still this operation's
+-                // edges and stay accounted: every final binding of a directory
+-                // this operation allocates is an addition.
+-                for (_, binding) in &update.changes {
+-                    let Some(child) = binding else {
+-                        continue;
+-                    };
+-                    reducer.note_retained_binding(*child)?;
+-                    counters.bindings_added = counters.bindings_added.saturating_add(1);
++        // Input validation already proved parent ordering and uniqueness. Keep
++        // only one bounded batch of authenticated base values, and consume each
++        // value for both its directory root and its final metadata overlay.
++        for updates in input
++            .directories
++            .chunks(input.resources.base_read_batch.min(MAXIMUM_READ_DEMANDS))
++        {
++            let parents = updates
++                .iter()
++                .filter(|update| {
++                    checked.topology.table.is_some()
++                        && !unreachable.contains_key(&update.parent)
++                        && !input.new_inodes.contains(&update.parent)
++                })
++                .map(|update| update.parent)
++                .collect::<Vec<_>>();
++            let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
++            for update in updates {
++                if unreachable.contains_key(&update.parent) {
++                    // Nothing binds this directory in the result, so no page of it
++                    // is worth building. Its bindings are still this operation's
++                    // edges and stay accounted: every final binding of a directory
++                    // this operation allocates is an addition.
++                    for (_, binding) in &update.changes {
++                        let Some(child) = binding else {
++                            continue;
++                        };
++                        reducer.note_retained_binding(*child)?;
++                        counters.bindings_added = counters.bindings_added.saturating_add(1);
++                    }
++                    continue;
+                 }
+-                continue;
+-            }
+-            if update.changes.is_empty() {
+-                // A directory with no changed name keeps the content root it already
+-                // has; a directory in a new filesystem is a real empty page.
+-                let content = if input.new_inodes.contains(&update.parent)
+-                    || checked.topology.table.is_none()
+-                {
+-                    crate::filesystem::directory::update::empty_directory(objects)?.0
++                let base = parents
++                    .binary_search(&update.parent)
++                    .ok()
++                    .and_then(|index| bases[index]);
++                let content_root = if update.changes.is_empty() {
++                    // An unchanged directory retains its root; a new directory
++                    // needs one actual empty page.
++                    if input.new_inodes.contains(&update.parent) || checked.topology.table.is_none()
++                    {
++                        crate::filesystem::directory::update::empty_directory(objects)?.0
++                    } else {
++                        base.ok_or(ContentError::InvalidRecord("directory parent record"))?
++                            .content_root
++                    }
+                 } else {
+-                    lookup_base(reader, table, update.parent)?
+-                        .ok_or(ContentError::InvalidRecord("directory parent record"))?
+-                        .content_root
++                    let base_directory = if input.new_inodes.contains(&update.parent) {
++                        None
++                    } else if checked.topology.table.is_some() {
++                        let record =
++                            base.ok_or(ContentError::InvalidRecord("directory parent record"))?;
++                        if record.kind != InodeKind::Directory {
++                            return Err(ContentError::InvalidRecord("directory parent kind"));
++                        }
++                        Some(DirectoryRoot(record.content_root))
++                    } else {
++                        None
++                    };
++                    let mut observe = |before: Option<u64>,
++                                       after: Option<u64>|
++                     -> ContentResult<()> {
++                        if before == after {
++                            return Ok(());
++                        }
++                        // Additions precede removals, so a move never drops an
++                        // inode to a spurious zero between its two bindings.
++                        if let Some(next) = after {
++                            reducer.note_retained_binding(next)?;
++                            counters.bindings_added = counters.bindings_added.saturating_add(1);
++                        }
++                        if let Some(previous) = before {
++                            reducer.note_removed_binding(previous)?;
++                            counters.bindings_removed = counters.bindings_removed.saturating_add(1);
++                        }
++                        Ok(())
++                    };
++                    let (root, work) = apply_bindings(
++                        objects,
++                        base_directory,
++                        update
++                            .changes
++                            .iter()
++                            .map(|(name, binding)| Ok((name.clone(), *binding))),
++                        input.resources.scratch_bytes,
++                        &mut observe,
++                    )?;
++                    counters.directories.pages_read = counters
++                        .directories
++                        .pages_read
++                        .saturating_add(work.pages_read);
++                    counters.directories.pages_created = counters
++                        .directories
++                        .pages_created
++                        .saturating_add(work.pages_created);
++                    counters.directories.pages_reused = counters
++                        .directories
++                        .pages_reused
++                        .saturating_add(work.pages_reused);
++                    counters.directories.change_keys = counters
++                        .directories
++                        .change_keys
++                        .saturating_add(work.change_keys);
++                    counters.directories.untouched_subtrees = counters
++                        .directories
++                        .untouched_subtrees
++                        .saturating_add(work.untouched_subtrees);
++                    counters.directories.peak_scratch_bytes = counters
++                        .directories
++                        .peak_scratch_bytes
++                        .max(work.peak_scratch_bytes);
++                    counters.directory_updates = counters.directory_updates.saturating_add(1);
++                    root.0
+                 };
+-                contents.insert(update.parent, content);
+-                continue;
++                // Preserve caller metadata when supplied; otherwise carry the
++                // same authenticated base record instead of looking it up again.
++                let value = input
++                    .value_for(update.parent)
++                    .or(base)
++                    .ok_or(ContentError::InvalidRecord("directory value missing"))?;
++                reducer.note_value(
++                    update.parent,
++                    InodeValue {
++                        content_root,
++                        ..value
++                    },
++                )?;
+             }
+-            let base_directory = if input.new_inodes.contains(&update.parent) {
+-                // A directory this operation allocates has no stored bindings yet.
+-                None
+-            } else if checked.topology.table.is_some() {
+-                let record = lookup_base(reader, table, update.parent)?
+-                    .ok_or(ContentError::InvalidRecord("directory parent record"))?;
+-                if record.kind != InodeKind::Directory {
+-                    return Err(ContentError::InvalidRecord("directory parent kind"));
+-                }
+-                Some(DirectoryRoot(record.content_root))
+-            } else {
+-                None
+-            };
+-            let mut observe = |before: Option<u64>, after: Option<u64>| -> ContentResult<()> {
+-                if before == after {
+-                    return Ok(());
+-                }
+-                // Additions are accounted before removals, so a move never drops an
+-                // inode to a spurious zero between its two bindings.
+-                if let Some(next) = after {
+-                    reducer.note_retained_binding(next)?;
+-                    counters.bindings_added = counters.bindings_added.saturating_add(1);
+-                }
+-                if let Some(previous) = before {
+-                    reducer.note_removed_binding(previous)?;
+-                    counters.bindings_removed = counters.bindings_removed.saturating_add(1);
+-                }
+-                Ok(())
+-            };
+-            let (root, work) = apply_bindings(
+-                objects,
+-                base_directory,
+-                update
+-                    .changes
+-                    .iter()
+-                    .map(|(name, binding)| Ok((name.clone(), *binding))),
+-                input.resources.scratch_bytes,
+-                &mut observe,
+-            )?;
+-            counters.directories.pages_read = counters
+-                .directories
+-                .pages_read
+-                .saturating_add(work.pages_read);
+-            counters.directories.pages_created = counters
+-                .directories
+-                .pages_created
+-                .saturating_add(work.pages_created);
+-            counters.directories.pages_reused = counters
+-                .directories
+-                .pages_reused
+-                .saturating_add(work.pages_reused);
+-            counters.directories.change_keys = counters
+-                .directories
+-                .change_keys
+-                .saturating_add(work.change_keys);
+-            counters.directories.untouched_subtrees = counters
+-                .directories
+-                .untouched_subtrees
+-                .saturating_add(work.untouched_subtrees);
+-            counters.directories.peak_scratch_bytes = counters
+-                .directories
+-                .peak_scratch_bytes
+-                .max(work.peak_scratch_bytes);
+-            counters.directory_updates = counters.directory_updates.saturating_add(1);
+-            contents.insert(update.parent, root.0);
+         }
+         Ok(())
+     })?;
+-    // A directory whose bindings this operation merged gets that directory's new
+-    // root as its content root. Its kind and attribute root come from the caller's
+-    // typed value when one was supplied, and from the stored record otherwise, so
+-    // a caller that only changes names does not have to restate its metadata.
+-    for (serial, content_root) in &contents {
+-        let value = match input.value_for(*serial) {
+-            Some(value) => Some(InodeValue {
+-                content_root: *content_root,
+-                ..value
+-            }),
+-            None => lookup_base(reader, table, *serial)?.map(|base| InodeValue {
+-                content_root: *content_root,
+-                ..base
+-            }),
+-        };
+-        let value = value.ok_or(ContentError::InvalidRecord("directory value missing"))?;
+-        reducer.note_value(*serial, value)?;
+-    }
+     // Every other supplied value keeps the content root the caller named, unless
+     // this operation rebuilt that inode's own directory.
+     let mut updates = Vec::with_capacity(input.inodes.len());
+     for update in input.inodes {
+-        if contents.contains_key(&update.serial) || unreachable.contains_key(&update.serial) {
++        if input.update_for(update.serial).is_some() || unreachable.contains_key(&update.serial) {
+             // A directory this batch drops is not part of the result at all: its
+             // value is never a final row, so it must not enter the reduction.
+             continue;
+diff --git a/core/docs/architecture/04-filesystem.md b/core/docs/architecture/04-filesystem.md
+index 26ea2dbf6..b841e54cf 100644
+--- a/core/docs/architecture/04-filesystem.md
++++ b/core/docs/architecture/04-filesystem.md
+@@ -4,7 +4,8 @@
+ 
+ Part of the [replacement-core architecture](README.md) set. Source pin
+ `1884e3eca`; scope, method, measurement status and upkeep are stated in the
+-[index](README.md).
++[index](README.md). The directory-parent batching and reuse addendum below describes
++the #190 working-tree change over `9f35c49ad62956f131dc2676787f99d69659686e`.
+ 
+ ---
+ 
+@@ -284,3 +285,37 @@ after.
+ `FilesystemUpdateCounters` broken out across objects, directories, inodes,
+ references, release and validation. Completion here is **this operation's own
+ result**; acknowledged persistence is the consumer's.
++
++### 5.7 Bounded directory-parent acquisition and reuse (#190)
++
++`core/crates/layerfs-content/src/filesystem/update.rs` consumes the validated,
++strictly ordered directory-update slice in batches bounded by the smaller of
++`FilesystemResources.base_read_batch` and `MAXIMUM_READ_DEMANDS`. It excludes
++unreachable and declared-new parents from base demands; a build has no base
++lookup. Existing `lookup_many` shares ancestors within each batch. No sorting,
++deduplication, new cache, or format change is needed: input validation already
++proved parent order and uniqueness.
++
++Each acquired immutable-base `InodeValue` supplies both the old directory root
++and the final metadata when the caller omitted a typed value. A supplied value
++still takes precedence. The new content root is overlaid onto that value and
++passed directly to the existing reference reducer. The batch values are then
++discarded. This removes both singleton parent acquisition and the second lookup
++formerly used to recover omitted metadata.
++
++The old operation-sized `contents` map is removed. The later inode-input pass
++uses the existing binary-search `input.update_for` to identify directories
++already processed. Extra retained lookup state is limited to one serial vector
++and one optional-value vector for the current batch, not the whole base tree or
++the complete directory-update set. Validation retains its existing checks and
++its own existing operation-local memo; this change does not extend that memo's
++lifetime or change its trust assumptions.
++
++Directory-value insertion now occurs during the `directories` phase, before
++later directories' binding observations. The reducer keeps typed values and
++binding effects independently and still resolves counts only after all effects.
++This can change spill cadence and the point of an I/O/quota failure; explicit
++ordering quotas and checked cleanup remain enforced. Phase comparisons must
++include this moved bookkeeping and distinguish it from the complete-operation
++total. Read counts and canonical equivalence are verified externally; this
++architecture description makes no latency claim.
