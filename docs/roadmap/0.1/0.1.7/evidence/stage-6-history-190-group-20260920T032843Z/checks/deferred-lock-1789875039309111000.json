@@ -1,0 +1,8 @@
+{
+  "time_ns": 1789875039309111000,
+  "status": "NOT_RUN_GLOBAL_LOCK_HELD",
+  "attempt": "baseline tests/build pre-launch",
+  "lsof": "",
+  "lsof_stderr": "",
+  "active_resource_processes": []
+}

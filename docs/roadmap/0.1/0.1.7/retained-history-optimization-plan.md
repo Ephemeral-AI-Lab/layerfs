@@ -269,3 +269,9 @@ The owner additionally accepts small allocated-storage overages when they accomp
 The owner requested one more subagent review of v0.1.6 `crates/` against current `core/`. [Ledger L39](../0.1.6/evidence/issue151-experiment-ledger.md#l39--190-legacy-code-review-and-next-experiment-ordering-2026-09-20) records source identities, three reviews, counter-evidence and the final recommendation: one isolated live group-compression-level pair next, with selective pack-range reads as the larger follow-up after fetch/parse attribution. Both experiments remain NOT_RUN. No default or product change was made by the review.
 
 The earlier stop recommendation and rejected New-row filter remain historical decisions about their own rounds. The current recommendation reflects the owner's one-second and small-allocation-tradeoff rulings. It does not claim parity with legacy or remove the outstanding qualification gaps.
+
+## Group-level live experiment — 2026-09-20
+
+The owner authorized the isolated codec experiment. [Ledger L40](../0.1.6/evidence/issue151-experiment-ledger.md#l40--190-group-compression-level-1-live-pair-2026-09-20) records the matched stride10/stride3 pairs, time/space tradeoff, independent canonical-inventory proof, separate verification, validation and limitations. Retain group level1 while keeping payload level3 and all prior optimizations, workspaces, workers, integrity checks and bounds unchanged. Stale source comments and the storage architecture description are corrected alongside the constant.
+
+The owner's one-second and small-allocation-tradeoff rulings apply; numeric allocation misses and O3/cache gaps remain visible. Pack-range reads remain a separate, unrun direction requiring fetch/parse attribution. No level sweep or stride1 optimization follows from this result.

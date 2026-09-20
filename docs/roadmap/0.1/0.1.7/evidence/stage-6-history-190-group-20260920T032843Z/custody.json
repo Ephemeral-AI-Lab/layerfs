@@ -1,0 +1,44 @@
+[
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/binaries/baseline",
+    "bytes": 3584352,
+    "sha256": "82fb535ddc74eb84aebfaac98d90058600331eb52ca8a8feffc5341b222a9d11",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/binaries/candidate",
+    "bytes": 3584352,
+    "sha256": "13bcfe86598d3c13f902d6ab7d0a15d24f9ed26bb2c67dadbfe1a34ea6108a2d",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/binaries/final",
+    "bytes": 3584352,
+    "sha256": "7dff19d828afe760a98ca614a9a99a6630bc94533347d78a467835ba7568a736",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/runs/baseline-history-stride10/raw/sample.sqlite",
+    "bytes": 49053696,
+    "sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/runs/candidate-history-stride10/raw/sample.sqlite",
+    "bytes": 49324032,
+    "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/runs/baseline-history-stride3/raw/sample.sqlite",
+    "bytes": 61767680,
+    "sha256": "cfb74bc9b1db6c9470129613283a8f4afa3b139c2819ae7bd7a4f14e548ecdb5",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/runs/candidate-history-stride3/raw/sample.sqlite",
+    "bytes": 62152704,
+    "sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+    "custody": "local retained Store; not committed"
+  }
+]

@@ -1,0 +1,13 @@
+diff --git a/core/crates/layerfs-storage/src/encoding/codec.rs b/core/crates/layerfs-storage/src/encoding/codec.rs
+index 4e9ae66d3..82887531b 100644
+--- a/core/crates/layerfs-storage/src/encoding/codec.rs
++++ b/core/crates/layerfs-storage/src/encoding/codec.rs
+@@ -99,7 +99,7 @@ const PAYLOAD_LEVEL: i32 = 3;
+ /// level 19 stores 2,779,992 B against level 1's 3,042,214 B (-262,222 B) for
+ /// +1.012 s. Level 22 adds 566 B for +0.075 s, less than a seventh of one
+ /// 4,096-byte page, and is refused as immaterial.
+-const GROUP_LEVEL: i32 = 19;
++const GROUP_LEVEL: i32 = 1;
+ /// Largest window log of the ordinary group body codec.
+ const GROUP_WINDOW_LOG_MAX: u32 = 16;
+ 

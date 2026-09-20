@@ -17,9 +17,9 @@
 //! decompression, and decompression is exact-size into a validated destination.
 //!
 //! The parameter sequences, workspace sizes and frame policy are the measured
-//! ones of the retained-history profile: payload frames use level 9, a
+//! ones of the retained-history profile: payload frames use level 3, a
 //! role-specific window log, a content-size field, a checksum, no dictionary id
-//! and no workers; group bodies use level 19 with the window log capped at
+//! and no workers; group bodies use level 1 with the window log capped at
 //! sixteen. Contexts live in a caller-owned aligned region, so a codec call
 //! cannot grow an allocator-backed context and every allocation is charged
 //! before the call.
@@ -48,33 +48,11 @@ use crate::error::{StorageError, StorageResult};
 
 /// One aligned encode workspace shared by every role of one save.
 ///
-/// Sized by the largest parameter set any call of this module can ask for, not
-/// by the level-3 default it used to hold. One save allocates this once
-/// (`cas/lifecycle.rs`) and every role shares it, so the bound is a property of
-/// the *widest accepted construction policy*, not of the record in hand.
-///
-/// `ZSTD_estimateCCtxSize_usingCParams`, measured at the exact parameters this
-/// module sets:
-///
-/// | caller | level | source | window log | estimate |
-/// | --- | --: | --: | --: | --: |
-/// | whole file, 128 KiB cutoff | 9 | 131,071 | 18 | 3,662,864 |
-/// | whole file, 128 KiB cutoff, with a prefix | 9 | 262,142 | 19 | 6,808,592 |
-/// | whole file, 1 MiB cutoff, with a prefix | 9 | 2,097,150 | 22 | **13,100,048** |
-/// | chunk | 9 | 32,768 | 16 | 1,057,808 |
-/// | group body | 19 | 65,536 | 16 | 2,883,726 |
-///
-/// The largest is 13,100,048 B, so sixteen mebibytes is the smallest power of two
-/// that holds every accepted policy. **This bound is load-bearing, not slack:** a
-/// static context that does not fit fails the save outright - measured, a 2 MiB
-/// workspace returns `ZSTD_error_memory_allocation` from level 9 upward, and the
-/// 1 MiB cutoff needs more than 8 MiB.
-///
-/// **The common case pays for the widest one.** The default 128 KiB cutoff needs
-/// 4 MiB, so 12 MiB of this is provision for a policy the product does not ship.
-/// Sizing it from the policy instead - `CompressionWorkspace::new(capacities)` at
-/// `cas/lifecycle.rs` - would remove that, and is a change this module cannot
-/// make for itself.
+/// The retained 16 MiB bound was sized for the earlier payload-level-9 and
+/// group-level-19 profiles. Those historical estimates are conservative for
+/// the current profiles. The group-level change does not resize this arena:
+/// one save allocates it once and shares it across all codec calls. Every
+/// static-context request must still fit; failure is returned to the caller.
 pub const ENCODE_WORKSPACE_BYTES: usize = 16 * 1024 * 1024;
 /// One aligned decode workspace shared by every role of one read.
 pub const DECODE_WORKSPACE_BYTES: usize = 1024 * 1024;
@@ -82,24 +60,14 @@ pub const DECODE_WORKSPACE_BYTES: usize = 1024 * 1024;
 pub const GROUP_LIMIT: usize = 65_536;
 /// Largest accepted group body frame.
 pub const GROUP_FRAME_LIMIT: usize = GROUP_LIMIT + 1024;
-/// Compression level of the payload codec: whole-file and chunk records.
-///
-/// Chosen on the measured level/CPU curve of the `history-stride10` whole-file
-/// lane (44,141 records, 348,460,295 canonical bytes): level 9 stores
-/// 34,753,589 B of record bodies against level 3's 38,086,787 B (-3,333,198 B)
-/// for +6.36 s of codec CPU on the same population, and is the smallest level
-/// inside the +10 s codec budget. Levels 12, 15 and 19 buy a further
-/// 508,903 / 976,318 / 1,096,427 B for +23.67 / +36.00 / +66.73 s and are
-/// outside it.
+/// Compression level of whole-file and chunk payload records.
 const PAYLOAD_LEVEL: i32 = 3;
-/// Compression level of the ordinary group body codec.
+/// Compression level shared by ordinary and pooled value-group bodies.
 ///
-/// The group population is 7,877,849 B of decoded bodies against the payload
-/// lane's 348,460,295 B, so the same budget reaches a much higher level here:
-/// level 19 stores 2,779,992 B against level 1's 3,042,214 B (-262,222 B) for
-/// +1.012 s. Level 22 adds 566 B for +0.075 s, less than a seventh of one
-/// 4,096-byte page, and is refused as immaterial.
-const GROUP_LEVEL: i32 = 19;
+/// This profile trades a larger encoded representation for less group-encoding
+/// work. Payload settings, frame integrity checks and workspace bounds are
+/// independent of this level and remain unchanged.
+const GROUP_LEVEL: i32 = 1;
 /// Largest window log of the ordinary group body codec.
 const GROUP_WINDOW_LOG_MAX: u32 = 16;
 
