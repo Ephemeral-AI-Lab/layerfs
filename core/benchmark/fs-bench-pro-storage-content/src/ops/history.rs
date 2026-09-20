@@ -354,6 +354,12 @@ struct SaveTotals {
     pool_trials: u64,
     pool_work_exceeded: u64,
     profile_resolve_ns: u64,
+    profile_reuse_repeat: u64,
+    profile_resolve_eligible_ns: u64,
+    profile_resolve_acquire_ns: u64,
+    profile_resolve_cost_ns: u64,
+    profile_resolve_reuse_ns: u64,
+    profile_resolve_pooled_ns: u64,
     profile_full_ns: u64,
     profile_delta_ns: u64,
     profile_group_ns: u64,
@@ -415,7 +421,25 @@ impl SaveTotals {
             .pool_work_exceeded
             .saturating_add(pool.work_exceeded);
         let profile = saved.profile;
-        self.profile_resolve_ns = self.profile_resolve_ns.saturating_add(profile.resolve_ns);
+        self.profile_resolve_ns = self.profile_resolve_ns.saturating_add(profile.resolve_ns());
+        self.profile_reuse_repeat = self
+            .profile_reuse_repeat
+            .saturating_add(profile.reuse_repeat);
+        self.profile_resolve_eligible_ns = self
+            .profile_resolve_eligible_ns
+            .saturating_add(profile.resolve.eligible_ns);
+        self.profile_resolve_acquire_ns = self
+            .profile_resolve_acquire_ns
+            .saturating_add(profile.resolve.acquire_ns);
+        self.profile_resolve_cost_ns = self
+            .profile_resolve_cost_ns
+            .saturating_add(profile.resolve.cost_ns);
+        self.profile_resolve_reuse_ns = self
+            .profile_resolve_reuse_ns
+            .saturating_add(profile.resolve.reuse_ns);
+        self.profile_resolve_pooled_ns = self
+            .profile_resolve_pooled_ns
+            .saturating_add(profile.resolve.pooled_ns);
         self.profile_full_ns = self.profile_full_ns.saturating_add(profile.full_ns);
         self.profile_delta_ns = self.profile_delta_ns.saturating_add(profile.delta_ns);
         self.profile_group_ns = self.profile_group_ns.saturating_add(profile.group_ns);
@@ -429,7 +453,7 @@ impl SaveTotals {
     /// `inserted` and `commits` are deliberately absent - this row already
     /// publishes them as `history.state.<n>.inserted` and `.save.commits`, and a
     /// key written twice would make a reader's first-match lookup ambiguous.
-    fn rows(&self) -> [(&'static str, u64, &'static str); 36] {
+    fn rows(&self) -> [(&'static str, u64, &'static str); 42] {
         [
             ("save.reused", self.reused, "objects"),
             ("save.full_records", self.full_records, "objects"),
@@ -469,6 +493,24 @@ impl SaveTotals {
             ("save.pool.trials", self.pool_trials, "trials"),
             ("save.pool.work_exceeded", self.pool_work_exceeded, "objects"),
             ("save.resolve_ns", self.profile_resolve_ns, "ns"),
+            ("save.reuse_repeat", self.profile_reuse_repeat, "objects"),
+            (
+                "save.resolve.eligible_ns",
+                self.profile_resolve_eligible_ns,
+                "ns",
+            ),
+            (
+                "save.resolve.acquire_ns",
+                self.profile_resolve_acquire_ns,
+                "ns",
+            ),
+            ("save.resolve.cost_ns", self.profile_resolve_cost_ns, "ns"),
+            ("save.resolve.reuse_ns", self.profile_resolve_reuse_ns, "ns"),
+            (
+                "save.resolve.pooled_ns",
+                self.profile_resolve_pooled_ns,
+                "ns",
+            ),
             ("save.full_ns", self.profile_full_ns, "ns"),
             ("save.delta_ns", self.profile_delta_ns, "ns"),
             ("save.group_ns", self.profile_group_ns, "ns"),
@@ -2469,6 +2511,20 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     // `objects` the counters above carry.
     for (key, value) in [
         ("delta.profile_resolve_ns", totals.profile_resolve_ns),
+        (
+            "delta.profile_resolve_eligible_ns",
+            totals.profile_resolve_eligible_ns,
+        ),
+        (
+            "delta.profile_resolve_acquire_ns",
+            totals.profile_resolve_acquire_ns,
+        ),
+        ("delta.profile_resolve_cost_ns", totals.profile_resolve_cost_ns),
+        ("delta.profile_resolve_reuse_ns", totals.profile_resolve_reuse_ns),
+        (
+            "delta.profile_resolve_pooled_ns",
+            totals.profile_resolve_pooled_ns,
+        ),
         ("delta.profile_full_ns", totals.profile_full_ns),
         ("delta.profile_delta_ns", totals.profile_delta_ns),
         ("delta.profile_group_ns", totals.profile_group_ns),
@@ -2484,6 +2540,15 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "chain total of the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
         )?;
     }
+    // A count, not a duration: it is the population the B1 probe measured, so it
+    // is published in its own unit rather than folded into the `ns` group above.
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.profile_reuse_repeat",
+        totals.profile_reuse_repeat as i128,
+        "objects",
+        "reuse occurrences that repeated an identity this same operation had already verified; zero unless LAYERFS_STORAGE_REUSE_PROBE=1",
+    )?;
     context.trace.write_number(
         Kind::Counter,
         "history.advisory_model",

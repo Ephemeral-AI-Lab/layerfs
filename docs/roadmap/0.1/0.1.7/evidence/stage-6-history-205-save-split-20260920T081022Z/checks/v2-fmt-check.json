@@ -1,0 +1,23 @@
+{
+  "schema": "h205-save-split-lock-v1",
+  "label": "v2-fmt-check",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "utc": "2026-09-20T08:40:38Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T08:40:38Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 1112519292
+}

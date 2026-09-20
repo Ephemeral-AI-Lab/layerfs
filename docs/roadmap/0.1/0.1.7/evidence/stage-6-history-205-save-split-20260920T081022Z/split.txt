@@ -1,0 +1,82 @@
+### instrument/history-stride10
+
+  states 17   inserted 52032   operation 16.248 s   invocation 34.534 s
+  scope (save_ns - storage.begin)      9.267 s
+    storage.accept_loop (node)         8.769 s (94.64 % of scope)
+    harness.index (node)               0.108 s (1.17 %)
+    storage.finish (node)              0.380 s (4.10 %)
+    unrecorded bookkeeping             0.009 s (0.10 %)
+
+  bucket                                   seconds    share  ns/object
+  resolution + exact-reuse verification      4.202   45.34%      80753
+  FULL representation encode                 1.592   17.18%      30599
+  delta representation encode                0.632    6.82%      12150
+  group codec                                0.044    0.47%        839
+  pack placement                             0.263    2.84%       5050
+  SQL statements                             1.061   11.45%      20392
+  transaction cadence                        0.449    4.85%       8636
+  remainder (uncharged)                      1.024   11.05%      19674
+  charged total                              8.243   88.95%
+
+  per inserted object, first 5 states -> last 5 states
+  bucket                                  early ns/obj  late ns/obj   growth
+  resolution + exact-reuse verification          28051        95725    3.41x
+  FULL representation encode                     25708        31528    1.23x
+  delta representation encode                    10861        12568    1.16x
+  group codec                                      761          834    1.10x
+  pack placement                                  4811         5017    1.04x
+  SQL statements                                 19000        20598    1.08x
+  transaction cadence                             6480         9087    1.40x
+  SCOPE TOTAL                                   117050       195720    1.67x
+
+  store sha256 4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487
+  recorded     4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487   equal: YES
+  state roots  17 states, first FilesystemRootId(ObjectId("ff484f8d92f57413ee83e7201fb04c8512ffd7bed3083471713db4e8e17c70d3"))
+                           last  FilesystemRootId(ObjectId("215e1f8a4288fcaa5fec75cff70bdcad3779ce75e6a2598e9f7f3c24618a83f4"))
+
+  instrument overhead bound: operation 16.248 s against the retained
+  uninstrumented candidate-history-stride10 16.908 s -> -0.660 s (-3.90 %)
+
+### instrument/history-stride1
+
+  states 157   inserted 97788   operation 106.700 s   invocation 159.016 s
+  scope (save_ns - storage.begin)     50.295 s
+    storage.accept_loop and harness.index are not recorded on this row
+    (the driver's ordinary recording above 53 states), so the scope
+    overstates accept_loop by exactly those two terms; storage.finish
+    is recorded and is 4.918 s (9.78 % of scope)
+
+  bucket                                   seconds    share  ns/object
+  resolution + exact-reuse verification     38.132   75.82%     389950
+  FULL representation encode                 3.466    6.89%      35446
+  delta representation encode                1.459    2.90%      14922
+  group codec                                0.161    0.32%       1644
+  pack placement                             0.525    1.04%       5369
+  SQL statements                             2.359    4.69%      24119
+  transaction cadence                        0.976    1.94%       9979
+  remainder (uncharged)                      3.217    6.40%      32894
+  charged total                             47.078   93.60%
+
+  per inserted object, first 52 states -> last 52 states
+  bucket                                  early ns/obj  late ns/obj   growth
+  resolution + exact-reuse verification         200486       429023    2.14x
+  FULL representation encode                     34121        35687    1.05x
+  delta representation encode                    14601        14673    1.00x
+  group codec                                     1340         1721    1.28x
+  pack placement                                  5089         5597    1.10x
+  SQL statements                                 21558        25568    1.19x
+  transaction cadence                             8468        10502    1.24x
+  SCOPE TOTAL                                   311275       557087    1.79x
+
+  store sha256 1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418
+  recorded     1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418   equal: YES
+  state roots  157 states, first FilesystemRootId(ObjectId("6c4dcd6206309048767df3a46bf14492466ac6f21455963d839122a6d7feba12"))
+                           last  FilesystemRootId(ObjectId("fa7d77ba27fae0c102b4e31380aafbdba5b0ee8146fff59c71f80a0efc8474aa"))
+
+  instrument overhead bound: operation 106.700 s against the retained
+  uninstrumented candidate-history-stride1 105.726 s -> +0.974 s (+0.92 %)
+
+### summary
+
+  history-stride10     scope    9.267 s  charged    8.243 s  remainder  1.024 s (11.05 %)  store equal
+  history-stride1      scope   50.295 s  charged   47.078 s  remainder  3.217 s ( 6.40 %)  store equal

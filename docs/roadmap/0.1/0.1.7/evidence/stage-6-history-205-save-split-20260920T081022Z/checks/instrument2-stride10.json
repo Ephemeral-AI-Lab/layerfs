@@ -1,0 +1,26 @@
+{
+  "schema": "h205-save-split-lock-v1",
+  "label": "instrument2-stride10",
+  "command": [
+    "python3",
+    "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-205-save-split-20260920T081022Z/collect.py",
+    "instrument2",
+    "history-stride10",
+    "--binary",
+    "core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "--cwd",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope",
+    "--seal-repo",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope",
+    "--pre-execute"
+  ],
+  "utc": "2026-09-20T09:56:00Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T09:56:00Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 40160144666
+}
