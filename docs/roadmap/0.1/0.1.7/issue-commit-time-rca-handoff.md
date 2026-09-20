@@ -1,9 +1,9 @@
 # Handoff prompt — #209: root-cause the commit-time defect with SQLite's own diagnostics
 
 > Status: Research; informative and not a product contract. Dated continuation
-> checkpoint, 2026-09-21, after `f3e84c073`. This prompt carries closed findings, one
-> withdrawn treatment and a bounded investigation; it is **not** a new measurement, not a
-> design freeze, and not a release claim.
+> checkpoint, 2026-09-21, after `b65d09a81`. This prompt carries closed findings, one kept
+> treatment, one withdrawn treatment and a bounded investigation; it is **not** a new
+> measurement, not a design freeze, and not a release claim.
 
 ## Mission
 
@@ -15,9 +15,11 @@ task is to root-cause what one step's transaction actually costs the engine, pro
 `EXPLAIN QUERY PLAN`, `sqlite3_stmt_status`, `sqlite3_db_status` and a per-statement charge
 split, and only then pre-register **one** treatment — **without giving up W > 1**.
 
-The committed state to start from is `f3e84c073`: the last round's treatment was measured
-and **withdrawn** (it did not move the wall clock), and the tree is reverted to
-`f3e84c073`'s product state. Read the two reports before touching anything:
+The committed state to start from is **`b65d09a81`**. Its product tree is byte-identical to
+`704580673` (the kept treatment) and to `f3e84c073` — verify with `git diff --stat 704580673
+HEAD -- core/crates crates`, which must print nothing. The round after the kept one was
+measured and **withdrawn** (it did not move the wall clock) and is not in the tree. Read
+these before touching anything:
 
 - [`issue-multi-writer-commit-optimization-handoff.md`](issue-multi-writer-commit-optimization-handoff.md)
   — the previous prompt, now largely closed;
@@ -26,17 +28,25 @@ and **withdrawn** (it did not move the wall clock), and the tree is reverted to
 - [`evidence/stage-6-history-209-stmtcache-20260920T210202Z/README.md`](evidence/stage-6-history-209-stmtcache-20260920T210202Z/README.md)
   — the withdrawn statement-cache round, its diagnostics and its unexplained
   redistribution;
-- ledger **L57**, **L58**, **L59** in
+- [`evidence/stage-6-history-209-confirm-20260920T212625Z/README.md`](evidence/stage-6-history-209-confirm-20260920T212625Z/README.md)
+  — the confirmation window: the kept change reproduces on `commit_ns` (−5.0 % against
+  −5.9 % in its own window) and still does not resolve on the operation;
+- ledger **L57**, **L58**, **L59**, **L60** in
   [`0.1.6/evidence/issue151-experiment-ledger.md`](0.1.6/evidence/issue151-experiment-ledger.md).
 
 ## 1. What is already known — do not re-derive
 
-**Where it stands today.** In the most recent window, stride10 measures **22.5 s** with
-`commit_ns` **2.49 s** on the control arm and **2.40 s** on the shipped arm; in the window
-before that the same code read **16.5 s** with `commit_ns` **1.81 s**. **The machine's
-level moves by more than 30 % between windows with the work held constant** — an archived,
-unchanged binary read 26.467 s in its own session and 19.908 s in another — so any bar
-must be re-derived in-window and no cross-window difference is an effect.
+**Where it stands today.** The three most recent windows, same code, same corpus, one
+sample per arm each: **16.5 s / `commit_ns` 1.81 s** (the kept treatment's own window),
+**22.5 s / 2.49 s** (the withdrawn round's window), **17.7 s / 2.05 s** (the confirmation
+window, whose treatment arm read **1.95 s**). **The machine's level moves by more than 30 %
+between windows with the work held constant** — an archived, unchanged binary read 26.467 s
+in its own session and 19.908 s in another — so any bar must be re-derived in-window and no
+cross-window difference is an effect. What *is* stable across the two windows that measured
+it is the kept change's bucket contrast: **−5.9 % and −5.0 % on `commit_ns`**, arms
+non-overlapping in both, against an operation contrast of −0.24 s and −0.04 s that is inside
+the window drift in both. **The kept change is kept for the statements it provably removes,
+not for a wall-clock claim.**
 
 **`commit_ns` is the pack body's pages at the write syscall's price.**
 `SQLITE_DBSTATUS_CACHE_WRITE` equals the payload's page count **exactly** in every arm
