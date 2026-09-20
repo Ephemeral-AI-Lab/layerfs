@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_parent_lookup",
+    "parent_value_ordering_quota_matrix_is_explicit_and_canonical",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "wall_ns": 2571581333
+}

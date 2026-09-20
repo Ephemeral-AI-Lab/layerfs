@@ -1,0 +1,72 @@
+{
+  "schema": "production-loc-exact-staged-v1",
+  "first_parent": "9f35c49ad62956f131dc2676787f99d69659686e",
+  "before": {
+    "combined": 85533,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12512,
+          "layerfs-storage": 6841,
+          "layerfs-telemetry": 763
+        },
+        "files": 121,
+        "lines": 20116
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 85582,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6841,
+          "layerfs-telemetry": 763
+        },
+        "files": 121,
+        "lines": 20165
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "delta": 49,
+  "counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "method": "git archive FIRST_PARENT and final index tree for crates/ and core/crates/; execute identical tools/production_loc.py --root SNAPSHOT --json; excludes inline legacy tests, tests/docs/harness/tools/generated outputs; includes runtime SQL. Rechecked final staged source after adding this document.",
+  "tested_source_identity": "Candidate identity product/harness compilation files verified identical in publication checkout; prior checks remain their original evidence.",
+  "excluded_non_source_metadata": [
+    "core/crates/layerfs-content/src/.DS_Store",
+    "core/crates/layerfs-content/src/file/.DS_Store"
+  ]
+}

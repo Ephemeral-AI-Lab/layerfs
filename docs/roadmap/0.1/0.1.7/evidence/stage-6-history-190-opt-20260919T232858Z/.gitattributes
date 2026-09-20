@@ -1,0 +1,6 @@
+# Preserve verbatim diagnostic logs, patch context, and CSV line endings.
+# Source and prose remain subject to normal whitespace checks.
+*.log -text -whitespace
+*.patch -text -whitespace
+*.diff -text -whitespace
+*.csv -text -whitespace

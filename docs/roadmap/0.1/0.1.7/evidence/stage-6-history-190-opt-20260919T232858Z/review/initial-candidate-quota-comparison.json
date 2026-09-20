@@ -1,0 +1,75 @@
+{
+  "cells": 56,
+  "changed": [
+    {
+      "pending": 1,
+      "ordering_bytes": 768,
+      "batch": 1,
+      "before": "ERR ObjectLimitExceeded { limit: 768, actual: 864 }",
+      "after": "ERR ObjectLimitExceeded { limit: 768, actual: 960 }"
+    },
+    {
+      "pending": 1,
+      "ordering_bytes": 768,
+      "batch": 64,
+      "before": "ERR ObjectLimitExceeded { limit: 768, actual: 864 }",
+      "after": "ERR ObjectLimitExceeded { limit: 768, actual: 960 }"
+    },
+    {
+      "pending": 1,
+      "ordering_bytes": 864,
+      "batch": 1,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 864, actual: 960 }"
+    },
+    {
+      "pending": 1,
+      "ordering_bytes": 864,
+      "batch": 64,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 864, actual: 960 }"
+    },
+    {
+      "pending": 1,
+      "ordering_bytes": 960,
+      "batch": 1,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 960, actual: 1056 }"
+    },
+    {
+      "pending": 1,
+      "ordering_bytes": 960,
+      "batch": 64,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 960, actual: 1056 }"
+    },
+    {
+      "pending": 2,
+      "ordering_bytes": 960,
+      "batch": 1,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 960, actual: 1248 }"
+    },
+    {
+      "pending": 2,
+      "ordering_bytes": 960,
+      "batch": 64,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 960, actual: 1248 }"
+    },
+    {
+      "pending": 2,
+      "ordering_bytes": 1152,
+      "batch": 1,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }"
+    },
+    {
+      "pending": 2,
+      "ordering_bytes": 1152,
+      "batch": 64,
+      "before": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "after": "ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }"
+    }
+  ]
+}

@@ -37,11 +37,17 @@
 //! unrepresentable axis is not exercised by this workload. It is recorded rather
 //! than left as an assumption.
 
+#[path = "history_reads.rs"]
+pub mod reads;
+
+use reads::{ReadCounters, ReadWork};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use layerfs_content::filesystem::references::backing::FileBacking;
 use layerfs_content::filesystem::{
-    build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
+    build_filesystem, build_filesystem_timed, scope_for_seed, update_filesystem,
+    update_filesystem_timed, DirectoryUpdate, FilesystemInput, FilesystemPhases,
+    FilesystemUpdateCounters,
     FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRootId, InodeUpdate,
     LogicalPath, PathName,
 };
@@ -1101,6 +1107,12 @@ struct StateOutcome {
     input_ns: u64,
     build_ns: u64,
     save_ns: u64,
+    commits: u64,
+    group_decodes: u64,
+    connection_opens: u64,
+    filesystem: FilesystemUpdateCounters,
+    filesystem_reads: ReadCounters,
+    content_reads: ReadCounters,
 }
 
 /// The driver.
@@ -1441,6 +1453,20 @@ fn prepare(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutc
     )))
 }
 
+/// Optional diagnostic nodes use the existing timer without changing product work.
+fn history_phase<T>(
+    child: &TimingScope<'_, Active>,
+    enabled: bool,
+    name: &'static str,
+    body: impl FnOnce(&TimingScope<'_, Active>) -> Result<T, OpError>,
+) -> Result<T, OpError> {
+    if enabled {
+        child.child(name).run(body)
+    } else {
+        Timing::disabled(name, body).0
+    }
+}
+
 /// The measured chain.
 fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
     context.create_output()?;
@@ -1499,6 +1525,16 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut totals = SaveTotals::default();
 
     let count = corpus.states().len();
+    // Extra nodes fit stride10/stride3; stride1 remains the ordinary recording.
+    let detailed = matches!(
+        std::env::var("LAYERFS_HISTORY_PHASES").as_deref(),
+        Ok("1") | Ok("true")
+    );
+    if detailed && count > 53 {
+        return Err(OpError::Io(
+            "history phase diagnostics support at most 53 states (timer node bound)".into(),
+        ));
+    }
 
     // **One root, N named children.** The corpus reading sits inside the root and
     // outside every child, so the row's `operation_ns` is the sum of the children
@@ -1564,6 +1600,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     // measured inside this node; the node itself is per state, so a
                     // 157-state chain needs 3 x 157 + 1 nodes rather than tens of
                     // thousands.
+                    let mut content_reads = ReadCounters::default();
                     let constructed = child
                         .child("content")
                         .run(
@@ -1581,7 +1618,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                 // once per state and reads nothing until a chunked
                                 // construction asks it for a mapping page.
                                 let cursor_reader = if chunk_predecessors_enabled() {
-                                    store.as_ref().map(StoreProvider::new)
+                                    store.as_ref().map(|store| ReadWork::new(StoreProvider::new(store), detailed))
                                 } else {
                                     None
                                 };
@@ -1659,172 +1696,178 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                     state_signatures.insert(root, raw_signature);
                                     constructed.insert(changed.path.clone(), root);
                                 }
+                                if let Some(reader) = cursor_reader {
+                                    content_reads = reader.counters();
+                                }
                                 Ok((constructed, state_signatures))
                             },
                         )?;
                     let (constructed, state_signatures) = constructed;
-                    // **Step 0 of #187.** A faithful history save reads the
-                    // previous version of a path and produces the new one as an
-                    // **edit**, which is what `file/edit/apply.rs` does when it
-                    // attaches `AdvisoryPredecessors::explicit(view.root())`.
-                    // This driver instead calls `construct_bytes`, which builds
-                    // `FinalizedObject::new(role, canonical)` with **no
-                    // predecessors at all** — so without this the Store is asked
-                    // to hold every version as though it had never existed, and
-                    // the only cross-save route to a delta base is never taken.
-                    //
-                    // Keyed by the NEW content root, because that is the object
-                    // the save will offer; the value is the previous version's
-                    // content root for the same path. An identical root is
-                    // skipped for the same reason `apply.rs` skips it: the
-                    // content did not change, so there is nothing to encode
-                    // against.
-                    // The producer's earlier versions, constructed inside the
-                    // measured region: a producer builds the base it declares.
-                    let mut prior_roots: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
-                    let mut prior_missing: BTreeSet<Vec<u8>> = BTreeSet::new();
-                    if faithful {
-                        let (built, _) = Timing::disabled(
-                            "content.prior",
-                            |scope: &TimingScope<'_, Active>| -> Result<
-                                BTreeMap<Vec<u8>, ObjectId>,
-                                OpError,
-                            > {
-                                let mut built: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
-                                for (path, bytes) in &prior_inputs {
-                                    match construct_bytes(
-                                        policy,
-                                        &capacities,
-                                        bytes,
-                                        &mut consumer,
-                                        scope.child("content.prior"),
-                                    ) {
-                                        Ok(file) => {
-                                            built.insert(path.clone(), file.root);
-                                        }
-                                        Err(error) => {
-                                            let _ = error;
-                                            prior_missing.insert(path.clone());
+                    let (bases, _prior_roots, _prior_missing) = history_phase(child, detailed, "harness.predecessors", |_| {
+                        // **Step 0 of #187.** A faithful history save reads the
+                        // previous version of a path and produces the new one as an
+                        // **edit**, which is what `file/edit/apply.rs` does when it
+                        // attaches `AdvisoryPredecessors::explicit(view.root())`.
+                        // This driver instead calls `construct_bytes`, which builds
+                        // `FinalizedObject::new(role, canonical)` with **no
+                        // predecessors at all** — so without this the Store is asked
+                        // to hold every version as though it had never existed, and
+                        // the only cross-save route to a delta base is never taken.
+                        //
+                        // Keyed by the NEW content root, because that is the object
+                        // the save will offer; the value is the previous version's
+                        // content root for the same path. An identical root is
+                        // skipped for the same reason `apply.rs` skips it: the
+                        // content did not change, so there is nothing to encode
+                        // against.
+                        // The producer's earlier versions, constructed inside the
+                        // measured region: a producer builds the base it declares.
+                        let mut prior_roots: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
+                        let mut prior_missing: BTreeSet<Vec<u8>> = BTreeSet::new();
+                        if faithful {
+                            let (built, _) = Timing::disabled(
+                                "content.prior",
+                                |scope: &TimingScope<'_, Active>| -> Result<
+                                    BTreeMap<Vec<u8>, ObjectId>,
+                                    OpError,
+                                > {
+                                    let mut built: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
+                                    for (path, bytes) in &prior_inputs {
+                                        match construct_bytes(
+                                            policy,
+                                            &capacities,
+                                            bytes,
+                                            &mut consumer,
+                                            scope.child("content.prior"),
+                                        ) {
+                                            Ok(file) => {
+                                                built.insert(path.clone(), file.root);
+                                            }
+                                            Err(error) => {
+                                                let _ = error;
+                                                prior_missing.insert(path.clone());
+                                            }
                                         }
                                     }
+                                    Ok(built)
+                                },
+                            );
+                            match built {
+                                Ok(built) => prior_roots = built,
+                                Err(error) => {
+                                    return Err(OpError::Product(format!("{error:?}")));
                                 }
-                                Ok(built)
-                            },
-                        );
-                        match built {
-                            Ok(built) => prior_roots = built,
-                            Err(error) => {
-                                return Err(OpError::Product(format!("{error:?}")));
                             }
                         }
-                    }
-                    // **R0's declaration, in the measured best order.** The
-                    // selector probes these in order and returns the first
-                    // *eligible* one (`encoding/delta/select.rs:342`), so the order
-                    // is the parameter that decides the result — and "try all four
-                    // and keep the smallest frame" is measurably worse because it
-                    // deepens chains past the depth cap.
-                    let mut bases: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
-                    if faithful {
-                        for changed in &transition.changed {
-                            if matches!(changed.kind, Change::Removed | Change::MetadataOnly) {
-                                continue;
-                            }
-                            let Some(new_root) = constructed.get(&changed.path).copied() else {
-                                continue;
-                            };
-                            let Some(signature) = state_signatures.get(&new_root).copied() else {
-                                continue;
-                            };
-                            let previous = same_path_root.get(&changed.path).copied();
-                            if previous == Some(new_root) {
-                                continue;
-                            }
-                            let ordered = if ordered_predecessors_enabled() {
-                                ordered_predecessors(
-                                    &index,
-                                    new_root,
-                                    &changed.path,
-                                    signature,
-                                    previous,
-                                )
-                            } else if similarity_candidates_enabled() {
-                                // **One variable against the default arm.** The
-                                // same-path previous version is still the whole list
-                                // when it exists; the cross-save index is consulted
-                                // only when it does not. The candidates are the
-                                // ordered arm's own, so the gain this arm shows is
-                                // the ordered arm's gain with its base-replacement
-                                // loss removed.
-                                match previous {
-                                    Some(previous) => vec![previous],
-                                    None => cross_path_predecessors(
+                        // **R0's declaration, in the measured best order.** The
+                        // selector probes these in order and returns the first
+                        // *eligible* one (`encoding/delta/select.rs:342`), so the order
+                        // is the parameter that decides the result — and "try all four
+                        // and keep the smallest frame" is measurably worse because it
+                        // deepens chains past the depth cap.
+                        let mut bases: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
+                        if faithful {
+                            for changed in &transition.changed {
+                                if matches!(changed.kind, Change::Removed | Change::MetadataOnly) {
+                                    continue;
+                                }
+                                let Some(new_root) = constructed.get(&changed.path).copied() else {
+                                    continue;
+                                };
+                                let Some(signature) = state_signatures.get(&new_root).copied() else {
+                                    continue;
+                                };
+                                let previous = same_path_root.get(&changed.path).copied();
+                                if previous == Some(new_root) {
+                                    continue;
+                                }
+                                let ordered = if ordered_predecessors_enabled() {
+                                    ordered_predecessors(
                                         &index,
                                         new_root,
                                         &changed.path,
                                         signature,
-                                        fallback_candidate_limit(),
-                                    ),
+                                        previous,
+                                    )
+                                } else if similarity_candidates_enabled() {
+                                    // **One variable against the default arm.** The
+                                    // same-path previous version is still the whole list
+                                    // when it exists; the cross-save index is consulted
+                                    // only when it does not. The candidates are the
+                                    // ordered arm's own, so the gain this arm shows is
+                                    // the ordered arm's gain with its base-replacement
+                                    // loss removed.
+                                    match previous {
+                                        Some(previous) => vec![previous],
+                                        None => cross_path_predecessors(
+                                            &index,
+                                            new_root,
+                                            &changed.path,
+                                            signature,
+                                            fallback_candidate_limit(),
+                                        ),
+                                    }
+                                } else {
+                                    // The measured best for this lane: the single
+                                    // same-path previous version. Everything else is
+                                    // shared, so the two arms differ in exactly one
+                                    // parameter — the list — and the comparison is one
+                                    // variable wide.
+                                    previous.into_iter().collect()
+                                };
+                                // Drop a candidate whose chain is already at the cap:
+                                // declaring it would make the writer build a chain the
+                                // reader refuses. The driver's own depth account is the
+                                // only one it has, and it is an over-estimate, which is
+                                // the safe direction.
+                                let depth_limit = advisory_depth_limit();
+                                // A candidate at or near the cap is a **bad base** even
+                                // when it is eligible: the frame it produces is deeper,
+                                // and a deeper chain is the spec's measured failure mode
+                                // for a greedy four-slot order. Rank by the candidate's
+                                // own depth first, then keep the measured
+                                // cross-path-then-same-path order within a depth, so a
+                                // shallow base is preferred to a deep one.
+                                let mut ranked: Vec<(u8, usize, ObjectId)> = ordered
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(position, candidate)| {
+                                        let depth = index
+                                            .path_of
+                                            .get(candidate)
+                                            .and_then(|path| chain_depth.get(path))
+                                            .copied()
+                                            .unwrap_or(0);
+                                        (depth, position, *candidate)
+                                    })
+                                    .collect();
+                                ranked.sort_by_key(|(depth, position, _)| (*depth, *position));
+                                let eligible: Vec<ObjectId> = ranked
+                                    .into_iter()
+                                    .filter(|(depth, _, _)| *depth < depth_limit)
+                                    .map(|(_, _, candidate)| candidate)
+                                    .collect();
+                                if eligible.is_empty() {
+                                    chain_depth.insert(changed.path.clone(), 0);
+                                    continue;
                                 }
-                            } else {
-                                // The measured best for this lane: the single
-                                // same-path previous version. Everything else is
-                                // shared, so the two arms differ in exactly one
-                                // parameter — the list — and the comparison is one
-                                // variable wide.
-                                previous.into_iter().collect()
-                            };
-                            // Drop a candidate whose chain is already at the cap:
-                            // declaring it would make the writer build a chain the
-                            // reader refuses. The driver's own depth account is the
-                            // only one it has, and it is an over-estimate, which is
-                            // the safe direction.
-                            let depth_limit = advisory_depth_limit();
-                            // A candidate at or near the cap is a **bad base** even
-                            // when it is eligible: the frame it produces is deeper,
-                            // and a deeper chain is the spec's measured failure mode
-                            // for a greedy four-slot order. Rank by the candidate's
-                            // own depth first, then keep the measured
-                            // cross-path-then-same-path order within a depth, so a
-                            // shallow base is preferred to a deep one.
-                            let mut ranked: Vec<(u8, usize, ObjectId)> = ordered
-                                .iter()
-                                .enumerate()
-                                .map(|(position, candidate)| {
+                                for candidate in &eligible {
                                     let depth = index
                                         .path_of
                                         .get(candidate)
                                         .and_then(|path| chain_depth.get(path))
                                         .copied()
                                         .unwrap_or(0);
-                                    (depth, position, *candidate)
-                                })
-                                .collect();
-                            ranked.sort_by_key(|(depth, position, _)| (*depth, *position));
-                            let eligible: Vec<ObjectId> = ranked
-                                .into_iter()
-                                .filter(|(depth, _, _)| *depth < depth_limit)
-                                .map(|(_, _, candidate)| candidate)
-                                .collect();
-                            if eligible.is_empty() {
-                                chain_depth.insert(changed.path.clone(), 0);
-                                continue;
+                                    chain_depth
+                                        .insert(changed.path.clone(), depth.saturating_add(1));
+                                    break;
+                                }
+                                bases.insert(new_root, eligible);
                             }
-                            for candidate in &eligible {
-                                let depth = index
-                                    .path_of
-                                    .get(candidate)
-                                    .and_then(|path| chain_depth.get(path))
-                                    .copied()
-                                    .unwrap_or(0);
-                                chain_depth
-                                    .insert(changed.path.clone(), depth.saturating_add(1));
-                                break;
-                            }
-                            bases.insert(new_root, eligible);
+                            advisory_bases = advisory_bases.saturating_add(bases.len() as u64);
                         }
-                        advisory_bases = advisory_bases.saturating_add(bases.len() as u64);
-                    }
+                        Ok((bases, prior_roots, prior_missing))
+                    })?;
                     // The Store is created inside state 1's child, so the fixed
                     // cost is visible and subtractable rather than buried.
                     if store.is_none() {
@@ -1838,15 +1881,17 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     }
                     let held = store.as_ref().expect("the Store was just created");
                     let t_input = std::time::Instant::now();
-                    filesystem_input(
-                        &mut chain,
-                        &transition,
-                        &constructed,
-                        previous_root.is_none(),
-                        &mut directories,
-                        &mut inodes,
-                        &mut new_inodes,
-                    )?;
+                    history_phase(child, detailed, "harness.input", |_| {
+                        filesystem_input(
+                            &mut chain,
+                            &transition,
+                            &constructed,
+                            previous_root.is_none(),
+                            &mut directories,
+                            &mut inodes,
+                            &mut new_inodes,
+                        )
+                    })?;
                     let input_ns = t_input.elapsed().as_nanos() as u64;
                     let t_build = std::time::Instant::now();
                     let input = FilesystemInput {
@@ -1858,7 +1903,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         new_inodes: &new_inodes,
                         resources: FilesystemResources::default(),
                     };
-                    let provider = StoreProvider::new(held);
+                    let provider = ReadWork::new(StoreProvider::new(held), detailed);
                     let bindings: usize =
                         directories.iter().map(|update| update.changes.len()).sum();
                     // **Always supply the ordering backing.**
@@ -1881,52 +1926,64 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     // byte-identical across this change.
                     let _ = bindings;
                     let mut backing = Some(FileBacking::new(&backing_directory));
-                    let built = {
+                    let built = history_phase(child, detailed, "filesystem", |scope| {
                         let mut objects = FilesystemObjects::new(&provider, &mut consumer);
                         let backing = backing.as_mut().map(|backing| {
                             backing
                                 as &mut dyn layerfs_content::filesystem::references::backing::OrderingBacking
                         });
-                        match previous_root {
-                            None => build_filesystem(&mut objects, &input, backing),
-                            Some(_) => update_filesystem(&mut objects, &input, backing),
-                        }
-                    };
-                    let built = built.map_err(|error| OpError::Product(format!("{error:?}")))?;
+                        let result = match (previous_root, detailed) {
+                            (None, false) => build_filesystem(&mut objects, &input, backing),
+                            (Some(_), false) => update_filesystem(&mut objects, &input, backing),
+                            (None, true) => build_filesystem_timed(
+                                &mut objects, &input, backing, &FilesystemPhases::new(scope),
+                            ),
+                            (Some(_), true) => update_filesystem_timed(
+                                &mut objects, &input, backing, &FilesystemPhases::new(scope),
+                            ),
+                        };
+                        result.map_err(|error| OpError::Product(format!("{error:?}")))
+                    })?;
                     let build_ns = t_build.elapsed().as_nanos() as u64;
                     let t_save = std::time::Instant::now();
                     let mut operation = held
                         .begin_save(child.child("storage.begin"))
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                    for id in consumer.insertion_order() {
-                        let mut object = consumer
-                            .cloned_object(*id)
-                            .ok_or_else(|| OpError::Io(format!("object {id:?} vanished")))?;
-                        if let Some(ordered) = bases.get(id) {
-                            let mut list = AdvisoryPredecessors::new();
-                            for candidate in ordered {
-                                list.push(*candidate, PredecessorProvenance::OriginalBase)
-                                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                    history_phase(child, detailed, "storage.accept_loop", |_| {
+                        for id in consumer.insertion_order() {
+                            let mut object = consumer
+                                .cloned_object(*id)
+                                .ok_or_else(|| OpError::Io(format!("object {id:?} vanished")))?;
+                            if let Some(ordered) = bases.get(id) {
+                                let mut list = AdvisoryPredecessors::new();
+                                for candidate in ordered {
+                                    list.push(*candidate, PredecessorProvenance::OriginalBase)
+                                        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                                }
+                                object = object.with_predecessors(list);
                             }
-                            object = object.with_predecessors(list);
+                            operation
+                                .accept(object)
+                                .map_err(|error| OpError::Product(format!("{error:?}")))?;
                         }
-                        operation
-                            .accept(object)
-                            .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                    }
-                    if faithful {
-                        // The objects this save admitted are the candidates the
-                        // **next** state may declare. Indexing after the save is
-                        // what makes the correspondence cross-save, which the
-                        // product's per-save cache cannot be at any size.
-                        for (path, root) in &constructed {
-                            if let Some(signature) = state_signatures.get(root).copied() {
-                                index.insert(*root, path, signature);
+                        Ok(())
+                    })?;
+                    history_phase(child, detailed, "harness.index", |_| {
+                        if faithful {
+                            // The objects this save admitted are the candidates the
+                            // **next** state may declare. Indexing after the save is
+                            // what makes the correspondence cross-save, which the
+                            // product's per-save cache cannot be at any size.
+                            for (path, root) in &constructed {
+                                if let Some(signature) = state_signatures.get(root).copied() {
+                                    index.insert(*root, path, signature);
+                                }
+                                previous_content.insert(path.clone(), *root);
+                                same_path_root.insert(path.clone(), *root);
                             }
-                            previous_content.insert(path.clone(), *root);
-                            same_path_root.insert(path.clone(), *root);
                         }
-                    }
+                        Ok(())
+                    })?;
                     let saved = operation
                         .finish(child.child("storage.finish"))
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
@@ -1945,6 +2002,12 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         input_ns,
                         build_ns,
                         save_ns,
+                        commits: saved.commits,
+                        group_decodes: provider.inner.group_decodes(),
+                        connection_opens: provider.inner.connection_opens(),
+                        filesystem_reads: provider.counters(),
+                        content_reads,
+                        filesystem: built.counters,
                     })
                 })?;
             outcomes.push(StateOutcome {
@@ -2022,6 +2085,59 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "bytes",
             "counting GlobalAlloc, this state's child alone",
         )?;
+        if detailed {
+            for (provider, reads) in [
+                ("filesystem.provider", outcome.filesystem_reads),
+                ("content.predecessor_provider", outcome.content_reads),
+            ] {
+                for (suffix, value, unit) in [
+                    ("read_waves", reads.waves, "count"),
+                    ("requested_objects", reads.requested_objects, "objects"),
+                    ("returned_objects", reads.returned_objects, "objects"),
+                    ("returned_canonical_bytes", reads.returned_bytes, "bytes"),
+                    ("failed_waves", reads.failed_waves, "count"),
+                    ("read_elapsed_ns", reads.elapsed_ns, "ns"),
+                ] {
+                    context.trace.write_number(
+                        Kind::Resource,
+                        &format!("history.state.{}.{provider}.{suffix}", outcome.ordinal),
+                        i128::from(value),
+                        unit,
+                        "aggregate original provider calls; elapsed overlaps enclosing phase; bytes are returned canonical bytes, not disk/pack traffic",
+                    )?;
+                }
+            }
+        }
+        let fs = outcome.filesystem;
+        for (suffix, value) in [
+            ("save.commits", outcome.commits),
+            ("filesystem.provider.group_decodes", outcome.group_decodes),
+            ("filesystem.provider.connection_opens", outcome.connection_opens),
+            ("filesystem.validation.objects_read", fs.validation.objects_read),
+            ("filesystem.validation.read_waves", fs.validation.read_waves),
+            ("filesystem.validation.inode_demands", fs.validation.inode_demands),
+            ("filesystem.validation.inode_pages_read", fs.validation.inode_pages_read),
+            ("filesystem.validation.directory_pages_read", fs.validation.directory_pages_read),
+            ("filesystem.validation.entries_examined", fs.validation.entries_examined),
+            ("filesystem.references.rows_touched", fs.references.rows_touched),
+            ("filesystem.references.rows_spilled", fs.references.rows_spilled),
+            ("filesystem.references.serials_scanned", fs.references.serials_scanned),
+            ("filesystem.references.base_records_read", fs.references.base_records_read),
+            ("filesystem.references.base_waves", fs.references.base_waves),
+            ("filesystem.references.runs_created", fs.references.runs.runs_created),
+            ("filesystem.references.rows_read", fs.references.runs.rows_read),
+            ("filesystem.references.rows_written", fs.references.runs.rows_written),
+            ("filesystem.directories.pages_read", fs.directories.pages_read),
+            ("filesystem.inodes.pages_read", fs.inodes.pages_read),
+        ] {
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("history.state.{}.{suffix}", outcome.ordinal),
+                i128::from(value),
+                "count",
+                "public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed",
+            )?;
+        }
         for (suffix, nanos, basis) in [
             ("input_ns", outcome.input_ns, "harness input assembly inside the child"),
             ("build_ns", outcome.build_ns, "build/update_filesystem"),

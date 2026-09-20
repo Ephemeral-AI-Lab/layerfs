@@ -1227,6 +1227,18 @@ fn a_branch_materialization_reads_children_in_one_wave() {
     })
     .expect("wide inode build");
     let base = built.root.0;
+    let inode_root = layerfs_content::filesystem::inode::decode_inode_page(
+        session
+            .store
+            .canonical(built.value.inode_table())
+            .expect("inode root bytes"),
+    )
+    .expect("inode root page");
+    assert_eq!(
+        inode_root.level(),
+        2,
+        "each parent lookup reads three inode pages"
+    );
 
     // Phase two: unbind the lowest 300 serials. Their inode rows are released, so
     // the inode tree loses three leaves and one stored level-1 branch page drops
@@ -1258,7 +1270,10 @@ fn a_branch_materialization_reads_children_in_one_wave() {
     // Before P1-3 this update issued 170 waves: the release's own batch (50) plus
     // two 64-child materializations, one of which the merge already batched and
     // the other of which `page_from_wire` point-read child by child. After it,
-    // both materializations are one wave each.
+    // both materializations are one wave each. Bounded parent reuse now also
+    // eliminates the second directory-parent lookup: one level-2 root, one
+    // level-1 branch and one leaf. That removes exactly three point waves and
+    // three objects, without changing either materialization or the final root.
     let waves = provider.waves();
     let wide = waves
         .iter()
@@ -1272,8 +1287,8 @@ fn a_branch_materialization_reads_children_in_one_wave() {
     );
     assert_eq!(
         waves.len(),
-        107,
-        "170 waves before P1-3: the second materialization was point-read"
+        104,
+        "107 after P1-3, minus the reused parent's three-page second lookup"
     );
     assert_eq!(
         result.counters.inodes.read_waves, 5,
@@ -1281,8 +1296,8 @@ fn a_branch_materialization_reads_children_in_one_wave() {
     );
     assert_eq!(
         provider.demands(),
-        303,
-        "the same objects are demanded, however they are grouped"
+        300,
+        "303 before bounded parent reuse, minus three repeated inode pages"
     );
     assert_eq!(
         result.counters.inodes.pages_read, 134,

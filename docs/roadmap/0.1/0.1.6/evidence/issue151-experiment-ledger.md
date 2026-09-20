@@ -1909,3 +1909,154 @@ stays `NOT_RUN` until its sealed v2 Store reappears. No merge, tag or release fo
   packets that do not depend on them.
 - No durability, release, tag or issue-state claim follows from this entry; both
   issues close only when their own gate rows are PASS or owner-waived.
+
+### L34 — 2026-09-20: #190 retained-history archival audit and harness attribution preparation
+
+Research only; no new performance or verification sample, no product change,
+no release claim. The [campaign synthesis](../../0.1.7/evidence/stage-6-history-190-20260919T225614Z/SYNTHESIS.md)
+links all five squad reports, raw copies, protocol, check logs and independent
+review. Source pin: `9f35c49ad62956f131dc2676787f99d69659686e` with a declared
+harness-only worktree diff. Unrelated architecture documentation edits were
+preserved. No commit or push was made; no per-commit production LOC figure is
+claimed, and production source diff remains empty.
+
+Archived core raw timing/trace/phases were retained byte-for-byte, with hashes;
+they lack an original binary/source identity receipt and are not promoted to
+fresh or matched evidence. Existing trace counters yield exact nanoseconds:
+
+```text
+32,566,067,669 = 23,520,347,667 build/update
+               + 7,769,904,041 save
+               + 1,115,152,085 content
+               +    65,188,166 harness input
+               +     2,469,708 Store create
+               +    93,006,002 unassigned state residual
+```
+
+Arithmetic residual is zero only with the explicit unassigned bucket; internal
+tree/save mechanism attribution remains unmeasured. Raw root is
+44,831,509,917 ns, correcting a 1,000,000-ns handoff transcription error.
+Root minus children = 12,265,442,248 ns; archived invocation = 44,999,165,042 ns.
+Do not interpret the prior invocation as a new measured command or a cold claim.
+
+S4 retained original v0.1.6 raw receipts and independently authenticated their
+custody. Exact Commit sum is 11,370,679,212 ns; the unmatched descriptive excess
+is `32,566,067,669 - 11,370,679,212 = 21,195,388,457 ns`.
+Historical source/product seals are `8308cd8e628a97cd8b7d17d184a8f69ff5f212d21b0646d84913a6df5d444e9a`
+and `970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd`.
+Legacy Commit includes content and namespace work; wholesale exclusion of those
+phases is falsified, but differing nested boundaries prevent causal subtraction.
+The source call graph does not establish an unconditional whole-base traversal.
+Historical worker counts and matched cache state remain unknown.
+
+Harness instrumentation reuses public timed filesystem APIs, with opt-in
+`LAYERFS_HISTORY_PHASES=1`, plus public per-state counters. The analyzer command is:
+
+```sh
+python3 docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-20260919T225614Z/squad-s1/analyze_spans.py --self-test
+python3 docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-20260919T225614Z/squad-s1/analyze_spans.py docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-20260919T225614Z/squad-s1/archive-original
+```
+
+**Non-passing/unrun lines:** fresh stride10 and stride3 diagnostics NOT_RUN pending
+an explicit complete-command ceiling: handoff says 15/25 s applies, earlier lane
+ruling lifts the generic limit but requires an undeclared prospective ceiling.
+Proposed 120/240 s diagnostic ceilings have not been authorized; elapsed waiting
+is not approval. Per-run wall is null because no run started. GROUP_LEVEL and
+true worker/index matched arms are NOT_RUN because no equivalent public lever
+exists without prohibited product changes. Charged transaction bytes and codec
+CPU attribution are unavailable. Stride1 is NOT_RUN/outside selected scope.
+Historical cache is uncontrolled; no cold or admission comparison is eligible.
+
+Checks were serial under core O_EXCL and legacy measurement flocks. Harness
+locked release build and 116 tests pass; Python history checks, product boundary
+guard/self-tests and attribution self-test pass. Warning-denying Clippy and
+harness formatting fail on existing statements/styles; original and final
+check logs remain in the campaign, including the reviewer-requested harness
+temporary-lifetime correction and its repeated checks. Full core Cargo checks
+were not run because product source was not edited. No CI or preflight ran.
+The ledger does not close #190: keep the tripwire and obtain fresh detailed
+evidence before proposing a separately authorized product fix.
+
+### L35 — 2026-09-20: #190 bounded parent lookup batching/reuse, confirmed on stride3
+
+The owner subsequently requested execution of the five-step optimization plan,
+including targeted product changes, subagents, issue updates and LOC reporting.
+The [campaign report](../../0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/README.md)
+and [independent review](../../0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/review/REVIEW.md)
+retain source/custody, every state, non-passing line and rejected attempt. This
+entry is diagnostic evidence, not release admission or historical receipt promotion.
+
+Only product `core/crates/layerfs-content/src/filesystem/update.rs` changes: bounded
+parent `lookup_many` calls, bounded final-window authenticated-record reuse, and
+batched omitted-metadata reads. Original reducer insertion order, format, validation,
+worker count and resource ceilings remain. Architecture and external tests accompany
+the source. First candidate interleaved value insertion and regressed eight quota
+cells; it was rejected before performance. Final candidate exactly reproduces all
+56 baseline quota outcomes. No budget increase was used to repair that failure.
+
+**Production LOC: 85,533 -> 85,582 (delta +49).** Reference65,417 unchanged;
+core20,116 ->20,165 (+49), content12,512 ->12,561. Same production-only
+`tools/production_loc.py --json` method and version, runtime SQL included, inline
+legacy tests/test/docs/harness/tooling excluded. Exact before/final source manifests
+and independent recount retained. This is a worktree comparison; no commit/push.
+
+Source HEAD `9f35c49ad62956f131dc2676787f99d69659686e`, declared dirty worktree.
+Baseline binary SHA256 `c5826d20f217a73ed4d814b82c3f8d8cdcaaa7af94ead18c0291918c88d4a855`;
+candidate `f3afbe222248aa1040004dd09095b63cd94dc6a8f919f48c18a99f3ce42b916e`.
+Harness/dependency identities match; product manifests differ only at update.rs.
+Manifest `03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271`,
+tip `b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed`. All behavior switches unset,
+`LAYERFS_CONSTRUCTION_WORKERS=1`, `LAYERFS_HISTORY_PHASES=1`.
+
+| Selection | Baseline operation ns | Candidate operation ns | Candidate minus baseline ns | Provider waves before -> after | Objects before -> after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Stride10 | 47,161,768,126 | 27,386,866,665 | −19,774,901,461 | 110,715 ->66,616 | 117,533 ->74,279 |
+| Stride3 | 125,277,281,254 | 79,607,320,336 | −45,669,960,918 | 210,380 ->111,853 | 230,323 ->135,296 |
+
+All 17/53 state roots match. All non-provider filesystem work counters and save
+decision/transaction counts match; final database hashes are identical across each
+pair. Directory work and previously unassigned post-directory work shrink; residual
+5,210,486,416 /15,511,671,619 ns remains named rather than assigned by inference.
+Read elapsed overlaps filesystem phases and is not separately added to totals.
+
+One sample per arm/case, order baseline10/baseline3/candidate10/candidate3; independent
+verification after each arm's performance collection. Complete performance command
+walls66,657,423,500 /146,622,418,084 /40,871,159,292 /99,357,294,167 ns fit prospective
+diagnostic120/240 s ceilings. Existing corpus preparation and incremental locked
+builds reused; no prepared Store, no cold claim. Measurement locks serialized all
+resource-sensitive work. Two preflight CPU-idle deferrals are not samples; all
+observations retained. Desktop activity and uncontrolled intra-chain/OS cache remain.
+
+Reproduction commands are retained per-run; the coordinator was invoked as:
+
+```sh
+python3 docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/collect_diagnostic.py baseline history-stride10
+python3 docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/collect_diagnostic.py baseline history-stride3
+python3 docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/collect_diagnostic.py candidate history-stride10
+python3 docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/collect_diagnostic.py candidate history-stride3
+```
+
+Each also had one `--mode verify` invocation using the same sealed binary/Store.
+Existing directories refuse recollection; a future campaign requires new outputs.
+`analyze_results.py` reproduces derived numbers from retained raw files.
+
+**Non-passing lines:** both stride3 verification-work rows are TARGET_MISS:
+29,241,424,750 /29,978,286,084 ns against20,000,000,000 ns. Stride10 rows8,124,985,000 /
+8,000,840,000 ns meet10 s. Samples compare1,083 /3,377 paths per arm, zero disagreements;
+not exhaustive read-back. All verification commands fit60 s hard wall. O3 pins are
+missing: all performance traces retain INCOMPLETE. Cache/performance admission is
+INELIGIBLE. Baseline stride10 allocated49,688,576 B fails the49,344,512 B ceiling;
+candidate49,192,960 B passes. Stride3 baseline/candidate62,402,560 /62,103,552 B pass
+64,024,576 B. Apparent49,053,696 /61,767,680 B and full contents are unchanged, so
+allocation differences are not attributed as product savings. Historical tripwire
+remains open; this pair does not rewrite the original32.566-second observation.
+
+Final core490 tests, example targets, warning-denying Clippy, fmt, boundary guard
+and self-tests pass; harness117 tests and release builds pass. Harness Clippy still
+fails at22 existing statements and harness formatting fails. Initial missing-docs
+compile failure, new-test formatting failure, baseline structural red test and old
+107-wave materialization expectation are retained; final materialization pins104
+waves/300objects after the removed three-page reread, preserving its golden root.
+No CI/preflight ran. Steps and rejection were posted to #190. Subtree summaries and
+save streaming were considered and deferred: their causal costs are not isolated,
+and measured handoff copying is insufficient to explain the remaining save time.

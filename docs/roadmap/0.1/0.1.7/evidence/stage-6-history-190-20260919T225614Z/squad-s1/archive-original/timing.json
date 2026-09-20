@@ -1,0 +1,160 @@
+{
+  "name": "history",
+  "elapsed_ns": 44831509917,
+  "children": [
+    {
+      "name": "history.state.1",
+      "elapsed_ns": 37022000,
+      "children": [
+        {"name": "content", "elapsed_ns": 4696250, "children": []},
+        {"name": "store.create", "elapsed_ns": 2469708, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1106958, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 13407709, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.2",
+      "elapsed_ns": 194775084,
+      "children": [
+        {"name": "content", "elapsed_ns": 18745917, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1044958, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 29759542, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.3",
+      "elapsed_ns": 277627000,
+      "children": [
+        {"name": "content", "elapsed_ns": 25980000, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 270542, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 28832250, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.4",
+      "elapsed_ns": 438791750,
+      "children": [
+        {"name": "content", "elapsed_ns": 27665958, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 281750, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 19084500, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.5",
+      "elapsed_ns": 903992167,
+      "children": [
+        {"name": "content", "elapsed_ns": 50678667, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 285000, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 69558083, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.6",
+      "elapsed_ns": 942292000,
+      "children": [
+        {"name": "content", "elapsed_ns": 46803125, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 304750, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 6284750, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.7",
+      "elapsed_ns": 1333462416,
+      "children": [
+        {"name": "content", "elapsed_ns": 53088042, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 308000, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 62387125, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.8",
+      "elapsed_ns": 1351428917,
+      "children": [
+        {"name": "content", "elapsed_ns": 38340708, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 270417, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 26566625, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.9",
+      "elapsed_ns": 1564124750,
+      "children": [
+        {"name": "content", "elapsed_ns": 56873792, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 322833, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 49392791, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.10",
+      "elapsed_ns": 1694802708,
+      "children": [
+        {"name": "content", "elapsed_ns": 51117375, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1062625, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 76863666, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.11",
+      "elapsed_ns": 2919255834,
+      "children": [
+        {"name": "content", "elapsed_ns": 83469250, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 257792, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 53277958, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.12",
+      "elapsed_ns": 2931409834,
+      "children": [
+        {"name": "content", "elapsed_ns": 91436792, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 338792, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 96942208, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.13",
+      "elapsed_ns": 3243867708,
+      "children": [
+        {"name": "content", "elapsed_ns": 90358875, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 285208, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 79852625, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.14",
+      "elapsed_ns": 3971637542,
+      "children": [
+        {"name": "content", "elapsed_ns": 122183917, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 398208, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 54437334, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.15",
+      "elapsed_ns": 3906736584,
+      "children": [
+        {"name": "content", "elapsed_ns": 131850417, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 410583, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 72892792, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.16",
+      "elapsed_ns": 3284932750,
+      "children": [
+        {"name": "content", "elapsed_ns": 108359000, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 270167, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 33026042, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.17",
+      "elapsed_ns": 3569908625,
+      "children": [
+        {"name": "content", "elapsed_ns": 113504000, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1346917, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 70753042, "children": []}
+      ]
+    }
+  ]
+}
