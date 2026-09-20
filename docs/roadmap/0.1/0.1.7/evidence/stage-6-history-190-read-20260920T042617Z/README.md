@@ -8,6 +8,11 @@ for information it already had. Both matched cases improve by more than one
 second, the saved Stores are **byte-identical** between the arms, and no format,
 schema, cache, limit, worker or public API changes.
 
+**Companion documents:** [CALLFLOW.md](CALLFLOW.md) (pinned legacy/current call
+flow with labelled facts, costs and hypotheses), [TREATMENT.md](TREATMENT.md),
+[PROTOCOL.md](PROTOCOL.md), [CORRECTNESS.md](CORRECTNESS.md),
+[REVIEW.md](REVIEW.md), [SUPERSEDED-ANALYSIS.md](SUPERSEDED-ANALYSIS.md).
+
 ## What was measured first
 
 A bounded aggregate instrument decomposed the filesystem provider's own elapsed
