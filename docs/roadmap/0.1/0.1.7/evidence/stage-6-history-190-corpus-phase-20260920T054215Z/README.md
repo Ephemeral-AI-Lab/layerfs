@@ -233,3 +233,74 @@ campaign's `candidate2` Stores — stride10 `4af37932aa3391b1…`, stride3
 `f5c7ff5a6b4f0821…`, the same hashes L42 recorded. That does not supply the retained
 source's own timing (still the one gap in the evidence chain), but it does close the
 *output* half of it: the instrumented arm measured the same bytes this tree produces.
+
+## Scaling: what grows, and which of it is the algorithm
+
+### More chunks for the same history
+
+All three rows cover the same 157 checkpoints; they differ in how many states the
+history is split into. Every extra chunk is another retained version, and the cost is
+not flat in that choice:
+
+| row | states | changed MB | operation | ns per changed MB | changed MB per state |
+|---|---:|---:|---:|---:|---:|
+| stride10 | 17 | 377.4 | 19.739 s | 52,297,706 | 22.2 |
+| stride3 | 53 | 713.7 | 48.976 s | 68,625,861 | 13.5 |
+| stride1 | 157 | 1,719.8 | 146.178 s | 84,996,709 | 11.0 |
+
+Operation grows ×7.41 while states grow ×9.24, and **nanoseconds per megabyte of change
+rise 63%** from the coarsest to the finest split. Two effects compound: finer chunking
+writes more total content (a file changed ten times inside a stride-10 span is stored
+once, but ten times at stride 1 — 377 MB against 1,719.8 MB), and every state pays the
+depth term below.
+
+### Inside one chain: the depth term is per-unit cost, not per-byte work
+
+At matched changed volume the late half of a chain costs 1.2–2.3× the early half, and
+nanoseconds per changed byte rises with depth with an elasticity of **+8,755,936**
+(stride10) and **+13,108,101** (stride3) ns per MB per e-fold of state count. The
+counters say where that comes from — and it is not the algorithm getting deeper:
+
+| quantity (early half → late half, matched volume) | stride3 7–10 MB | stride3 4–7 MB | stride10 14–22 MB |
+|---|---:|---:|---:|
+| provider waves per changed MB | 139.4 → 111.3 (**0.80×**) | 140.6 → 66.1 (0.47×) | 250.7 → 112.4 (0.45×) |
+| pack fetches per wave | 2.4 → 9.7 (**4.0×**) | 2.9 → 14.0 (4.8×) | 0.5 → 2.2 (4.4×) |
+| KiB copied per fetch | 34.6 → 77.6 (**2.2×**) | 32.6 → 42.2 (1.3×) | 52.4 → 68.9 (1.3×) |
+| decoded-group cache hit rate | 0.967 → 0.898 | 0.955 → 0.822 | 0.996 → 0.980 |
+| records per leaf request | 6.01 → 7.26 | 6.39 → 8.71 | 3.55 → 5.91 |
+| **chain edges per record call** | **0.33 → 0.36** | **0.34 → 0.39** | **0.22 → 0.33** |
+| **pack bytes copied per changed MB** | **12.1 M → 86.2 M (7.1×)** | 13.8 M → 40.0 M (2.9×) | 6.1 M → 17.3 M (2.8×) |
+
+The read path does not make more calls per byte — it makes *fewer* — and delta-chain
+resolution per record stays flat (0.33 → 0.36 edges). What rises is the size of each
+call: four times the fetches per wave, twice the bytes per fetch, and up to **7.1× the
+application bytes copied per byte of change**. That is the pack-acquisition item L42
+measured at 43.6% of provider time, now shown to be depth-dependent: for one state whose
+diff is 8 MB, the read path copies 86 MB late in the chain against 12 MB early.
+
+The natural reading is a bounded cache against a growing working set — the pack and
+decoded-group caches are fixed (512 KiB / 4 MiB class bounds) while the Store grows, so
+the fraction of each read they can serve falls. **Stated as the reading the counters
+point at, not as a measured cache curve**: only the decoded-group cache publishes a hit
+counter, and it falls modestly (0.955 → 0.822) rather than collapsing. The deciding
+experiment is a treatment, not another counter.
+
+Consequences for the next step, in the order the evidence supports them:
+
+1. **The pack/decoded-cache *scope* treatment is now the best-motivated product
+   experiment.** L42's Priority B (per-leaf reuse with a Store-write invalidation
+   contract, a 2.1–3.9 s target on stride10) was reviewed and never implemented, and
+   the scaling data predicts its value *grows* with history length. The standing owner
+   ruling — no automatic cache growth — is respected by scope-and-invalidation rather
+   than a larger bound; anything that needs more retained bytes is an owner decision,
+   and the space comparison above says the core is already 0.71–1.84% above the v0.1.6
+   allocation on two rows.
+2. **Chunk-selection policy is the largest single multiplier in the table** and it is a
+   product question, not a code one: the same history costs 19.7 s at 17 states and
+   146.2 s at 157, and writes 4.6× the content. If "retained history" keeps every
+   version, that multiplier is chosen, not measured.
+
+Bounds on all of it: one sample per row, within-run comparisons, 2–21 states per band,
+matched on changed bytes only (not path count, tree size or predecessor structure), and
+the amplification ratios come from published counters while the cache attribution is
+inferred from them.
