@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "core/crates/layerfs-daemon/tests/docker_route.py",
+    "--image",
+    "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a",
+    "--telemetry",
+    "forward",
+    "--output",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/review-forward-20260920"
+  ],
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 3.171499957999913,
+  "source_unchanged": true,
+  "head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2
+}

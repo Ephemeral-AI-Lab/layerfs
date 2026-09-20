@@ -1,0 +1,176 @@
+{
+  "selection": "additional",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "changed-name-tree-original-intact",
+      "status": "PASS",
+      "detail": {
+        "root": "d19a2489ac31b71ebd199f45bd6a5df0fb76414e23a6279d5ad21d5aa6d81b40"
+      }
+    },
+    {
+      "name": "reject-scope",
+      "status": "PASS",
+      "detail": {
+        "code": "Invalid"
+      }
+    },
+    {
+      "name": "reject-allocation",
+      "status": "PASS",
+      "detail": {
+        "code": "Invalid"
+      }
+    },
+    {
+      "name": "edit-reject-coordinates",
+      "status": "PASS",
+      "detail": {
+        "body_sent": 0
+      }
+    },
+    {
+      "name": "edit-reject-overlap",
+      "status": "PASS",
+      "detail": {
+        "body_sent": 0
+      }
+    },
+    {
+      "name": "edit-reject-overflow",
+      "status": "PASS",
+      "detail": {
+        "body_sent": 0
+      }
+    },
+    {
+      "name": "edit-reject-replay-cap",
+      "status": "PASS",
+      "detail": {
+        "body_sent": 0
+      }
+    },
+    {
+      "name": "unsupported-opcode",
+      "status": "PASS",
+      "detail": {
+        "body_sent": 0
+      }
+    },
+    {
+      "name": "authenticated-malformed-peer",
+      "status": "PASS",
+      "detail": {
+        "output": "authenticated illegal-state/zero-id/truncated-metadata: PASS (external peer, daemon bypassed)",
+        "scope": "external host peer; native service parser, daemon bypassed"
+      }
+    },
+    {
+      "name": "untrusted-key",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    }
+  ],
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Capacity unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Capacity unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Unsupported unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a"
+}

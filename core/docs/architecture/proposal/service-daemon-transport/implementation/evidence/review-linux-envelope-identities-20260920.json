@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "image": "sha256:6f6e3d3192b1476e3b07565a33d216181be3ea48af6ba587d056ea6b75083448",
+  "test_binary_sha256": "f6f1bdf7632dd062dbffa3d5e6572bf298f8c16e0932acbca2e9ee671c2ed331",
+  "command": [
+    "docker",
+    "run",
+    "--name",
+    "layerfs-issue192-envelope-37857",
+    "--label=io.layerfs.task=issue192",
+    "--log-driver=none",
+    "--cpus=1",
+    "--memory=64m",
+    "--memory-swap=64m",
+    "--pids-limit=16",
+    "--cap-drop=ALL",
+    "sha256:6f6e3d3192b1476e3b07565a33d216181be3ea48af6ba587d056ea6b75083448",
+    "--nocapture"
+  ],
+  "scope": "external Linux maximum ownership test; one shared sampler, producer and collector, concurrent encoders; OS counters separate from heap accounting",
+  "container_id": "7f0e91671dd8acd24cd51c70e1d306c02662120b5ddad82ef7f29fc5085a929b",
+  "mounts": [],
+  "labels": {
+    "io.layerfs.task": "issue192"
+  },
+  "memory_limit": 67108864,
+  "exit": 0,
+  "logical_writable_layer_bytes": 4096,
+  "diff": "",
+  "phase_memory_peak": "unavailable; not claimed"
+}

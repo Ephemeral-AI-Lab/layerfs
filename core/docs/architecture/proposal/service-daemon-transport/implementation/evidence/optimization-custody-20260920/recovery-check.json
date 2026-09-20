@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "base": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "reconstructed_tree": "fe5fed02369898d449542c42bd5cfdacd95a660f",
+  "checked_files": 25,
+  "method": "git read-tree base and git apply --cached in an isolated temporary index; compare reconstructed file SHA256 with captured working files",
+  "working_tree_modified": false,
+  "product_verification": "NOT_RUN; this is recovery integrity only"
+}

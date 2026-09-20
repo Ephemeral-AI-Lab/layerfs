@@ -1,0 +1,74 @@
+{
+  "parent": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "counter": "tools/production_loc.py",
+  "counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "scope": "reference and core first-party runtime Rust and SQL; external application adapters=0; new bridge/service/daemon source counted in core; tests/examples/benchmarks/tooling/docs/manifests/Docker deployment configuration excluded; reference inline tests excluded by counter; archived unapplied recovery patch is excluded and is not runtime source of this commit",
+  "before": {
+    "combined": 89766,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-bridge": 1696,
+          "layerfs-content": 12561,
+          "layerfs-daemon": 234,
+          "layerfs-service": 768,
+          "layerfs-storage": 6841,
+          "layerfs-telemetry": 2249
+        },
+        "files": 171,
+        "lines": 24349
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 89766,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-bridge": 1696,
+          "layerfs-content": 12561,
+          "layerfs-daemon": 234,
+          "layerfs-service": 768,
+          "layerfs-storage": 6841,
+          "layerfs-telemetry": 2249
+        },
+        "files": 171,
+        "lines": 24349
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "delta": 0,
+  "snapshot_note": "Exact final staged tree is recorded in the commit message and confirmed after commit; omitting it here avoids a self-referential tree hash. Documentation, immutable receipts and unapplied recovery patch do not change runtime source."
+}

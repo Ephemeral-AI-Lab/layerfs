@@ -2,6 +2,13 @@
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 
+**2026-09-20 owner revision:** read the [optimization specification](optimization-spec.md)
+and [optimization handoff](optimization-handoff.md) before implementing this packet.
+They preserve the agreed multi-writer/accepted-duplicate design, revise the
+unqualified socket-buffer and large-load profile, and distinguish source/evidence
+custody from qualification. Earlier global A=1 recommendations do not govern the
+revised design. The older proposal and receipts remain available as history.
+
 This packet turns the reviewed service/bridge/daemon design into implementation
 work. In the current request, **C3 means co-design pair 3 / #181**, the foundation
 for later Workspace/FUSE. It does not rename older component/risk classifications

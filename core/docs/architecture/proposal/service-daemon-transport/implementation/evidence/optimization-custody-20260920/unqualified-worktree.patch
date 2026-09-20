@@ -1,0 +1,1568 @@
+diff --git a/core/Cargo.toml b/core/Cargo.toml
+index 79d5027db..5d63c71da 100644
+--- a/core/Cargo.toml
++++ b/core/Cargo.toml
+@@ -22,3 +22,11 @@ edition = "2021"
+ version = "0.1.6"
+ rust-version = "1.85"
+ license = "MIT"
++
++# Keep the large boundary fixtures cheap without removing cases or assertions.
++# Product dev/release profiles and test debug assertions stay unchanged.
++[profile.test]
++opt-level = 1
++
++[profile.test.package.zstd-sys]
++opt-level = 3
+diff --git a/core/crates/layerfs-bridge/Cargo.toml b/core/crates/layerfs-bridge/Cargo.toml
+index 4aa31ee4c..0bf8f358c 100644
+--- a/core/crates/layerfs-bridge/Cargo.toml
++++ b/core/crates/layerfs-bridge/Cargo.toml
+@@ -11,7 +11,7 @@ native = ["dep:snow", "dep:nix"]
+ 
+ [dependencies]
+ snow = { version = "=0.9.6", optional = true }
+-nix = { version = "=0.31.3", features = ["poll", "fs", "feature", "socket"], optional = true }
++nix = { version = "=0.31.3", features = ["poll", "fs", "feature", "socket", "net"], optional = true }
+ 
+ [[example]]
+ name = "public_key"
+@@ -20,3 +20,7 @@ required-features = ["native"]
+ [[example]]
+ name = "fault_peer"
+ required-features = ["native"]
++
++[[example]]
++name = "socket_bounds"
++required-features = ["native"]
+diff --git a/core/crates/layerfs-bridge/examples/fault_peer.rs b/core/crates/layerfs-bridge/examples/fault_peer.rs
+index f8272eba4..0a581bb9f 100644
+--- a/core/crates/layerfs-bridge/examples/fault_peer.rs
++++ b/core/crates/layerfs-bridge/examples/fault_peer.rs
+@@ -5,37 +5,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+     let endpoint = std::env::var("LAYERFS_ENDPOINT")?.parse()?;
+     let private = key(&std::env::var("LAYERFS_PRIVATE_KEY")?)?;
+     let server = key(&std::env::var("LAYERFS_SERVER_KEY")?)?;
+-    for frame in [
+-        Frame {
+-            kind: Kind::Body,
+-            id: 1,
+-            bytes: vec![1],
+-        },
+-        Frame {
+-            kind: Kind::Begin,
+-            id: 0,
+-            bytes: vec![],
+-        },
+-        Frame {
+-            kind: Kind::Begin,
+-            id: 1,
+-            bytes: vec![255],
+-        },
+-    ] {
+-        let mut c = connect(endpoint, 1, &private, &server)?;
+-        c.send.write(&Frame {
+-            kind: Kind::Hello,
+-            id: 0,
+-            bytes: vec![0, 1],
+-        })?;
+-        assert_eq!(c.receive.read()?.kind, Kind::Hello);
+-        c.send.write(&frame)?;
+-        c.receive
+-            .deadline(Instant::now() + Duration::from_millis(500));
+-        if let Ok(reply) = c.receive.read() {
+-            assert_eq!(reply.kind, Kind::Failure);
++    let rounds = std::env::var("LAYERFS_FAULT_PEER_ROUNDS")
++        .ok()
++        .map(|value| value.parse::<usize>())
++        .transpose()?
++        .unwrap_or(1);
++    assert!((1..=16).contains(&rounds));
++    for round in 0..rounds {
++        for (index, frame) in [
++            Frame {
++                kind: Kind::Body,
++                id: 1,
++                bytes: vec![1],
++            },
++            Frame {
++                kind: Kind::Begin,
++                id: 0,
++                bytes: vec![],
++            },
++            Frame {
++                kind: Kind::Begin,
++                id: 1,
++                bytes: vec![255],
++            },
++        ]
++        .into_iter()
++        .enumerate()
++        {
++            let mut c = connect(endpoint, 1, &private, &server)
++                .map_err(|e| format!("round {round} case {index} connect: {e:?}"))?;
++            c.send
++                .write(&Frame {
++                    kind: Kind::Hello,
++                    id: 0,
++                    bytes: vec![0, 1],
++                })
++                .map_err(|e| format!("round {round} case {index} send Hello: {e:?}"))?;
++            assert_eq!(
++                c.receive
++                    .read()
++                    .map_err(|e| format!("round {round} case {index} receive Hello: {e:?}"))?
++                    .kind,
++                Kind::Hello
++            );
++            c.send
++                .write(&frame)
++                .map_err(|e| format!("round {round} case {index} send fault: {e:?}"))?;
++            c.receive
++                .deadline(Instant::now() + Duration::from_millis(500));
++            if let Ok(reply) = c.receive.read() {
++                assert_eq!(reply.kind, Kind::Failure);
++            }
++            c.receive.close();
+         }
+-        c.receive.close();
+     }
+     println!("authenticated illegal-state/zero-id/truncated-metadata: PASS (external peer, daemon bypassed)");
+     Ok(())
+diff --git a/core/crates/layerfs-bridge/src/adapters/native/connection.rs b/core/crates/layerfs-bridge/src/adapters/native/connection.rs
+index 253f8919c..f0bca8744 100644
+--- a/core/crates/layerfs-bridge/src/adapters/native/connection.rs
++++ b/core/crates/layerfs-bridge/src/adapters/native/connection.rs
+@@ -143,8 +143,7 @@ pub fn connect(
+     private: &[u8; 32],
+     server: &[u8; 32],
+ ) -> Result<Connection, Failure> {
+-    let stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))?;
+-    configure(&stream)?;
++    let stream = super::socket::connect(address)?;
+     let mut io = Socket {
+         stream,
+         deadline: Instant::now() + Duration::from_secs(5),
+@@ -163,7 +162,8 @@ pub fn accept(
+     // macOS inherits O_NONBLOCK from the listener. This adapter uses bounded
+     // blocking I/O and absolute timeouts, so normalize the accepted descriptor.
+     stream.set_nonblocking(false)?;
+-    configure(&stream)?;
++    super::socket::configure(&stream)?;
++    stream.set_nodelay(true)?;
+     let mut io = Socket {
+         stream,
+         deadline: Instant::now() + Duration::from_secs(5),
+@@ -267,17 +267,3 @@ fn write_record(io: &mut Socket, b: &[u8]) -> Result<(), Failure> {
+     io.write_all(b)?;
+     Ok(())
+ }
+-
+-fn configure(stream: &TcpStream) -> Result<(), Failure> {
+-    use nix::sys::socket::{getsockopt, setsockopt, sockopt};
+-    let size = 128usize * 1024;
+-    setsockopt(stream, sockopt::SndBuf, &size).map_err(|_| Code::Unsupported)?;
+-    setsockopt(stream, sockopt::RcvBuf, &size).map_err(|_| Code::Unsupported)?;
+-    let send = getsockopt(stream, sockopt::SndBuf).map_err(|_| Code::Unsupported)?;
+-    let receive = getsockopt(stream, sockopt::RcvBuf).map_err(|_| Code::Unsupported)?;
+-    if send > size * 2 || receive > size * 2 {
+-        return Err(Code::Capacity.into());
+-    }
+-    stream.set_nodelay(true)?;
+-    Ok(())
+-}
+diff --git a/core/crates/layerfs-bridge/src/adapters/native/mod.rs b/core/crates/layerfs-bridge/src/adapters/native/mod.rs
+index 372f6ae00..10faa3908 100644
+--- a/core/crates/layerfs-bridge/src/adapters/native/mod.rs
++++ b/core/crates/layerfs-bridge/src/adapters/native/mod.rs
+@@ -4,3 +4,5 @@ pub mod payload;
+ pub mod pipe;
+ pub mod protocol;
+ pub mod server;
++mod socket;
++pub use socket::listen;
+diff --git a/core/crates/layerfs-bridge/src/adapters/native/pipe.rs b/core/crates/layerfs-bridge/src/adapters/native/pipe.rs
+index 0687bf795..e63e0f231 100644
+--- a/core/crates/layerfs-bridge/src/adapters/native/pipe.rs
++++ b/core/crates/layerfs-bridge/src/adapters/native/pipe.rs
+@@ -78,3 +78,25 @@ pub fn key(text: &str) -> Result<[u8; 32], crate::contract::Failure> {
+     }
+     Ok(key)
+ }
++
++/// Best-effort bounded ordinary diagnostics. Never wait for a pipe consumer.
++/// The dedicated stderr description stays nonblocking for other diagnostic
++/// writers too; product stdout is a separate descriptor and protocol channel.
++pub fn diagnostic(message: &str) {
++    use nix::fcntl::{fcntl, FcntlArg, OFlag};
++    if message.len() > 512 {
++        return;
++    }
++    let stderr = io::stderr();
++    let Ok(flags) = fcntl(&stderr, FcntlArg::F_GETFL) else {
++        return;
++    };
++    if fcntl(
++        &stderr,
++        FcntlArg::F_SETFL(OFlag::from_bits_retain(flags) | OFlag::O_NONBLOCK),
++    )
++    .is_ok()
++    {
++        let _ = unistd::write(&stderr, message.as_bytes());
++    }
++}
+diff --git a/core/crates/layerfs-content/tests/edit_bounds.rs b/core/crates/layerfs-content/tests/edit_bounds.rs
+index f1c594f30..8c376022d 100644
+--- a/core/crates/layerfs-content/tests/edit_bounds.rs
++++ b/core/crates/layerfs-content/tests/edit_bounds.rs
+@@ -4,8 +4,8 @@
+ //! non-root page holds between 64 and 128 entries, the root holds at least two
+ //! children when it is a branch, and the retained frontier never grows with the
+ //! file length. The join cases at 63/64/127/128/129 and the streaming flush
+-//! boundaries at 192/193 extents are reached by probing for inputs with exactly
+-//! that many extents, not by shrinking the workload.
++//! boundaries at 192/193 extents use the exact deterministic inputs captured from
++//! the original search. Their extent counts are still checked on every run.
+ 
+ mod support;
+ 
+@@ -35,45 +35,27 @@ fn build(bytes: &[u8]) -> (MemoryStore, ObjectId) {
+     (store, constructed.root)
+ }
+ 
+-/// Extent count of a chunked construction of `length` deterministic bytes.
+-fn extents_at(length: usize) -> u64 {
++/// Exact lengths captured from the original bisection in the append-only
++/// issue192 review-boundary-input-capture-20260920 receipt. Reuse the inputs,
++/// not the result of the operation under test; keep the extent-count assertion.
++fn file_with_extents(wanted: u64) -> (Vec<u8>, MemoryStore, ObjectId) {
++    let length = match wanted {
++        40 => 723_887,
++        63 => 1_136_450,
++        64 => 1_153_312,
++        80 => 1_479_513,
++        100 => 1_876_987,
++        127 => 2_362_757,
++        128 => 2_384_497,
++        129 => 2_403_852,
++        192 => 3_654_982,
++        193 => 3_684_001,
++        _ => panic!("no frozen input with {wanted} extents"),
++    };
+     let bytes = noise(length);
+     let (store, root) = build(&bytes);
+-    extent_count(&store, root)
+-}
+-
+-/// Finds an input whose chunked construction has exactly `wanted` extents.
+-///
+-/// Bisection over a monotone-enough probe keeps this a bounded search: at most a
+-/// few dozen constructions instead of a linear scan.
+-fn file_with_extents(wanted: u64) -> Vec<u8> {
+-    let mut low = 0_usize;
+-    let mut high = (wanted as usize) * 32_768 + 65_536;
+-    while extents_at(high) < wanted {
+-        low = high;
+-        high *= 2;
+-    }
+-    while low + 1 < high {
+-        let middle = (low + high) / 2;
+-        if extents_at(middle) >= wanted {
+-            high = middle;
+-        } else {
+-            low = middle;
+-        }
+-    }
+-    for candidate in [high, high + 1_024, high + 4_096, high + 16_384] {
+-        if extents_at(candidate) == wanted {
+-            return noise(candidate);
+-        }
+-    }
+-    let mut candidate = high;
+-    for _ in 0..512 {
+-        candidate += 1_024;
+-        if extents_at(candidate) == wanted {
+-            return noise(candidate);
+-        }
+-    }
+-    panic!("no input produced {wanted} extents");
++    assert_eq!(extent_count(&store, root), wanted);
++    (bytes, store, root)
+ }
+ 
+ /// Checks the canonical partition of every page under `root`.
+@@ -98,15 +80,20 @@ fn assert_canonical(store: &MemoryStore, root: ObjectId, label: &str) {
+     }
+ }
+ 
+-fn edit_and_check(base: &[u8], edits: Vec<Edit>, replacements: &Replacements, label: &str) {
+-    let (store, root) = build(base);
+-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
++fn edit_and_check(
++    base: (&MemoryStore, ObjectId, u64),
++    edits: Vec<Edit>,
++    replacements: &Replacements,
++    label: &str,
++) {
++    let (store, root, length) = base;
++    let stream = EditStream::new(length, edits).expect("valid stream");
+     let mut result = store.merged_clone();
+     let constructed = disabled_scope(|scope| {
+         apply_edits(
+             policy(),
+             &policy().capacities(),
+-            &store,
++            store,
+             EditRequest {
+                 root,
+                 edits: &stream,
+@@ -130,15 +117,14 @@ fn edit_and_check(base: &[u8], edits: Vec<Edit>, replacements: &Replacements, la
+ #[test]
+ fn join_occupancy_at_every_boundary() {
+     for wanted in [63_u64, 64, 127, 128, 129] {
+-        let base = file_with_extents(wanted);
+-        let (store, root) = build(&base);
++        let (base, store, root) = file_with_extents(wanted);
+         assert_eq!(extent_count(&store, root), wanted);
+         assert_canonical(&store, root, &format!("base {wanted}"));
+         // A deletion inside the first chunk must not force a rebuild of the whole
+         // mapping, and an insertion at the front must grow it by one extent.
+         let replacements = Replacements::new();
+         edit_and_check(
+-            &base,
++            (&store, root, base.len() as u64),
+             vec![Edit::delete(10, 100)],
+             &replacements,
+             &format!("{wanted} delete"),
+@@ -146,7 +132,7 @@ fn join_occupancy_at_every_boundary() {
+         let mut insert = Replacements::new();
+         insert.push(noise(9_000));
+         edit_and_check(
+-            &base,
++            (&store, root, base.len() as u64),
+             vec![Edit::insert(0, 9_000)],
+             &insert,
+             &format!("{wanted} insert"),
+@@ -157,21 +143,20 @@ fn join_occupancy_at_every_boundary() {
+ #[test]
+ fn streaming_flush_boundaries_and_height_growth() {
+     for wanted in [192_u64, 193] {
+-        let base = file_with_extents(wanted);
+-        let (store, root) = build(&base);
++        let (base, store, root) = file_with_extents(wanted);
+         assert_eq!(extent_count(&store, root), wanted);
+         assert_canonical(&store, root, &format!("base {wanted}"));
+         let mut insert = Replacements::new();
+         insert.push(noise(40_000));
+         edit_and_check(
+-            &base,
++            (&store, root, base.len() as u64),
+             vec![Edit::insert(base.len() as u64 / 2, 40_000)],
+             &insert,
+             &format!("{wanted} insert"),
+         );
+         let replacements = Replacements::new();
+         edit_and_check(
+-            &base,
++            (&store, root, base.len() as u64),
+             vec![Edit::delete(0, base.len() as u64 - 1)],
+             &replacements,
+             &format!("{wanted} collapse"),
+@@ -184,8 +169,8 @@ fn a_join_of_two_full_pages_stays_canonical() {
+     // 80 + 100 extents joined into one file: individually valid leaves are not
+     // automatically final, so the joined mapping must still satisfy the canonical
+     // partition after the edit.
+-    let left = file_with_extents(80);
+-    let right = file_with_extents(100);
++    let (left, _, _) = file_with_extents(80);
++    let (right, _, _) = file_with_extents(100);
+     let mut joined = left.clone();
+     joined.extend_from_slice(&right);
+     let (store, root) = build(&joined);
+@@ -193,7 +178,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
+     let mut insert = Replacements::new();
+     insert.push(noise(200_000));
+     edit_and_check(
+-        &joined,
++        (&store, root, joined.len() as u64),
+         vec![Edit::insert(left.len() as u64, 200_000)],
+         &insert,
+         "80+100 insert",
+@@ -201,7 +186,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
+     // Deleting the seam must also leave a canonical partition.
+     let replacements = Replacements::new();
+     edit_and_check(
+-        &joined,
++        (&store, root, joined.len() as u64),
+         vec![Edit::delete(
+             left.len() as u64 - 1_000,
+             left.len() as u64 + 1_000,
+@@ -215,6 +200,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
+ fn many_files_and_many_edits_stay_bounded() {
+     for round in 0..8_u64 {
+         let base = noise(150_000 + round as usize * 1_000);
++        let (store, root) = build(&base);
+         let mut edits = Vec::new();
+         let mut replacements = Replacements::new();
+         let mut position = 100_u64;
+@@ -229,7 +215,7 @@ fn many_files_and_many_edits_stay_bounded() {
+             position += 700 + index;
+         }
+         edit_and_check(
+-            &base,
++            (&store, root, base.len() as u64),
+             edits,
+             &replacements,
+             &format!("round {round} many edits"),
+@@ -248,9 +234,8 @@ fn many_files_and_many_edits_stay_bounded() {
+ /// released, so the peak cannot grow with the edit count.
+ #[test]
+ fn the_retained_frontier_does_not_grow_with_the_edit_count() {
+-    let base = file_with_extents(40);
++    let (base, base_store, root) = file_with_extents(40);
+     let base_len = base.len() as u64;
+-    let (base_store, root) = build(&base);
+     let base_extents = extent_count(&base_store, root);
+     let mut peaks = Vec::new();
+     for edits in [1_u64, 2, 4, 8, 16] {
+diff --git a/core/crates/layerfs-content/tests/edit_reference.rs b/core/crates/layerfs-content/tests/edit_reference.rs
+index 3f6317387..b329606b8 100644
+--- a/core/crates/layerfs-content/tests/edit_reference.rs
++++ b/core/crates/layerfs-content/tests/edit_reference.rs
+@@ -92,50 +92,24 @@ fn patterned(len: usize) -> Vec<u8> {
+         .collect()
+ }
+ 
+-/// The same extents: a deterministic fixture with exactly `wanted` extents.
++/// Recreate the sealed input bytes without rediscovering their lengths through
++/// dozens of candidate constructions. The oracle comparison still checks the
++/// exact base root, length, page partition, edits and surviving identities.
+ fn file_with_extents(wanted: u64) -> Vec<u8> {
+-    fn extents_at(length: usize) -> u64 {
+-        let mut store = MemoryStore::new();
+-        let policy = ConstructionPolicy::frozen_default();
+-        let constructed = disabled_scope(|scope| {
+-            construct_bytes(
+-                policy,
+-                &policy.capacities(),
+-                &noise(length),
+-                &mut store,
+-                scope.child("content"),
+-            )
+-        })
+-        .expect("build");
+-        support::extent_count(&store, constructed.root)
+-    }
+-    let mut low = 0_usize;
+-    let mut high = (wanted as usize) * 32_768 + 65_536;
+-    while extents_at(high) < wanted {
+-        low = high;
+-        high *= 2;
+-    }
+-    while low + 1 < high {
+-        let middle = (low + high) / 2;
+-        if extents_at(middle) >= wanted {
+-            high = middle;
+-        } else {
+-            low = middle;
+-        }
+-    }
+-    for candidate in [high, high + 1_024, high + 4_096, high + 16_384] {
+-        if extents_at(candidate) == wanted {
+-            return noise(candidate);
+-        }
+-    }
+-    let mut candidate = high;
+-    for _ in 0..512 {
+-        candidate += 1_024;
+-        if extents_at(candidate) == wanted {
+-            return noise(candidate);
++    let length = match wanted {
++        80 => load("join-80-100").edits[0].0,
++        100 => {
++            let join = load("join-80-100");
++            join.base_len - join.edits[0].0
+         }
+-    }
+-    panic!("no input produced {wanted} extents");
++        140 => load("unequal-height-join").base_len,
++        180 => load("half-partition-90-90").base_len,
++        200 => load("height-growth").base_len,
++        300 => load("untouched-sibling").base_len,
++        400 => load("interior-multi-level").base_len,
++        _ => panic!("no sealed input with {wanted} extents"),
++    };
++    noise(usize::try_from(length).expect("fixture length"))
+ }
+ 
+ /// One raw edit: start, deleted length and replacement bytes.
+diff --git a/core/crates/layerfs-daemon/src/config.rs b/core/crates/layerfs-daemon/src/config.rs
+index 4b259542a..97836c36c 100644
+--- a/core/crates/layerfs-daemon/src/config.rs
++++ b/core/crates/layerfs-daemon/src/config.rs
+@@ -14,7 +14,9 @@ pub fn telemetry(role: u8) -> Runtime {
+         "local" => OutputMode::Local,
+         "both" => OutputMode::Both,
+         _ => {
+-            eprintln!("telemetry initialization: unsupported mode");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization: unsupported mode\n",
++            );
+             return Runtime::disabled();
+         }
+     };
+@@ -27,7 +29,9 @@ pub fn telemetry(role: u8) -> Runtime {
+     {
+         Some(v) => v,
+         None => {
+-            eprintln!("telemetry initialization: run identity required");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization: run identity required\n",
++            );
+             return Runtime::disabled();
+         }
+     };
+@@ -38,7 +42,9 @@ pub fn telemetry(role: u8) -> Runtime {
+     {
+         Some(v) => v,
+         None => {
+-            eprintln!("telemetry initialization: namespace required");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization: namespace required\n",
++            );
+             return Runtime::disabled();
+         }
+     };
+@@ -62,7 +68,9 @@ pub fn telemetry(role: u8) -> Runtime {
+     }) {
+         Ok(runtime) => runtime,
+         Err(_) => {
+-            eprintln!("telemetry initialization failed; disabled");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization failed; disabled\n",
++            );
+             Runtime::disabled()
+         }
+     }
+diff --git a/core/crates/layerfs-daemon/src/main.rs b/core/crates/layerfs-daemon/src/main.rs
+index 30d85d49d..8d4b68357 100644
+--- a/core/crates/layerfs-daemon/src/main.rs
++++ b/core/crates/layerfs-daemon/src/main.rs
+@@ -2,6 +2,12 @@
+ mod config;
+ mod headless;
+ mod run;
+-fn main() -> Result<(), layerfs_bridge::contract::Failure> {
+-    run::run()
++fn main() -> std::process::ExitCode {
++    match run::run() {
++        Ok(()) => std::process::ExitCode::SUCCESS,
++        Err(error) => {
++            layerfs_bridge::adapters::native::pipe::diagnostic(&format!("Error: {error}\n"));
++            std::process::ExitCode::FAILURE
++        }
++    }
+ }
+diff --git a/core/crates/layerfs-daemon/tests/docker_faults.py b/core/crates/layerfs-daemon/tests/docker_faults.py
+index 34500aad2..dc02bd54f 100644
+--- a/core/crates/layerfs-daemon/tests/docker_faults.py
++++ b/core/crates/layerfs-daemon/tests/docker_faults.py
+@@ -5,7 +5,7 @@ from pathlib import Path
+ from docker_route import TARGET, ROOT, Diagnostics, start_daemon, public, frame, request, receive, exchange
+ 
+ def main():
+-    parser=argparse.ArgumentParser();parser.add_argument("--image",required=True);parser.add_argument("--output",type=Path,required=True);parser.add_argument("--selection",choices=["errors","admission","blocked-stderr","cleanup","slow","lost-response","additional"],default="errors");args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=False)
++    parser=argparse.ArgumentParser();parser.add_argument("--image",required=True);parser.add_argument("--output",type=Path,required=True);parser.add_argument("--selection",choices=["errors","admission","blocked-stderr","cleanup","slow","lost-response","additional","envelope"],default="errors");args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=False)
+     evidence={"selection":args.selection,"kind":"functional-deployment","performance":"NOT_RUN","cases":[],"status":"INCOMPLETE"};children=[];service=None;names=[];diagnostics=[]
+     def passed(name,detail):evidence["cases"].append({"name":name,"status":"PASS","detail":detail})
+     try:
+@@ -13,7 +13,7 @@ def main():
+         fixture=json.loads(subprocess.check_output([TARGET/"debug/examples/prepare_store",Path(temp)/"store.sqlite"],text=True));root=bytes.fromhex(fixture["file"]);tree=bytes.fromhex(fixture["root"])
+         server_key=os.urandom(32).hex();keys=[os.urandom(32).hex(),os.urandom(32).hex()];pub=[public(k)for k in keys];server_public=public(server_key)
+         with socket.socket() as s:s.bind(("127.0.0.1",0));port=s.getsockname()[1]
+-        env=os.environ.copy();env.update(LAYERFS_PRIVATE_KEY=server_key,LAYERFS_PEERS=f"1,{pub[0]},{int(time.time())+3600},31;2,{pub[1]},{int(time.time())+3600},1",LAYERFS_STORE=str(Path(temp)/"store.sqlite"),LAYERFS_LISTEN=f"0.0.0.0:{port}",LAYERFS_TELEMETRY="off")
++        env=os.environ.copy();env.update(LAYERFS_PRIVATE_KEY=server_key,LAYERFS_PEERS=f"1,{pub[0]},{int(time.time())+3600},31;2,{pub[1]},{int(time.time())+3600},1",LAYERFS_STORE=str(Path(temp)/"store.sqlite"),LAYERFS_LISTEN=f"0.0.0.0:{port}",LAYERFS_TELEMETRY="forward"if args.selection=="envelope"else"off",LAYERFS_RUN_ID="192",LAYERFS_NAMESPACE="1")
+         service=subprocess.Popen([TARGET/"debug/layerfs-service"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE);assert b"ready" in service.stderr.readline();diagnostics.append(Diagnostics(service.stderr))
+         def spawn(principal=1,telemetry="off",drain=True,endpoint=None):
+             name=f"layerfs-issue192-fault-{os.getpid()}-{len(names)}";names.append(name)
+@@ -33,17 +33,30 @@ def main():
+             child=spawn();child.stdin.write(request(1,3,struct.pack(">Q",0))+frame(4,1,struct.pack(">Q",0))+frame(3,1,b"surplus"));child.stdin.close();result=receive(child);assert result[0]==6,result;child.wait(timeout=3);assert child.returncode!=0;passed("surplus-after-completed-operation",{"first_operation":"valid success after EndInput","surplus":"session refused; never another operation"})
+             child=spawn();child.stdin.write(request(1,3,struct.pack(">Q",300000))+frame(3,1,b"partial"));child.stdin.close();result=receive(child);assert result[0]==7,result;child.wait(timeout=3);passed("disconnect-before-end-input",{"code":result[1][0],"unknown":bool(result[1][1]),"replay":False})
+             child=spawn();result=exchange(child,1,1,root+struct.pack(">QQ",0,8));assert result[0]==6 and result[2]==8;child.stdin.close();child.wait(timeout=3);passed("old-root-after-failures",{"bytes":8})
+-        elif args.selection=="admission":
++        elif args.selection in ("admission","envelope"):
+             holders=[]
+             # Each completed read establishes the real daemon connection. A
+             # partially supplied next mutation then holds the sole service slot.
+-            for _ in range(4):
+-                child=spawn();result=exchange(child,1,1,root+struct.pack(">QQ",0,8));assert result[0]==6;holders.append(child)
+-            excess=spawn();excess.stdin.write(request(1,1,root+struct.pack(">QQ",0,8)));excess.stdin.flush();excess.wait(timeout=3);assert excess.returncode!=0;passed("C-plus-one",{"established":4,"excess_refused":True})
++            for slot in range(4):
++                child=spawn(telemetry="forward"if args.selection=="envelope"else"off");result=exchange(child,slot*10+1,1,root+struct.pack(">QQ",slot,slot+1));assert result[0]==6 and result[3]==hashlib.sha256(b"original"[slot:slot+1]).hexdigest();holders.append(child)
++            excess=spawn();excess.wait(timeout=3);assert excess.returncode!=0;passed("C-plus-one",{"established":4,"excess_refused":True})
+             holders[0].stdin.write(request(2,3,struct.pack(">Q",300000))+frame(3,2,b"held"));holders[0].stdin.flush()
+             # One scheduling turn gives the authenticated BEGIN to the host.
+             time.sleep(.1)
+-            result=exchange(holders[1],2,3,struct.pack(">Q",0));assert result[:2]==(7,b"\4\0\0"),result;passed("A-plus-one-Q-zero",{"active":1,"excess_code":"Capacity"})
++            if args.selection=="envelope":
++                configs=json.loads(subprocess.check_output(["docker","inspect",*names[:4]],text=True))
++                endpoint=subprocess.check_output(["docker","context","inspect","--format","{{.Endpoints.docker.Host}}"],text=True).strip();assert endpoint.startswith("unix://")
++                observations=[]
++                for config in configs:
++                    assert not config["Mounts"] and config["HostConfig"]["Memory"]==128*1024*1024 and config["HostConfig"]["PidsLimit"]==16
++                    stats=json.loads(subprocess.check_output(["curl","-sS","--max-time","2","--max-filesize","65536","--unix-socket",endpoint[7:],f"http://localhost/containers/{config['Id']}/stats?stream=false&one-shot=true"]))
++                    observations.append({"id":config["Id"],"image":config["Image"],"memory_limit":config["HostConfig"]["Memory"],"pids_limit":config["HostConfig"]["PidsLimit"],"memory":stats.get("memory_stats"),"pids":stats.get("pids_stats")})
++                stacks=subprocess.run(["vmmap","-summary",str(service.pid)],capture_output=True,text=True,timeout=3)
++                sockets=subprocess.check_output(["/usr/sbin/lsof","-a","-p",str(service.pid),"-iTCP","-nP"],text=True)
++                thread_rows=subprocess.check_output(["ps","-M","-p",str(service.pid)],text=True)
++                evidence["physical_envelope"]={"containers":observations,"service_pid":service.pid,"service_threads":thread_rows,"service_sockets":sockets,"stack_regions":[line for line in stacks.stdout.splitlines()if "Stack"in line],"vmmap_status":stacks.returncode,"vmmap_unavailable":stacks.stderr[:1024]if stacks.returncode else None,"service_connection_stack_request_bytes":4*2*1024*1024,"service_telemetry_stack_request_bytes":2*256*1024,"active_daemon_upload_stack_request_bytes":2*1024*1024,"daemon_telemetry_stack_request_bytes":4*2*256*1024,"connected_socket_buffer_ceiling_bytes":8*2*256*1024,"socket_cap_evidence":"every successful native handshake executes checked setsockopt/getsockopt at both endpoints; refused accept slot/backlog remain OS-owned additional domains","phase_peak":"unavailable; sampled process/cgroup observations are not additive exclusive-operation costs"}
++                passed("maximum-connected-native-roles",{"service":1,"daemons":4,"active_mutations":1,"telemetry":"forward","response_isolation":"four distinct byte ranges and hashes"})
++            result=exchange(holders[1],12,3,struct.pack(">Q",0));assert result[:2]==(7,b"\4\0\0"),result;passed("A-plus-one-Q-zero",{"active":1,"excess_code":"Capacity"})
+             for child in holders:child.stdin.close()
+             for child in holders:child.wait(timeout=3)
+         elif args.selection=="cleanup":
+diff --git a/core/crates/layerfs-daemon/tests/docker_route.py b/core/crates/layerfs-daemon/tests/docker_route.py
+index 8d696816d..1f4b3541c 100644
+--- a/core/crates/layerfs-daemon/tests/docker_route.py
++++ b/core/crates/layerfs-daemon/tests/docker_route.py
+@@ -83,6 +83,13 @@ def start_daemon(command,env,diagnostics,drain=True):
+             part=stream.recv(1);assert part and len(header)<8192;header.extend(part)
+         if header.startswith(b"HTTP/1.1 101"):break
+         stream.close()
++        # Authentication/admission may refuse the daemon before its optional
++        # stderr attachment exists. Keep the real process outcome, not a fake
++        # harness failure or a log-file fallback.
++        state=subprocess.run(["docker","inspect","--format","{{.State.Status}}",name],capture_output=True,text=True)
++        if state.returncode==0 and state.stdout.strip() in ("exited","dead"):
++            child.diagnostics_stream=None
++            return child
+         if not header.startswith(b"HTTP/1.1 404")or time.monotonic()>=deadline:raise RuntimeError("independent diagnostics attach failed: "+header.decode(errors="replace"))
+         time.sleep(.01)
+     stream.settimeout(None);child.diagnostics_stream=stream
+diff --git a/core/crates/layerfs-service/src/main.rs b/core/crates/layerfs-service/src/main.rs
+index 4df4c40fd..c1f61dc5a 100644
+--- a/core/crates/layerfs-service/src/main.rs
++++ b/core/crates/layerfs-service/src/main.rs
+@@ -1,3 +1,9 @@
+-fn main() -> Result<(), layerfs_bridge::contract::Failure> {
+-    layerfs_service::native::run()
++fn main() -> std::process::ExitCode {
++    match layerfs_service::native::run() {
++        Ok(()) => std::process::ExitCode::SUCCESS,
++        Err(error) => {
++            layerfs_bridge::adapters::native::pipe::diagnostic(&format!("Error: {error}\n"));
++            std::process::ExitCode::FAILURE
++        }
++    }
+ }
+diff --git a/core/crates/layerfs-service/src/native/config.rs b/core/crates/layerfs-service/src/native/config.rs
+index f3ef05777..deede463f 100644
+--- a/core/crates/layerfs-service/src/native/config.rs
++++ b/core/crates/layerfs-service/src/native/config.rs
+@@ -14,7 +14,9 @@ pub fn telemetry(role: u8) -> Runtime {
+         "local" => OutputMode::Local,
+         "both" => OutputMode::Both,
+         _ => {
+-            eprintln!("telemetry initialization: unsupported mode");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization: unsupported mode\n",
++            );
+             return Runtime::disabled();
+         }
+     };
+@@ -27,7 +29,9 @@ pub fn telemetry(role: u8) -> Runtime {
+     {
+         Some(v) => v,
+         None => {
+-            eprintln!("telemetry initialization: run identity required");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization: run identity required\n",
++            );
+             return Runtime::disabled();
+         }
+     };
+@@ -38,7 +42,9 @@ pub fn telemetry(role: u8) -> Runtime {
+     {
+         Some(v) => v,
+         None => {
+-            eprintln!("telemetry initialization: namespace required");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization: namespace required\n",
++            );
+             return Runtime::disabled();
+         }
+     };
+@@ -62,7 +68,9 @@ pub fn telemetry(role: u8) -> Runtime {
+     }) {
+         Ok(runtime) => runtime,
+         Err(_) => {
+-            eprintln!("telemetry initialization failed; disabled");
++            layerfs_bridge::adapters::native::pipe::diagnostic(
++                "telemetry initialization failed; disabled\n",
++            );
+             Runtime::disabled()
+         }
+     }
+diff --git a/core/crates/layerfs-service/src/native/startup.rs b/core/crates/layerfs-service/src/native/startup.rs
+index 9e1518ee7..c558109b5 100644
+--- a/core/crates/layerfs-service/src/native/startup.rs
++++ b/core/crates/layerfs-service/src/native/startup.rs
+@@ -13,7 +13,6 @@ use layerfs_telemetry::timer::Timing;
+ use nix::poll::{poll, PollFd, PollFlags};
+ use std::{
+     io,
+-    net::TcpListener,
+     os::fd::AsFd,
+     sync::Arc,
+     thread,
+@@ -60,9 +59,16 @@ pub fn run() -> Result<(), Failure> {
+     let store = Timing::disabled("open", |s| Store::open(path, s.child("open")))
+         .0
+         .map_err(crate::operation::failure::storage)?;
+-    let listener = TcpListener::bind(env("LAYERFS_LISTEN")?)?;
++    let listener = layerfs_bridge::adapters::native::listen(
++        env("LAYERFS_LISTEN")?
++            .parse()
++            .map_err(|_| Code::InvalidInput)?,
++    )?;
+     listener.set_nonblocking(true)?;
+-    eprintln!("layerfs-service ready {}", listener.local_addr()?);
++    layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
++        "layerfs-service ready {}\n",
++        listener.local_addr()?
++    ));
+     let runtime = super::config::telemetry(1);
+     let service = Arc::new(Service::new(
+         vec![StoreAccess {
+diff --git a/core/crates/layerfs-service/tests/direct.rs b/core/crates/layerfs-service/tests/direct.rs
+index 9d9338f8d..8d4be0be0 100644
+--- a/core/crates/layerfs-service/tests/direct.rs
++++ b/core/crates/layerfs-service/tests/direct.rs
+@@ -212,9 +212,10 @@ fn authenticated_network_after_nonblocking_accept() {
+         connection::{accept, connect, Peer},
+         server::serve,
+     };
+-    use std::{net::TcpListener, thread};
++    use std::thread;
+     let (_temp, service, peer) = fixture();
+-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
++    let listener =
++        layerfs_bridge::adapters::native::listen("127.0.0.1:0".parse().unwrap()).unwrap();
+     listener.set_nonblocking(true).unwrap();
+     let address = listener.local_addr().unwrap();
+     let server_public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
+diff --git a/core/crates/layerfs-storage/tests/codec_frames.rs b/core/crates/layerfs-storage/tests/codec_frames.rs
+index 71c61c7b3..f246489c4 100644
+--- a/core/crates/layerfs-storage/tests/codec_frames.rs
++++ b/core/crates/layerfs-storage/tests/codec_frames.rs
+@@ -152,8 +152,12 @@ fn every_truncation_of_a_valid_frame_is_refused_without_panicking() {
+     let profile = CodecProfile::whole_file(&capacities);
+     let raw = support::noise(2_048);
+     let frame = encode(profile, &raw);
++    // Reuse the public session workspace, retaining every byte-cut case.
++    // Reallocating its one-MiB arena for each cut tests setup, not truncation.
++    let mut decoder = DecompressionWorkspace::new().expect("decode workspace");
+     for length in 0..frame.len() {
+-        let error = decode(profile, &frame[..length], raw.len())
++        let error = decoder
++            .decompress(profile, &frame[..length], raw.len())
+             .expect_err("a truncated frame is never accepted");
+         assert!(
+             matches!(
+@@ -163,6 +167,12 @@ fn every_truncation_of_a_valid_frame_is_refused_without_panicking() {
+             "truncation to {length} bytes produced {error}"
+         );
+     }
++    assert_eq!(
++        decoder
++            .decompress(profile, &frame, raw.len())
++            .expect("valid frame after errors"),
++        raw
++    );
+ }
+ 
+ #[test]
+diff --git a/core/crates/layerfs-storage/tests/metadata_window.rs b/core/crates/layerfs-storage/tests/metadata_window.rs
+index 659a030df..761c3b915 100644
+--- a/core/crates/layerfs-storage/tests/metadata_window.rs
++++ b/core/crates/layerfs-storage/tests/metadata_window.rs
+@@ -17,7 +17,7 @@ use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
+ use layerfs_storage::encoding::pool::PoolIndex;
+ use layerfs_storage::policy::{METADATA_INDEX_VALUES, VALUES_PER_GROUP};
+ use layerfs_storage::StorageError;
+-use support::{create_store, open_store, read_objects, save_one, TempDir};
++use support::{create_store, disabled, open_store, read_objects, save_one, TempDir};
+ 
+ fn value(seed: u64) -> [u8; INODE_VALUE_BYTES] {
+     let mut bytes = [0_u8; 32];
+@@ -142,18 +142,28 @@ fn crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window()
+     let leaves = 1_312_u64;
+     let mut first_id = None;
+     let mut last_values = Vec::new();
+-    for step in 0..leaves {
+-        let values = (0..100_u64)
+-            .map(|index| value(step * 100 + index))
+-            .collect::<Vec<_>>();
+-        if step == 0 {
+-            first_id = Some(leaf(1, &values).id());
+-        }
+-        if step == leaves - 1 {
+-            last_values = values.clone();
+-        }
+-        let object = leaf(step * 100 + 1, &values);
+-        save_one(&store, object).expect("leaf");
++    // Stream the unchanged 131,200-value fixture through four saves: first
++    // leaf, remaining pre-boundary leaves, crossing leaf, and final leaf. This
++    // retains cross-save eviction while avoiding 1,312 workspace/transaction
++    // setups unrelated to the window contract. Every catalogue assertion stays.
++    for range in [0..1, 1..1_310, 1_310..1_311, 1_311..leaves] {
++        disabled(|scope| {
++            let mut save = store.begin_save(scope.child("setup.begin"))?;
++            for step in range {
++                let values = (0..100_u64)
++                    .map(|index| value(step * 100 + index))
++                    .collect::<Vec<_>>();
++                if step == 0 {
++                    first_id = Some(leaf(1, &values).id());
++                }
++                if step == leaves - 1 {
++                    last_values = values.clone();
++                }
++                save.accept(leaf(step * 100 + 1, &values))?;
++            }
++            save.finish(scope.child("setup.finish"))
++        })
++        .expect("fixture leaves");
+     }
+     let first_id = first_id.expect("first leaf identity");
+     let rows = groups(&path);
+diff --git a/core/crates/layerfs-telemetry/src/output/queue.rs b/core/crates/layerfs-telemetry/src/output/queue.rs
+index 383e07b9e..d9b803714 100644
+--- a/core/crates/layerfs-telemetry/src/output/queue.rs
++++ b/core/crates/layerfs-telemetry/src/output/queue.rs
+@@ -125,8 +125,11 @@ pub struct Loss {
+ /// Shared producer handle. Clones share one queue and one writer.
+ #[derive(Clone)]
+ pub struct Output {
++    owner: Arc<Owner>,
++}
++struct Owner {
+     shared: Arc<Shared>,
+-    worker: Arc<Mutex<Option<JoinHandle<()>>>>,
++    worker: Mutex<Option<JoinHandle<()>>>,
+ }
+ impl Output {
+     /// Starts explicit output after validation; failure is independent of product work.
+@@ -163,8 +166,10 @@ impl Output {
+             .stack_size(256 * 1024)
+             .spawn(move || write_loop(owner, local))?;
+         Ok(Self {
+-            shared,
+-            worker: Arc::new(Mutex::new(Some(worker))),
++            owner: Arc::new(Owner {
++                shared,
++                worker: Mutex::new(Some(worker)),
++            }),
+         })
+     }
+     /// Nonblocking ownership transfer; capacity charges Vec allocation, not length.
+@@ -176,7 +181,7 @@ impl Output {
+         bytes: Vec<u8>,
+         producer: Option<Arc<super::collector::Registration>>,
+     ) {
+-        let s = &self.shared;
++        let s = &self.owner.shared;
+         let charge = bytes.capacity();
+         if s.closed.load(Ordering::Acquire)
+             || bytes.len() > s.config.record_bytes
+@@ -189,6 +194,11 @@ impl Output {
+             s.dropped.add(1);
+             return;
+         };
++        // Shutdown may have begun between the optimistic check and this lock.
++        if s.closed.load(Ordering::Acquire) {
++            s.dropped.add(1);
++            return;
++        }
+         while q.bytes + charge > s.config.queue_bytes
+             || q.records.len() + usize::from(q.active) >= s.config.queue_count
+         {
+@@ -209,23 +219,24 @@ impl Output {
+     }
+     /// Charges omitted detail without allocating a recursive failure report.
+     pub fn omit(&self) {
+-        self.shared.dropped.add(1);
++        self.owner.shared.dropped.add(1);
+     }
+     /// Fixed health snapshot; not a promise that output arrived at its destination.
+     pub fn loss(&self) -> Loss {
+         Loss {
+-            dropped: self.shared.dropped.value(),
+-            failed: self.shared.failed.value(),
+-            overflow: self.shared.failed.overflowed() || self.shared.dropped.overflowed(),
++            dropped: self.owner.shared.dropped.value(),
++            failed: self.owner.shared.failed.value(),
++            overflow: self.owner.shared.failed.overflowed()
++                || self.owner.shared.dropped.overflowed(),
+         }
+     }
+     /// Stops new output, attempts a bounded wait, then releases the join handle.
+     /// Blocking local filesystem syscalls are not claimed to be preemptible.
+     pub fn shutdown(&self, allowance: Duration) {
+-        self.shared.closed.store(true, Ordering::Release);
+-        self.shared.wake.notify_all();
++        self.owner.shared.closed.store(true, Ordering::Release);
++        self.owner.shared.wake.notify_all();
+         let end = Instant::now() + allowance.min(Duration::from_secs(2));
+-        if let Ok(mut slot) = self.worker.try_lock() {
++        if let Ok(mut slot) = self.owner.worker.try_lock() {
+             if let Some(worker) = slot.take() {
+                 while !worker.is_finished() && Instant::now() < end {
+                     thread::park_timeout(Duration::from_millis(10));
+@@ -235,17 +246,17 @@ impl Output {
+                 }
+             }
+         }
+-        self.shared.stop.store(true, Ordering::Release);
+-        self.shared.wake.notify_all();
++        self.owner.shared.stop.store(true, Ordering::Release);
++        self.owner.shared.wake.notify_all();
+     }
+ }
+-impl Drop for Output {
++impl Drop for Owner {
+     fn drop(&mut self) {
+-        if Arc::strong_count(&self.worker) == 1 {
+-            self.shared.closed.store(true, Ordering::Release);
+-            self.shared.stop.store(true, Ordering::Release);
+-            self.shared.wake.notify_all();
+-        }
++        // Arc drops this owner exactly once, even when final handles disappear
++        // concurrently. The worker owns Shared, never Owner.
++        self.shared.closed.store(true, Ordering::Release);
++        self.shared.stop.store(true, Ordering::Release);
++        self.shared.wake.notify_all();
+     }
+ }
+ fn write_loop(s: Arc<Shared>, mut local: Option<Local>) {
+diff --git a/core/crates/layerfs-telemetry/tests/native.rs b/core/crates/layerfs-telemetry/tests/native.rs
+index ff87cdca6..6ff04ccc3 100644
+--- a/core/crates/layerfs-telemetry/tests/native.rs
++++ b/core/crates/layerfs-telemetry/tests/native.rs
+@@ -351,3 +351,43 @@ fn independent_measurement_selection_and_aggregate_configuration() {
+     .is_err());
+     assert!(!path.exists());
+ }
++
++#[test]
++fn concurrent_final_handles_release_the_owned_writer() {
++    use std::sync::{Arc, Barrier};
++    let path = directory();
++    let config = || {
++        let mut c = OutputConfig::forward();
++        c.mode = OutputMode::Local;
++        c.directory = Some(path.clone());
++        c
++    };
++    let output = Output::start(config()).unwrap();
++    let gate = Arc::new(Barrier::new(9));
++    std::thread::scope(|scope| {
++        for _ in 0..8 {
++            let handle = output.clone();
++            let gate = gate.clone();
++            scope.spawn(move || {
++                gate.wait();
++                drop(handle);
++            });
++        }
++        drop(output);
++        gate.wait();
++    });
++    // Observe asynchronous writer teardown through its real exclusive namespace,
++    // with no private state or product-only test controls.
++    let end = Instant::now() + Duration::from_secs(1);
++    let reopened = loop {
++        match Output::start(config()) {
++            Ok(output) => break output,
++            Err(error) => {
++                assert!(Instant::now() < end, "last-owner teardown: {error}");
++                std::thread::park_timeout(Duration::from_millis(5));
++            }
++        }
++    };
++    reopened.shutdown(Duration::from_secs(1));
++    std::fs::remove_dir_all(path).unwrap();
++}
+diff --git a/core/crates/layerfs-telemetry/tests/owned_allocations.rs b/core/crates/layerfs-telemetry/tests/owned_allocations.rs
+index ca7b456ed..8c48c0768 100644
+--- a/core/crates/layerfs-telemetry/tests/owned_allocations.rs
++++ b/core/crates/layerfs-telemetry/tests/owned_allocations.rs
+@@ -35,72 +35,289 @@ unsafe impl GlobalAlloc for Count {
+ #[global_allocator]
+ static ALLOCATOR: Count = Count;
+ #[test]
+-fn two_hosted_roles_retain_full_recording_pools_under_combined_heap_budget() {
++fn maximum_owned_envelope_and_closing_producers() {
++    use std::{
++        process::{Command, Stdio},
++        time::{Duration, Instant},
++    };
++    let mut child = Command::new(std::env::current_exe().unwrap())
++        .args([
++            "--ignored",
++            "--exact",
++            "maximum_envelope_child",
++            "--nocapture",
++            "--test-threads=1",
++        ])
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    let deadline = Instant::now() + Duration::from_secs(5);
++    while child.try_wait().unwrap().is_none() {
++        if Instant::now() >= deadline {
++            child.kill().unwrap();
++            let output = child.wait_with_output().unwrap();
++            panic!(
++                "envelope child timeout: {}",
++                String::from_utf8_lossy(&output.stdout)
++            );
++        }
++        std::thread::park_timeout(Duration::from_millis(5));
++    }
++    let output = child.wait_with_output().unwrap();
++    assert!(
++        output.status.success(),
++        "{}",
++        String::from_utf8_lossy(&output.stdout)
++    );
++    print!("{}", String::from_utf8_lossy(&output.stdout));
++}
++
++#[test]
++#[ignore = "subprocess helper, invoked by maximum_owned_envelope_and_closing_producers"]
++fn maximum_envelope_child() {
+     use layerfs_telemetry::{
+         operation::Diagnostic,
+-        output::{Identity, OutputConfig, OutputMode},
+-        runtime::{Configuration, MonitorConfig, Runtime},
++        output::{encode_operation, Collector, Identity, Output, OutputConfig},
++        runtime::{Monitor, MonitorConfig},
+     };
+-    let root = std::env::temp_dir().join(format!("layerfs-owned-{}", std::process::id()));
+-    std::fs::create_dir(&root).unwrap();
++    use std::{sync::Barrier, time::Duration};
++    // External OS pressure, before product workers start; no private hooks.
++    let stderr = std::io::stderr();
++    use nix::fcntl::{fcntl, FcntlArg, OFlag};
++    let flags = OFlag::from_bits_retain(fcntl(&stderr, FcntlArg::F_GETFL).unwrap());
++    fcntl(&stderr, FcntlArg::F_SETFL(flags | OFlag::O_NONBLOCK)).unwrap();
++    let mut pipe_bytes = 0;
++    loop {
++        match nix::unistd::write(&stderr, &[b'x'; 4096]) {
++            Ok(n) => {
++                pipe_bytes += n;
++                assert!(pipe_bytes <= 1024 * 1024);
++            }
++            Err(nix::errno::Errno::EAGAIN) => break,
++            Err(e) => panic!("pipe fill: {e}"),
++        }
++    }
+     let baseline = LIVE.load(Ordering::SeqCst);
+     PEAK.store(baseline, Ordering::SeqCst);
+     TRACK.store(true, Ordering::SeqCst);
+-    let mut roles = Vec::new();
++    let identity = Identity {
++        run: 192,
++        pid: std::process::id(),
++        role: 1,
++        namespace: 1,
++    };
++    let monitor_config = MonitorConfig {
++        cpu: true,
++        memory: true,
++        interval_ms: 100,
++        history: 600,
++        windows: 32,
++    };
++    let producer_output = Output::start(OutputConfig::forward()).unwrap();
++    let monitor =
++        Monitor::start_with_output(monitor_config, Some((producer_output.clone(), identity)))
++            .unwrap()
++            .unwrap();
++    let windows = monitor.windows();
++    let recorder = layerfs_telemetry::operation::OperationRecorder::new(
++        layerfs_telemetry::timer::RecordingLimits::new(256, 32, 256 * 1024).unwrap(),
++        8,
++        4 * 1024 * 1024,
++    )
++    .unwrap()
++    .with_windows(windows.clone());
++    // Hosted components share one sampler and recording pool. Collector output
++    // adds no sampler. Use the same public pieces assembled by Runtime.
++    let component = recorder.clone();
++    let (_, diagnostic) = recorder.run(0, "queue", |_| Ok::<_, ()>(()));
++    let Diagnostic::Report(report) = diagnostic else {
++        panic!("template report")
++    };
++    let template = encode_operation(identity, &report, 16384).unwrap();
++    drop(report);
++    let before_producer_queue = LIVE.load(Ordering::SeqCst);
++    for capacity in [16384, 32768] {
++        for _ in 0..256 {
++            producer_output.submit(resident_envelope(&template, capacity));
++        }
++        assert!(LIVE.load(Ordering::SeqCst) - before_producer_queue <= 2 * 1024 * 1024 + 65536);
++    }
+     let mut reports = Vec::new();
+-    for role in 1..=2 {
+-        let mut output = OutputConfig::forward();
+-        output.mode = OutputMode::Local;
+-        output.directory = Some(root.join(role.to_string()));
+-        let runtime = Runtime::start(Configuration {
+-            enabled: true,
+-            timing: true,
+-            monitor: MonitorConfig {
+-                cpu: true,
+-                memory: true,
+-                interval_ms: 10,
+-                history: 600,
+-                windows: 32,
+-            },
+-            output,
+-            identity: Identity {
+-                run: 192,
+-                pid: std::process::id(),
+-                role,
+-                namespace: 1,
+-            },
+-        })
+-        .unwrap();
+-        let recorder = runtime.clone().recorder();
+-        for key in 0..8 {
+-            let (result, report) = recorder.run(key, "full", |scope| {
+-                for _ in 0..255 {
+-                    scope
+-                        .child("a bounded label with escaped data: \"\n\t")
+-                        .run(|_| Ok::<_, ()>(()))?;
+-                }
+-                Ok::<_, ()>(17)
+-            });
+-            assert_eq!(result, Ok(17));
+-            assert!(matches!(report, Diagnostic::Report(_)));
+-            reports.push(report);
++    for key in 0..8 {
++        let (result, report) = component.run(key, "full", |scope| {
++            deep(scope, 31)?;
++            for _ in 0..224 {
++                scope.child("\n".repeat(128)).run(|_| Ok::<_, ()>(()))?;
++            }
++            Ok::<_, ()>(17)
++        });
++        assert_eq!(result, Ok(17));
++        let Diagnostic::Report(report) = report else {
++            panic!("reserved report")
++        };
++        reports.push(report);
++    }
++    let (result, excess) = recorder.run(9, "excess", |_| Ok::<_, ()>(17));
++    assert_eq!(result, Ok(17));
++    assert!(matches!(excess, Diagnostic::Omitted));
++    let tokens: Vec<_> = (0..32).map(|_| windows.begin().unwrap()).collect();
++    assert!(windows.begin().is_none());
++    let mut config = OutputConfig::forward();
++    config.queue_bytes = 8 * 1024 * 1024;
++    config.queue_count = 256;
++    config.rate = 1024 * 1024;
++    config.burst = 1024 * 1024;
++    let output = Output::start(config).unwrap();
++    let collector = Collector::new(16, output.clone()).unwrap();
++    assert!(Collector::new(17, output.clone()).is_none());
++    let producers: Vec<_> = (0..16).map(|_| collector.connect().unwrap()).collect();
++    assert!(collector.connect().is_none());
++    let before_collector_queue = LIVE.load(Ordering::SeqCst);
++    for capacity in [32768, 65536] {
++        for n in 0..512 {
++            assert!(producers[n % 16].submit(resident_envelope(&template, capacity)));
+         }
+-        assert!(matches!(
+-            recorder.run(9, "excess", |_| Ok::<_, ()>(())).1,
+-            Diagnostic::Omitted
+-        ));
+-        roles.push(runtime);
++        assert!(LIVE.load(Ordering::SeqCst) - before_collector_queue <= 8 * 1024 * 1024 + 131072);
+     }
+-    for (index, report) in reports.into_iter().enumerate() {
+-        roles[index / 8].publish(report);
++    drop(producers);
++    let start = Barrier::new(9);
++    let encoded_ready = Barrier::new(9);
++    let release = Barrier::new(9);
++    let before = native_process();
++    let (encoded, observed, held) = std::thread::scope(|scope| {
++        let mut jobs = Vec::new();
++        for report in &reports {
++            let start = &start;
++            let ready = &encoded_ready;
++            let release = &release;
++            jobs.push(
++                std::thread::Builder::new()
++                    .stack_size(256 * 1024)
++                    .spawn_scoped(scope, move || {
++                        start.wait();
++                        let values = vec![resident_envelope(
++                            &encode_operation(identity, report, 16384).unwrap(),
++                            16384,
++                        )];
++                        ready.wait();
++                        release.wait();
++                        values
++                    })
++                    .unwrap(),
++            );
++        }
++        start.wait();
++        encoded_ready.wait();
++        let observed = native_process();
++        let held = LIVE.load(Ordering::SeqCst) - baseline;
++        println!("ENV05_SNAPSHOT heap_held={held} rss={} virtual={} threads={} before_encoder_threads={} closing_producers={}",observed.0,observed.1,observed.2,before.2,collector.occupied());
++        // Always release the scoped children before making assertions.
++        release.wait();
++        let encoded: Vec<_> = jobs.into_iter().flat_map(|j| j.join().unwrap()).collect();
++        (encoded, observed, held)
++    });
++    assert_eq!(encoded.len(), 8);
++    assert!(encoded
++        .iter()
++        .all(|b| b.len() <= 16384 && b.capacity() == 16384));
++    assert!(
++        held >= 10 * 1024 * 1024,
++        "maximum queues must really be retained: {held}"
++    );
++    assert!(observed.2 >= before.2 + 8);
++    assert_eq!(collector.occupied(), 16);
++    assert!(collector.connect().is_none());
++    assert!(output.loss().dropped > 0);
++    for token in tokens {
++        windows.release(token);
+     }
+-    drop(roles);
+-    TRACK.store(false, Ordering::SeqCst);
++    drop(monitor);
++    assert!(windows.begin().is_none());
++    drop(windows);
++    drop(encoded);
++    drop(template);
++    drop(reports);
++    drop(component);
++    drop(recorder);
++    producer_output.shutdown(Duration::from_secs(2));
++    drop(producer_output);
++    output.shutdown(Duration::from_secs(2));
++    assert_eq!(collector.occupied(), 0);
++    assert_eq!(output.loss().failed, 1);
++    let dropped = output.loss().dropped;
++    output.submit(b"LFT1 {}\n".to_vec());
++    assert_eq!(output.loss().dropped, dropped + 1);
++    drop(collector);
++    drop(output);
+     let peak = PEAK.load(Ordering::SeqCst) - baseline;
++    let residual = LIVE.load(Ordering::SeqCst) - baseline;
++    TRACK.store(false, Ordering::SeqCst);
++    assert!(
++        peak <= 24 * 1024 * 1024,
++        "8 MiB producer plus 16 MiB collector envelope: {peak}"
++    );
+     assert!(
+-        peak > 0 && peak <= 16 * 1024 * 1024,
+-        "combined observed heap peak {peak}"
++        residual < 1024 * 1024,
++        "closing ownership retained too much: {residual}"
+     );
+-    println!("two hosted producer roles, 16 simultaneous 256-node report owners: observed additional heap high-water={peak} bytes; combined producer ownership allowance=16777216 bytes; excludes OS stacks, kernel buffers and allocator metadata");
+-    std::fs::remove_dir_all(root).unwrap();
++    println!("ENV05_RESULT heap_peak={peak} heap_residual={residual} producer_allowance=8388608 collector_allowance=16777216 collector_queue_allowance=8388608 recording_owners=8 encoded_owners=8 active_windows=32 collector_producers=16 telemetry_worker_stack_requests=786432 external_encoder_stack_requests=2097152 stderr_pipe_filled={pipe_bytes} closing_released=true");
++}
++
++fn deep(
++    scope: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
++    left: u8,
++) -> Result<(), ()> {
++    if left > 0 {
++        scope
++            .child("\n".repeat(128))
++            .run(|next| deep(next, left - 1))?;
++    }
++    Ok(())
++}
++
++// Materialize spare capacity to exercise worst resident ownership, then restore
++// the original valid envelope length. No product result or fixture is modified.
++fn resident_envelope(template: &[u8], capacity: usize) -> Vec<u8> {
++    let mut bytes = vec![0xa5; capacity];
++    bytes.truncate(0);
++    bytes.extend_from_slice(template);
++    bytes
++}
++
++#[cfg(target_os = "macos")]
++fn native_process() -> (u64, u64, u64) {
++    let info =
++        libproc::proc_pid::pidinfo::<libproc::task_info::TaskInfo>(std::process::id() as i32, 0)
++            .unwrap();
++    (
++        info.pti_resident_size,
++        info.pti_virtual_size,
++        info.pti_threadnum as u64,
++    )
++}
++#[cfg(target_os = "linux")]
++fn native_process() -> (u64, u64, u64) {
++    use std::io::Read;
++    let mut text = String::new();
++    std::fs::File::open("/proc/self/status")
++        .unwrap()
++        .take(16384)
++        .read_to_string(&mut text)
++        .unwrap();
++    let number = |key: &str| {
++        text.lines()
++            .find(|line| line.starts_with(key))
++            .unwrap()
++            .split_whitespace()
++            .nth(1)
++            .unwrap()
++            .parse::<u64>()
++            .unwrap()
++    };
++    (
++        number("VmRSS:") * 1024,
++        number("VmSize:") * 1024,
++        number("Threads:"),
++    )
+ }
+diff --git a/core/crates/layerfs-bridge/examples/socket_bounds.rs b/core/crates/layerfs-bridge/examples/socket_bounds.rs
+new file mode 100644
+index 000000000..903270a44
+--- /dev/null
++++ b/core/crates/layerfs-bridge/examples/socket_bounds.rs
+@@ -0,0 +1,42 @@
++//! External native socket-buffer diagnostic, without a service or protocol peer.
++use nix::sys::socket::{getsockopt, setsockopt, sockopt};
++use std::{
++    io::{Read, Write},
++    net::{TcpListener, TcpStream},
++    time::Duration,
++};
++fn main() -> Result<(), Box<dyn std::error::Error>> {
++    let listener = TcpListener::bind("127.0.0.1:0")?;
++    let address = listener.local_addr()?;
++    let server = std::thread::spawn(move || {
++        for _ in 0..64 {
++            let (mut stream, _) = listener.accept().unwrap();
++            stream
++                .set_read_timeout(Some(Duration::from_secs(1)))
++                .unwrap();
++            let _ = stream.read(&mut [0; 1]);
++        }
++    });
++    let mut oversized = 0;
++    for index in 0..64 {
++        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(1))?;
++        let before = (
++            getsockopt(&stream, sockopt::SndBuf)?,
++            getsockopt(&stream, sockopt::RcvBuf)?,
++        );
++        setsockopt(&stream, sockopt::SndBuf, &(128 * 1024))?;
++        setsockopt(&stream, sockopt::RcvBuf, &(128 * 1024))?;
++        let after = (
++            getsockopt(&stream, sockopt::SndBuf)?,
++            getsockopt(&stream, sockopt::RcvBuf)?,
++        );
++        if after.0 > 256 * 1024 || after.1 > 256 * 1024 {
++            oversized += 1;
++            println!("socket {index}: before={before:?} after={after:?}");
++        }
++        stream.write_all(&[0])?;
++    }
++    server.join().unwrap();
++    println!("64 sockets; over-bound after successful setsockopt: {oversized}");
++    Ok(())
++}
+diff --git a/core/crates/layerfs-bridge/src/adapters/native/socket.rs b/core/crates/layerfs-bridge/src/adapters/native/socket.rs
+new file mode 100644
+index 000000000..837133f62
+--- /dev/null
++++ b/core/crates/layerfs-bridge/src/adapters/native/socket.rs
+@@ -0,0 +1,71 @@
++//! Configure native buffer bounds before a connection can advertise its window.
++use crate::contract::{Code, Failure, MAX_SESSIONS};
++use nix::{
++    errno::Errno,
++    poll::{poll, PollFd, PollFlags},
++    sys::socket::{
++        self, getsockopt, setsockopt, sockopt, AddressFamily, Backlog, SockFlag, SockType,
++        SockaddrStorage,
++    },
++};
++use std::{
++    net::{SocketAddr, TcpListener, TcpStream},
++    os::fd::{AsFd, AsRawFd, OwnedFd},
++};
++fn prepared(address: SocketAddr) -> Result<OwnedFd, Failure> {
++    let family = if address.is_ipv4() {
++        AddressFamily::Inet
++    } else {
++        AddressFamily::Inet6
++    };
++    let fd = socket::socket(family, SockType::Stream, SockFlag::empty(), None)
++        .map_err(|_| Code::Unsupported)?;
++    configure(&fd)?;
++    Ok(fd)
++}
++/// A bounded native listener. Accepted connections inherit the buffer selection.
++pub fn listen(address: SocketAddr) -> Result<TcpListener, Failure> {
++    let fd = prepared(address)?;
++    setsockopt(&fd, sockopt::ReuseAddr, &true).map_err(|_| Code::Unsupported)?;
++    socket::bind(fd.as_raw_fd(), &SockaddrStorage::from(address)).map_err(|_| Code::Io)?;
++    socket::listen(
++        &fd,
++        Backlog::new(MAX_SESSIONS as i32).map_err(|_| Code::Unsupported)?,
++    )
++    .map_err(|_| Code::Io)?;
++    Ok(TcpListener::from(fd))
++}
++pub(super) fn connect(address: SocketAddr) -> Result<TcpStream, Failure> {
++    let stream = TcpStream::from(prepared(address)?);
++    stream.set_nonblocking(true)?;
++    match socket::connect(stream.as_raw_fd(), &SockaddrStorage::from(address)) {
++        Ok(()) => {}
++        Err(Errno::EINPROGRESS) => {
++            let mut fds = [PollFd::new(stream.as_fd(), PollFlags::POLLOUT)];
++            if poll(&mut fds, 5000u16).map_err(|_| Code::Io)? == 0
++                || getsockopt(&stream, sockopt::SocketError).map_err(|_| Code::Io)? != 0
++            {
++                return Err(Code::Io.into());
++            }
++        }
++        Err(_) => return Err(Code::Io.into()),
++    }
++    stream.set_nonblocking(false)?;
++    validate(&stream)?;
++    stream.set_nodelay(true)?;
++    Ok(stream)
++}
++pub(super) fn configure(fd: &impl AsFd) -> Result<(), Failure> {
++    let size = 128usize * 1024;
++    setsockopt(fd, sockopt::SndBuf, &size).map_err(|_| Code::Unsupported)?;
++    setsockopt(fd, sockopt::RcvBuf, &size).map_err(|_| Code::Unsupported)?;
++    validate(fd)
++}
++fn validate(fd: &impl AsFd) -> Result<(), Failure> {
++    if getsockopt(fd, sockopt::SndBuf).map_err(|_| Code::Unsupported)? > 256 * 1024
++        || getsockopt(fd, sockopt::RcvBuf).map_err(|_| Code::Unsupported)? > 256 * 1024
++    {
++        return Err(Code::Capacity.into());
++    }
++    Ok(())
++}
+diff --git a/core/crates/layerfs-bridge/tests/native_connections.rs b/core/crates/layerfs-bridge/tests/native_connections.rs
+new file mode 100644
+index 000000000..ed2f100fc
+--- /dev/null
++++ b/core/crates/layerfs-bridge/tests/native_connections.rs
+@@ -0,0 +1,51 @@
++#![cfg(feature = "native")]
++//! Real socket lifecycle regression: buffers are selected before native connect.
++use layerfs_bridge::adapters::native::{
++    connection::{accept, connect, Peer, VerifiedPeer},
++    listen,
++    protocol::{Frame, Kind},
++};
++#[test]
++fn repeated_native_connections_keep_the_buffer_bound() {
++    use nix::poll::{poll, PollFd, PollFlags};
++    use std::os::fd::AsFd;
++    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
++    let address = listener.local_addr().unwrap();
++    let private = [7; 32];
++    let server = [9; 32];
++    let public = *VerifiedPeer::from_private(&server).unwrap().public_key();
++    let peers = [Peer {
++        selector: 1,
++        public: *VerifiedPeer::from_private(&private).unwrap().public_key(),
++        expires_unix: u64::MAX,
++    }];
++    std::thread::scope(|scope| {
++        scope.spawn(|| {
++            for _ in 0..64 {
++                let mut ready = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
++                assert!(poll(&mut ready, 1000u16).unwrap() > 0, "client stopped");
++                let (stream, _) = listener.accept().unwrap();
++                let mut connection = accept(stream, &server, &peers).unwrap();
++                let hello = connection.receive.read().unwrap();
++                assert_eq!(hello.kind, Kind::Hello);
++                connection.send.write(&hello).unwrap();
++            }
++        });
++        for index in 0..64 {
++            let mut connection = connect(address, 1, &private, &public)
++                .unwrap_or_else(|error| panic!("connect {index}: {error}"));
++            connection
++                .send
++                .write(&Frame {
++                    kind: Kind::Hello,
++                    id: 0,
++                    bytes: vec![0, 1],
++                })
++                .unwrap();
++            assert_eq!(connection.receive.read().unwrap().bytes, [0, 1]);
++        }
++    });
++    drop(listener);
++    // No fallback or retry after a refused native connection.
++    assert!(connect(address, 1, &private, &public).is_err());
++}
+diff --git a/core/crates/layerfs-service/tests/exit_failure.py b/core/crates/layerfs-service/tests/exit_failure.py
+new file mode 100644
+index 000000000..d4d7be8fd
+--- /dev/null
++++ b/core/crates/layerfs-service/tests/exit_failure.py
+@@ -0,0 +1,36 @@
++#!/usr/bin/env python3
++"""A running daemon must exit on invalid input even with a full diagnostic pipe."""
++import fcntl, json, os, select, socket, struct, subprocess, sys, tempfile, time
++from pathlib import Path
++ROOT=Path(__file__).resolve().parents[4]
++sys.path.insert(0,str(ROOT/'core/crates/layerfs-daemon/tests'))
++from docker_route import TARGET, Diagnostics, exchange, frame, public
++reader,writer=os.pipe();service=None;daemon=None;diagnostics=None
++try:
++    with tempfile.TemporaryDirectory(prefix='layerfs-exit-proof-')as temp:
++        store=Path(temp)/'store.sqlite'
++        fixture=json.loads(subprocess.check_output([TARGET/'debug/examples/prepare_store',store],text=True))
++        server=os.urandom(32).hex();client=os.urandom(32).hex()
++        env=os.environ.copy();env.update(LAYERFS_PRIVATE_KEY=server,LAYERFS_PEERS=f'1,{public(client)},{int(time.time())+3600},31',LAYERFS_STORE=str(store),LAYERFS_LISTEN='127.0.0.1:0',LAYERFS_TELEMETRY='off')
++        service=subprocess.Popen([TARGET/'debug/layerfs-service'],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
++        assert select.select([service.stderr],[],[],5)[0], 'service startup'
++        ready=service.stderr.readline();assert b'ready'in ready,ready;port=int(ready.rsplit(b':',1)[1]);diagnostics=Diagnostics(service.stderr)
++        env.update(LAYERFS_PRIVATE_KEY=client,LAYERFS_SERVER_KEY=public(server),LAYERFS_SELECTOR='1',LAYERFS_ENDPOINT=f'127.0.0.1:{port}')
++        daemon=subprocess.Popen([TARGET/'debug/layerfs-daemon'],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=writer)
++        result=exchange(daemon,1,1,bytes.fromhex(fixture['file'])+struct.pack('>QQ',0,8));assert result[0]==6 and result[2]==8
++        flags=fcntl.fcntl(writer,fcntl.F_GETFL);fcntl.fcntl(writer,fcntl.F_SETFL,flags|os.O_NONBLOCK);filled=0
++        while True:
++            try:filled+=os.write(writer,b'x'*4096);assert filled<=1024*1024
++            except BlockingIOError:break
++        fcntl.fcntl(writer,fcntl.F_SETFL,flags)
++        started=time.monotonic();daemon.stdin.write(frame(3,2,b'invalid state'));daemon.stdin.flush()
++        daemon.wait(timeout=1)
++        assert daemon.returncode!=0 and daemon.stdout.read()==b''
++        assert fcntl.fcntl(writer,fcntl.F_GETFL)&os.O_NONBLOCK
++        print(f'PASS: established connection; full diagnostic pipe={filled} bytes; invalid-input exit={daemon.returncode}; error/cleanup wall={time.monotonic()-started:.3f}s')
++        service.stdin.close();service.wait(timeout=3);assert service.returncode==0
++finally:
++    for child in (daemon,service):
++        if child is not None and child.poll()is None:child.kill();child.wait()
++    os.close(writer);os.close(reader)
++    if diagnostics:diagnostics.close()

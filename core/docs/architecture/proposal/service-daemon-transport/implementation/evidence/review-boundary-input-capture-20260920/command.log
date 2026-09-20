@@ -1,0 +1,34 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.70s
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-18f8d66de52539e4)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+SEALED_EXTENT_INPUT wanted=40 length=723887
+MEASURED frontier peaks (bytes), 1/2/4/8/16 edits: [2208, 2288, 2448, 2768, 3408]
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+SEALED_EXTENT_INPUT wanted=63 length=1136450
+SEALED_EXTENT_INPUT wanted=80 length=1479513
+MEASURED ceiling-run counters: EditCounters { nodes_read: 73062, nodes_created: 79, payloads_created: 4096, payload_bytes: 102400, peak_deferred_bytes: 353952 }
+test the_edit_stream_ceiling_is_enforced_before_any_work ... ok
+SEALED_EXTENT_INPUT wanted=64 length=1153312
+MEASURED deferred shape: EditCounters { nodes_read: 90971, nodes_created: 122, payloads_created: 4096, payload_bytes: 102400, peak_deferred_bytes: 384112 }
+DERIVED ceiling floor: 3148 B/draft measured (bound 8320), 1009 live pages, 64512 extents, 427819008 base bytes
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+SEALED_EXTENT_INPUT wanted=100 length=1876987
+SEALED_EXTENT_INPUT wanted=192 length=3654982
+test a_join_of_two_full_pages_stays_canonical ... ok
+SEALED_EXTENT_INPUT wanted=127 length=2362757
+SEALED_EXTENT_INPUT wanted=128 length=2384497
+SEALED_EXTENT_INPUT wanted=193 length=3684001
+test streaming_flush_boundaries_and_height_growth ... ok
+SEALED_EXTENT_INPUT wanted=129 length=2403852
+test join_occupancy_at_every_boundary ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.39s
+

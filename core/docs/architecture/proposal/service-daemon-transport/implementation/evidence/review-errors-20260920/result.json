@@ -1,0 +1,297 @@
+{
+  "selection": "errors",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "path-absence",
+      "status": "PASS",
+      "detail": {
+        "code": 7,
+        "unknown": false
+      }
+    },
+    {
+      "name": "object-absence",
+      "status": "PASS",
+      "detail": {
+        "code": 6,
+        "unknown": false
+      }
+    },
+    {
+      "name": "range-error",
+      "status": "PASS",
+      "detail": {
+        "code": 1,
+        "unknown": false
+      }
+    },
+    {
+      "name": "store-denied",
+      "status": "PASS",
+      "detail": {
+        "code": 3,
+        "unknown": false
+      }
+    },
+    {
+      "name": "operation-denied",
+      "status": "PASS",
+      "detail": {
+        "code": 3,
+        "unknown": false
+      }
+    },
+    {
+      "name": "early-refusal-unread-stdin",
+      "status": "PASS",
+      "detail": {
+        "terminal": "Denied",
+        "input_body_sent": 0
+      }
+    },
+    {
+      "name": "body-before-begin",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    },
+    {
+      "name": "oversized-frame",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    },
+    {
+      "name": "truncated-header",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    },
+    {
+      "name": "truncated-body",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    },
+    {
+      "name": "zero-body",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    },
+    {
+      "name": "unsupported-profile",
+      "status": "PASS",
+      "detail": {
+        "session_closed": true
+      }
+    },
+    {
+      "name": "wrong-operation-id",
+      "status": "PASS",
+      "detail": {
+        "code": 10,
+        "unknown": false
+      }
+    },
+    {
+      "name": "surplus-after-completed-operation",
+      "status": "PASS",
+      "detail": {
+        "first_operation": "valid success after EndInput",
+        "surplus": "session refused; never another operation"
+      }
+    },
+    {
+      "name": "disconnect-before-end-input",
+      "status": "PASS",
+      "detail": {
+        "code": 10,
+        "unknown": false,
+        "replay": false
+      }
+    },
+    {
+      "name": "old-root-after-failures",
+      "status": "PASS",
+      "detail": {
+        "bytes": 8
+      }
+    }
+  ],
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: PathNotFound unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: MissingObject unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Denied unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Denied unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Denied unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Capacity unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Capacity unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Unsupported unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: InvalidInput unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a"
+}

@@ -1,0 +1,1 @@
+PASS: full diagnostic pipe=65536 bytes; failure exit=1; command wall=0.011s
