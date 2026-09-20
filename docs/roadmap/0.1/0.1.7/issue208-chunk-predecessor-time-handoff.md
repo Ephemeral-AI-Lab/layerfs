@@ -40,6 +40,49 @@ The control does not *remove a cost*; it *removes a feature*. The question is th
 **"how much time does the space win cost, and is that price worth paying?"** — not
 "can we save time by declining bases".
 
+## 1a. WITHDRAWN: the 33 % time price was a cross-binary measurement artifact
+
+**The single most important thing in this prompt.** The earlier claim — *"declining
+prior-state bases cut the stride10 operation 33 % (16.296 → 10.882 s)"* — is **not a
+measurement of the feature**. It compared two runs from **different binaries**:
+
+| run | binary sha256 | built from |
+| --- | --- | --- |
+| `nopred-history-stride10` (OFF, 10.882 s) | `441099a0c3af7c63…` | `6ee45af92` |
+| `cp-off-history-stride10` (OFF, 16.150 s) | `418ee5085664a696…` | `d05b80bba` |
+
+Between those two builds, `core/crates/layerfs-telemetry/src/timer` changed by **171 lines**
+(`RecordingLimits` added to `Recording::start`, `limits.rs`, `report.rs`, `scope.rs`), and:
+
+- `operation_ns` is defined as *"the sum of this row's named children"* — i.e. it is built
+  **entirely from telemetry's timer**, the exact component that changed;
+- the new recording limits **omit children while still executing them**, so a different limit
+  set yields a different sum for identical work.
+
+The signature confirms it: the cross-binary ratios are near-identical across independent
+quantities — operation **0.674**, scope **0.669** — which is a uniform scaling, not a
+phase-specific effect.
+
+### The only valid comparison is same-binary
+
+| arm | binary | operation |
+| --- | --- | ---: |
+| `cp-on-history-stride10` | `418ee508…` | 16.463 s |
+| `cp-off-history-stride10` | `418ee508…` | 16.150 s |
+| | | **Δ = 0.313 s (1.9 %)** |
+
+**So the feature's stride10 time price is ~2 %, not 33 %** — and 0.313 s is within the
+0.05–0.85 s reproducibility band this lane has observed across arms, so even that is not
+established. **One sample per arm; do not quote the 1.9 % as a result either.**
+
+`invocation_ns` (the harness's own wall clock, not telemetry) also fell 25 % between the two
+sessions (33.083 → 24.780 s), which a timer change cannot explain and which remains
+**unidentified**. It means the two sessions differed in machine conditions as well, so the
+cross-binary comparison is confounded twice over.
+
+**Consequence for this round's design: sample all six arms from ONE binary.** The §3 table
+below already requires it; §1a is why.
+
 ## 2. What is already measured (do not re-derive)
 
 ### The space win, from `795fb1a2f` (the reason the switch defaults ON)
@@ -60,14 +103,10 @@ the first chunk trials this lane has ever run.
 **So the feature is the reason this lane now sits below v0.1.6 on bytes.** That standing is
 the stake; if it is a requirement, the time price is not optional regardless of its size.
 
-### The time price, stride10, measured
+### ~~The time price, stride10, measured~~ — WITHDRAWN, see §1a
 
-| arm | operation | `content` | `filesystem` | `accept_loop` |
-| --- | ---: | ---: | ---: | ---: |
-| ON | 16.296 s | 1.585 s | 5.146 s | 8.820 s |
-| OFF | **10.882 s** | 1.039 s | 3.490 s | 5.847 s |
-
-Same workload, same 17 states, same 52,032 objects, same build. **Δ = 5.414 s (33 %).**
+The figure that stood here (ON 16.296 s vs OFF 10.882 s, "Δ = 5.414 s, 33 %") is
+**withdrawn**. It compared two different binaries whose telemetry timers differ. See §1a.
 
 ### The space cost of the OFF arm, measured
 
@@ -96,13 +135,12 @@ before the round was stopped. **They are not a verdict and one is suspect:**
 | `cp-on-history-stride3` | 36.281 s | complete, exit 0 |
 | `cp-off-history-stride3` | — | **INCOMPLETE, aborted mid-run** |
 
-> **Warning — do not build on these.** The stride10 OFF arm reads **16.150 s** here against
-> **10.882 s** in the earlier measurement: a **5.3 s disagreement on the same arm**. Something
-> differs between the two sampling sessions — machine state, a harness/telemetry change since
-> the earlier sample, or the sampling conditions — and **that discrepancy must be resolved
-> before any delta is quoted.** The ON arm also moved (16.296 → 16.463 s). A 33 % effect and a
-> 5.3 s instability on the same arm cannot both be taken at face value. Re-measure both arms
-> of stride10 first, back to back, from one binary, before trusting anything below.
+> **Resolved by §1a, and the resolution removes the headline.** The 5.3 s disagreement was a
+> **binary difference**: the 10.882 s sample came from `441099a0` (telemetry timer before the
+> `RecordingLimits` change) and the 16.150 s sample from `418ee508` (after). `operation_ns` is
+> the sum of telemetry-recorded children, so the two are not comparable. **The valid
+> same-binary delta is 0.313 s (1.9 %), not 5.414 s (33 %)** — and even that is one sample
+> per arm and must not be quoted as a result. Re-measure all six arms from one binary.
 
 ## 3. The experiment to run
 
