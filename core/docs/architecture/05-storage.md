@@ -69,6 +69,29 @@ bindings before returning to that cache. Missing rows, invalid ordinals, damaged
 rows and engine errors retain their existing handling. Pack BLOB acquisition and
 all cache ownership, resource policies and formats are unchanged.
 
+### #190 pooled leaf ordinal-ordered resolution (2026-09-20)
+
+This addition describes the working tree based on the catalogue statement-reuse
+change above. It changes the **order** in which one pooled leaf's rows are
+resolved, not the statement, the grammar, the caches or any bound.
+
+A pooled leaf's rows are ordered by serial, and their ordinals are scattered
+across the value-group catalogue. The covering-group memo in
+`PoolReader::leaf_canonical_with_groups` therefore only helped when two
+consecutive serial-ordered rows happened to share a group, and a leaf issued
+several catalogue statements per distinct group it touched. The rows are now
+visited in ascending ordinal order, with each resolved value written back at its
+own row's index. Ordinals inside one group are consecutive, so the memo answers
+one `sqlite::pool::group_for` statement per distinct covering group.
+
+`group_for`, its `prepare_cached` statement, its ordinal-coverage validation and
+its error handling are unchanged. The decoded-value cache, the per-chain decoded
+work charge, the pack cache, the visibility ceiling, the leaf's rebuilt canonical
+bytes and the `values` slice handed to `rebuild_leaf` are all unchanged; only the
+visit order and the index at which each value is stored differ. The sort is over
+at most `MAXIMUM_LEAF_ROWS` positions. No format, schema, cache size, limit or
+public API changes.
+
 ### 6.1 The Store handle
 
 `core/crates/layerfs-storage/src/cas/store.rs`

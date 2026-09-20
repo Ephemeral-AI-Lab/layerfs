@@ -439,12 +439,22 @@ impl PoolReader {
         if rows.len() > MAXIMUM_LEAF_ROWS {
             return Err(StorageError::Integrity("pooled row count"));
         }
-        let mut values = Vec::with_capacity(rows.len());
-        // The rows of one leaf are in ordinal order, so the group covering a row is
-        // almost always the group that covered the row before it: the catalogue is
-        // queried when the covering group changes, not once per row.
+        let mut values: Vec<[u8; INODE_VALUE_BYTES]> = vec![[0_u8; INODE_VALUE_BYTES]; rows.len()];
+        // Resolve the rows in **ordinal** order, not in the body's serial order.
+        //
+        // The rows of a pooled leaf are ordered by serial, so their ordinals jump:
+        // the group covering a row is usually not the group that covered the row
+        // before it, and this memo then asks the catalogue for several times as
+        // many groups as the leaf actually touches. Ordinals inside one group are
+        // consecutive, so resolving in ordinal order makes the same memo answer one
+        // statement per distinct covering group. Every value is written back at its
+        // own row's index, so the rebuilt leaf and the values it is rebuilt from
+        // are unchanged.
+        let mut order: Vec<usize> = (0..rows.len()).collect();
+        order.sort_unstable_by_key(|position| rows[*position].ordinal);
         let mut covering: Option<pool::ValueGroupRow> = None;
-        for row in &rows {
+        for position in order {
+            let row = &rows[position];
             let group = match covering {
                 Some(group)
                     if row.ordinal >= group.first_ordinal
@@ -460,14 +470,14 @@ impl PoolReader {
                     group
                 }
             };
-            values.push(self.group_value(
+            values[position] = self.group_value(
                 connection,
                 capacities,
                 ceiling,
                 workspace,
                 &group,
                 row.ordinal,
-            )?);
+            )?;
         }
         let canonical = rebuild_leaf(&prefix, &rows, &values)?;
         if canonical.len() != root.canonical_length {
