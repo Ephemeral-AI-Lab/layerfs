@@ -18,19 +18,33 @@ Direct same-process calls are secondary semantic-parity checks and cannot replac
 this path. The architecture must also preserve a credible future cloud/serverless
 SQLite path. Durability and a managed SQLite implementation come later.
 
+The [implementation specification](implementation/README.md) turns this packet
+into ordered product, telemetry and verification work. It uses C3 as the current
+request's shorthand for pair 3/#181. The M0 source/security/schema/resource freeze
+is still NOT_FROZEN; the specification itself is not implemented or qualified.
+
+The [direct/forward benchmark-verification draft](implementation/04-benchmark-direct-forward.md)
+is sequenced after the C3 product implementation and prerequisite checks. It
+keeps the existing core benchmark unchanged and separates execution mode from
+placement and telemetry-output selection; no new benchmark mode exists yet.
+
 ## Read in this order
 
 | Document | What it settles in the proposal |
 | --- | --- |
 | [01 — Architecture and portability](01-architecture-and-portability.md) | ASCII ownership/dependency and deployment diagrams: embedded native, host processes, host plus Docker, native cloud, future managed SQLite, and later Workspace/FUSE integration. Identifies the real provider/lifecycle portability gaps. |
 | [02 — File layout and boundaries](02-file-layout-and-boundaries.md) | Proposed three-crate tree, module responsibilities, dependency direction, production daemon entry before FUSE, and existing C1/C2 APIs to reuse. |
-| [03 — Operations and transport](03-operations-and-transport.md) | Logical operations, construction/edit/tree-update algorithms, request/result sequences, framing, authorization, admission, backpressure and known/unknown outcomes. |
+| [07 — Public operation catalog](07-public-operations.md) | Five caller-facing operations, inputs/results, C1/C2 mappings, minimal public entry points and internal-only storage calls. |
+| [03 — Operations and transport](03-operations-and-transport.md) | Request/result sequences, C1 input constraints, framing, authorization, admission, backpressure and completion/failure states. |
 | [04 — Resource and verification plan](04-resource-and-verification-plan.md) | Roundtrip accounting, buffer/replay/CPU bounds, illustrative memory arithmetic, correctness cases, real Docker/host evidence and honest performance measurement. |
 | [05 — v0.1.6 comparison](05-v0.1.6-comparison.md) | Source-backed legacy flow, existing optimizations to preserve, exact exchange formulas, and the recommended minimal refinements before pair 1. |
 | [06 — Later FUSE and cloud integration](06-future-fuse-and-cloud.md) | Workspace ownership, thin FUSE adapter, future native-cloud and managed/serverless adaptations, and the integration evidence each needs. |
+| [08 — Telemetry and retention](08-telemetry-and-retention.md) | Disableable operation recording, independent CPU/memory observation, environment adapters, host/local output and bounded configurable cleanup. |
 
-Document 03 owns message semantics; document 04 owns resource terminology and
-numeric profiles. The file map assigns responsibilities rather than creating
+Document 07 owns the public operation catalog; document 03 owns wire and lifecycle
+semantics; document 04 owns product-resource and verification profiles. Document 08
+owns proposed telemetry observation/output budgets and retention; its candidate
+operational defaults do not override benchmark contracts. The file map assigns responsibilities rather than creating
 empty modules. Exact protocol widths, dependencies and deployed limits remain
 implementation decisions to close below.
 
@@ -45,20 +59,38 @@ The further review keeps three crates and removes speculative machinery:
 | Validated connection/active-operation and byte limits | Waiting-operation queue and scheduler; Q=0 means immediate refusal |
 | Deadline/disconnect handling and explicit unknown outcome | In-band `CANCEL`, acknowledged rollback, resume and automatic replay |
 | One selected authenticated native carrier; same-body direct parity | Carrier/provider matrix, generic cloud framework or unused embedded feature |
-| Small cohesive modules split when needed | Separate config/access/read/save/error/limits file merely because each is a concept |
+| Focused contract, adapter/protocol, service-operation/input and daemon folders | Catch-all implementation files, per-field wrappers and empty future adapter scaffolding |
 
 These are proposal scope choices, not production changes. The five logical
 operations remain service handlers used to exercise transport. Future composite
 submission, Workspace/FUSE and managed SQLite stay in their own integration work.
 
+Telemetry likewise stays in **one `layerfs-telemetry` crate**: existing timing
+and portable reports plus optional native monitoring/output modules. The
+[telemetry proposal](08-telemetry-and-retention.md) defines feature/runtime disable
+boundaries; no separate telemetry-runtime crate is required.
+Its [LOC baseline and estimate](08-telemetry-and-retention.md#production-loc-baseline-and-estimated-growth)
+records 763 existing production LOC, an estimated +1,800 to +3,200 inside that
+crate, and +100 to +300 for application wiring. Tests/examples are separate;
+the new telemetry features are not implemented by these documents.
+
 ## One implementation, configurable placement
 
 Build **one bridge library, one logical service implementation and one logical
-daemon implementation**. The bridge contains client/server endpoints and one
-selected authenticated native network carrier initially. Direct invocation calls
+daemon implementation**. Separate shared operation types from delivery-adapter
+folders. The initial native adapter contains client/server endpoints over one
+selected authenticated carrier; future HTTP/WebSocket adapters can implement the
+same operation meanings without copying the service. Direct invocation calls
 the same service body; it is not a second bridge implementation. Do not create
 separate local, Docker and cloud bridge crates or environment-specific service
 forks. Different native platforms can require different builds/configuration.
+
+The [folder proposal](02-file-layout-and-boundaries.md) separates these two future
+extension points: **delivery adapters under bridge; persistence providers under
+C2**. Different databases do not require different bridge protocols. All production
+files stay within 999 physical lines; `lib.rs`/`mod.rs` stay within 200 and contain
+only declarations/reexports/thin delegation. Future locations are documented but
+are created only with a real implementation.
 
 | Placement | Delivery | Status in this scope |
 | --- | --- | --- |
@@ -134,7 +166,8 @@ total memory or CPU.
 
 The initial proposed operation set is `ReadFile`, `Inspect`, `ConstructFile`,
 `EditFile` and `UpdatePreparedFilesystem`. These are proposed bridge names,
-mapped to actual C1/C2 interfaces in documents 02/03. Key limits are explicit:
+mapped to actual C1/C2 interfaces in the [operation catalog](07-public-operations.md).
+Key limits are explicit:
 
 - Complete-file construction can consume a sequential stream. Known edits use
   replayable replacement input under a separate retained-byte cap because the

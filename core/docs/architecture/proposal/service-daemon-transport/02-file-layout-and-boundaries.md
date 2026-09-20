@@ -10,9 +10,11 @@ Linux Docker daemon connected to the macOS host service. These directories,
 modules and new API names are proposals; this document does not create them or
 claim they compile.
 
-This is one bridge library and one logical implementation of each executable,
-not separate local/Docker/cloud variants. The bridge has client and server
-endpoints with one selected native network carrier initially. Endpoint, credentials,
+Use one shared bridge contract with independently owned delivery-adapter folders,
+and one logical implementation of each executable. Multiple bridge delivery
+implementations can be added for real target requirements; local/Docker/native-cloud
+placement can reuse the same adapter. The initial native adapter has client/server
+endpoints over one selected carrier. Endpoint, credentials,
 Store configuration and limits vary by deployment; platform-specific builds can
 vary without forking operation behavior. Main acceptance uses networked separate
 processes. The direct example is secondary parity through the same handler, not
@@ -32,63 +34,108 @@ specification owns message semantics. The resource specification is the single
 source of numerical limits and their configuration; this file defines ownership,
 not another set of defaults.
 
-## 1. Three new crates, existing core unchanged
+## 1. Responsibility folders under three new crates
+
+The user-directed structure separates independently changing responsibilities
+rather than packing them into a few catch-all files. This remains a proposal;
+create each production module with its implementation, not empty scaffolding.
+C1, C2 and telemetry remain existing crates alongside the three new packages.
 
 ```text
-core/
-+-- Cargo.toml                         add real members when implemented
-+-- Cargo.lock                         existing locked dependency resolution
-+-- crates/
-|   +-- layerfs-content/               existing C1
-|   +-- layerfs-storage/               existing C2, native SQLite initially
-|   +-- layerfs-telemetry/             existing operation timing
-|   |
-|   +-- layerfs-bridge/
-|   |   +-- Cargo.toml
-|   |   +-- src/
-|   |   |   +-- lib.rs                 declarations/reexports only
-|   |   |   +-- contract.rs            request/result, errors and validated limits
-|   |   |   +-- frame.rs               one bounded encoder/decoder
-|   |   |   +-- client.rs              concrete remote Client
-|   |   |   `-- server.rs              stream loop calls supplied handler
-|   |   `-- tests/                    external framing/outcome checks
-|   |
-|   +-- layerfs-service/
-|   |   +-- Cargo.toml
-|   |   +-- src/
-|   |   |   +-- lib.rs                 declarations/reexports only
-|   |   |   +-- main.rs                delegates to host startup
-|   |   |   +-- host.rs                config, authentication, listener/lifecycle
-|   |   |   +-- service.rs             authorize/dispatch, real C1/C2 read/save
-|   |   |   `-- input.rs               stable bounded C1 input and edit replay
-|   |   +-- examples/direct.rs         same Service body without the wire
-|   |   `-- tests/                    operation and authorization checks
-|   |
-|   `-- layerfs-daemon/
-|       +-- Cargo.toml
-|       +-- Dockerfile                package actual Linux binary
-|       +-- src/
-|       |   +-- main.rs                delegates to run
-|       |   `-- run.rs                 config, headless relay, process lifecycle
-|       `-- tests/                    real process and Docker/host checks
-`-- docs/architecture/proposal/service-daemon-transport/
-    `-- ...                            design only
+core/crates/
++-- layerfs-content/                     existing C1
++-- layerfs-storage/                     existing C2; native SQLite today
++-- layerfs-telemetry/                   existing
+|
++-- layerfs-bridge/
+|   +-- Cargo.toml
+|   +-- src/
+|   |   +-- lib.rs                      declarations/reexports only
+|   |   +-- contract/                   shared operation vocabulary
+|   |   |   +-- mod.rs
+|   |   |   +-- request.rs              envelope and five request variants
+|   |   |   +-- response.rs             typed results and bounded metadata
+|   |   |   +-- outcome.rs              semantic/delivery errors and certainty
+|   |   |   `-- limits.rs               checked operation limits
+|   |   `-- adapters/
+|   |       +-- mod.rs
+|   |       `-- native/                 initial selected network carrier
+|   |           +-- mod.rs
+|   |           +-- connection.rs       connect/accept, peer evidence, close
+|   |           +-- client.rs           operation submission/result delivery
+|   |           +-- server.rs           invoke supplied service handler
+|   |           +-- payload.rs          bounded delivery sources/sinks
+|   |           `-- protocol/
+|   |               +-- mod.rs
+|   |               +-- frame.rs        header/primitive framing and partial I/O
+|   |               +-- metadata.rs     checked request/result field codec
+|   |               `-- state.rs        grammar, counts, input/terminal states
+|   `-- tests/                          external contract/framing/outcome tests
+|
++-- layerfs-service/
+|   +-- Cargo.toml
+|   +-- src/
+|   |   +-- lib.rs                      declarations/reexports only
+|   |   +-- main.rs                     delegates to native startup
+|   |   +-- owner.rs                    concrete Service and configured Stores
+|   |   +-- operation/
+|   |   |   +-- mod.rs
+|   |   |   +-- dispatch.rs             logical request -> supported handler
+|   |   |   +-- access.rs               per-Store/operation authorization
+|   |   |   +-- admission.rs            aggregate active/resource limits, Q=0
+|   |   |   +-- lifecycle.rs            save completion and safe failure cleanup
+|   |   |   +-- read.rs                 ReadFile and Inspect composition
+|   |   |   +-- write.rs                ConstructFile and EditFile composition
+|   |   |   `-- filesystem.rs           prepared filesystem update composition
+|   |   +-- input/
+|   |   |   +-- mod.rs
+|   |   |   +-- sequential.rs           exact-length construction input
+|   |   |   +-- replay.rs               capped stable edit replacement source
+|   |   |   `-- records.rs              bounded prepared filesystem records
+|   |   `-- native/
+|   |       +-- mod.rs
+|   |       +-- config.rs               endpoint, credentials, Store paths, limits
+|   |       `-- startup.rs              process/listener and handler assembly
+|   +-- examples/direct.rs              secondary same-handler parity
+|   `-- tests/                          operation/auth/input/cleanup behavior
+|
+`-- layerfs-daemon/
+    +-- Cargo.toml
+    +-- Dockerfile                      package the actual Linux executable
+    +-- src/
+    |   +-- main.rs                     delegates to run
+    |   +-- run.rs                      assembly/startup/shutdown only
+    |   +-- config.rs                   validated endpoint/credentials/limits
+    |   `-- headless.rs                 stdin/stdout submission via bridge Client
+    `-- tests/                          real daemon and Docker/host route
 ```
 
-This is a responsibility map, not permission to create empty scaffolding. Add a
-file with its real implementation; merge a tiny responsibility into its existing
-owner where that remains clear. There is no separate protocol crate, generated
-provider registry, generic application framework or parallel implementation of
-C1/C2. The chosen stream carrier may need a small carrier-specific module once
-its concrete dependencies and platform behavior are settled; do not pre-create
-one for each possible transport.
+All `mod.rs` files shown above contain declarations/reexports/thin delegation,
+not the state, types or implementations of their directory. Tests, fixtures,
+synthetic peers and process drivers stay outside `src/`.
 
-Production files remain at most 999 physical lines. `lib.rs` and `mod.rs` remain
-at most 200 and contain declarations/delegation only. Put types, validation,
-branching and I/O in the named modules. All tests, synthetic peers, process
-controllers and fixtures stay outside `src/`. The Docker integration driver may
-have external helpers under `tests/support/` when shared work warrants them; no
-test-only public entry point or fault switch belongs in the daemon.
+### File limits and size discipline
+
+- **999 physical lines maximum** per production file, including comments/blanks.
+- **200 physical lines maximum** for `lib.rs` and `mod.rs`, with the stricter
+  declaration/delegation-only content rule.
+- Keep each implementation focused and comfortably below the ceiling. The ceiling
+  is not a target and file count is not a measure of simplicity. Split by real
+  responsibility, not arbitrary numbered parts or one type/field per file.
+- If `protocol/metadata.rs` grows, split request/result or filesystem-record codecs
+  rather than weakening validation or creating a second parser. If `headless.rs`
+  grows, replace it with `headless/{mod,session,relay}.rs`; do not keep parallel
+  implementations. That session owns local submission lifetime, not another
+  transport state machine.
+- No placeholders for future adapters/providers, generated forwarding framework,
+  test hooks, or implementation hidden in entry modules. New product formats must
+  remain covered by the existing boundary checks.
+
+This replaces the earlier flat file sketch as the proposed responsibility map.
+It does not establish a new production LOC count: physical file limits and
+nonblank/non-comment production LOC are different measures. The earlier total
+LOC range remains an unmeasured planning estimate, to revisit after actual carrier,
+security and schema choices; splitting folders does not prove a size or speed win.
 
 ## 2. Cargo dependency graph
 
@@ -146,34 +193,59 @@ Direct invocation belongs in the service example and external parity tests.
 Configurable placement does not require another launch framework, an optional
 embedded-daemon feature or a daemon dependency on service/C2/native SQLite.
 
-## 3. File-level responsibilities and public seams
+## 3. Dependency and responsibility rules inside the folders
 
-All names in this table are **proposed**, except the C1/C2 APIs in section 5.
-Exact function signatures and protocol discriminants belong to the operation
-specification; they have not been implemented or compiled.
+The [public operation catalog](07-public-operations.md) owns the caller surface;
+[document 03](03-operations-and-transport.md) owns native transport/lifecycle
+behavior. Exact signatures, adapter selection and wire discriminants are still
+proposal decisions, not compiled APIs.
 
-| File/module | Initial responsibility | Boundary |
+```text
+bridge/contract                 no carrier, C1/C2, SQL or runtime dependency
+       ^
+       |
+bridge/adapters/native          native connection and protocol mechanics
+       ^                  ^
+       |                  |
+daemon/headless        service/native/startup
+                              |
+                       supplied handler
+                              v
+                       service/owner
+                              |
+                    operation/access + admission + dispatch
+                              |
+                    read / write / filesystem
+                              |
+                      input adapters + C1/C2
+```
+
+| Owner | What it owns | What stays outside |
 | --- | --- | --- |
-| `bridge/contract.rs` | Shared request/result/error types and validated limits | No SQL, native paths, Workspace state or caller-created authority |
-| `bridge/frame.rs` | One encoder/decoder reused by native link and headless submission | Validate lengths/counts before variable allocation; exact completion |
-| `bridge/client.rs` | Concrete remote call and bounded result handling | No reconnect-and-replay, polling or guessed rollback |
-| `bridge/server.rs` | Stream decode/dispatch/encode through supplied handler | No C1/C2 algorithms or Store opening |
-| `service/host.rs` | Config, credentials/authentication, listener and process/connection lifecycle | Deployment details remain outside operation types |
-| `service/service.rs` | Store lifetime, per-operation authorization/admission, dispatch and C1/C2 read/save composition | Direct and remote callers share one authoritative operation body |
-| `service/input.rs` | Sequential input, bounded replay/record backing and cleanup | Actual C1 capabilities and aggregate resources, not unlimited buffering |
-| `daemon/run.rs` | Native config, supported stdin/stdout submission and configured bridge client | Reuses framing; no separate control protocol, SQL or history engine |
+| `bridge/contract/` | Logical requests/results/outcomes and checked common limits | Native sockets, HTTP objects, SQL, Workspace state and caller-created authority |
+| `bridge/adapters/native/connection.rs` | Selected carrier setup and peer evidence; connection close | Store permissions, C1/C2 and deployment-specific service behavior |
+| `bridge/adapters/native/protocol/` | Frame/field codec and legal wire transitions | Storage algorithms, replay backing and semantic success decisions |
+| `bridge/adapters/native/{client,server,payload}.rs` | Bounded request/result delivery around the supplied handler | Unbounded queues, automatic replay and a second service implementation |
+| `service/owner.rs` | Configured Store lifetimes and the concrete Service facade | Pending Workspace overlays or remote file handles |
+| `service/operation/access.rs` | Verified identity -> Store/operation permission, including direct calls | Trust in an identity supplied by the request itself |
+| `service/operation/admission.rs` | Active operation and handler resource accounting, immediate refusal | Waiting scheduler; hidden construction workers |
+| `service/operation/lifecycle.rs` | Existing single-attempt C2 finish/abort/error retention | Transport grammar, durable recovery or completion redelivery |
+| `service/operation/{read,write,filesystem}.rs` | Five logical operations composed from real C1/C2 APIs | Native listeners and per-canonical-object RPCs |
+| `service/input/` | Sequential, replay and finite-record capabilities C1 actually requires | Generic collect-everything buffer or container spool fallback |
+| `service/native/` | Config, credentials/verification policy, native process and bridge-server assembly | Operation algorithm forks for Docker or cloud placement |
+| `daemon/{config,run,headless}.rs` | Validated settings, assembly, local submission and bounded result relay | Another frame parser, SQL, storage ownership or history engine |
 
-Do not pre-split configuration, access checks, read/save dispatch, limits and
-errors into one file per concern. Split a real implementation when its cohesion
-or the production line ceiling requires it. Authentication setup belongs to the
-host endpoint; authorization remains in the service for **every** operation,
-including direct calls. Combining files must not bypass either check.
+Host setup supplies authentication policy to the selected endpoint and binds
+verified caller context to the handler. The service authorizes every operation,
+including direct calls. Connection admission resources are owned at the endpoint;
+handler admission is owned at the service. They use declared aggregate limits,
+not duplicate counters that each pretend to bound the whole process.
 
-An operation context supplied to the service must be minted/validated by the
-trusted endpoint or embedded caller setup; a wire field cannot assert its own
-authorization. Authentication carrier choice and per-operation authorization are
-specified in documents 01/03. Framing code has no independent authority to grant
-Store access.
+This applies SRP through separate reasons to change: operation schema, native
+framing, carrier setup, authorization, storage composition and input lifetime.
+The supplied handler maintains dependency direction without an interface per
+file. Substitution requires matching semantics, errors and bounds through the
+same external contract tests; a new adapter cannot silently weaken those rules.
 
 ## 4. A real daemon interface before FUSE exists
 
@@ -264,7 +336,7 @@ requires indexed `replacement_len`/`read_at`; `FilesystemInput` borrows finite s
 validation/update code revisits records. Native ordering spill is available via
 [OrderingBacking/FileBacking](../../../../crates/layerfs-content/src/filesystem/references/backing.rs).
 
-Consequently `service/input.rs` must make each operation's input capability
+Consequently `service/input/` must make each operation's input capability
 explicit: bounded in-memory input, a declared stable random-access/replay backing,
 or refusal when the capability is unavailable. The selected bounds and backing
 policy come from document 04. An iterator over immutable prepared records can
@@ -279,23 +351,106 @@ and never appear as client-requested write destinations. Managed runtimes may
 lack those backing capabilities; they must refuse unsupported operations or
 supply a qualified replacement, not silently collect unlimited data in memory.
 
-## 7. Later components and honest portability boundary
+## 7. Future adapters and database providers are different extension points
 
-Pair 1 adds actual FUSE callbacks, Workspace lifecycle/overlays, file handles and
-accumulated mutation scheduling on the execution side. Their public-operation
-caller should depend on bridge interfaces; it must not acquire a dependency on
-service SQL/pack modules. No empty Workspace/FUSE crate is added in this phase.
-Pair 2 adds history, allocation ownership, stage/Commit identities and conditional
-head publication outside C1/C2, with its own explicit integration/schema design.
-The saved-root response remains distinct from those future operations.
+The shared operation contract can support several delivery implementations:
 
-The current service links C2/native SQLite; the default remote daemon and bridge
-do not. Keep provider extraction, alternate carriers and target-specific builds
-for a concrete future target. The dependency rule is enforceable now; managed
-runtime support is not. See [architecture boundaries](01-architecture-and-portability.md)
-and the [future integration proposal](06-future-fuse-and-cloud.md) for provider,
-codec, scratch and lifecycle requirements. No provider registry or unused embedded
-feature is added in this foundation.
+```text
+layerfs-bridge/src/
++-- contract/                         shared meanings, limits and outcomes
+`-- adapters/
+    +-- native/                       initial implementation
+    +-- http/                         FUTURE, only for a selected real target
+    |   +-- mod.rs
+    |   +-- client.rs
+    |   +-- server.rs
+    |   `-- mapping.rs                operation <-> HTTP representation
+    `-- websocket/                    FUTURE, only when required
+        +-- mod.rs
+        +-- client.rs
+        +-- server.rs
+        `-- mapping.rs                messages, limits and terminal outcomes
+```
+
+The future folders are design locations, not files/features to create now.
+Do not add local/Docker/cloud copies of the same adapter: those are usually
+endpoint/configuration choices. Direct invocation is the existing service body,
+not a delivery adapter that needs its own implementation.
+
+HTTP/WebSocket may use different async I/O, buffering and lifetime APIs. Preserve
+logical operation semantics without forcing every future target through native
+`Read`/`Write`, HELLO or the same frame codec. A small operation-level caller
+interface is justified when actual adapters need interchangeable callers; add
+that boundary rather than exposing sockets to Workspace or creating a registry.
+Native dependencies must not enter `contract/`. When a second target exists,
+qualify feature/dependency isolation and use a separate adapter crate only if a
+real build boundary warrants it. Folders alone do not prove target portability.
+
+### Storage placement does not select a bridge implementation
+
+A different database is a C2 persistence adaptation, independent of the delivery
+adapter. Keep native SQLite for the initial pair. A later concrete provider may
+justify this internal extraction:
+
+```text
+service operation handlers
+         |
+         v
+C1 <-> C2 canonical/storage ownership and physical representation rules
+         |
+         v
+future bounded persistence capability
+         +--> native SQLite
+         +--> managed SQLite           FUTURE
+         `--> other qualified database FUTURE
+```
+
+Possible future C2 location, only when a real second provider is implemented:
+
+```text
+layerfs-storage/src/
++-- cas/                               Store/read/save ownership
++-- encoding/                          physical representation
++-- pack/                              pack algorithms
+`-- persistence/                       FUTURE extraction from current sqlite/
+    +-- mod.rs
+    +-- contract.rs                    actual grouped I/O and save capabilities
+    +-- native_sqlite/                 migrate current implementation once
+    `-- selected_provider/             actual alternative, not a placeholder
+```
+
+Current `sqlite/` remains in place now. The future tree is a replacement/extraction
+of provider-specific code, not permission to maintain duplicate native providers.
+The contract must cover bounded grouped reads/writes, integrity/dependencies,
+whole-save ownership, visibility, transactions, format/capacity rules, cleanup and
+known/unknown outcomes. It must not become an interface for every SQL statement.
+A different engine must qualify those semantics and declare format/import changes;
+C1 identity and bridge compatibility are conditional on their actual guarantees.
+
+Today's C2 still opens native paths, exposes native engine errors and links native
+SQLite/codec dependencies. A future provider may need actual refactoring and build
+isolation; the service is not already database-agnostic because this diagram exists.
+No provider registry or database implementation is added in pair 3.
+
+### Later Workspace, FUSE and history
+
+Pair 1 introduces `daemon/workspace/` for local mutable state and `daemon/fuse/`
+for a thin Linux projection. See the focused future tree in
+[document 06](06-future-fuse-and-cloud.md#future-responsibility-folders).
+Workspace depends on logical bridge calls; FUSE depends on Workspace. Neither
+acquires service/C2/SQL dependencies or its own wire parser. Pair 2 adds history,
+allocation ownership and conditional publication outside C1/C2 under its own
+contract. Transport changes do not create a Workspace or a logical Commit.
+
+### Telemetry integration is separate from transport and persistence
+
+Use one `layerfs-telemetry` crate. Portable timing/report/operation modules stay
+independent of optional native runtime/platform/output modules in that same crate.
+Service/daemon assembly explicitly enables and configures native facilities;
+Workspace/FUSE reuse the daemon's process monitor. See
+[document 08](08-telemetry-and-retention.md) for feature boundaries, disabled
+behavior, configuration and retention. No second telemetry package is proposed,
+and compiling/importing modules does not start a sampler or exporter.
 
 ## 8. Layout acceptance
 
