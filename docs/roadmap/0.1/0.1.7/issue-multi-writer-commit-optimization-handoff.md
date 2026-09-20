@@ -1,7 +1,7 @@
 # Handoff prompt — #209: optimise `commit_ns`, and keep multi-writer while you do it
 
 > Status: Research; informative and not a product contract. Dated continuation
-> checkpoint, 2026-09-20, after `09bfbd2a4`. This prompt carries an attributed
+> checkpoint, 2026-09-20, after `6e0d52606`. This prompt carries an attributed
 > regression and a bounded investigation; it is **not** a new measurement, not a design
 > freeze, and not a release claim.
 
