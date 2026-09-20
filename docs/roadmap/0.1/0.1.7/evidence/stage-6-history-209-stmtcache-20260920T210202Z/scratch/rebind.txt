@@ -1,0 +1,19 @@
+fresh, growing body r0       calls=15000 growth=1450B body=192180B  ns/statement=    35638
+cached, growing body r0      calls=15000 growth=1450B body=192180B  ns/statement=    31069
+fresh, fixed body r0         calls=15000 growth=1450B body=96480B  ns/statement=    17755
+cached, fixed body r0        calls=15000 growth=1450B body=96480B  ns/statement=    13570
+fresh, growing body r1       calls=15000 growth=1450B body=192180B  ns/statement=    35518
+cached, growing body r1      calls=15000 growth=1450B body=192180B  ns/statement=    30962
+fresh, fixed body r1         calls=15000 growth=1450B body=96480B  ns/statement=    17779
+cached, fixed body r1        calls=15000 growth=1450B body=96480B  ns/statement=    13607
+fresh, growing body r2       calls=15000 growth=1450B body=192180B  ns/statement=    35676
+cached, growing body r2      calls=15000 growth=1450B body=192180B  ns/statement=    31077
+fresh, fixed body r2         calls=15000 growth=1450B body=96480B  ns/statement=    17769
+cached, fixed body r2        calls=15000 growth=1450B body=96480B  ns/statement=    14933
+fresh, growing body      mean 35611 ns per statement
+cached, growing body     mean 31036 ns per statement
+fresh, fixed body        mean 17768 ns per statement
+cached, fixed body       mean 14036 ns per statement
+growth penalty (growing - fixed): fresh +17843 ns, cached +17000 ns
+cache effect: growing -4575 ns, fixed -3732 ns
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.20s
