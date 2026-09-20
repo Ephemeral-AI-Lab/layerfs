@@ -102,6 +102,9 @@ impl MutationOwner {
                 ..OutcomeCounters::default()
             },
             profile: SaveProfile::default(),
+            // Enabled only by `LAYERFS_STORAGE_REUSE_PROBE`; `None` otherwise, so
+            // an ordinary save carries no probe state at all.
+            probe: crate::cas::owner::ReuseProbe::enabled().then(Default::default),
             candidates,
             depths: DepthCache::new(),
             pack_cache: BTreeMap::new(),

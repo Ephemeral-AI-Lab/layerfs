@@ -376,7 +376,7 @@ pub fn select(
             base_id,
             |connection, workspace, location| bases.base_of(connection, workspace, location),
         );
-        SaveProfile::charge(&mut input.profile.resolve_ns, started);
+        SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
         let base_cost = base_cost?.ok_or(StorageError::Integrity("selected base is not stored"))?;
         input.depths.record(
             id,
@@ -448,7 +448,7 @@ fn eligible(
         id,
         |connection, workspace, location| bases.base_of(connection, workspace, location),
     );
-    SaveProfile::charge(&mut input.profile.resolve_ns, started);
+    SaveProfile::charge(&mut input.profile.resolve.eligible_ns, started);
     let depth = depth?;
     let Some(depth) = depth else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
@@ -476,6 +476,6 @@ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> 
         resolver.resolve_dependency(id)?.0
     };
     crate::encoding::delta::read::accumulate(input.chain_total, *input.chain);
-    SaveProfile::charge(&mut input.profile.resolve_ns, started);
+    SaveProfile::charge(&mut input.profile.resolve.acquire_ns, started);
     Ok(value)
 }

@@ -42,10 +42,8 @@ use std::time::Instant;
 /// deliberately outside all seven and is reported as the remainder.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct SaveProfile {
-    /// Chain/edge walks and stored-object reconstruction: candidate eligibility,
-    /// base acquisition, the post-trial cost walk, exact-reuse verification, and
-    /// the pooled lane's value lookup and base acquisition.
-    pub resolve_ns: u64,
+    /// The disjoint parts of resolution.
+    pub resolve: ResolveProfile,
     /// FULL representation encode: the ordinary lane's tree-role and payload
     /// frames, and the pooled lane's leaf body.
     pub full_ns: u64,
@@ -62,12 +60,82 @@ pub struct SaveProfile {
     /// Transaction cadence: `COMMIT`, `ROLLBACK`, and the `BEGIN IMMEDIATE` that
     /// restarts a bounded transaction.
     pub commit_ns: u64,
+    /// Occurrences of the exact-reuse verification whose identity had already been
+    /// verified once earlier in this same operation (B1's population).
+    ///
+    /// A **count**, not a duration, and deliberately not an eighth time bucket:
+    /// [`total_ns`](Self::total_ns) still sums the seven durations, so the split
+    /// published beside this figure is unchanged by it. It exists because "how
+    /// much of `resolve.reuse` is a repeat of work this operation already did"
+    /// cannot be answered from any duration - a first verification and a repeat
+    /// cost the same - and a treatment that memoizes a verification has to know
+    /// its population before it is pre-registered. It is zero unless the
+    /// measurement-only probe is enabled (see `cas::owner::reuse_probe`), so an
+    /// ordinary save is unaffected; `SaveOutcome`'s equality already excludes this
+    /// whole struct, so enabling it cannot make a determinism comparison fail.
+    pub reuse_repeat: u64,
+}
+
+/// The disjoint parts of [`SaveProfile::resolve`].
+///
+/// Resolution is the save's largest bucket and its parts are different kinds of
+/// work with different treatments: a chain walk that only measures depth
+/// (`eligible`), a chain walk that reconstructs a base (`acquire`), a walk that
+/// records a new object's cost (`cost`), the exact-reuse verification
+/// (`reuse`), and the pooled lane's own lookups (`pooled`). `resolve_ns()` is
+/// their sum, so the top-level bucket is unchanged and the parts cannot overlap
+/// it or each other.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ResolveProfile {
+    /// Candidate eligibility: the `depth_of` edge walk, which reads each edge
+    /// through `ChainBases` and is charged to no other counter in the product.
+    pub eligible_ns: u64,
+    /// Base acquisition: the chain rebuild that produces the offered bytes a
+    /// prefix frame is taken against.
+    pub acquire_ns: u64,
+    /// The post-trial cost walk that records the admitted object's own depth.
+    pub cost_ns: u64,
+    /// Exact-reuse verification: stored-object reconstruction, the identity
+    /// re-hash that authenticates it, and the byte comparison.
+    pub reuse_ns: u64,
+    /// The pooled lane's value lookup, base acquisition and index synchronization.
+    pub pooled_ns: u64,
+}
+
+impl ResolveProfile {
+    /// Adds another resolve profile's parts into this one.
+    pub fn accumulate(&mut self, other: &Self) {
+        self.eligible_ns = self.eligible_ns.saturating_add(other.eligible_ns);
+        self.acquire_ns = self.acquire_ns.saturating_add(other.acquire_ns);
+        self.cost_ns = self.cost_ns.saturating_add(other.cost_ns);
+        self.reuse_ns = self.reuse_ns.saturating_add(other.reuse_ns);
+        self.pooled_ns = self.pooled_ns.saturating_add(other.pooled_ns);
+    }
+
+    /// Sum of the five parts.
+    pub fn total_ns(&self) -> u64 {
+        [
+            self.eligible_ns,
+            self.acquire_ns,
+            self.cost_ns,
+            self.reuse_ns,
+            self.pooled_ns,
+        ]
+        .into_iter()
+        .fold(0_u64, u64::saturating_add)
+    }
 }
 
 impl SaveProfile {
+    /// Resolution: the sum of [`ResolveProfile`]'s disjoint parts.
+    pub fn resolve_ns(&self) -> u64 {
+        self.resolve.total_ns()
+    }
+
     /// Adds another profile's buckets into this one.
     pub fn accumulate(&mut self, other: &Self) {
-        self.resolve_ns = self.resolve_ns.saturating_add(other.resolve_ns);
+        self.resolve.accumulate(&other.resolve);
+        self.reuse_repeat = self.reuse_repeat.saturating_add(other.reuse_repeat);
         self.full_ns = self.full_ns.saturating_add(other.full_ns);
         self.delta_ns = self.delta_ns.saturating_add(other.delta_ns);
         self.group_ns = self.group_ns.saturating_add(other.group_ns);
@@ -82,7 +150,7 @@ impl SaveProfile {
     /// `storage.accept_loop` is the remainder the instrument does not name.
     pub fn total_ns(&self) -> u64 {
         [
-            self.resolve_ns,
+            self.resolve_ns(),
             self.full_ns,
             self.delta_ns,
             self.group_ns,
@@ -103,6 +171,49 @@ impl SaveProfile {
     /// published, at the cost of an extra branch per object.
     pub(crate) fn charge(slot: &mut u64, started: Instant) {
         *slot = slot.saturating_add(started.elapsed().as_nanos() as u64);
+    }
+}
+
+/// Measurement-only population probe for the exact-reuse verification.
+///
+/// `#205`'s B1 candidate is "do not re-verify what this save already verified".
+/// Its size cannot be read from any duration, because a first verification and a
+/// repeat cost the same: the population - how many reuse occurrences find an
+/// identity this operation has already reconstructed and compared equal - has to
+/// be counted. This type counts it, and does nothing else.
+///
+/// It is **off by default** and enabled only by
+/// `LAYERFS_STORAGE_REUSE_PROBE`, which exists so the mechanism can be sized
+/// before any treatment is pre-registered. Enabled, it records every identity the
+/// reuse verification has completed for and counts the occurrences that find one
+/// already recorded. It changes no decision, no byte, no row and no root: the
+/// verification still runs in full on every occurrence, and the probe only
+/// observes what the result was. With the variable unset the owner holds `None`
+/// and the accept path pays one `Option` test per reuse occurrence.
+#[derive(Debug, Default)]
+pub struct ReuseProbe {
+    /// Identities whose exact-reuse verification has completed in this operation.
+    ///
+    /// Bounded by the identities one operation verifies, and retained only while
+    /// the probe is enabled. The count itself lives on `SaveProfile::reuse_repeat`,
+    /// pushed by the caller that observes the return value, so there is exactly one
+    /// place a repeat is counted.
+    verified: std::collections::BTreeSet<ObjectId>,
+}
+
+impl ReuseProbe {
+    /// Whether the measurement-only probe is enabled for this process.
+    pub fn enabled() -> bool {
+        std::env::var("LAYERFS_STORAGE_REUSE_PROBE").is_ok_and(|value| value == "1")
+    }
+
+    /// Records one completed verification, returning whether it was a repeat.
+    ///
+    /// `true` means this operation had already reconstructed and re-authenticated
+    /// this identity earlier, which is exactly the occurrence a whole-operation
+    /// memo could have answered from its own record.
+    pub fn observe(&mut self, id: ObjectId) -> bool {
+        !self.verified.insert(id)
     }
 }
 
@@ -184,6 +295,11 @@ pub struct MutationOwner {
     pub(super) counters: OutcomeCounters,
     /// Nanosecond cost split of this operation's accept path.
     pub(super) profile: SaveProfile,
+    /// Measurement-only reuse-repeat probe; `None` unless explicitly enabled.
+    ///
+    /// See [`ReuseProbe`]. It is not part of the persisted policy, is never
+    /// enabled by a default, and observes the verification without changing it.
+    pub(super) probe: Option<ReuseProbe>,
     /// Store-owned bounded content-signature index.
     ///
     /// **W2 (#188d).** It is shared with the `Store` and persisted in

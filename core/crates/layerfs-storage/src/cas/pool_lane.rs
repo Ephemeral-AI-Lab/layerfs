@@ -66,7 +66,7 @@ impl MutationOwner {
         use layerfs_content::inode_leaf::{pooled_body, INODE_VALUE_BYTES};
         let started = Instant::now();
         let synced = self.sync_pool_index();
-        SaveProfile::charge(&mut self.profile.resolve_ns, started);
+        SaveProfile::charge(&mut self.profile.resolve.pooled_ns, started);
         synced?;
         let leaf = layerfs_content::inode_leaf::InodeLeaf::decode(object.canonical())?;
         // One batch demand for every distinct value of this leaf that the save's
@@ -99,7 +99,7 @@ impl MutationOwner {
                 &mut self.decompression,
                 &unknown,
             );
-            SaveProfile::charge(&mut self.profile.resolve_ns, started);
+            SaveProfile::charge(&mut self.profile.resolve.pooled_ns, started);
             found?
         };
         let mut ordinals = Vec::with_capacity(leaf.rows.len());
@@ -150,7 +150,7 @@ impl MutationOwner {
         // ineligible base, or a losing comparison, stores the leaf in full.
         let started = Instant::now();
         let base = self.pool_base(advisory, object.canonical_len() as u64, full.len() as u64);
-        SaveProfile::charge(&mut self.profile.resolve_ns, started);
+        SaveProfile::charge(&mut self.profile.resolve.pooled_ns, started);
         let base = base?;
         let Some((base_id, base_body)) = base else {
             return Ok(self.pooled_full(full, object.canonical_len(), body.len()));

@@ -34,7 +34,7 @@ pub fn stored_canonical(
         }
         Ok(canonical)
     })();
-    SaveProfile::charge(&mut owner.profile.resolve_ns, started);
+    SaveProfile::charge(&mut owner.profile.resolve.reuse_ns, started);
     verified
 }
 
@@ -54,9 +54,20 @@ pub fn reuse_or_collide(
         return Err(StorageError::Collision(object.id()));
     }
     let stored = stored_canonical(owner, location)?;
+    // A verification has completed: this identity's stored bytes were
+    // reconstructed and the identity was re-authenticated against them. The probe
+    // records that fact and counts a repeat of an identity this operation already
+    // verified. It observes the result and changes nothing - the comparison below
+    // runs on every occurrence whether the probe is enabled or not, and a
+    // colliding record still fails the save here.
+    if let Some(probe) = owner.probe.as_mut() {
+        if probe.observe(object.id()) {
+            owner.profile.reuse_repeat = owner.profile.reuse_repeat.saturating_add(1);
+        }
+    }
     let started = Instant::now();
     let equal = stored == object.canonical();
-    SaveProfile::charge(&mut owner.profile.resolve_ns, started);
+    SaveProfile::charge(&mut owner.profile.resolve.reuse_ns, started);
     if equal {
         Ok(())
     } else {
