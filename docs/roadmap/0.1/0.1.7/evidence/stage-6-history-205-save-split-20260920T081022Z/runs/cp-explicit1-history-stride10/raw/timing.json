@@ -1,0 +1,432 @@
+{
+  "name": "history",
+  "elapsed_ns": 33277567125,
+  "children": [
+    {
+      "name": "history.state.1",
+      "elapsed_ns": 43448666,
+      "children": [
+        {"name": "content", "elapsed_ns": 6764750, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 284041, "children": []},
+        {"name": "store.create", "elapsed_ns": 3902917, "children": []},
+        {"name": "harness.input", "elapsed_ns": 655917, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 839333,
+          "children": [
+            {"name": "validate", "elapsed_ns": 124125, "children": []},
+            {"name": "directories", "elapsed_ns": 257416, "children": []},
+            {"name": "references", "elapsed_ns": 11625, "children": []},
+            {"name": "inodes", "elapsed_ns": 165250, "children": []},
+            {"name": "cleanup", "elapsed_ns": 542, "children": []},
+            {"name": "root.encode", "elapsed_ns": 833, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 2047292, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 19061334, "children": []},
+        {"name": "harness.index", "elapsed_ns": 390125, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 8957584, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.2",
+      "elapsed_ns": 225149375,
+      "children": [
+        {"name": "content", "elapsed_ns": 27100000, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 987042, "children": []},
+        {"name": "harness.input", "elapsed_ns": 1663167, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 84894208,
+          "children": [
+            {"name": "validate", "elapsed_ns": 77296042, "children": []},
+            {"name": "directories", "elapsed_ns": 3161417, "children": []},
+            {"name": "references", "elapsed_ns": 16458, "children": []},
+            {"name": "inodes", "elapsed_ns": 1507458, "children": []},
+            {"name": "cleanup", "elapsed_ns": 541, "children": []},
+            {"name": "root.encode", "elapsed_ns": 750, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 737291, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 96765042, "children": []},
+        {"name": "harness.index", "elapsed_ns": 1397125, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 10177458, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.3",
+      "elapsed_ns": 244238083,
+      "children": [
+        {"name": "content", "elapsed_ns": 36582583, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 1540833, "children": []},
+        {"name": "harness.input", "elapsed_ns": 1757000, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 63258125,
+          "children": [
+            {"name": "validate", "elapsed_ns": 47655833, "children": []},
+            {"name": "directories", "elapsed_ns": 7644000, "children": []},
+            {"name": "references", "elapsed_ns": 16583, "children": []},
+            {"name": "inodes", "elapsed_ns": 3675375, "children": []},
+            {"name": "cleanup", "elapsed_ns": 750, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1083, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 1008333, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 128482125, "children": []},
+        {"name": "harness.index", "elapsed_ns": 1799833, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 8092625, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.4",
+      "elapsed_ns": 269712792,
+      "children": [
+        {"name": "content", "elapsed_ns": 39162417, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 1789833, "children": []},
+        {"name": "harness.input", "elapsed_ns": 1998333, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 68294625,
+          "children": [
+            {"name": "validate", "elapsed_ns": 45010708, "children": []},
+            {"name": "directories", "elapsed_ns": 10918875, "children": []},
+            {"name": "references", "elapsed_ns": 23000, "children": []},
+            {"name": "inodes", "elapsed_ns": 5729959, "children": []},
+            {"name": "cleanup", "elapsed_ns": 1041, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1083, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 438417, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 150473000, "children": []},
+        {"name": "harness.index", "elapsed_ns": 1896334, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 3673042, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.5",
+      "elapsed_ns": 620029667,
+      "children": [
+        {"name": "content", "elapsed_ns": 72598666, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 3391792, "children": []},
+        {"name": "harness.input", "elapsed_ns": 4254417, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 211377416,
+          "children": [
+            {"name": "validate", "elapsed_ns": 167162542, "children": []},
+            {"name": "directories", "elapsed_ns": 18261083, "children": []},
+            {"name": "references", "elapsed_ns": 59333, "children": []},
+            {"name": "inodes", "elapsed_ns": 10631167, "children": []},
+            {"name": "cleanup", "elapsed_ns": 792, "children": []},
+            {"name": "root.encode", "elapsed_ns": 792, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 564708, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 304084625, "children": []},
+        {"name": "harness.index", "elapsed_ns": 4235833, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 17106083, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.6",
+      "elapsed_ns": 519311667,
+      "children": [
+        {"name": "content", "elapsed_ns": 65602333, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 3301791, "children": []},
+        {"name": "harness.input", "elapsed_ns": 3670208, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 135083250,
+          "children": [
+            {"name": "validate", "elapsed_ns": 89368500, "children": []},
+            {"name": "directories", "elapsed_ns": 19035167, "children": []},
+            {"name": "references", "elapsed_ns": 39416, "children": []},
+            {"name": "inodes", "elapsed_ns": 12850209, "children": []},
+            {"name": "cleanup", "elapsed_ns": 709, "children": []},
+            {"name": "root.encode", "elapsed_ns": 750, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 453625, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 303506334, "children": []},
+        {"name": "harness.index", "elapsed_ns": 3658875, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 1816917, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.7",
+      "elapsed_ns": 769485708,
+      "children": [
+        {"name": "content", "elapsed_ns": 80654250, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 4959041, "children": []},
+        {"name": "harness.input", "elapsed_ns": 5036833, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 227188959,
+          "children": [
+            {"name": "validate", "elapsed_ns": 159546667, "children": []},
+            {"name": "directories", "elapsed_ns": 24984417, "children": []},
+            {"name": "references", "elapsed_ns": 71125, "children": []},
+            {"name": "inodes", "elapsed_ns": 20778458, "children": []},
+            {"name": "cleanup", "elapsed_ns": 791, "children": []},
+            {"name": "root.encode", "elapsed_ns": 959, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 506250, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 415436000, "children": []},
+        {"name": "harness.index", "elapsed_ns": 5708584, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 26816708, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.8",
+      "elapsed_ns": 492067333,
+      "children": [
+        {"name": "content", "elapsed_ns": 54848458, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 3143625, "children": []},
+        {"name": "harness.input", "elapsed_ns": 3942542, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 128428500,
+          "children": [
+            {"name": "validate", "elapsed_ns": 53858500, "children": []},
+            {"name": "directories", "elapsed_ns": 27604792, "children": []},
+            {"name": "references", "elapsed_ns": 42542, "children": []},
+            {"name": "inodes", "elapsed_ns": 25192417, "children": []},
+            {"name": "cleanup", "elapsed_ns": 541, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1083, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 567459, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 285199333, "children": []},
+        {"name": "harness.index", "elapsed_ns": 3689625, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 9817792, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.9",
+      "elapsed_ns": 751494083,
+      "children": [
+        {"name": "content", "elapsed_ns": 80413958, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 3842500, "children": []},
+        {"name": "harness.input", "elapsed_ns": 4572541, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 163629792,
+          "children": [
+            {"name": "validate", "elapsed_ns": 81019583, "children": []},
+            {"name": "directories", "elapsed_ns": 28430792, "children": []},
+            {"name": "references", "elapsed_ns": 39625, "children": []},
+            {"name": "inodes", "elapsed_ns": 29587792, "children": []},
+            {"name": "cleanup", "elapsed_ns": 1125, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1458, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 566416, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 463024583, "children": []},
+        {"name": "harness.index", "elapsed_ns": 4577709, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 27851583, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.10",
+      "elapsed_ns": 724715209,
+      "children": [
+        {"name": "content", "elapsed_ns": 72430250, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 3768375, "children": []},
+        {"name": "harness.input", "elapsed_ns": 4438458, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 152695417,
+          "children": [
+            {"name": "validate", "elapsed_ns": 58322417, "children": []},
+            {"name": "directories", "elapsed_ns": 31344458, "children": []},
+            {"name": "references", "elapsed_ns": 79416, "children": []},
+            {"name": "inodes", "elapsed_ns": 35220791, "children": []},
+            {"name": "cleanup", "elapsed_ns": 1166, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1041, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 2334250, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 415275666, "children": []},
+        {"name": "harness.index", "elapsed_ns": 4180458, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 66339000, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.11",
+      "elapsed_ns": 1283797750,
+      "children": [
+        {"name": "content", "elapsed_ns": 117341417, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 7177083, "children": []},
+        {"name": "harness.input", "elapsed_ns": 6812625, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 357775875,
+          "children": [
+            {"name": "validate", "elapsed_ns": 133220833, "children": []},
+            {"name": "directories", "elapsed_ns": 75079917, "children": []},
+            {"name": "references", "elapsed_ns": 42542, "children": []},
+            {"name": "inodes", "elapsed_ns": 59839834, "children": []},
+            {"name": "cleanup", "elapsed_ns": 5500, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1833, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 590208, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 759111833, "children": []},
+        {"name": "harness.index", "elapsed_ns": 12270083, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 19494417, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.12",
+      "elapsed_ns": 1362864458,
+      "children": [
+        {"name": "content", "elapsed_ns": 130950834, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 7608375, "children": []},
+        {"name": "harness.input", "elapsed_ns": 7762833, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 460820542,
+          "children": [
+            {"name": "validate", "elapsed_ns": 206926666, "children": []},
+            {"name": "directories", "elapsed_ns": 94280417, "children": []},
+            {"name": "references", "elapsed_ns": 46375, "children": []},
+            {"name": "inodes", "elapsed_ns": 59884500, "children": []},
+            {"name": "cleanup", "elapsed_ns": 958, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1375, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 411667, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 691906292, "children": []},
+        {"name": "harness.index", "elapsed_ns": 9464125, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 50113708, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.13",
+      "elapsed_ns": 1329630875,
+      "children": [
+        {"name": "content", "elapsed_ns": 130917166, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 8653542, "children": []},
+        {"name": "harness.input", "elapsed_ns": 6888125, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 403168375,
+          "children": [
+            {"name": "validate", "elapsed_ns": 116972833, "children": []},
+            {"name": "directories", "elapsed_ns": 84771750, "children": []},
+            {"name": "references", "elapsed_ns": 21500, "children": []},
+            {"name": "inodes", "elapsed_ns": 75010625, "children": []},
+            {"name": "cleanup", "elapsed_ns": 875, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1459, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 398625, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 726176583, "children": []},
+        {"name": "harness.index", "elapsed_ns": 9834125, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 38809334, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.14",
+      "elapsed_ns": 1991778916,
+      "children": [
+        {"name": "content", "elapsed_ns": 173190333, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 10948875, "children": []},
+        {"name": "harness.input", "elapsed_ns": 9990416, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 693259834,
+          "children": [
+            {"name": "validate", "elapsed_ns": 282196292, "children": []},
+            {"name": "directories", "elapsed_ns": 130424208, "children": []},
+            {"name": "references", "elapsed_ns": 35958, "children": []},
+            {"name": "inodes", "elapsed_ns": 86144167, "children": []},
+            {"name": "cleanup", "elapsed_ns": 917, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1459, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 452333, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 1065650167, "children": []},
+        {"name": "harness.index", "elapsed_ns": 13436292, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 19771459, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.15",
+      "elapsed_ns": 2141784459,
+      "children": [
+        {"name": "content", "elapsed_ns": 173636958, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 9899291, "children": []},
+        {"name": "harness.input", "elapsed_ns": 10256542, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 775140958,
+          "children": [
+            {"name": "validate", "elapsed_ns": 345421042, "children": []},
+            {"name": "directories", "elapsed_ns": 129768750, "children": []},
+            {"name": "references", "elapsed_ns": 66250, "children": []},
+            {"name": "inodes", "elapsed_ns": 86039375, "children": []},
+            {"name": "cleanup", "elapsed_ns": 1292, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1583, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 453625, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 1126711083, "children": []},
+        {"name": "harness.index", "elapsed_ns": 13331208, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 27479417, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.16",
+      "elapsed_ns": 1720879375,
+      "children": [
+        {"name": "content", "elapsed_ns": 159296791, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 10416125, "children": []},
+        {"name": "harness.input", "elapsed_ns": 9208583, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 493634250,
+          "children": [
+            {"name": "validate", "elapsed_ns": 138198958, "children": []},
+            {"name": "directories", "elapsed_ns": 103696583, "children": []},
+            {"name": "references", "elapsed_ns": 62416, "children": []},
+            {"name": "inodes", "elapsed_ns": 89891833, "children": []},
+            {"name": "cleanup", "elapsed_ns": 1292, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1500, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 462083, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 1020296375, "children": []},
+        {"name": "harness.index", "elapsed_ns": 9144625, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 14380625, "children": []}
+      ]
+    },
+    {
+      "name": "history.state.17",
+      "elapsed_ns": 1869984125,
+      "children": [
+        {"name": "content", "elapsed_ns": 163860666, "children": []},
+        {"name": "harness.predecessors", "elapsed_ns": 8761084, "children": []},
+        {"name": "harness.input", "elapsed_ns": 10313459, "children": []},
+        {
+          "name": "filesystem",
+          "elapsed_ns": 660021916,
+          "children": [
+            {"name": "validate", "elapsed_ns": 248048041, "children": []},
+            {"name": "directories", "elapsed_ns": 125026375, "children": []},
+            {"name": "references", "elapsed_ns": 20375, "children": []},
+            {"name": "inodes", "elapsed_ns": 93577291, "children": []},
+            {"name": "cleanup", "elapsed_ns": 958, "children": []},
+            {"name": "root.encode", "elapsed_ns": 1875, "children": []}
+          ]
+        },
+        {"name": "storage.begin", "elapsed_ns": 1832125, "children": []},
+        {"name": "storage.accept_loop", "elapsed_ns": 977357500, "children": []},
+        {"name": "harness.index", "elapsed_ns": 13934500, "children": []},
+        {"name": "storage.finish", "elapsed_ns": 28971541, "children": []}
+      ]
+    }
+  ]
+}
