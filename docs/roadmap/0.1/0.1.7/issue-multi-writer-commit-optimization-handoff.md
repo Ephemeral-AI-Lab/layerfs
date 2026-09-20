@@ -136,7 +136,7 @@ cleanup, or the memory bound has failed.
    sha256 for both arms and the Store hash for both.
 3. **Both-writer evidence**: second-writer latency and throughput on the shipped step,
    not only single-writer buckets.
-4. **An append-only ledger entry** (next free is **L56**) and an update on #209.
+4. **An append-only ledger entry** (next free is **L57**) and an update on #209.
 5. Production LOC for every commit, with core/reference subtotals.
 
 ## 7. Do not
