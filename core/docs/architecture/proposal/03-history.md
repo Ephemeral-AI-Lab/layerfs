@@ -6,13 +6,15 @@
 > already settled with its evidence, and every open decision. The design itself is
 > **not written**. Issue: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 >
-> **Implementation status (2026-09-21):** C5 history is implemented in
-> `core/crates/layerfs-history/` through the existing service, per the reviewed
-> [pair 2 implementation specification](commit-history/implementation.md) and its
-> [pre-publication audit](commit-history/review-20260921.md). Where this document
-> and that specification disagree, the specification and the source-backed
-> [paper 16](../../16-history.md) are authoritative; this page is not updated to
-> restate the implemented contract.
+> **Implementation review status (2026-09-21):** C5 history exists in
+> `core/crates/layerfs-history/` through the service, but independent review at
+> `92e56635ae4559d175fe3cd455f36f9fe6b5b498` found it **not ready**.
+> The [remediation specification](commit-history/remediation-20260921.md) records
+> the fixes and acceptance gates. The governing
+> [implementation specification](https://github.com/Ephemeral-AI-Lab/layerfs/blob/c85cf6b69b3809d860caaad764a09e86a54ece9a/core/docs/architecture/proposal/commit-history/implementation.md)
+> and [pre-publication audit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/c85cf6b69b3809d860caaad764a09e86a54ece9a/core/docs/architecture/proposal/commit-history/review-20260921.md)
+> are pinned on unmerged PR #211. [Paper 16](../16-history.md) describes the
+> implementation; it does not override that specification or waive review findings.
 
 Operational half: [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) — the five phases, every DB operation, and the concurrency cases.
 Folder index and conventions: [`README.md`](README.md).

@@ -1,0 +1,44 @@
+[
+  {
+    "revision": "018d9c36612790e1e9134ec633ddf2079640838d",
+    "core": 30244,
+    "reference": 65417,
+    "combined": 95661
+  },
+  {
+    "revision": "4cbb8aecbe0b68f83e270ac5747d07c87f6aeef8",
+    "core": 30248,
+    "reference": 65417,
+    "combined": 95665
+  },
+  {
+    "revision": "572d61f031a6374953a1a3d8f2047f651d4d9e04",
+    "core": 30245,
+    "reference": 65417,
+    "combined": 95662
+  },
+  {
+    "revision": "6e310b2497bbb56371e3d5ec6459ea4e5a82cac2",
+    "core": 30248,
+    "reference": 65417,
+    "combined": 95665
+  },
+  {
+    "revision": "92e56635ae4559d175fe3cd455f36f9fe6b5b498",
+    "core": 30248,
+    "reference": 65417,
+    "combined": 95665
+  },
+  {
+    "revision": "a02168adbb1b02571941654919cefca12dbc1f42",
+    "core": 25394,
+    "reference": 65417,
+    "combined": 90811
+  },
+  {
+    "revision": "daccb403a0ca5328486a530a75e41e0db3815782",
+    "core": 30245,
+    "reference": 65417,
+    "combined": 95662
+  }
+]

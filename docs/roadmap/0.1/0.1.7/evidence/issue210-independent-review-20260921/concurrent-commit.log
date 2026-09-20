@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running tests/review_probes.rs (target/debug/deps/review_probes-db8a0d1ca966e52c)
+
+running 1 test
+concurrent Commit results: [Err(Busy), Ok(Committed(CommitRecord { id: CommitId(122d4707ae1ffcb61eff6c2d42e4faf08ab033d4a02cc86473b78de8638bc9db2d), stack: LayerStackId(3101010101010101010101010101010101), root: ObjectId("60fb306af980a0a5b6fb6f5481a88aa235ea5753fad9fd1905f3152f899db96f"), parent: None, base_layer: LayerId(32db9b064d039cdb4f211919a88565936efe130bb762b9948b6495ede2e7b4ca86) }))]
+test review_concurrent_commit_has_one_winner_and_retained_loser ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+

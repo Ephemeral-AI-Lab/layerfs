@@ -1,0 +1,122 @@
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:98: fn put_stack(e: &mut Encoder, record: &StackWire) -> Result<(), Failure> {
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:106: fn put_branch(e: &mut Encoder, record: &BranchWire) -> Result<(), Failure> {
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:114: fn put_commit(e: &mut Encoder, record: &CommitWire) -> Result<(), Failure> {
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:122: fn put_layer(e: &mut Encoder, record: &LayerWire) -> Result<(), Failure> {
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:131: fn put_stage(e: &mut Encoder, record: &StageWire) -> Result<(), Failure> {
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:354: let count = d.count(PAGE_RECORDS as usize, 100)?;
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:374: let count = d.count(PAGE_RECORDS as usize, 120)?;
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:387: let count = d.count(PAGE_RECORDS as usize, 100)?;
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:400: let count = d.count(PAGE_RECORDS as usize, 120)?;
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:413: let count = d.count(PAGE_RECORDS as usize, 90)?;
+core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs:516: pub fn decode_failure(b: &[u8]) -> Result<Failure, Failure> {
+core/crates/layerfs-history/src/sqlite/query.rs:25: const FIELD_BYTES: usize = 33;
+core/crates/layerfs-history/src/sqlite/query.rs:33: const DIGEST_AT: usize = POSITION_AT + FIELD_BYTES + 1;
+core/crates/layerfs-history/src/sqlite/query.rs:102: if expected[DIGEST_AT..] != digest(&expected[..DIGEST_AT]) {
+core/crates/layerfs-history/src/sqlite/query.rs:120: pub(crate) fn capacity(limit: u16, per_record: usize) -> HistoryResult<usize> {
+core/crates/layerfs-history/src/sqlite/query.rs:156: fn place(target: &mut [u8; CURSOR_BYTES], at: usize, value: &[u8]) -> HistoryResult<()> {
+core/crates/layerfs-history/src/sqlite/query.rs:180: fn digest(bytes: &[u8]) -> [u8; 16] {
+core/crates/layerfs-history/src/sqlite/commit.rs:41: pub(crate) fn verify_commit(tx: &Transaction<'_>, record: &CommitRecord) -> HistoryResult<bool> {
+core/crates/layerfs-history/src/sqlite/commit.rs:62: pub(crate) fn ancestry_contains(
+core/crates/layerfs-history/src/sqlite/commit.rs:71: if examined > MAXIMUM_LINEAGE_ROWS {
+core/crates/layerfs-history/src/sqlite/commit.rs:88: let stage = super::staging::stage(tx, request.workspace)?
+core/crates/layerfs-history/src/sqlite/commit.rs:90: if stage.token != request.token {
+core/crates/layerfs-history/src/sqlite/commit.rs:122: return Err(HistoryError::HeadMoved(Box::new(MovedState {
+core/crates/layerfs-history/src/sqlite/commit.rs:129: if stage.candidate_root == effective && stage.intended_commit_base == branch.base_layer {
+core/crates/layerfs-history/src/sqlite/commit.rs:182: return Err(HistoryError::HeadMoved(Box::new(MovedState {
+core/crates/layerfs-history/src/sqlite/commit.rs:218: let start = match request.start {
+core/crates/layerfs-history/src/sqlite/commit.rs:229: None => branch.head_commit,
+core/crates/layerfs-history/src/sqlite/commit.rs:246: if cursor.anchor != start.as_slice() {
+core/crates/layerfs-history/src/sqlite/commit.rs:251: current = match cursor.position.is_empty() {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:168: pub(crate) fn verify_layer(tx: &Transaction<'_>, expected: &LayerRecord) -> HistoryResult<bool> {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:195: let start = match request.start {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:203: None => stack.head_layer,
+core/crates/layerfs-history/src/sqlite/layerstack.rs:214: if cursor.anchor != start.as_slice() {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:255: pub(crate) fn add_layer(
+core/crates/layerfs-history/src/sqlite/layerstack.rs:271: if let Some(layer) = published_source(tx, request.branch, request.commit)? {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:294: if stack.head_layer != request.expected_stack_head {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:300: if commit.root == layer_root(tx, branch.base_layer)? {
+core/crates/layerfs-history/src/sqlite/layerstack.rs:306: id: LayerId::derive(request.stack, Some(branch.base_layer), commit.root),
+core/crates/layerfs-history/src/sqlite/layerstack.rs:308: parent: Some(branch.base_layer),
+core/crates/layerfs-history/src/sqlite/open.rs:106: pub fn open_read_only(path: &Path, binding_key: &[u8]) -> HistoryResult<SqliteCatalog> {
+core/crates/layerfs-history/src/sqlite/open.rs:186: fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64> {
+core/crates/layerfs-history/src/sqlite/open.rs:211: "SELECT catalog_id, catalog_incarnation, identity_format, next_stage_token \
+core/crates/layerfs-history/src/sqlite/open.rs:229: if stored != *expected {
+core/crates/layerfs-history/src/sqlite/open.rs:241: impl HistoryCatalog for SqliteCatalog {
+core/crates/layerfs-history/src/sqlite/rows.rs:50: _ => HistoryError::UnknownOutcome,
+core/crates/layerfs-history/src/sqlite/rows.rs:59: _ => HistoryError::UnknownOutcome,
+core/crates/layerfs-history/src/sqlite/rows.rs:85: let mut provider: MutexGuard<'_, Provider> = match self.state.try_lock() {
+core/crates/layerfs-history/src/sqlite/rows.rs:88: Err(TryLockError::Poisoned(_)) => return Err(HistoryError::UnknownOutcome),
+core/crates/layerfs-history/src/sqlite/rows.rs:98: let transaction = provider
+core/crates/layerfs-history/src/sqlite/rows.rs:104: Err(error) => {
+core/crates/layerfs-history/src/sqlite/rows.rs:106: let _ = transaction.rollback();
+core/crates/layerfs-history/src/sqlite/rows.rs:111: transaction.commit().map_err(sql)?;
+core/crates/layerfs-history/src/sqlite/allocation.rs:62: let end = highwater
+core/crates/layerfs-history/src/sqlite/allocation.rs:63: .checked_add(request.count)
+core/crates/layerfs-history/src/sqlite/allocation.rs:80: Ok(Reservation {
+core/crates/layerfs-history/src/records.rs:163: pub fn end(&self) -> HistoryResult<u64> {
+core/crates/layerfs-history/src/records.rs:554: encoded_width!(LayerStackRecord, 179);
+core/crates/layerfs-history/src/records.rs:555: encoded_width!(BranchRecord, 166);
+core/crates/layerfs-history/src/records.rs:556: encoded_width!(CommitRecord, 149);
+core/crates/layerfs-history/src/records.rs:557: encoded_width!(LayerRecord, 168);
+core/crates/layerfs-history/src/records.rs:558: encoded_width!(StageRecord, 342);
+core/crates/layerfs-service/src/operation/history.rs:35: pub(crate) fn failure(error: HistoryError) -> Failure {
+core/crates/layerfs-service/src/operation/history.rs:44: HistoryError::HeadMoved(_) | HistoryError::BaseMismatch { .. } => Code::HeadMoved.into(),
+core/crates/layerfs-service/src/operation/history.rs:47: HistoryError::StageChanged { .. } => Code::StageChanged.into(),
+core/crates/layerfs-service/src/operation/history.rs:58: pub(crate) fn query(
+core/crates/layerfs-service/src/operation/history.rs:59: catalog: &dyn HistoryCatalog,
+core/crates/layerfs-service/src/operation/history.rs:64: &catalog
+core/crates/layerfs-service/src/operation/history.rs:70: let page = catalog
+core/crates/layerfs-service/src/operation/history.rs:81: HistoryQuery::GetBranch { branch } => HistoryResult::BranchSnapshot(snapshot_wire(
+core/crates/layerfs-service/src/operation/history.rs:82: &catalog
+core/crates/layerfs-service/src/operation/history.rs:92: let page = catalog
+core/crates/layerfs-service/src/operation/history.rs:107: &catalog
+core/crates/layerfs-service/src/operation/history.rs:118: let page = catalog
+core/crates/layerfs-service/src/operation/history.rs:132: &catalog
+core/crates/layerfs-service/src/operation/history.rs:143: let page = catalog
+core/crates/layerfs-service/src/operation/history.rs:157: &catalog
+core/crates/layerfs-service/src/operation/history.rs:167: let page = catalog
+core/crates/layerfs-service/src/operation/history.rs:187: catalog: &dyn HistoryCatalog,
+core/crates/layerfs-service/src/operation/history.rs:205: let reservation = catalog
+core/crates/layerfs-service/src/operation/history.rs:222: let record = catalog
+core/crates/layerfs-service/src/operation/history.rs:239: let snapshot = catalog
+core/crates/layerfs-service/src/operation/history.rs:256: let stage = stage(catalog, store, changes, deadline, timer)?;
+core/crates/layerfs-service/src/operation/history.rs:260: let stage = stage(catalog, store, changes, deadline, timer)?;
+core/crates/layerfs-service/src/operation/history.rs:261: let outcome = catalog
+core/crates/layerfs-service/src/operation/history.rs:270: let outcome = catalog
+core/crates/layerfs-service/src/operation/history.rs:285: let outcome = catalog
+core/crates/layerfs-service/src/operation/history.rs:305: let outcome = catalog
+core/crates/layerfs-service/src/operation/history.rs:316: let reservation: Reservation = catalog
+core/crates/layerfs-service/src/operation/history.rs:333: fn stage(
+core/crates/layerfs-service/src/operation/history.rs:334: catalog: &dyn HistoryCatalog,
+core/crates/layerfs-service/src/operation/history.rs:342: let snapshot = catalog
+core/crates/layerfs-service/src/operation/history.rs:399: save.finish(timer.child("history.finish"))
+core/crates/layerfs-service/src/operation/history.rs:414: catalog
+core/crates/layerfs-service/src/operation/history.rs:415: .stage_changes(&StageRequest {
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:57: let (metadata, content_roots) =
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:112: save.finish(timer.child("history.finish_tree_save"))
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:190: let view = FileView::open(provider, root, timer.child("history.role"))
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:197: RecordKind::Directory => metadata_root,
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:216: save.finish(timer.child("history.finish_prerequisite_save"))
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:239: fn directory_updates(
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:243: let mut directories: Vec<DirectoryUpdate> = vec![DirectoryUpdate {
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:250: match directories.last_mut() {
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:262: directories.sort_by_key(|directory| directory.parent);
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:286: pub(crate) fn validate_inode_role(
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:295: let view = FileView::open(provider, content_root, timer.child("history.role_file"))
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:303: SymlinkTarget::decode(&canonical).map_err(content)?;
+core/crates/layerfs-service/src/operation/history_bootstrap.rs:310: read_portable(provider, metadata_root, kind, &mut work).map_err(content)?;
+core/crates/layerfs-bridge/src/contract/request.rs:14: pub const MAX_OPERATIONS: usize = 2;
+core/crates/layerfs-bridge/src/contract/request.rs:134: pub const fn content_mutation(&self) -> bool {
+core/crates/layerfs-bridge/src/contract/request.rs:150: pub const fn metadata_mutation(&self) -> bool {
+core/crates/layerfs-bridge/src/contract/request.rs:152: Self::HistoryCommand(_) => true,
+core/crates/layerfs-bridge/src/contract/request.rs:183: if history {
+core/crates/layerfs-bridge/src/adapters/native/client.rs:160: Kind::ResultData => {
+core/crates/layerfs-bridge/src/adapters/native/client.rs:161: if r.operation.read_only()
+core/crates/layerfs-bridge/src/adapters/native/client.rs:170: output.write_all(&frame.bytes).map_err(|_| delivery(r))?;
+core/crates/layerfs-bridge/src/adapters/native/client.rs:218: fn query_matches(query: &HistoryQuery, result: &HistoryResult) -> bool {
+core/crates/layerfs-bridge/src/adapters/native/client.rs:265: fn command_matches(command: &HistoryCommand, result: &HistoryResult) -> bool {
+core/docs/architecture/16-history.md:12: - **Source pin:** authored against the commit that added
+core/docs/architecture/16-history.md:120: derived catalog identity. An incomplete, foreign or inconsistent catalog is
+core/docs/architecture/16-history.md:213: A live Branch advancing does not invalidate a cursor: the anchor is an immutable
+core/docs/architecture/16-history.md:310: resumed reads validate the roots they use and fail explicitly if content is
+core/docs/architecture/16-history.md:312: - **No byte-packed expected/actual failure context.** A history refusal preserves
