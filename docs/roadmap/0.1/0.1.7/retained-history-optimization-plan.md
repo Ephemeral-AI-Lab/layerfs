@@ -275,3 +275,7 @@ The earlier stop recommendation and rejected New-row filter remain historical de
 The owner authorized the isolated codec experiment. [Ledger L40](../0.1.6/evidence/issue151-experiment-ledger.md#l40--190-group-compression-level-1-live-pair-2026-09-20) records the matched stride10/stride3 pairs, time/space tradeoff, independent canonical-inventory proof, separate verification, validation and limitations. Retain group level1 while keeping payload level3 and all prior optimizations, workspaces, workers, integrity checks and bounds unchanged. Stale source comments and the storage architecture description are corrected alongside the constant.
 
 The owner's one-second and small-allocation-tradeoff rulings apply; numeric allocation misses and O3/cache gaps remain visible. Pack-range reads remain a separate, unrun direction requiring fetch/parse attribution. No level sweep or stride1 optimization follows from this result.
+
+## Data-access continuation handoff — 2026-09-20
+
+The next agent should use the [#190 data-access, reuse-boundary and execution-pipeline handoff](issue190-data-access-handoff.md). It preserves the four merged improvements and latest measured baseline, prioritizes provider attribution and selected-group reads, and makes reuse/pipeline changes conditional on evidence. It also records the resolved lock protocols and the owner's instruction to stop cross-task communication. Creating this handoff runs no new experiment and changes no product source.
