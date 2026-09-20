@@ -17,6 +17,7 @@ use layerfs_content::ObjectId;
 use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::decode::{decode_canonical, GroupCache};
 use crate::encoding::full::raw_payload;
+use crate::encoding::pool::PoolReader;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
@@ -46,12 +47,45 @@ pub struct ChainCounters {
     pub pooled: crate::encoding::pool::PoolReadCounters,
 }
 
-/// One read wave's chain resolver: shared pack cache, ceiling and counters.
+/// The two stored-body caches one reading caller owns.
+///
+/// Both bounds are the ones they always were; what this type makes explicit is
+/// their **lifetime**, because a cache whose lifetime is one leaf cannot serve the
+/// next leaf even when the same bytes are demanded again.
+///
+/// * `packs` - ordinary-lane pack bodies, bounded by
+///   [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`]. The read wave owns it, so a
+///   pack is read once per wave per pack.
+/// * `pool` - the pooled metadata reader: its pack bodies (same bound) and its
+///   decoded value groups ([`crate::policy::POOLED_VALUE_CACHE_BYTES`]). The
+///   **caller's operation** owns it. A pooled reader built per resolved inode leaf
+///   is discarded with the leaf it just served, so a pack a later leaf of the same
+///   operation needs is copied from SQLite again; the repetition is measured, and
+///   the scope is the treatment.
+///
+/// **Invalidation contract.** A pack body at or below the ceiling a read was
+/// authorized under is immutable: a save writes only packs it created above the
+/// baseline publication watermark and publishes them by advancing that watermark,
+/// so a committed pack is never rewritten. A reader may therefore retain a body
+/// across the waves of one operation, and every pooled consult checks the
+/// location's pack against the current ceiling **before** the cache answers
+/// (`Resolver::decode_at`, `PoolReader::load_group`). A **writing** owner must
+/// instead release the reader's pack cache on every pack write, which
+/// `cas::placement::MutationOwner::write_pack` does; decoded values are never
+/// released, because an ordinal's value is written once and never moves.
+pub struct BodyCaches<'a> {
+    /// Ordinary-lane pack bodies this reading caller already read.
+    pub packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    /// Pooled metadata reader this reading caller reconstructs pooled leaves through.
+    pub pool: &'a mut PoolReader,
+}
+
+/// One read wave's chain resolver: shared body caches, ceiling and counters.
 pub struct Resolver<'a> {
     connection: &'a Connection,
     ceiling: i64,
     capacities: &'a StorageCapacities,
-    packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    caches: BodyCaches<'a>,
     /// Decoded ordinary-lane group bodies this **wave** already materialised.
     ///
     /// Shared across the resolvers a wave builds - one per requested object - so
@@ -65,12 +99,12 @@ pub struct Resolver<'a> {
 }
 
 impl<'a> Resolver<'a> {
-    /// Builds a resolver over one read wave's caches.
+    /// Builds a resolver over one reading caller's caches.
     pub fn new(
         connection: &'a Connection,
         ceiling: i64,
         capacities: &'a StorageCapacities,
-        packs: &'a mut BTreeMap<i64, Vec<u8>>,
+        caches: BodyCaches<'a>,
         groups: &'a mut GroupCache,
         workspace: &'a mut DecompressionWorkspace,
         counters: &'a mut ChainCounters,
@@ -79,7 +113,7 @@ impl<'a> Resolver<'a> {
             connection,
             ceiling,
             capacities,
-            packs,
+            caches,
             groups,
             workspace,
             counters,
@@ -140,8 +174,13 @@ impl<'a> Resolver<'a> {
             // A pooled leaf owns its whole chain: the physical body is rebuilt
             // from pooled COPY/INSERT instructions and the ordinals are resolved
             // through authenticated value groups.
-            let mut pool = crate::encoding::pool::PoolReader::new();
-            let canonical = pool.leaf_canonical_with_groups(
+            //
+            // The reader is the **caller's**, not one built here: a reader per leaf
+            // is discarded with the leaf it served, so the next leaf re-copies every
+            // pack this one read. Its counters are cumulative over that wider
+            // lifetime, so this chain reports the difference it made.
+            let before = self.caches.pool.counters();
+            let canonical = self.caches.pool.leaf_canonical_with_groups(
                 self.connection,
                 self.capacities,
                 self.ceiling,
@@ -157,7 +196,7 @@ impl<'a> Resolver<'a> {
                 .counters
                 .canonical_bytes
                 .saturating_add(canonical.len() as u64);
-            self.counters.pooled = pool.counters();
+            self.counters.pooled = self.caches.pool.counters().since(before);
             return Ok((canonical, id));
         }
         let role_depth = self.capacities.delta_depth_for_role(root.role);
@@ -218,13 +257,13 @@ impl<'a> Resolver<'a> {
         // The body is charged here, where it is fetched, and not inferred later
         // from the cache: the walk now reads it, so a decode that follows is a
         // cache hit and would otherwise report a read that never happened.
-        let (_, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
+        let (_, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
         if fetched {
             self.packs_read = self.packs_read.saturating_add(1);
         }
         stored_base(
             self.connection,
-            self.packs,
+            self.caches.packs,
             self.groups,
             self.workspace,
             &mut self.counters.group_decodes,
@@ -264,7 +303,7 @@ impl<'a> Resolver<'a> {
             });
         }
         let record_bytes = {
-            let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
+            let (pack, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
             if fetched {
                 self.packs_read = self.packs_read.saturating_add(1);
             }
@@ -277,7 +316,7 @@ impl<'a> Resolver<'a> {
             }
             self.counters.encoded_bytes = encoded;
         }
-        let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
+        let (pack, fetched) = pack_of(self.caches.packs, self.connection, location.pack_id)?;
         if fetched {
             self.packs_read = self.packs_read.saturating_add(1);
         }

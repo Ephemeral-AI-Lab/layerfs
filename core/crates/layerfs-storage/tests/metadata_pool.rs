@@ -138,6 +138,7 @@ fn observe_pooled_physical_decodes(elements: usize) {
     let provider = StoreProvider::new(&reopened);
     let id = *ids.last().expect("leaf");
     let mut first_value_decodes = None;
+    let mut first_pack_fetches = None;
     for wave in 1..=2 {
         let (read, counters) =
             disabled(|scope| provider.read_wave(&[id], scope.child("storage.read")))
@@ -158,19 +159,43 @@ fn observe_pooled_physical_decodes(elements: usize) {
             pooled.physical_group_cache_hits,
             (2 - first_wave) * compressed
         );
-        assert!(pooled.value_group_decodes > 0);
-        assert_eq!(
-            *first_value_decodes.get_or_insert(pooled.value_group_decodes),
-            pooled.value_group_decodes,
-            "physical group reuse must not retain pooled values across leaves"
-        );
-        assert!(pooled.pack_fetches > 0);
-        assert!(pooled.pack_bytes > 0);
+        // The pooled reader belongs to the **operation**, so the first wave reads
+        // the leaf's packs and decodes its value groups, and every later wave of
+        // the same session is served from them. The per-wave counters are a delta
+        // over that shared reader, so a zero here is a measurement and not an
+        // accounting artefact: nothing was read again.
+        if wave == 1 {
+            assert!(pooled.value_group_decodes > 0);
+            assert!(pooled.pack_fetches > 0);
+            assert!(pooled.pack_bytes > 0);
+            first_value_decodes = Some(pooled.value_group_decodes);
+            first_pack_fetches = Some(pooled.pack_fetches);
+        } else {
+            assert_eq!(
+                pooled.value_group_decodes, 0,
+                "the operation's reader retains the value groups the first wave decoded"
+            );
+            assert_eq!(
+                pooled.pack_fetches, 0,
+                "the operation's reader retains the packs the first wave read"
+            );
+            assert_eq!(pooled.pack_bytes, 0);
+        }
         let cumulative = provider.pooled_read_counters();
         assert_eq!(cumulative.leaf_requests, wave);
         assert_eq!(
             cumulative.physical_group_decodes, compressed,
             "the existing bounded session cache retains physical groups"
+        );
+        assert_eq!(
+            cumulative.pack_fetches,
+            first_pack_fetches.expect("the first wave fetched"),
+            "no pack is fetched twice in one operation"
+        );
+        assert_eq!(
+            cumulative.value_group_decodes,
+            first_value_decodes.expect("the first wave decoded"),
+            "no value group is decoded twice in one operation"
         );
         println!("pooled physical fixture: elements={elements} wave={wave} {pooled:?}");
     }
@@ -188,13 +213,17 @@ fn observe_pooled_physical_decodes(elements: usize) {
             .expect("leaf locator");
         let resolve = |capacities: &layerfs_storage::StorageCapacities, groups: &mut GroupCache| {
             let mut packs = std::collections::BTreeMap::new();
+            let mut pool = layerfs_storage::encoding::pool::PoolReader::new();
             let mut decode = DecompressionWorkspace::new().expect("decode");
             let mut counters = ChainCounters::default();
             Resolver::new(
                 &connection,
                 i64::MAX,
                 capacities,
-                &mut packs,
+                layerfs_storage::encoding::delta::read::BodyCaches {
+                    packs: &mut packs,
+                    pool: &mut pool,
+                },
                 groups,
                 &mut decode,
                 &mut counters,

@@ -208,6 +208,13 @@ pub struct SelectInput<'a> {
     /// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and released wholesale when
     /// the next body would cross it.
     pub packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    /// The operation's pooled metadata reader.
+    ///
+    /// A selection of a non-pooled role never reaches the pooled branch, but the
+    /// resolver it builds takes the reader from its caller rather than making one:
+    /// a reader whose lifetime is one leaf cannot serve the next leaf, and the
+    /// operation already owns one. See [`super::read::BodyCaches`].
+    pub pool: &'a mut crate::encoding::pool::PoolReader,
     /// Decode workspace for base reconstruction.
     pub decode: &'a mut DecompressionWorkspace,
     /// Work performed while acquiring the base just resolved.
@@ -437,7 +444,10 @@ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> 
             input.connection,
             i64::MAX,
             input.capacities,
-            input.packs,
+            crate::encoding::delta::read::BodyCaches {
+                packs: input.packs,
+                pool: input.pool,
+            },
             &mut groups,
             input.decode,
             input.chain,

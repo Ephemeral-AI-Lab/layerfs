@@ -315,6 +315,10 @@ impl Store {
                 .child("storage.decode")
                 .run(|_| DecompressionWorkspace::new())?;
             let mut groups = crate::encoding::GroupCache::new();
+            // One independent wave owns one pooled reader: this call is its whole
+            // lifetime, so the reader is built here and dropped with the wave. The
+            // operation-scoped reader is the session's (`ReadSession`).
+            let mut pool = crate::encoding::pool::PoolReader::new();
             let (values, counters) = read_scope.child("storage.read").run(|_| {
                 read::read_objects(
                     &connection,
@@ -323,6 +327,7 @@ impl Store {
                     &self.capacities,
                     &mut workspace,
                     &mut groups,
+                    &mut pool,
                 )
             })?;
             Ok((

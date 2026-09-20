@@ -147,6 +147,11 @@ impl MutationOwner {
     }
 
     /// Reads objects inside this owner's transaction, with no ceiling.
+    ///
+    /// The pooled reader is this operation's own (`self.pool_reader`), the same one
+    /// the pooled lane and the depth walk use, so a pack a later read of this save
+    /// demands is not copied again. Its pack cache is released on every pack write
+    /// (`write_pack`), which is what makes that lifetime sound while the save runs.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
         let mut groups = crate::encoding::GroupCache::new();
         let (values, _) = crate::cas::read::read_objects(
@@ -156,11 +161,19 @@ impl MutationOwner {
             &self.capacities,
             &mut self.decompression,
             &mut groups,
+            &mut self.pool_reader,
         )?;
         Ok(values)
     }
 
     /// Reconstructs one stored object, following and authenticating its chain.
+    ///
+    /// Both body caches are this operation's: the ordinary-lane pack cache
+    /// (`self.pack_cache`) and the pooled reader (`self.pool_reader`). A pooled
+    /// reader built here instead would be discarded with the one leaf it resolved,
+    /// and the next leaf of the same save would copy the same packs again. The
+    /// pooled reader's pack cache is released on every pack write, so no body it
+    /// retains can predate a write to the pack it came from.
     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
         let value = {
             let mut groups = crate::encoding::GroupCache::new();
@@ -168,7 +181,10 @@ impl MutationOwner {
                 &self.connection,
                 i64::MAX,
                 &self.capacities,
-                &mut self.pack_cache,
+                crate::encoding::delta::read::BodyCaches {
+                    packs: &mut self.pack_cache,
+                    pool: &mut self.pool_reader,
+                },
                 &mut groups,
                 &mut self.decompression,
                 &mut self.chain,
