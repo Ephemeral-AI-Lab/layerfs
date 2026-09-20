@@ -1,0 +1,7 @@
+{
+  "python_syntax": "PASS",
+  "json_jsonl_parse": "PASS",
+  "product_diff": "EMPTY",
+  "tests": "focused baseline/candidate test receipts retained; no full suite after rejection",
+  "stride3": "NOT_RUN_REJECTED_CANDIDATE"
+}

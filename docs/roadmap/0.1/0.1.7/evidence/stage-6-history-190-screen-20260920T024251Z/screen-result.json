@@ -1,0 +1,89 @@
+{
+  "operation_ns": 22615178250,
+  "zero_count_ns": 1699077376,
+  "phase_occurrences": 16,
+  "node_count_including_root": 273,
+  "threshold_ns": 2000000000,
+  "states": [
+    {
+      "state": "history.state.2",
+      "name": "zero_count",
+      "elapsed_ns": 2638958
+    },
+    {
+      "state": "history.state.3",
+      "name": "zero_count",
+      "elapsed_ns": 7513958
+    },
+    {
+      "state": "history.state.4",
+      "name": "zero_count",
+      "elapsed_ns": 16021208
+    },
+    {
+      "state": "history.state.5",
+      "name": "zero_count",
+      "elapsed_ns": 29845500
+    },
+    {
+      "state": "history.state.6",
+      "name": "zero_count",
+      "elapsed_ns": 35013416
+    },
+    {
+      "state": "history.state.7",
+      "name": "zero_count",
+      "elapsed_ns": 48394792
+    },
+    {
+      "state": "history.state.8",
+      "name": "zero_count",
+      "elapsed_ns": 60673834
+    },
+    {
+      "state": "history.state.9",
+      "name": "zero_count",
+      "elapsed_ns": 73737417
+    },
+    {
+      "state": "history.state.10",
+      "name": "zero_count",
+      "elapsed_ns": 82179667
+    },
+    {
+      "state": "history.state.11",
+      "name": "zero_count",
+      "elapsed_ns": 142333250
+    },
+    {
+      "state": "history.state.12",
+      "name": "zero_count",
+      "elapsed_ns": 138946042
+    },
+    {
+      "state": "history.state.13",
+      "name": "zero_count",
+      "elapsed_ns": 173537333
+    },
+    {
+      "state": "history.state.14",
+      "name": "zero_count",
+      "elapsed_ns": 221693375
+    },
+    {
+      "state": "history.state.15",
+      "name": "zero_count",
+      "elapsed_ns": 210460917
+    },
+    {
+      "state": "history.state.16",
+      "name": "zero_count",
+      "elapsed_ns": 214146250
+    },
+    {
+      "state": "history.state.17",
+      "name": "zero_count",
+      "elapsed_ns": 241941459
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "combined": 85729,
+  "root": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "scopes": {
+    "core": {
+      "crates": {
+        "layerfs-content": 12568,
+        "layerfs-storage": 6981,
+        "layerfs-telemetry": 763
+      },
+      "files": 122,
+      "lines": 20312
+    },
+    "reference": {
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      },
+      "files": 193,
+      "lines": 65417
+    }
+  }
+}

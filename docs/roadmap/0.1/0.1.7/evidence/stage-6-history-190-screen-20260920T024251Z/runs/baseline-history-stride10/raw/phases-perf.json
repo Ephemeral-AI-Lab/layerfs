@@ -1,0 +1,15 @@
+{
+  "schema": "layerfs-phases-v1",
+  "invocation": "perf",
+  "preparation_ns": 195512833,
+  "acquisition_ns": 0,
+  "operation_ns": 22615178250,
+  "verification_ns": 22874917,
+  "cleanup_ns": 416,
+  "handoff_ns": 49648300,
+  "invocation_ns": 40324942833,
+  "timing_json_bytes": 21702,
+  "cpu_user_ns": 24479295000,
+  "cpu_system_ns": 8762704000,
+  "process_peak_rss_bytes": 249348096
+}
