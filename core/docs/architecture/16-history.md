@@ -9,10 +9,9 @@ parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 Implementation specification and its pre-publication audit:
 [`proposal/commit-history/`](proposal/commit-history/).
 
-- **Source pin:** remediation based on `35740836f84b9ef687da2f70d785c9e6b2ed2fd2`
-  (reviewed product `92e56635ae4559d175fe3cd455f36f9fe6b5b498`), updated alongside
-  the source in this remediation commit. The final handoff records its exact
-  committed source identity. Reference root `crates/` remains a separate product.
+- **Source pin:** `f2021367e11f6433d1d9e055198cac5ad280f6c9`, the repaired
+  product commit. This pin-only update changes no production behavior. Reference
+  root `crates/` remains a separate implementation and schema.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source

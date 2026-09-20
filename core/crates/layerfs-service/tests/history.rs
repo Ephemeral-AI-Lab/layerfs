@@ -1950,3 +1950,118 @@ fn refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes() {
     );
     assert_eq!(native_call(&f, operation).unwrap_err(), error);
 }
+
+#[test]
+fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
+    let f = fixture("disjoint-stale", ALL);
+    let original = construct(&f.service, &f.peer, 1, b"original");
+    let replacement = construct(&f.service, &f.peer, 2, b"changed");
+    let mut entries = manifest(original);
+    let mut b = entries[1].clone();
+    b.name = b"b".to_vec();
+    entries.push(b);
+    let created = stack_wire(
+        call(
+            &f.service,
+            &f.peer,
+            3,
+            Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+                stack: [1; 16],
+                name: b"main".to_vec(),
+                scope_seed: [15; 32],
+                manifest: entries,
+            }),
+        )
+        .unwrap(),
+    );
+    let base = snapshot(
+        call(
+            &f.service,
+            &f.peer,
+            4,
+            Operation::HistoryCommand(HistoryCommand::Fork {
+                stack: created.stack,
+                branch: [1; 16],
+                name: b"work".to_vec(),
+                source: HistoryForkSource::Layer(created.head_layer),
+            }),
+        )
+        .unwrap(),
+    );
+    let mut stages = vec![];
+    for (index, path) in [b"a", b"b"].into_iter().enumerate() {
+        let (serial, kind, _, metadata) =
+            stat_roots(stat(&f.service, &f.peer, 5, base.effective_root, path));
+        let change = PreparedChanges {
+            workspace: [index as u8 + 1; 32],
+            branch: base.branch.branch,
+            expected_head: None,
+            expected_base: base.branch.base_layer,
+            generation: 1,
+            base: base.effective_root,
+            scope: base.scope,
+            root_serial: 1,
+            directories: vec![DirectoryChange {
+                parent: 1,
+                changes: vec![],
+            }],
+            inodes: vec![InodeChange {
+                serial,
+                kind,
+                content: replacement,
+                metadata,
+            }],
+        };
+        stages.push(stage(
+            call(
+                &f.service,
+                &f.peer,
+                6,
+                Operation::HistoryCommand(HistoryCommand::StageChanges(change)),
+            )
+            .unwrap(),
+        ));
+    }
+    let winner = call(
+        &f.service,
+        &f.peer,
+        7,
+        Operation::HistoryCommand(HistoryCommand::CommitStaged {
+            workspace: stages[0].workspace,
+            token: stages[0].token,
+        }),
+    )
+    .unwrap();
+    let winner = match result(winner) {
+        HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
+        _ => panic!(),
+    };
+    let error = native_call(
+        &f,
+        Operation::HistoryCommand(HistoryCommand::CommitStaged {
+            workspace: stages[1].workspace,
+            token: stages[1].token,
+        }),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.history.as_deref(),
+        Some(&HistoryFailure {
+            conflict: Some(HistoryConflict::BranchMoved {
+                expected_head: None,
+                actual_head: Some(winner.commit),
+                expected_base: base.branch.base_layer,
+                actual_base: base.branch.base_layer
+            }),
+            stage: StageObservation::Retained(Box::new(stages[1].clone()))
+        })
+    );
+    assert_eq!(
+        stat_roots(stat(&f.service, &f.peer, 8, winner.root, b"a")).2,
+        replacement
+    );
+    assert_eq!(
+        stat_roots(stat(&f.service, &f.peer, 9, winner.root, b"b")).2,
+        original
+    );
+}
