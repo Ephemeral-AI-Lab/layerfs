@@ -53,16 +53,19 @@ product line.
 Store hashes: noise `601c5624c78989f7ec8b34c92e0e6b86df644818588fa11e21b534da2c63e234`,
 repeat `fc196571a6dafe98e5f87c7b37bb2c8a55554702dbdb53052a59d8f7fe797b6e`.
 
-**The noise row's Store is not committed, and cannot be.** It is 508.41 MB and
-GitHub rejects any file over 100 MB at push time (`GH001: Large files detected`),
-so the file is retained **on this disk only**, in
-[`runs/ingest-500m-noise/sample.sqlite`](runs/ingest-500m-noise), with the sha256
-above as the committed record of it. The repeat row's Store is 264 KiB and **is**
-committed. This is the first #209 row whose Store is too large for the repository,
-and it is a consequence of the measurement being a 500 MiB ingest rather than a
-49 MB Store; the convention of committing each row's saved Store needs a policy
-decision (LFS, hashes-only above a threshold, or a size cap) before more rows at
-this scale are taken.
+**The noise row's Store is not retained at all.** It was 508.41 MB, and GitHub
+rejects any file over 100 MB at push time (`GH001: Large files detected`), so it was
+**deleted on owner direction on 2026-09-21** with the sha256 above as its only
+record. The row is reproducible in about four seconds from the committed source, so
+nothing is lost but the bytes. The repeat row's Store is 264 KiB and **is** committed.
+
+**Owner policy from 2026-09-21: large files are not saved.** A row whose Store is too
+large for the repository keeps its hash and its stdout, not its bytes. This was the
+first #209 row to hit the limit — a consequence of measuring a 500 MiB ingest rather
+than a 49 MB Store — and the earlier #209 rounds had already been drifting towards
+it, carrying Stores of 52 MB (L57, L59, the confirmation window, the format round)
+and 85.7 MB (the stride1 row). Those remain committed; the policy applies to new
+rows.
 
 **The two rows bracket the format's behaviour.** Incompressible bytes are stored in
 full (508.4 MiB of Store for a 500 MiB payload) and pay the whole write path; the
