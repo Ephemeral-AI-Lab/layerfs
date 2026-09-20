@@ -1,5 +1,5 @@
 //! Typed product outcomes, separate from transport uncertainty.
-use super::Root;
+use super::{HistoryResult, Root};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Code {
@@ -15,12 +15,24 @@ pub enum Code {
     Io = 10,
     Deadline = 11,
     Unknown = 12,
+    /// Immediate metadata admission was refused; retrying later is allowed.
+    Busy = 13,
+    /// A named history record does not exist.
+    NotFound = 14,
+    /// The Branch moved away from the expected head or base.
+    HeadMoved = 15,
+    /// The exact stage token does not match the stage that is present.
+    StageChanged = 16,
+    /// Writable history authority was not established by this process.
+    ContinuityUnavailable = 17,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failure {
     pub code: Code,
     pub unknown: bool,
     pub cleanup: Option<Code>,
+    /// Typed context for history-only failures.
+    pub history: Option<Box<super::HistoryFailure>>,
 }
 impl From<Code> for Failure {
     fn from(code: Code) -> Self {
@@ -28,6 +40,7 @@ impl From<Code> for Failure {
             code,
             unknown: code == Code::Unknown,
             cleanup: None,
+            history: None,
         }
     }
 }
@@ -35,8 +48,8 @@ impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{:?} unknown={} cleanup={:?}",
-            self.code, self.unknown, self.cleanup
+            "{:?} unknown={} cleanup={:?} history={:?}",
+            self.code, self.unknown, self.cleanup, self.history
         )
     }
 }
@@ -81,4 +94,7 @@ pub enum Response {
         continuation: Option<Vec<u8>>,
     },
     Link(Vec<u8>),
+    /// One history reply. The closed wire union is boxed so a legacy reply does
+    /// not pay for the widest history record it can never carry.
+    History(Box<HistoryResult>),
 }

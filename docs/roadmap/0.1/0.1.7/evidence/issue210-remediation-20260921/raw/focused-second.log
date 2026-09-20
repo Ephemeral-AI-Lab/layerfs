@@ -1,0 +1,142 @@
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.45s
+     Running unittests src/lib.rs (target/remediation-core/debug/deps/layerfs_history-c89ab39162faeb7b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/allocation.rs (target/remediation-core/debug/deps/allocation-8861abc565ed48a7)
+
+running 3 tests
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+test a_consumed_reservation_survives_a_later_failure ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/conditional_updates.rs (target/remediation-core/debug/deps/conditional_updates-25e8990f5c2ac171)
+
+running 6 tests
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test a_stale_loser_keeps_its_exact_stage ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+test stage_insertion_enforces_the_frozen_context ... ok
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_pages.rs (target/remediation-core/debug/deps/history_pages-7c217d9657fca800)
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/lifecycle.rs (target/remediation-core/debug/deps/lifecycle-8b95e3bf16571306)
+
+running 3 tests
+test genesis_is_atomic_and_unique ... ok
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/remediation.rs (target/remediation-core/debug/deps/remediation-952c1b44df3fda76)
+
+running 9 tests
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/reopen.rs (target/remediation-core/debug/deps/reopen-8c2d20c9f0243b33)
+
+running 3 tests
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/remediation-core/debug/deps/layerfs_service-10df068b81b29b8c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/remediation-core/debug/deps/layerfs_service-d2e93cc4abbd1a4e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/direct.rs (target/remediation-core/debug/deps/direct-d93afbaad6beaa32)
+
+running 5 tests
+test inherited_deadline_expires_before_direct_input_or_mutation ... ok
+test authenticated_network_after_nonblocking_accept ... ok
+test two_writers_overlap_and_capacity_is_reclaimed_after_reverse_completion ... ok
+test denial_partial_and_invalid_inputs_never_succeed ... ok
+test construct_read_edit_inspect_and_reopen ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/history.rs (target/remediation-core/debug/deps/history-8c02e200c3bd3c95)
+
+running 18 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test legacy_mask_grants_no_history ... ok
+test history_profile_and_opcode_must_agree ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test manifest_initialization_builds_a_real_namespace ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test wrong_role_root_is_refused ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... FAILED
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test stale_loser_retains_its_exact_stage ... FAILED
+
+failures:
+
+---- delayed_discard_token_cannot_consume_a_replacement_stage stdout ----
+
+thread 'delayed_discard_token_cannot_consume_a_replacement_stage' panicked at crates/layerfs-service/tests/history.rs:926:5:
+assertion `left == right` failed
+  left: Failure { code: Unknown, unknown: true, cleanup: None, history: None }
+ right: Failure { code: StageChanged, unknown: false, cleanup: None, history: Some(HistoryFailure { conflict: Some(StageChanged { expected: 1, actual: Some(2) }), stage: Retained(StageWire { workspace: [161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161], token: 2, stack: [49, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81], branch: [17, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97], expected_head: None, expected_base: [50, 242, 171, 240, 135, 177, 227, 127, 149, 209, 172, 4, 13, 185, 80, 131, 8, 26, 148, 169, 75, 38, 237, 49, 195, 189, 112, 0, 59, 244, 78, 150, 8], expected_root: [198, 7, 81, 25, 247, 141, 60, 203, 184, 138, 172, 248, 6, 110, 212, 151, 146, 39, 181, 163, 242, 118, 88, 176, 202, 168, 223, 81, 104, 68, 13, 68], construction_base_root: [198, 7, 81, 25, 247, 141, 60, 203, 184, 138, 172, 248, 6, 110, 212, 151, 146, 39, 181, 163, 242, 118, 88, 176, 202, 168, 223, 81, 104, 68, 13, 68], intended_commit_base: [50, 242, 171, 240, 135, 177, 227, 127, 149, 209, 172, 4, 13, 185, 80, 131, 8, 26, 148, 169, 75, 38, 237, 49, 195, 189, 112, 0, 59, 244, 78, 150, 8], candidate_root: [202, 174, 138, 50, 185, 177, 220, 242, 7, 196, 16, 18, 208, 251, 127, 85, 212, 157, 205, 225, 197, 111, 141, 93, 147, 3, 88, 17, 218, 35, 117, 3], profile: [217, 188, 57, 125, 87, 141, 171, 113, 180, 159, 8, 22, 235, 45, 79, 59, 197, 105, 156, 253, 117, 90, 221, 239, 145, 90, 48, 59, 53, 116, 142, 224], scope: [209, 3, 235, 218, 183, 81, 10, 168, 54, 245, 160, 37, 57, 215, 138, 144, 5, 157, 39, 184, 126, 136, 44, 62, 64, 50, 4, 115, 180, 120, 56, 17], generation: 2 }) }) }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- stale_loser_retains_its_exact_stage stdout ----
+
+thread 'stale_loser_retains_its_exact_stage' panicked at crates/layerfs-service/tests/history.rs:793:5:
+assertion `left == right` failed
+  left: Failure { code: Unknown, unknown: true, cleanup: None, history: None }
+ right: Failure { code: HeadMoved, unknown: false, cleanup: None, history: Some(HistoryFailure { conflict: Some(BranchMoved { expected_head: None, actual_head: Some([18, 156, 117, 225, 171, 94, 244, 134, 189, 39, 249, 239, 98, 78, 48, 42, 133, 112, 255, 111, 37, 224, 113, 67, 28, 89, 118, 70, 184, 175, 167, 60, 12]), expected_base: [50, 140, 9, 89, 172, 105, 178, 29, 129, 71, 26, 59, 253, 227, 224, 135, 247, 219, 123, 77, 21, 178, 44, 6, 4, 64, 128, 61, 223, 235, 12, 24, 62], actual_base: [50, 140, 9, 89, 172, 105, 178, 29, 129, 71, 26, 59, 253, 227, 224, 135, 247, 219, 123, 77, 21, 178, 44, 6, 4, 64, 128, 61, 223, 235, 12, 24, 62] }), stage: Retained(StageWire { workspace: [130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130], token: 2, stack: [49, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81], branch: [17, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97], expected_head: None, expected_base: [50, 140, 9, 89, 172, 105, 178, 29, 129, 71, 26, 59, 253, 227, 224, 135, 247, 219, 123, 77, 21, 178, 44, 6, 4, 64, 128, 61, 223, 235, 12, 24, 62], expected_root: [34, 108, 188, 244, 102, 150, 15, 154, 215, 182, 200, 204, 185, 17, 247, 165, 46, 228, 39, 33, 230, 172, 12, 53, 79, 104, 22, 3, 77, 20, 156, 77], construction_base_root: [34, 108, 188, 244, 102, 150, 15, 154, 215, 182, 200, 204, 185, 17, 247, 165, 46, 228, 39, 33, 230, 172, 12, 53, 79, 104, 22, 3, 77, 20, 156, 77], intended_commit_base: [50, 140, 9, 89, 172, 105, 178, 29, 129, 71, 26, 59, 253, 227, 224, 135, 247, 219, 123, 77, 21, 178, 44, 6, 4, 64, 128, 61, 223, 235, 12, 24, 62], candidate_root: [78, 166, 190, 110, 11, 156, 116, 229, 221, 151, 162, 202, 11, 21, 201, 189, 235, 216, 250, 191, 128, 75, 68, 65, 120, 148, 62, 169, 25, 154, 124, 136], profile: [217, 188, 57, 125, 87, 141, 171, 113, 180, 159, 8, 22, 235, 45, 79, 59, 197, 105, 156, 253, 117, 90, 221, 239, 145, 90, 48, 59, 53, 116, 142, 224], scope: [243, 213, 201, 161, 91, 237, 222, 170, 90, 150, 35, 106, 233, 71, 75, 23, 150, 30, 108, 236, 92, 127, 9, 68, 197, 210, 14, 37, 176, 18, 178, 218], generation: 1 }) }) }
+
+
+failures:
+    delayed_discard_token_cannot_consume_a_replacement_stage
+    stale_loser_retains_its_exact_stage
+
+test result: FAILED. 16 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p layerfs-service --test history`

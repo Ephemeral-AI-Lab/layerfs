@@ -1,0 +1,35 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-telemetry)
+   Compiling cc v1.4.5
+   Compiling rusqlite v0.40.2
+   Compiling blake3 v1.8.5
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-history)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.12s
+     Running tests/remediation.rs (target/remediation-core/debug/deps/remediation-ca7a2a968e330369)
+
+running 9 tests
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... FAILED
+
+failures:
+
+---- reopen_refuses_each_independent_schema_or_binding_corruption stdout ----
+
+thread 'reopen_refuses_each_independent_schema_or_binding_corruption' panicked at crates/layerfs-history/tests/remediation.rs:126:88:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: Unknown, extended_code: 1 }, Some("table sqlite_master may not be modified"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    reopen_refuses_each_independent_schema_or_binding_corruption
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p layerfs-history --test remediation`

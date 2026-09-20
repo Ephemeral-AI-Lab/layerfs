@@ -40,7 +40,7 @@ pub fn serve(
                 let _ = connection.send.write(&Frame {
                     kind: Kind::Failure,
                     id: begin.id,
-                    bytes: encode_failure(e).to_vec(),
+                    bytes: encode_failure(e.clone()).to_vec(),
                 });
                 return Err(e);
             }
@@ -76,7 +76,7 @@ pub fn serve(
                 let _ = connection.send.write(&Frame {
                     kind: Kind::Failure,
                     id: request.id,
-                    bytes: encode_failure(error).to_vec(),
+                    bytes: encode_request_failure(&request, &error)?,
                 });
                 connection.receive.close();
                 return Err(error);

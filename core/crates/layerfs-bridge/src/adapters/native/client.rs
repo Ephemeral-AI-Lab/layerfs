@@ -181,7 +181,9 @@ impl Client {
                             return Ok(response);
                         }
                         Kind::Failure => {
-                            return Err(decode_failure(&frame.bytes).map_err(|_| delivery(r))?)
+                            return Err(
+                                decode_request_failure(r, &frame.bytes).map_err(|_| delivery(r))?
+                            )
                         }
                         _ => return Err(delivery(r)),
                     }
@@ -212,6 +214,89 @@ impl Drop for Client {
         self.connection.receive.close();
     }
 }
+/// True when one history reply answers exactly this query.
+fn query_matches(query: &HistoryQuery, result: &HistoryResult) -> bool {
+    match (query, result) {
+        (HistoryQuery::GetStack { .. }, HistoryResult::Stack(_)) => true,
+        (
+            HistoryQuery::ListStacks { limit, .. },
+            HistoryResult::Stacks {
+                records,
+                continuation,
+            },
+        ) => page_matches(*limit, records.len(), continuation),
+        (HistoryQuery::GetBranch { .. }, HistoryResult::BranchSnapshot(snapshot)) => {
+            snapshot.root_serial.is_some()
+        }
+        (
+            HistoryQuery::ListBranches { limit, .. },
+            HistoryResult::Branches {
+                records,
+                continuation,
+            },
+        ) => page_matches(*limit, records.len(), continuation),
+        (HistoryQuery::GetCommit { .. }, HistoryResult::Commit(_)) => true,
+        (
+            HistoryQuery::CommitHistory { limit, .. },
+            HistoryResult::Commits {
+                records,
+                continuation,
+            },
+        ) => page_matches(*limit, records.len(), continuation),
+        (HistoryQuery::GetLayer { .. }, HistoryResult::Layer(_)) => true,
+        (
+            HistoryQuery::LayerHistory { limit, .. },
+            HistoryResult::Layers {
+                records,
+                continuation,
+            },
+        ) => page_matches(*limit, records.len(), continuation),
+        (HistoryQuery::GetStage { .. }, HistoryResult::Stage(_)) => true,
+        (
+            HistoryQuery::ListStages { limit, .. },
+            HistoryResult::Stages {
+                records,
+                continuation,
+            },
+        ) => page_matches(*limit, records.len(), continuation),
+        _ => false,
+    }
+}
+
+/// True when one history reply answers exactly this command.
+fn command_matches(command: &HistoryCommand, result: &HistoryResult) -> bool {
+    if let (HistoryCommand::Fork { .. }, HistoryResult::BranchSnapshot(snapshot)) =
+        (command, result)
+    {
+        return snapshot.root_serial.is_none();
+    }
+    matches!(
+        (command, result),
+        (
+            HistoryCommand::InitLayerStack { .. },
+            HistoryResult::StackCreated(_)
+        ) | (HistoryCommand::StageChanges(_), HistoryResult::Stage(_))
+            | (
+                HistoryCommand::CommitStaged { .. } | HistoryCommand::Commit(_),
+                HistoryResult::Committed(_)
+            )
+            | (HistoryCommand::AddLayer { .. }, HistoryResult::Published(_))
+            | (
+                HistoryCommand::DiscardStage { .. },
+                HistoryResult::Discarded { .. }
+            )
+            | (
+                HistoryCommand::ReserveInodes { .. },
+                HistoryResult::Reservation { .. }
+            )
+    )
+}
+
+/// A page is well formed when it fits the request and its continuation is short.
+fn page_matches(limit: u16, records: usize, continuation: &[u8]) -> bool {
+    records <= usize::from(limit) && continuation.len() <= CURSOR_BYTES
+}
+
 fn delivery(r: &Request) -> Failure {
     Failure {
         code: if r.operation.mutation() {
@@ -221,10 +306,19 @@ fn delivery(r: &Request) -> Failure {
         },
         unknown: r.operation.mutation(),
         cleanup: None,
+        history: None,
     }
 }
 
 fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
+    if let Operation::HistoryQuery(query) = &r.operation {
+        return matches!(response, Response::History(result) if query_matches(query, result))
+            && bytes == 0;
+    }
+    if let Operation::HistoryCommand(command) = &r.operation {
+        return matches!(response, Response::History(result) if command_matches(command, result))
+            && bytes == 0;
+    }
     match (&r.operation, response) {
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes

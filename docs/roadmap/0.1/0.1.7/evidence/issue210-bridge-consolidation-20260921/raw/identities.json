@@ -1,0 +1,18 @@
+{
+  "parent": "a4a144af8af9b46c3ce3100047466f4817332808",
+  "staged_tree": "b1b0004595d71e17eaf0f36fa2166118bf94c528",
+  "product_diff_sha256": "8e8106eace053fd27ffa2b2e1f50cea13b0035c878df5e1e1eed780fb9797ffe",
+  "commit": "7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c",
+  "tree": "b1b0004595d71e17eaf0f36fa2166118bf94c528",
+  "clean": true,
+  "head_after_checks": "7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c",
+  "clean_after_checks": true,
+  "lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+  "binaries": {
+    "layerfs-service": "7961d21118ce5c211d0d606d89bf192cdc910863b2283bcac23f90fdf7ee5d92",
+    "layerfs-daemon": "e0d0b1892e742245f6f5dd74d4ec59d4da76d4cb7d1e4a75e6d8cf8f322da4df",
+    "examples/public_key": "fd355342fe35b3bfe3efec171f214472fe291884b0bf4d3f93c52be889095f88",
+    "examples/prepare_store": "b08f6ec6bd392a438f29f3d55e19624796c5c45ddd6cd4816e47b7f72b3c7e8b"
+  },
+  "golden_fixture_sha256": "1bd91e225df1b032dadb74cc4a36a0965931c39c40cfe77bdc07e434c6562931"
+}

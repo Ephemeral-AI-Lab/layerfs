@@ -1,0 +1,26 @@
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-daemon)
+error: use of `format!` to build up a string from an iterator
+    --> crates/layerfs-bridge/tests/history_protocol.rs:1044:27
+     |
+1044 |         let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+     |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: call `fold` instead
+    --> crates/layerfs-bridge/tests/history_protocol.rs:1044:40
+     |
+1044 |         let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+     |                                        ^^^
+help: ... and use the `write!` macro here
+    --> crates/layerfs-bridge/tests/history_protocol.rs:1044:51
+     |
+1044 |         let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+     |                                                   ^^^^^^^^^^^^^^^^^^^^^
+     = note: this can be written more efficiently by appending to a `String` directly
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+     = note: `-D clippy::format-collect` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::format_collect)]`
+
+error: could not compile `layerfs-bridge` (test "history_protocol") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

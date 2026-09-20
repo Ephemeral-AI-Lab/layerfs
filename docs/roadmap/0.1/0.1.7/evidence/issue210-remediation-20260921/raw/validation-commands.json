@@ -1,0 +1,76 @@
+{
+  "source_commit": "f2021367e11f6433d1d9e055198cac5ad280f6c9",
+  "source_tree": "85356d35f3d6ee947fa74a89f86f22711af086da",
+  "cwd": "/Users/yifanxu/.codex/worktrees/b995/layerfs/core",
+  "environment": {
+    "CARGO_TARGET_DIR": "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1"
+  },
+  "checks": [
+    {
+      "command": "cargo +1.85.1 test --offline --locked --workspace",
+      "log": "final-cargo-test.log",
+      "exit_code": 0,
+      "count": 601
+    },
+    {
+      "command": "cargo +1.85.1 build --offline --locked --workspace --examples",
+      "log": "final-cargo-examples.log",
+      "exit_code": 0,
+      "count": null
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path Cargo.toml --all -- --check",
+      "log": "final-cargo-fmt.log",
+      "exit_code": 0,
+      "count": null
+    },
+    {
+      "command": "cargo +1.85.1 clippy --offline --locked --workspace --all-targets -- -D warnings",
+      "log": "final-cargo-clippy.log",
+      "exit_code": 0,
+      "count": null
+    },
+    {
+      "command": "cargo +1.85.1 build --offline --locked -p layerfs-history --no-default-features",
+      "log": "final-cargo-no-native.log",
+      "exit_code": 0,
+      "count": null
+    },
+    {
+      "command": "python3 tools/check_product_boundary.py",
+      "log": "final-boundary.log",
+      "exit_code": 0,
+      "count": 194
+    },
+    {
+      "command": "python3 -m unittest discover -s tools -p 'test_*.py'",
+      "log": "final-python-tests.log",
+      "exit_code": 0,
+      "count": 6
+    },
+    {
+      "command": "cargo +1.85.1 build --offline --locked --workspace --bins",
+      "log": "final-cargo-bins.log",
+      "exit_code": 0,
+      "count": null
+    }
+  ],
+  "host_route": {
+    "command": "python3 crates/layerfs-daemon/tests/history_route.py --output /Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-evidence/host-route-f2021367",
+    "exit_code": 0,
+    "cases": 14
+  },
+  "linux_build": {
+    "command": "cargo +1.85.1 zigbuild --offline --locked --target aarch64-unknown-linux-musl -p layerfs-daemon",
+    "CARGO_TARGET_DIR": "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-linux",
+    "exit_code": 0
+  },
+  "linux_route": {
+    "command": "python3 crates/layerfs-daemon/tests/history_route.py --image layerfs-history-remediation:f2021367 --output /Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-evidence/linux-route-f2021367",
+    "exit_code": 0,
+    "cases": 14
+  },
+  "head_after_checks": "f2021367e11f6433d1d9e055198cac5ad280f6c9",
+  "worktree_clean_after_checks": true
+}

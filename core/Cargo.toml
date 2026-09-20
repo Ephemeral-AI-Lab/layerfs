@@ -14,6 +14,7 @@ members = [
     "crates/layerfs-service",
     "crates/layerfs-content",
     "crates/layerfs-storage",
+    "crates/layerfs-history",
     "crates/layerfs-telemetry",
 ]
 

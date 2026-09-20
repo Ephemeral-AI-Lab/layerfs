@@ -1,0 +1,5 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair2-history-implementation/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/pair2-history-implementation/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair2-history-implementation/layerfs/core/crates/layerfs-service)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair2-history-implementation/layerfs/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.25s

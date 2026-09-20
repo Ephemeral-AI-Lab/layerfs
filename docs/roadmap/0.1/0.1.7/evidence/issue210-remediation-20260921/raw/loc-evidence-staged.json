@@ -1,0 +1,35 @@
+{
+  "combined": 96344,
+  "root": "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/loc-evidence-staged",
+  "scopes": {
+    "core": {
+      "crates": {
+        "layerfs-bridge": 3734,
+        "layerfs-content": 12561,
+        "layerfs-daemon": 248,
+        "layerfs-history": 2722,
+        "layerfs-service": 1817,
+        "layerfs-storage": 7588,
+        "layerfs-telemetry": 2257
+      },
+      "files": 194,
+      "lines": 30927
+    },
+    "reference": {
+      "crates": {
+        "layerfs-cli": 1142,
+        "layerfs-content": 15701,
+        "layerfs-daemon": 3233,
+        "layerfs-fuse": 10986,
+        "layerfs-layerstack-store": 18376,
+        "layerfs-materialization": 358,
+        "layerfs-monitor": 414,
+        "layerfs-sdk": 979,
+        "layerfs-workspace": 11776,
+        "layerfs-workspace-core": 2452
+      },
+      "files": 193,
+      "lines": 65417
+    }
+  }
+}

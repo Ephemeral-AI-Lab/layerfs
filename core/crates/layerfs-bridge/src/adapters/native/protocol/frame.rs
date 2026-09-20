@@ -85,7 +85,7 @@ fn check(kind: Kind, n: usize) -> Result<(), Failure> {
         Kind::Body | Kind::ResultData => n > 0 && n <= FRAME_BYTES,
         Kind::EndInput => n == 8,
         Kind::Hello => n == 2,
-        Kind::Failure => n == 3,
+        Kind::Failure => n == 3 || (6..=HISTORY_FAILURE_BYTES).contains(&n),
         _ => n <= METADATA_BYTES,
     };
     if valid {

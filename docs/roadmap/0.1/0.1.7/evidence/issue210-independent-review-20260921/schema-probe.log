@@ -1,0 +1,17 @@
+tables: ['branches', 'commits', 'history_meta', 'layer_stacks', 'layers', 'scope_allocator', 'workspace_stages']
+application_id: 1279677256 user_version: 1
+triggers: 0
+second genesis: UNIQUE constraint failed: layers.layer_stack_id
+second child: UNIQUE constraint failed: layers.layer_stack_id, layers.parent_layer_id
+second source publication: UNIQUE constraint failed: layers.source_branch_id, layers.source_commit_id
+genesis with source: CHECK constraint failed: (parent_layer_id IS NULL AND source_branch_id IS NULL AND source_commit_id IS NULL)
+        OR
+        (parent_layer_id IS NOT NULL AND source_branch_id IS NOT NULL AND source_commit_id IS NOT NULL)
+child missing source commit: CHECK constraint failed: (parent_layer_id IS NULL AND source_branch_id IS NULL AND source_commit_id IS NULL)
+        OR
+        (parent_layer_id IS NOT NULL AND source_branch_id IS NOT NULL AND source_commit_id IS NOT NULL)
+cross-stack commit base: FOREIGN KEY constraint failed
+cross-stack commit parent: FOREIGN KEY constraint failed
+cross-stack branch base: FOREIGN KEY constraint failed
+cross-stack branch head: FOREIGN KEY constraint failed
+DDL constraint probes complete

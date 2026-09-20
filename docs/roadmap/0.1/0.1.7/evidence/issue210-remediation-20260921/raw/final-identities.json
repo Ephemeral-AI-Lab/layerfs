@@ -1,0 +1,13 @@
+{
+  "commit": "f2021367e11f6433d1d9e055198cac5ad280f6c9",
+  "tree": "85356d35f3d6ee947fa74a89f86f22711af086da",
+  "worktree_clean": true,
+  "cargo_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+  "host_binaries": {
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/layerfs-service": "4d421405704dbc18f74678357eb1aee7c5de429b69568972de7e69dd5dcf8733",
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/layerfs-daemon": "d520c4e2f15f5db1e6686c3ac113f4a6149714c4d87ec1a3ea6fad6670f5beff",
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/examples/public_key": "fd355342fe35b3bfe3efec171f214472fe291884b0bf4d3f93c52be889095f88",
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/examples/prepare_store": "b08f6ec6bd392a438f29f3d55e19624796c5c45ddd6cd4816e47b7f72b3c7e8b"
+  },
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n"
+}

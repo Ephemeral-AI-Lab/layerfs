@@ -1,0 +1,51 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.05s
+     Running tests/history_protocol.rs (target/remediation-core/debug/deps/history_protocol-8c53dc6bd04d214a)
+
+running 15 tests
+test failure_codes_round_trip_and_stay_typed ... ok
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test invalid_terminal_reservation_and_descriptor_serial_are_refused ... ok
+test identity_widths_and_tags_are_checked ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test a_manifest_is_a_tree_by_construction ... ok
+test every_reply_round_trips ... ok
+test profile_and_opcode_must_agree ... ok
+test page_and_count_bounds_are_checked ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test every_query_and_command_round_trips ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history.rs (target/remediation-core/debug/deps/history-8c02e200c3bd3c95)
+
+running 20 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test legacy_mask_grants_no_history ... ok
+test history_profile_and_opcode_must_agree ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test manifest_initialization_builds_a_real_namespace ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... ok
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test wrong_role_root_is_refused ... ok
+test refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes ... ok
+test stale_loser_retains_its_exact_stage ... ok
+test composite_failure_keeps_acknowledged_stage_distinct_from_absence ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

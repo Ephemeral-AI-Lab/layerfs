@@ -1,6 +1,15 @@
 # Pair 2 — commit and history
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
+>
+> **Implementation status (2026-09-21):** C5 history is implemented through the
+> service, including the reviewed remediation and bridge consolidation at
+> `72d95323205e1352f1310a81a9e287414c7c9957`. The
+> [remediation specification](commit-history/remediation-20260921.md) and
+> [repaired boundary](commit-history/remediation-contract-20260921.md) record
+> the corrections to the original specification. [Paper 16](../16-history.md)
+> describes the implementation. H04/H06/H08/H14 qualification gaps remain open;
+> see the [verification handoff](../../../../docs/roadmap/0.1/0.1.7/evidence/issue210-bridge-consolidation-20260921/validation.md).
 
 Design parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 The [implementation specification](commit-history/implementation.md) is the current

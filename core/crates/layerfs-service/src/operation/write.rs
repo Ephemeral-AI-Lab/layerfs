@@ -91,9 +91,24 @@ pub fn mutate(
                 .map_err(content)
             })
         }
-        Operation::UpdatePreparedFilesystem { .. } => {
-            filesystem::update(&provider, &r.operation, &mut handoff, scope)
-        }
+        Operation::UpdatePreparedFilesystem {
+            base,
+            scope: allocation,
+            root_serial,
+            directories,
+            inodes,
+        } => filesystem::update(
+            &provider,
+            &filesystem::PreparedUpdate {
+                base: *base,
+                scope: *allocation,
+                root_serial: *root_serial,
+                directories,
+                inodes,
+            },
+            &mut handoff,
+            scope,
+        ),
         _ => Err(Code::Unsupported.into()),
     };
     let retained = handoff.take_failure();

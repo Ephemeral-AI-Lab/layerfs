@@ -1,0 +1,8 @@
+{
+  "baseline": "35740836f84b9ef687da2f70d785c9e6b2ed2fd2",
+  "candidate": "f2021367e11f6433d1d9e055198cac5ad280f6c9",
+  "original_driver_sha256": "274a5288c5700965cec5e9bb0d42fe21ce4d2dc9e6819b7e663918eec98dabf2",
+  "driver_sha256": "c6c45eab179c598b2b3003a28db73c2d07217d60771db61734200ae61269ce2b",
+  "consumer_unchanged": true,
+  "scope": "existing C1/C2 component consumer; not an H14 history consumer qualification"
+}

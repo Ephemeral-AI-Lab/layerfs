@@ -1,0 +1,54 @@
+{
+  "commit": "7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c",
+  "cwd": "/Users/yifanxu/.codex/worktrees/b995/layerfs/core",
+  "environment": {
+    "CARGO_TARGET_DIR": "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1"
+  },
+  "checks": [
+    {
+      "command": "cargo +1.85.1 test --offline --locked --workspace",
+      "log": "cargo-test.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo +1.85.1 build --offline --locked --workspace --examples",
+      "log": "cargo-examples.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path Cargo.toml --all -- --check",
+      "log": "cargo-fmt.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo +1.85.1 clippy --offline --locked --workspace --all-targets -- -D warnings",
+      "log": "cargo-clippy.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo +1.85.1 build --offline --locked -p layerfs-history --no-default-features",
+      "log": "cargo-no-native.log",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tools/check_product_boundary.py",
+      "log": "boundary.log",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 -m unittest discover -s tools -p 'test_*.py'",
+      "log": "python-tests.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo +1.85.1 build --offline --locked --workspace --bins",
+      "log": "cargo-bins.log",
+      "exit_code": 0
+    }
+  ],
+  "host_route_command": "python3 crates/layerfs-daemon/tests/history_route.py --output /Users/yifanxu/.codex/worktrees/b995/layerfs/target/bridge-simplification-evidence/host-route-7a6db4c2",
+  "linux_build_command": "cargo +1.85.1 zigbuild --offline --locked --target aarch64-unknown-linux-musl -p layerfs-daemon",
+  "linux_build_target": "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-linux",
+  "linux_route_command": "python3 crates/layerfs-daemon/tests/history_route.py --image layerfs-history-bridge:7a6db4c2 --output /Users/yifanxu/.codex/worktrees/b995/layerfs/target/bridge-simplification-evidence/linux-route-7a6db4c2"
+}

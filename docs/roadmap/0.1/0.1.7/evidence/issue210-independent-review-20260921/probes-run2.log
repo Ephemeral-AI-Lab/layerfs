@@ -1,0 +1,43 @@
+   Compiling layerfs-service v0.1.6 (/private/tmp/layerfs-pair2-review-92e56635-dczjaq/probe-tree/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.23s
+     Running tests/review_codec.rs (target/debug/deps/review_codec-684431ac76a4e679)
+
+running 1 test
+branch: encoded=77 record=71 decode=Failure { code: Capacity, unknown: false, cleanup: None }
+genesis: encoded=91 record=85 decode=Failure { code: Capacity, unknown: false, cleanup: None }
+test review_minimal_legal_reply_pages_are_refused ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/review_probes.rs (target/debug/deps/review_probes-82c8f85e9213dd86)
+
+running 6 tests
+long stack name: InvalidInput("page cursor field")
+long branch name: InvalidInput("page cursor field")
+test review_long_names_cannot_be_paginated ... ok
+stale base with refreshed stack head: Integrity("catalog constraint")
+live Commit cursor: InvalidInput("page cursor anchor")
+stale base with base-equal root: NoChanges { head: LayerId(32dc51544cb355c450cd7df4e6aca6d8578b59aeef1e3fa404c93981b39878e28b) }
+reserve succeeds: start=9223372036854775807 count=1 end=Err(Capacity("inode reservation"))
+forged cursor returns sibling parent: true
+live Layer cursor: InvalidInput("page cursor anchor")
+test review_refreshed_stack_token_is_not_a_rebase ... ok
+test review_terminal_reservation_acknowledges_unrepresentable_end ... ok
+test review_rehashed_cursor_escapes_branch_ancestry ... ok
+test review_live_growth_rejects_default_start_cursors ... ok
+open with missing layers_child index and changed binding_key: true
+test review_open_accepts_missing_constraint_and_bad_binding_row ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/review_service.rs (target/debug/deps/review_service-0c0bc9d8bb341db6)
+
+running 2 tests
+GetBranch with absent C2 root succeeds: true
+test review_get_branch_accepts_missing_filesystem_root ... ok
+empty child directory initialization: Err(Failure { code: InvalidInput, unknown: false, cleanup: None })
+legal interleaved parents: Err(Failure { code: InvalidInput, unknown: false, cleanup: None })
+test review_empty_child_directory_and_interleaved_parents ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.01s
+

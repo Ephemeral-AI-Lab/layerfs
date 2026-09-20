@@ -470,11 +470,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-history"
+version = "0.1.6"
+dependencies = [
+ "blake3",
+ "layerfs-content",
+ "rusqlite",
+]
+
+[[package]]
 name = "layerfs-service"
 version = "0.1.6"
 dependencies = [
  "layerfs-bridge",
  "layerfs-content",
+ "layerfs-history",
  "layerfs-storage",
  "layerfs-telemetry",
  "nix",
