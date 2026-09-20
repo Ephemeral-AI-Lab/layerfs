@@ -1,0 +1,40 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 154B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 10.40MB 0.1s done
+#3 DONE 0.1s
+
+#4 [1/2] COPY tests /tests
+#4 DONE 0.0s
+
+#5 [2/2] COPY --chown=65532:65532 --chmod=1777 tmp /tmp
+#5 DONE 0.0s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.3s done
+#6 exporting manifest sha256:b48782a2a6dcc6fe3d2d9a0fb46367375c213ce46760b1ef6b5aa5e8315b4d77 done
+#6 exporting config sha256:2be87a7082b45a3ff72fd73d2406858658dc97c86e9e78bfe731b562432177d9 done
+#6 exporting attestation manifest sha256:6cf57bc0ac0aa5d2d3247ec13f70a344788b51292e4815477996c2e78bbf7b1c 0.0s done
+#6 exporting manifest list sha256:a636e7aa23d51a2aecfc101689ee96357d5d6f3929facb56edbb592b889ea4b1 done
+#6 naming to docker.io/library/layerfs-issue192-native:8fdb29cd19a494db done
+#6 unpacking to docker.io/library/layerfs-issue192-native:8fdb29cd19a494db 0.0s done
+#6 DONE 0.4s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/341q1fhpioif3aj7w77r9s0sy
+
+running 2 tests
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.06s
+
+{"status": "PASS", "image": "sha256:a636e7aa23d51a2aecfc101689ee96357d5d6f3929facb56edbb592b889ea4b1", "test_binary_sha256": "8fdb29cd19a494db2658919a36dfbe3343bda0b2d72bcbd73bec5cefe75622a9", "command": ["docker", "run", "--name", "layerfs-issue192-retention-10940", "--label=io.layerfs.task=issue192", "--log-driver=none", "--cpus=1", "--memory=32m", "--memory-swap=32m", "--pids-limit=16", "--cap-drop=ALL", "sha256:a636e7aa23d51a2aecfc101689ee96357d5d6f3929facb56edbb592b889ea4b1", "retention", "--nocapture"], "scope": "two external Linux retention tests; optional local output configuration, not forward mode", "container_id": "5869ca99b425eceb12038a6dd48a5e80a2ef5a48f528045465f658ee9ecfc635", "mounts": [], "labels": {"io.layerfs.task": "issue192"}, "memory_limit": 33554432, "exit": 0, "logical_writable_layer_bytes": 8192, "diff": "", "phase_memory_peak": "unavailable; not claimed"}

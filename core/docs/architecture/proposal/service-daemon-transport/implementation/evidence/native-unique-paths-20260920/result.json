@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-telemetry",
+    "--features",
+    "native",
+    "--test",
+    "native",
+    "--test",
+    "owned_allocations",
+    "--test",
+    "off_allocations",
+    "--",
+    "--nocapture"
+  ],
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 3.696364874995197,
+  "source_unchanged": true,
+  "head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2
+}

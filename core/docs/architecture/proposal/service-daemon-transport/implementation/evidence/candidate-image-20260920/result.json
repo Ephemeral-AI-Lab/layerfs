@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "image": "sha256:e8e242c78c53d1312b70a0d9b6d6384754e11186e79bb183c501cbe89496105e",
+  "tag": "layerfs-issue192:c426109f416a53e2",
+  "daemon_sha256": "c426109f416a53e2d9f773ae2d88e12fb450d9d57f19e94239e3784ba32c13cb",
+  "labels": {
+    "org.layerfs.binary-sha256": "c426109f416a53e2d9f773ae2d88e12fb450d9d57f19e94239e3784ba32c13cb"
+  },
+  "architecture": "arm64",
+  "os": "linux",
+  "dockerfile_sha256": "25c5437e8ec14b4d226fd6764280beb152b32dd819e59d212d3e9d8d11b829a2"
+}

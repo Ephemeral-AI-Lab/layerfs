@@ -1,0 +1,23 @@
+{
+  "selection": "slow",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [],
+  "status": "FAIL",
+  "error": "EOFError('terminal response missing')",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Failure { code: Unknown, unknown: true, cleanup: None }"
+      ],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "image": "sha256:3bc9f14b59fdea3521580648c3223e8f55f3062cc5bc60927d45412e16677dd0"
+}

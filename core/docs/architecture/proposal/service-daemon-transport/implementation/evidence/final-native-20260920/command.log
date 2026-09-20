@@ -1,0 +1,25 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.10s
+     Running tests/native.rs (core/target/debug/deps/native-b87fb1b279e92834)
+
+running 7 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+
+thread 'output_failure_is_independent_and_encoding_is_valid' panicked at crates/layerfs-telemetry/tests/native.rs:148:35:
+called `Result::unwrap()` on an `Err` value: Custom { kind: Other, error: "output namespace type" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test output_failure_is_independent_and_encoding_is_valid ... FAILED
+test native_cpu_units_match_posix_process_counters ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+
+failures:
+
+failures:
+    output_failure_is_independent_and_encoding_is_valid
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p layerfs-telemetry --test native`

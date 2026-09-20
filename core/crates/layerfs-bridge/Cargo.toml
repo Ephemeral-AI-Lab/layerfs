@@ -1,0 +1,22 @@
+[package]
+name = "layerfs-bridge"
+description = "Bounded logical operation contract and authenticated native endpoints"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+[features]
+default = ["native"]
+native = ["dep:snow", "dep:nix"]
+
+[dependencies]
+snow = { version = "=0.9.6", optional = true }
+nix = { version = "=0.31.3", features = ["poll", "fs", "feature", "socket"], optional = true }
+
+[[example]]
+name = "public_key"
+required-features = ["native"]
+
+[[example]]
+name = "fault_peer"
+required-features = ["native"]

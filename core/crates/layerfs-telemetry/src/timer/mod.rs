@@ -14,8 +14,10 @@
 //! [`write_text`](crate::timer::TimingReport::write_text) or
 //! [`write_json`](crate::timer::TimingReport::write_json).
 
+mod bounded_json;
 mod format;
 mod json;
+mod limits;
 mod recording;
 mod report;
 mod scope;
@@ -23,3 +25,5 @@ mod scope;
 pub use recording::{MAX_DEPTH, MAX_LABEL_BYTES, MAX_NODES};
 pub use report::{Completeness, NodeOutcome, TimingNode, TimingReport};
 pub use scope::{Active, Pending, Timing, TimingScope};
+
+pub use limits::{RecordingLimits, MAX_RECORDING_BYTES, NODE_CHARGE};

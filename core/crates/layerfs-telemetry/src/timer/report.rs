@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use crate::timer::recording::{MAX_DEPTH, MAX_NODES};
+use crate::timer::recording::{Label, MAX_DEPTH, MAX_NODES};
 
 /// Outcome of the operation a node measured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,11 +99,13 @@ impl TimingNode {
     ///
     /// Labels are owned: `&'static str`, `String` and `Cow` all work.
     pub fn new(name: impl Into<Cow<'static, str>>, elapsed: Duration) -> Self {
+        let label = Label::bounded(name);
+        let incomplete = label.is_clipped();
         Self {
-            name: name.into(),
+            name: label.into_text(),
             elapsed,
             outcome: NodeOutcome::Ok,
-            incomplete: false,
+            incomplete,
             children: Vec::new(),
             nodes: 1,
             height: 1,
@@ -118,7 +120,7 @@ impl TimingNode {
 
     /// Sets whether requested detail is missing.
     pub fn with_incomplete(mut self, incomplete: bool) -> Self {
-        self.incomplete = incomplete;
+        self.incomplete |= incomplete;
         self
     }
 
@@ -155,6 +157,22 @@ impl TimingNode {
         self.height = height;
         self.children.push(child);
         true
+    }
+
+    /// Retained allocation capacity, including descendant Vec and owned labels.
+    /// Excludes this value's inline size and caller-owned incoming allocations.
+    pub fn retained_bytes(&self) -> usize {
+        let label = match &self.name {
+            Cow::Borrowed(_) => 0,
+            Cow::Owned(s) => s.capacity(),
+        };
+        label
+            + self.children.capacity() * std::mem::size_of::<Self>()
+            + self
+                .children
+                .iter()
+                .map(Self::retained_bytes)
+                .sum::<usize>()
     }
 
     /// Returns this node's label.

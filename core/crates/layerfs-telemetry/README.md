@@ -4,8 +4,9 @@ Environment-independent parent/child timing trees for LayerFS.
 
 > **Status:** Implemented standalone component; target LayerFS v0.1.7; not a
 > released contract. The crate lives in the replacement product workspace under
-> `core/` and has no product or third-party dependencies. Adapter integration,
-> async execution and overhead qualification are follow-up work, listed below.
+> `core/`. Default features have no product or third-party dependencies. The explicit
+> `native` feature adds hosted observation/output for #192; qualification gaps are
+> recorded in the architecture and acceptance evidence.
 
 Specification: [`docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md`](../../../docs/roadmap/0.1/0.1.7/component-decoupling/telemetry.md).
 Implementation: [#161](https://github.com/Ephemeral-AI-Lab/layerfs/issues/161).
@@ -214,3 +215,13 @@ or transport this crate implements. Overhead qualification of a wired-in product
 path is separate work. Future memory, CPU and storage observation domains are
 independent siblings when implemented; unsupported observations are unavailable,
 not zero.
+
+## Issue 192 hosted extension
+
+The [runtime architecture](../../docs/architecture/14-service-runtime.md) records
+source pins, the safe native APIs, recorder/queue ownership, configuration,
+retention and remaining qualification. `operation` and `observation` are portable;
+`runtime` and `output` require `native`. All native configuration is supplied by
+assembly; importing the crate never starts collectors. CPU/RSS are process-window
+observations, not exclusive operation costs. Operational retention is separate
+from append-only benchmark evidence. Existing Timing entry points remain available.

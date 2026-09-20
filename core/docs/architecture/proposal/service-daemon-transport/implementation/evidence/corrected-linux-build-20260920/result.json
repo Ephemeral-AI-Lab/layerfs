@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-daemon",
+    "--target",
+    "aarch64-unknown-linux-musl"
+  ],
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 1.493214458001603,
+  "source_unchanged": true,
+  "head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2
+}

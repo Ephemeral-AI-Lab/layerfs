@@ -98,7 +98,7 @@ Two cautions on these numbers, because both have already caused drift:
 
 ## Contents
 
-Thirteen papers. Chapter numbers are global to the set, so a reference such as
+Fourteen papers. Chapter numbers are global to the set, so a reference such as
 "§6.8" resolves to one place no matter which paper it appears in.
 
 | Paper | Chapters | Covers |
@@ -116,6 +116,7 @@ Thirteen papers. Chapter numbers are global to the set, so a reference such as
 | [`11-optimization-study.md`](11-optimization-study.md) | 16 | **Study — nothing measured:** parallelism, batched work, round trips and the SQLite profile against the v0.1.6 reference, with a regression ledger and an opportunity register |
 | [`12-attributes.md`](12-attributes.md) | 17 | Attribute trees: key grammar, `LFS4MET` pages, the streaming builder, extent-only values, portable mode/mtime, patching and multi-key reads |
 | [`13-physical-writing.md`](13-physical-writing.md) | 18 | Codec profiles and static contexts, group framing, placement by exact fit, and assembly — with the locator-stability argument |
+| [`14-service-runtime.md`](14-service-runtime.md) | — | Issue #192 candidate service/bridge/daemon, authenticated framing, hosted telemetry and remaining qualification |
 
 **Proposals** live one level down, in [`proposal/`](proposal/), and are a different
 kind of document — they state what should be built rather than what exists. The

@@ -1,0 +1,215 @@
+{
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "image": "sha256:edbb0b3c02e061813d6d749f4c589fc0cf88efe134850a4d2333f5f6e263754a",
+  "telemetry": "off",
+  "cases": [
+    {
+      "id": "V02",
+      "selection": "500000-byte construct",
+      "status": "PASS",
+      "root": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be"
+    },
+    {
+      "id": "V03",
+      "selection": "exact full readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "replace and readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V06",
+      "selection": "existing inode content attachment and stat",
+      "status": "PASS"
+    },
+    {
+      "id": "V04",
+      "selection": "File, Stat, two paged List calls, Readlink",
+      "status": "PASS"
+    },
+    {
+      "id": "V02",
+      "selection": "empty and 131071/131072/131073 cutoff boundaries",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "no-op, insert and delete",
+      "status": "PASS"
+    },
+    {
+      "id": "V07",
+      "selection": "two independent file saves, then one tree attachment; two retained roots",
+      "status": "PASS",
+      "logical_exchanges": 3,
+      "roots": [
+        "c6ebb4233263564866523a146e70ce2018a7e8ea8b81c687a12d89bf1429aada",
+        "d3f76821633c8a780308a418cc2ee86ce9e7215021c5b29a5bcb78e6ee21ac08"
+      ],
+      "tree": "f6972b4bdd57397e954d2a4ab258ad95777f921ccc4e3f17a284b3e19e54c744",
+      "atomic_composite": false
+    },
+    {
+      "id": "V16",
+      "status": "PASS",
+      "selection": "no mounts/devices; primary read-only/no files or explicitly selected owned local telemetry"
+    },
+    {
+      "id": "V14",
+      "selection": "new native service and new Docker daemon read old/new roots after ordinary Store reopen",
+      "status": "PASS",
+      "service_pid": 10470
+    },
+    {
+      "id": "V17",
+      "selection": "all five operations, identical roots and save counts from an independent pristine Store copy",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "fixture": {
+    "root": "61e52d6f1901fa4effebf037d6f0d917fb4d6c08e8ce8128f7b4404167669ff6",
+    "scope": "27ef987c298fe365e3637d2a85267beec50fe0b734be6f0aa2be72c9a8382574",
+    "file": "cb09a5b37b219deeceded9f45cce0bbf471e7ebedcaf4c91ed254d16e1c6562e",
+    "metadata": "312fe7a8867620f01b89e8a886d40cca367840853233e6ee7159ed3e27fdd409"
+  },
+  "fixture_copy": "closed independent byte copy",
+  "service_pid": 10461,
+  "ready": "layerfs-service ready 0.0.0.0:61860",
+  "container": {
+    "id": "ef38e65bc86cc5ea65c2e00710056dc1cbc734e383a49dd376e58e5d51cd38a6",
+    "image": "sha256:edbb0b3c02e061813d6d749f4c589fc0cf88efe134850a4d2333f5f6e263754a",
+    "labels": {
+      "io.layerfs.task": "issue192",
+      "org.layerfs.binary-sha256": "826bf2bb8a12d00431741e0fde904c464fee889b31f644bd26a3e6f7b067cd20"
+    },
+    "nano_cpus": 1000000000,
+    "memory_limit": 134217728,
+    "pids_limit": 16,
+    "mounts": [],
+    "logging": {
+      "Type": "none",
+      "Config": {}
+    },
+    "readonly": true,
+    "devices": [],
+    "pid": 742,
+    "network": {
+      "bridge": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": null,
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "3355b6d496a3d241168f4dcd94cb2c0c80488bdcd8e02b626a6a56122b5d7543",
+        "EndpointID": "656785e45a41f1aa57e2906ed4564f0ef808d4017889b0f3035b514aa7044534",
+        "Gateway": "172.17.0.1",
+        "IPAddress": "172.17.0.2",
+        "MacAddress": "2e:63:cd:1a:ae:66",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": null
+      }
+    }
+  },
+  "diff": "",
+  "observed_host_sockets": "COMMAND     PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nlayerfs-s 10461 yifanxu    3u  IPv4 0x2c6edac40dcb02b6      0t0  TCP *:61860 (LISTEN)\nlayerfs-s 10461 yifanxu    4u  IPv4 0xf6d0ba427bfdff56      0t0  TCP 127.0.0.1:61860->127.0.0.1:61861 (ESTABLISHED)\nlayerfs-s 10461 yifanxu    5u  IPv4 0xf6d0ba427bfdff56      0t0  TCP 127.0.0.1:61860->127.0.0.1:61861 (ESTABLISHED)\n",
+  "container_memory_observation": {
+    "scope": "enclosing container cgroup; not additive with process RSS",
+    "source": "Docker Engine stats one-shot",
+    "read": "2026-09-20T03:47:16.651009463Z",
+    "memory_stats": {
+      "usage": 1024000,
+      "stats": {
+        "active_anon": 143360,
+        "active_file": 0,
+        "anon": 192512,
+        "anon_thp": 0,
+        "file": 0,
+        "file_dirty": 0,
+        "file_mapped": 0,
+        "file_writeback": 0,
+        "inactive_anon": 0,
+        "inactive_file": 49152,
+        "kernel_stack": 16384,
+        "pgactivate": 0,
+        "pgdeactivate": 0,
+        "pgfault": 5802,
+        "pglazyfree": 80,
+        "pglazyfreed": 0,
+        "pgmajfault": 0,
+        "pgrefill": 0,
+        "pgscan": 0,
+        "pgsteal": 0,
+        "shmem": 0,
+        "slab": 386480,
+        "slab_reclaimable": 59168,
+        "slab_unreclaimable": 327312,
+        "sock": 0,
+        "thp_collapse_alloc": 0,
+        "thp_fault_alloc": 1,
+        "unevictable": 0,
+        "workingset_activate": 0,
+        "workingset_nodereclaim": 0,
+        "workingset_refault": 0
+      },
+      "limit": 134217728
+    },
+    "phase_peak": "unavailable; lifetime counters are not reset phase peaks"
+  },
+  "service_exit": 0,
+  "daemon_exit": 0,
+  "direct_parity": {
+    "file": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+    "edited": "5967b9c8a25b57590b81089d490ed7e2ce2523c2b05dc0431276c77a66da4284",
+    "tree": "7ea32421382c2629edacb0de7d7dd56ad18a76ccc4d6268b1bab77342748ba93",
+    "file_counts": [
+      18,
+      0
+    ],
+    "edit_counts": [
+      3,
+      0
+    ],
+    "tree_counts": [
+      2,
+      0
+    ]
+  },
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "lock_sha256": "48d2c6f7ef507a5052e5f7377a9b203c7b4c6f3cad26bf38a66a6a4a4928437b",
+  "service_sha256": "3da0acf6a1e91f2eb74f9b652f76fd558d7cdb3ea5c9cdd3af11dd3e33021821",
+  "daemon_sha256": "826bf2bb8a12d00431741e0fde904c464fee889b31f644bd26a3e6f7b067cd20"
+}

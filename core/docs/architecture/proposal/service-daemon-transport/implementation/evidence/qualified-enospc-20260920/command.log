@@ -1,0 +1,12 @@
+created: /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-8qmm8g8l/disk.dmg
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+     Running tests/full_disk.rs (core/target/debug/deps/full_disk-5ba0233b0df32057)
+
+running 1 test
+filesystem_bytes=33513472 filler_bytes=32727040 native_error=ENOSPC output_failures=1 original_result=Err(42)
+test actual_enospc_preserves_the_original_result ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+{"status": "PASS", "command": ["cargo", "+1.85.1", "test", "--manifest-path", "core/Cargo.toml", "--locked", "-p", "layerfs-telemetry", "--features", "native", "--test", "full_disk", "--", "--ignored", "--nocapture"], "create": ["hdiutil", "create", "-size", "32m", "-fs", "HFS+", "-volname", "layerfs192", "-type", "UDIF", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-8qmm8g8l/disk.dmg"], "attach": ["hdiutil", "attach", "-nobrowse", "-mountpoint", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-8qmm8g8l/volume", "-plist", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-8qmm8g8l/disk.dmg"], "attachment": {"system-entities": [{"content-hint": "Apple_HFS", "dev-entry": "/dev/disk5s1", "mount-point": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-8qmm8g8l/volume", "potentially-mountable": true, "unmapped-content-hint": "48465300-0000-11AA-AA11-00306543ECAC", "volume-kind": "hfs"}, {"content-hint": "GUID_partition_scheme", "dev-entry": "/dev/disk5", "potentially-mountable": false, "unmapped-content-hint": "GUID_partition_scheme"}]}, "detach": ["hdiutil", "detach", "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-8qmm8g8l/volume"], "cleanup": "\"disk5\" ejected.", "source_scope": "current source and dependency selection, with full test filesystem guard", "returncode": 0}

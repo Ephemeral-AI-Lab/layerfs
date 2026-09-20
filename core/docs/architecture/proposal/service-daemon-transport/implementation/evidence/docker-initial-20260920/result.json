@@ -1,0 +1,34 @@
+{
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "image": "layerfs-issue192:development",
+  "telemetry": "off",
+  "cases": [],
+  "cleanup": "PASS",
+  "fixture": {
+    "root": "408e9eea8c18099530cf0e290e246d1126818d866e77b518a9fbaf04b526ae6e",
+    "scope": "27ef987c298fe365e3637d2a85267beec50fe0b734be6f0aa2be72c9a8382574",
+    "file": "cb09a5b37b219deeceded9f45cce0bbf471e7ebedcaf4c91ed254d16e1c6562e",
+    "metadata": "2c25d596d4f2b69cfe7a634e8cbd7bd6bb87f1e4a18830256a1b788c67cb53f1"
+  },
+  "service_pid": 87461,
+  "ready": "layerfs-service ready 0.0.0.0:50622",
+  "status": "FAIL",
+  "error": "EOFError('terminal response missing')",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Failure { code: Io, unknown: false, cleanup: None }"
+      ],
+      "overflow": 0
+    }
+  ],
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "lock_sha256": "69887e7ef623b6d21715ef1785c5e2d6da3f4c6126a8ccf58b9076a09669d64a",
+  "service_sha256": "5a43888eb46eae9751c7d0cb292bb47bf51a714b44829c0777ab92ec974996ea",
+  "daemon_sha256": "23dccbc7c567e86fb4da684ee99a56d0fa23be0dff6f93477f5bca3fc0384fad"
+}

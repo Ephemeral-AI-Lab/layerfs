@@ -5,3 +5,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+
+[features]
+default = []
+native = ["dep:libproc", "dep:nix"]
+[target.'cfg(target_os = "macos")'.dependencies]
+libproc = { version = "=0.14.11", optional = true }
+nix = { version = "=0.31.3", features = ["resource"], optional = true }
+[target.'cfg(unix)'.dependencies]
+nix = { version = "=0.31.3", features = ["feature", "poll", "fs"], optional = true }

@@ -1,0 +1,29 @@
+{
+  "recorded_at": "2026-09-20T03:04:07.871581+00:00",
+  "status": "INCOMPLETE",
+  "completed_check": "focused-native-protocol-20260920/result.json",
+  "test_count": 8,
+  "native_test_execution_seconds": 0.05,
+  "command_wall_seconds": 6.24865654200039,
+  "functional_stall_request_deadline_ms": 250,
+  "functional_stall_controller_watchdog_seconds": 3,
+  "stall_deployment": "NOT_RUN at this checkpoint",
+  "next_command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-service",
+    "-p",
+    "layerfs-bridge",
+    "--bins",
+    "--examples"
+  ],
+  "next_command_status": "NOT_RUN",
+  "reason": "Nonblocking shared measurement-lock acquisition failed with BlockingIOError errno 35 before build or artifact creation; observed history-stride10 performance process in history-parent-lookup worktree. No lock bypass or benchmark interruption.",
+  "issue192_completion": "INCOMPLETE; final checks and required deployment/fault proofs remain",
+  "performance_claim": "none"
+}

@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "action": "preserved then removed only the empty unowned primary-checkout private harness marker",
+  "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+  "inode": 824199092,
+  "size": 0,
+  "mode": "0o644",
+  "uid": 501,
+  "gid": 20,
+  "mtime_ns": 1789866379824966750,
+  "preserved_file": "primary-empty-lock-824199092.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "global_flocks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "lsof_owners": [],
+  "active_harness_processes": [],
+  "removed": true,
+  "recorded_at": "2026-09-20T03:45:21.366306+00:00",
+  "cause": "issue192 helper incorrectly opened a private O_EXCL marker with append plus flock; helper corrected to shared global flocks only",
+  "sibling_private_marker": "untouched"
+}

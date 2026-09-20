@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
+use crate::timer::limits::RecordingLimits;
 use crate::timer::report::{NodeOutcome, TimingNode, TimingReport};
 
 /// Maximum number of nodes in one report, including root and attached nodes.
@@ -32,17 +33,16 @@ impl Label {
     /// Stores `name`, truncating on a UTF-8 boundary when it exceeds the budget.
     pub(crate) fn bounded(name: impl Into<Cow<'static, str>>) -> Self {
         let text = name.into();
-        if text.len() <= MAX_LABEL_BYTES {
-            Self {
-                text,
-                clipped: false,
-            }
-        } else {
-            Self {
-                text: clip(text),
-                clipped: true,
-            }
+        let mut end = text.len().min(MAX_LABEL_BYTES);
+        while !text.is_char_boundary(end) {
+            end -= 1;
         }
+        let clipped = end != text.len();
+        let text = match text {
+            Cow::Borrowed(value) => Cow::Borrowed(&value[..end]),
+            Cow::Owned(value) => Cow::Owned(value[..end].to_owned()),
+        };
+        Self { text, clipped }
     }
 
     /// An empty placeholder label, used when a label is moved out of a slot.
@@ -59,20 +59,6 @@ impl Label {
 
     pub(crate) fn into_text(self) -> Cow<'static, str> {
         self.text
-    }
-}
-
-fn clip(text: Cow<'static, str>) -> Cow<'static, str> {
-    let mut end = MAX_LABEL_BYTES;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    match text {
-        Cow::Borrowed(value) => Cow::Owned(value[..end].to_owned()),
-        Cow::Owned(mut value) => {
-            value.truncate(end);
-            Cow::Owned(value)
-        }
     }
 }
 
@@ -95,6 +81,7 @@ struct Slot {
 
 struct Inner {
     root: NodeId,
+    limits: RecordingLimits,
     slots: Vec<Slot>,
 }
 
@@ -106,7 +93,7 @@ pub(crate) struct Recording {
 
 impl Recording {
     /// Starts the root node before the operation closure runs.
-    pub(crate) fn start(label: Label) -> Self {
+    pub(crate) fn start(label: Label, limits: RecordingLimits) -> Self {
         let started = Instant::now();
         let root = Slot {
             incomplete: label.is_clipped(),
@@ -122,6 +109,7 @@ impl Recording {
             started,
             inner: RefCell::new(Inner {
                 root: 0,
+                limits,
                 slots: vec![root],
             }),
         }
@@ -202,7 +190,7 @@ impl Recording {
 impl Inner {
     fn child_fits(&self, parent: NodeId) -> bool {
         let slot = &self.slots[parent];
-        slot.running && slot.depth < MAX_DEPTH && self.slots.len() < MAX_NODES
+        slot.running && slot.depth < self.limits.depth() && self.slots.len() < self.limits.nodes()
     }
 
     fn push_child(&mut self, parent: NodeId, label: Label) -> NodeId {
@@ -236,7 +224,7 @@ impl Inner {
     /// any part of it was missing, invalid or clipped.
     fn graft(inner: &mut Inner, parent: NodeId, node: TimingNode) -> bool {
         let depth = inner.slots[parent].depth + 1;
-        if depth > MAX_DEPTH || inner.slots.len() >= MAX_NODES {
+        if depth > inner.limits.depth() || inner.slots.len() >= inner.limits.nodes() {
             return true;
         }
         let parts = node.into_parts();
