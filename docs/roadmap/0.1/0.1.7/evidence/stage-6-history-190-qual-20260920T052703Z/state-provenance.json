@@ -1,0 +1,77 @@
+{
+  "campaign": "stage-6-history-190-read-20260920T042617Z",
+  "runs": {
+    "baseline2-history-stride10": {
+      "states": 17,
+      "states_with_every_read_counter_zero": [
+        1
+      ],
+      "first_state_with_nonzero_returned_canonical_bytes": 2,
+      "total_returned_canonical_bytes": 148826516,
+      "state_1_read_counters": {
+        "filesystem.provider.read_waves": 0,
+        "filesystem.provider.requested_objects": 0,
+        "filesystem.provider.returned_objects": 0,
+        "filesystem.provider.returned_canonical_bytes": 0,
+        "filesystem.provider.failed_waves": 0,
+        "filesystem.validation.objects_read": 0,
+        "filesystem.validation.read_waves": 0,
+        "filesystem.references.rows_read": 0
+      }
+    },
+    "candidate2-history-stride10": {
+      "states": 17,
+      "states_with_every_read_counter_zero": [
+        1
+      ],
+      "first_state_with_nonzero_returned_canonical_bytes": 2,
+      "total_returned_canonical_bytes": 148826516,
+      "state_1_read_counters": {
+        "filesystem.provider.read_waves": 0,
+        "filesystem.provider.requested_objects": 0,
+        "filesystem.provider.returned_objects": 0,
+        "filesystem.provider.returned_canonical_bytes": 0,
+        "filesystem.provider.failed_waves": 0,
+        "filesystem.validation.objects_read": 0,
+        "filesystem.validation.read_waves": 0,
+        "filesystem.references.rows_read": 0
+      }
+    },
+    "baseline2-history-stride3": {
+      "states": 53,
+      "states_with_every_read_counter_zero": [
+        1
+      ],
+      "first_state_with_nonzero_returned_canonical_bytes": 2,
+      "total_returned_canonical_bytes": 377985893,
+      "state_1_read_counters": {
+        "filesystem.provider.read_waves": 0,
+        "filesystem.provider.requested_objects": 0,
+        "filesystem.provider.returned_objects": 0,
+        "filesystem.provider.returned_canonical_bytes": 0,
+        "filesystem.provider.failed_waves": 0,
+        "filesystem.validation.objects_read": 0,
+        "filesystem.validation.read_waves": 0,
+        "filesystem.references.rows_read": 0
+      }
+    },
+    "candidate2-history-stride3": {
+      "states": 53,
+      "states_with_every_read_counter_zero": [
+        1
+      ],
+      "first_state_with_nonzero_returned_canonical_bytes": 2,
+      "total_returned_canonical_bytes": 377985893,
+      "state_1_read_counters": {
+        "filesystem.provider.read_waves": 0,
+        "filesystem.provider.requested_objects": 0,
+        "filesystem.provider.returned_objects": 0,
+        "filesystem.provider.returned_canonical_bytes": 0,
+        "filesystem.provider.failed_waves": 0,
+        "filesystem.validation.objects_read": 0,
+        "filesystem.validation.read_waves": 0,
+        "filesystem.references.rows_read": 0
+      }
+    }
+  }
+}

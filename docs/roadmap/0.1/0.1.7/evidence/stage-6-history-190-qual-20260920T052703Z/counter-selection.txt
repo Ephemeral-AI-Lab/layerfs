@@ -1,0 +1,137 @@
+=== history-stride10
+  published numeric counters (kind=counter, integer) : 410
+  distinct family-local counter names                  : 42
+  moved under the retained optimization (R3 fails)    : 2
+      history.children_ns: 21905900168 -> 19888424711 'ns' (the sum of this row's named children; the published operation_ns)
+      history.root_ns: 38174166166 -> 36067700458 'ns' (the product's own root: the chain including the harness's untimed corpus reading)
+  excluded as durations (R2)                           : 2
+  invariant candidates (R1+R2+R3)                      : 408
+  ... of which the 217 table already pins the name (R4) : 8
+  invariant names with no 217 precedent                 : 32
+      changed_bytes
+      changed_paths
+      delta.absent_candidates
+      delta.ineligible_candidates
+      delta.packs_created
+      delta.prepared_full
+      delta.trials
+      filesystem.directories.pages_read
+      filesystem.inodes.pages_read
+      filesystem.provider.connection_opens
+      filesystem.provider.group_decodes
+      filesystem.references.base_records_read
+      filesystem.references.base_waves
+      filesystem.references.rows_read
+      filesystem.references.rows_spilled
+      filesystem.references.rows_touched
+      filesystem.references.rows_written
+      filesystem.references.runs_created
+      filesystem.references.serials_scanned
+      filesystem.validation.directory_pages_read
+      filesystem.validation.entries_examined
+      filesystem.validation.inode_demands
+      filesystem.validation.inode_pages_read
+      filesystem.validation.objects_read
+      filesystem.validation.read_waves
+      history.advisory_bases
+      history.advisory_depth_limit
+      history.advisory_model
+      history.prior_unavailable
+      inserted
+      objects
+      save.commits
+=== history-stride3
+  published numeric counters (kind=counter, integer) : 1238
+  distinct family-local counter names                  : 42
+  moved under the retained optimization (R3 fails)    : 2
+      history.children_ns: 56597343506 -> 49501013748 'ns' (the sum of this row's named children; the published operation_ns)
+      history.root_ns: 79832087833 -> 72472473000 'ns' (the product's own root: the chain including the harness's untimed corpus reading)
+  excluded as durations (R2)                           : 2
+  invariant candidates (R1+R2+R3)                      : 1236
+  ... of which the 217 table already pins the name (R4) : 8
+  invariant names with no 217 precedent                 : 32
+      changed_bytes
+      changed_paths
+      delta.absent_candidates
+      delta.ineligible_candidates
+      delta.packs_created
+      delta.prepared_full
+      delta.trials
+      filesystem.directories.pages_read
+      filesystem.inodes.pages_read
+      filesystem.provider.connection_opens
+      filesystem.provider.group_decodes
+      filesystem.references.base_records_read
+      filesystem.references.base_waves
+      filesystem.references.rows_read
+      filesystem.references.rows_spilled
+      filesystem.references.rows_touched
+      filesystem.references.rows_written
+      filesystem.references.runs_created
+      filesystem.references.serials_scanned
+      filesystem.validation.directory_pages_read
+      filesystem.validation.entries_examined
+      filesystem.validation.inode_demands
+      filesystem.validation.inode_pages_read
+      filesystem.validation.objects_read
+      filesystem.validation.read_waves
+      history.advisory_bases
+      history.advisory_depth_limit
+      history.advisory_model
+      history.prior_unavailable
+      inserted
+      objects
+      save.commits
+
+=== every published counter name, once, with its metadata
+name                                                 unit         r4 moved basis
+changed_bytes                                        bytes        no  no    logical bytes this transition changed
+changed_paths                                        paths        no  no    entries this transition changed
+delta.absent_candidates                              objects      no  no    chain total of the save's own counters
+delta.full_losses                                    objects      yes no    chain total of the save's own counters
+delta.full_records                                   objects      yes no    chain total of the save's own counters
+delta.ineligible_candidates                          objects      no  no    chain total of the save's own counters
+delta.inserted                                       objects      yes no    chain total of the save's own counters
+delta.no_candidate                                   objects      yes no    chain total of the save's own counters
+delta.packs_created                                  objects      no  no    chain total of the save's own counters
+delta.prefix_records                                 objects      yes no    chain total of the save's own counters
+delta.prefix_selected                                objects      yes no    chain total of the save's own counters
+delta.prepared_full                                  objects      no  no    chain total of the save's own counters
+delta.reused                                         objects      yes no    chain total of the save's own counters
+delta.trials                                         objects      no  no    chain total of the save's own counters
+delta.work_exceeded                                  objects      yes no    chain total of the save's own counters
+filesystem.directories.pages_read                    count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.inodes.pages_read                         count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.provider.connection_opens                 count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.provider.group_decodes                    count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.base_records_read              count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.base_waves                     count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.rows_read                      count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.rows_spilled                   count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.rows_touched                   count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.rows_written                   count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.runs_created                   count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.references.serials_scanned                count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.validation.directory_pages_read           count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.validation.entries_examined               count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.validation.inode_demands                  count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.validation.inode_pages_read               count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.validation.objects_read                   count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+filesystem.validation.read_waves                     count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+history.advisory_bases                               objects      no  no    content roots the driver declared a previous version as the base for
+history.advisory_depth_limit                         edges        no  no    255 means the driver declared unconditionally
+history.advisory_model                               bool         no  no    1 when the driver declared each version's previous content root as an OriginalBase predecessor
+history.children_ns                                  ns           no  yes   the sum of this row's named children; the published operation_ns
+history.prior_unavailable                            objects      no  no    changed paths that have an earlier version in the history whose bytes were not served
+history.root_ns                                      ns           no  yes   the product's own root: the chain including the harness's untimed corpus reading
+inserted                                             objects      no  no    SaveOutcome.inserted
+objects                                              objects      no  no    canonical objects the child emitted
+save.commits                                         count        no  no    public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed
+
+=== pin-table size this would add
+  history-stride10: 410 lines (19 row-level + 17 states x 23 names)
+  history-stride3 : 1238 lines (measured; 53 states)
+  history-stride1 : NOT_MEASURED; the same per-state code path at 157 states
+                    projects ~3630 lines
+
+217-table pinned counter names: 156
