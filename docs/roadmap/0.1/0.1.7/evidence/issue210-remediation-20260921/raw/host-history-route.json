@@ -1,0 +1,100 @@
+{
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "client": "host",
+  "profile": "debug",
+  "cases": [
+    {
+      "id": "R00",
+      "case": "legacy mask 31 grants no history",
+      "status": "PASS",
+      "client_name": "host"
+    },
+    {
+      "id": "R01",
+      "case": "legacy construct through profile 1",
+      "status": "PASS"
+    },
+    {
+      "id": "R02",
+      "case": "init_layerstack through the daemon",
+      "status": "PASS"
+    },
+    {
+      "id": "R03",
+      "case": "fork from a Layer shares its root",
+      "status": "PASS"
+    },
+    {
+      "id": "R04",
+      "case": "stage_changes freezes exact context",
+      "status": "PASS"
+    },
+    {
+      "id": "R05",
+      "case": "commit_staged advances the Branch",
+      "status": "PASS"
+    },
+    {
+      "id": "R06",
+      "case": "add_layer publishes and advances the stack",
+      "status": "PASS"
+    },
+    {
+      "id": "R07",
+      "case": "repeat publication is idempotent",
+      "status": "PASS"
+    },
+    {
+      "id": "R08",
+      "case": "layer_history returns the chain",
+      "status": "PASS"
+    },
+    {
+      "id": "R09",
+      "case": "logical readback of the published root",
+      "status": "PASS"
+    },
+    {
+      "id": "R10",
+      "case": "a committed token removes nothing",
+      "status": "PASS"
+    },
+    {
+      "id": "R11",
+      "case": "delayed token cannot consume a replacement stage",
+      "status": "PASS"
+    },
+    {
+      "id": "R12",
+      "case": "stage survives on a new connection",
+      "status": "PASS"
+    },
+    {
+      "id": "R13",
+      "case": "GetBranch returns validated root serial",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "store_provisioning": {
+    "method": "existing C2 fixture executable (Store::open never creates)",
+    "store_sha256": "6011ab50e14836be6afe241afef6855ec91719058d833e6ecafda43c8290573a"
+  },
+  "service_ready": "layerfs-service ready 127.0.0.1:59480",
+  "binaries": {
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/layerfs-service": "4d421405704dbc18f74678357eb1aee7c5de429b69568972de7e69dd5dcf8733"
+  },
+  "client_name": "host",
+  "identities": {
+    "stack": "3151515151515151515151515151515151",
+    "branch": "1161616161616161616161616161616161",
+    "genesis": "32b0baaf29b135cdb1bdec06fa8b9ba231470c519515320b93e5a8888d6957eab4",
+    "commit": "12cb598c2ee8f40cebb8607bad03b6b041202ad31cdedf7b3ffa31b20ac20e55a7",
+    "layer": "32836f3c72840db95587bd11b5d380e618992f81c948b0b5cb834e506d040e025b",
+    "root": "c656fedb6351108e83ca64e8f6ac04cbb24cc72546e4c7188cdfc5049bf82e66",
+    "replacement_workspace": "7272727272727272727272727272727272727272727272727272727272727272",
+    "replacement_token": 3
+  },
+  "status": "PASS"
+}

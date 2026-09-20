@@ -1,0 +1,8 @@
+    Checking zstd-sys v2.0.16+zstd.1.5.7
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-content)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-daemon)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-history)
+    Checking layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.03s

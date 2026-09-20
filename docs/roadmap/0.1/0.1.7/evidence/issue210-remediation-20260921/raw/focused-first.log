@@ -1,0 +1,135 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.45s
+     Running unittests src/lib.rs (target/remediation-core/debug/deps/layerfs_bridge-54ebe816104fabaa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aead_profile.rs (target/remediation-core/debug/deps/aead_profile-23176638f3a2d72b)
+
+running 1 test
+test negotiated_suite_matches_the_compiled_backend ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_delivery.rs (target/remediation-core/debug/deps/history_delivery-fb678f55701fd89a)
+
+running 1 test
+test mutation_result_data_is_rejected_before_any_output ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_protocol.rs (target/remediation-core/debug/deps/history_protocol-8c53dc6bd04d214a)
+
+running 14 tests
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test identity_widths_and_tags_are_checked ... ok
+test failure_codes_round_trip_and_stay_typed ... ok
+test profile_and_opcode_must_agree ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test a_manifest_is_a_tree_by_construction ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test every_reply_round_trips ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test page_and_count_bounds_are_checked ... ok
+test every_query_and_command_round_trips ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_connections.rs (target/remediation-core/debug/deps/native_connections-6a0f20ba93ed8e4b)
+
+running 2 tests
+test repeated_native_connections_authenticate_with_ordinary_tcp ... ok
+test productive_upload_keeps_the_response_wait_alive ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.02s
+
+     Running tests/pipe_deadline.rs (target/remediation-core/debug/deps/pipe_deadline-28c113c279bfe488)
+
+running 1 test
+test a_full_pipe_fails_at_the_deadline_instead_of_blocking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/protocol.rs (target/remediation-core/debug/deps/protocol-f7148992e6ca9d53)
+
+running 5 tests
+test remote_budget_only_shortens_the_declared_duration ... ok
+test declared_large_input_has_a_size_consistent_frame_and_time_budget ... ok
+test terminal_types_and_explicit_continuation_roundtrip ... ok
+test all_operation_metadata_roundtrips_and_caps_are_checked ... ok
+test fixed_framing_rejects_lengths_states_and_truncations ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/relay_write.rs (target/remediation-core/debug/deps/relay_write-3df445e32ff88836)
+
+running 1 test
+test result_frames_reach_the_consumer_one_write_each ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/upload_batch.rs (target/remediation-core/debug/deps/upload_batch-b6be1b528625d8c6)
+
+running 1 test
+test bulk_upload_batches_records_without_changing_frames ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+     Running unittests src/lib.rs (target/remediation-core/debug/deps/layerfs_history-c89ab39162faeb7b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/allocation.rs (target/remediation-core/debug/deps/allocation-8861abc565ed48a7)
+
+running 3 tests
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+test a_consumed_reservation_survives_a_later_failure ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/conditional_updates.rs (target/remediation-core/debug/deps/conditional_updates-25e8990f5c2ac171)
+
+running 6 tests
+test stage_insertion_enforces_the_frozen_context ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test a_stale_loser_keeps_its_exact_stage ... FAILED
+test an_exact_token_is_the_only_stage_a_discard_removes ... FAILED
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+
+failures:
+
+---- a_stale_loser_keeps_its_exact_stage stdout ----
+
+thread 'a_stale_loser_keeps_its_exact_stage' panicked at crates/layerfs-history/tests/conditional_updates.rs:100:18:
+expected HeadMoved, got WithStage { cause: HeadMoved(MovedState { expected_head: None, actual_head: Some(CommitId(1208c9ad9c39d74d5e86aa1983faa5ae075ac53bb511342a77f528f7df75ecb83f)), expected_base: LayerId(3288c95012e6e51175492ec39583ad081ab32e9dab35db4d3b9ad1ccbcea86898c), actual_base: LayerId(3288c95012e6e51175492ec39583ad081ab32e9dab35db4d3b9ad1ccbcea86898c) }), stage: Retained(StageRecord { workspace: WorkspaceId(2222222222222222222222222222222222222222222222222222222222222222), token: StageToken(2), stack: LayerStackId(3111111111111111111111111111111111), branch: BranchId(1112121212121212121212121212121212), expected_head: None, expected_base: LayerId(3288c95012e6e51175492ec39583ad081ab32e9dab35db4d3b9ad1ccbcea86898c), expected_root: ObjectId("9415bd0f9752b5b51af5bc19fcf04add4160613ab06d5deb65dee1d75f3c86b7"), construction_base_root: ObjectId("9415bd0f9752b5b51af5bc19fcf04add4160613ab06d5deb65dee1d75f3c86b7"), intended_commit_base: LayerId(3288c95012e6e51175492ec39583ad081ab32e9dab35db4d3b9ad1ccbcea86898c), candidate_root: ObjectId("878ca041dbde5a8f7938d03567a509cc1be664d5353651bd41473213ec6c6e65"), profile: ObjectId("239bd44d6ec91152992a6844ed0703466bc030c98bdc5fb809877415dbb27e0f"), scope: ObjectId("9bb86b886e9b60138d95716a4e641badbb841167bb7aafaf156b5ec1196429bf"), generation: 1 }) }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- an_exact_token_is_the_only_stage_a_discard_removes stdout ----
+
+thread 'an_exact_token_is_the_only_stage_a_discard_removes' panicked at crates/layerfs-history/tests/conditional_updates.rs:141:5:
+assertion `left == right` failed
+  left: WithStage { cause: StageChanged { expected: StageToken(1), actual: Some(StageToken(2)) }, stage: Retained(StageRecord { workspace: WorkspaceId(3131313131313131313131313131313131313131313131313131313131313131), token: StageToken(2), stack: LayerStackId(3111111111111111111111111111111111), branch: BranchId(1112121212121212121212121212121212), expected_head: None, expected_base: LayerId(3288c95012e6e51175492ec39583ad081ab32e9dab35db4d3b9ad1ccbcea86898c), expected_root: ObjectId("9415bd0f9752b5b51af5bc19fcf04add4160613ab06d5deb65dee1d75f3c86b7"), construction_base_root: ObjectId("9415bd0f9752b5b51af5bc19fcf04add4160613ab06d5deb65dee1d75f3c86b7"), intended_commit_base: LayerId(3288c95012e6e51175492ec39583ad081ab32e9dab35db4d3b9ad1ccbcea86898c), candidate_root: ObjectId("a9b80cd3db5cff0ef459ce79e5a37bf9da9ea493e23e89242ac183d12ee44a3f"), profile: ObjectId("239bd44d6ec91152992a6844ed0703466bc030c98bdc5fb809877415dbb27e0f"), scope: ObjectId("9bb86b886e9b60138d95716a4e641badbb841167bb7aafaf156b5ec1196429bf"), generation: 1 }) }
+ right: StageChanged { expected: StageToken(1), actual: Some(StageToken(2)) }
+
+
+failures:
+    a_stale_loser_keeps_its_exact_stage
+    an_exact_token_is_the_only_stage_a_discard_removes
+
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-history --test conditional_updates`

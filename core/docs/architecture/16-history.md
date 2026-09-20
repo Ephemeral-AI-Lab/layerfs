@@ -6,6 +6,8 @@
 
 Issue: [#210](https://github.com/Ephemeral-AI-Lab/layerfs/issues/210). Design
 parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
+The [remediation handoff and qualification record](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-remediation-20260921/validation.md)
+records the current execution evidence and its gaps.
 Implementation specification and its pre-publication audit:
 [`proposal/commit-history/`](proposal/commit-history/).
 

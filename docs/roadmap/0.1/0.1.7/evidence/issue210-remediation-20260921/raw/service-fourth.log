@@ -1,0 +1,28 @@
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.58s
+     Running tests/history.rs (target/remediation-core/debug/deps/history-8c02e200c3bd3c95)
+
+running 20 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test history_profile_and_opcode_must_agree ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test legacy_mask_grants_no_history ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test manifest_initialization_builds_a_real_namespace ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test wrong_role_root_is_refused ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... ok
+test refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes ... ok
+test stale_loser_retains_its_exact_stage ... ok
+test composite_failure_keeps_acknowledged_stage_distinct_from_absence ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
