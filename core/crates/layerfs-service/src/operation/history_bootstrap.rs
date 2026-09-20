@@ -240,31 +240,27 @@ fn directory_updates(
     entries: &[ManifestEntry],
     serials: &[u64],
 ) -> Result<Vec<DirectoryUpdate>, Failure> {
-    let mut directories: Vec<DirectoryUpdate> = vec![DirectoryUpdate {
-        parent: serials[0],
-        changes: Vec::new(),
-    }];
+    let mut bindings = std::collections::BTreeMap::new();
+    for (entry, serial) in entries.iter().zip(serials) {
+        if entry.kind == RecordKind::Directory {
+            bindings.insert(*serial, Vec::new());
+        }
+    }
     for (index, entry) in entries.iter().enumerate().skip(1) {
         let name = PathName::from_bytes(&entry.name).map_err(content)?;
         let parent = serials[usize::from(entry.parent)];
-        match directories.last_mut() {
-            Some(last) if last.parent == parent => last.changes.push((name, Some(serials[index]))),
-            _ => directories.push(DirectoryUpdate {
-                parent,
-                changes: vec![(name, Some(serials[index]))],
-            }),
-        }
+        bindings
+            .get_mut(&parent)
+            .ok_or(Code::InvalidInput)?
+            .push((name, Some(serials[index])));
     }
+    let mut directories: Vec<DirectoryUpdate> = bindings
+        .into_iter()
+        .map(|(parent, changes)| DirectoryUpdate { parent, changes })
+        .collect();
     for directory in &mut directories {
         directory.changes.sort_by(|a, b| a.0.cmp(&b.0));
         directory.check().map_err(content)?;
-    }
-    directories.sort_by_key(|directory| directory.parent);
-    if directories
-        .windows(2)
-        .any(|pair| pair[0].parent >= pair[1].parent)
-    {
-        return Err(Code::InvalidInput.into());
     }
     Ok(directories)
 }

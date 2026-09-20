@@ -55,6 +55,7 @@ pub fn create(path: &std::path::Path) -> sqlite::SqliteCatalog {
     sqlite::create(
         path,
         &HistoryCatalogConfig {
+            cursor_key: [71; 32],
             binding_key: BINDING.to_vec(),
             incarnation: 7,
         },
@@ -64,7 +65,7 @@ pub fn create(path: &std::path::Path) -> sqlite::SqliteCatalog {
 
 /// Opens one existing catalog read-only.
 pub fn reopen(path: &std::path::Path) -> sqlite::SqliteCatalog {
-    sqlite::open_read_only(path, BINDING).expect("read-only reopen")
+    sqlite::open_read_only(path, BINDING, [71; 32]).expect("read-only reopen")
 }
 
 /// The catalog identity of the fixture binding.

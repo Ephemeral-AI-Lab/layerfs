@@ -103,12 +103,14 @@ pub(crate) fn layer_stacks(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     incarnation: u64,
+    key: &[u8; 32],
     page: &Page,
 ) -> HistoryResult<PageResult<LayerStackRecord>> {
     page.check()?;
     let capacity = query::capacity(page.limit, LayerStackRecord::MAXIMUM_ENCODED_BYTES)?;
     let window = capacity as i64 + 1;
     let context = Context {
+        key,
         catalog,
         incarnation,
         range: Range::StackNames,
@@ -122,8 +124,11 @@ pub(crate) fn layer_stacks(
                 return Err(HistoryError::InvalidInput("page cursor anchor"));
             }
             Some(
-                String::from_utf8(cursor.position)
-                    .map_err(|_| HistoryError::InvalidInput("page cursor position"))?,
+                layer_stack(tx, LayerStackId::from_slice(&cursor.position)?)?
+                    .ok_or(HistoryError::Integrity("page cursor position"))?
+                    .name
+                    .as_str()
+                    .to_owned(),
             )
         }
     };
@@ -144,7 +149,7 @@ pub(crate) fn layer_stacks(
             context,
             &Cursor {
                 anchor: Vec::new(),
-                position: record.name.as_str().as_bytes().to_vec(),
+                position: record.id.as_slice().to_vec(),
             },
         )
         .map(Some)
@@ -188,44 +193,48 @@ pub(crate) fn layer_history(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     incarnation: u64,
+    key: &[u8; 32],
     request: &LayerHistoryRequest,
 ) -> HistoryResult<PageResult<LayerRecord>> {
     let stack =
         layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
-    let start = match request.start {
-        Some(start) => {
-            let record = layer(tx, start)?.ok_or(HistoryError::Missing(Missing::Layer))?;
-            if record.stack != request.stack {
-                return Err(HistoryError::Integrity("Layer ownership"));
-            }
-            start
-        }
-        None => stack.head_layer,
-    };
+    let capacity = query::capacity(request.limit, LayerRecord::MAXIMUM_ENCODED_BYTES)?;
     let context = Context {
+        key,
         catalog,
         incarnation,
         range: Range::LayerChain,
         subject: request.stack.as_slice(),
     };
-    let mut current = Some(start);
-    if let Some(bytes) = &request.cursor {
-        let cursor = query::decode(context, bytes)?;
-        if cursor.anchor != start.as_slice() {
+    let cursor = request
+        .cursor
+        .as_ref()
+        .map(|bytes| query::decode(context, bytes))
+        .transpose()?;
+    let (start, mut current) = if let Some(cursor) = cursor {
+        let anchor = LayerId::from_slice(&cursor.anchor)?;
+        if request.start.is_some_and(|start| start != anchor) {
             return Err(HistoryError::InvalidInput("page cursor anchor"));
         }
-        // The continuation names the last delivered Layer; the walk resumes at
-        // its parent, so a page never repeats the record it ended on.
-        current = match cursor.position.is_empty() {
-            true => None,
-            false => {
-                layer(tx, LayerId::from_slice(&cursor.position)?)?
-                    .ok_or(HistoryError::Integrity("Layer chain"))?
-                    .parent
-            }
-        };
+        let position = LayerId::from_slice(&cursor.position)?;
+        // Authentication attests to the immutable anchor/position relationship
+        // established by the page traversal that issued this cursor.
+        let last = layer(tx, position)?.ok_or(HistoryError::Integrity("Layer chain"))?;
+        if last.stack != request.stack {
+            return Err(HistoryError::Integrity("Layer ownership"));
+        }
+        (anchor, last.parent)
+    } else {
+        let start = request.start.unwrap_or(stack.head_layer);
+        (start, Some(start))
+    };
+    if layer(tx, start)?
+        .ok_or(HistoryError::Missing(Missing::Layer))?
+        .stack
+        != request.stack
+    {
+        return Err(HistoryError::Integrity("Layer ownership"));
     }
-    let capacity = query::capacity(request.limit, LayerRecord::MAXIMUM_ENCODED_BYTES)?;
     let mut records = Vec::new();
     while let Some(id) = current {
         if records.len() > capacity {
@@ -268,8 +277,19 @@ pub(crate) fn add_layer(
     if commit.stack != request.stack {
         return Err(HistoryError::Integrity("Commit ownership"));
     }
-    if let Some(layer) = published_source(tx, request.branch, request.commit)? {
-        return Ok(AddLayerOutcome::UpToDate { layer });
+    if let Some(id) = published_source(tx, request.branch, request.commit)? {
+        let expected = LayerRecord {
+            id: LayerId::derive(request.stack, Some(commit.base_layer), commit.root),
+            stack: request.stack,
+            parent: Some(commit.base_layer),
+            root: commit.root,
+            source_branch: Some(request.branch),
+            source_commit: Some(request.commit),
+        };
+        if id != expected.id || !verify_layer(tx, &expected)? {
+            return Err(HistoryError::Integrity("Layer provenance"));
+        }
+        return Ok(AddLayerOutcome::UpToDate { layer: id });
     }
     let moved = || {
         HistoryError::HeadMoved(Box::new(MovedState {
@@ -294,6 +314,12 @@ pub(crate) fn add_layer(
     if stack.head_layer != request.expected_stack_head {
         return Err(HistoryError::StackMoved {
             expected: request.expected_stack_head,
+            actual: stack.head_layer,
+        });
+    }
+    if stack.head_layer != branch.base_layer {
+        return Err(HistoryError::StackMoved {
+            expected: branch.base_layer,
             actual: stack.head_layer,
         });
     }

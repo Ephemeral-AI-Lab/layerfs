@@ -31,6 +31,9 @@ pub fn history() -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> 
     if binding.is_empty() || binding.len() > 128 {
         return Err(Code::InvalidInput.into());
     }
+    let cursor_key = layerfs_bridge::adapters::native::pipe::key(
+        &std::env::var("LAYERFS_HISTORY_CURSOR_KEY").map_err(|_| Code::InvalidInput)?,
+    )?;
     let create_mode = std::env::var("LAYERFS_HISTORY_CREATE").map_err(|_| Code::InvalidInput)?;
     let catalog: std::sync::Arc<dyn HistoryCatalog> = match create_mode.as_str() {
         "1" => {
@@ -43,6 +46,7 @@ pub fn history() -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> 
                 create(
                     std::path::Path::new(&path),
                     &HistoryCatalogConfig {
+                        cursor_key,
                         binding_key: binding.into_bytes(),
                         incarnation,
                     },
@@ -51,7 +55,7 @@ pub fn history() -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> 
             )
         }
         "0" => std::sync::Arc::new(
-            open_read_only(std::path::Path::new(&path), binding.as_bytes())
+            open_read_only(std::path::Path::new(&path), binding.as_bytes(), cursor_key)
                 .map_err(catalog_failure)?,
         ),
         _ => return Err(Code::Unsupported.into()),

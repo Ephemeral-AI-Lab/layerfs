@@ -52,6 +52,10 @@ fn unique(name: &str) -> PathBuf {
 }
 
 fn fixture(name: &str, operations: u8) -> Fixture {
+    fixture_using(name, operations, None)
+}
+
+fn fixture_using(name: &str, operations: u8, refusal: Option<bool>) -> Fixture {
     let path = unique(name);
     std::fs::create_dir(&path).unwrap();
     let store_path = path.join("store.sqlite");
@@ -65,12 +69,20 @@ fn fixture(name: &str, operations: u8) -> Fixture {
         sqlite::create(
             &catalog_path,
             &HistoryCatalogConfig {
+                cursor_key: [71; 32],
                 binding_key: b"layerfs-test-authority".to_vec(),
                 incarnation: 1,
             },
         )
         .unwrap(),
     );
+    let catalog: Arc<dyn HistoryCatalog> = match refusal {
+        Some(unknown) => Arc::new(RefusingCommit {
+            inner: catalog,
+            unknown,
+        }),
+        None => catalog,
+    };
     let peer = VerifiedPeer::from_private(&[7; 32]).unwrap();
     let service = Service::new(
         vec![StoreAccess {
@@ -144,7 +156,8 @@ fn result(response: Response) -> HistoryResult {
 
 fn stack_wire(response: Response) -> StackWire {
     match result(response) {
-        HistoryResult::StackCreated(record) | HistoryResult::Stack(record) => record,
+        HistoryResult::StackCreated(record) => record.stack,
+        HistoryResult::Stack(record) => record,
         other => panic!("expected a stack record, got {other:?}"),
     }
 }
@@ -771,10 +784,10 @@ fn stale_loser_retains_its_exact_stage() {
         }),
     )
     .unwrap();
-    assert!(matches!(
-        result(committed),
-        HistoryResult::Committed(CommitOutcomeWire::Committed(_))
-    ));
+    let committed = match result(committed) {
+        HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
+        _ => panic!(),
+    };
 
     let failure = call(
         &fixture.service,
@@ -787,6 +800,29 @@ fn stale_loser_retains_its_exact_stage() {
     )
     .unwrap_err();
     assert_eq!(failure.code, Code::HeadMoved);
+    assert_eq!(
+        failure.history.as_deref(),
+        Some(&HistoryFailure {
+            conflict: Some(HistoryConflict::BranchMoved {
+                expected_head: None,
+                actual_head: Some(committed.commit),
+                expected_base: init.base_layer,
+                actual_base: init.base_layer
+            }),
+            stage: StageObservation::Retained(Box::new(loser_stage.clone())),
+        })
+    );
+    assert_eq!(
+        native_call(
+            &fixture,
+            Operation::HistoryCommand(HistoryCommand::CommitStaged {
+                workspace: loser,
+                token: loser_stage.token
+            })
+        )
+        .unwrap_err(),
+        failure
+    );
     let retained = stage(
         call(
             &fixture.service,
@@ -915,6 +951,27 @@ fn delayed_discard_token_cannot_consume_a_replacement_stage() {
     )
     .unwrap_err();
     assert_eq!(failure.code, Code::StageChanged);
+    assert_eq!(
+        failure.history.as_deref(),
+        Some(&HistoryFailure {
+            conflict: Some(HistoryConflict::StageChanged {
+                expected: original.token,
+                actual: Some(replacement.token)
+            }),
+            stage: StageObservation::Retained(Box::new(replacement.clone())),
+        })
+    );
+    assert_eq!(
+        native_call(
+            &fixture,
+            Operation::HistoryCommand(HistoryCommand::DiscardStage {
+                workspace,
+                token: original.token
+            })
+        )
+        .unwrap_err(),
+        failure
+    );
     let retained = stage(
         call(
             &fixture.service,
@@ -1302,7 +1359,8 @@ fn read_only_reopen_supports_reads_and_refuses_every_mutation() {
     let file = construct(&fixture.service, &fixture.peer, 1, b"payload");
     let init = initialize(&fixture, [61; 32], file, 2);
 
-    let reader = sqlite::open_read_only(&fixture.catalog_path, b"layerfs-test-authority").unwrap();
+    let reader =
+        sqlite::open_read_only(&fixture.catalog_path, b"layerfs-test-authority", [71; 32]).unwrap();
     assert_eq!(reader.catalog_id(), fixture.catalog.catalog_id());
     assert_eq!(
         reader
@@ -1345,7 +1403,7 @@ fn read_only_reopen_supports_reads_and_refuses_every_mutation() {
         HistoryError::ContinuityUnavailable
     );
     // The wrong binding key does not open the catalog at all.
-    match sqlite::open_read_only(&fixture.catalog_path, b"another-authority") {
+    match sqlite::open_read_only(&fixture.catalog_path, b"another-authority", [71; 32]) {
         Err(error) => assert_eq!(error, HistoryError::Integrity("catalog binding")),
         Ok(_) => panic!("a foreign binding key must not open the catalog"),
     }
@@ -1453,4 +1511,442 @@ fn encoded_record_widths_match_the_catalog_bounds() {
         },
         StageRecord::MAXIMUM_ENCODED_BYTES,
     );
+}
+
+fn directory(parent: u16, name: &[u8]) -> ManifestEntry {
+    ManifestEntry {
+        parent,
+        name: name.to_vec(),
+        kind: 2,
+        mode: 0o755,
+        mtime_seconds: 0,
+        mtime_nanoseconds: 0,
+        content: None,
+        target: vec![],
+    }
+}
+
+#[test]
+fn empty_and_interleaved_directories_have_real_canonical_pages() {
+    let f = fixture("directory-regression", ALL);
+    for (index, (manifest, paths)) in [
+        (vec![directory(0, b"")], vec![b"".as_slice()]),
+        (
+            vec![directory(0, b""), directory(0, b"a")],
+            vec![b"a".as_slice()],
+        ),
+        (
+            vec![directory(0, b""), directory(0, b"a"), directory(1, b"x")],
+            vec![b"a/x".as_slice()],
+        ),
+        (
+            vec![
+                directory(0, b""),
+                directory(0, b"a"),
+                directory(1, b"x"),
+                directory(0, b"b"),
+                directory(1, b"y"),
+            ],
+            vec![b"a/x".as_slice(), b"a/y", b"b"],
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &f.service,
+            &f.peer,
+            1,
+            Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+                stack: [index as u8 + 1; 16],
+                name: format!("s{index}").into_bytes(),
+                scope_seed: [index as u8 + 1; 32],
+                manifest,
+            }),
+        )
+        .unwrap();
+        let created = match result(response) {
+            HistoryResult::StackCreated(created) => created,
+            _ => panic!(),
+        };
+        for path in paths {
+            let listed = call(
+                &f.service,
+                &f.peer,
+                2,
+                Operation::Inspect {
+                    root: created.root,
+                    query: Inspect::List {
+                        path: path.to_vec(),
+                        after: vec![],
+                        entries: 128,
+                        bytes: 16384,
+                    },
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                listed,
+                Response::List {
+                    entries: vec![],
+                    continuation: None
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn branch_root_descriptor_validates_content_scope_profile_and_actual_serial() {
+    let f = fixture("descriptor", ALL);
+    let seed = [8; 32];
+    let scope = scope_for_seed(seed).object();
+    f.catalog
+        .reserve_inodes(&layerfs_history::ReserveRequest { scope, count: 8 })
+        .unwrap();
+    let response = call(
+        &f.service,
+        &f.peer,
+        1,
+        Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+            stack: [1; 16],
+            name: b"main".to_vec(),
+            scope_seed: seed,
+            manifest: vec![directory(0, b"")],
+        }),
+    )
+    .unwrap();
+    let created = match result(response) {
+        HistoryResult::StackCreated(created) => created,
+        _ => panic!(),
+    };
+    assert_eq!(created.root_serial, 9);
+    let forked = snapshot(
+        call(
+            &f.service,
+            &f.peer,
+            2,
+            Operation::HistoryCommand(HistoryCommand::Fork {
+                stack: created.stack.stack,
+                branch: [1; 16],
+                name: b"work".to_vec(),
+                source: HistoryForkSource::Layer(created.stack.head_layer),
+            }),
+        )
+        .unwrap(),
+    );
+    assert_eq!(forked.root_serial, None);
+    let descriptor = snapshot(
+        call(
+            &f.service,
+            &f.peer,
+            3,
+            Operation::HistoryQuery(HistoryQuery::GetBranch {
+                branch: forked.branch.branch,
+            }),
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        snapshot(
+            native_call(
+                &f,
+                Operation::HistoryQuery(HistoryQuery::GetBranch {
+                    branch: forked.branch.branch
+                })
+            )
+            .unwrap()
+        ),
+        descriptor
+    );
+    assert_eq!(descriptor.root_serial, Some(9));
+    assert_eq!(descriptor.effective_root, created.root);
+    assert_eq!(descriptor.scope, created.stack.scope);
+    assert_eq!(descriptor.profile, created.stack.profile);
+    assert_eq!(
+        f.catalog
+            .reserve_inodes(&layerfs_history::ReserveRequest { scope, count: 1 })
+            .unwrap()
+            .start,
+        10
+    );
+    let file = construct(&f.service, &f.peer, 4, b"wrong root role");
+    for (index, (root, scope, profile)) in [
+        (
+            layerfs_content::ObjectId::for_bytes(b"absent"),
+            scope,
+            layerfs_content::filesystem::profile_id(),
+        ),
+        (
+            layerfs_content::ObjectId::from_bytes(&file).unwrap(),
+            scope,
+            layerfs_content::filesystem::profile_id(),
+        ),
+        (
+            layerfs_content::ObjectId::from_bytes(&created.root).unwrap(),
+            scope_for_seed([9; 32]).object(),
+            layerfs_content::filesystem::profile_id(),
+        ),
+        (
+            layerfs_content::ObjectId::from_bytes(&created.root).unwrap(),
+            scope,
+            layerfs_content::ObjectId::for_bytes(b"foreign profile"),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let s = f
+            .catalog
+            .initialize_layerstack(&layerfs_history::StackInitialization {
+                stack: layerfs_history::LayerStackId::from_authority([index as u8 + 2; 16]),
+                name: layerfs_history::HistoryName::new(&format!("bad{index}")).unwrap(),
+                scope,
+                profile,
+                genesis_root: root,
+            })
+            .unwrap();
+        let b = f
+            .catalog
+            .fork(&layerfs_history::ForkRequest {
+                stack: s.id,
+                branch: layerfs_history::BranchId::from_authority([index as u8 + 2; 16]),
+                name: layerfs_history::HistoryName::new("work").unwrap(),
+                source: layerfs_history::ForkSource::Layer(s.head_layer),
+            })
+            .unwrap();
+        assert!(call(
+            &f.service,
+            &f.peer,
+            5,
+            Operation::HistoryQuery(HistoryQuery::GetBranch {
+                branch: b.branch.id.to_bytes()
+            })
+        )
+        .is_err());
+    }
+}
+
+fn native_call(f: &Fixture, operation: Operation) -> Result<Response, Failure> {
+    use layerfs_bridge::adapters::native::{
+        client::Client,
+        connection::{accept, connect, Peer},
+        listen,
+        server::serve,
+    };
+    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_key = [9; 32];
+    let public = *VerifiedPeer::from_private(&server_key)
+        .unwrap()
+        .public_key();
+    let peers = [Peer {
+        selector: 1,
+        public: *f.peer.public_key(),
+        expires_unix: u64::MAX,
+    }];
+    std::thread::scope(|threads| {
+        let server = threads.spawn(|| {
+            let (socket, _) = listener.accept().unwrap();
+            let c = accept(socket, &server_key, &peers).unwrap();
+            let _ = serve(c, |peer, request, input, output, deadline| {
+                f.service
+                    .handle_until(peer, request, input, output, deadline)
+                    .0
+            });
+        });
+        let mut client = Client::new(connect(addr, 1, &[7; 32], &public).unwrap()).unwrap();
+        let request = Request {
+            id: 1,
+            generation: 1,
+            store: 1,
+            profile: profile(&operation),
+            deadline_ms: 10000,
+            response_bytes: 16384,
+            operation,
+        };
+        let mut input: &[u8] = &[];
+        let mut output = Vec::new();
+        let result = client.call(&request, &mut input, &mut output);
+        drop(client);
+        server.join().unwrap();
+        result
+    })
+}
+
+// A public-contract provider refusal checks composition; it is not evidence of
+// a real SQLite I/O-loss or reverse-completion schedule.
+struct RefusingCommit {
+    inner: Arc<dyn HistoryCatalog>,
+    unknown: bool,
+}
+macro_rules! delegate_history {
+    ($($name:ident($($arg:ident:$ty:ty),*) -> $ret:ty;)*) => {$(
+        fn $name(&self,$($arg:$ty),*)->$ret {self.inner.$name($($arg),*)}
+    )*};
+}
+impl HistoryCatalog for RefusingCommit {
+    delegate_history! {
+        catalog_id()->layerfs_history::CatalogId;
+        incarnation()->u64;
+        layer_stack(id:layerfs_history::LayerStackId)->layerfs_history::HistoryResult<Option<layerfs_history::LayerStackRecord>>;
+        layer_stacks(page:&layerfs_history::Page)->layerfs_history::HistoryResult<layerfs_history::PageResult<layerfs_history::LayerStackRecord>>;
+        branch(id:layerfs_history::BranchId)->layerfs_history::HistoryResult<Option<layerfs_history::BranchRecord>>;
+        branch_snapshot(id:layerfs_history::BranchId)->layerfs_history::HistoryResult<Option<layerfs_history::BranchSnapshot>>;
+        branches(stack:layerfs_history::LayerStackId,page:&layerfs_history::Page)->layerfs_history::HistoryResult<layerfs_history::PageResult<layerfs_history::BranchRecord>>;
+        commit(id:layerfs_history::CommitId)->layerfs_history::HistoryResult<Option<layerfs_history::CommitRecord>>;
+        layer(id:layerfs_history::LayerId)->layerfs_history::HistoryResult<Option<layerfs_history::LayerRecord>>;
+        stage(workspace:layerfs_history::WorkspaceId)->layerfs_history::HistoryResult<Option<layerfs_history::StageRecord>>;
+        stages(branch:layerfs_history::BranchId,page:&layerfs_history::Page)->layerfs_history::HistoryResult<layerfs_history::PageResult<layerfs_history::StageRecord>>;
+        commit_history(request:&layerfs_history::CommitHistoryRequest)->layerfs_history::HistoryResult<layerfs_history::PageResult<layerfs_history::CommitRecord>>;
+        layer_history(request:&layerfs_history::LayerHistoryRequest)->layerfs_history::HistoryResult<layerfs_history::PageResult<layerfs_history::LayerRecord>>;
+        initialize_layerstack(request:&layerfs_history::StackInitialization)->layerfs_history::HistoryResult<layerfs_history::LayerStackRecord>;
+        fork(request:&layerfs_history::ForkRequest)->layerfs_history::HistoryResult<layerfs_history::BranchSnapshot>;
+        stage_changes(request:&layerfs_history::StageRequest)->layerfs_history::HistoryResult<layerfs_history::StageRecord>;
+        add_layer(request:&layerfs_history::AddLayerRequest)->layerfs_history::HistoryResult<layerfs_history::AddLayerOutcome>;
+        discard_stage(request:&layerfs_history::DiscardRequest)->layerfs_history::HistoryResult<layerfs_history::DiscardOutcome>;
+        reserve_inodes(request:&layerfs_history::ReserveRequest)->layerfs_history::HistoryResult<layerfs_history::Reservation>;
+    }
+    fn commit_staged(
+        &self,
+        _: &layerfs_history::CommitStagedRequest,
+    ) -> layerfs_history::HistoryResult<layerfs_history::CommitStagedOutcome> {
+        Err(if self.unknown {
+            HistoryError::UnknownOutcome
+        } else {
+            HistoryError::Busy
+        })
+    }
+}
+
+#[test]
+fn composite_failure_keeps_acknowledged_stage_distinct_from_absence() {
+    for unknown in [false, true] {
+        let f = fixture_using("composite-context", ALL, Some(unknown));
+        let file = construct(&f.service, &f.peer, 1, b"original");
+        let replacement = construct(&f.service, &f.peer, 2, b"replacement");
+        let init = initialize(&f, [9; 32], file, 3);
+        for native in [false, true] {
+            let workspace = if native { [2; 32] } else { [1; 32] };
+            let operation = Operation::HistoryCommand(HistoryCommand::Commit(changes(
+                &init,
+                workspace,
+                replacement,
+                4,
+            )));
+            let error = if native {
+                native_call(&f, operation)
+            } else {
+                call(&f.service, &f.peer, 10, operation)
+            }
+            .unwrap_err();
+            assert_eq!(error.code, if unknown { Code::Unknown } else { Code::Busy });
+            assert_eq!(error.unknown, unknown);
+            let observed = error.history.unwrap().stage;
+            let acknowledged = match observed {
+                StageObservation::AcknowledgedUnknown(stage) => *stage,
+                _ => panic!("must report acknowledged stage with unresolved disposition"),
+            };
+            assert_eq!(acknowledged.workspace, workspace);
+            assert_eq!(acknowledged.generation, 4);
+            let retained = stage(
+                call(
+                    &f.service,
+                    &f.peer,
+                    11,
+                    Operation::HistoryQuery(HistoryQuery::GetStage { workspace }),
+                )
+                .unwrap(),
+            );
+            assert_eq!(acknowledged, retained);
+        }
+    }
+    let f = fixture("absent-context", ALL);
+    let err = native_call(
+        &f,
+        Operation::HistoryCommand(HistoryCommand::CommitStaged {
+            workspace: [3; 32],
+            token: 1,
+        }),
+    )
+    .unwrap_err();
+    assert_eq!(
+        err.history.as_deref(),
+        Some(&HistoryFailure {
+            conflict: Some(HistoryConflict::StageChanged {
+                expected: 1,
+                actual: None
+            }),
+            stage: StageObservation::Absent([3; 32])
+        })
+    );
+}
+
+#[test]
+fn refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes() {
+    let f = fixture("stack-context", ALL);
+    let file = construct(&f.service, &f.peer, 1, b"one");
+    let second = construct(&f.service, &f.peer, 2, b"two");
+    let init = initialize(&f, [11; 32], file, 3);
+    let committed = call(
+        &f.service,
+        &f.peer,
+        8,
+        Operation::HistoryCommand(HistoryCommand::Commit(changes(&init, [1; 32], second, 1))),
+    )
+    .unwrap();
+    let first = match result(committed) {
+        HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
+        _ => panic!(),
+    };
+    let layer = call(
+        &f.service,
+        &f.peer,
+        9,
+        Operation::HistoryCommand(HistoryCommand::AddLayer {
+            stack: init.stack,
+            branch: init.branch,
+            commit: first.commit,
+            expected_stack_head: init.base_layer,
+            expected_branch_base: init.base_layer,
+        }),
+    )
+    .unwrap();
+    let layer = match result(layer) {
+        HistoryResult::Published(LayerOutcomeWire::Added(record)) => record,
+        _ => panic!(),
+    };
+    let mut change = changes(&init, [2; 32], file, 2);
+    change.expected_head = Some(first.commit);
+    change.base = first.root;
+    let second = call(
+        &f.service,
+        &f.peer,
+        10,
+        Operation::HistoryCommand(HistoryCommand::Commit(change)),
+    )
+    .unwrap();
+    let second = match result(second) {
+        HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
+        _ => panic!(),
+    };
+    let operation = Operation::HistoryCommand(HistoryCommand::AddLayer {
+        stack: init.stack,
+        branch: init.branch,
+        commit: second.commit,
+        expected_stack_head: layer.layer,
+        expected_branch_base: init.base_layer,
+    });
+    let error = call(&f.service, &f.peer, 11, operation.clone()).unwrap_err();
+    assert_eq!(
+        error.history.as_deref(),
+        Some(&HistoryFailure {
+            conflict: Some(HistoryConflict::StackMoved {
+                expected: init.base_layer,
+                actual: layer.layer
+            }),
+            stage: StageObservation::Unobserved
+        })
+    );
+    assert_eq!(native_call(&f, operation).unwrap_err(), error);
 }

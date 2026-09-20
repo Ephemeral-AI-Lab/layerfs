@@ -135,11 +135,22 @@ impl Operation {
         match self {
             Self::ConstructFile { .. }
             | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. } => true,
+            | Self::UpdatePreparedFilesystem { .. }
+            | Self::HistoryCommand(
+                HistoryCommand::InitLayerStack { .. }
+                | HistoryCommand::StageChanges(_)
+                | HistoryCommand::Commit(_),
+            ) => true,
             Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::HistoryQuery(_)
-            | Self::HistoryCommand(_) => false,
+            | Self::HistoryCommand(
+                HistoryCommand::Fork { .. }
+                | HistoryCommand::CommitStaged { .. }
+                | HistoryCommand::AddLayer { .. }
+                | HistoryCommand::DiscardStage { .. }
+                | HistoryCommand::ReserveInodes { .. },
+            ) => false,
         }
     }
 
@@ -149,13 +160,24 @@ impl Operation {
     /// two failure boundaries separate.
     pub const fn metadata_mutation(&self) -> bool {
         match self {
-            Self::HistoryCommand(_) => true,
+            Self::HistoryCommand(
+                HistoryCommand::Fork { .. }
+                | HistoryCommand::CommitStaged { .. }
+                | HistoryCommand::AddLayer { .. }
+                | HistoryCommand::DiscardStage { .. }
+                | HistoryCommand::ReserveInodes { .. },
+            ) => true,
             Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
-            | Self::HistoryQuery(_) => false,
+            | Self::HistoryQuery(_)
+            | Self::HistoryCommand(
+                HistoryCommand::InitLayerStack { .. }
+                | HistoryCommand::StageChanges(_)
+                | HistoryCommand::Commit(_),
+            ) => false,
         }
     }
 
@@ -541,7 +563,7 @@ fn check_history_command(command: &HistoryCommand) -> Result<(), Failure> {
     }
 }
 
-fn check_name(name: &[u8]) -> Result<(), Failure> {
+pub(crate) fn check_name(name: &[u8]) -> Result<(), Failure> {
     if name.is_empty() || name.len() > NAME_MAX_BYTES {
         return Err(Code::InvalidInput.into());
     }

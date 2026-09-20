@@ -2,8 +2,8 @@
 //!
 //! A cursor is a fixed 160-byte value. It binds the catalog identity and
 //! incarnation, the range it belongs to, the immutable anchor that range was
-//! opened at, and the position to resume after; a sixteen-byte digest covers
-//! everything before it. The server recomputes that digest from the request it
+//! opened at, and the position to resume after; a sixteen-byte keyed MAC covers
+//! everything before it. The server authenticates that MAC with its authority capability while it
 //! is serving, so a cursor from another catalog, another incarnation, another
 //! query or with a tampered body fails validation instead of being honoured.
 //!
@@ -18,7 +18,7 @@ use crate::records::{
 };
 
 /// Frozen cursor format version.
-pub(crate) const CURSOR_VERSION: u8 = 1;
+pub(crate) const CURSOR_VERSION: u8 = 2;
 /// Fixed encoded width of one cursor.
 pub(crate) const CURSOR_BYTES: usize = MAXIMUM_CURSOR_BYTES;
 /// Bytes each variable field occupies, zero padded.
@@ -48,8 +48,10 @@ pub(crate) enum Range {
 }
 
 /// The request context a cursor is only valid inside.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct Context<'a> {
+    /// Authority capability, never serialized.
+    pub(crate) key: &'a [u8; 32],
     /// Catalog the cursor was issued by.
     pub(crate) catalog: CatalogId,
     /// Incarnation the cursor was issued in.
@@ -79,7 +81,7 @@ pub(crate) fn encode(context: Context<'_>, cursor: &Cursor) -> HistoryResult<Vec
     place(&mut bytes, SUBJECT_AT, context.subject)?;
     place(&mut bytes, ANCHOR_AT, &cursor.anchor)?;
     place(&mut bytes, POSITION_AT, &cursor.position)?;
-    let digest = digest(&bytes[..DIGEST_AT]);
+    let digest = digest(context.key, &bytes[..DIGEST_AT]);
     bytes[DIGEST_AT..].copy_from_slice(&digest);
     Ok(bytes.to_vec())
 }
@@ -99,7 +101,12 @@ pub(crate) fn decode(context: Context<'_>, bytes: &[u8]) -> HistoryResult<Cursor
     {
         return Err(HistoryError::InvalidInput("page cursor catalog"));
     }
-    if expected[DIGEST_AT..] != digest(&expected[..DIGEST_AT]) {
+    if expected[DIGEST_AT..]
+        .iter()
+        .zip(digest(context.key, &expected[..DIGEST_AT]))
+        .fold(0u8, |difference, (a, b)| difference | (a ^ b))
+        != 0
+    {
         return Err(HistoryError::Integrity("page cursor digest"));
     }
     let subject = field(&expected, SUBJECT_AT)?;
@@ -177,9 +184,9 @@ fn field(bytes: &[u8; CURSOR_BYTES], at: usize) -> HistoryResult<&[u8]> {
     Ok(value)
 }
 
-fn digest(bytes: &[u8]) -> [u8; 16] {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"layerfs/history/cursor/v1\0");
+fn digest(key: &[u8; 32], bytes: &[u8]) -> [u8; 16] {
+    let mut hasher = blake3::Hasher::new_keyed(key);
+    hasher.update(b"layerfs/history/cursor/v2\0");
     hasher.update(bytes);
     let full = hasher.finalize();
     let mut out = [0u8; 16];

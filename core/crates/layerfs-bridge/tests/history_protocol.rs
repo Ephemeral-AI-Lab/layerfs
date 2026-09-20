@@ -512,8 +512,8 @@ fn stage_wire() -> StageWire {
         expected_head: Some(commit_id(0x09)),
         expected_base: layer_id(0x0D),
         expected_root: [0x06; 32],
-        construction_base_root: [0x07; 32],
-        intended_commit_base: layer_id(0x0E),
+        construction_base_root: [0x06; 32],
+        intended_commit_base: layer_id(0x0D),
         candidate_root: [0x08; 32],
         profile: [0x02; 32],
         scope: [0x01; 32],
@@ -532,7 +532,8 @@ fn every_result() -> Vec<HistoryResult> {
             branch: branch_wire(),
             head_root: Some([0x09; 32]),
             base_root: [0x0A; 32],
-            effective_root: [0x0B; 32],
+            effective_root: [0x09; 32],
+            root_serial: Some(1),
             scope: [0x01; 32],
             profile: [0x02; 32],
         }),
@@ -555,7 +556,11 @@ fn every_result() -> Vec<HistoryResult> {
             continuation: Vec::new(),
             records: vec![stage_wire()],
         },
-        HistoryResult::StackCreated(stack_wire()),
+        HistoryResult::StackCreated(StackCreatedWire {
+            stack: stack_wire(),
+            root: [1; 32],
+            root_serial: 1,
+        }),
         HistoryResult::Committed(CommitOutcomeWire::Committed(commit_wire())),
         HistoryResult::Committed(CommitOutcomeWire::UpToDate {
             head: Some(commit_id(0x0A)),
@@ -619,7 +624,10 @@ fn failure_codes_round_trip_and_stay_typed() {
         Code::ContinuityUnavailable,
     ] {
         let failure = Failure::from(code);
-        assert_eq!(decode_failure(&encode_failure(failure)).unwrap(), failure);
+        assert_eq!(
+            decode_failure(&encode_failure(failure.clone())).unwrap(),
+            failure
+        );
     }
     assert_eq!(Code::Busy as u8, 13);
     assert_eq!(Code::NotFound as u8, 14);
@@ -653,10 +661,16 @@ fn classification_is_exhaustive_and_semantic() {
         assert_eq!(operation.opcode(), QUERY_OPCODE);
     }
     for command in every_command() {
+        let content = matches!(
+            command,
+            HistoryCommand::InitLayerStack { .. }
+                | HistoryCommand::StageChanges(_)
+                | HistoryCommand::Commit(_)
+        );
         let operation = Operation::HistoryCommand(command);
         assert!(!operation.read_only());
-        assert!(!operation.content_mutation());
-        assert!(operation.metadata_mutation());
+        assert_eq!(operation.content_mutation(), content);
+        assert_eq!(operation.metadata_mutation(), !content);
         assert!(operation.mutation());
         assert_eq!(operation.opcode(), COMMAND_OPCODE);
     }
@@ -692,4 +706,261 @@ fn classification_is_exhaustive_and_semantic() {
         assert!(operation.read_only());
         assert!(!operation.mutation());
     }
+}
+
+#[test]
+fn minimum_and_maximum_record_encodings_match_the_frozen_widths() {
+    let mut small_stack = stack_wire();
+    small_stack.name = b"a".to_vec();
+    let mut small_branch = branch_wire();
+    small_branch.name = b"a".to_vec();
+    small_branch.head_commit = None;
+    let mut small_commit = commit_wire();
+    small_commit.parent = None;
+    let mut genesis = layer_wire();
+    genesis.parent = None;
+    genesis.source_branch = None;
+    genesis.source_commit = None;
+    let mut small_stage = stage_wire();
+    small_stage.expected_head = None;
+    for (result, width) in [
+        (
+            HistoryResult::Stacks {
+                continuation: vec![],
+                records: vec![small_stack],
+            },
+            117,
+        ),
+        (
+            HistoryResult::Stacks {
+                continuation: vec![],
+                records: vec![stack_wire()],
+            },
+            179,
+        ),
+        (
+            HistoryResult::Branches {
+                continuation: vec![],
+                records: vec![small_branch],
+            },
+            71,
+        ),
+        (
+            HistoryResult::Branches {
+                continuation: vec![],
+                records: vec![branch_wire()],
+            },
+            166,
+        ),
+        (
+            HistoryResult::Commits {
+                continuation: vec![],
+                records: vec![small_commit],
+            },
+            116,
+        ),
+        (
+            HistoryResult::Commits {
+                continuation: vec![],
+                records: vec![commit_wire()],
+            },
+            149,
+        ),
+        (
+            HistoryResult::Layers {
+                continuation: vec![],
+                records: vec![genesis],
+            },
+            85,
+        ),
+        (
+            HistoryResult::Layers {
+                continuation: vec![],
+                records: vec![layer_wire()],
+            },
+            168,
+        ),
+        (
+            HistoryResult::Stages {
+                continuation: vec![],
+                records: vec![small_stage],
+            },
+            309,
+        ),
+        (
+            HistoryResult::Stages {
+                continuation: vec![],
+                records: vec![stage_wire()],
+            },
+            342,
+        ),
+    ] {
+        let response = Response::History(Box::new(result));
+        let bytes = encode_response(&response).unwrap();
+        assert_eq!(bytes.len(), width + 6);
+        assert_eq!(decode_response(&bytes).unwrap(), response);
+        assert!(decode_response(&bytes[..bytes.len() - 1]).is_err());
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        assert!(decode_response(&trailing).is_err());
+        let mut count = bytes;
+        count[4..6].copy_from_slice(&129u16.to_be_bytes());
+        assert!(decode_response(&count).is_err());
+    }
+}
+
+#[test]
+fn history_page_budget_includes_tags_counts_and_continuation() {
+    let mut records = vec![stack_wire(); 91];
+    // 91*179=16289; choose 89 continuation bytes: 6+89+16289=16384.
+    let response = Response::History(Box::new(HistoryResult::Stacks {
+        continuation: vec![1; 89],
+        records: records.clone(),
+    }));
+    let encoded = encode_response(&response).unwrap();
+    assert_eq!(encoded.len(), HISTORY_RESULT_BYTES);
+    assert_eq!(decode_response(&encoded).unwrap(), response);
+    assert!(
+        encode_response(&Response::History(Box::new(HistoryResult::Stacks {
+            continuation: vec![1; 90],
+            records: records.clone()
+        })))
+        .is_err()
+    );
+    let mut oversized = encoded;
+    oversized.push(0);
+    assert_eq!(
+        decode_response(&oversized).unwrap_err().code,
+        Code::Capacity
+    );
+    records.resize(128, stack_wire());
+    assert_eq!(
+        encode_response(&Response::History(Box::new(HistoryResult::Stacks {
+            continuation: vec![],
+            records
+        })))
+        .unwrap_err()
+        .code,
+        Code::Capacity
+    );
+    assert!(
+        encode_response(&Response::History(Box::new(HistoryResult::Branches {
+            continuation: vec![1; 161],
+            records: vec![]
+        })))
+        .is_err()
+    );
+}
+
+#[test]
+fn history_failure_context_round_trips_without_changing_legacy_frames() {
+    use layerfs_bridge::adapters::native::protocol::{
+        decode_request_failure, encode_request_failure,
+    };
+    let request = request(Operation::HistoryCommand(HistoryCommand::CommitStaged {
+        workspace: [5; 32],
+        token: 7,
+    }));
+    for conflict in [
+        HistoryConflict::BranchMoved {
+            expected_head: None,
+            actual_head: Some(commit_id(1)),
+            expected_base: layer_id(1),
+            actual_base: layer_id(2),
+        },
+        HistoryConflict::StackMoved {
+            expected: layer_id(1),
+            actual: layer_id(2),
+        },
+        HistoryConflict::StageChanged {
+            expected: 7,
+            actual: Some(8),
+        },
+        HistoryConflict::BaseMismatch {
+            commit_base: layer_id(1),
+            branch_base: layer_id(2),
+        },
+    ] {
+        let code = if matches!(conflict, HistoryConflict::StageChanged { .. }) {
+            Code::StageChanged
+        } else {
+            Code::HeadMoved
+        };
+        let failure = Failure {
+            code,
+            unknown: false,
+            cleanup: None,
+            history: Some(Box::new(HistoryFailure {
+                conflict: Some(conflict),
+                stage: StageObservation::Retained(Box::new(stage_wire())),
+            })),
+        };
+        let bytes = encode_request_failure(&request, &failure).unwrap();
+        assert_eq!(decode_request_failure(&request, &bytes).unwrap(), failure);
+        assert!(decode_failure(&bytes).is_err());
+        assert!(decode_request_failure(&request, &bytes[..3]).is_err());
+        let mut trailing = bytes;
+        trailing.push(0);
+        assert!(decode_request_failure(&request, &trailing).is_err());
+    }
+    for stage in [
+        StageObservation::Absent([1; 32]),
+        StageObservation::AcknowledgedUnknown(Box::new(stage_wire())),
+        StageObservation::Unobserved,
+    ] {
+        let mut failure = Failure::from(Code::Busy);
+        if stage != StageObservation::Unobserved {
+            failure.history = Some(Box::new(HistoryFailure {
+                conflict: None,
+                stage,
+            }));
+        }
+        assert_eq!(
+            decode_request_failure(
+                &request,
+                &encode_request_failure(&request, &failure).unwrap()
+            )
+            .unwrap(),
+            failure
+        );
+    }
+    let mut legacy = request;
+    legacy.profile = 1;
+    legacy.operation = Operation::ConstructFile { length: 0 };
+    for code in [Code::InvalidInput, Code::Integrity, Code::Unknown] {
+        let failure = Failure::from(code);
+        let bytes = encode_request_failure(&legacy, &failure).unwrap();
+        assert_eq!(bytes, vec![code as u8, u8::from(code == Code::Unknown), 0]);
+        assert_eq!(decode_request_failure(&legacy, &bytes).unwrap(), failure);
+    }
+}
+
+#[test]
+fn invalid_terminal_reservation_and_descriptor_serial_are_refused() {
+    let reservation = Response::History(Box::new(HistoryResult::Reservation {
+        scope: [1; 32],
+        start: 1,
+        count: 1,
+    }));
+    let mut bytes = encode_response(&reservation).unwrap();
+    bytes[34..42].copy_from_slice(&(i64::MAX as u64).to_be_bytes());
+    assert!(decode_response(&bytes).is_err());
+    assert!(
+        encode_response(&Response::History(Box::new(HistoryResult::Reservation {
+            scope: [1; 32],
+            start: i64::MAX as u64,
+            count: 1
+        })))
+        .is_err()
+    );
+    assert!(
+        encode_response(&Response::History(Box::new(HistoryResult::StackCreated(
+            StackCreatedWire {
+                stack: stack_wire(),
+                root: [1; 32],
+                root_serial: 0
+            }
+        ))))
+        .is_err()
+    );
 }

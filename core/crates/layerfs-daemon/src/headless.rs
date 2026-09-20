@@ -67,7 +67,7 @@ pub fn run(
                 let _ = Frame {
                     kind: Kind::Failure,
                     id: request.id,
-                    bytes: encode_failure(error).to_vec(),
+                    bytes: encode_request_failure(&request, &error)?,
                 }
                 .write(&mut output.pipe);
                 return Err(error);

@@ -26,7 +26,7 @@ pub(crate) fn dispatch(
     match &r.operation {
         Operation::HistoryQuery(query) => {
             end_input(input)?;
-            history::query(catalog.ok_or(Code::Unsupported)?, query)
+            history::query(catalog.ok_or(Code::Unsupported)?, query, store)
         }
         Operation::HistoryCommand(command) => {
             end_input(input)?;

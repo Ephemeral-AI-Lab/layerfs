@@ -6,7 +6,8 @@
 //! admission contention and never a semantic conflict; `UnknownOutcome` states
 //! that persistence did not answer and therefore proves nothing about rollback.
 
-use crate::identity::{CommitId, LayerId, StageToken};
+use crate::identity::{CommitId, LayerId, StageToken, WorkspaceId};
+use crate::records::StageRecord;
 
 /// A related record kind, used for a typed absence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,9 +44,27 @@ pub struct MovedState {
     pub actual_base: LayerId,
 }
 
+/// Exact stage observation at a failed transition boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StageDisposition {
+    /// The deciding transaction observed no stage for this producer.
+    Absent(WorkspaceId),
+    /// Definite refusal retained this complete immutable stage.
+    Retained(Box<StageRecord>),
+    /// This stage was acknowledged, but its final disposition is not known.
+    AcknowledgedUnknown(Box<StageRecord>),
+}
+
 /// Every failure a history operation can report.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HistoryError {
+    /// A failure with a stage observation from the deciding transaction.
+    WithStage {
+        /// Original typed failure.
+        cause: Box<HistoryError>,
+        /// Exact known stage disposition, never reconstructed by a reread.
+        stage: StageDisposition,
+    },
     /// A checked input is structurally unusable.
     InvalidInput(&'static str),
     /// A named record does not exist.
@@ -98,14 +117,43 @@ pub enum HistoryError {
 
 impl HistoryError {
     /// True when the attempted mutation's persistence outcome is unknown.
-    pub const fn unknown(&self) -> bool {
-        matches!(self, Self::UnknownOutcome)
+    pub fn unknown(&self) -> bool {
+        matches!(self.cause(), Self::UnknownOutcome)
+    }
+
+    /// The typed failure independent of its stage observation.
+    pub fn cause(&self) -> &Self {
+        match self {
+            Self::WithStage { cause, .. } => cause.cause(),
+            error => error,
+        }
+    }
+
+    #[cfg(feature = "native")]
+    pub(crate) fn with_observed_stage(
+        self,
+        workspace: WorkspaceId,
+        observed: Option<Option<StageRecord>>,
+    ) -> Self {
+        let stage = match observed {
+            Some(Some(record)) if self.unknown() => {
+                StageDisposition::AcknowledgedUnknown(Box::new(record))
+            }
+            Some(Some(record)) => StageDisposition::Retained(Box::new(record)),
+            Some(None) if !self.unknown() => StageDisposition::Absent(workspace),
+            _ => return self,
+        };
+        Self::WithStage {
+            cause: Box::new(self),
+            stage,
+        }
     }
 }
 
 impl std::fmt::Display for HistoryError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::WithStage { cause, stage } => write!(formatter, "{cause}; stage={stage:?}"),
             Self::InvalidInput(what) => write!(formatter, "invalid input: {what}"),
             Self::Missing(what) => write!(formatter, "missing {what:?}"),
             Self::Unsupported(what) => write!(formatter, "unsupported: {what}"),

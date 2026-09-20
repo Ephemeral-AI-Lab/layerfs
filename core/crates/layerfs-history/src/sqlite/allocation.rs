@@ -61,7 +61,7 @@ pub(crate) fn reserve_inodes(
     };
     let end = highwater
         .checked_add(request.count)
-        .filter(|end| *end <= i64::MAX as u64)
+        .filter(|end| *end < i64::MAX as u64)
         .ok_or(HistoryError::Capacity("inode serials"))?;
     let advanced = tx
         .execute(

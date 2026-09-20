@@ -41,12 +41,14 @@ pub struct SqliteCatalog {
     pub(crate) state: Mutex<Provider>,
     pub(crate) catalog_id: CatalogId,
     pub(crate) incarnation: u64,
+    pub(crate) cursor_key: [u8; 32],
 }
 
 /// The single connection and the authority that owns it.
 pub(crate) struct Provider {
     pub(crate) connection: Connection,
     pub(crate) writable: bool,
+    pub(crate) quarantined: bool,
 }
 
 /// Application identity of the C5 catalog; distinct from C2's schema identity.
@@ -96,14 +98,23 @@ pub fn create(path: &Path, config: &HistoryCatalogConfig) -> HistoryResult<Sqlit
         state: std::sync::Mutex::new(Provider {
             connection,
             writable: true,
+            quarantined: false,
         }),
         catalog_id,
         incarnation: stored,
+        cursor_key: config.cursor_key,
     })
 }
 
 /// Opens an existing catalog for reading only, refusing every mutation.
-pub fn open_read_only(path: &Path, binding_key: &[u8]) -> HistoryResult<SqliteCatalog> {
+pub fn open_read_only(
+    path: &Path,
+    binding_key: &[u8],
+    cursor_key: [u8; 32],
+) -> HistoryResult<SqliteCatalog> {
+    if cursor_key == [0; 32] {
+        return Err(HistoryError::InvalidInput("cursor capability"));
+    }
     let catalog_id = CatalogId::derive(binding_key)?;
     let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(super::rows::sql)?;
@@ -119,9 +130,11 @@ pub fn open_read_only(path: &Path, binding_key: &[u8]) -> HistoryResult<SqliteCa
         state: std::sync::Mutex::new(Provider {
             connection,
             writable: false,
+            quarantined: false,
         }),
         catalog_id,
         incarnation: stored,
+        cursor_key,
     })
 }
 
@@ -171,7 +184,7 @@ fn application_tables(connection: &Connection) -> HistoryResult<impl Iterator<It
     let mut statement = connection
         .prepare(
             "SELECT name FROM sqlite_master \
-             WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+             WHERE type = 'table' AND name NOT GLOB 'sqlite_*' ORDER BY name",
         )
         .map_err(super::rows::sql)?;
     let names = statement
@@ -200,6 +213,7 @@ fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64
     if tables.next().is_some() {
         return Err(HistoryError::Integrity("catalog table set"));
     }
+    validate_schema(connection)?;
     let rows: i64 = connection
         .query_row("SELECT count(*) FROM history_meta", [], |row| row.get(0))
         .map_err(super::rows::sql)?;
@@ -208,7 +222,7 @@ fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64
     }
     let row = connection
         .query_row(
-            "SELECT catalog_id, catalog_incarnation, identity_format, next_stage_token \
+            "SELECT catalog_id, catalog_incarnation, identity_format, next_stage_token, binding_key \
              FROM history_meta WHERE id = 1",
             [],
             |row| {
@@ -217,6 +231,7 @@ fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64
                     row.get::<_, i64>(1)?,
                     row.get::<_, i64>(2)?,
                     row.get::<_, i64>(3)?,
+                    row.get::<_, Vec<u8>>(4)?,
                 ))
             },
         )
@@ -226,7 +241,10 @@ fn read_meta(connection: &Connection, expected: &CatalogId) -> HistoryResult<u64
             .try_into()
             .map_err(|_| HistoryError::Integrity("catalog identity width"))?,
     );
-    if stored != *expected {
+    if stored != *expected
+        || CatalogId::derive(&row.4).map_err(|_| HistoryError::Integrity("catalog binding"))?
+            != stored
+    {
         return Err(HistoryError::Integrity("catalog binding"));
     }
     if row.2 != IDENTITY_FORMAT {
@@ -252,7 +270,15 @@ impl HistoryCatalog for SqliteCatalog {
     }
 
     fn layer_stacks(&self, page: &Page) -> HistoryResult<PageResult<LayerStackRecord>> {
-        self.read(|tx| layerstack::layer_stacks(tx, self.catalog_id, self.incarnation, page))
+        self.read(|tx| {
+            layerstack::layer_stacks(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                page,
+            )
+        })
     }
 
     fn branch(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
@@ -268,7 +294,16 @@ impl HistoryCatalog for SqliteCatalog {
         stack: LayerStackId,
         page: &Page,
     ) -> HistoryResult<PageResult<BranchRecord>> {
-        self.read(|tx| branch::branches(tx, self.catalog_id, self.incarnation, stack, page))
+        self.read(|tx| {
+            branch::branches(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                stack,
+                page,
+            )
+        })
     }
 
     fn commit(&self, id: CommitId) -> HistoryResult<Option<CommitRecord>> {
@@ -284,21 +319,46 @@ impl HistoryCatalog for SqliteCatalog {
     }
 
     fn stages(&self, branch: BranchId, page: &Page) -> HistoryResult<PageResult<StageRecord>> {
-        self.read(|tx| staging::stages(tx, self.catalog_id, self.incarnation, branch, page))
+        self.read(|tx| {
+            staging::stages(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                branch,
+                page,
+            )
+        })
     }
 
     fn commit_history(
         &self,
         request: &CommitHistoryRequest,
     ) -> HistoryResult<PageResult<CommitRecord>> {
-        self.read(|tx| commit::commit_history(tx, self.catalog_id, self.incarnation, request))
+        self.read(|tx| {
+            commit::commit_history(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                request,
+            )
+        })
     }
 
     fn layer_history(
         &self,
         request: &LayerHistoryRequest,
     ) -> HistoryResult<PageResult<LayerRecord>> {
-        self.read(|tx| layerstack::layer_history(tx, self.catalog_id, self.incarnation, request))
+        self.read(|tx| {
+            layerstack::layer_history(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                request,
+            )
+        })
     }
 
     fn initialize_layerstack(
@@ -317,7 +377,9 @@ impl HistoryCatalog for SqliteCatalog {
     }
 
     fn commit_staged(&self, request: &CommitStagedRequest) -> HistoryResult<CommitStagedOutcome> {
-        self.write(|tx| commit::commit_staged(tx, request))
+        let mut observed = None;
+        self.write(|tx| commit::commit_staged(tx, request, &mut observed))
+            .map_err(|error| error.with_observed_stage(request.workspace, observed))
     }
 
     fn add_layer(&self, request: &AddLayerRequest) -> HistoryResult<AddLayerOutcome> {
@@ -325,10 +387,35 @@ impl HistoryCatalog for SqliteCatalog {
     }
 
     fn discard_stage(&self, request: &DiscardRequest) -> HistoryResult<DiscardOutcome> {
-        self.write(|tx| staging::discard_stage(tx, request))
+        let mut observed = None;
+        self.write(|tx| staging::discard_stage(tx, request, &mut observed))
+            .map_err(|error| error.with_observed_stage(request.workspace, observed))
     }
 
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
     }
+}
+
+fn validate_schema(connection: &Connection) -> HistoryResult<()> {
+    type Definition = (String, String, String, Option<String>);
+    fn definitions(connection: &Connection) -> HistoryResult<Vec<Definition>> {
+        let mut statement = connection.prepare(
+            "SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*' ORDER BY type, name"
+        ).map_err(super::rows::sql)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .map_err(super::rows::sql)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(super::rows::sql)
+    }
+    let expected = Connection::open_in_memory().map_err(super::rows::sql)?;
+    configure(&expected, true)?;
+    expected.execute_batch(SCHEMA).map_err(super::rows::sql)?;
+    if definitions(connection)? != definitions(&expected)? {
+        return Err(HistoryError::Integrity("catalog schema definition"));
+    }
+    Ok(())
 }

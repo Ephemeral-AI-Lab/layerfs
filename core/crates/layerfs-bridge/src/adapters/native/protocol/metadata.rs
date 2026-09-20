@@ -64,18 +64,29 @@ impl<'a> Decoder<'a> {
         }
     }
 }
-#[derive(Default)]
 pub struct Encoder {
     bytes: Vec<u8>,
+    limit: usize,
+}
+impl Default for Encoder {
+    fn default() -> Self {
+        Self::bounded(METADATA_BYTES)
+    }
 }
 impl Encoder {
+    pub fn bounded(limit: usize) -> Self {
+        Self {
+            bytes: Vec::new(),
+            limit,
+        }
+    }
     pub fn put(&mut self, b: &[u8]) -> Result<(), Failure> {
         if self
             .bytes
             .len()
             .checked_add(b.len())
             .ok_or(Code::Capacity)?
-            > METADATA_BYTES
+            > self.limit
         {
             return Err(Code::Capacity.into());
         }

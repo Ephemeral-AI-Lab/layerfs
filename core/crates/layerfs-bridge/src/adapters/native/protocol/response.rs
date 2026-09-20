@@ -2,7 +2,11 @@
 use super::{Decoder, Encoder};
 use crate::contract::*;
 pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
-    let mut e = Encoder::default();
+    let mut e = if matches!(r, Response::History(_)) {
+        Encoder::bounded(HISTORY_RESULT_BYTES)
+    } else {
+        Encoder::default()
+    };
     match r {
         Response::Read { length } => {
             e.u8(1)?;
@@ -85,7 +89,10 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
     Ok(e.finish())
 }
 
-fn put_optional<const N: usize>(e: &mut Encoder, value: Option<&[u8; N]>) -> Result<(), Failure> {
+pub(super) fn put_optional<const N: usize>(
+    e: &mut Encoder,
+    value: Option<&[u8; N]>,
+) -> Result<(), Failure> {
     match value {
         Some(value) => {
             e.u8(1)?;
@@ -96,6 +103,7 @@ fn put_optional<const N: usize>(e: &mut Encoder, value: Option<&[u8; N]>) -> Res
 }
 
 fn put_stack(e: &mut Encoder, record: &StackWire) -> Result<(), Failure> {
+    check_stack(record)?;
     e.put(&record.stack)?;
     e.blob(&record.name)?;
     e.put(&record.scope)?;
@@ -104,6 +112,7 @@ fn put_stack(e: &mut Encoder, record: &StackWire) -> Result<(), Failure> {
 }
 
 fn put_branch(e: &mut Encoder, record: &BranchWire) -> Result<(), Failure> {
+    check_branch(record)?;
     e.put(&record.branch)?;
     e.put(&record.stack)?;
     e.blob(&record.name)?;
@@ -112,6 +121,7 @@ fn put_branch(e: &mut Encoder, record: &BranchWire) -> Result<(), Failure> {
 }
 
 fn put_commit(e: &mut Encoder, record: &CommitWire) -> Result<(), Failure> {
+    check_commit(record)?;
     e.put(&record.commit)?;
     e.put(&record.stack)?;
     e.put(&record.root)?;
@@ -120,6 +130,7 @@ fn put_commit(e: &mut Encoder, record: &CommitWire) -> Result<(), Failure> {
 }
 
 fn put_layer(e: &mut Encoder, record: &LayerWire) -> Result<(), Failure> {
+    check_layer(record)?;
     e.put(&record.layer)?;
     e.put(&record.stack)?;
     put_optional(e, record.parent.as_ref())?;
@@ -128,7 +139,8 @@ fn put_layer(e: &mut Encoder, record: &LayerWire) -> Result<(), Failure> {
     put_optional(e, record.source_commit.as_ref())
 }
 
-fn put_stage(e: &mut Encoder, record: &StageWire) -> Result<(), Failure> {
+pub(super) fn put_stage(e: &mut Encoder, record: &StageWire) -> Result<(), Failure> {
+    check_stage(record)?;
     e.put(&record.workspace)?;
     e.u64(record.token)?;
     e.put(&record.stack)?;
@@ -145,6 +157,7 @@ fn put_stage(e: &mut Encoder, record: &StageWire) -> Result<(), Failure> {
 }
 
 fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
+    check_result(result)?;
     match result {
         HistoryResult::Stack(record) => {
             e.u8(1)?;
@@ -156,6 +169,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         } => {
             e.u8(2)?;
             e.blob(continuation)?;
+            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
+                return Err(Code::Capacity.into());
+            }
             e.count(records.len())?;
             for record in records {
                 put_stack(e, record)?;
@@ -169,6 +185,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
             e.put(&snapshot.effective_root)?;
             e.put(&snapshot.scope)?;
             e.put(&snapshot.profile)?;
+            put_optional(e, snapshot.root_serial.map(u64::to_be_bytes).as_ref())?;
         }
         HistoryResult::Branches {
             continuation,
@@ -176,6 +193,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         } => {
             e.u8(4)?;
             e.blob(continuation)?;
+            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
+                return Err(Code::Capacity.into());
+            }
             e.count(records.len())?;
             for record in records {
                 put_branch(e, record)?;
@@ -191,6 +211,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         } => {
             e.u8(7)?;
             e.blob(continuation)?;
+            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
+                return Err(Code::Capacity.into());
+            }
             e.count(records.len())?;
             for record in records {
                 put_commit(e, record)?;
@@ -206,6 +229,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         } => {
             e.u8(9)?;
             e.blob(continuation)?;
+            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
+                return Err(Code::Capacity.into());
+            }
             e.count(records.len())?;
             for record in records {
                 put_layer(e, record)?;
@@ -221,6 +247,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         } => {
             e.u8(11)?;
             e.blob(continuation)?;
+            if records.len() > usize::from(PAGE_RECORDS) || continuation.len() > CURSOR_BYTES {
+                return Err(Code::Capacity.into());
+            }
             e.count(records.len())?;
             for record in records {
                 put_stage(e, record)?;
@@ -228,7 +257,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         }
         HistoryResult::StackCreated(record) => {
             e.u8(12)?;
-            put_stack(e, record)?;
+            put_stack(e, &record.stack)?;
+            e.put(&record.root)?;
+            e.u64(record.root_serial)?;
         }
         HistoryResult::Committed(outcome) => {
             e.u8(13)?;
@@ -279,7 +310,9 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
     Ok(())
 }
 
-fn take_optional<const N: usize>(d: &mut Decoder<'_>) -> Result<Option<[u8; N]>, Failure> {
+pub(super) fn take_optional<const N: usize>(
+    d: &mut Decoder<'_>,
+) -> Result<Option<[u8; N]>, Failure> {
     match d.u8()? {
         0 => Ok(None),
         1 => Ok(Some(d.take(N)?.try_into().map_err(|_| Code::InvalidInput)?)),
@@ -288,48 +321,56 @@ fn take_optional<const N: usize>(d: &mut Decoder<'_>) -> Result<Option<[u8; N]>,
 }
 
 fn take_stack(d: &mut Decoder<'_>) -> Result<StackWire, Failure> {
-    Ok(StackWire {
+    let record = StackWire {
         stack: d.take(17)?.try_into().map_err(|_| Code::InvalidInput)?,
         name: d.blob(NAME_MAX_BYTES)?,
         scope: d.root()?,
         profile: d.root()?,
         head_layer: d.take(33)?.try_into().map_err(|_| Code::InvalidInput)?,
-    })
+    };
+    check_stack(&record)?;
+    Ok(record)
 }
 
 fn take_branch(d: &mut Decoder<'_>) -> Result<BranchWire, Failure> {
-    Ok(BranchWire {
+    let record = BranchWire {
         branch: d.take(17)?.try_into().map_err(|_| Code::InvalidInput)?,
         stack: d.take(17)?.try_into().map_err(|_| Code::InvalidInput)?,
         name: d.blob(NAME_MAX_BYTES)?,
         base_layer: d.take(33)?.try_into().map_err(|_| Code::InvalidInput)?,
         head_commit: take_optional::<33>(d)?,
-    })
+    };
+    check_branch(&record)?;
+    Ok(record)
 }
 
 fn take_commit(d: &mut Decoder<'_>) -> Result<CommitWire, Failure> {
-    Ok(CommitWire {
+    let record = CommitWire {
         commit: d.take(33)?.try_into().map_err(|_| Code::InvalidInput)?,
         stack: d.take(17)?.try_into().map_err(|_| Code::InvalidInput)?,
         root: d.root()?,
         parent: take_optional::<33>(d)?,
         base_layer: d.take(33)?.try_into().map_err(|_| Code::InvalidInput)?,
-    })
+    };
+    check_commit(&record)?;
+    Ok(record)
 }
 
 fn take_layer(d: &mut Decoder<'_>) -> Result<LayerWire, Failure> {
-    Ok(LayerWire {
+    let record = LayerWire {
         layer: d.take(33)?.try_into().map_err(|_| Code::InvalidInput)?,
         stack: d.take(17)?.try_into().map_err(|_| Code::InvalidInput)?,
         parent: take_optional::<33>(d)?,
         root: d.root()?,
         source_branch: take_optional::<17>(d)?,
         source_commit: take_optional::<33>(d)?,
-    })
+    };
+    check_layer(&record)?;
+    Ok(record)
 }
 
-fn take_stage(d: &mut Decoder<'_>) -> Result<StageWire, Failure> {
-    Ok(StageWire {
+pub(super) fn take_stage(d: &mut Decoder<'_>) -> Result<StageWire, Failure> {
+    let record = StageWire {
         workspace: d.take(32)?.try_into().map_err(|_| Code::InvalidInput)?,
         token: d.u64()?,
         stack: d.take(17)?.try_into().map_err(|_| Code::InvalidInput)?,
@@ -343,7 +384,9 @@ fn take_stage(d: &mut Decoder<'_>) -> Result<StageWire, Failure> {
         profile: d.root()?,
         scope: d.root()?,
         generation: d.u64()?,
-    })
+    };
+    check_stage(&record)?;
+    Ok(record)
 }
 
 fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
@@ -351,7 +394,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         1 => HistoryResult::Stack(take_stack(d)?),
         2 => {
             let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 100)?;
+            let count = d.count(PAGE_RECORDS as usize, 117)?;
             let mut records = Vec::with_capacity(count);
             for _ in 0..count {
                 records.push(take_stack(d)?);
@@ -368,10 +411,11 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
             effective_root: d.root()?,
             scope: d.root()?,
             profile: d.root()?,
+            root_serial: take_optional::<8>(d)?.map(u64::from_be_bytes),
         }),
         4 => {
             let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 120)?;
+            let count = d.count(PAGE_RECORDS as usize, 71)?;
             let mut records = Vec::with_capacity(count);
             for _ in 0..count {
                 records.push(take_branch(d)?);
@@ -384,7 +428,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         6 => HistoryResult::Commit(take_commit(d)?),
         7 => {
             let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 100)?;
+            let count = d.count(PAGE_RECORDS as usize, 116)?;
             let mut records = Vec::with_capacity(count);
             for _ in 0..count {
                 records.push(take_commit(d)?);
@@ -397,7 +441,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         8 => HistoryResult::Layer(take_layer(d)?),
         9 => {
             let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 120)?;
+            let count = d.count(PAGE_RECORDS as usize, 85)?;
             let mut records = Vec::with_capacity(count);
             for _ in 0..count {
                 records.push(take_layer(d)?);
@@ -410,7 +454,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
         10 => HistoryResult::Stage(take_stage(d)?),
         11 => {
             let continuation = d.blob(CURSOR_BYTES)?;
-            let count = d.count(PAGE_RECORDS as usize, 90)?;
+            let count = d.count(PAGE_RECORDS as usize, 309)?;
             let mut records = Vec::with_capacity(count);
             for _ in 0..count {
                 records.push(take_stage(d)?);
@@ -420,7 +464,11 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
                 records,
             }
         }
-        12 => HistoryResult::StackCreated(take_stack(d)?),
+        12 => HistoryResult::StackCreated(StackCreatedWire {
+            stack: take_stack(d)?,
+            root: d.root()?,
+            root_serial: d.u64()?,
+        }),
         13 => HistoryResult::Committed(match d.u8()? {
             0 => CommitOutcomeWire::Committed(take_commit(d)?),
             1 => {
@@ -458,6 +506,9 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
     })
 }
 pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
+    if b.first() == Some(&8) && b.len() > HISTORY_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let mut d = Decoder::new(b)?;
     let r = match d.u8()? {
         1 => Response::Read { length: d.u64()? },
@@ -504,6 +555,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
+    if let Response::History(result) = &r {
+        check_result(result)?;
+    }
     Ok(r)
 }
 pub fn encode_failure(f: Failure) -> [u8; 3] {
@@ -523,6 +577,7 @@ pub fn decode_failure(b: &[u8]) -> Result<Failure, Failure> {
     Ok(Failure {
         code: code(b[0])?,
         unknown: b[1] != 0,
+        history: None,
         cleanup: if b[2] == 0 { None } else { Some(code(b[2])?) },
     })
 }
@@ -547,4 +602,107 @@ fn code(n: u8) -> Result<Code, Failure> {
         17 => Code::ContinuityUnavailable,
         _ => return Err(Code::InvalidInput.into()),
     })
+}
+
+fn tag(bytes: &[u8], expected: u8) -> Result<(), Failure> {
+    if bytes.first() != Some(&expected) {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+fn serial(value: u64) -> Result<(), Failure> {
+    if value == 0 || value > i64::MAX as u64 {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+fn check_stack(record: &StackWire) -> Result<(), Failure> {
+    tag(&record.stack, 0x31)?;
+    check_name(&record.name)?;
+    tag(&record.head_layer, 0x32)
+}
+fn check_branch(record: &BranchWire) -> Result<(), Failure> {
+    tag(&record.branch, 0x11)?;
+    tag(&record.stack, 0x31)?;
+    check_name(&record.name)?;
+    tag(&record.base_layer, 0x32)?;
+    if let Some(head) = record.head_commit {
+        tag(&head, 0x12)?;
+    }
+    Ok(())
+}
+fn check_commit(record: &CommitWire) -> Result<(), Failure> {
+    tag(&record.commit, 0x12)?;
+    tag(&record.stack, 0x31)?;
+    tag(&record.base_layer, 0x32)?;
+    if let Some(parent) = record.parent {
+        tag(&parent, 0x12)?;
+    }
+    Ok(())
+}
+fn check_layer(record: &LayerWire) -> Result<(), Failure> {
+    tag(&record.layer, 0x32)?;
+    tag(&record.stack, 0x31)?;
+    match (record.parent, record.source_branch, record.source_commit) {
+        (None, None, None) => {}
+        (Some(parent), Some(branch), Some(commit)) => {
+            tag(&parent, 0x32)?;
+            tag(&branch, 0x11)?;
+            tag(&commit, 0x12)?;
+        }
+        _ => return Err(Code::InvalidInput.into()),
+    }
+    Ok(())
+}
+fn check_stage(record: &StageWire) -> Result<(), Failure> {
+    if record.workspace == [0; 32]
+        || record.generation > i64::MAX as u64
+        || record.construction_base_root != record.expected_root
+        || record.intended_commit_base != record.expected_base
+    {
+        return Err(Code::InvalidInput.into());
+    }
+    serial(record.token)?;
+    tag(&record.stack, 0x31)?;
+    tag(&record.branch, 0x11)?;
+    tag(&record.expected_base, 0x32)?;
+    tag(&record.intended_commit_base, 0x32)?;
+    if let Some(head) = record.expected_head {
+        tag(&head, 0x12)?;
+    }
+    Ok(())
+}
+fn check_result(result: &HistoryResult) -> Result<(), Failure> {
+    match result {
+        HistoryResult::BranchSnapshot(snapshot) => {
+            if snapshot.head_root.is_some() != snapshot.branch.head_commit.is_some()
+                || snapshot.effective_root != snapshot.head_root.unwrap_or(snapshot.base_root)
+            {
+                return Err(Code::InvalidInput.into());
+            }
+            if let Some(value) = snapshot.root_serial {
+                serial(value)?;
+            }
+        }
+        HistoryResult::StackCreated(created) => serial(created.root_serial)?,
+        HistoryResult::Reservation { start, count, .. } => {
+            serial(*start)?;
+            if *count == 0
+                || *count > 65_536
+                || start
+                    .checked_add(*count)
+                    .is_none_or(|end| end > i64::MAX as u64)
+            {
+                return Err(Code::InvalidInput.into());
+            }
+        }
+        HistoryResult::Committed(CommitOutcomeWire::UpToDate {
+            head: Some(head), ..
+        }) => tag(head, 0x12)?,
+        HistoryResult::Published(
+            LayerOutcomeWire::UpToDate { layer } | LayerOutcomeWire::NoChanges { head: layer },
+        ) => tag(layer, 0x32)?,
+        _ => {}
+    }
+    Ok(())
 }

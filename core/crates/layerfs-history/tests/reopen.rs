@@ -153,7 +153,7 @@ fn an_incompatible_or_foreign_catalog_is_refused() {
     let (writer, _, _) = seeded(&temp);
     let path = temp.join("catalog.sqlite");
     // A different binding key is a different authority.
-    match sqlite::open_read_only(&path, b"another-binding") {
+    match sqlite::open_read_only(&path, b"another-binding", [71; 32]) {
         Err(error) => assert_eq!(error, HistoryError::Integrity("catalog binding")),
         Ok(_) => panic!("a foreign binding key must not open the catalog"),
     }
@@ -161,6 +161,7 @@ fn an_incompatible_or_foreign_catalog_is_refused() {
     match sqlite::create(
         &path,
         &HistoryCatalogConfig {
+            cursor_key: [71; 32],
             binding_key: BINDING.to_vec(),
             incarnation: 9,
         },
@@ -172,7 +173,7 @@ fn an_incompatible_or_foreign_catalog_is_refused() {
     // A file that is not a catalog at all never opens.
     let other = temp.join("not-a-catalog.sqlite");
     std::fs::write(&other, b"not a catalog").unwrap();
-    assert!(sqlite::open_read_only(&other, BINDING).is_err());
+    assert!(sqlite::open_read_only(&other, BINDING, [71; 32]).is_err());
 }
 
 #[test]

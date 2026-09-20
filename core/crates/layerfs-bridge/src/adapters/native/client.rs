@@ -158,9 +158,7 @@ impl Client {
                     }
                     match frame.kind {
                         Kind::ResultData => {
-                            if r.operation.read_only()
-                                && !matches!(r.operation, Operation::ReadFile { .. })
-                            {
+                            if !matches!(r.operation, Operation::ReadFile { .. }) {
                                 return Err(delivery(r));
                             }
                             bytes = bytes
@@ -183,7 +181,9 @@ impl Client {
                             return Ok(response);
                         }
                         Kind::Failure => {
-                            return Err(decode_failure(&frame.bytes).map_err(|_| delivery(r))?)
+                            return Err(
+                                decode_request_failure(r, &frame.bytes).map_err(|_| delivery(r))?
+                            )
                         }
                         _ => return Err(delivery(r)),
                     }
@@ -225,7 +225,9 @@ fn query_matches(query: &HistoryQuery, result: &HistoryResult) -> bool {
                 continuation,
             },
         ) => page_matches(*limit, records.len(), continuation),
-        (HistoryQuery::GetBranch { .. }, HistoryResult::BranchSnapshot(_)) => true,
+        (HistoryQuery::GetBranch { .. }, HistoryResult::BranchSnapshot(snapshot)) => {
+            snapshot.root_serial.is_some()
+        }
         (
             HistoryQuery::ListBranches { limit, .. },
             HistoryResult::Branches {
@@ -263,6 +265,11 @@ fn query_matches(query: &HistoryQuery, result: &HistoryResult) -> bool {
 
 /// True when one history reply answers exactly this command.
 fn command_matches(command: &HistoryCommand, result: &HistoryResult) -> bool {
+    if let (HistoryCommand::Fork { .. }, HistoryResult::BranchSnapshot(snapshot)) =
+        (command, result)
+    {
+        return snapshot.root_serial.is_none();
+    }
     matches!(
         (command, result),
         (
@@ -302,6 +309,7 @@ fn delivery(r: &Request) -> Failure {
         },
         unknown: r.operation.mutation(),
         cleanup: None,
+        history: None,
     }
 }
 

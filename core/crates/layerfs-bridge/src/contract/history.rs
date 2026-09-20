@@ -33,6 +33,10 @@ pub const NAME_MAX_BYTES: usize = 63;
 pub const CURSOR_BYTES: usize = 160;
 /// Largest records one history page returns.
 pub const PAGE_RECORDS: u16 = 128;
+/// Complete history terminal result budget, including tags and prefixes.
+pub const HISTORY_RESULT_BYTES: usize = 16 * 1024;
+/// Widest profile-2 failure: prefix/version, Branch conflict and full retained stage.
+pub const HISTORY_FAILURE_BYTES: usize = 482;
 /// Largest entries one init manifest declares, including its root.
 pub const MANIFEST_ENTRIES: usize = 128;
 /// Largest bytes of one symlink target inside a manifest.
@@ -299,6 +303,8 @@ pub struct BranchSnapshotWire {
     pub base_root: Root,
     /// Head root when present, otherwise the base root.
     pub effective_root: Root,
+    /// Validated for GetBranch; absent on a metadata-only Fork snapshot.
+    pub root_serial: Option<u64>,
     /// Allocation scope.
     pub scope: Root,
     /// Frozen filesystem profile.
@@ -448,7 +454,7 @@ pub enum HistoryResult {
         records: Vec<StageWire>,
     },
     /// The stack created by an initialization.
-    StackCreated(StackWire),
+    StackCreated(StackCreatedWire),
     /// The outcome of committing one exact stage.
     Committed(CommitOutcomeWire),
     /// The outcome of publishing one Layer.
@@ -467,4 +473,52 @@ pub enum HistoryResult {
         /// Serials reserved.
         count: u64,
     },
+}
+
+/// Typed conflict context from the deciding snapshot/transaction.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HistoryConflict {
+    BranchMoved {
+        expected_head: Option<[u8; 33]>,
+        actual_head: Option<[u8; 33]>,
+        expected_base: [u8; 33],
+        actual_base: [u8; 33],
+    },
+    StackMoved {
+        expected: [u8; 33],
+        actual: [u8; 33],
+    },
+    StageChanged {
+        expected: u64,
+        actual: Option<u64>,
+    },
+    BaseMismatch {
+        commit_base: [u8; 33],
+        branch_base: [u8; 33],
+    },
+}
+
+/// Exact stage disposition; lack of observation is not absence.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub enum StageObservation {
+    #[default]
+    Unobserved,
+    Absent([u8; 32]),
+    Retained(Box<StageWire>),
+    AcknowledgedUnknown(Box<StageWire>),
+}
+
+/// History-only failure payload, boxed to keep ordinary failures small.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct HistoryFailure {
+    pub conflict: Option<HistoryConflict>,
+    pub stage: StageObservation,
+}
+
+/// Initialization descriptor known from successful C1 construction and C2 finish.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StackCreatedWire {
+    pub stack: StackWire,
+    pub root: Root,
+    pub root_serial: u64,
 }

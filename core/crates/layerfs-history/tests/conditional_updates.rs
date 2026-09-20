@@ -90,7 +90,7 @@ fn a_stale_loser_keeps_its_exact_stage() {
             token: loser.token,
         })
         .unwrap_err();
-    match moved {
+    match moved.cause() {
         HistoryError::HeadMoved(state) => {
             assert_eq!(state.expected_head, None);
             assert_eq!(state.actual_head, Some(head));
@@ -139,8 +139,8 @@ fn an_exact_token_is_the_only_stage_a_discard_removes() {
         })
         .unwrap_err();
     assert_eq!(
-        delayed,
-        HistoryError::StageChanged {
+        delayed.cause(),
+        &HistoryError::StageChanged {
             expected: original.token,
             actual: Some(replacement.token),
         }
@@ -160,7 +160,7 @@ fn an_exact_token_is_the_only_stage_a_discard_removes() {
             token: original.token,
         })
         .unwrap_err();
-    assert!(matches!(wrong, HistoryError::StageChanged { .. }));
+    assert!(matches!(wrong.cause(), HistoryError::StageChanged { .. }));
     assert!(fixture
         .catalog
         .stage(replacement.workspace)

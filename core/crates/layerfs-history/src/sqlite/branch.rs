@@ -70,6 +70,7 @@ pub(crate) fn branches(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     incarnation: u64,
+    key: &[u8; 32],
     stack: LayerStackId,
     page: &Page,
 ) -> HistoryResult<PageResult<BranchRecord>> {
@@ -80,6 +81,7 @@ pub(crate) fn branches(
     let capacity = query::capacity(page.limit, BranchRecord::MAXIMUM_ENCODED_BYTES)?;
     let window = capacity as i64 + 1;
     let context = Context {
+        key,
         catalog,
         incarnation,
         range: Range::BranchNames,
@@ -92,10 +94,14 @@ pub(crate) fn branches(
             if !cursor.anchor.is_empty() {
                 return Err(HistoryError::InvalidInput("page cursor anchor"));
             }
-            Some(
-                String::from_utf8(cursor.position)
-                    .map_err(|_| HistoryError::InvalidInput("page cursor position"))?,
-            )
+            {
+                let record = branch(tx, BranchId::from_slice(&cursor.position)?)?
+                    .ok_or(HistoryError::Integrity("page cursor position"))?;
+                if record.stack != stack {
+                    return Err(HistoryError::Integrity("page cursor ownership"));
+                }
+                Some(record.name.as_str().to_owned())
+            }
         }
     };
     let records = match after {
@@ -118,7 +124,7 @@ pub(crate) fn branches(
             context,
             &Cursor {
                 anchor: Vec::new(),
-                position: record.name.as_str().as_bytes().to_vec(),
+                position: record.id.as_slice().to_vec(),
             },
         )
         .map(Some)

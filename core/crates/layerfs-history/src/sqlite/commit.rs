@@ -84,9 +84,14 @@ pub(crate) fn ancestry_contains(
 pub(crate) fn commit_staged(
     tx: &Transaction<'_>,
     request: &CommitStagedRequest,
+    observed: &mut Option<Option<crate::records::StageRecord>>,
 ) -> HistoryResult<CommitStagedOutcome> {
-    let stage = super::staging::stage(tx, request.workspace)?
-        .ok_or(HistoryError::Missing(Missing::Stage))?;
+    let stage = super::staging::stage(tx, request.workspace)?;
+    *observed = Some(stage.clone());
+    let stage = stage.ok_or(HistoryError::StageChanged {
+        expected: request.token,
+        actual: None,
+    })?;
     if stage.token != request.token {
         return Err(HistoryError::StageChanged {
             expected: request.token,
@@ -211,22 +216,50 @@ pub(crate) fn commit_history(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     incarnation: u64,
+    key: &[u8; 32],
     request: &CommitHistoryRequest,
 ) -> HistoryResult<PageResult<CommitRecord>> {
     let branch =
         super::branch::branch(tx, request.branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
-    let start = match request.start {
-        Some(start) => {
+    let capacity = query::capacity(request.limit, CommitRecord::MAXIMUM_ENCODED_BYTES)?;
+    let context = Context {
+        key,
+        catalog,
+        incarnation,
+        range: Range::CommitAncestry,
+        subject: request.branch.as_slice(),
+    };
+    let cursor = request
+        .cursor
+        .as_ref()
+        .map(|bytes| query::decode(context, bytes))
+        .transpose()?;
+    let (start, mut current) = if let Some(cursor) = cursor {
+        let anchor = CommitId::from_slice(&cursor.anchor)?;
+        if request.start.is_some_and(|start| start != anchor) {
+            return Err(HistoryError::InvalidInput("page cursor anchor"));
+        }
+        let position = CommitId::from_slice(&cursor.position)?;
+        let anchor_record = commit(tx, anchor)?.ok_or(HistoryError::Integrity("Commit anchor"))?;
+        let last = commit(tx, position)?.ok_or(HistoryError::Integrity("Commit chain"))?;
+        // The keyed cursor attests that traversal from this anchor delivered
+        // this position. Rewalking it would impose a lifetime listing ceiling.
+        if anchor_record.stack != branch.stack || last.stack != branch.stack {
+            return Err(HistoryError::Integrity("page cursor ancestry"));
+        }
+        (Some(anchor), last.parent)
+    } else {
+        let start = request.start.or(branch.head_commit);
+        if let Some(start) = start {
             let record = commit(tx, start)?.ok_or(HistoryError::Missing(Missing::Commit))?;
             if record.stack != branch.stack {
                 return Err(HistoryError::Integrity("Commit ownership"));
             }
-            if !ancestry_contains(tx, branch.head_commit, start)? {
+            if request.start.is_some() && !ancestry_contains(tx, branch.head_commit, start)? {
                 return Err(HistoryError::NotInHistory("Commit"));
             }
-            Some(start)
         }
-        None => branch.head_commit,
+        (start, start)
     };
     let Some(start) = start else {
         return Ok(PageResult {
@@ -234,30 +267,6 @@ pub(crate) fn commit_history(
             continuation: None,
         });
     };
-    let context = Context {
-        catalog,
-        incarnation,
-        range: Range::CommitAncestry,
-        subject: request.branch.as_slice(),
-    };
-    let mut current = Some(start);
-    if let Some(bytes) = &request.cursor {
-        let cursor = query::decode(context, bytes)?;
-        if cursor.anchor != start.as_slice() {
-            return Err(HistoryError::InvalidInput("page cursor anchor"));
-        }
-        // The continuation names the last delivered Commit; the walk resumes at
-        // its parent, so a page never repeats the record it ended on.
-        current = match cursor.position.is_empty() {
-            true => None,
-            false => {
-                commit(tx, CommitId::from_slice(&cursor.position)?)?
-                    .ok_or(HistoryError::Integrity("Commit chain"))?
-                    .parent
-            }
-        };
-    }
-    let capacity = query::capacity(request.limit, CommitRecord::MAXIMUM_ENCODED_BYTES)?;
     let mut records = Vec::new();
     while let Some(id) = current {
         if records.len() > capacity {

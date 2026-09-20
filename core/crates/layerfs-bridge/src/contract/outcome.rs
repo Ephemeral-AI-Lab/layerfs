@@ -26,11 +26,13 @@ pub enum Code {
     /// Writable history authority was not established by this process.
     ContinuityUnavailable = 17,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failure {
     pub code: Code,
     pub unknown: bool,
     pub cleanup: Option<Code>,
+    /// Typed context for history-only failures.
+    pub history: Option<Box<super::HistoryFailure>>,
 }
 impl From<Code> for Failure {
     fn from(code: Code) -> Self {
@@ -38,6 +40,7 @@ impl From<Code> for Failure {
             code,
             unknown: code == Code::Unknown,
             cleanup: None,
+            history: None,
         }
     }
 }
@@ -45,8 +48,8 @@ impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{:?} unknown={} cleanup={:?}",
-            self.code, self.unknown, self.cleanup
+            "{:?} unknown={} cleanup={:?} history={:?}",
+            self.code, self.unknown, self.cleanup, self.history
         )
     }
 }

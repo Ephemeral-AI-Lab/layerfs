@@ -12,7 +12,7 @@ use crate::identity::{
 };
 use crate::records::{BranchRecord, CommitRecord, LayerRecord, LayerStackRecord, StageRecord};
 use layerfs_content::ObjectId;
-use rusqlite::{Error as SqlError, Row, Transaction, TransactionBehavior};
+use rusqlite::{DropBehavior, Error as SqlError, Row, Transaction, TransactionBehavior};
 use std::sync::{MutexGuard, TryLockError};
 
 use super::open::Provider;
@@ -87,6 +87,9 @@ impl SqliteCatalog {
             Err(TryLockError::WouldBlock) => return Err(HistoryError::Busy),
             Err(TryLockError::Poisoned(_)) => return Err(HistoryError::UnknownOutcome),
         };
+        if provider.quarantined {
+            return Err(HistoryError::UnknownOutcome);
+        }
         if writable && !provider.writable {
             return Err(HistoryError::ContinuityUnavailable);
         }
@@ -95,22 +98,35 @@ impl SqliteCatalog {
         } else {
             TransactionBehavior::Deferred
         };
-        let transaction = provider
-            .connection
-            .transaction_with_behavior(behavior)
-            .map_err(sql)?;
-        let value = match body(&transaction) {
-            Ok(value) => value,
-            Err(error) => {
-                // A typed refusal is a definite outcome: nothing was published.
-                let _ = transaction.rollback();
-                return Err(error);
+        let result = (|| {
+            let mut transaction = provider
+                .connection
+                .transaction_with_behavior(behavior)
+                .map_err(sql)?;
+            // Never let RAII guess rollback after an unknown body/COMMIT outcome.
+            transaction.set_drop_behavior(DropBehavior::Ignore);
+            let result = body(&transaction).and_then(|value| {
+                if writable {
+                    transaction.execute_batch("COMMIT").map_err(sql)?;
+                }
+                Ok(value)
+            });
+            match result {
+                Err(error) if error.unknown() => Err(error),
+                result => {
+                    if !transaction.is_autocommit() && transaction.rollback().is_err() {
+                        return Err(HistoryError::UnknownOutcome);
+                    }
+                    result
+                }
             }
-        };
-        if writable {
-            transaction.commit().map_err(sql)?;
+        })();
+        if result.as_ref().is_err_and(|error| error.unknown()) {
+            // Retain one bounded connection until this catalog is dropped. It
+            // cannot publish more work or expose pending rows as committed.
+            provider.quarantined = true;
         }
-        Ok(value)
+        result
     }
 
     /// Runs one coherent read-only metadata transaction.

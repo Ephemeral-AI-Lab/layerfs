@@ -25,7 +25,7 @@ use crate::records::{
     ReserveRequest, StackInitialization, StageRecord, StageRequest,
 };
 /// Checked inputs that establish one catalog binding.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct HistoryCatalogConfig {
     /// Stable authority binding key. It identifies the content authority this
     /// catalog is bound to; the caller is responsible for having selected the
@@ -34,12 +34,19 @@ pub struct HistoryCatalogConfig {
     /// Catalog incarnation. A fresh creation states it; a cursor binds it, so a
     /// cursor from a recreated catalog cannot be replayed into this one.
     pub incarnation: u64,
+    /// Authority-supplied secret for cursor authentication; retained outside the catalog.
+    pub cursor_key: [u8; 32],
 }
 
 impl HistoryCatalogConfig {
     /// Checks both inputs.
     pub fn check(&self) -> HistoryResult<()> {
         CatalogId::derive(&self.binding_key)?;
+        if self.cursor_key == [0; 32] {
+            return Err(crate::error::HistoryError::InvalidInput(
+                "cursor capability",
+            ));
+        }
         if self.incarnation == 0 || self.incarnation > i64::MAX as u64 {
             return Err(crate::error::HistoryError::InvalidInput(
                 "catalog incarnation",
@@ -122,4 +129,14 @@ pub trait HistoryCatalog: Send + Sync {
 
     /// Consumes one checked half-open inode range for a scope.
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation>;
+}
+
+impl std::fmt::Debug for HistoryCatalogConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HistoryCatalogConfig")
+            .field("binding_key", &self.binding_key)
+            .field("incarnation", &self.incarnation)
+            .field("cursor_key", &"[redacted]")
+            .finish()
+    }
 }

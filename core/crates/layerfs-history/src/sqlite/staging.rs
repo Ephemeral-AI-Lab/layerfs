@@ -16,7 +16,7 @@ use crate::records::{DiscardOutcome, DiscardRequest, Page, PageResult, StageReco
 use rusqlite::Transaction;
 
 use super::query::{self, Context, Cursor, Range};
-use super::rows::{many, one, sql, stage_row, token_column, unsigned};
+use super::rows::{many, one, sql, stage_row, unsigned};
 
 const STAGE_BY_WORKSPACE: &str = "SELECT workspace_id, stage_token, layer_stack_id, branch_id, \
      expected_head_commit_id, expected_base_layer_id, expected_root_id, construction_base_root_id, \
@@ -62,6 +62,7 @@ pub(crate) fn stages(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     incarnation: u64,
+    key: &[u8; 32],
     branch: crate::identity::BranchId,
     page: &Page,
 ) -> HistoryResult<PageResult<StageRecord>> {
@@ -72,6 +73,7 @@ pub(crate) fn stages(
     let capacity = query::capacity(page.limit, StageRecord::MAXIMUM_ENCODED_BYTES)?;
     let window = capacity as i64 + 1;
     let context = Context {
+        key,
         catalog,
         incarnation,
         range: Range::StageTokens,
@@ -215,13 +217,11 @@ fn allocate_token(tx: &Transaction<'_>) -> HistoryResult<StageToken> {
 pub(crate) fn discard_stage(
     tx: &Transaction<'_>,
     request: &DiscardRequest,
+    observed: &mut Option<Option<StageRecord>>,
 ) -> HistoryResult<DiscardOutcome> {
-    let present = one(
-        tx,
-        STAGE_BY_WORKSPACE,
-        [request.workspace.as_slice()],
-        |row| token_column(row, 1),
-    )?;
+    let record = stage(tx, request.workspace)?;
+    *observed = Some(record.clone());
+    let present = record.map(|stage| stage.token);
     let Some(actual) = present else {
         return Ok(DiscardOutcome::Absent);
     };

@@ -33,31 +33,76 @@ use std::time::Instant;
 
 /// Maps one typed history failure onto its wire class without parsing a message.
 pub(crate) fn failure(error: HistoryError) -> Failure {
-    match error {
-        HistoryError::InvalidInput(_) => Code::InvalidInput.into(),
-        HistoryError::Missing(_) => Code::NotFound.into(),
-        HistoryError::Unsupported(_) => Code::Unsupported.into(),
-        HistoryError::Busy => Code::Busy.into(),
-        HistoryError::OwnershipUnavailable => Code::Ownership.into(),
-        HistoryError::Capacity(_) => Code::Capacity.into(),
-        HistoryError::Integrity(_) => Code::Integrity.into(),
-        HistoryError::HeadMoved(_) | HistoryError::BaseMismatch { .. } => Code::HeadMoved.into(),
-        HistoryError::NotInHistory(_) => Code::NotFound.into(),
-        HistoryError::StackMoved { .. } => Code::HeadMoved.into(),
-        HistoryError::StageChanged { .. } => Code::StageChanged.into(),
-        HistoryError::ContinuityUnavailable => Code::ContinuityUnavailable.into(),
-        HistoryError::UnknownOutcome => Failure {
-            code: Code::Unknown,
-            unknown: true,
-            cleanup: None,
-        },
+    let conflict = match &error {
+        HistoryError::HeadMoved(state) => Some(HistoryConflict::BranchMoved {
+            expected_head: state.expected_head.map(CommitId::to_bytes),
+            actual_head: state.actual_head.map(CommitId::to_bytes),
+            expected_base: state.expected_base.to_bytes(),
+            actual_base: state.actual_base.to_bytes(),
+        }),
+        HistoryError::StackMoved { expected, actual } => Some(HistoryConflict::StackMoved {
+            expected: expected.to_bytes(),
+            actual: actual.to_bytes(),
+        }),
+        HistoryError::BaseMismatch {
+            commit_base,
+            branch_base,
+        } => Some(HistoryConflict::BaseMismatch {
+            commit_base: commit_base.to_bytes(),
+            branch_base: branch_base.to_bytes(),
+        }),
+        HistoryError::StageChanged { expected, actual } => Some(HistoryConflict::StageChanged {
+            expected: expected.value(),
+            actual: actual.map(|token| token.value()),
+        }),
+        _ => None,
+    };
+    let code = match error {
+        HistoryError::WithStage { cause, stage } => {
+            let mut failure = failure(*cause);
+            let context = failure.history.get_or_insert_with(Default::default);
+            context.stage = match stage {
+                layerfs_history::error::StageDisposition::Absent(workspace) => {
+                    StageObservation::Absent(workspace.to_bytes())
+                }
+                layerfs_history::error::StageDisposition::Retained(stage) => {
+                    StageObservation::Retained(Box::new(stage_wire(&stage)))
+                }
+                layerfs_history::error::StageDisposition::AcknowledgedUnknown(stage) => {
+                    StageObservation::AcknowledgedUnknown(Box::new(stage_wire(&stage)))
+                }
+            };
+            return failure;
+        }
+        HistoryError::InvalidInput(_) => Code::InvalidInput,
+        HistoryError::Missing(_) | HistoryError::NotInHistory(_) => Code::NotFound,
+        HistoryError::Unsupported(_) => Code::Unsupported,
+        HistoryError::Busy => Code::Busy,
+        HistoryError::OwnershipUnavailable => Code::Ownership,
+        HistoryError::Capacity(_) => Code::Capacity,
+        HistoryError::Integrity(_) => Code::Integrity,
+        HistoryError::HeadMoved(_)
+        | HistoryError::BaseMismatch { .. }
+        | HistoryError::StackMoved { .. } => Code::HeadMoved,
+        HistoryError::StageChanged { .. } => Code::StageChanged,
+        HistoryError::ContinuityUnavailable => Code::ContinuityUnavailable,
+        HistoryError::UnknownOutcome => Code::Unknown,
+    };
+    let mut result = Failure::from(code);
+    if conflict.is_some() {
+        result.history = Some(Box::new(HistoryFailure {
+            conflict,
+            stage: StageObservation::Unobserved,
+        }));
     }
+    result
 }
 
 /// Answers one read-only history query. No content save is started.
 pub(crate) fn query(
     catalog: &dyn HistoryCatalog,
     query: &HistoryQuery,
+    store: &Store,
 ) -> Result<Response, Failure> {
     let result = match query {
         HistoryQuery::GetStack { stack } => HistoryResult::Stack(stack_wire(
@@ -78,12 +123,26 @@ pub(crate) fn query(
                 records: page.records.iter().map(stack_wire).collect(),
             }
         }
-        HistoryQuery::GetBranch { branch } => HistoryResult::BranchSnapshot(snapshot_wire(
-            &catalog
+        HistoryQuery::GetBranch { branch } => {
+            let snapshot = catalog
                 .branch_snapshot(branch_id(branch)?)
                 .map_err(failure)?
-                .ok_or(Code::NotFound)?,
-        )),
+                .ok_or(Code::NotFound)?;
+            let provider = StoreProvider::new(store);
+            let fs = layerfs_content::FilesystemRead::new(
+                &provider,
+                layerfs_content::filesystem::root::FilesystemRootId(snapshot.effective_root),
+            )
+            .map_err(content)?;
+            if snapshot.profile != fs.root().profile()
+                || fs.root().scope().object() != snapshot.scope
+            {
+                return Err(Code::Integrity.into());
+            }
+            let mut wire = snapshot_wire(&snapshot);
+            wire.root_serial = Some(fs.root().root_inode().serial());
+            HistoryResult::BranchSnapshot(wire)
+        }
         HistoryQuery::ListBranches {
             stack,
             cursor,
@@ -228,7 +287,11 @@ pub(crate) fn command(
                     genesis_root: root,
                 })
                 .map_err(failure)?;
-            HistoryResult::StackCreated(stack_wire(&record))
+            HistoryResult::StackCreated(StackCreatedWire {
+                stack: stack_wire(&record),
+                root: *root.as_bytes(),
+                root_serial: reservation.start,
+            })
         }
         HistoryCommand::Fork {
             stack,
@@ -263,7 +326,15 @@ pub(crate) fn command(
                     workspace: stage.workspace,
                     token: stage.token,
                 })
-                .map_err(failure)?;
+                .map_err(|error| {
+                    let mut failure = failure(error);
+                    let context = failure.history.get_or_insert_with(Default::default);
+                    if context.stage == StageObservation::Unobserved {
+                        context.stage =
+                            StageObservation::AcknowledgedUnknown(Box::new(stage_wire(&stage)));
+                    }
+                    failure
+                })?;
             commit_outcome(outcome)
         }
         HistoryCommand::CommitStaged { workspace, token } => {
@@ -347,7 +418,14 @@ fn stage(
     if changes.expected_head != snapshot.branch.head_commit.map(CommitId::to_bytes)
         || changes.expected_base != snapshot.branch.base_layer.to_bytes()
     {
-        return Err(Code::HeadMoved.into());
+        return Err(failure(HistoryError::HeadMoved(Box::new(
+            layerfs_history::error::MovedState {
+                expected_head: optional_commit(&changes.expected_head)?,
+                actual_head: snapshot.branch.head_commit,
+                expected_base: layer_id(&changes.expected_base)?,
+                actual_base: snapshot.branch.base_layer,
+            },
+        ))));
     }
     // Changing an expected token never rebases content: the construction base
     // must be the captured effective root, and the scope must be the stack's.
@@ -530,6 +608,7 @@ fn snapshot_wire(snapshot: &BranchSnapshot) -> BranchSnapshotWire {
         head_root: snapshot.head_root.map(|root| *root.as_bytes()),
         base_root: *snapshot.base_root.as_bytes(),
         effective_root: *snapshot.effective_root.as_bytes(),
+        root_serial: None,
         scope: *snapshot.scope.as_bytes(),
         profile: *snapshot.profile.as_bytes(),
     }

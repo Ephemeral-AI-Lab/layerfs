@@ -9,10 +9,10 @@ parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 Implementation specification and its pre-publication audit:
 [`proposal/commit-history/`](proposal/commit-history/).
 
-- **Source pin:** authored against the commit that added
-  `core/crates/layerfs-history/`. Every claim below was read from that tree; no
-  claim is inherited from the reference product under root `crates/`, which
-  remains a separate implementation with a different schema.
+- **Source pin:** remediation based on `35740836f84b9ef687da2f70d785c9e6b2ed2fd2`
+  (reviewed product `92e56635ae4559d175fe3cd455f36f9fe6b5b498`), updated alongside
+  the source in this remediation commit. The final handoff records its exact
+  committed source identity. Reference root `crates/` remains a separate product.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
@@ -116,8 +116,11 @@ The catalog is opened with the embedded profile C2 uses: `journal_mode = MEMORY`
 timeout. No WAL, no `fsync`, no added crash-durability work.
 
 Open validates the application identity, the schema version, the exact
-application-table set and the singleton metadata row, including the binding
-derived catalog identity. An incomplete, foreign or inconsistent catalog is
+schema definitions (tables, columns, STRICT/WITHOUT ROWID properties, indexes,
+CHECKs and foreign keys) against the same schema parsed by SQLite, and the
+singleton metadata row. Its stored binding must derive the configured catalog
+identity and its counters must be inside their declared ranges. Reserved engine
+objects use a literal `sqlite_` prefix; similarly named user objects are not hidden. An incomplete, foreign or inconsistent catalog is
 refused. Nothing is migrated, repaired or promoted, and `create` never adopts an
 existing catalog.
 
@@ -127,7 +130,7 @@ existing catalog.
 | --- | --- |
 | `init_layerstack` | creates the genesis Layer and the stack in one transaction; no Branch, stage or Commit |
 | `fork` | creates one Branch sharing the selected Layer or the selected ancestor Commit's ancestry; copies no content and no history rows |
-| `read_branch` | one coherent Branch snapshot: stack, base, head, base root, head root, effective root, scope, profile |
+| `read_branch` | capture one coherent Branch snapshot, release C5, then validate the immutable effective root through C1; return root/profile/scope/root serial |
 | `stage_changes` | inserts one frozen stage with a freshly allocated token |
 | `commit_staged` | one transaction: validate the frozen expectations, insert or verify the Commit, compare-and-swap the Branch head, delete the exact stage |
 | `commit` | the service composes the same staging body and the same commit body under one admission; it is not a second implementation and not a cross-database transaction |
@@ -152,7 +155,11 @@ original context and the next `commit_staged` reports `HeadMoved`.
 
 `add_layer` checks the exact earlier publication **before** any expected-head
 comparison, so asking twice is idempotent even after the stack head advanced. A
-Commit whose root equals its base Layer root is `NoChanges`. Because one Layer
+new publication first requires Commit base, Branch base and current/expected stack
+head to agree; refreshing a head token does not rebase the content. Only then is a
+Commit whose root equals its base Layer root `NoChanges`. Immutable/provenance
+checks remain on admissible insertion and on exact-source UpToDate; a stale-base
+sibling is refused before collision checking, without changing existing rows. Because one Layer
 may have one child per stack, a Branch publishes once; the next publication needs
 a Branch forked from the Layer it produced, or an explicit future rebase.
 
@@ -190,8 +197,18 @@ the scope's high-water mark, the mark advances in the same transaction that
 returns the range, and consumption is unconditional: a reservation that is never
 used, a stage that is discarded and an operation that fails afterwards all leave
 the mark where they found it plus their own count. The terminal value is a
-checked `Capacity` refusal, not an overflow. There is no recycling, and exposed
+checked `Capacity` refusal before publication: `start + count <= i64::MAX`. Thus
+the highest exposable serial is `i64::MAX - 1`; every acknowledged reservation
+has a representable exclusive end. There is no recycling, and exposed
 unused serials cannot be recovered by scanning roots.
+
+Unknown C5 statement/COMMIT outcomes suppress rusqlite's implicit rollback with
+its supported `DropBehavior::Ignore`. Definite refusals attempt rollback once;
+failed cleanup becomes UnknownOutcome. An uncertain provider retains one bounded
+connection and refuses both reads and writes, so pending rows cannot become
+observable as acknowledged state. Connection teardown releases resources; it is
+not an operation rollback receipt. Known C2 finish is preserved through later C5
+failure and causes no content deletion, retry or guessed stage discard.
 
 ## 16.6 Bounded pages and cursors
 
@@ -200,19 +217,25 @@ catalog cuts a page short inside the byte budget and returns a continuation
 rather than letting the codec refuse a legal query, and the caller's `limit` is
 always an upper bound.
 
-A cursor is a fixed 160-byte value: format version, range tag, catalog identity,
-incarnation, the immutable anchor the range was opened at, the last delivered
-record, and a sixteen-byte digest over everything before it. The server
-recomputes the digest from the request it is serving, so a cursor from another
-catalog, another incarnation, another query or with a tampered body fails
-validation instead of being honoured. Every range resumes strictly after the last
-delivered record — a name or token range with an exclusive comparison, an
-ancestry or publication walk by stepping to that record's parent — so no page
-repeats a record and none skips one.
+A cursor is a fixed 160-byte v2 value: range tag, catalog identity/incarnation,
+three zero-padded bounded fields (subject, immutable anchor, last delivered
+position), and a sixteen-byte keyed BLAKE3 MAC. The domain is
+`layerfs/history/cursor/v2\0`. Names use immutable Stack/Branch IDs followed by a
+checked name lookup, so every legal 1–63-byte name fits. Token pages keep their
+exclusive numeric ordering. The authority supplies a nonzero 32-byte secret at
+create and read-only reopen; native configuration requires
+`LAYERFS_HISTORY_CURSOR_KEY`. It is not derived from public catalog data, stored
+in C5, serialized, logged or generated by fallback. Missing capability refuses
+open; a wrong key refuses existing continuations. Schema 1 has no key commitment,
+so open alone cannot authenticate the key. The authority must retain it externally.
 
-A live Branch advancing does not invalidate a cursor: the anchor is an immutable
-Commit or Layer and the walk from it is the parent chain, which cannot change. A
-cursor is not a snapshot and makes no such claim.
+The authenticated anchor/position pair attests to the immutable traversal that
+issued the cursor. Resume validates typed identities and ownership, then steps
+from the last delivered record to its parent. It neither re-proves ancestry from
+the moving live head nor repeatedly walks the immutable anchor. `start=None`
+uses the cursor anchor; an explicit start must agree. Ordinary live growth does
+not invalidate it; traversal can exceed 4,096 total rows through bounded pages.
+There is no process-local cursor registry and old unkeyed v1 cursors are refused.
 
 Ancestry membership is a bounded walk with a 4,096-row work ceiling. Exhausting
 the ceiling is `Capacity`, never `NotFound`: an over-budget walk is unproven, and
@@ -239,13 +262,34 @@ membership is validated on every suboperation.
 Dispatch is exhaustive and semantic. `Operation::read_only`,
 `content_mutation` and `metadata_mutation` are separate exhaustive matches, and
 the old `opcode >= 3` mutation test is gone. A `HistoryQuery` is read-only, a
-`HistoryCommand` mutates metadata only, and a metadata command never reaches the
-content save path. HELLO/framing version stays separate from the operation
+`InitLayerStack`, `StageChanges` and composite `Commit` write content; `Fork`,
+`CommitStaged`, `AddLayer`, `DiscardStage` and `ReserveInodes` mutate metadata
+only. Metadata commands never start a C2 save. HELLO/framing version stays separate from the operation
 profile; an unknown profile/suboperation combination is refused before any
 mutation, and there is no automatic downgrade or resend.
 
-The daemon's generic framed relay is reused unchanged; the new operations are
-driven by an external driver rather than by a second production parser.
+The daemon's generic framed relay selects history failure encoding from its
+validated request profile; it has no second history parser. Legacy failures stay
+exactly three bytes. History failures carry bounded typed BranchMoved,
+StackMoved, StageChanged or BaseMismatch context plus a separate stage observation:
+unobserved, absent, retained complete stage, or acknowledged stage with unknown
+final disposition. No mutable reread or message parsing reconstructs this context.
+A composite Commit preserves its already acknowledged stage if admission or
+publication fails. The native frame cap is 482 bytes for history failures; legacy
+decoding retains the three-byte bound. Unexpected ResultData is refused before
+caller output for every operation except ReadFile.
+
+History result codecs enforce the complete 16 KiB budget (tags, prefixes and
+continuation included) before growth/allocation. Page record minimum/maximum
+widths are Stack 117/179, Branch 71/166, Commit 116/149, Layer 85/168, Stage
+309/342 bytes. The 32 KiB request envelope and legacy limits remain unchanged.
+Candidate profile-2 compatibility changes are frozen in the
+[repaired boundary](proposal/commit-history/remediation-contract-20260921.md).
+BranchSnapshot appends optional root serial: GetBranch supplies a C1-validated
+serial; metadata-only Fork supplies none. StackCreated appends the constructed
+root and actual reserved root serial, so earlier scope reservations never cause
+an assumed serial 1. Fork performs no post-publication content validation that
+could mislabel a known successful metadata transition as abort.
 
 ## 16.8 Production namespace bootstrap
 
@@ -271,10 +315,10 @@ combined unpublished reader/sink. Earlier successful saves may become
 unreferenced if a later step fails; that is the same bounded ownership the
 ordinary save path has, and no cleanup is guessed.
 
-The root directory is always stated in the prepared update, even when it has no
-children. A build retains a directory's content root only for the parents the
-operation states, and the empty statement is also what gives the one-directory
-namespace its real empty page.
+Every declared directory receives one DirectoryUpdate, including empty children.
+Child bindings are grouped by parent independently of declaration adjacency and
+sorted once. This gives empty directories canonical empty pages while retaining
+duplicate-name, parent-kind and acyclicity checks.
 
 `stage_changes` initially supports the existing-inode prepared-update surface.
 Before calling it, history validates every proposed inode value's semantic role
@@ -309,11 +353,6 @@ Recorded plainly, because each is a limit rather than a plan:
   boundaries; a machine failure can leave the two databases inconsistent, and
   resumed reads validate the roots they use and fail explicitly if content is
   missing.
-- **No byte-packed expected/actual failure context.** A history refusal preserves
-  its typed class on the wire (`Busy`, `NotFound`, `HeadMoved`, `StageChanged`,
-  `ContinuityUnavailable`, `Integrity`, `Capacity`), and the retained stage and
-  Branch remain observable through `GetStage`/`GetBranch`; the failure frame
-  itself carries the class and not a serialized expected/actual block.
 - **No Windows/WASM/cloud persistence.** Current native C1/C2 arbitration is
   Unix-specific; Linux/macOS is the initial supported profile.
 

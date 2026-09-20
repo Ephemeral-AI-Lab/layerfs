@@ -15,7 +15,7 @@ import argparse, hashlib, json, os, select, shutil, struct, subprocess, sys, tem
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-TARGET = ROOT / "core/target"
+TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "core/target"))
 PROFILE = os.environ.get("LAYERFS_PROOF_PROFILE", "debug")
 if PROFILE not in ("debug", "release"):
     raise ValueError("unsupported proof build profile")
@@ -143,11 +143,13 @@ def history(body):
     assert r.u8() == 8, "history result tag"
     tag = r.u8()
     if tag == 12:
-        value = ("StackCreated", stack_record(r))
+        record = stack_record(r)
+        record.update(root=r.take(32), root_serial=r.u64())
+        value = ("StackCreated", record)
     elif tag == 3:
         value = ("BranchSnapshot", {"branch": branch_record(r), "head_root": r.optional(32),
                                     "base_root": r.take(32), "effective_root": r.take(32),
-                                    "scope": r.take(32), "profile": r.take(32)})
+                                    "scope": r.take(32), "profile": r.take(32), "root_serial": r.optional(8)})
     elif tag == 10:
         value = ("Stage", stage_record(r))
     elif tag == 13:
@@ -216,7 +218,7 @@ def start_service(temp, port, server_key, peers):
                LAYERFS_LISTEN=f"127.0.0.1:{port}", LAYERFS_TELEMETRY="off",
                LAYERFS_HISTORY_CATALOG=str(Path(temp) / "history.sqlite"),
                LAYERFS_HISTORY_BINDING="layerfs-history-route", LAYERFS_HISTORY_CREATE="1",
-               LAYERFS_HISTORY_INCARNATION="1")
+               LAYERFS_HISTORY_INCARNATION="1", LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex())
     child = subprocess.Popen([BIN / "layerfs-service"], env=env, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     line = child.stderr.readline()
@@ -437,6 +439,13 @@ def main():
             tag, retained = history(body)
             assert tag == "Stage" and retained["token"] == identities["replacement_token"], (tag, retained)
             evidence["cases"].append({"id": "R12", "case": "stage survives on a new connection", "status": "PASS"})
+            kind, body = exchange(witness, 2, QUERY_OPCODE,
+                                  b"\x03" + bytes.fromhex(identities["branch"]), HISTORY_PROFILE)
+            assert kind == 6, body
+            tag, descriptor = history(body)
+            assert tag == "BranchSnapshot" and descriptor["root_serial"] == struct.pack(">Q", 1)
+            assert descriptor["effective_root"].hex() == identities["root"]
+            evidence["cases"].append({"id": "R13", "case": "GetBranch returns validated root serial", "status": "PASS"})
             witness.stdin.close()
             witness.wait(timeout=10)
             daemon = None
@@ -446,6 +455,7 @@ def main():
             if child is not None:
                 try:
                     child.kill()
+                    child.wait(timeout=10)
                 except Exception:
                     pass
     evidence["status"] = "PASS" if all(case["status"] == "PASS" for case in evidence["cases"]) else "FAIL"
