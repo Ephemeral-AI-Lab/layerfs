@@ -353,6 +353,13 @@ struct SaveTotals {
     pool_full_leaves: u64,
     pool_trials: u64,
     pool_work_exceeded: u64,
+    profile_resolve_ns: u64,
+    profile_full_ns: u64,
+    profile_delta_ns: u64,
+    profile_group_ns: u64,
+    profile_place_ns: u64,
+    profile_sql_ns: u64,
+    profile_commit_ns: u64,
 }
 
 impl SaveTotals {
@@ -407,6 +414,14 @@ impl SaveTotals {
         self.pool_work_exceeded = self
             .pool_work_exceeded
             .saturating_add(pool.work_exceeded);
+        let profile = saved.profile;
+        self.profile_resolve_ns = self.profile_resolve_ns.saturating_add(profile.resolve_ns);
+        self.profile_full_ns = self.profile_full_ns.saturating_add(profile.full_ns);
+        self.profile_delta_ns = self.profile_delta_ns.saturating_add(profile.delta_ns);
+        self.profile_group_ns = self.profile_group_ns.saturating_add(profile.group_ns);
+        self.profile_place_ns = self.profile_place_ns.saturating_add(profile.place_ns);
+        self.profile_sql_ns = self.profile_sql_ns.saturating_add(profile.sql_ns);
+        self.profile_commit_ns = self.profile_commit_ns.saturating_add(profile.commit_ns);
     }
 
     /// The same figures as trace rows: `(suffix, value, unit)`.
@@ -414,7 +429,7 @@ impl SaveTotals {
     /// `inserted` and `commits` are deliberately absent - this row already
     /// publishes them as `history.state.<n>.inserted` and `.save.commits`, and a
     /// key written twice would make a reader's first-match lookup ambiguous.
-    fn rows(&self) -> [(&'static str, u64, &'static str); 29] {
+    fn rows(&self) -> [(&'static str, u64, &'static str); 36] {
         [
             ("save.reused", self.reused, "objects"),
             ("save.full_records", self.full_records, "objects"),
@@ -453,6 +468,13 @@ impl SaveTotals {
             ("save.pool.full_leaves", self.pool_full_leaves, "objects"),
             ("save.pool.trials", self.pool_trials, "trials"),
             ("save.pool.work_exceeded", self.pool_work_exceeded, "objects"),
+            ("save.resolve_ns", self.profile_resolve_ns, "ns"),
+            ("save.full_ns", self.profile_full_ns, "ns"),
+            ("save.delta_ns", self.profile_delta_ns, "ns"),
+            ("save.group_ns", self.profile_group_ns, "ns"),
+            ("save.place_ns", self.profile_place_ns, "ns"),
+            ("save.sql_ns", self.profile_sql_ns, "ns"),
+            ("save.commit_ns", self.profile_commit_ns, "ns"),
         ]
     }
 }
@@ -2438,6 +2460,28 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             value as i128,
             "objects",
             "chain total of the save's own counters",
+        )?;
+    }
+    // The save's own nanosecond split, totalled over every state. Seven disjoint
+    // buckets charged inside `storage.accept_loop`; their sum is charged work and
+    // the difference from the accept span is the remainder the instrument does
+    // not name. Published as a separate group because the unit is `ns`, not the
+    // `objects` the counters above carry.
+    for (key, value) in [
+        ("delta.profile_resolve_ns", totals.profile_resolve_ns),
+        ("delta.profile_full_ns", totals.profile_full_ns),
+        ("delta.profile_delta_ns", totals.profile_delta_ns),
+        ("delta.profile_group_ns", totals.profile_group_ns),
+        ("delta.profile_place_ns", totals.profile_place_ns),
+        ("delta.profile_sql_ns", totals.profile_sql_ns),
+        ("delta.profile_commit_ns", totals.profile_commit_ns),
+    ] {
+        context.trace.write_number(
+            Kind::Counter,
+            key,
+            value as i128,
+            "ns",
+            "chain total of the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
         )?;
     }
     context.trace.write_number(
