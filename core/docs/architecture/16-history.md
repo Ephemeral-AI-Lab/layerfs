@@ -8,14 +8,14 @@ Issue: [#210](https://github.com/Ephemeral-AI-Lab/layerfs/issues/210). Design
 parent: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
 The [remediation handoff and qualification record](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-remediation-20260921/validation.md)
 records the execution evidence and its gaps; the subsequent
-[bridge consolidation](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-bridge-consolidation-20260921/implementation.md)
+[bridge consolidation](../../../docs/roadmap/0.1/0.1.7/evidence/issue210-bridge-consolidation-20260921/validation.md)
 records the internal codec refactor.
 Implementation specification and its pre-publication audit:
 [`proposal/commit-history/`](proposal/commit-history/).
 
-- **Source pin:** codec consolidation on `a4a144af8af9b46c3ce3100047466f4817332808`,
-  updated with the bridge source in this commit. The consolidation handoff pins
-  the resulting source and checks. Reference root `crates/` remains separate.
+- **Source pin:** `7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c`, including the
+  bridge codec consolidation. This pin-only update changes no product behavior.
+  Reference root `crates/` remains separate.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source

@@ -1,0 +1,3 @@
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s

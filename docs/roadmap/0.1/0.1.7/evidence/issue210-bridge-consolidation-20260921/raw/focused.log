@@ -1,0 +1,43 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/b995/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.45s
+     Running tests/history_delivery.rs (/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/deps/history_delivery-beff0ed2218238bc)
+
+running 1 test
+test mutation_result_data_is_rejected_before_any_output ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_protocol.rs (/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/deps/history_protocol-6f3e95d9e10500a4)
+
+running 16 tests
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test failure_codes_round_trip_and_stay_typed ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test every_reply_round_trips ... ok
+test every_query_and_command_round_trips ... ok
+test a_manifest_is_a_tree_by_construction ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test identity_widths_and_tags_are_checked ... ok
+test invalid_terminal_reservation_and_descriptor_serial_are_refused ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test page_and_count_bounds_are_checked ... ok
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test profile_and_opcode_must_agree ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test history_wire_bytes_match_pre_simplification_head ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/protocol.rs (/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-core/debug/deps/protocol-2f99ba64d8463ef4)
+
+running 5 tests
+test remote_budget_only_shortens_the_declared_duration ... ok
+test declared_large_input_has_a_size_consistent_frame_and_time_budget ... ok
+test terminal_types_and_explicit_continuation_roundtrip ... ok
+test all_operation_metadata_roundtrips_and_caps_are_checked ... ok
+test fixed_framing_rejects_lengths_states_and_truncations ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
