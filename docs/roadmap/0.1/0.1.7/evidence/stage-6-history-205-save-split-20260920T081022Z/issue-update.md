@@ -22,7 +22,9 @@ So **B1 is not pre-registered, not implemented, and no saving is claimed for it*
 
 This round changes no read-path line: the depth term L49/L51 treated and L52 reinterpreted is unchanged, and the `resolve` split above names it inside the *save's* accept path. The one figure that touches #190's subject: at stride1 the eligibility walk now costs **5.186 s** and base acquisition **6.633 s**, both inside `storage.accept_loop` rather than in the read path L49 removed. **#190 stays open** — it still needs the owner's D1–D5 qualification rulings and the v0.1.6 reconciliation, neither of which is this lane's to supply.
 
-## Why the save path is slow on long histories — and why the successor should go to FUSE next (L53 continuation)
+## Why the save path is slow on long histories — and the successor should go to FUSE next (L53 continuation)
+
+**The headline for whoever picks this up.** `#205`'s question has an answer now, and it points somewhere this lane cannot go. The save's growth is a **volume** term driven by **constructs and edits**, not by writes; it is paid **eagerly, inside the measured operation**; and v0.1.6 — doing the same job behind a FUSE projection — pays **9–11 ms to mount a workspace with a 100-commit branch behind it, flat across depth**. That is not a like-for-like number (it materialises no content; construction happens in its Commit path), but it is the shape of the gap, and the deferral is the unexplored half of it. **Recommendation: land FUSE next**, add a mount node so the core has a comparable figure, and measure first-read-after-history — the one number missing on *both* sides. Details, bounds and the condition under which FUSE does *not* pay are below.
 
 This section is the answer to "does it get slower with longer histories, and which operations cause it". It is measured on this round's own arms; every number is in the evidence above or in `runs/`.
 
