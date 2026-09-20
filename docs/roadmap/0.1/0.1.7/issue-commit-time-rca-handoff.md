@@ -202,7 +202,7 @@ must be shown to **fail** on a structurally broken build before it is claimed as
 3. **`commit_ns` (and whichever term the treatment targets) before and after**, in seconds
    and per append, with the binary sha256 for both arms and the Store hash for both.
 4. **Both-writer evidence**: second-writer latency and throughput on the shipped step.
-5. **An append-only ledger entry** (next free is **L60**) and an update on #209.
+5. **An append-only ledger entry** (next free is **L61**) and an update on #209.
 6. Production LOC for every commit, with core/reference subtotals.
 
 ## 7. Do not

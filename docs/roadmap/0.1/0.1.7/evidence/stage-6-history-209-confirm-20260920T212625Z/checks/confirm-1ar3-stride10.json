@@ -1,0 +1,26 @@
+{
+  "schema": "h209-rca-lock-v1",
+  "label": "confirm-1ar3-stride10",
+  "command": [
+    "python3",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-confirm-20260920T212625Z/collect.py",
+    "confirm-1ar3",
+    "history-stride10",
+    "--binary",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope//Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-commit-20260920T194819Z/binary-archive/lever-pair",
+    "--cwd",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope",
+    "--seal-repo",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope",
+    "--pre-execute"
+  ],
+  "utc": "2026-09-20T21:26:47Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T21:26:47Z",
+  "outcome": "COMPLETED",
+  "exit_code": 2,
+  "wall_ns": 54516500
+}
