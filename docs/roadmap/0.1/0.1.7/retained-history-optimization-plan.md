@@ -263,3 +263,9 @@ The owner reopened exploration and clarified that **one second is a worthwhile s
 No stride3 or full-suite continuation for this rejected variant. Future one-second candidates remain worthwhile when justified by measured removable work and proportionate complexity; this experiment establishes no such next candidate. Subtree summaries and save streaming remain untested and unjustified by this result.
 
 The owner additionally accepts small allocated-storage overages when they accompany worthwhile time reduction. Record the byte overage and time benefit together; preserve historical numeric misses and apply the conditional disposition. This does not rescue the rejected filter, whose speed difference is below one second.
+
+## Legacy-code comparison — 2026-09-20
+
+The owner requested one more subagent review of v0.1.6 `crates/` against current `core/`. [Ledger L39](../0.1.6/evidence/issue151-experiment-ledger.md#l39--190-legacy-code-review-and-next-experiment-ordering-2026-09-20) records source identities, three reviews, counter-evidence and the final recommendation: one isolated live group-compression-level pair next, with selective pack-range reads as the larger follow-up after fetch/parse attribution. Both experiments remain NOT_RUN. No default or product change was made by the review.
+
+The earlier stop recommendation and rejected New-row filter remain historical decisions about their own rounds. The current recommendation reflects the owner's one-second and small-allocation-tradeoff rulings. It does not claim parity with legacy or remove the outstanding qualification gaps.
