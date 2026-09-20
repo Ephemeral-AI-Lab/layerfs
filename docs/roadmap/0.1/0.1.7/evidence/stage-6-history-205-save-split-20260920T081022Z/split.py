@@ -186,8 +186,14 @@ def analyse(label, case):
 
 
 def main() -> int:
-    cases = sys.argv[1:] or ["history-stride10", "history-stride1"]
-    summary = [analyse("instrument", case) for case in cases]
+    # `--label NAME` selects the arm; the default is the first instrumented build,
+    # which is what this script published before the sub-split arm existed.
+    argv = sys.argv[1:]
+    label = "instrument"
+    if len(argv) >= 2 and argv[0] == "--label":
+        label, argv = argv[1], argv[2:]
+    cases = argv or ["history-stride10", "history-stride1"]
+    summary = [analyse(label, case) for case in cases]
     write("### summary")
     write()
     for entry in summary:

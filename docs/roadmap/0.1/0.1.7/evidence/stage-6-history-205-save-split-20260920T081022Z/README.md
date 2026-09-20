@@ -83,9 +83,42 @@ stride1, which is the honest limit of what these samples can resolve.
 
 ## 2. The published split
 
-Both tables below are computed by `split.py` (seven buckets) and `split2.py` (the five
-resolve parts) from the product's own counters in `trace.jsonl`; nothing is inferred
-from counts, and the remainder is stated as a remainder.
+All three tables below are computed by `split.py` (seven buckets) and `split2.py` (the
+five resolve parts) from the product's own counters in `trace.jsonl`; nothing is
+inferred from counts, and the remainder is stated as a remainder.
+
+### 2.0 all three rows, and how the save scales
+
+| case | states | objects | operation | scope | resolve | resolve/scope | operation per object |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| stride10 | 17 | 52,032 | 16.296 s | 9.312 s | 4.247 s | 45.61 % | 313.2 µs |
+| stride3 | 53 | 72,560 | 34.594 s | 18.777 s | 11.584 s | 61.70 % | 476.8 µs |
+| stride1 | 157 | 97,788 | 101.994 s | 47.821 s | 36.458 s | 76.24 % | 1043.0 µs |
+
+All three Stores hash to their recorded constants (`4af37932a…`, `f5c7ff5a6…`,
+`1635cf7bb…`). Over 17 → 157 versions the operation grows **6.26×** while objects
+written grow **1.88×**, so the operation per object grows **3.33×** — and the save
+scope grows 5.14× while objects grow 1.88×, i.e. **2.73× per object**. That is the
+scaling curve as the save path sees it, and it is unfavourable.
+
+The resolution parts scale in two distinct ways, and the three-row view is what
+separates them:
+
+| part | 17 v | 53 v | 157 v | 157/17 | what grows |
+| --- | --- | --- | --- | --- | --- |
+| eligibility walk | 0.888 s | 2.252 s | 5.186 s | **5.84×** | **cost per walk**: 22.8 → 40.1 → 69.8 µs, while walks stay flat at 0.75 per object |
+| pooled lane | 0.732 s | 2.845 s | 8.086 s | **11.05×** | both volume and cost |
+| base acquisition | 2.527 s | 4.317 s | 6.633 s | **2.62×** | volume; per *trial* it grows 2.62× against trials' 1.87× |
+| exact-reuse verification | 0.096 s | 2.165 s | 16.544 s | **172×** | **volume**: 0.022 → 0.298 → 1.240 events per object, a 56× rise per object, while the cost per event moves only 85 → 100 → 136 µs |
+
+So there are two different problems, not one. Reuse verification is a **volume**
+problem — it rises 56× per object as the Store accumulates, and its cost per event
+barely moves — which is why the fit at stride1 makes it look like the whole curve
+even though it is 1.03 % of the stride10 scope. The eligibility walk is the opposite:
+a **cost-per-walk** problem, whose events are already flat per object and whose price
+per walk **triples** as versions accumulate. Base acquisition and the pooled lane sit
+between the two. A treatment that fixes one of these will not fix the other, and the
+stride10 row alone would have hidden the volume term entirely.
 
 ### 2.1 stride10 — 17 states, 52,032 objects, operation 16.296 s
 
@@ -124,14 +157,14 @@ above 53 states), so the scope overstates it by that node and `harness.index`;
 
 ### 2.3 resolution, split five ways
 
-| part | stride10 s | of resolve | stride1 s | of resolve | stride1 ns/obj | early→late growth |
+| part | stride10 s | stride3 s | stride1 s | of stride1 resolve | stride1 ns/obj | early→late growth (stride1) |
 | --- | --- | --- | --- | --- | --- | --- |
-| eligibility walk (`depth_of`) | 0.888 | 20.91 % | 5.186 | 14.23 % | 53,038 | 19,609 → 68,257 (**3.48×**) |
-| base acquisition (`resolve_dependency`) | 2.527 | 59.50 % | 6.633 | 18.19 % | 67,834 | 54,647 → 74,375 (1.36×) |
-| post-trial cost walk | 0.004 | 0.09 % | 0.008 | 0.02 % | 83 | 66 → 90 (1.38×) |
-| exact-reuse verification | 0.096 | 2.25 % | **16.544** | **45.38 %** | 169,184 | 85,249 → 169,408 (**1.99×**) |
-| pooled lane lookup + base | 0.732 | 17.25 % | 8.086 | 22.18 % | 82,693 | 37,793 → 95,434 (**2.53×**) |
-| **resolution total** | **4.247** | 100 % | **36.458** | 100 % | 372,832 | — |
+| eligibility walk (`depth_of`) | 0.888 | 2.252 | 5.186 | 14.23 % | 53,038 | 19,609 → 68,257 (**3.48×**) |
+| base acquisition (`resolve_dependency`) | 2.527 | 4.317 | 6.633 | 18.19 % | 67,834 | 54,647 → 74,375 (1.36×) |
+| post-trial cost walk | 0.004 | 0.005 | 0.008 | 0.02 % | 83 | 66 → 90 (1.38×) |
+| exact-reuse verification | 0.096 | 2.165 | **16.544** | **45.38 %** | 169,184 | 85,249 → 169,408 (**1.99×**) |
+| pooled lane lookup + base | 0.732 | 2.845 | 8.086 | 22.18 % | 82,693 | 37,793 → 95,434 (**2.53×**) |
+| **resolution total** | **4.247** | **11.584** | **36.458** | 100 % | 372,832 | — |
 
 The five parts sum to the row's own `resolve_ns` exactly on both cases
 (`parts==row: YES`, checked per case by `split2.py`).
@@ -139,28 +172,31 @@ The five parts sum to the row's own `resolve_ns` exactly on both cases
 ### 2.4 What the split names
 
 1. **Reuse verification is the largest single part at stride1** — 16.544 s, 34.60 % of
-   scope and 45.38 % of resolution. Per object it grows 85,249 → 169,408 ns
-   (**1.99×**), which is **37.9 %** of the scope's own per-object growth
-   (304,405 → 526,538 ns), and in the same three-thirds comparison it is still the
-   largest absolute part (8.504 s late, against 4.790 s for the pooled lane). This is
-   the bucket B1 was designed to attack, and §5 measures why attacking it that way
-   saves nothing.
-2. **The pooled lane is the largest part at the coarser row** (0.732 s, 59.5 % of
-   stride10's resolution) and the second largest at stride1 (8.086 s), and it is the
+   scope and 45.38 % of resolution, and it is a **volume** term: 1.03 % of the
+   stride10 scope becomes 45.38 % of stride1's, because events per object rise 56×
+   (0.022 → 1.240) while the cost per event moves only 85 → 136 µs. Per object it
+   grows 85,249 → 169,408 ns (1.99×), **37.9 %** of the scope's own per-object growth,
+   and in the three-thirds comparison it is the largest absolute part (8.504 s late,
+   against 4.790 s for the pooled lane). This is the bucket B1 was designed to attack,
+   and §5 measures why attacking it that way saves nothing.
+2. **The eligibility walk is a cost-per-walk term and grows fastest of all** — 5.84×
+   across the three rows while its walks stay flat at ~0.75 per object, because each
+   walk costs 22.8 → 69.8 µs as chains lengthen. It is only 14.23 % of stride1's
+   resolution, so a stride1-only view understates it and a stride10-only view
+   understates reuse; the three rows are what separate the two mechanisms.
+3. **The pooled lane is the largest part at the coarse end** (0.732 s, 59.5 % of
+   stride10's resolution) and the fastest-growing in ratio (11.05×), and it is the
    only bucket whose per-object growth outruns the scope's (2.53× against 1.73×),
    contributing **25.9 %** of the scope's per-object growth.
-3. **The cost walk is nil** (8 ms at stride1). The depth-cap binding L51 reported is
+4. **The cost walk is nil** (8 ms at stride1). The depth-cap binding L51 reported is
    real for the *policy* but is not paid for in time at this site.
-4. **The group codec is 0.151 s at stride1** (0.32 %). L40's +1.685 s is the *delta*
+5. **The group codec is 0.151 s at stride1** (0.32 %). L40's +1.685 s is the *delta*
    of level 19 against level 1, and this figure is the level-1 absolute the brief said
    had never been isolated: codec level is not a lever worth one second.
-5. **The eligibility walk grows fastest of all** (19,609 → 68,257 ns/object, **3.48×**,
-   8.99× in the coarser tier comparison) even though it is only 14.23 % of resolution
-   at stride1. It is the one part that is paid twice for the winning candidate — walked
-   to measure depth, then walked again by `acquire` to rebuild the same chain — which
-   is the brief's candidate C. It is **not** treated this round; it is named here
-   because the split measured it, and the counting was asked for before any
-   implementation (C.5).
+6. **The eligibility walk's own cost is paid twice for the winning candidate** — once
+   to measure depth, then again by `acquire` to rebuild the same chain. That is the
+   brief's candidate C. It is **not** treated this round; it is named here because the
+   split measured it, and the counting was asked for before any implementation.
 
 ## 3. The instrument leaves the store byte-identical
 
@@ -187,7 +223,13 @@ canonical inventory are unchanged by the instrument: it observes, it does not de
   existing run directory, so nothing was overwritten. `--pre-execute` ran each freshly
   built binary once outside the sample and declared its wall time.
 * Diagnostic caps unchanged and never approached: 120 s stride10 (max wall 35.3 s),
-  720 s stride1 (max wall 155.2 s). No cap was promoted, enlarged or shrunk.
+  240 s stride3 (wall 60.9 s), 720 s stride1 (max wall 155.2 s). No cap was promoted,
+  enlarged or shrunk. All three rows were sampled from one build (`68f0cc5e687c…`),
+  and the stride3 row was taken after §2 was first written, because the 17 → 157 pair
+  alone could not tell a volume term from a cost-per-unit term and the middle row is
+  what separates them (§2.0). It was not taken for a better number, and it did not
+  flatter the story: it is the row that shows the save's scope growing 2.73× per
+  object.
 * `--locked`, Rust 1.85.1, `LAYERFS_CONSTRUCTION_WORKERS=1`, one construction worker,
   no second lane.
 * `collect.py` gained one recorded option (`--env KEY=VALUE`, published in the
@@ -266,9 +308,8 @@ in `ops/history.rs` that this round did not introduce.
 
 Not run, and why: no CI (`tools/preflight.sh` is permanently retired and was not
 used); no verification-mode run, because these rows are diagnostic and admission
-`INELIGIBLE` for every arm; no stride3 arm, because the two ends of the curve already
-bound the mechanism and a stride3 sample would have consumed the round's remaining
-budget without changing the decision.
+`INELIGIBLE` for every arm; no verification-mode run for the stride3 row, for the
+same reason as the others.
 
 ## 7. Production LOC
 
@@ -293,8 +334,8 @@ cargo +1.85.1 build --release --manifest-path \
 python3 $EV/with_locks.py <label> python3 $EV/collect.py instrument2 history-stride10 \
   --binary core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content \
   --cwd "$PWD" --seal-repo "$PWD" --pre-execute
-python3 $EV/split.py instrument2 history-stride10 history-stride1
-python3 $EV/split2.py instrument2 history-stride10 history-stride1
+python3 $EV/split.py instrument2 history-stride10 history-stride3 history-stride1
+python3 $EV/split2.py instrument2 history-stride10 history-stride3 history-stride1
 # the B1 population, one arm only:
 python3 $EV/with_locks.py <label> python3 $EV/collect.py probe history-stride1 \
   --binary …/fs-bench-storage-content --cwd "$PWD" --seal-repo "$PWD" \

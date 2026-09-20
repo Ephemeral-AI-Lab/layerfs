@@ -30,6 +30,38 @@
   instrument overhead bound: operation 16.296 s against the retained
   uninstrumented candidate-history-stride10 16.908 s -> -0.612 s (-3.62 %)
 
+### instrument2/history-stride3
+
+  states 53   inserted 72560   operation 34.594 s   invocation 60.861 s
+  scope (save_ns - storage.begin)     18.777 s
+    storage.accept_loop (node)        17.082 s (90.98 % of scope)
+
+  resolution part                          seconds  of resolve  of scope  ns/object
+  eligibility walk (depth_of)                2.252      19.44%    11.99%      31031
+  base acquisition (resolve_dependency)      4.317      37.26%    22.99%      59492
+  post-trial cost walk                       0.005       0.05%     0.03%         73
+  exact-reuse verification                   2.165      18.69%    11.53%      29842
+  pooled lane lookup + base                  2.845      24.56%    15.15%      39215
+  resolution (all five parts)               11.584     100.00%    61.70%     159653
+  resolve_ns as the row reports it          11.584                61.70%     159653   parts==row: YES
+
+  per inserted object, first 17 states -> last 17 states
+  resolution part                         early ns/obj  late ns/obj   growth
+  eligibility walk (depth_of)                     9438        41752    4.42x
+  base acquisition (resolve_dependency)          46175        66940    1.45x
+  post-trial cost walk                              57           85    1.49x
+  exact-reuse verification                       19195        24151    1.26x
+  pooled lane lookup + base                      17082        43161    2.53x
+  SCOPE TOTAL                                   186033       280021    1.51x
+
+  store sha256 f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e
+  recorded     f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e   equal: YES
+  state roots  53 states, first FilesystemRootId(ObjectId("7383dcd6e75ad784518dbdb95b3a7d3cce5a5b3f264ceaa05d9957ef9096e066"))
+                           last  FilesystemRootId(ObjectId("80d6c15b2b95be4e18a3fdb0e7cf90f015e479b4ae4f2e307bcc5e2b1ee82a81"))
+
+  instrument overhead bound: operation 34.594 s against the retained
+  uninstrumented candidate-history-stride3 36.810 s -> -2.216 s (-6.02 %)
+
 ### instrument2/history-stride1
 
   states 157   inserted 97788   operation 101.994 s   invocation 153.753 s
@@ -68,5 +100,7 @@
 
   history-stride10   resolve    4.247 s of scope    9.312 s (45.61 %)  store equal
                      eligible 0.888  acquire 2.527  cost 0.004  reuse 0.096  pooled 0.732
+  history-stride3    resolve   11.584 s of scope   18.777 s (61.70 %)  store equal
+                     eligible 2.252  acquire 4.317  cost 0.005  reuse 2.165  pooled 2.845
   history-stride1    resolve   36.458 s of scope   47.821 s (76.24 %)  store equal
                      eligible 5.186  acquire 6.633  cost 0.008  reuse 16.544  pooled 8.086
