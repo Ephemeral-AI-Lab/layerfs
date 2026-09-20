@@ -89,25 +89,64 @@ The FUSE adapter delegates filesystem behavior to Workspace and never bypasses
 it with a remote request for each callback. Kernel handle-number translation can
 live in the adapter; semantic file lifetime and revisions have one Workspace owner.
 
-### Smallest plausible file placement
+### Future responsibility folders
 
 ```text
- core/crates/layerfs-daemon/src/
- +-- main.rs                  delegates to startup
- +-- run.rs                   assembly, configuration and native lifecycle
- +-- workspace.rs             transport-independent mutable filesystem owner
- `-- fuse.rs                  Linux-only callback adapter -> Workspace
-
- Existing bridge/service crates keep their roles.
+core/crates/layerfs-daemon/src/
++-- main.rs                         thin entry
++-- run.rs                          component assembly/startup/shutdown
++-- config.rs                       validated deployment settings
++-- headless.rs                     existing bounded headless caller
+|
++-- workspace/                      FUTURE pair 1 implementation
+|   +-- mod.rs                      declarations/reexports only
+|   +-- state.rs                    one Workspace state/lifetime owner
+|   +-- namespace/
+|   |   +-- mod.rs
+|   |   +-- lookup.rs                overlay/base metadata resolution
+|   |   +-- changes.rs               create/rename/unlink/link semantics
+|   |   `-- directory.rs             bounded overlay merge and cursor state
+|   +-- files/
+|   |   +-- mod.rs
+|   |   +-- pieces.rs                immutable-base/replacement/zero spans
+|   |   +-- read.rs                  local reads and immutable misses
+|   |   +-- write.rs                 readable backing before write acknowledgement
+|   |   `-- lower.rs                 final state -> supported stable C1 input
+|   +-- generation/
+|   |   +-- mod.rs
+|   |   +-- capture.rs               frozen input/revision/resource ownership
+|   |   `-- complete.rs              revision-safe completion/unknown outcome
+|   +-- backing/
+|   |   +-- mod.rs
+|   |   +-- segments.rs              declared local payload backing
+|   |   `-- account.rs               live/frozen/read references and cleanup
+|   `-- cache.rs                     bounded immutable metadata/content cache
+|
+`-- fuse/                           FUTURE Linux projection
+    +-- mod.rs                      declarations/reexports only
+    +-- adapter.rs                  one FUSE trait implementation; thin dispatch
+    +-- handles.rs                  kernel handle/inode-number translation
+    +-- files.rs                    file callback/reply helpers
+    +-- namespace.rs                name mutation callback/reply helpers
+    +-- directory.rs                directory replies/cookie translation
+    `-- attributes.rs               metadata replies/error translation
 ```
 
-This is a future responsibility map. Start Workspace as a module; split focused
-files when implementation or the 999-line ceiling requires it. A separate
-Workspace crate becomes useful when a second real consumer or build boundary
-needs it. No empty crate, generic runtime framework, or second `LiveOwner` wrapper
-is introduced now. Platform-gate FUSE and its dependency; a headless build must
-not require mounting capability. Module names do not waive the product-only source
-and external-test rules in [core/AGENTS.md](../../../../AGENTS.md).
+This is a future responsibility map, not code or scaffolding to add in pair 3.
+Use directories for the known independent responsibilities instead of growing
+one `workspace.rs` or `fuse.rs` to the ceiling. Every production file is at most
+999 physical lines; every `lib.rs`/`mod.rs` is at most 200 and declaration/delegation
+only. There is one FUSE trait implementation delegating to helpers, not multiple
+competing implementations of the same trait. Workspace owns semantic open-file
+lifetime; kernel number translation must not duplicate that ownership.
+
+A separate Workspace crate becomes useful when another real consumer/build
+boundary requires it. No generic runtime framework or second LiveOwner wrapper
+is introduced. Platform-gate FUSE and its dependency; a headless build does not
+require mounting capability. Unsupported requested mount capability fails
+explicitly. Follow [core/AGENTS.md](../../../../AGENTS.md) for product-only source
+and external tests. Bridge adapter selection remains outside Workspace methods;
+database-provider changes stay service/C2-side.
 
 ### Callback and operation mapping
 
@@ -257,6 +296,12 @@ LayerFS durable-operation contract.
 A serverless service does not need FUSE. A native Linux executor can mount FUSE
 and contact that service. An isolate caller needs an appropriate logical or virtual
 filesystem API; the native kernel mount interface is not a portable requirement.
+
+The [telemetry proposal](08-telemetry-and-retention.md) supplies reusable report
+and window semantics across these environments. Workspace/FUSE add local timings
+and owned counters to the existing daemon reporter. Managed targets supply only
+qualified available observations; native samplers, cgroups and persistent local
+log directories are not assumed.
 
 ## 6. Integration acceptance, all NOT_RUN
 

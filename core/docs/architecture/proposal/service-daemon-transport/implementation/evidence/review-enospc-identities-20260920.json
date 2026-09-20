@@ -1,0 +1,68 @@
+{
+  "status": "PASS",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-telemetry",
+    "--features",
+    "native",
+    "--test",
+    "full_disk",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "create": [
+    "hdiutil",
+    "create",
+    "-size",
+    "32m",
+    "-fs",
+    "HFS+",
+    "-volname",
+    "layerfs192",
+    "-type",
+    "UDIF",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-i1814b4j/disk.dmg"
+  ],
+  "attach": [
+    "hdiutil",
+    "attach",
+    "-nobrowse",
+    "-mountpoint",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-i1814b4j/volume",
+    "-plist",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-i1814b4j/disk.dmg"
+  ],
+  "attachment": {
+    "system-entities": [
+      {
+        "content-hint": "Apple_HFS",
+        "dev-entry": "/dev/disk5s1",
+        "mount-point": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-i1814b4j/volume",
+        "potentially-mountable": true,
+        "unmapped-content-hint": "48465300-0000-11AA-AA11-00306543ECAC",
+        "volume-kind": "hfs"
+      },
+      {
+        "content-hint": "GUID_partition_scheme",
+        "dev-entry": "/dev/disk5",
+        "potentially-mountable": false,
+        "unmapped-content-hint": "GUID_partition_scheme"
+      }
+    ]
+  },
+  "detach": [
+    "hdiutil",
+    "detach",
+    "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs192-enospc-i1814b4j/volume"
+  ],
+  "cleanup": "\"disk5\" ejected.",
+  "source_scope": "current source and dependency selection, with full test filesystem guard",
+  "returncode": 0
+}

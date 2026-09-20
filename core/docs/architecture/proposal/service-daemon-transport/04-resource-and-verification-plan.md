@@ -11,6 +11,12 @@ component and file ownership are in [01](01-architecture-and-portability.md) and
 the implementation contract. No transport code or cloud provider exists by virtue
 of this document.
 
+The [telemetry and retention proposal](08-telemetry-and-retention.md) defines
+optional process observation, operation-report composition, disable behavior and
+bounded output/cleanup. Its candidate 100 ms operational sampler is not a new
+benchmark instrument contract or proof of a phase peak. Include enabled telemetry
+in resource accounting and report unavailable/incomplete required evidence.
+
 **Primary acceptance is network delivery between separate processes:** an actual
 Linux Docker daemon connects to the actual native macOS host service. A bounded
 host test driver supplies daemon stdin and consumes daemon stdout; inputs and
@@ -289,6 +295,12 @@ creating a container directory tree. No mount-free acceptance is established by
 this checklist alone.
 
 ## 7. Measuring the implementation without misleading speed claims
+
+The [direct/forward benchmark-verification draft](implementation/04-benchmark-direct-forward.md)
+turns these accounting requirements into a prospective comparison contract. Its
+implementation follows product correctness/deployment work; workload membership,
+numeric gates and actual runner flags still need a committed freeze.
+
 
 Follow the repository [benchmark rules](../../../../../docs/general/benchmark_rules.md),
 [benchmark-tree rules](../../../../../benchmark/AGENTS.md),

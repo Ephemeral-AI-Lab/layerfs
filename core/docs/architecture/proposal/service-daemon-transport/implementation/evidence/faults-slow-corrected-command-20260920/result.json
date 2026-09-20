@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "core/crates/layerfs-daemon/tests/docker_faults.py",
+    "--image",
+    "sha256:8b0cfd81338aad96131b20c0148512b0d4a14f3f901f89d2b6ead970576af2bc",
+    "--selection",
+    "slow",
+    "--output",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/faults-slow-corrected-20260920"
+  ],
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 1.8210440000038943,
+  "source_unchanged": true,
+  "head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2
+}

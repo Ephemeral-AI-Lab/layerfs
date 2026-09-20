@@ -1,0 +1,30 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 21.72s
+     Running tests/native_connections.rs (core/target/debug/deps/native_connections-cdd742942bd36c04)
+
+running 1 test
+test repeated_native_connections_keep_the_buffer_bound ... FAILED
+
+failures:
+
+---- repeated_native_connections_keep_the_buffer_bound stdout ----
+
+thread 'repeated_native_connections_keep_the_buffer_bound' panicked at crates/layerfs-bridge/tests/native_connections.rs:36:41:
+connect 0: Capacity unknown=false cleanup=None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' panicked at crates/layerfs-bridge/tests/native_connections.rs:28:70:
+called `Result::unwrap()` on an `Err` value: Failure { code: Io, unknown: false, cleanup: None }
+
+
+failures:
+    repeated_native_connections_keep_the_buffer_bound
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test native_connections`

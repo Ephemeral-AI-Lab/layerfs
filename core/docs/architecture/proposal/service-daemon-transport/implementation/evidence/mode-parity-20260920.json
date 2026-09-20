@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "off_forward_both_roots_and_counts": {
+    "qualified-off-20260920": {
+      "file": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+      "edited": "5967b9c8a25b57590b81089d490ed7e2ce2523c2b05dc0431276c77a66da4284",
+      "tree": "7ea32421382c2629edacb0de7d7dd56ad18a76ccc4d6268b1bab77342748ba93",
+      "file_counts": [
+        18,
+        0
+      ],
+      "edit_counts": [
+        3,
+        0
+      ],
+      "tree_counts": [
+        2,
+        0
+      ]
+    },
+    "qualified-forward-20260920": {
+      "file": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+      "edited": "5967b9c8a25b57590b81089d490ed7e2ce2523c2b05dc0431276c77a66da4284",
+      "tree": "7ea32421382c2629edacb0de7d7dd56ad18a76ccc4d6268b1bab77342748ba93",
+      "file_counts": [
+        18,
+        0
+      ],
+      "edit_counts": [
+        3,
+        0
+      ],
+      "tree_counts": [
+        2,
+        0
+      ]
+    },
+    "qualified-both-20260920": {
+      "file": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+      "edited": "5967b9c8a25b57590b81089d490ed7e2ce2523c2b05dc0431276c77a66da4284",
+      "tree": "7ea32421382c2629edacb0de7d7dd56ad18a76ccc4d6268b1bab77342748ba93",
+      "file_counts": [
+        18,
+        0
+      ],
+      "edit_counts": [
+        3,
+        0
+      ],
+      "tree_counts": [
+        2,
+        0
+      ]
+    }
+  }
+}

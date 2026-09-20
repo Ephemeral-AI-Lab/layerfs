@@ -1,0 +1,2238 @@
+{
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "image": "sha256:8b0cfd81338aad96131b20c0148512b0d4a14f3f901f89d2b6ead970576af2bc",
+  "telemetry": "local",
+  "cases": [
+    {
+      "id": "V02",
+      "selection": "500000-byte construct",
+      "status": "PASS",
+      "root": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be"
+    },
+    {
+      "id": "V03",
+      "selection": "exact full readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "replace and readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V06",
+      "selection": "existing inode content attachment and stat",
+      "status": "PASS"
+    },
+    {
+      "id": "V04",
+      "selection": "File, Stat, two paged List calls, Readlink",
+      "status": "PASS"
+    },
+    {
+      "id": "V02",
+      "selection": "empty and 131071/131072/131073 cutoff boundaries",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "no-op, insert and delete",
+      "status": "PASS"
+    },
+    {
+      "id": "V07",
+      "selection": "two independent file saves, then one tree attachment; two retained roots",
+      "status": "PASS",
+      "logical_exchanges": 3,
+      "roots": [
+        "c6ebb4233263564866523a146e70ce2018a7e8ea8b81c687a12d89bf1429aada",
+        "d3f76821633c8a780308a418cc2ee86ce9e7215021c5b29a5bcb78e6ee21ac08"
+      ],
+      "tree": "f6972b4bdd57397e954d2a4ab258ad95777f921ccc4e3f17a284b3e19e54c744",
+      "atomic_composite": false
+    },
+    {
+      "id": "ENV04",
+      "status": "PASS",
+      "selection": "no mounts/devices; primary read-only/no files or explicitly selected owned local telemetry"
+    },
+    {
+      "id": "V14",
+      "selection": "new native service and new Docker daemon read old/new roots after ordinary Store reopen",
+      "status": "PASS",
+      "service_pid": 6819
+    },
+    {
+      "id": "V17",
+      "selection": "all five operations, identical roots and save counts from an independent pristine Store copy",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "fixture": {
+    "root": "61e52d6f1901fa4effebf037d6f0d917fb4d6c08e8ce8128f7b4404167669ff6",
+    "scope": "27ef987c298fe365e3637d2a85267beec50fe0b734be6f0aa2be72c9a8382574",
+    "file": "cb09a5b37b219deeceded9f45cce0bbf471e7ebedcaf4c91ed254d16e1c6562e",
+    "metadata": "312fe7a8867620f01b89e8a886d40cca367840853233e6ee7159ed3e27fdd409"
+  },
+  "fixture_copy": "closed independent byte copy",
+  "service_pid": 6810,
+  "ready": "layerfs-service ready 0.0.0.0:60209",
+  "container": {
+    "id": "716e21839318a65ccfbb6fc3f1e679b83a3e314baae8bdab347d85f51b811ba6",
+    "image": "sha256:8b0cfd81338aad96131b20c0148512b0d4a14f3f901f89d2b6ead970576af2bc",
+    "mounts": [],
+    "logging": {
+      "Type": "none",
+      "Config": {}
+    },
+    "readonly": false,
+    "devices": [],
+    "pid": 3849,
+    "network": {
+      "bridge": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": null,
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "ab52cf7650c21bac0f1925764cc640b34ebfb3fb7490724f50ff5795c1a95d52",
+        "EndpointID": "8bafaf38eb676ec63712d69520c99bdb8e2663d1f568bc26713ac833208504f0",
+        "Gateway": "172.17.0.1",
+        "IPAddress": "172.17.0.2",
+        "MacAddress": "f6:93:3a:13:c1:56",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": null
+      }
+    }
+  },
+  "diff": "C /logs\nA /logs/run\nA /logs/run/.layerfs-operational-v1\nA /logs/run/.writer-lock\nA /logs/run/segment-00.jsonl\n",
+  "observed_host_sockets": "COMMAND    PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nlayerfs-s 6810 yifanxu    3u  IPv4 0xd9096e59e953b5da      0t0  TCP *:60209 (LISTEN)\nlayerfs-s 6810 yifanxu    6u  IPv4 0x80eb0ff1fb8eeece      0t0  TCP 127.0.0.1:60209->127.0.0.1:60212 (ESTABLISHED)\nlayerfs-s 6810 yifanxu    7u  IPv4 0x80eb0ff1fb8eeece      0t0  TCP 127.0.0.1:60209->127.0.0.1:60212 (ESTABLISHED)\n",
+  "container_memory_observation": {
+    "scope": "enclosing container cgroup; not additive with process RSS",
+    "source": "Docker Engine stats one-shot",
+    "read": "2026-09-20T03:28:35.934998007Z",
+    "memory_stats": {
+      "usage": 1441792,
+      "stats": {
+        "active_anon": 241664,
+        "active_file": 0,
+        "anon": 286720,
+        "anon_thp": 0,
+        "file": 20480,
+        "file_dirty": 20480,
+        "file_mapped": 0,
+        "file_writeback": 0,
+        "inactive_anon": 0,
+        "inactive_file": 65536,
+        "kernel_stack": 49152,
+        "pgactivate": 0,
+        "pgdeactivate": 0,
+        "pgfault": 5754,
+        "pglazyfree": 84,
+        "pglazyfreed": 0,
+        "pgmajfault": 0,
+        "pgrefill": 0,
+        "pgscan": 0,
+        "pgsteal": 0,
+        "shmem": 0,
+        "slab": 413208,
+        "slab_reclaimable": 74328,
+        "slab_unreclaimable": 338880,
+        "sock": 0,
+        "thp_collapse_alloc": 0,
+        "thp_fault_alloc": 1,
+        "unevictable": 0,
+        "workingset_activate": 0,
+        "workingset_nodereclaim": 0,
+        "workingset_refault": 0
+      },
+      "limit": 134217728
+    },
+    "phase_peak": "unavailable; lifetime counters are not reset phase peaks"
+  },
+  "service_exit": 0,
+  "daemon_exit": 0,
+  "direct_parity": {
+    "file": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+    "edited": "5967b9c8a25b57590b81089d490ed7e2ce2523c2b05dc0431276c77a66da4284",
+    "tree": "7ea32421382c2629edacb0de7d7dd56ad18a76ccc4d6268b1bab77342748ba93",
+    "file_counts": [
+      18,
+      0
+    ],
+    "edit_counts": [
+      3,
+      0
+    ],
+    "tree_counts": [
+      2,
+      0
+    ]
+  },
+  "local_records": {
+    "daemon": [
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "kind": "resource",
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "at_ns": 232834,
+        "incarnation": 100701,
+        "user_ns": 0,
+        "source": "procfs+sysconf",
+        "probe_ns": 40292,
+        "system_ns": 0,
+        "rss": 1224704
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "kind": "operation",
+        "key": 1,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 89514000,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 232834,
+        "opened_ns": 197542,
+        "closed_ns": 89719334,
+        "last_ns": 232834,
+        "incarnation": 100701,
+        "largest_gap_ns": 0,
+        "source": "procfs+sysconf",
+        "last_probe_ns": 40292,
+        "sampled_max_rss": 1224704
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "kind": "operation",
+        "key": 2,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 84231625,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          70000000,
+          0
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 232834,
+        "opened_ns": 90793459,
+        "closed_ns": 175032125,
+        "last_ns": 102483250,
+        "incarnation": 100701,
+        "largest_gap_ns": 102250416,
+        "source": "procfs+sysconf",
+        "last_probe_ns": 58375,
+        "sampled_max_rss": 1224704
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "kind": "operation",
+        "key": 3,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 2149625,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 102483250,
+        "opened_ns": 176117959,
+        "closed_ns": 178272334,
+        "last_ns": 102483250,
+        "incarnation": 100701,
+        "largest_gap_ns": 0,
+        "source": "procfs+sysconf",
+        "last_probe_ns": 58375,
+        "sampled_max_rss": 1224704
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "kind": "operation",
+        "key": 4,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 1710917,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 102483250,
+        "opened_ns": 178789084,
+        "closed_ns": 180503292,
+        "last_ns": 102483250,
+        "incarnation": 100701,
+        "largest_gap_ns": 0,
+        "source": "procfs+sysconf",
+        "last_probe_ns": 58375,
+        "sampled_max_rss": 1224704
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "kind": "operation",
+        "key": 5,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 3612375,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 102483250,
+        "opened_ns": 181096250,
+        "closed_ns": 184713000,
+        "last_ns": 102483250,
+        "incarnation": 100701,
+        "largest_gap_ns": 0,
+        "source": "procfs+sysconf",
+        "last_probe_ns": 58375,
+        "sampled_max_rss": 1224704
+      },
+      {
+        "v": 1,
+        "kind": "run-summary",
+        "run": "000000000000000000000000000000c0",
+        "pid": 1,
+        "role": 2,
+        "namespace": 2,
+        "dropped": 0,
+        "failed": 0,
+        "overflow": false,
+        "delivery": "best-effort"
+      }
+    ],
+    "service": [
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "kind": "resource",
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "at_ns": 66416,
+        "incarnation": 821642784273,
+        "user_ns": 3311000,
+        "source": "getrusage+libproc",
+        "probe_ns": 11000,
+        "system_ns": 3668000,
+        "rss": 4784128
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "kind": "operation",
+        "key": 1,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 77976792,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 77794417,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1597333,
+                  "children": []
+                },
+                {
+                  "name": "content.traverse",
+                  "elapsed_ns": 76078708,
+                  "children": [
+                    {
+                      "name": "mapping.navigate",
+                      "elapsed_ns": 82958,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 82000,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mapping.payload",
+                      "elapsed_ns": 13153000,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 13150792,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          27179000,
+          1401000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 200447750,
+        "opened_ns": 275263166,
+        "closed_ns": 353255458,
+        "last_ns": 303626875,
+        "incarnation": 821642784273,
+        "largest_gap_ns": 103179125,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 16125,
+        "sampled_max_rss": 8568832
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "kind": "operation",
+        "key": 2,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 74909125,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 74613916,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1547500,
+                  "children": []
+                },
+                {
+                  "name": "content.traverse",
+                  "elapsed_ns": 73054333,
+                  "children": [
+                    {
+                      "name": "mapping.navigate",
+                      "elapsed_ns": 75458,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 74542,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mapping.payload",
+                      "elapsed_ns": 12891875,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 12890708,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          87470000,
+          1778000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 303626875,
+        "opened_ns": 365905166,
+        "closed_ns": 440826208,
+        "last_ns": 404580041,
+        "incarnation": 821642784273,
+        "largest_gap_ns": 100953166,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 11000,
+        "sampled_max_rss": 9043968
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "kind": "operation",
+        "key": 3,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 1579750,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 1408750,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1364917,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 39791,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 404580041,
+        "opened_ns": 451199666,
+        "closed_ns": 452786083,
+        "last_ns": 404580041,
+        "incarnation": 821642784273,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 11000,
+        "sampled_max_rss": 9043968
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "kind": "operation",
+        "key": 4,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 1261916,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 1080584,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1048875,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 29334,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 404580041,
+        "opened_ns": 453796916,
+        "closed_ns": 455064541,
+        "last_ns": 404580041,
+        "incarnation": 821642784273,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 11000,
+        "sampled_max_rss": 9043968
+      },
+      {
+        "v": 1,
+        "namespace": 2,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "kind": "operation",
+        "key": 5,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 3076875,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 404580041,
+        "opened_ns": 456114125,
+        "closed_ns": 459194333,
+        "last_ns": 404580041,
+        "incarnation": 821642784273,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 11000,
+        "sampled_max_rss": 9043968
+      },
+      {
+        "v": 1,
+        "kind": "run-summary",
+        "run": "000000000000000000000000000000c0",
+        "pid": 6819,
+        "role": 1,
+        "namespace": 2,
+        "dropped": 0,
+        "failed": 0,
+        "overflow": false,
+        "delivery": "best-effort"
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "resource",
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "at_ns": 31666,
+        "incarnation": 821613610832,
+        "user_ns": 2726000,
+        "source": "getrusage+libproc",
+        "probe_ns": 7084,
+        "system_ns": 2872000,
+        "rss": 4571136
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 1,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 113919125,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 15738667,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 93323459,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 16134417,
+                  "children": []
+                },
+                {
+                  "name": "content.chunk",
+                  "elapsed_ns": 77048792,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 110541,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 4653250,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          60363000,
+          2965000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 102391291,
+        "opened_ns": 140184708,
+        "closed_ns": 254119083,
+        "last_ns": 201720083,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 99328792,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 11333,
+        "sampled_max_rss": 23511040
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 2,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 74887625,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 74697584,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1524541,
+                  "children": []
+                },
+                {
+                  "name": "content.traverse",
+                  "elapsed_ns": 73162042,
+                  "children": [
+                    {
+                      "name": "mapping.navigate",
+                      "elapsed_ns": 77166,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 76250,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mapping.payload",
+                      "elapsed_ns": 13042292,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 13040333,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          92471000,
+          2339000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 201720083,
+        "opened_ns": 255920416,
+        "closed_ns": 330826750,
+        "last_ns": 302057625,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 100337542,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 13083,
+        "sampled_max_rss": 26492928
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 3,
+        "timing": {
+          "name": "EditFile",
+          "elapsed_ns": 18052167,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13230458,
+              "children": []
+            },
+            {
+              "name": "service.edit",
+              "elapsed_ns": 1505792,
+              "children": [
+                {
+                  "name": "edit.base",
+                  "elapsed_ns": 1284042,
+                  "children": [
+                    {
+                      "name": "edit.base_read",
+                      "elapsed_ns": 1277834,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "edit.compare",
+                  "elapsed_ns": 1917,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 107042,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 11375,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 1375,
+                  "children": []
+                },
+                {
+                  "name": "content.chunk",
+                  "elapsed_ns": 29458,
+                  "children": []
+                },
+                {
+                  "name": "edit.finish",
+                  "elapsed_ns": 36834,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 2903625,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 302057625,
+        "opened_ns": 341675541,
+        "closed_ns": 359741875,
+        "last_ns": 302057625,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 13083,
+        "sampled_max_rss": 26492928
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 4,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 75781167,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 75587500,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1216542,
+                  "children": []
+                },
+                {
+                  "name": "content.traverse",
+                  "elapsed_ns": 74365458,
+                  "children": [
+                    {
+                      "name": "mapping.navigate",
+                      "elapsed_ns": 74916,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 74000,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mapping.payload",
+                      "elapsed_ns": 13035584,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 13033958,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          85305000,
+          2518000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 302057625,
+        "opened_ns": 361271125,
+        "closed_ns": 437061625,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 98642708,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 5,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 1586083,
+          "children": [
+            {
+              "name": "service.inspect",
+              "elapsed_ns": 1394792,
+              "children": [
+                {
+                  "name": "edit.base_read",
+                  "elapsed_ns": 1389583,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 446626583,
+        "closed_ns": 448220333,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 6,
+        "timing": {
+          "name": "UpdatePreparedFilesystem",
+          "elapsed_ns": 16896000,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 12668959,
+              "children": []
+            },
+            {
+              "name": "validate",
+              "elapsed_ns": 60458,
+              "children": []
+            },
+            {
+              "name": "directories",
+              "elapsed_ns": 542,
+              "children": []
+            },
+            {
+              "name": "references",
+              "elapsed_ns": 7000,
+              "children": []
+            },
+            {
+              "name": "inodes",
+              "elapsed_ns": 302834,
+              "children": []
+            },
+            {
+              "name": "cleanup",
+              "elapsed_ns": 375,
+              "children": []
+            },
+            {
+              "name": "root.encode",
+              "elapsed_ns": 6542,
+              "children": []
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 1652708,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 449466250,
+        "closed_ns": 466371541,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 7,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 3070542,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 468133083,
+        "closed_ns": 471209500,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 8,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 1579459,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 472368208,
+        "closed_ns": 473951250,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 9,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 1596000,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 474854875,
+        "closed_ns": 476454541,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 10,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 2038708,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 477995125,
+        "closed_ns": 480040916,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 11,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 13802541,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13128208,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 110000,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 61250,
+                  "children": []
+                },
+                {
+                  "name": "content.chunk",
+                  "elapsed_ns": 16000,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 17042,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 6791,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 427833,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 400700333,
+        "opened_ns": 481249250,
+        "closed_ns": 495059333,
+        "last_ns": 400700333,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 10584,
+        "sampled_max_rss": 28049408
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 12,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 39098042,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 12869166,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 18102458,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 15628375,
+                  "children": []
+                },
+                {
+                  "name": "content.encode",
+                  "elapsed_ns": 11083,
+                  "children": []
+                },
+                {
+                  "name": "content.identify",
+                  "elapsed_ns": 2435542,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 8458,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 7946166,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 503062458,
+        "opened_ns": 503337666,
+        "closed_ns": 542448916,
+        "last_ns": 503062458,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 21917,
+        "sampled_max_rss": 29966336
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 13,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 44531500,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13388959,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 23538834,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 15773834,
+                  "children": []
+                },
+                {
+                  "name": "content.chunk",
+                  "elapsed_ns": 7747292,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 6667,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 7397791,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 503062458,
+        "opened_ns": 550611291,
+        "closed_ns": 595151958,
+        "last_ns": 503062458,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 21917,
+        "sampled_max_rss": 29966336
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 14,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 44297250,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13272334,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 23353708,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 15645666,
+                  "children": []
+                },
+                {
+                  "name": "content.chunk",
+                  "elapsed_ns": 7686209,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 6125,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 7467125,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 600629125,
+        "opened_ns": 603277541,
+        "closed_ns": 647589791,
+        "last_ns": 600629125,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 35042,
+        "sampled_max_rss": 29982720
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 15,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 1557459,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 1308125,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1303833,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 600629125,
+        "opened_ns": 649308625,
+        "closed_ns": 650873500,
+        "last_ns": 600629125,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 35042,
+        "sampled_max_rss": 29982720
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 16,
+        "timing": {
+          "name": "EditFile",
+          "elapsed_ns": 14421375,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 12980250,
+              "children": []
+            },
+            {
+              "name": "service.edit",
+              "elapsed_ns": 1281583,
+              "children": [
+                {
+                  "name": "edit.base",
+                  "elapsed_ns": 1276125,
+                  "children": [
+                    {
+                      "name": "edit.base_read",
+                      "elapsed_ns": 1269375,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 18750,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 600629125,
+        "opened_ns": 652078750,
+        "closed_ns": 666509166,
+        "last_ns": 600629125,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 35042,
+        "sampled_max_rss": 29982720
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 17,
+        "timing": {
+          "name": "EditFile",
+          "elapsed_ns": 15505875,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 12986834,
+              "children": []
+            },
+            {
+              "name": "service.edit",
+              "elapsed_ns": 1428792,
+              "children": [
+                {
+                  "name": "edit.base",
+                  "elapsed_ns": 1244750,
+                  "children": [
+                    {
+                      "name": "edit.base_read",
+                      "elapsed_ns": 1237833,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "edit.compare",
+                  "elapsed_ns": 2042,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 375,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 125,
+                  "children": []
+                },
+                {
+                  "name": "content.chunk",
+                  "elapsed_ns": 31750,
+                  "children": []
+                },
+                {
+                  "name": "edit.finish",
+                  "elapsed_ns": 35500,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 741542,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 600629125,
+        "opened_ns": 668198916,
+        "closed_ns": 683714250,
+        "last_ns": 600629125,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 35042,
+        "sampled_max_rss": 29982720
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 18,
+        "timing": {
+          "name": "EditFile",
+          "elapsed_ns": 15778833,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13007250,
+              "children": []
+            },
+            {
+              "name": "service.edit",
+              "elapsed_ns": 1376250,
+              "children": [
+                {
+                  "name": "edit.base",
+                  "elapsed_ns": 1223458,
+                  "children": [
+                    {
+                      "name": "edit.base_read",
+                      "elapsed_ns": 1216375,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "edit.compare",
+                  "elapsed_ns": 2500,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 417,
+                  "children": []
+                },
+                {
+                  "name": "edit.split",
+                  "elapsed_ns": 90084,
+                  "children": []
+                },
+                {
+                  "name": "edit.finish",
+                  "elapsed_ns": 36000,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 1183417,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 600629125,
+        "opened_ns": 685413833,
+        "closed_ns": 701203041,
+        "last_ns": 600629125,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 35042,
+        "sampled_max_rss": 29982720
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 19,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 77335584,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 77099709,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1231292,
+                  "children": []
+                },
+                {
+                  "name": "content.traverse",
+                  "elapsed_ns": 75857416,
+                  "children": [
+                    {
+                      "name": "mapping.navigate",
+                      "elapsed_ns": 63458,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 62625,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mapping.payload",
+                      "elapsed_ns": 13512125,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 13510125,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 702128666,
+        "opened_ns": 702905083,
+        "closed_ns": 780252416,
+        "last_ns": 702128666,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 8500,
+        "sampled_max_rss": 30113792
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 20,
+        "timing": {
+          "name": "ReadFile",
+          "elapsed_ns": 76176166,
+          "children": [
+            {
+              "name": "service.read",
+              "elapsed_ns": 76049583,
+              "children": [
+                {
+                  "name": "content.acquire",
+                  "elapsed_ns": 1357167,
+                  "children": []
+                },
+                {
+                  "name": "content.traverse",
+                  "elapsed_ns": 74684250,
+                  "children": [
+                    {
+                      "name": "mapping.navigate",
+                      "elapsed_ns": 75542,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 74250,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "mapping.payload",
+                      "elapsed_ns": 13055333,
+                      "children": [
+                        {
+                          "name": "storage.read",
+                          "elapsed_ns": 13053167,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          86962000,
+          2414000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 702128666,
+        "opened_ns": 790431958,
+        "closed_ns": 866620541,
+        "last_ns": 805031291,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 102902625,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 16917,
+        "sampled_max_rss": 30162944
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 21,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 13643541,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13014791,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 119416,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 90125,
+                  "children": []
+                },
+                {
+                  "name": "content.encode",
+                  "elapsed_ns": 4375,
+                  "children": []
+                },
+                {
+                  "name": "content.identify",
+                  "elapsed_ns": 13500,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 1584,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 328334,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 805031291,
+        "opened_ns": 877262625,
+        "closed_ns": 890916208,
+        "last_ns": 805031291,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 16917,
+        "sampled_max_rss": 30162944
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 22,
+        "timing": {
+          "name": "ConstructFile",
+          "elapsed_ns": 13742750,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13121667,
+              "children": []
+            },
+            {
+              "name": "service.construct",
+              "elapsed_ns": 125875,
+              "children": [
+                {
+                  "name": "content.probe",
+                  "elapsed_ns": 96084,
+                  "children": []
+                },
+                {
+                  "name": "content.encode",
+                  "elapsed_ns": 4375,
+                  "children": []
+                },
+                {
+                  "name": "content.identify",
+                  "elapsed_ns": 13458,
+                  "children": []
+                },
+                {
+                  "name": "content.emit",
+                  "elapsed_ns": 1750,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 322292,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 2,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": [
+          86723000,
+          2039000
+        ],
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 805031291,
+        "opened_ns": 892486291,
+        "closed_ns": 906238291,
+        "last_ns": 905028625,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 99997334,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 14500,
+        "sampled_max_rss": 30195712
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 23,
+        "timing": {
+          "name": "UpdatePreparedFilesystem",
+          "elapsed_ns": 17889625,
+          "children": [
+            {
+              "name": "service.begin_save",
+              "elapsed_ns": 13179125,
+              "children": []
+            },
+            {
+              "name": "validate",
+              "elapsed_ns": 59541,
+              "children": []
+            },
+            {
+              "name": "directories",
+              "elapsed_ns": 500,
+              "children": []
+            },
+            {
+              "name": "references",
+              "elapsed_ns": 5166,
+              "children": []
+            },
+            {
+              "name": "inodes",
+              "elapsed_ns": 422000,
+              "children": []
+            },
+            {
+              "name": "cleanup",
+              "elapsed_ns": 375,
+              "children": []
+            },
+            {
+              "name": "root.encode",
+              "elapsed_ns": 6792,
+              "children": []
+            },
+            {
+              "name": "service.finish",
+              "elapsed_ns": 1651167,
+              "children": []
+            }
+          ]
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 905028625,
+        "opened_ns": 907654041,
+        "closed_ns": 925550500,
+        "last_ns": 905028625,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 14500,
+        "sampled_max_rss": 30195712
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 24,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 2906375,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 905028625,
+        "opened_ns": 927323000,
+        "closed_ns": 930236458,
+        "last_ns": 905028625,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 14500,
+        "sampled_max_rss": 30195712
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "operation",
+        "key": 25,
+        "timing": {
+          "name": "Inspect",
+          "elapsed_ns": 2793750,
+          "children": []
+        },
+        "success": true,
+        "resource_status": "sampled",
+        "samples": 1,
+        "gaps": 0,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "first_ns": 905028625,
+        "opened_ns": 931025333,
+        "closed_ns": 933821916,
+        "last_ns": 905028625,
+        "incarnation": 821613610832,
+        "largest_gap_ns": 0,
+        "source": "getrusage+libproc",
+        "last_probe_ns": 14500,
+        "sampled_max_rss": 30195712
+      },
+      {
+        "v": 1,
+        "namespace": 1,
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "kind": "resource",
+        "scope": "process-shared",
+        "clock": "local-monitor",
+        "at_ns": 1000841333,
+        "incarnation": 821613610832,
+        "user_ns": 683070000,
+        "source": "getrusage+libproc",
+        "probe_ns": 14209,
+        "system_ns": 26765000,
+        "rss": 30179328
+      },
+      {
+        "v": 1,
+        "kind": "run-summary",
+        "run": "000000000000000000000000000000c0",
+        "pid": 6810,
+        "role": 1,
+        "namespace": 1,
+        "dropped": 0,
+        "failed": 0,
+        "overflow": false,
+        "delivery": "best-effort"
+      }
+    ]
+  },
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "lock_sha256": "48d2c6f7ef507a5052e5f7377a9b203c7b4c6f3cad26bf38a66a6a4a4928437b",
+  "service_sha256": "e248bf87c2d4b9d579bfb74c0bcaf88f03e397f0857a991341fd144dce2055a8",
+  "daemon_sha256": "8aae223f03a2e6cfac82d43f5d246649d7ff14497f0dd2ff736d1853af7ea08c"
+}

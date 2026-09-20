@@ -1,0 +1,25 @@
+{
+  "source_checkout": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs",
+  "base": "10b9d4a6cf9d88267d508cb010cc82950e080d77",
+  "files": {
+    "core/docs/architecture/proposal/service-daemon-transport/01-architecture-and-portability.md": "22deb3ab9fa626719ce0cb89727dd51d587d16cbcd4826b328c7f23c01212832",
+    "core/docs/architecture/proposal/service-daemon-transport/02-file-layout-and-boundaries.md": "3e138ee6b676b9c5eb2206eba3eaabfbdf4df107fa5f16c567007c1e8744436a",
+    "core/docs/architecture/proposal/service-daemon-transport/03-operations-and-transport.md": "c1cce81e7aeeab54bf0d21c483894ccaa45188bf7e46e4d0bc656593574d6269",
+    "core/docs/architecture/proposal/service-daemon-transport/04-resource-and-verification-plan.md": "d200381e754a13ca12259fe37cb5c4d3eb5440d142c15451790341e4747618b6",
+    "core/docs/architecture/proposal/service-daemon-transport/05-v0.1.6-comparison.md": "6abe99bdfca98579d172f41fcc7e3f1aa08927542610ecbc4671bed72c680689",
+    "core/docs/architecture/proposal/service-daemon-transport/06-future-fuse-and-cloud.md": "9f0ec9019e2422a502e339baf1445b9ad73af43621d16ee4ee90553331962a71",
+    "core/docs/architecture/proposal/service-daemon-transport/07-public-operations.md": "5a066b96d1ebda5615a2d8fdfb8ec2f9ed1968a7c62aa2e7537a5b441a620134",
+    "core/docs/architecture/proposal/service-daemon-transport/08-telemetry-and-retention.md": "bb4f9b546b37008b8120844b99976d30494c35ae97a28fb8a8feefd93ecb0912",
+    "core/docs/architecture/proposal/service-daemon-transport/README.md": "5658a5b29f5b730feccb58978ecc47e8c1d9b38358970851ee97dbad86796d2c",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/01-product.md": "4af48ecc40ef3d9787bee65f332b626567c6c2bd86b4333e6537248d2de05fb3",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/02-telemetry.md": "34f46c25e90f3d001c1284191aa3008ae0a19ed14c4b91d521ced0d8d7eab7de",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/03-verification.md": "5d47a38339455ea96684ff3e8a6cde277311a10f1828b3c5740744c6957fc2d7",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/04-benchmark-direct-forward.md": "d1873b0907246722f4c761c51940b82d56e8eb43e796729fc7d44d3015d8465e",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/05-issue192-handoff.md": "78083173abe50ab41be579f49d9b617fc04f1aa5042b4de283ec14f1cb71b51e",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/README.md": "89a3f4c053c33ec72afcf3b3bfab2bc496c17614cd5b4b898b3988e686ef0191",
+    "core/docs/architecture/proposal/service-daemon-transport/source-snapshot.json": "f916d0015473dcbb1ba893f6327c47a1a821e5419d785017ab62f090b55ff44e",
+    "core/docs/architecture/proposal/04-boundary-and-trust.md": "f2a4ba678868df5f26df2797960c18ba694192e2bc4f97b5c15f10539f55bdf0",
+    "core/docs/architecture/proposal/README.md": "134fce83b070fefd3e9f6bd34824772ce015428e806a53e8b3ce94c53ec2802b",
+    "core/docs/architecture/proposal/01-projection-and-runtime.md": "369d8a2c402b37d51e4242bf3f0d23a633f4bd1e1cf1ddd8088a6d69e1499808"
+  }
+}

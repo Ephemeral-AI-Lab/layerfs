@@ -1,0 +1,56 @@
+{
+  "selection": "slow",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "slow-upload-deadline",
+      "status": "PASS",
+      "detail": {
+        "terminal": "missing after deadline",
+        "unknown": true,
+        "requested_deadline_ms": 250,
+        "replay": false
+      }
+    },
+    {
+      "name": "blocked-result-consumer",
+      "status": "PASS",
+      "detail": {
+        "requested_deadline_ms": 250,
+        "container_exit": 1,
+        "partial_read": "provisional; no terminal success consumed"
+      }
+    }
+  ],
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Unknown unknown=true cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a"
+}

@@ -1,0 +1,16 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.76s
+     Running tests/codec_frames.rs (core/target/debug/deps/codec_frames-1695c755dbcf0a7d)
+
+running 7 tests
+test a_declared_length_that_contradicts_the_frame_is_refused ... ok
+test every_truncation_of_a_valid_frame_is_refused_without_panicking ... ok
+test a_frame_whose_checksum_no_longer_matches_is_refused ... ok
+test a_forged_declared_length_inside_the_header_is_refused_by_the_call_itself ... ok
+test the_decode_arena_is_charged_only_when_a_frame_needs_it ... ok
+test a_valid_frame_round_trips_through_both_decode_entry_points ... ok
+test a_frame_beyond_the_profiles_window_is_refused ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

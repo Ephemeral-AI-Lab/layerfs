@@ -46,7 +46,7 @@ address. A bridge is endpoint code, not another process or an SQL proxy.
 
 The main acceptance route is network delivery between the actual Linux container
 daemon and native macOS service processes. One bridge implementation provides both
-endpoints; deployments do not select separate Docker/local/cloud protocols. A
+endpoints; native placements do not select separate Docker/local/cloud protocols. A
 service can accept multiple independently authenticated daemon connections under
 its aggregate bounds. Request correlation is connection-scoped and associated
 with the verified caller; it is not authorization or an idempotency guarantee.
@@ -71,17 +71,13 @@ page or delta dependency, while preserving the grouped local calls.
 
 ## 2. Initial operation set
 
-Names below are proposed logical opcodes, not claims of existing SDK methods.
-Requests name an authorized logical Store, not a filesystem path or connection
-string. Store routing and its configuration belong to the service.
-
-| Operation | Inputs | Existing local implementation seam | Successful result |
-| --- | --- | --- | --- |
-| `ReadFile` | Explicit file root, validated range, response-byte allowance | C1 `read_range` with `StoreProvider`; whole-file variants may use `read_all_bounded` | Ordered bytes, exact returned length, terminal success |
-| `Inspect` | Explicit file/filesystem root and a supported typed query | File inspection or `FilesystemRead::{resolve,stat,list,readlink,read_portable,read_attribute}` as applicable | Bounded typed value/page; listing has an explicit page/count limit |
-| `ConstructFile` | Stable sequential bytes, exact declared length, optional expected supported Store/profile identity | C1 `construct_stream`, matching `store.policy().construction()`, C2 `SaveHandoff` | File root and logical length, plus bounded save outcome after `finish` |
-| `EditFile` | Explicit immutable base root/base length, ordered edit records and stable replacement parts | C1 `EditStream`, replayable `EditSource`, `apply_edits`, C2 `SaveHandoff` | New file root/length and save outcome; old root remains readable |
-| `UpdatePreparedFilesystem` | Explicit prepared filesystem base, scope/root serial, bounded sorted changed-name and inode records, already retained content/metadata roots | C1 `FilesystemInput`/`FilesystemObjects`/`update_filesystem`, C2 handoff | New filesystem root and save outcome |
+The [public operation catalog](07-public-operations.md) defines the five proposed
+caller operations, their inputs/results, public entry points and C1/C2 mappings:
+`ReadFile`, `Inspect`, `ConstructFile`, `EditFile`, and
+`UpdatePreparedFilesystem`. This document defines their shared transport,
+completion and failure behavior. Names remain proposed, not existing SDK methods
+or frozen wire discriminants. Requests name an authorized logical Store, not a
+filesystem path or connection string; routing belongs to the service.
 
 The first filesystem slice changes existing identities and prepared bindings.
 Creation of new inode identities requires the later explicit allocator/nonreuse
@@ -162,7 +158,7 @@ saves locally, using already retained roots for the tree update. Earlier saves
 would remain if a later step failed. It needs an explicit partial/unknown outcome,
 input-ID-to-root mapping and reconciliation contract, not a same-save provider
 merely to reduce network exchanges. See the [legacy comparison](05-v0.1.6-comparison.md).
-This recommendation does not change the initial operation table above.
+This recommendation does not change the initial public operation catalog.
 
 Source anchors: C1 [sequential construction](../../../../crates/layerfs-content/src/file/content.rs),
 [edit source](../../../../crates/layerfs-content/src/file/edit/input.rs),
@@ -456,6 +452,14 @@ is no background retry/polling/status-recovery service implicit in correlation I
 Content-addressed reuse alone does not make a complete operation replay-safe.
 
 ## 8. CPU/copy accounting and verification
+
+Optional completed diagnostics must fit the actual response envelope and remain
+independent of the product outcome. The [telemetry proposal](08-telemetry-and-retention.md)
+separates per-operation reports from independent resource observation/export;
+it introduces no sixth product operation or unsolicited metric frame. The default
+periodic daemon report route uses a bounded diagnostic channel collected by the
+host, with stdout reserved for the operation protocol.
+
 
 Frame parsing, checked length/count accounting and byte relay should cost
 `O(payload bytes + control records + frame count)`, with bounded per-frame state.

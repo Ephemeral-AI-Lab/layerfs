@@ -176,7 +176,19 @@ impl Timing {
     where
         F: FnOnce(&TimingScope<'_, Active>) -> Result<T, E>,
     {
-        let recording = Recording::start(Label::bounded(name));
+        Self::record_with_limits(crate::timer::RecordingLimits::default(), name, operation)
+    }
+
+    /// Records under validated ownership limits; omitted children keep executing.
+    pub fn record_with_limits<T, E, F>(
+        limits: crate::timer::RecordingLimits,
+        name: impl Into<Cow<'static, str>>,
+        operation: F,
+    ) -> (Result<T, E>, TimingReport)
+    where
+        F: FnOnce(&TimingScope<'_, Active>) -> Result<T, E>,
+    {
+        let recording = Recording::start(Label::bounded(name), limits);
         let root = recording.root();
         let result = {
             let handle = TimingScope::running(&recording, root);

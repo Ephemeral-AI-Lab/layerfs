@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "core/crates/layerfs-daemon/tests/docker_faults.py",
+    "--image",
+    "sha256:edbb0b3c02e061813d6d749f4c589fc0cf88efe134850a4d2333f5f6e263754a",
+    "--selection",
+    "errors",
+    "--output",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/qualified-framing-20260920"
+  ],
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 6.295863790997828,
+  "source_unchanged": true,
+  "head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2
+}

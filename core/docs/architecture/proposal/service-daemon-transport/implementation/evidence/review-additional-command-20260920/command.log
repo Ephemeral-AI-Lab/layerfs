@@ -1,0 +1,16 @@
+Error: Failure { code: Capacity, unknown: false, cleanup: None }
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 158, in <module>
+    if __name__=="__main__":main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 84, in main
+    peer=subprocess.check_output([TARGET/"debug/examples/fault_peer"],env=peer_env,text=True,timeout=3);passed("authenticated-malformed-peer",{"output":peer.strip(),"scope":"external host peer; native service parser, daemon bypassed"})
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 472, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               **kwargs).stdout
+               ^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '[PosixPath('/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/debug/examples/fault_peer')]' returned non-zero exit status 1.

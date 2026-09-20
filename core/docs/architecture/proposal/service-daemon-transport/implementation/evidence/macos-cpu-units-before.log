@@ -1,0 +1,20 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.53s
+     Running tests/native.rs (core/target/debug/deps/native-b87fb1b279e92834)
+
+running 1 test
+
+thread 'native_cpu_units_match_posix_process_counters' panicked at crates/layerfs-telemetry/tests/native.rs:205:2:
+native user_ns=Some(114666), POSIX bracket=4758000..=4781000
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_cpu_units_match_posix_process_counters ... FAILED
+
+failures:
+
+failures:
+    native_cpu_units_match_posix_process_counters
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p layerfs-telemetry --test native`

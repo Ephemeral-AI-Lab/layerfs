@@ -1,0 +1,44 @@
+{
+  "root": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-issue192-disk-xmh6c99h",
+  "mount": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-issue192-disk-xmh6c99h/volume",
+  "attachment": {
+    "system-entities": [
+      {
+        "content-hint": "Apple_HFS",
+        "dev-entry": "/dev/disk5s1",
+        "mount-point": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-issue192-disk-xmh6c99h/volume",
+        "potentially-mountable": true,
+        "unmapped-content-hint": "48465300-0000-11AA-AA11-00306543ECAC",
+        "volume-kind": "hfs"
+      },
+      {
+        "content-hint": "GUID_partition_scheme",
+        "dev-entry": "/dev/disk5",
+        "potentially-mountable": false,
+        "unmapped-content-hint": "GUID_partition_scheme"
+      }
+    ]
+  },
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-telemetry",
+    "--features",
+    "native",
+    "--test",
+    "full_disk",
+    "--",
+    "--ignored",
+    "--nocapture"
+  ],
+  "returncode": 101,
+  "wall_seconds": 0.8409735409986752,
+  "status": "FAIL",
+  "kind": "native functional fault proof",
+  "lock_sha256": "48d2c6f7ef507a5052e5f7377a9b203c7b4c6f3cad26bf38a66a6a4a4928437b"
+}

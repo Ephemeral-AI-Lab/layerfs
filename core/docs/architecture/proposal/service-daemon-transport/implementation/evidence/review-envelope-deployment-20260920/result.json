@@ -1,0 +1,328 @@
+{
+  "selection": "envelope",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "C-plus-one",
+      "status": "PASS",
+      "detail": {
+        "established": 4,
+        "excess_refused": true
+      }
+    },
+    {
+      "name": "maximum-connected-native-roles",
+      "status": "PASS",
+      "detail": {
+        "service": 1,
+        "daemons": 4,
+        "active_mutations": 1,
+        "telemetry": "forward",
+        "response_isolation": "four distinct byte ranges and hashes"
+      }
+    },
+    {
+      "name": "A-plus-one-Q-zero",
+      "status": "PASS",
+      "detail": {
+        "active": 1,
+        "excess_code": "Capacity"
+      }
+    }
+  ],
+  "status": "PASS",
+  "physical_envelope": {
+    "containers": [
+      {
+        "id": "dc6dc54ec655bebc424d805d00f7a3e9ee3c2f3731da3b0aa8ee0d425601e368",
+        "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a",
+        "memory_limit": 134217728,
+        "pids_limit": 16,
+        "memory": {
+          "usage": 811008,
+          "stats": {
+            "active_anon": 225280,
+            "active_file": 0,
+            "anon": 249856,
+            "anon_thp": 0,
+            "file": 0,
+            "file_dirty": 0,
+            "file_mapped": 0,
+            "file_writeback": 0,
+            "inactive_anon": 0,
+            "inactive_file": 0,
+            "kernel_stack": 65536,
+            "pgactivate": 0,
+            "pgdeactivate": 0,
+            "pgfault": 1091,
+            "pglazyfree": 0,
+            "pglazyfreed": 0,
+            "pgmajfault": 0,
+            "pgrefill": 0,
+            "pgscan": 0,
+            "pgsteal": 0,
+            "shmem": 0,
+            "slab": 407040,
+            "slab_reclaimable": 61176,
+            "slab_unreclaimable": 345864,
+            "sock": 0,
+            "thp_collapse_alloc": 0,
+            "thp_fault_alloc": 1,
+            "unevictable": 0,
+            "workingset_activate": 0,
+            "workingset_nodereclaim": 0,
+            "workingset_refault": 0
+          },
+          "limit": 134217728
+        },
+        "pids": {
+          "current": 4,
+          "limit": 16
+        }
+      },
+      {
+        "id": "24b5ae8ebba108963f290aab53c197eebdf72ac2f9946813c35545405411471d",
+        "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a",
+        "memory_limit": 134217728,
+        "pids_limit": 16,
+        "memory": {
+          "usage": 757760,
+          "stats": {
+            "active_anon": 221184,
+            "active_file": 0,
+            "anon": 221184,
+            "anon_thp": 0,
+            "file": 0,
+            "file_dirty": 0,
+            "file_mapped": 0,
+            "file_writeback": 0,
+            "inactive_anon": 0,
+            "inactive_file": 0,
+            "kernel_stack": 49152,
+            "pgactivate": 0,
+            "pgdeactivate": 0,
+            "pgfault": 1084,
+            "pglazyfree": 0,
+            "pglazyfreed": 0,
+            "pgmajfault": 0,
+            "pgrefill": 0,
+            "pgscan": 0,
+            "pgsteal": 0,
+            "shmem": 0,
+            "slab": 401504,
+            "slab_reclaimable": 60072,
+            "slab_unreclaimable": 341432,
+            "sock": 0,
+            "thp_collapse_alloc": 0,
+            "thp_fault_alloc": 1,
+            "unevictable": 0,
+            "workingset_activate": 0,
+            "workingset_nodereclaim": 0,
+            "workingset_refault": 0
+          },
+          "limit": 134217728
+        },
+        "pids": {
+          "current": 3,
+          "limit": 16
+        }
+      },
+      {
+        "id": "00594ce710ffadf3d99c6e5431afc0e3cda50e65df64a399e7724bd55e9e9f7c",
+        "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a",
+        "memory_limit": 134217728,
+        "pids_limit": 16,
+        "memory": {
+          "usage": 757760,
+          "stats": {
+            "active_anon": 217088,
+            "active_file": 0,
+            "anon": 217088,
+            "anon_thp": 0,
+            "file": 0,
+            "file_dirty": 0,
+            "file_mapped": 0,
+            "file_writeback": 0,
+            "inactive_anon": 0,
+            "inactive_file": 0,
+            "kernel_stack": 49152,
+            "pgactivate": 0,
+            "pgdeactivate": 0,
+            "pgfault": 982,
+            "pglazyfree": 0,
+            "pglazyfreed": 0,
+            "pgmajfault": 0,
+            "pgrefill": 0,
+            "pgscan": 0,
+            "pgsteal": 0,
+            "shmem": 0,
+            "slab": 401504,
+            "slab_reclaimable": 60072,
+            "slab_unreclaimable": 341432,
+            "sock": 0,
+            "thp_collapse_alloc": 0,
+            "thp_fault_alloc": 1,
+            "unevictable": 0,
+            "workingset_activate": 0,
+            "workingset_nodereclaim": 0,
+            "workingset_refault": 0
+          },
+          "limit": 134217728
+        },
+        "pids": {
+          "current": 3,
+          "limit": 16
+        }
+      },
+      {
+        "id": "04ccac9d470352ac228344ba1cda3a3140e10e319fc7a0323836d2ffe9234e75",
+        "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a",
+        "memory_limit": 134217728,
+        "pids_limit": 16,
+        "memory": {
+          "usage": 757760,
+          "stats": {
+            "active_anon": 221184,
+            "active_file": 0,
+            "anon": 221184,
+            "anon_thp": 0,
+            "file": 0,
+            "file_dirty": 0,
+            "file_mapped": 0,
+            "file_writeback": 0,
+            "inactive_anon": 0,
+            "inactive_file": 0,
+            "kernel_stack": 49152,
+            "pgactivate": 0,
+            "pgdeactivate": 0,
+            "pgfault": 986,
+            "pglazyfree": 0,
+            "pglazyfreed": 0,
+            "pgmajfault": 0,
+            "pgrefill": 0,
+            "pgscan": 0,
+            "pgsteal": 0,
+            "shmem": 0,
+            "slab": 401504,
+            "slab_reclaimable": 60072,
+            "slab_unreclaimable": 341432,
+            "sock": 0,
+            "thp_collapse_alloc": 0,
+            "thp_fault_alloc": 1,
+            "unevictable": 0,
+            "workingset_activate": 0,
+            "workingset_nodereclaim": 0,
+            "workingset_refault": 0
+          },
+          "limit": 134217728
+        },
+        "pids": {
+          "current": 3,
+          "limit": 16
+        }
+      }
+    ],
+    "service_pid": 37597,
+    "service_threads": "USER      PID   TT   %CPU STAT PRI     STIME     UTIME COMMAND\nyifanxu 37597   ??    0.0 S    31T   0:00.01   0:00.00 /Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/debug/layerfs-service\n        37597         0.0 S    31T   0:00.00   0:00.00 \n        37597         0.0 S    31T   0:00.00   0:00.00 \n        37597         0.0 S    31T   0:00.00   0:00.02 \n        37597         0.0 S    31T   0:00.00   0:00.00 \n        37597         0.0 S    31T   0:00.00   0:00.00 \n        37597         0.0 S    31T   0:00.00   0:00.00 \n",
+    "service_sockets": "COMMAND     PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nlayerfs-s 37597 yifanxu    3u  IPv4 0x6b1a9b8b8daf6e95      0t0  TCP *:54554 (LISTEN)\nlayerfs-s 37597 yifanxu    4u  IPv4 0xf713a6b1f782b58d      0t0  TCP 127.0.0.1:54554->127.0.0.1:54557 (ESTABLISHED)\nlayerfs-s 37597 yifanxu    5u  IPv4 0xf713a6b1f782b58d      0t0  TCP 127.0.0.1:54554->127.0.0.1:54557 (ESTABLISHED)\nlayerfs-s 37597 yifanxu    6u  IPv4 0xd13a8e65735a31b8      0t0  TCP 127.0.0.1:54554->127.0.0.1:54558 (ESTABLISHED)\nlayerfs-s 37597 yifanxu    7u  IPv4 0xd13a8e65735a31b8      0t0  TCP 127.0.0.1:54554->127.0.0.1:54558 (ESTABLISHED)\nlayerfs-s 37597 yifanxu    8u  IPv4 0x8b74acfb1e125bd2      0t0  TCP 127.0.0.1:54554->127.0.0.1:54559 (ESTABLISHED)\nlayerfs-s 37597 yifanxu    9u  IPv4 0x8b74acfb1e125bd2      0t0  TCP 127.0.0.1:54554->127.0.0.1:54559 (ESTABLISHED)\nlayerfs-s 37597 yifanxu   10u  IPv4 0x1b1bc9f763f947c1      0t0  TCP 127.0.0.1:54554->127.0.0.1:54560 (ESTABLISHED)\nlayerfs-s 37597 yifanxu   11u  IPv4 0x1b1bc9f763f947c1      0t0  TCP 127.0.0.1:54554->127.0.0.1:54560 (ESTABLISHED)\n",
+    "stack_regions": [
+      "Stack                             16.7M     400K     400K       0K       0K       0K       0K        7 ",
+      "Stack Guard                       56.0M       0K       0K       0K       0K       0K       0K        1 "
+    ],
+    "vmmap_status": 0,
+    "vmmap_unavailable": null,
+    "service_connection_stack_request_bytes": 8388608,
+    "service_telemetry_stack_request_bytes": 524288,
+    "active_daemon_upload_stack_request_bytes": 2097152,
+    "daemon_telemetry_stack_request_bytes": 2097152,
+    "connected_socket_buffer_ceiling_bytes": 4194304,
+    "socket_cap_evidence": "every successful native handshake executes checked setsockopt/getsockopt at both endpoints; refused accept slot/backlog remain OS-owned additional domains",
+    "phase_peak": "unavailable; sampled process/cgroup observations are not additive exclusive-operation costs"
+  },
+  "diagnostics": [
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":38958,\"incarnation\":1001010167754,\"user_ns\":3226000,\"source\":\"getrusage+libproc\",\"probe_ns\":6500,\"selected\":3,\"system_ns\":6171000,\"rss\":4636672}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"operation\",\"key\":1,\"timing\":{  \"name\": \"ReadFile\",  \"elapsed_ns\": 2857375,  \"children\": [    {      \"name\": \"service.read\",      \"elapsed_ns\": 2684958,      \"children\": [        {\"name\": \"content.acquire\", \"elapsed_ns\": 2581625, \"children\": []},        {\"name\": \"content.emit\", \"elapsed_ns\": 78667, \"children\": []}      ]    }  ]},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":203198208,\"opened_ns\":235238875,\"closed_ns\":238167833,\"last_ns\":203198208,\"incarnation\":1001010167754,\"largest_gap_ns\":0,\"source\":\"getrusage+libproc\",\"last_probe_ns\":16459,\"selected\":3,\"sampled_max_rss\":4636672}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"operation\",\"key\":11,\"timing\":{  \"name\": \"ReadFile\",  \"elapsed_ns\": 1704041,  \"children\": [    {      \"name\": \"service.read\",      \"elapsed_ns\": 1544083,      \"children\": [        {\"name\": \"content.acquire\", \"elapsed_ns\": 1469166, \"children\": []},        {\"name\": \"content.emit\", \"elapsed_ns\": 69000, \"children\": []}      ]    }  ]},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":302918458,\"opened_ns\":374758292,\"closed_ns\":376469792,\"last_ns\":302918458,\"incarnation\":1001010167754,\"largest_gap_ns\":0,\"source\":\"getrusage+libproc\",\"last_probe_ns\":17875,\"selected\":3,\"sampled_max_rss\":7258112}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"operation\",\"key\":21,\"timing\":{  \"name\": \"ReadFile\",  \"elapsed_ns\": 1845875,  \"children\": [    {      \"name\": \"service.read\",      \"elapsed_ns\": 1594125,      \"children\": [        {\"name\": \"content.acquire\", \"elapsed_ns\": 1505459, \"children\": []},        {\"name\": \"content.emit\", \"elapsed_ns\": 82334, \"children\": []}      ]    }  ]},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":405035167,\"opened_ns\":494092333,\"closed_ns\":495947417,\"last_ns\":405035167,\"incarnation\":1001010167754,\"largest_gap_ns\":0,\"source\":\"getrusage+libproc\",\"last_probe_ns\":17792,\"selected\":3,\"sampled_max_rss\":8617984}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"operation\",\"key\":31,\"timing\":{  \"name\": \"ReadFile\",  \"elapsed_ns\": 1636583,  \"children\": [    {      \"name\": \"service.read\",      \"elapsed_ns\": 1392083,      \"children\": [        {\"name\": \"content.acquire\", \"elapsed_ns\": 1339375, \"children\": []},        {\"name\": \"content.emit\", \"elapsed_ns\": 47959, \"children\": []}      ]    }  ]},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":601168875,\"opened_ns\":627185167,\"closed_ns\":628830833,\"last_ns\":601168875,\"incarnation\":1001010167754,\"largest_gap_ns\":0,\"source\":\"getrusage+libproc\",\"last_probe_ns\":10916,\"selected\":3,\"sampled_max_rss\":8798208}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1003335833,\"incarnation\":1001010167754,\"user_ns\":32239000,\"source\":\"getrusage+libproc\",\"probe_ns\":56250,\"selected\":3,\"system_ns\":11945000,\"rss\":26001408}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":2140437083,\"incarnation\":1001010167754,\"user_ns\":32326000,\"source\":\"getrusage+libproc\",\"probe_ns\":14542,\"selected\":3,\"system_ns\":12100000,\"rss\":26001408}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"operation\",\"key\":12,\"timing\":{\"name\": \"ConstructFile\", \"elapsed_ns\": 4209, \"outcome\": \"error\", \"children\": []},\"success\":false,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":2140437083,\"opened_ns\":2197551792,\"closed_ns\":2197567375,\"last_ns\":2140437083,\"incarnation\":1001010167754,\"largest_gap_ns\":0,\"source\":\"getrusage+libproc\",\"last_probe_ns\":14542,\"selected\":3,\"sampled_max_rss\":26001408}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"kind\":\"operation\",\"key\":2,\"timing\":{  \"name\": \"ConstructFile\",  \"elapsed_ns\": 1381529709,  \"outcome\": \"error\",  \"children\": [    {\"name\": \"service.begin_save\", \"elapsed_ns\": 15045250, \"children\": []},    {      \"name\": \"service.construct\",      \"elapsed_ns\": 1365700167,      \"outcome\": \"error\",      \"children\": [        {\"name\": \"content.probe\", \"elapsed_ns\": 1365689458, \"outcome\": \"error\", \"children\": []}      ]    },    {\"name\": \"service.abort\", \"elapsed_ns\": 673625, \"children\": []}  ]},\"success\":false,\"resource_status\":\"sampled\",\"samples\":6,\"gaps\":9,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":805035292,\"opened_ns\":819721417,\"closed_ns\":2201260667,\"last_ns\":2201078083,\"incarnation\":1001010167754,\"largest_gap_ns\":1038911416,\"source\":\"getrusage+libproc\",\"last_probe_ns\":14084,\"selected\":3,\"sampled_max_rss\":26050560}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":37597,\"role\":1,\"namespace\":1,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":1,\"timing\":{\"name\": \"ReadFile\", \"elapsed_ns\": 3777125, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":126709,\"opened_ns\":13405792,\"closed_ns\":17196667,\"last_ns\":126709,\"incarnation\":2270,\"largest_gap_ns\":0,\"source\":\"procfs+sysconf\",\"last_probe_ns\":53834,\"selected\":3,\"sampled_max_rss\":1355776}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1005425043,\"incarnation\":2270,\"user_ns\":10000000,\"source\":\"procfs+sysconf\",\"probe_ns\":57458,\"selected\":3,\"system_ns\":0,\"rss\":1355776}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":2,\"timing\":{\"name\": \"ConstructFile\", \"elapsed_ns\": 1382508376, \"outcome\": \"error\", \"children\": []},\"success\":false,\"resource_status\":\"sampled\",\"samples\":15,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":[10000000,0],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":500749501,\"opened_ns\":597893417,\"closed_ns\":1980408335,\"last_ns\":1905708335,\"incarnation\":2270,\"largest_gap_ns\":105031167,\"source\":\"procfs+sysconf\",\"last_probe_ns\":65166,\"selected\":3,\"sampled_max_rss\":1355776}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"namespace\":11,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}",
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":12,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":102208,\"incarnation\":2286,\"user_ns\":10000000,\"source\":\"procfs+sysconf\",\"probe_ns\":45500,\"selected\":3,\"system_ns\":0,\"rss\":1486848}",
+        "LFT1 {\"v\":1,\"namespace\":12,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":11,\"timing\":{\"name\": \"ReadFile\", \"elapsed_ns\": 2186833, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":102208,\"opened_ns\":56625,\"closed_ns\":2248375,\"last_ns\":102208,\"incarnation\":2286,\"largest_gap_ns\":0,\"source\":\"procfs+sysconf\",\"last_probe_ns\":45500,\"selected\":3,\"sampled_max_rss\":1486848}",
+        "LFT1 {\"v\":1,\"namespace\":12,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1003887375,\"incarnation\":2286,\"user_ns\":10000000,\"source\":\"procfs+sysconf\",\"probe_ns\":66583,\"selected\":3,\"system_ns\":0,\"rss\":1486848}",
+        "LFT1 {\"v\":1,\"namespace\":12,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":12,\"timing\":{\"name\": \"ConstructFile\", \"elapsed_ns\": 969583, \"outcome\": \"error\", \"children\": []},\"success\":false,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":1804522084,\"opened_ns\":1822533167,\"closed_ns\":1823513792,\"last_ns\":1804522084,\"incarnation\":2286,\"largest_gap_ns\":0,\"source\":\"procfs+sysconf\",\"last_probe_ns\":106958,\"selected\":3,\"sampled_max_rss\":1486848}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"namespace\":12,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}",
+        "Error: Capacity unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":13,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":136625,\"incarnation\":2297,\"user_ns\":0,\"source\":\"procfs+sysconf\",\"probe_ns\":58250,\"selected\":3,\"system_ns\":0,\"rss\":1486848}",
+        "LFT1 {\"v\":1,\"namespace\":13,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":21,\"timing\":{\"name\": \"ReadFile\", \"elapsed_ns\": 2386666, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":136625,\"opened_ns\":71625,\"closed_ns\":2463750,\"last_ns\":136625,\"incarnation\":2297,\"largest_gap_ns\":0,\"source\":\"procfs+sysconf\",\"last_probe_ns\":58250,\"selected\":3,\"sampled_max_rss\":1486848}",
+        "LFT1 {\"v\":1,\"namespace\":13,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1000284167,\"incarnation\":2297,\"user_ns\":0,\"source\":\"procfs+sysconf\",\"probe_ns\":47792,\"selected\":3,\"system_ns\":0,\"rss\":1486848}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"namespace\":13,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":14,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":144417,\"incarnation\":2310,\"user_ns\":10000000,\"source\":\"procfs+sysconf\",\"probe_ns\":39625,\"selected\":3,\"system_ns\":0,\"rss\":1417216}",
+        "LFT1 {\"v\":1,\"namespace\":14,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":31,\"timing\":{\"name\": \"ReadFile\", \"elapsed_ns\": 2191000, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":144417,\"opened_ns\":74917,\"closed_ns\":2275292,\"last_ns\":144417,\"incarnation\":2310,\"largest_gap_ns\":0,\"source\":\"procfs+sysconf\",\"last_probe_ns\":39625,\"selected\":3,\"sampled_max_rss\":1417216}",
+        "LFT1 {\"v\":1,\"namespace\":14,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1001774418,\"incarnation\":2310,\"user_ns\":10000000,\"source\":\"procfs+sysconf\",\"probe_ns\":59875,\"selected\":3,\"system_ns\":0,\"rss\":1417216}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"namespace\":14,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Io unknown=false cleanup=None"
+      ],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a"
+}

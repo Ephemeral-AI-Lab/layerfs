@@ -65,13 +65,18 @@ operation's actual result. Internal object-provider calls stay local.
                                                  native SQLite, initially
 ```
 
-There is **one bridge library**, containing the shared logical contract, one
-frame encoder/decoder and the client/server endpoint code. Its client runs in
-the daemon; its server endpoint calls the service's concrete handler. These are
-the two ends of one bridge, not independent bridge implementations or a third
-process. A direct call reaches that same handler without invoking the wire codec;
-it is not a second bridge. No mandatory dispatch trait or handler registry is
-needed for this composition.
+There is **one shared bridge contract**, organized separately from delivery
+adapters in the initial bridge crate. The native adapter contains one frame
+encoder/decoder and client/server endpoints: its client runs in the daemon and
+its server calls the service's concrete handler. These are endpoints, not an
+extra bridge process. Future HTTP/WebSocket adapters can use the same logical
+contract with different carrier mappings; the [folder proposal](02-file-layout-and-boundaries.md)
+keeps that extension separate from C2 database-provider adaptation.
+
+A direct call reaches the same service handler without invoking a wire codec;
+it does not require a second bridge implementation. No mandatory dispatch trait
+or handler registry is needed for the initial composition. Actual interchangeable
+future clients can justify a small operation-level selection boundary.
 
 The bridge does not replace C1's canonical object grammar or C2's physical
 format. A logical read may traverse many mapping pages and packs entirely inside the service; a logical

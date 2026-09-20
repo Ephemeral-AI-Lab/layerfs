@@ -1,0 +1,23 @@
+{
+  "checkpoint": "M3-to-M4",
+  "source_commit": "e54af84653cd1a22b3f26631dbd19eafb895a7b4",
+  "mode": "selective integration of committed files; no uncommitted or benchmark source/evidence imported",
+  "files": {
+    "core/crates/layerfs-content/src/filesystem/update.rs": {
+      "before_sha256": "ff36c4248cc186dfc8e1e2812d59fda458740d20b125c31c9ad1c9918c3d7f7e",
+      "after_sha256": "8d4762d1750284536f03a066931ac01fe1213aaee2ff273a7ffaaf2cbe98f8a7"
+    },
+    "core/crates/layerfs-content/tests/filesystem_bounds.rs": {
+      "before_sha256": "6fee63df7778be76db491f87d4dd1f252dd57784251ebd89ecdbc8858653bd52",
+      "after_sha256": "bc9f0f4c266f388938745a4eaad0e4307fc8fd9174e3ef9a66c232568977bc20"
+    },
+    "core/crates/layerfs-content/tests/filesystem_parent_lookup.rs": {
+      "before_sha256": null,
+      "after_sha256": "aa78b9e41baf0b98c3afacaf93085e877828caa40020c0d95bb6a6c3ecd84c8f"
+    },
+    "core/docs/architecture/04-filesystem.md": {
+      "before_sha256": "fca92932ae16d8a13625f2c0d0721151a7a40259efd98b346c294959fe6a5e35",
+      "after_sha256": "c1e98b02e0b72683a00aea8c7a83715cd94ab6ff82002dd5904ef3f6d5d83a37"
+    }
+  }
+}

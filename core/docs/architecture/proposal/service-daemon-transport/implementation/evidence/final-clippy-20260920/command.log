@@ -1,0 +1,18 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-service)
+error: manual `RangeInclusive::contains` implementation
+  --> crates/layerfs-telemetry/tests/full_disk.rs:18:9
+   |
+18 |         filesystem_bytes <= 64 * 1024 * 1024 && filesystem_bytes >= 8 * 1024 * 1024,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(8 * 1024 * 1024..=64 * 1024 * 1024).contains(&filesystem_bytes)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+   = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: could not compile `layerfs-telemetry` (test "full_disk") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

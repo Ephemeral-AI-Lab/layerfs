@@ -1,0 +1,47 @@
+{
+  "selection": "lost-response",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "lost-result-after-confirmed-save",
+      "status": "PASS",
+      "detail": {
+        "withheld_ciphertext_bytes": 93,
+        "daemon_code": "Unknown",
+        "unknown": true,
+        "saved_root_readable": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+        "replayed": false,
+        "proxy_scope": "external fault controller; encrypted result deliberately withheld"
+      }
+    }
+  ],
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Unknown unknown=true cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "image": "sha256:bab1522c12fd2b5f2dc75b21102f08190ea473faa3f15cb2baf3143afc8d7b0a"
+}

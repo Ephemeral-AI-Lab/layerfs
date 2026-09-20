@@ -1,0 +1,174 @@
+{
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "image": "sha256:e8e242c78c53d1312b70a0d9b6d6384754e11186e79bb183c501cbe89496105e",
+  "telemetry": "off",
+  "cases": [
+    {
+      "id": "V02",
+      "selection": "500000-byte construct",
+      "status": "PASS",
+      "root": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be"
+    },
+    {
+      "id": "V03",
+      "selection": "exact full readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "replace and readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V06",
+      "selection": "existing inode content attachment and stat",
+      "status": "PASS"
+    },
+    {
+      "id": "V04",
+      "selection": "File, Stat, two paged List calls, Readlink",
+      "status": "PASS"
+    },
+    {
+      "id": "V02",
+      "selection": "empty and 131071/131072/131073 cutoff boundaries",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "no-op, insert and delete",
+      "status": "PASS"
+    },
+    {
+      "id": "V16",
+      "status": "PASS",
+      "selection": "read-only scratch image, no mounts/devices/changed files"
+    },
+    {
+      "id": "V17",
+      "selection": "all five operations, identical roots and save counts from an independent pristine Store copy",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "fixture": {
+    "root": "f77575c1f2bad170b11f580471d914ec78c2adb17f432e5084435eab5fe28e54",
+    "scope": "27ef987c298fe365e3637d2a85267beec50fe0b734be6f0aa2be72c9a8382574",
+    "file": "cb09a5b37b219deeceded9f45cce0bbf471e7ebedcaf4c91ed254d16e1c6562e",
+    "metadata": "312fe7a8867620f01b89e8a886d40cca367840853233e6ee7159ed3e27fdd409"
+  },
+  "fixture_copy": "closed independent byte copy",
+  "service_pid": 96026,
+  "ready": "layerfs-service ready 0.0.0.0:54197",
+  "container": {
+    "id": "dd42c8c4c9f3cc716941147bc810bc815ec163f38db1101eb460d2e4be1e4e7d",
+    "image": "sha256:e8e242c78c53d1312b70a0d9b6d6384754e11186e79bb183c501cbe89496105e",
+    "mounts": [],
+    "logging": {
+      "Type": "none",
+      "Config": {}
+    },
+    "readonly": true,
+    "devices": [],
+    "pid": 569,
+    "network": {
+      "bridge": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": null,
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "c6253c53e2b25d295ff7d13a3410829d03773981a9cf3fb70321798bd44531f6",
+        "EndpointID": "9eb57f41e067e1cf23a0e5ee95c467560d0e688581219ac49b0539d844306c85",
+        "Gateway": "172.17.0.1",
+        "IPAddress": "172.17.0.2",
+        "MacAddress": "6e:bc:15:0e:70:5b",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": null
+      }
+    }
+  },
+  "diff": "",
+  "observed_host_sockets": "COMMAND     PID    USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nlayerfs-s 96026 yifanxu    3u  IPv4 0x27ea861a41777140      0t0  TCP *:54197 (LISTEN)\nlayerfs-s 96026 yifanxu    4u  IPv4 0xe2ac3de303b70f5e      0t0  TCP 127.0.0.1:54197->127.0.0.1:54200 (ESTABLISHED)\nlayerfs-s 96026 yifanxu    5u  IPv4 0xe2ac3de303b70f5e      0t0  TCP 127.0.0.1:54197->127.0.0.1:54200 (ESTABLISHED)\n",
+  "container_memory_observation": {
+    "scope": "enclosing container cgroup; not additive with process RSS",
+    "source": "Docker Engine stats one-shot",
+    "read": "2026-09-20T02:28:21.296195959Z",
+    "memory_stats": {
+      "usage": 880640,
+      "stats": {
+        "active_anon": 73728,
+        "active_file": 135168,
+        "anon": 192512,
+        "anon_thp": 0,
+        "file": 135168,
+        "file_dirty": 0,
+        "file_mapped": 0,
+        "file_writeback": 0,
+        "inactive_anon": 0,
+        "inactive_file": 49152,
+        "kernel_stack": 16384,
+        "pgactivate": 0,
+        "pgdeactivate": 0,
+        "pgfault": 5762,
+        "pglazyfree": 80,
+        "pglazyfreed": 0,
+        "pgmajfault": 0,
+        "pgrefill": 0,
+        "pgscan": 0,
+        "pgsteal": 0,
+        "shmem": 0,
+        "slab": 387008,
+        "slab_reclaimable": 60272,
+        "slab_unreclaimable": 326736,
+        "sock": 0,
+        "thp_collapse_alloc": 0,
+        "thp_fault_alloc": 1,
+        "unevictable": 0,
+        "workingset_activate": 0,
+        "workingset_nodereclaim": 0,
+        "workingset_refault": 0
+      },
+      "limit": 134217728
+    },
+    "phase_peak": "unavailable; lifetime counters are not reset phase peaks"
+  },
+  "service_exit": 0,
+  "daemon_exit": 0,
+  "direct_parity": {
+    "file": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be",
+    "edited": "5967b9c8a25b57590b81089d490ed7e2ce2523c2b05dc0431276c77a66da4284",
+    "tree": "41470684ff59d80006d958f3f2fce1c5d6a3e0f0b50d1f12572d898afbde34d3",
+    "file_counts": [
+      18,
+      0
+    ],
+    "edit_counts": [
+      3,
+      0
+    ],
+    "tree_counts": [
+      2,
+      0
+    ]
+  },
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "lock_sha256": "48d2c6f7ef507a5052e5f7377a9b203c7b4c6f3cad26bf38a66a6a4a4928437b",
+  "service_sha256": "6a59e8c18bc6afe459a070bb2734b0450af82d6e5c80566c3cab95ca12de72e2",
+  "daemon_sha256": "c426109f416a53e2d9f773ae2d88e12fb450d9d57f19e94239e3784ba32c13cb"
+}

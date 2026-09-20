@@ -1,0 +1,33 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 250B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 12.17MB 0.1s done
+#3 DONE 0.1s
+
+#4 [1/2] COPY layerfs-daemon /layerfs-daemon
+#4 DONE 0.0s
+
+#5 [2/2] COPY --chown=65532:65532 --chmod=0700 logs /logs
+#5 DONE 0.0s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.4s done
+#6 exporting manifest sha256:e4a241c83dcb2e5b600563f45703f7d0ba69440f1637042477ad4fcff6701b21
+#6 exporting manifest sha256:e4a241c83dcb2e5b600563f45703f7d0ba69440f1637042477ad4fcff6701b21 done
+#6 exporting config sha256:5605573119268291140ebbd34c96bc9cd9ce63b419f9eeba1792c8cb571f46c6 done
+#6 exporting attestation manifest sha256:7c24e3b3fcb42308dcbdf20747a7b9e3bfb0294a916ba8306914f2bc0c82f490 0.0s done
+#6 exporting manifest list sha256:e8e242c78c53d1312b70a0d9b6d6384754e11186e79bb183c501cbe89496105e done
+#6 naming to docker.io/library/layerfs-issue192:c426109f416a53e2 done
+#6 unpacking to docker.io/library/layerfs-issue192:c426109f416a53e2 0.1s done
+#6 DONE 0.5s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/uq18ngvugyzlmolpspa8a3pre

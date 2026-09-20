@@ -1,0 +1,16 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.43s
+     Running tests/native.rs (core/target/debug/deps/native-b87fb1b279e92834)
+
+running 8 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test native_cpu_units_match_posix_process_counters ... ok
+test concurrent_final_handles_release_the_owned_writer ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test output_failure_is_independent_and_encoding_is_valid ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 92, in <module>
+    if __name__=="__main__":main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 59, in main
+    result=receive(child);assert result[0]==7,result;child.stdin.close();child.wait(timeout=3);passed("slow-upload-deadline",{"code":result[1][0],"unknown":bool(result[1][1]),"requested_deadline_ms":250})
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 22, in receive
+    h=read_exact(process.stdout.fileno(),20,end)
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 16, in read_exact
+    if not part: raise EOFError("terminal response missing")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EOFError: terminal response missing

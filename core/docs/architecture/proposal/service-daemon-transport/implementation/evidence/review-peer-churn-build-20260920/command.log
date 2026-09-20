@@ -1,0 +1,17 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+error[E0599]: no method named `transpose` found for enum `Result<Result<usize, ParseIntError>, VarError>` in the current scope
+  --> crates/layerfs-bridge/examples/fault_peer.rs:10:10
+   |
+8  |       let rounds = std::env::var("LAYERFS_FAULT_PEER_ROUNDS")
+   |  __________________-
+9  | |         .map(|value| value.parse::<usize>())
+10 | |         .transpose()?
+   | |         -^^^^^^^^^ method not found in `Result<Result<usize, ParseIntError>, VarError>`
+   | |_________|
+   |
+   |
+   = note: the method was found for
+           - `Result<Option<T>, E>`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-bridge` (example "fault_peer") due to 1 previous error

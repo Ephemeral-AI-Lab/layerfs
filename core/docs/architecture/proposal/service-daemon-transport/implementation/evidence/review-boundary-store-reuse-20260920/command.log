@@ -1,0 +1,20 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running tests/edit_bounds.rs (core/target/debug/deps/edit_bounds-18f8d66de52539e4)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+test the_edit_stream_ceiling_is_enforced_before_any_work ... ok
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.32s
+

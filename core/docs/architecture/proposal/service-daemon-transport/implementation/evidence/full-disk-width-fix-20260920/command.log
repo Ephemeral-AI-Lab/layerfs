@@ -1,0 +1,10 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running tests/full_disk.rs (core/target/debug/deps/full_disk-4bc23a88393b32f3)
+
+running 1 test
+filesystem_bytes=33513472 filler_bytes=32727040 native_error=ENOSPC output_failures=1 original_result=Err(42)
+test actual_enospc_preserves_the_original_result ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

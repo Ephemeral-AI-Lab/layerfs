@@ -1,0 +1,30 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running tests/native.rs (core/target/debug/deps/native-b87fb1b279e92834)
+
+running 7 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test native_cpu_units_match_posix_process_counters ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test output_failure_is_independent_and_encoding_is_valid ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/off_allocations.rs (core/target/debug/deps/off_allocations-5048453c011fafd8)
+
+running 1 test
+test master_off_allocates_nothing_after_configuration_is_supplied ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_allocations.rs (core/target/debug/deps/owned_allocations-69e30f226198d4c5)
+
+running 1 test
+two hosted producer roles, 16 simultaneous 256-node report owners: observed additional heap high-water=462540 bytes; combined producer ownership allowance=16777216 bytes; excludes OS stacks, kernel buffers and allocator metadata
+test two_hosted_roles_retain_full_recording_pools_under_combined_heap_budget ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

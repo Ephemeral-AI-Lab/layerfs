@@ -1,0 +1,61 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 154B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 10.66MB 0.1s done
+#3 DONE 0.1s
+
+#4 [1/2] COPY tests /tests
+#4 DONE 0.0s
+
+#5 [2/2] COPY --chown=65532:65532 --chmod=1777 tmp /tmp
+#5 DONE 0.0s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.3s done
+#6 exporting manifest sha256:12ad60697c40cdc2fc76a4185ad14fa1e4867c616739d3172a1b6ea5f1cb07c3 done
+#6 exporting config sha256:75140051ae29e676956dd57b9b4d2e2de9eef59b23d1a4086e1a17ce74b05610 done
+#6 exporting attestation manifest sha256:a4c607618a27b877eabefb1a6e4d3848f41618e09a9346225fbc59347c4701f6 0.0s done
+#6 exporting manifest list sha256:a027c5b98643a5bba223de4e782545b436c1c106b8653dcd5d3d7c89040efa0e done
+#6 naming to docker.io/library/layerfs-issue192-native:7cc219c32269d478 done
+#6 unpacking to docker.io/library/layerfs-issue192-native:7cc219c32269d478 0.0s done
+#6 DONE 0.4s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/7rgkt0eo5ovc8zv6614sbx520
+
+running 7 tests
+test concurrent_final_handles_release_the_owned_writer ... ok
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+test output_failure_is_independent_and_encoding_is_valid ... 
+thread 'output_failure_is_independent_and_encoding_is_valid' panicked at crates/layerfs-telemetry/tests/native.rs:186:224:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+
+failures:
+
+failures:
+    output_failure_is_independent_and_encoding_is_valid
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+Traceback (most recent call last):
+  File "/tmp/layerfs192-linux-native.py", line 11, in <module>
+    command=['docker','run','--name',name,'--label=io.layerfs.task=issue192','--log-driver=none','--cpus=1','--memory=32m','--memory-swap=32m','--pids-limit=16','--cap-drop=ALL',image,'--nocapture'];subprocess.run(command,check=True,timeout=10)
+                                                                                                                                                                                                       ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['docker', 'run', '--name', 'layerfs-issue192-retention-37904', '--label=io.layerfs.task=issue192', '--log-driver=none', '--cpus=1', '--memory=32m', '--memory-swap=32m', '--pids-limit=16', '--cap-drop=ALL', 'sha256:a027c5b98643a5bba223de4e782545b436c1c106b8653dcd5d3d7c89040efa0e', '--nocapture']' returned non-zero exit status 101.

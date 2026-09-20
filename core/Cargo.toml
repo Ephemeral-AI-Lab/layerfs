@@ -9,6 +9,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/layerfs-daemon",
+    "crates/layerfs-bridge",
+    "crates/layerfs-service",
     "crates/layerfs-content",
     "crates/layerfs-storage",
     "crates/layerfs-telemetry",

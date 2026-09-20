@@ -1,0 +1,191 @@
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-service)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.80s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_bridge-a5bc03303d5c7204)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/protocol.rs (core/target/debug/deps/protocol-721e9153f1f63800)
+
+running 3 tests
+test terminal_types_and_explicit_continuation_roundtrip ... ok
+test all_operation_metadata_roundtrips_and_caps_are_checked ... ok
+test fixed_framing_rejects_lengths_states_and_truncations ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/target/debug/deps/layerfs_daemon-151dcf0a7f58ac71)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_service-7af0335427f77e65)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/target/debug/deps/layerfs_service-b7d3120658f31426)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/direct.rs (core/target/debug/deps/direct-1baf3bf2b6194888)
+
+running 3 tests
+test authenticated_network_after_nonblocking_accept ... ok
+test denial_partial_and_invalid_inputs_never_succeed ... ok
+test construct_read_edit_inspect_and_reopen ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_telemetry-16b74e88bf2ded55)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/full_disk.rs (core/target/debug/deps/full_disk-b1ebfa1c9795b091)
+
+running 1 test
+test actual_enospc_preserves_the_original_result ... ignored, requires a dedicated disposable filesystem no larger than 64 MiB
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native.rs (core/target/debug/deps/native-1e3292276dcd7529)
+
+running 7 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test native_cpu_units_match_posix_process_counters ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+test output_failure_is_independent_and_encoding_is_valid ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/observations.rs (core/target/debug/deps/observations-3b34ada6ceb30bd9)
+
+running 2 tests
+test optional_windows_release_on_return_error_and_unwind ... ok
+test long_shared_windows_preserve_first_and_sampled_max ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/off_allocations.rs (core/target/debug/deps/off_allocations-0a43f4b22a62d633)
+
+running 1 test
+test master_off_allocates_nothing_after_configuration_is_supplied ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_allocations.rs (core/target/debug/deps/owned_allocations-8afb7282a5cf7592)
+
+running 1 test
+test two_hosted_roles_retain_full_recording_pools_under_combined_heap_budget ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/stalled_output.rs (core/target/debug/deps/stalled_output-a13b8fb13e02cf1b)
+
+running 2 tests
+test stalled_writer_child ... ignored, subprocess helper; invoked by blocked_native_stderr_preserves_result_and_process_exit
+test blocked_native_stderr_preserves_result_and_process_exit ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+     Running tests/timer.rs (core/target/debug/deps/timer-ee0d52e623311ef4)
+
+running 21 tests
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test disabled_and_clipped_reports_are_distinguishable ... ok
+test a_parent_can_recover_from_a_child_error ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test attached_reports_become_owned_children ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test uncalled_operations_have_no_node ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_bounds.rs (core/target/debug/deps/timer_bounds-5b7213fdc84910c5)
+
+running 3 tests
+test public_labels_are_normalized_before_attachment ... ok
+test owned_capacity_is_not_retained ... ok
+test recording_budget_pool_unwind_and_encoding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_compile_fail.rs (core/target/debug/deps/timer_compile_fail-3ca3db78efcc5c16)
+
+running 1 test
+test external_compile_fail_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+     Running tests/timer_format.rs (core/target/debug/deps/timer_format-e9322eef0a9a67f8)
+
+running 6 tests
+test disabled_report_is_explicit ... ok
+test labels_are_escaped_for_display ... ok
+test a_real_recording_renders_its_structure ... ok
+test markers_show_error_and_missing_detail ... ok
+test writer_failures_propagate ... ok
+test text_renders_a_readable_tree ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_json.rs (core/target/debug/deps/timer_json-08d506307fcd90ea)
+
+running 10 tests
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test writer_failures_propagate ... ok
+test a_flush_failure_is_surfaced ... ok
+test a_disabled_report_serializes_to_null ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test a_real_recording_round_trips_through_json ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test json_matches_the_documented_shape ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+   Doc-tests layerfs_bridge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_service
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_telemetry
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

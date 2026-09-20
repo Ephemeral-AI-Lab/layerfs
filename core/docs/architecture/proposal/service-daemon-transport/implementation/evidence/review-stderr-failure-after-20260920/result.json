@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "core/crates/layerfs-service/tests/exit_failure.py",
+    "--binary",
+    "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/debug/layerfs-service"
+  ],
+  "status": "FAIL",
+  "returncode": 1,
+  "wall_seconds": 1.0935818340003607,
+  "source_unchanged": true,
+  "head": "5f637f17c17d134deb6b567dfcbd290b112457d8",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2
+}

@@ -31,7 +31,10 @@ is not a prerequisite. Pair 3's scope is now specified. The detailed
 [service/daemon/transport design packet](service-daemon-transport/README.md)
 provides deployment diagrams, file boundaries, proposed operations and resource
 accounting, including the later pair 1 integration. Protocol freeze,
-implementation and acceptance evidence remain open.
+implementation and acceptance evidence remain open. The
+[implementation packet](service-daemon-transport/implementation/README.md) now
+defines milestones, telemetry wiring and verification; its M0 contract freeze
+remains explicit and incomplete until the implementation choices are recorded.
 
 ## 2. Components and concrete topology
 
@@ -104,7 +107,9 @@ edit replay in capped service memory. Docker's ordinary image/runtime files are
 not excluded by this application-data rule. Pair 1 introduces actual Workspace
 backing and mounted filesystem behavior later.
 
-The initial operation surface covers read/inspect, complete-file construction and
+The [public operation catalog](service-daemon-transport/07-public-operations.md)
+maps the initial caller surface to C1/C2 and distinguishes public operations from
+service-local storage calls. The initial surface covers read/inspect, complete-file construction and
 save, known file edits and save, and a filesystem update against a prepared base
 where supported. C1 directory updates contain sorted final bindings for changed
 names, not a resend of every unchanged directory entry. New-inode operations need
