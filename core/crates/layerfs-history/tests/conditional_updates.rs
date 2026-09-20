@@ -390,3 +390,125 @@ fn a_commit_whose_root_equals_its_base_is_no_changes() {
         AddLayerOutcome::NoChanges { head: fixture.base }
     );
 }
+
+#[test]
+fn two_branches_commit_independently_and_one_wins_the_stack_head() {
+    let fixture = fixture("conditional-branches");
+    let sibling = branch_id(0x13);
+    fixture
+        .catalog
+        .fork(&ForkRequest {
+            stack: fixture.stack,
+            branch: sibling,
+            name: name("sibling"),
+            source: ForkSource::Layer(fixture.base),
+        })
+        .unwrap();
+    let mut heads = Vec::new();
+    for (body, candidate) in [(0x71u8, root(0xa0)), (0x72, root(0xa1))] {
+        let identity = if body == 0x71 {
+            fixture.branch
+        } else {
+            sibling
+        };
+        let staged = fixture
+            .catalog
+            .stage_changes(&StageRequest {
+                workspace: workspace(body),
+                branch: identity,
+                expected_head: None,
+                expected_base: fixture.base,
+                expected_root: fixture.root,
+                construction_base_root: fixture.root,
+                intended_commit_base: fixture.base,
+                candidate_root: candidate,
+                profile: root(0x42),
+                scope: root(0x41),
+                generation: 1,
+            })
+            .unwrap();
+        heads.push(
+            match fixture
+                .catalog
+                .commit_staged(&CommitStagedRequest {
+                    workspace: staged.workspace,
+                    token: staged.token,
+                })
+                .unwrap()
+            {
+                CommitStagedOutcome::Committed(record) => record,
+                other => panic!("expected a Commit, got {other:?}"),
+            },
+        );
+    }
+    // Both Branch Commits succeeded and neither head moved the other's.
+    assert_eq!(
+        fixture
+            .catalog
+            .branch(fixture.branch)
+            .unwrap()
+            .unwrap()
+            .head_commit,
+        Some(heads[0].id)
+    );
+    assert_eq!(
+        fixture
+            .catalog
+            .branch(sibling)
+            .unwrap()
+            .unwrap()
+            .head_commit,
+        Some(heads[1].id)
+    );
+    // The shared stack head is the first publication's to win.
+    let winner = fixture
+        .catalog
+        .add_layer(&AddLayerRequest {
+            stack: fixture.stack,
+            branch: fixture.branch,
+            commit: heads[0].id,
+            expected_stack_head: fixture.base,
+            expected_branch_base: fixture.base,
+        })
+        .unwrap();
+    let layer = match winner {
+        AddLayerOutcome::Added(layer) => layer,
+        other => panic!("expected a Layer, got {other:?}"),
+    };
+    match fixture
+        .catalog
+        .add_layer(&AddLayerRequest {
+            stack: fixture.stack,
+            branch: sibling,
+            commit: heads[1].id,
+            expected_stack_head: fixture.base,
+            expected_branch_base: fixture.base,
+        })
+        .unwrap_err()
+    {
+        HistoryError::StackMoved { expected, actual } => {
+            assert_eq!(expected, fixture.base);
+            assert_eq!(actual, layer.id);
+        }
+        other => panic!("expected StackMoved, got {other:?}"),
+    }
+    // The loser published nothing and its Branch is unchanged.
+    assert_eq!(
+        fixture
+            .catalog
+            .layer_stack(fixture.stack)
+            .unwrap()
+            .unwrap()
+            .head_layer,
+        layer.id
+    );
+    assert_eq!(
+        fixture
+            .catalog
+            .branch(sibling)
+            .unwrap()
+            .unwrap()
+            .head_commit,
+        Some(heads[1].id)
+    );
+}
