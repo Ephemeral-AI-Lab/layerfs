@@ -32,3 +32,20 @@
   root_ns / children_ns                 : 74,463,634,542 / 48,976,026,830
   retained candidate2 operation         : 49,501,013,748
 
+=== history-stride1
+  wall (complete command)               : 199.025 s
+  preparation (window + declared corpus): 52.664 s
+  operation (sum of children)           : 146.178 s
+  verification / cleanup                : 0.034 / 0.000001 s
+  declared phases sum                   : 198.876 s
+  child invocation wall                 : 198.961 s
+  reconciliation                        : PASS - every declared phase reconciles with its wall
+  budget, ordinary 15 s                 : NOT_RUN
+  budget, declared exception 25 s       : NOT_RUN
+  corpus read (declared, own record)    : 51.142 s
+  corpus files probed before first read : 180,128 (1,946,359,193 bytes, 245,733 pages)
+  corpus pages resident before first rd : 2,933
+  device bytes read across the chain    : 2,369,449,984
+  root_ns / children_ns                 : 197,378,873,459 / 146,177,713,707
+  retained candidate2 operation         : NOT_MEASURED (the retained campaign never sampled this row)
+

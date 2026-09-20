@@ -42,7 +42,18 @@ SWITCHES = (
     "CHUNK_PREDECESSORS",
     "DEPTH_LIMIT",
 )
-LIMITS = {"history-stride10": 120, "history-stride3": 240}
+# Frozen #190 diagnostic complete-command caps. stride10/stride3 are the retained
+# campaign's (120 s / 240 s). history-stride1 has never had one: it was never run.
+# Its cap is declared here, before the first sample, by the campaign's own convention
+# (120 s for 17 states, 240 s for 53 is ~4.5 s of complete command per state, which
+# is the row's corpus reading plus its replay), i.e. 157 x 4.5 s = 706.5 s -> 720 s.
+# It is a diagnostic ceiling, not an admission budget, and it is not enlarged after
+# a miss: a run that cannot finish inside it is recorded NOT_RUN with its wall.
+LIMITS = {"history-stride10": 120, "history-stride3": 240, "history-stride1": 720}
+# The driver refuses the per-state phase diagnostics above 53 states (timer node
+# bound), so stride1 runs the ordinary recording: its named children are measured,
+# the extra per-state phase nodes and the read-work instrumentation are not.
+PHASES = {"history-stride10": "1", "history-stride3": "1", "history-stride1": ""}
 
 
 def sha(path: Path) -> str:
@@ -90,7 +101,7 @@ def main() -> int:
            if not key.startswith("LAYERFS_")}
     env.update({f"LAYERFS_HISTORY_{key}": os.environ.get(f"LAYERFS_HISTORY_{key}", "")
                 for key in SWITCHES})
-    env["LAYERFS_HISTORY_PHASES"] = "1"
+    env["LAYERFS_HISTORY_PHASES"] = PHASES[args.case]
     env["LAYERFS_CONSTRUCTION_WORKERS"] = "1"
     command = [str(BINARY), "--case", args.case, "--corpus", str(CORPUS),
                "--out", str(raw), "--phase", "perf"]

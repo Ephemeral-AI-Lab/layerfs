@@ -1,0 +1,49 @@
+=== history-stride10 (17 states)
+  correlation of per-state elapsed with changed bytes : +0.990
+  correlation of per-state elapsed with ordinal       : +0.956
+   decile   mean ms  mean changed B  ns per changed B
+        1      44.1       1,499,109              29.4
+        2     240.0       6,535,170              36.7
+        3     260.9       8,860,665              29.4
+        4     325.8       9,741,690              33.4
+        5     686.0      17,146,318              40.0
+        6     630.4      16,075,165              39.2
+        7     820.2      18,396,659              44.6
+        8     616.4      13,501,125              45.7
+        9     851.8      19,534,024              43.6
+       10     889.1      17,713,193              50.2
+
+=== history-stride3 (53 states)
+  correlation of per-state elapsed with changed bytes : +0.963
+  correlation of per-state elapsed with ordinal       : +0.736
+   decile   mean ms  mean changed B  ns per changed B
+        1     125.7       3,560,994              35.3
+        2     262.0       6,786,053              38.6
+        3     372.6       8,408,798              44.3
+        4     582.8      10,987,924              53.0
+        5     538.5       8,389,364              64.2
+        6     805.8      12,561,904              64.1
+        7    1064.4      15,501,445              68.7
+        8    1914.7      22,327,622              85.8
+        9    1345.3      18,465,298              72.9
+       10    1666.8      21,805,038              76.4
+
+=== history-stride1 (157 states)
+  correlation of per-state elapsed with changed bytes : +0.896
+  correlation of per-state elapsed with ordinal       : +0.564
+   decile   mean ms  mean changed B  ns per changed B
+        1      91.5       2,597,500              35.2
+        2     275.7       6,226,080              44.3
+        3     498.5       8,273,578              60.3
+        4     551.9       8,031,930              68.7
+        5     820.2      10,896,107              75.3
+        6     844.8      10,887,465              77.6
+        7    1068.4      12,827,690              83.3
+        8    1606.0      17,719,023              90.6
+        9    1106.6      11,112,385              99.6
+       10    1312.2      13,267,426              98.9
+
+=== Store bytes: this round's runs against the retained campaign's candidate2 Stores
+  history-stride10   no retained candidate2 Store on disk to compare
+  history-stride3    no retained candidate2 Store on disk to compare
+  history-stride1    no retained candidate2 Store on disk to compare

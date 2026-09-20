@@ -140,3 +140,96 @@ python3 analyze.py
 established #190 diagnostic caps (120 s / 240 s) — **not** ordinary admission
 budgets, and not promoted here. `analyze.py` imports the runner's own
 `phases.compose` and `receipt.budget`; it re-implements neither.
+
+## The third row: stride1, and the depth term it exposed
+
+`history-stride1` is the one `history.*` row no #190 campaign had ever sampled. Its
+diagnostic cap is declared *here, before the sample*, by the retained campaign's own
+convention (120 s for 17 states and 240 s for 53 is ~4.5 s of complete command per
+state): 157 × 4.5 s = 706.5 s → **720 s**. It is a diagnostic ceiling, not an
+admission budget, and it was never approached. The driver refuses the per-state phase
+nodes above 53 states (timer node bound), so stride1 ran the **ordinary recording**:
+its 157 named children are measured, but `filesystem`, `storage.accept_loop` and the
+`harness.*` spans are inside the state total and unnamed. That is a recording
+difference, stated rather than worked around.
+
+| Quantity | stride1 |
+|---|---:|
+| complete command (wall) | 199.025 s |
+| preparation (window + declared corpus) | 52.664 s |
+| **operation (sum of 157 named children)** | **146.178 s** |
+| declared phases, summed / reconciliation | 198.876 s / **PASS** |
+| budget, ordinary 15 s / declared exception 25 s | NOT_RUN / NOT_RUN |
+| per state | mean 931.1 ms, median 698.5 ms, min 22.2 ms, max 8,952.0 ms |
+| corpus files probed before first read | 180,128 (1,946,359,193 B, 245,733 pages) |
+| corpus pages resident before first read | 2,933 (**1.19%**) |
+| device bytes read across the chain | 2,369,449,984 |
+
+Per state, the three rows now compare: stride10 **1,161.1 ms**, stride3 **924.1 ms**,
+stride1 **931.1 ms**.
+
+### The depth term
+
+Per-state cost is not proportional to work alone. Content drives most of the spread
+(correlation of per-state elapsed with changed bytes: **+0.990 / +0.963 / +0.896** for
+stride10 / stride3 / stride1), but nanoseconds per changed byte rises down the chain —
+stride1 35.2 → 98.9, stride3 35.3 → 76.4, stride10 29.4 → 50.2 from the first decile
+to the last. Deciles confound content with depth (later commits are bigger), so the
+load-bearing test is a **matched-volume** comparison: states in the same changed-bytes
+band, first half of the chain against the second.
+
+| row | 4–7 MB | 7–10 MB | 10–14 MB | 14–22 MB |
+|---|---:|---:|---:|---:|
+| stride1 late/early | 1.58× | 1.95× | 1.56× | 1.25× |
+| stride3 late/early | 1.71× | 2.31× | 1.50× | 1.66× |
+| stride10 late/early | — | — | — | 1.22× |
+
+At equal changed bytes, late-chain states cost **1.2–2.3×** more, and ns per changed
+byte roughly doubles (stride1 7–10 MB band: 54.5 → 102.4; stride3: 46.4 → 105.1).
+Localised by sub-phase, both product paths carry it: stride3 `filesystem` 47.5 →
+843.4 ms/state (**17.8×**) and `storage.accept_loop` 78.0 → 658.3 (**8.4×**); stride10
+142.6 → 1,002.1 (7.0×) and 216.9 → 1,023.1 (4.7×). The harness's `content` span grows
+least (4.6× / 3.3×).
+
+Caveats, stated because they bound the claim: these are **within-run** comparisons
+(one sample per row, no repeat), the per-band cells hold 2–21 states, the match is on
+changed **bytes** only — not path count, tree size or predecessor structure — and the
+depth term is measured, not attributed to a mechanism. It is nevertheless the first
+direct evidence that the retained-history save path has a cost that grows with chain
+depth at constant content, and that it sits in **both** the read/update path #190 has
+been optimising and the storage accept loop.
+
+### Store bytes: the one axis where v0.1.6 is directly comparable
+
+A Store allocation target from the v0.1.6 campaign is a byte count of the same
+selection's content, not a phase-scoped time from a different harness, so owner ruling
+7's gate is the one historical comparison that is valid. Measured now for all three
+rows, with the historical apparent figures beside them:
+
+| row | core apparent | core allocated | v0.1.6 apparent | v0.1.6 allocated | delta allocated |
+|---|---:|---:|---:|---:|---:|
+| stride10 | 49,324,032 | 50,249,728 | 49,315,940 | 49,344,512 | **+905,216** above |
+| stride3 | 62,152,704 | 63,078,400 | 64,000,100 | 64,024,576 | **−946,176** below |
+| stride1 | 80,969,728 | 84,541,440 | 82,677,860 | 83,947,520 | **+593,920** above |
+
+On **content** (apparent bytes, which are determined by the bytes stored), the core is
+below the historical figure on stride3 and stride1 (−1,847,396 / −1,708,132) and
++8,092 above it on stride10. On **allocation**, two rows are above their targets.
+
+**Allocation is not a precise statistic, and this round measured that.** The retained
+campaign's footprint read stride3's allocated bytes as 62,152,704; this round reads
+63,078,400 — for Stores that **hash identically** (`f5c7ff5a…`). Identical bytes,
+1.5% apart, because allocation is a property of extents rather than content. That is
+the same order as stride10's +905,216 (1.8%) and larger than stride1's +593,920
+(0.71%). Recorded as a finding for owner ruling 7, not as a re-baseline: the apparent
+axis is the one that tracks the stored bytes, and on it the core stores *less* than
+v0.1.6 on two of three rows.
+
+### And the retained source reproduces the measured candidate's output exactly
+
+This round built the **retained source without the instrumentation patch** and ran
+stride10 and stride3 again. Both Stores are **byte-identical** to the retained
+campaign's `candidate2` Stores — stride10 `4af37932aa3391b1…`, stride3
+`f5c7ff5a6b4f0821…`, the same hashes L42 recorded. That does not supply the retained
+source's own timing (still the one gap in the evidence chain), but it does close the
+*output* half of it: the instrumented arm measured the same bytes this tree produces.

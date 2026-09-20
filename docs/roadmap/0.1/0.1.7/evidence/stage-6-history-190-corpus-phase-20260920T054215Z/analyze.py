@@ -23,7 +23,7 @@ sys.path.insert(0, str(HARNESS / "shared"))
 import phases as phases_module  # noqa: E402
 import receipt  # noqa: E402
 
-CASES = ("history-stride10", "history-stride3")
+CASES = ("history-stride10", "history-stride3", "history-stride1")
 DIAGNOSTIC_KEYS = (
     "history.corpus_read_ns",
     "history.corpus.probe.files",
@@ -103,7 +103,9 @@ def main() -> int:
         lines.append(f"  corpus pages resident before first rd : {diagnostics['history.corpus.probe.resident_pages']:,}")
         lines.append(f"  device bytes read across the chain    : {diagnostics['history.operation.disk_read_bytes']:,}")
         lines.append(f"  root_ns / children_ns                 : {counts['root_ns']:,} / {counts['children_ns']:,}")
-        lines.append(f"  retained candidate2 operation         : {retained_operation:,}")
+        lines.append("  retained candidate2 operation         : "
+                     + (f"{retained_operation:,}" if retained_operation is not None
+                        else "NOT_MEASURED (the retained campaign never sampled this row)"))
         lines.append("")
     (CAMPAIGN / "analysis.json").write_text(json.dumps(report, indent=2, sort_keys=False) + "\n")
     (CAMPAIGN / "analysis.txt").write_text("\n".join(lines) + "\n")

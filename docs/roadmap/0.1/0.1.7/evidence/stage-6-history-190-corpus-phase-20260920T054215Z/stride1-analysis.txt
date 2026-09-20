@@ -1,0 +1,23 @@
+=== history-stride10  (17 states)
+  operation (sum of named children) :    19.739 s
+  per state: mean  1161.1 ms, median   851.8 ms, min   44.1, max  2592.8
+  first decile mean    44.1 ms -> last decile mean  2396.4 ms   (slope +160260.61 us per state)
+  changed bytes 377,435,167 over 52,417 paths; ns per changed byte 52.3
+  canonical objects emitted 7,264; save commits 1,149
+=== history-stride3  (53 states)
+  operation (sum of named children) :    48.976 s
+  per state: mean   924.1 ms, median   778.9 ms, min   46.0, max  3818.7
+  first decile mean   125.7 ms -> last decile mean  1639.1 ms   (slope +36717.73 us per state)
+  changed bytes 713,667,213 over 91,445 paths; ns per changed byte 68.6
+  canonical objects emitted 13,608; save commits 1,471
+=== history-stride1  (157 states)
+  operation (sum of named children) :   146.178 s
+  per state: mean   931.1 ms, median   698.5 ms, min   22.2, max  8952.0
+  first decile mean    91.5 ms -> last decile mean  2193.0 ms   (slope +12629.15 us per state)
+  changed bytes 1,719,804,402 over 217,646 paths; ns per changed byte 85.0
+  canonical objects emitted 32,954; save commits 1,797
+
+=== Store axes against the historical v0.1.6 targets (owner ruling 7: below is the gate)
+  history-stride10   apparent   49,324,032  allocated   50,249,728  target   49,344,512  delta +905,216  ABOVE
+  history-stride3    apparent   62,152,704  allocated   63,078,400  target   64,024,576  delta -946,176  BELOW
+  history-stride1    apparent   80,969,728  allocated   84,541,440  target   83,947,520  delta +593,920  ABOVE
