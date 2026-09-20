@@ -96,7 +96,7 @@ The prediction is arithmetic on the measured per-statement cost, not a measureme
 
 The first candidate (`candidate`) replaced the memo with one statement per leaf
 over the leaf's whole ordinal span. It was measured: stride10 improved by
-2,297,544,961 ns, but **stride3 regressed by 1,885,811,742 ns** because a span
+2,298,597,419 ns, but **stride3 regressed by 1,884,341,075 ns** because a span
 query's cost grows with the *width* of the leaf's ordinal span, not with the number
 of groups the leaf uses. Measured per span statement: 101,011 ns on stride10 and
 259,906 ns on stride3, against 7,817 ns for a single-group statement. That

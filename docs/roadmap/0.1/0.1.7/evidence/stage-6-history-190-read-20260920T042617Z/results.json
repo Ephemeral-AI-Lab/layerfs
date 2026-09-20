@@ -17,8 +17,9 @@
             "quiet_last_cpu_idle_percent": 79.71,
             "wall_ns": 40220718250
           },
-          "operation_ns": 21862271710,
+          "operation_ns": 21905900168,
           "per_state_operation_ns": {
+            "1": 43628458,
             "10": 1009204417,
             "11": 1745702708,
             "12": 1848102417,
@@ -57,22 +58,22 @@
             "waves": 66616
           },
           "regions_ns": {
-            "content": 1623555291,
-            "filesystem": 10007435416,
-            "harness.index": 119939959,
-            "harness.input": 94980498,
-            "harness.predecessors": 81920374,
-            "storage.accept_loop": 9450020540,
-            "storage.begin": 11406748,
-            "storage.finish": 401871753,
-            "store.create": 0
+            "content": 1630222082,
+            "filesystem": 10008188499,
+            "harness.index": 120350625,
+            "harness.input": 95463039,
+            "harness.predecessors": 82160666,
+            "storage.accept_loop": 9470181998,
+            "storage.begin": 12992039,
+            "storage.finish": 411586628,
+            "store.create": 3109041
           },
           "store": {
             "allocated_bytes": 50249728,
             "apparent_bytes": 49324032,
             "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487"
           },
-          "unattributed_state_body_ns": 71141131,
+          "unattributed_state_body_ns": 71645551,
           "verification": {
             "limit_ns": 60000000000,
             "ns": 5593199541,
@@ -112,8 +113,9 @@
             "quiet_last_cpu_idle_percent": 81.21,
             "wall_ns": 38101144250
           },
-          "operation_ns": 19840252294,
+          "operation_ns": 19888424711,
           "per_state_operation_ns": {
+            "1": 48172417,
             "10": 902297625,
             "11": 1572452500,
             "12": 1650892459,
@@ -152,22 +154,22 @@
             "waves": 66616
           },
           "regions_ns": {
-            "content": 1622363667,
-            "filesystem": 8227499706,
-            "harness.index": 112364166,
-            "harness.input": 96108414,
-            "harness.predecessors": 84279751,
-            "storage.accept_loop": 9241205709,
-            "storage.begin": 11966418,
-            "storage.finish": 396408624,
-            "store.create": 0
+            "content": 1629628334,
+            "filesystem": 8228260706,
+            "harness.index": 112755999,
+            "harness.input": 96633497,
+            "harness.predecessors": 84564751,
+            "storage.accept_loop": 9263481834,
+            "storage.begin": 13600710,
+            "storage.finish": 406779499,
+            "store.create": 4233125
           },
           "store": {
             "allocated_bytes": 50249728,
             "apparent_bytes": 49324032,
             "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487"
           },
-          "unattributed_state_body_ns": 48055839,
+          "unattributed_state_body_ns": 48486256,
           "verification": {
             "limit_ns": 60000000000,
             "ns": 4606757792,
@@ -196,15 +198,15 @@
       "catalogue_reduction_ns": 1595725442,
       "complete_command_reduction_ns": 2119574000,
       "cpu_reduction_ns": 2089371000,
-      "operation_reduction_ns": 2022019416,
-      "operation_reduction_percent": 9.248899,
+      "operation_reduction_ns": 2017475457,
+      "operation_reduction_percent": 9.209735,
       "provider_reduction_ns": 1764710765,
       "rejected_span_candidate": {
         "catalogue_calls": 11268,
         "catalogue_ns": 1138189534,
         "nanoseconds_per_statement": 101010,
-        "operation_delta_ns": -2297544961,
-        "operation_ns": 19564726749
+        "operation_delta_ns": -2298597419,
+        "operation_ns": 19607302749
       },
       "store_byte_identical": true,
       "verification_target_ns": 10000000000
@@ -226,8 +228,9 @@
             "quiet_last_cpu_idle_percent": 82.49,
             "wall_ns": 80483422875
           },
-          "operation_ns": 56552396089,
+          "operation_ns": 56597343506,
           "per_state_operation_ns": {
+            "1": 44947417,
             "10": 309142291,
             "11": 840244542,
             "12": 456254417,
@@ -302,22 +305,22 @@
             "waves": 111853
           },
           "regions_ns": {
-            "content": 3021191127,
-            "filesystem": 32619895790,
-            "harness.index": 187597039,
-            "harness.input": 219685878,
-            "harness.predecessors": 155573375,
-            "storage.accept_loop": 18535528881,
-            "storage.begin": 28925459,
-            "storage.finish": 1609527750,
-            "store.create": 0
+            "content": 3027773293,
+            "filesystem": 32620645790,
+            "harness.index": 187993205,
+            "harness.input": 220170670,
+            "harness.predecessors": 155811666,
+            "storage.accept_loop": 18557134673,
+            "storage.begin": 30621750,
+            "storage.finish": 1618483417,
+            "store.create": 3812125
           },
           "store": {
             "allocated_bytes": 62152704,
             "apparent_bytes": 62152704,
             "sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e"
           },
-          "unattributed_state_body_ns": 174470790,
+          "unattributed_state_body_ns": 174896917,
           "verification": {
             "limit_ns": 60000000000,
             "ns": 19864253708,
@@ -357,8 +360,9 @@
             "quiet_last_cpu_idle_percent": 76.62,
             "wall_ns": 73127405000
           },
-          "operation_ns": 49458300790,
+          "operation_ns": 49501013748,
           "per_state_operation_ns": {
+            "1": 42712958,
             "10": 269048625,
             "11": 552946583,
             "12": 427936417,
@@ -433,22 +437,22 @@
             "waves": 111853
           },
           "regions_ns": {
-            "content": 3033043252,
-            "filesystem": 25336046585,
-            "harness.index": 189990461,
-            "harness.input": 222674751,
-            "harness.predecessors": 155075131,
-            "storage.accept_loop": 18710445460,
-            "storage.begin": 29013622,
-            "storage.finish": 1614338168,
-            "store.create": 0
+            "content": 3039538669,
+            "filesystem": 25336780793,
+            "harness.index": 190377961,
+            "harness.input": 223160126,
+            "harness.predecessors": 155319714,
+            "storage.accept_loop": 18730893460,
+            "storage.begin": 30621955,
+            "storage.finish": 1623297960,
+            "store.create": 3004667
           },
           "store": {
             "allocated_bytes": 62152704,
             "apparent_bytes": 62152704,
             "sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e"
           },
-          "unattributed_state_body_ns": 167673360,
+          "unattributed_state_body_ns": 168018443,
           "verification": {
             "limit_ns": 60000000000,
             "ns": 16126274334,
@@ -477,20 +481,25 @@
       "catalogue_reduction_ns": 7128182097,
       "complete_command_reduction_ns": 7356017875,
       "cpu_reduction_ns": 7151548000,
-      "operation_reduction_ns": 7094095299,
-      "operation_reduction_percent": 12.544288,
+      "operation_reduction_ns": 7096329758,
+      "operation_reduction_percent": 12.538274,
       "provider_reduction_ns": 7285698495,
       "rejected_span_candidate": {
         "catalogue_calls": 41958,
         "catalogue_ns": 10905146605,
         "nanoseconds_per_statement": 259906,
-        "operation_delta_ns": 1885811742,
-        "operation_ns": 58438207831
+        "operation_delta_ns": 1884341075,
+        "operation_ns": 58481684581
       },
       "store_byte_identical": true,
       "verification_target_ns": 20000000000
     }
   },
+  "corrections": [
+    "Operation and region figures were first derived over states 2..N; the harness's phases-perf.operation_ns and the retained L40 table sum over all selected states including the first. Corrected in this file; the superseded derived JSON is kept and labelled in SUPERSEDED-ANALYSIS.md.",
+    "The stride10 provider's unattributed remainder was first reported as 1,339,076,683 ns; the disjoint set leaves 1,305,940,532 ns.",
+    "Both were found by rederive.py, which recomputes the headline arithmetic from the raw receipts without importing this script."
+  ],
   "measured_candidate": "candidate2 (ordinal-ordered catalogue resolution)",
   "rejected_candidate": "candidate (one catalogue statement per leaf ordinal span)",
   "schema": "h190-read-results-v1",

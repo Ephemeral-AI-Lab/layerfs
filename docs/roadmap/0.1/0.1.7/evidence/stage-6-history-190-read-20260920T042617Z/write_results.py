@@ -15,6 +15,16 @@ def load(name):
 def main():
     out = {"schema": "h190-read-results-v1",
            "status": "Research; diagnostic evidence, not release admission",
+           "corrections": [
+               "Operation and region figures were first derived over states 2..N; the "
+               "harness's phases-perf.operation_ns and the retained L40 table sum over "
+               "all selected states including the first. Corrected in this file; the "
+               "superseded derived JSON is kept and labelled in SUPERSEDED-ANALYSIS.md.",
+               "The stride10 provider's unattributed remainder was first reported as "
+               "1,339,076,683 ns; the disjoint set leaves 1,305,940,532 ns.",
+               "Both were found by rederive.py, which recomputes the headline arithmetic "
+               "from the raw receipts without importing this script.",
+           ],
            "measured_candidate": "candidate2 (ordinal-ordered catalogue resolution)",
            "rejected_candidate": "candidate (one catalogue statement per leaf ordinal span)",
            "cases": {}}
@@ -22,8 +32,7 @@ def main():
         body = {"arms": {}}
         for arm in ARMS:
             run = CAMPAIGN / "runs" / f"{arm}-{case}"
-            analysis = load(f"{arm}-instrumented-{short}.json" if arm == "baseline2"
-                            else f"{arm}-{short}.json")
+            analysis = load(f"{arm}-{short}-analysis.json")
             perf = json.loads((run / "raw/phases-perf.json").read_text())
             verify = json.loads((run / "raw/phases-verify.json").read_text())
             receipt = json.loads((run / "perf-receipt.json").read_text())
@@ -79,7 +88,7 @@ def main():
         out["cases"][case] = body
     # the rejected span candidate, where it was sampled
     for case, short in CASES.items():
-        path = CAMPAIGN / f"candidate-{short}.json"
+        path = CAMPAIGN / f"candidate-{short}-analysis.json"
         if path.exists():
             rejected = json.loads(path.read_text())
             baseline = out["cases"][case]["arms"]["baseline2"]

@@ -22,7 +22,7 @@ Instrumented stride10 baseline (`baseline2`), provider elapsed 9,019,067,220 ns:
 |---|---:|---:|
 | Pack BLOB acquisition, both lanes (142,686 fetches, 12,080,963,142 B copied) | 3,928,606,618 | 43.6% |
 | Metadata value-group catalogue SQL (278,927 statements) | 2,180,465,764 | 24.2% |
-| Unattributed remainder | 1,339,076,683 | 14.8% |
+| Unattributed remainder | 1,305,940,532 | 14.5% |
 | Object/locator SQL | 666,844,674 | 7.4% |
 | Pooled value materialisation, authentication, decode, conversion | 644,700,604 | 7.1% |
 | Ordinary-lane group decompression | 177,929,427 | 2.0% |
@@ -34,7 +34,14 @@ Instrumented stride10 baseline (`baseline2`), provider elapsed 9,019,067,220 ns:
 | Physical pooled body decode into rows | 1,717,437 | 0.0% |
 
 The spans nest; the table is disjoint as stated and closes against the provider
-elapsed. **Named unmeasured remainders:** the ordinary lane's internal split, the
+elapsed with a 1,305,940,532 ns remainder.
+
+**Convention.** Every operation and region figure here is summed over **all**
+selected states, including the first one, because that is what
+`phases-perf.operation_ns` measures and what the retained L40 table reports. An
+earlier revision of this campaign's derived JSON excluded state 1; see
+[SUPERSEDED-ANALYSIS.md](SUPERSEDED-ANALYSIS.md). The exclusion moved the
+headline reductions by at most 4,543,959 ns and is corrected, not hidden. **Named unmeasured remainders:** the ordinary lane's internal split, the
 per-wave `retained_pack_ceiling` read, the per-leaf identity hash, the `group_value`
 cache lookup per row, and whatever the 1.339-second residual is. Pack bytes are
 application-buffer acquisition, not physical disk traffic; exclusive codec/SQL/copy
@@ -76,8 +83,8 @@ instrumentation, fresh outputs, both under the shared global flocks.
 
 | Selection | Baseline operation | Candidate operation | Reduction | % |
 |---|---:|---:|---:|---:|
-| history-stride10 | 21,862,271,710 | 19,840,252,294 | **2,022,019,416** | 9.248899 |
-| history-stride3 | 56,552,396,089 | 49,458,300,790 | **7,094,095,299** | 12.544288 |
+| history-stride10 | 21,905,900,168 | 19,888,424,711 | **2,017,475,457** | 9.209735 |
+| history-stride3 | 56,597,343,506 | 49,501,013,748 | **7,096,329,758** | 12.538274 |
 
 | Selection | Provider reduction | Catalogue statements | Catalogue interval reduction | Complete command reduction | Whole-invocation CPU reduction |
 |---|---:|---|---:|---:|---:|
@@ -90,8 +97,8 @@ group); the stride3 count likewise.
 
 | Selection | Filesystem reduction | Store begin+accept+finish reduction | Content reduction |
 |---|---:|---:|---:|
-| stride10 | 1,779,935,710 | 214,277,960 | 1,191,624 |
-| stride3 | 7,283,849,205 | 179,726,997 | −11,852,125 |
+| stride10 | 1,779,927,793 | 210,898,622 | 593,748 |
+| stride3 | 7,283,864,997 | −178,573,535 | −11,765,376 |
 
 The Store interval also improves, because the save's own pooled dependency
 resolution goes through the same function. Stride3's Store interval and content
@@ -105,8 +112,8 @@ whole ordinal span. It was measured and is retained as a **rejected** treatment:
 
 | Selection | Operation | Delta vs baseline2 | Statements | ns per statement |
 |---|---:|---:|---:|---:|
-| stride10 | 19,564,726,749 | **−2,297,544,961** | 11,268 | 101,010 |
-| stride3 | 58,438,207,831 | **+1,885,811,742** | 41,958 | 259,906 |
+| stride10 | 19,607,302,749 | **−2,298,597,419** | 11,268 | 101,010 |
+| stride3 | 58,481,684,581 | **+1,884,341,075** | 41,958 | 259,906 |
 
 A span statement's cost grows with the *width* of the leaf's ordinal span, not
 with the number of groups the leaf uses. The ordinal-ordered memo has no such

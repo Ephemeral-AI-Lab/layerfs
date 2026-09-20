@@ -38,7 +38,11 @@ def main():
     args = parser.parse_args()
     timing, counters, resources = load(args.arm, args.case)
     states = sorted({int(k.split("/")[2].split(".")[-1]) for k in timing if k.startswith("/history/history.state.")})
-    measured = [s for s in states if s != 1]
+    # The established #190 convention counts every selected state, including the
+    # first one: `phases-perf.operation_ns` equals the sum over all of them, and
+    # the retained L40 table is on that convention. Excluding state 1 would make
+    # these rows incomparable with L40 by about 43-48 ms.
+    measured = list(states)
     regions = ["content", "filesystem", "storage.begin", "storage.accept_loop",
                "storage.finish", "harness.index", "harness.input", "harness.predecessors"]
     totals = {r: sum(timing.get(f"/history/history.state.{s}/{r}", 0) for s in measured) for r in regions}
