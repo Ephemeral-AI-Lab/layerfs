@@ -1,0 +1,67 @@
+{
+  "first_parent": "81f4f1fefcd5f600742fb8b0fe4c0502354db09d",
+  "before": {
+    "combined": 85723,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6982,
+          "layerfs-telemetry": 763
+        },
+        "files": 122,
+        "lines": 20306
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 85722,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6981,
+          "layerfs-telemetry": 763
+        },
+        "files": 122,
+        "lines": 20305
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "delta": -1,
+  "attribution_production_delta": 0,
+  "counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "method": "identical tools/production_loc.py --root SNAPSHOT --json on git archive first parent and exact staged product scope crates/ and core/crates/; runtime SQL included; tests including legacy inline branches, harness/docs/tools/generated sources excluded"
+}

@@ -1,0 +1,33 @@
+{
+  "kind": "profiled diagnostic; not a paired timing arm",
+  "child_command": [
+    "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-pool-20260920T010152Z/binaries/candidate",
+    "--case",
+    "history-stride10",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-roi-20260920T014227Z/profile/runs/baseline-history-stride10/raw",
+    "--phase",
+    "perf"
+  ],
+  "child_pid": 90748,
+  "sample_command": [
+    "/usr/bin/sample",
+    "90748",
+    "120",
+    "5",
+    "-mayDie",
+    "-file",
+    "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-roi-20260920T014227Z/profile/sample.txt"
+  ],
+  "start_monotonic_ns": 27917835760250,
+  "actual_first_sample_gap_ns": null,
+  "cache_admission": "INELIGIBLE",
+  "deadline_seconds": 120,
+  "profiler_launch_gap_ns": 4679541,
+  "workload_wall_ns": 42339847333,
+  "child_exit_code": 0,
+  "sampler_exit_code": 0,
+  "complete_wall_ns": 42414263625
+}

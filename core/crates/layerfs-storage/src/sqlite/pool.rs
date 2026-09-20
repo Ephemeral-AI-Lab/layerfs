@@ -93,14 +93,13 @@ pub fn group_for(connection: &Connection, ordinal: u32) -> StorageResult<Option<
     if ordinal < FIRST_ORDINAL {
         return Err(StorageError::Integrity("metadata ordinal"));
     }
-    let row = connection
-        .query_row(
-            "SELECT first_ordinal, count, pack_id, group_number, digest \
-             FROM metadata_value_groups WHERE first_ordinal <= ?1 \
-             ORDER BY first_ordinal DESC LIMIT 1",
-            [i64::from(ordinal)],
-            decode_group_row,
-        )
+    let mut statement = connection.prepare_cached(
+        "SELECT first_ordinal, count, pack_id, group_number, digest \
+         FROM metadata_value_groups WHERE first_ordinal <= ?1 \
+         ORDER BY first_ordinal DESC LIMIT 1",
+    )?;
+    let row = statement
+        .query_row([i64::from(ordinal)], decode_group_row)
         .map(Some)
         .or_else(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => Ok(None),

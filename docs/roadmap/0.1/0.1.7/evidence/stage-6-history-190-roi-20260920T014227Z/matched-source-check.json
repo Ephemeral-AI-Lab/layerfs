@@ -1,0 +1,7 @@
+{
+  "harness_equal": true,
+  "locks_equal": true,
+  "product_differences": [
+    "core/crates/layerfs-storage/src/sqlite/pool.rs"
+  ]
+}
