@@ -344,8 +344,15 @@ fn put_manifest(e: &mut Encoder, entries: &[ManifestEntry]) -> Result<(), Failur
     Ok(())
 }
 
+/// Smallest encoded width of one manifest entry.
+///
+/// Parent, empty name, kind, mode, seconds, nanoseconds, an absent content flag
+/// and an empty target. The pre-check uses this and not a typical width: a
+/// manifest of small entries is legal and must not be refused before it is read.
+const MANIFEST_ENTRY_MINIMUM: usize = 24;
+
 fn take_manifest(d: &mut Decoder<'_>) -> Result<Vec<ManifestEntry>, Failure> {
-    let count = d.count(MANIFEST_ENTRIES, 56)?;
+    let count = d.count(MANIFEST_ENTRIES, MANIFEST_ENTRY_MINIMUM)?;
     let mut entries = Vec::with_capacity(count);
     for _ in 0..count {
         let parent = d.u16()?;
