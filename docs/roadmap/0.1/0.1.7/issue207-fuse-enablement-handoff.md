@@ -1,9 +1,18 @@
 # Handoff prompt — #207 enabling the live FUSE mechanism: enablement, universality, and pair 3 incorporation
 
 > Status: Research; informative and not a product contract. Dated continuation
-> checkpoint, 2026-09-20, after `ae1d514d2`. This prompt carries existing
+> checkpoint, 2026-09-20, revised after **PR #200 merged** (`7b8a7d9d3`, pair 3's
+> service/bridge/daemon foundation is on `main`). This prompt carries existing
 > measurements and three bounded investigations; it is **not** a new measurement, not
 > a design freeze, and not a release claim.
+>
+> **Read first, in this order:**
+> [`06-future-fuse-and-cloud.md`](../../../../core/docs/architecture/proposal/service-daemon-transport/06-future-fuse-and-cloud.md)
+> — pair 3's own forward design for pair 1, which is authoritative for the
+> responsibilities and file layout below — then
+> [`fuse-mechanism-from-source.md`](evidence/stage-6-history-205-save-split-20260920T081022Z/fuse-mechanism-from-source.md)
+> for the reference mechanism's shape. **This prompt is subordinate to that
+> document**; where they differ, it wins and the difference is a bug in this prompt.
 
 ## Mission and decision rule
 
@@ -60,6 +69,52 @@ needs a number, say which measurement would supply it and on which arm.
 `execve` of a binary **above 8 KiB**, repeated. It is the most common shell operation, it
 falls in the uncached band *by construction*, and it is the case where an eager model should
 win outright. If the core cannot beat a lazy loader there, it will not beat it anywhere.
+
+## 0.1 What pair 3's forward design already settles — do not re-decide these
+
+Pair 3 landed with its own design for pair 1:
+[`06-future-fuse-and-cloud.md`](../../../../core/docs/architecture/proposal/service-daemon-transport/06-future-fuse-and-cloud.md).
+It is **authoritative** for the responsibilities and layout below, and it changes three
+things this prompt originally treated as open.
+
+**a. The responsibility split is decided.** Workspace owns namespace and inode identity,
+open-file lifetime and pending changes, local read-your-writes, bounded backing/cache
+ownership, and stable submission generation. It must **not** recreate v0.1.6's combined
+`LiveOwner`: borrow its behavioural requirements, and exclude its reverse snapshot-pull
+protocol, transport authentication, host-control framing and automatic completion
+redelivery. The daemon creates and wires Workspace, the FUSE adapter and the bridge client,
+and hosts Workspace without duplicating its overlay or generation registry. The FUSE adapter
+delegates to Workspace and **never bypasses it with a remote request per callback.**
+
+**b. The operation mapping largely exists.** The document's callback table already assigns
+per-callback work and the possible service side for Lookup/getattr/readlink, Read, Write,
+Readdir, Create/rename/unlink/setattr, Save/submission and Flush/fsync. §1.1's first
+deliverable therefore becomes **reviewing and filling gaps in that table**, not authoring one
+from scratch.
+
+**c. There is a hard C1 constraint that shapes the whole write path.** FUSE can overwrite
+bytes written earlier in the same dirty generation, but C1's `EditStream` **rejects** an edit
+that reaches into bytes an earlier edit in the same stream introduced —
+`InvalidEdit { what: "range inside an earlier replacement" }`
+(`core/crates/layerfs-content/src/file/edit/input.rs:10-15`). Therefore Workspace must
+**lower its final piece/namespace state to a supported stable operation input**; it cannot
+forward the chronological FUSE write list to `apply_edits`. The document is explicit that
+this lowering is a Workspace algorithm and that it must **not** be worked around by sorting
+or coalescing raw edits in the bridge, nor by silently flattening to a complete file to evade
+a replay limit. Note `MAXIMUM_EDITS_PER_OPERATION = 4_096` in the same file — the same
+ceiling #179 cites for bindings.
+
+**d. The file layout is specified, with ceilings.** Future work goes under
+`core/crates/layerfs-daemon/src/workspace/` and `.../fuse/` in the responsibility folders the
+document lists — one FUSE trait implementation delegating to helpers, not competing
+implementations. Every production file ≤ 999 physical lines; every `lib.rs`/`mod.rs` ≤ 200
+and declaration/delegation only. FUSE and its dependency are **platform-gated**, and
+unsupported requested mount capability **fails explicitly** rather than no-opping.
+
+**What this leaves genuinely open** — and what §1–§3 below should now focus on: the numeric
+overlay ceiling and flush policy, mount topology, the fate of the 8 MiB cache and 8 KiB
+prefetch threshold under a cross-boundary topology, round-trip counts per operation, and the
+lowering algorithm's canonical/profile consequences.
 
 ## 1. How to enable FUSE
 
@@ -159,9 +214,14 @@ Reuse these; do not restate them as new. From [#181](https://github.com/Ephemera
 
 ## 3. How to incorporate with the pair 3 implementation
 
-**Question:** pair 3 is in flight (`codex/pair3-foundation`, PR
-[#200](https://github.com/Ephemeral-AI-Lab/layerfs/pull/200), 100 files). What does pair 1
-consume, what does it add, and what must it not duplicate?
+**Question:** pair 3 has **landed** — PR [#200](https://github.com/Ephemeral-AI-Lab/layerfs/pull/200)
+merged as `7b8a7d9d3`, and `core/crates/` now carries `layerfs-bridge`, `layerfs-daemon`
+and `layerfs-service` beside `layerfs-content`, `layerfs-storage` and `layerfs-telemetry`.
+What does pair 1 consume, what does it add, and what must it not duplicate?
+
+**The boundary this prompt predicted is confirmed in the landed code:** `layerfs-bridge`
+contains no FUSE, overlay or accumulation logic, so the constraint in §3.2 stands as
+written rather than as a forecast.
 
 ### 3.1 The authoritative order is pair 3 → pair 1 → pair 2
 
@@ -261,4 +321,4 @@ applies unchanged:
   it.
 - Do not claim a mount, a latency figure, or a durability guarantee that does not exist.
 - Do not answer #180's questions (what `commit` returns, whether a stage is durable) from
-  this lane.
+  this lane
