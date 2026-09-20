@@ -244,3 +244,12 @@ planned optimization sequence is not itself a closure or a performance claim.
 The owner directed continuation after parent-lookup PR#194. Three subagents implemented missing pooled-read telemetry, bounded physical-group reuse, and external correctness checks, with independent source/raw-evidence review. The existing512KiB session group cache is shared; no new cache, policy, codec, worker or format change. Details and exact measurements are in [ledger L36](../0.1.6/evidence/issue151-experiment-ledger.md#l36--190-pooled-physical-group-reuse-2026-09-20) and its linked evidence.
 
 The candidate meets stride10 and stride3 verification targets in this diagnostic. Historical operation parity, history pins and eligible cache admission remain open. The preserved parent-lookup checkpoint retains its original misses. No subtree summaries, save streaming, signature reuse or new-row filtering were added. Remaining read costs need measurement before choosing another treatment.
+
+
+## Bounded ROI round closed — 2026-09-20
+
+The owner authorized one attribution step and at most one low-complexity change. Native sampling required no new production telemetry and identified repeated catalogue SQL preparation. Only `group_for` now reuses the existing bounded prepared-statement cache; SQL, current results and validation remain unchanged.
+
+[Ledger L37](../0.1.6/evidence/issue151-experiment-ledger.md#l37--190-catalogue-statement-reuse-bounded-roi-round-2026-09-20) records the single-sample matched results, exact work proof and limits. Both operation samples improve, while stride10 complete-command wall regresses. Candidate verification meets both targets. The one-helper implementation is net −1 production LOC.
+
+**Stop optimization here.** No broader data/value cache, pack-query treatment, summaries or save streaming is included or recommended by this round. Existing O3 pins, cache qualification and historical timer tripwire remain separate open acceptance work. Earlier receipts retain their original results and misses.

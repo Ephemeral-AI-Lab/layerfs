@@ -37,6 +37,19 @@ physical-group route, so writer-owned readers and pack invalidation are unchange
 Only successful Zstandard decompressions avoided by the borrowed cache count as
 `physical_group_cache_hits`; raw groups do not produce such hits.
 
+### #190 catalogue statement reuse (2026-09-20)
+
+This addition describes the working tree based on `81f4f1fef`, after the pooled
+physical-group reuse change. `sqlite::pool::group_for` now borrows its fixed
+catalogue lookup statement through the connection's existing `prepare_cached`
+mechanism. The SQL and parameters are unchanged; every call still executes the
+query and validates the returned row and ordinal coverage. Query results and
+value groups are not cached by this change. The pinned rusqlite default bound of
+16 prepared statements remains unchanged, and dropped statements release their
+bindings before returning to that cache. Missing rows, invalid ordinals, damaged
+rows and engine errors retain their existing handling. Pack BLOB acquisition and
+all cache ownership, resource policies and formats are unchanged.
+
 ### 6.1 The Store handle
 
 `core/crates/layerfs-storage/src/cas/store.rs`
