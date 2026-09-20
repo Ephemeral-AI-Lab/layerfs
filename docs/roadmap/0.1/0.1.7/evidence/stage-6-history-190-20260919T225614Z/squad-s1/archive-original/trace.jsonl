@@ -1,0 +1,202 @@
+{"schema":"layerfs-trace-v1","seq":0,"kind":"run","key":"case_id","value":"history-stride10","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":1,"kind":"run","key":"family","value":"history.*","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":2,"kind":"run","key":"admission","value":"admission","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":3,"kind":"run","key":"tier","value":"255","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":4,"kind":"run","key":"tier_label","value":"","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":5,"kind":"run","key":"profile","value":"","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":6,"kind":"run","key":"declared_bytes","value":"561010345","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":7,"kind":"run","key":"declared_entries","value":"17","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":8,"kind":"run","key":"cache_state","value":"CreatedInSample","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":9,"kind":"run","key":"store_state","value":"CreatedInSample","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":10,"kind":"run","key":"shape","value":"History(Stride10)","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":11,"kind":"run","key":"phase","value":"Perf","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":12,"kind":"counter","key":"history.state.1.root","value":"FilesystemRootId(ObjectId(\"ff484f8d92f57413ee83e7201fb04c8512ffd7bed3083471713db4e8e17c70d3\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":13,"kind":"counter","key":"history.state.1.changed_paths","value":276,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":14,"kind":"counter","key":"history.state.1.changed_bytes","value":1499109,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":15,"kind":"counter","key":"history.state.1.inserted","value":364,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":16,"kind":"counter","key":"history.state.1.objects","value":93,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":17,"kind":"resource","key":"history.state.1.heap_peak_incremental_bytes","value":22194992,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":18,"kind":"resource","key":"history.state.1.input_ns","value":340291,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":19,"kind":"resource","key":"history.state.1.build_ns","value":531750,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":20,"kind":"resource","key":"history.state.1.save_ns","value":28739167,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":21,"kind":"counter","key":"history.state.2.root","value":"FilesystemRootId(ObjectId(\"72f064ddbe6da11b338a115e2a258d92edf3a5c0864bd47c5dc2bd648e63931a\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":22,"kind":"counter","key":"history.state.2.changed_paths","value":985,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":23,"kind":"counter","key":"history.state.2.changed_bytes","value":6535170,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":24,"kind":"counter","key":"history.state.2.inserted","value":1096,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":25,"kind":"counter","key":"history.state.2.objects","value":313,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":26,"kind":"resource","key":"history.state.2.heap_peak_incremental_bytes","value":30457254,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":27,"kind":"resource","key":"history.state.2.input_ns","value":1120167,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":28,"kind":"resource","key":"history.state.2.build_ns","value":73406916,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":29,"kind":"resource","key":"history.state.2.save_ns","value":99639833,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":30,"kind":"counter","key":"history.state.3.root","value":"FilesystemRootId(ObjectId(\"8e6d4cf0b86079f10b83333e97da4ea293865073c74a13928f007c174a97b0e8\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":31,"kind":"counter","key":"history.state.3.changed_paths","value":1000,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":32,"kind":"counter","key":"history.state.3.changed_bytes","value":8860665,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":33,"kind":"counter","key":"history.state.3.inserted","value":1197,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":34,"kind":"counter","key":"history.state.3.objects","value":204,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":35,"kind":"resource","key":"history.state.3.heap_peak_incremental_bytes","value":33686302,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":36,"kind":"resource","key":"history.state.3.input_ns","value":1166583,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":37,"kind":"resource","key":"history.state.3.build_ns","value":125935458,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":38,"kind":"resource","key":"history.state.3.save_ns","value":122972584,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":39,"kind":"counter","key":"history.state.4.root","value":"FilesystemRootId(ObjectId(\"21c6e06308aba3d67bbf2c6e4db2c712dd21e38f3efcc3869cc1cb4df80b05b2\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":40,"kind":"counter","key":"history.state.4.changed_paths","value":1103,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":41,"kind":"counter","key":"history.state.4.changed_bytes","value":9741690,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":42,"kind":"counter","key":"history.state.4.inserted","value":1258,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":43,"kind":"counter","key":"history.state.4.objects","value":193,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":44,"kind":"resource","key":"history.state.4.heap_peak_incremental_bytes","value":35771693,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":45,"kind":"resource","key":"history.state.4.input_ns","value":1477084,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":46,"kind":"resource","key":"history.state.4.build_ns","value":271863750,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":47,"kind":"resource","key":"history.state.4.save_ns","value":135908917,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":48,"kind":"counter","key":"history.state.5.root","value":"FilesystemRootId(ObjectId(\"e7068fcff3be5d9a282df1d544c7e5f115540f890034aa0fe62b0a112db74884\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":49,"kind":"counter","key":"history.state.5.changed_paths","value":2716,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":50,"kind":"counter","key":"history.state.5.changed_bytes","value":17146318,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":51,"kind":"counter","key":"history.state.5.inserted","value":2842,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":52,"kind":"counter","key":"history.state.5.objects","value":540,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":53,"kind":"resource","key":"history.state.5.heap_peak_incremental_bytes","value":45188601,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":54,"kind":"resource","key":"history.state.5.input_ns","value":2849417,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":55,"kind":"resource","key":"history.state.5.build_ns","value":556033125,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":56,"kind":"resource","key":"history.state.5.save_ns","value":291628791,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":57,"kind":"counter","key":"history.state.6.root","value":"FilesystemRootId(ObjectId(\"4969a796d0770e33f907e5855e5473e2401ed22726b015fec5f7fa54cf9cc3d6\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":58,"kind":"counter","key":"history.state.6.changed_paths","value":2073,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":59,"kind":"counter","key":"history.state.6.changed_bytes","value":16075165,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":60,"kind":"counter","key":"history.state.6.inserted","value":2225,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":61,"kind":"counter","key":"history.state.6.objects","value":282,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":62,"kind":"resource","key":"history.state.6.heap_peak_incremental_bytes","value":43648743,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":63,"kind":"resource","key":"history.state.6.input_ns","value":2472416,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":64,"kind":"resource","key":"history.state.6.build_ns","value":616797625,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":65,"kind":"resource","key":"history.state.6.save_ns","value":273296958,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":66,"kind":"counter","key":"history.state.7.root","value":"FilesystemRootId(ObjectId(\"604840dde1420c025b9d5ed2371eefe093a5eeb346f10932ea6756c01c72a910\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":67,"kind":"counter","key":"history.state.7.changed_paths","value":2895,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":68,"kind":"counter","key":"history.state.7.changed_bytes","value":18396659,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":69,"kind":"counter","key":"history.state.7.inserted","value":3130,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":70,"kind":"counter","key":"history.state.7.objects","value":480,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":71,"kind":"resource","key":"history.state.7.heap_peak_incremental_bytes","value":47185089,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":72,"kind":"resource","key":"history.state.7.input_ns","value":3323416,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":73,"kind":"resource","key":"history.state.7.build_ns","value":894872625,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":74,"kind":"resource","key":"history.state.7.save_ns","value":378592500,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":75,"kind":"counter","key":"history.state.8.root","value":"FilesystemRootId(ObjectId(\"bc2f2b9113ed2688944c04578ccfac4e4934f59dc50b19d495d9e7bc8e6a4734\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":76,"kind":"counter","key":"history.state.8.changed_paths","value":1638,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":77,"kind":"counter","key":"history.state.8.changed_bytes","value":13501125,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":78,"kind":"counter","key":"history.state.8.inserted","value":1804,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":79,"kind":"counter","key":"history.state.8.objects","value":239,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":80,"kind":"resource","key":"history.state.8.heap_peak_incremental_bytes","value":41185059,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":81,"kind":"resource","key":"history.state.8.input_ns","value":2723667,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":82,"kind":"resource","key":"history.state.8.build_ns","value":1043704334,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":83,"kind":"resource","key":"history.state.8.save_ns","value":263737833,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":84,"kind":"counter","key":"history.state.9.root","value":"FilesystemRootId(ObjectId(\"f523a1bb9ec971e4ffe4b23c87b372314f032ab8919f5f800942e29f9607a9dc\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":85,"kind":"counter","key":"history.state.9.changed_paths","value":2029,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":86,"kind":"counter","key":"history.state.9.changed_bytes","value":19534024,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":87,"kind":"counter","key":"history.state.9.inserted","value":2408,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":88,"kind":"counter","key":"history.state.9.objects","value":301,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":89,"kind":"resource","key":"history.state.9.heap_peak_incremental_bytes","value":46835155,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":90,"kind":"resource","key":"history.state.9.input_ns","value":3450750,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":91,"kind":"resource","key":"history.state.9.build_ns","value":1113079125,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":92,"kind":"resource","key":"history.state.9.save_ns","value":386441917,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":93,"kind":"counter","key":"history.state.10.root","value":"FilesystemRootId(ObjectId(\"47df3547b1ca28c92b3a37c42eb349f88368e012b5cfcedfaa6b9f2add1248d6\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":94,"kind":"counter","key":"history.state.10.changed_paths","value":1815,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":95,"kind":"counter","key":"history.state.10.changed_bytes","value":17713193,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":96,"kind":"counter","key":"history.state.10.inserted","value":2068,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":97,"kind":"counter","key":"history.state.10.objects","value":216,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":98,"kind":"resource","key":"history.state.10.heap_peak_incremental_bytes","value":45204195,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":99,"kind":"resource","key":"history.state.10.input_ns","value":3072750,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":100,"kind":"resource","key":"history.state.10.build_ns","value":1277410833,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":101,"kind":"resource","key":"history.state.10.save_ns","value":359594958,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":102,"kind":"counter","key":"history.state.11.root","value":"FilesystemRootId(ObjectId(\"456f996cc885c96046f3ac0908602e354c5ade03fd2bc1315921440bc30224f9\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":103,"kind":"counter","key":"history.state.11.changed_paths","value":4122,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":104,"kind":"counter","key":"history.state.11.changed_bytes","value":28168849,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":105,"kind":"counter","key":"history.state.11.inserted","value":4153,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":106,"kind":"counter","key":"history.state.11.objects","value":411,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":107,"kind":"resource","key":"history.state.11.heap_peak_incremental_bytes","value":61296520,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":108,"kind":"resource","key":"history.state.11.input_ns","value":5054042,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":109,"kind":"resource","key":"history.state.11.build_ns","value":2232000542,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":110,"kind":"resource","key":"history.state.11.save_ns","value":592539041,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":111,"kind":"counter","key":"history.state.12.root","value":"FilesystemRootId(ObjectId(\"ad8124295a04fa0e5dae91bb96754ab1d2ecff549cdb8b48411e74f6d2aff8e3\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":112,"kind":"counter","key":"history.state.12.changed_paths","value":4310,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":113,"kind":"counter","key":"history.state.12.changed_bytes","value":30317290,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":114,"kind":"counter","key":"history.state.12.inserted","value":4029,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":115,"kind":"counter","key":"history.state.12.objects","value":511,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":116,"kind":"resource","key":"history.state.12.heap_peak_incremental_bytes","value":63322616,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":117,"kind":"resource","key":"history.state.12.input_ns","value":5463250,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":118,"kind":"resource","key":"history.state.12.build_ns","value":2191169625,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":119,"kind":"resource","key":"history.state.12.save_ns","value":632330167,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":120,"kind":"counter","key":"history.state.13.root","value":"FilesystemRootId(ObjectId(\"a7c2492b9eacab5a77ecc4f71cb051ffd5db2c552d87a43471ce35d3344a4dae\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":121,"kind":"counter","key":"history.state.13.changed_paths","value":4086,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":122,"kind":"counter","key":"history.state.13.changed_bytes","value":31331121,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":123,"kind":"counter","key":"history.state.13.inserted","value":3863,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":124,"kind":"counter","key":"history.state.13.objects","value":408,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":125,"kind":"resource","key":"history.state.13.heap_peak_incremental_bytes","value":62906541,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":126,"kind":"resource","key":"history.state.13.input_ns","value":5223250,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":127,"kind":"resource","key":"history.state.13.build_ns","value":2456608125,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":128,"kind":"resource","key":"history.state.13.save_ns","value":684358458,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":129,"kind":"counter","key":"history.state.14.root","value":"FilesystemRootId(ObjectId(\"de3c194dc9baedef33c8f8d904db92f0b78e28612b77a5514269a7082b9cddf7\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":130,"kind":"counter","key":"history.state.14.changed_paths","value":6320,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":131,"kind":"counter","key":"history.state.14.changed_bytes","value":40145766,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":132,"kind":"counter","key":"history.state.14.inserted","value":5875,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":133,"kind":"counter","key":"history.state.14.objects","value":853,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":134,"kind":"resource","key":"history.state.14.heap_peak_incremental_bytes","value":72365486,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":135,"kind":"resource","key":"history.state.14.input_ns","value":7038583,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":136,"kind":"resource","key":"history.state.14.build_ns","value":2918463000,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":137,"kind":"resource","key":"history.state.14.save_ns","value":912738208,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":138,"kind":"counter","key":"history.state.15.root","value":"FilesystemRootId(ObjectId(\"b380d38dd584236a15fc464b4a98a871af5c451d0d1e45938c11868673ef27ab\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":139,"kind":"counter","key":"history.state.15.changed_paths","value":6408,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":140,"kind":"counter","key":"history.state.15.changed_bytes","value":42050613,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":141,"kind":"counter","key":"history.state.15.inserted","value":5884,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":142,"kind":"counter","key":"history.state.15.objects","value":1062,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":143,"kind":"resource","key":"history.state.15.heap_peak_incremental_bytes","value":75411887,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":144,"kind":"resource","key":"history.state.15.input_ns","value":8020666,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":145,"kind":"resource","key":"history.state.15.build_ns","value":2777986542,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":146,"kind":"resource","key":"history.state.15.save_ns","value":976061209,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":147,"kind":"counter","key":"history.state.16.root","value":"FilesystemRootId(ObjectId(\"e28065192af86223a7149bd30f0f5ba96dc8c071403a85e820e78cf72ae5e234\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":148,"kind":"counter","key":"history.state.16.changed_paths","value":4727,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":149,"kind":"counter","key":"history.state.16.changed_bytes","value":38691424,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":150,"kind":"counter","key":"history.state.16.inserted","value":4867,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":151,"kind":"counter","key":"history.state.16.objects","value":659,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":152,"kind":"resource","key":"history.state.16.heap_peak_incremental_bytes","value":72236035,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":153,"kind":"resource","key":"history.state.16.input_ns","value":5856750,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":154,"kind":"resource","key":"history.state.16.build_ns","value":2376118625,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":155,"kind":"resource","key":"history.state.16.save_ns","value":783523083,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":156,"kind":"counter","key":"history.state.17.root","value":"FilesystemRootId(ObjectId(\"215e1f8a4288fcaa5fec75cff70bdcad3779ce75e6a2598e9f7f3c24618a83f4\"))","unit":"identity","basis":"the state's filesystem root identity (O1 pin)"}
+{"schema":"layerfs-trace-v1","seq":157,"kind":"counter","key":"history.state.17.changed_paths","value":5914,"numeric":true,"unit":"paths","basis":"entries this transition changed"}
+{"schema":"layerfs-trace-v1","seq":158,"kind":"counter","key":"history.state.17.changed_bytes","value":37726986,"numeric":true,"unit":"bytes","basis":"logical bytes this transition changed"}
+{"schema":"layerfs-trace-v1","seq":159,"kind":"counter","key":"history.state.17.inserted","value":4969,"numeric":true,"unit":"objects","basis":"SaveOutcome.inserted"}
+{"schema":"layerfs-trace-v1","seq":160,"kind":"counter","key":"history.state.17.objects","value":499,"numeric":true,"unit":"objects","basis":"canonical objects the child emitted"}
+{"schema":"layerfs-trace-v1","seq":161,"kind":"resource","key":"history.state.17.heap_peak_incremental_bytes","value":71657445,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, this state's child alone"}
+{"schema":"layerfs-trace-v1","seq":162,"kind":"resource","key":"history.state.17.input_ns","value":6535084,"numeric":true,"unit":"ns","basis":"harness input assembly inside the child"}
+{"schema":"layerfs-trace-v1","seq":163,"kind":"resource","key":"history.state.17.build_ns","value":2594365667,"numeric":true,"unit":"ns","basis":"build/update_filesystem"}
+{"schema":"layerfs-trace-v1","seq":164,"kind":"resource","key":"history.state.17.save_ns","value":847800417,"numeric":true,"unit":"ns","basis":"begin_save + accept + finish"}
+{"schema":"layerfs-trace-v1","seq":165,"kind":"resource","key":"heap.peak_incremental_bytes","value":75411887,"numeric":true,"unit":"bytes","basis":"the largest single-state peak; the chain's own peak is not the product's"}
+{"schema":"layerfs-trace-v1","seq":166,"kind":"counter","key":"history.root_ns","value":44831509917,"numeric":true,"unit":"ns","basis":"the product's own root: the chain including the harness's untimed corpus reading"}
+{"schema":"layerfs-trace-v1","seq":167,"kind":"resource","key":"history.corpus_read_ns","value":12253148292,"numeric":true,"unit":"ns","basis":"the harness's own corpus reading: inside the root, between the children, untimed"}
+{"schema":"layerfs-trace-v1","seq":168,"kind":"counter","key":"history.children_ns","value":32566067669,"numeric":true,"unit":"ns","basis":"the sum of this row's named children; the published operation_ns"}
+{"schema":"layerfs-trace-v1","seq":169,"kind":"counter","key":"delta.reused","value":1121,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":170,"kind":"counter","key":"delta.inserted","value":52032,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":171,"kind":"counter","key":"delta.full_records","value":12952,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":172,"kind":"counter","key":"delta.prefix_records","value":39080,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":173,"kind":"counter","key":"delta.packs_created","value":255,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":174,"kind":"counter","key":"delta.prepared_full","value":45239,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":175,"kind":"counter","key":"delta.trials","value":38230,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":176,"kind":"counter","key":"delta.prefix_selected","value":38163,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":177,"kind":"counter","key":"delta.full_losses","value":67,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":178,"kind":"counter","key":"delta.no_candidate","value":6988,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":179,"kind":"counter","key":"delta.absent_candidates","value":0,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":180,"kind":"counter","key":"delta.ineligible_candidates","value":683,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":181,"kind":"counter","key":"delta.work_exceeded","value":21,"numeric":true,"unit":"objects","basis":"chain total of the save's own counters"}
+{"schema":"layerfs-trace-v1","seq":182,"kind":"counter","key":"history.advisory_model","value":1,"numeric":true,"unit":"bool","basis":"1 when the driver declared each version's previous content root as an OriginalBase predecessor"}
+{"schema":"layerfs-trace-v1","seq":183,"kind":"counter","key":"history.prior_unavailable","value":0,"numeric":true,"unit":"objects","basis":"changed paths that have an earlier version in the history whose bytes were not served"}
+{"schema":"layerfs-trace-v1","seq":184,"kind":"counter","key":"history.advisory_bases","value":29192,"numeric":true,"unit":"objects","basis":"content roots the driver declared a previous version as the base for"}
+{"schema":"layerfs-trace-v1","seq":185,"kind":"counter","key":"history.advisory_depth_limit","value":255,"numeric":true,"unit":"edges","basis":"255 means the driver declared unconditionally"}
+{"schema":"layerfs-trace-v1","seq":186,"kind":"counter","key":"store.path","value":"/tmp/history-stride10/sample.sqlite","unit":"path","basis":"the Store this row created and grew"}
+{"schema":"layerfs-trace-v1","seq":187,"kind":"resource","key":"space.allocated_bytes","value":49192960,"numeric":true,"unit":"bytes","basis":"st_blocks * 512 of the Store file"}
+{"schema":"layerfs-trace-v1","seq":188,"kind":"resource","key":"space.apparent_bytes","value":49053696,"numeric":true,"unit":"bytes","basis":"st_size of the Store file"}
+{"schema":"layerfs-trace-v1","seq":189,"kind":"gate","key":"g1.o1-chain-complete","value":"PASS|17 of 17 states saved|every state of the selection is saved, in order","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":190,"kind":"gate","key":"g4.swaps","value":"PASS|0|== 0","unit":"","basis":"G4"}
+{"schema":"layerfs-trace-v1","seq":191,"kind":"gate","key":"g1.o3-pinned-counters","value":"INCOMPLETE|no pinned counters for this case|at least one O3 constant pinned for every admission case","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":192,"kind":"receipt","key":"note","value":"history_row: history-stride10","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":193,"kind":"receipt","key":"note","value":"history_states: 17","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":194,"kind":"receipt","key":"note","value":"history_logical_bytes: 561010345","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":195,"kind":"receipt","key":"note","value":"history_path_states: 101477","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":196,"kind":"receipt","key":"note","value":"measured_region: construct + build/update + save, one named child per state","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":197,"kind":"receipt","key":"note","value":"operation_ns: the sum of the named children, not the root","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":198,"kind":"receipt","key":"note","value":"corpus_reading: between the children, untimed","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":199,"kind":"receipt","key":"note","value":"prepared: none (Preparation::InProcess)","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":200,"kind":"receipt","key":"note","value":"oracle_phase: verify-invocation","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":201,"kind":"receipt","key":"note","value":"store: /tmp/history-stride10/sample.sqlite","unit":"","basis":"driver declaration"}

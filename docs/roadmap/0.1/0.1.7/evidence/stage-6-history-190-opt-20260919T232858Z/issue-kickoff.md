@@ -1,0 +1,11 @@
+## Execution kickoff — steps 1–5 now requested
+
+The owner has now explicitly requested the subagent optimization campaign, including product batching/bounded reuse, correctness proof, stride3 confirmation, issue updates after each step and production LOC reporting. This supersedes the earlier investigation-only restriction for these changes.
+
+- Subagents own harness read-work instrumentation, product batching/reuse, and external correctness/work-reduction tests. One coordinator serializes builds and measurement under the shared locks.
+- First freeze an instrumented baseline; product edits wait until its binary and runs are retained. Same harness/corpus/switches across arms, one sample per case/arm, no stride1.
+- Prospectively freeze raw diagnostic execution ceilings at 120 s (stride10), 240 s (stride3); verification hard wall remains60 s and its work targets remain10/20 s. These execution ceilings do not relax ordinary gates or turn the uncontrolled-cache diagnostics into admission evidence.
+- Actual provider read waves/objects/returned bytes and elapsed read work will be recorded separately from logical demand counters. No per-read telemetry-node explosion.
+- Initial production LOC: reference65,417 + core20,116 =85,533. Method: `python3 tools/production_loc.py --json`, excluding tests/docs/tools/harness and legacy inline tests, including runtime SQL.
+
+Campaign: `docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/`. No optimization or new timing result is claimed yet. No format, codec, worker-count or validation relaxation is planned.

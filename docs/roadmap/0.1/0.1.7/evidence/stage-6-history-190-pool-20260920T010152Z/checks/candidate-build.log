@@ -1,0 +1,14 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+   Compiling fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/benchmark/fs-bench-pro-storage-content)
+warning: variable does not need to be mutable
+    --> src/ops/history.rs:1525:9
+     |
+1525 |     let mut prior_unavailable: u64 = 0;
+     |         ----^^^^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+warning: `fs-bench-pro-storage-content` (lib) generated 1 warning (run `cargo fix --lib -p fs-bench-pro-storage-content` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 4.38s

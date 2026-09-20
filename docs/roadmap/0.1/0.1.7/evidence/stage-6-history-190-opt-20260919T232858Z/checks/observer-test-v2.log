@@ -1,0 +1,20 @@
+   Compiling fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content)
+warning: variable does not need to be mutable
+    --> src/ops/history.rs:1524:9
+     |
+1524 |     let mut prior_unavailable: u64 = 0;
+     |         ----^^^^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+warning: `fs-bench-pro-storage-content` (lib) generated 1 warning (run `cargo fix --lib -p fs-bench-pro-storage-content` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.66s
+     Running tests/history_read_work.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/history_read_work-4fe0c7ddb688b40f)
+
+running 1 test
+test read_observation_preserves_results_errors_dispatch_and_disabled_behavior ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

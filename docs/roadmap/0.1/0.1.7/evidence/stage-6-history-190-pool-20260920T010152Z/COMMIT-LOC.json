@@ -1,0 +1,68 @@
+{
+  "first_parent": "9d82685f39460fabec6c810184d87adcccd53dc5",
+  "before": {
+    "combined": 85582,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6841,
+          "layerfs-telemetry": 763
+        },
+        "files": 121,
+        "lines": 20165
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 85723,
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6982,
+          "layerfs-telemetry": 763
+        },
+        "files": 122,
+        "lines": 20306
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "delta": 141,
+  "instrumentation_delta": 85,
+  "reuse_delta": 56,
+  "counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "method": "identical tools/production_loc.py --root SNAPSHOT --json over git archive first parent and final staged product scope crates/ and core/crates/; runtime SQL included, tests including legacy inline branches/harness/docs/tools/generated sources excluded"
+}

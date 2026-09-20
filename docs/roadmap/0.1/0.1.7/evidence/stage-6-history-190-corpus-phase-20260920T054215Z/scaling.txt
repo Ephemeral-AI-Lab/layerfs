@@ -1,0 +1,32 @@
+=== history-stride3: work per changed byte, early half against late half, by changed-bytes band
+    band (MB)  fs ns/MB early       late     x | waves/MB e       l     x | packfetch/MB e       l     x |  ns/wave e        l     x
+     4-7           20,957,062 46,773,902  2.23 |      140.6    66.1  0.47 |          411.6   925.3  2.25 |    149,026  707,638  4.75
+     7-10          18,204,160 62,175,088  3.42 |      139.4   111.3  0.80 |          341.1  1085.0  3.18 |    130,586  558,507  4.28
+    10-14          28,081,564 42,207,400  1.50 |      149.5   106.5  0.71 |          619.8   731.3  1.18 |    187,821  396,151  2.11
+    14-22          27,167,024 38,960,443  1.43 |      202.3   139.0  0.69 |          492.7   704.2  1.43 |    134,289  280,346  2.09
+  elasticity of filesystem ns/MB against ln(state): +13,108,101 ns/MB per e-fold  (from 440,595 at state 1 to 57,939,636 at state 53)
+
+=== history-stride10: work per changed byte, early half against late half, by changed-bytes band
+    band (MB)  fs ns/MB early       late     x | waves/MB e       l     x | packfetch/MB e       l     x |  ns/wave e        l     x
+    14-22          14,446,757 16,172,942  1.12 |      250.7   112.4  0.45 |          113.4   244.6  2.16 |     57,615  143,908  2.50
+  elasticity of filesystem ns/MB against ln(state): +8,755,936 ns/MB per e-fold  (from 514,167 at state 1 to 29,905,291 at state 17)
+
+=== the same history, split into more states (all three rows cover the same 157 checkpoints)
+  row                 states  operation s   s/state  changed MB      ns/MB  MB/state
+  history-stride10        17       19.739    1161.1       377.4 52297706.1      22.2
+  history-stride3         53       48.976     924.1       713.7 68625860.8      13.5
+  history-stride1        157      146.178     931.1      1719.8 84996708.7      11.0
+=== which mechanism: per-byte work against per-unit cost (detailed rows only)
+  history-stride3
+      band MB    hit rate e/l   fetch/wave e/l    KB/fetch e/l   rec/leaf e/l  edges/rec e/l   pack bytes/MB e/l
+      4-7       0.955/0.822       2.9/14.0        32.6/42.2      6.39/8.71      0.34/0.39    13,754,006/39,986,625
+      7-10      0.967/0.898       2.4/9.7         34.6/77.6      6.01/7.26      0.33/0.36    12,081,783/86,166,815
+     10-14      0.952/0.858       4.1/6.9         32.2/72.0      6.38/5.91      0.34/0.33    20,446,598/53,906,060
+     14-22      0.945/0.904       2.4/5.1         35.5/56.6      6.97/6.26      0.36/0.34    17,928,086/40,794,860
+  history-stride10
+      band MB    hit rate e/l   fetch/wave e/l    KB/fetch e/l   rec/leaf e/l  edges/rec e/l   pack bytes/MB e/l
+     14-22      0.996/0.980       0.5/2.2         52.4/68.9      3.55/5.91      0.22/0.33    6,083,858/17,252,296
+
+Reading: bytes copied per fetch and fetches per wave both rise, while the decoded-group
+hit rate falls, and chain edges per record call stay flat. That is a bounded-cache
+against a growing working set, not a deeper-chain algorithm.

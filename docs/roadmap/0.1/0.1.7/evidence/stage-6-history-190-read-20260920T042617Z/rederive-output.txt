@@ -1,0 +1,57 @@
+=== history-stride10 ===
+OK   baseline2 operation == phases-perf.operation_ns: 21905900168
+OK   baseline2 measured states: 17
+OK   baseline2 invocation <= wall: True
+OK   baseline2 binary sha: '371ee8c28edee240f3627e16935b1f259cf045f30ba63890cf1ee6caaadc4fdb'
+OK   baseline2 binary sha == results.json: '371ee8c28edee240f3627e16935b1f259cf045f30ba63890cf1ee6caaadc4fdb'
+OK   baseline2 store sha == results.json: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   candidate2 operation == phases-perf.operation_ns: 19888424711
+OK   candidate2 measured states: 17
+OK   candidate2 invocation <= wall: True
+OK   candidate2 binary sha: '2e1fd754961ea50bcdc85ac07c9a1131c1c9745c61665638d69015414b567089'
+OK   candidate2 binary sha == results.json: '2e1fd754961ea50bcdc85ac07c9a1131c1c9745c61665638d69015414b567089'
+OK   candidate2 store sha == results.json: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   store byte-identical between arms: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   operation reduction: 2017475457
+OK   provider reduction: 1764710765
+OK   catalogue reduction: 1595725442
+     statements 278,927 -> 65,337
+     operation  21,905,900,168 -> 19,888,424,711 (9.209735%)
+=== history-stride3 ===
+OK   baseline2 operation == phases-perf.operation_ns: 56597343506
+OK   baseline2 measured states: 53
+OK   baseline2 invocation <= wall: True
+OK   baseline2 binary sha: '371ee8c28edee240f3627e16935b1f259cf045f30ba63890cf1ee6caaadc4fdb'
+OK   baseline2 binary sha == results.json: '371ee8c28edee240f3627e16935b1f259cf045f30ba63890cf1ee6caaadc4fdb'
+OK   baseline2 store sha == results.json: 'f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e'
+OK   candidate2 operation == phases-perf.operation_ns: 49501013748
+OK   candidate2 measured states: 53
+OK   candidate2 invocation <= wall: True
+OK   candidate2 binary sha: '2e1fd754961ea50bcdc85ac07c9a1131c1c9745c61665638d69015414b567089'
+OK   candidate2 binary sha == results.json: '2e1fd754961ea50bcdc85ac07c9a1131c1c9745c61665638d69015414b567089'
+OK   candidate2 store sha == results.json: 'f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e'
+OK   store byte-identical between arms: 'f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e'
+OK   operation reduction: 7096329758
+OK   provider reduction: 7285698495
+OK   catalogue reduction: 7128182097
+     statements 1,334,277 -> 368,074
+     operation  56,597,343,506 -> 49,501,013,748 (12.538274%)
+OK   custody baseline-instrumented.bin/stage-6-history-190-read-20260920T042617Z: '7e17aca502990c5ed054ff1ada20b744833e8ef6e767492e0758b9908bdd99cf'
+OK   custody baseline2-instrumented.bin/stage-6-history-190-read-20260920T042617Z: '371ee8c28edee240f3627e16935b1f259cf045f30ba63890cf1ee6caaadc4fdb'
+OK   custody candidate.bin/stage-6-history-190-read-20260920T042617Z: '9958e0d1a09e2e1b7148b1f76b4be2f5cd84c620c9022c5028ded3df38d7abe0'
+OK   custody candidate2.bin/stage-6-history-190-read-20260920T042617Z: '2e1fd754961ea50bcdc85ac07c9a1131c1c9745c61665638d69015414b567089'
+OK   custody sample.sqlite/baseline-history-stride10: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   custody sample.sqlite/baseline2-history-stride10: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   custody sample.sqlite/baseline2-history-stride3: 'f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e'
+OK   custody sample.sqlite/candidate-history-stride10: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   custody sample.sqlite/candidate-history-stride3: 'f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e'
+OK   custody sample.sqlite/candidate2-history-stride10: '4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487'
+OK   custody sample.sqlite/candidate2-history-stride3: 'f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e'
+OK   ledger has L42: True
+OK   README states 2,017,475,457: True
+OK   README states 7,096,329,758: True
+OK   README states 65,337: True
+OK   README states 368,074: True
+OK   README states 85,722 → 85,725: True
+
+FAILURES: none

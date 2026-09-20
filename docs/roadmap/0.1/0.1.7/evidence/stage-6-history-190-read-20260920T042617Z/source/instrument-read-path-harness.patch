@@ -1,0 +1,61 @@
+diff --git a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+index 0247ab734..f8c18a4ab 100644
+--- a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
++++ b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+@@ -1110,6 +1110,8 @@ struct StateOutcome {
+     commits: u64,
+     group_decodes: u64,
+     pooled_reads: layerfs_storage::encoding::pool::PoolReadCounters,
++    /// Diagnostic read-path attribution over this state's filesystem provider.
++    read_work: layerfs_storage::encoding::ReadPathWork,
+     connection_opens: u64,
+     filesystem: FilesystemUpdateCounters,
+     filesystem_reads: ReadCounters,
+@@ -2006,6 +2008,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                         commits: saved.commits,
+                         group_decodes: provider.inner.group_decodes(),
+                         pooled_reads: provider.inner.pooled_read_counters(),
++                        read_work: provider.inner.read_path_work(),
+                         connection_opens: provider.inner.connection_opens(),
+                         filesystem_reads: provider.counters(),
+                         content_reads,
+@@ -2110,6 +2113,39 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                 }
+             }
+         }
++        if detailed {
++            // Diagnostic attribution: where the provider's own elapsed time goes.
++            // The spans nest, so these are not a partition and are never summed
++            // into the operation; the residual against `read_elapsed_ns` is the
++            // part this attribution does not name.
++            let work = outcome.read_work;
++            for (suffix, value, unit) in [
++                ("pack_demands", work.pack_demands, "count"),
++                ("pack_fetches", work.pack_fetches, "count"),
++                ("pack_bytes", work.pack_bytes, "bytes"),
++                ("pack_fetch_ns", work.pack_fetch_ns, "ns"),
++                ("control_ns", work.control_ns, "ns"),
++                ("group_decode_ns", work.group_decode_ns, "ns"),
++                ("record_frame_ns", work.record_frame_ns, "ns"),
++                ("value_decode_ns", work.value_decode_ns, "ns"),
++                ("locator_ns", work.locator_ns, "ns"),
++                ("catalogue_ns", work.catalogue_ns, "ns"),
++                ("catalogue_calls", work.catalogue_calls, "count"),
++                ("covering_reuse", work.covering_reuse, "count"),
++                ("physical_rebuild_ns", work.physical_rebuild_ns, "ns"),
++                ("body_decode_ns", work.body_decode_ns, "ns"),
++                ("leaf_encode_ns", work.leaf_encode_ns, "ns"),
++                ("decode_call_ns", work.decode_call_ns, "ns"),
++            ] {
++                context.trace.write_number(
++                    Kind::Resource,
++                    &format!("history.state.{}.filesystem.provider.work.{suffix}", outcome.ordinal),
++                    i128::from(value),
++                    unit,
++                    "diagnostic aggregate read-path attribution; spans nest and overlap the provider elapsed, so they are not a partition",
++                )?;
++            }
++        }
+         if detailed {
+             let pooled = outcome.pooled_reads;
+             for (suffix, value, unit) in [

@@ -1,0 +1,80 @@
+{
+  "schema": "h190-stride1-analysis-v1",
+  "rows": {
+    "history-stride10": {
+      "states": 17,
+      "operation_ns": 19738993418,
+      "per_state_mean_ns": 1161117259.8823528,
+      "per_state_median_ns": 851784041,
+      "per_state_min_ns": 44087334,
+      "per_state_max_ns": 2592800875,
+      "first_decile_mean_ns": 44087334.0,
+      "last_decile_mean_ns": 2396413875.0,
+      "slope_ns_per_state": 160260612.8382353,
+      "changed_bytes_total": 377435167,
+      "changed_paths_total": 52417,
+      "objects_total": 7264,
+      "save_commits_total": 1149,
+      "ns_per_changed_byte": 52.29770605344785,
+      "store": {
+        "apparent_bytes": 49324032,
+        "allocated_bytes": 50249728,
+        "v016_allocated_bytes": 49344512,
+        "delta_allocated_bytes": 905216,
+        "below_target": false,
+        "incomplete_axes": [],
+        "byte_identical_to_retained_candidate2": null
+      }
+    },
+    "history-stride3": {
+      "states": 53,
+      "operation_ns": 48976026830,
+      "per_state_mean_ns": 924075977.9245284,
+      "per_state_median_ns": 778945959,
+      "per_state_min_ns": 46006584,
+      "per_state_max_ns": 3818712750,
+      "first_decile_mean_ns": 125699241.8,
+      "last_decile_mean_ns": 1639091174.8,
+      "slope_ns_per_state": 36717729.80204806,
+      "changed_bytes_total": 713667213,
+      "changed_paths_total": 91445,
+      "objects_total": 13608,
+      "save_commits_total": 1471,
+      "ns_per_changed_byte": 68.62586081840921,
+      "store": {
+        "apparent_bytes": 62152704,
+        "allocated_bytes": 63078400,
+        "v016_allocated_bytes": 64024576,
+        "delta_allocated_bytes": -946176,
+        "below_target": true,
+        "incomplete_axes": [],
+        "byte_identical_to_retained_candidate2": null
+      }
+    },
+    "history-stride1": {
+      "states": 157,
+      "operation_ns": 146177713707,
+      "per_state_mean_ns": 931068240.1719745,
+      "per_state_median_ns": 698455833,
+      "per_state_min_ns": 22187792,
+      "per_state_max_ns": 8951961042,
+      "first_decile_mean_ns": 91503939.0,
+      "last_decile_mean_ns": 2192956588.733333,
+      "slope_ns_per_state": 12629153.377461407,
+      "changed_bytes_total": 1719804402,
+      "changed_paths_total": 217646,
+      "objects_total": 32954,
+      "save_commits_total": 1797,
+      "ns_per_changed_byte": 84.99670865884899,
+      "store": {
+        "apparent_bytes": 80969728,
+        "allocated_bytes": 84541440,
+        "v016_allocated_bytes": 83947520,
+        "delta_allocated_bytes": 593920,
+        "below_target": false,
+        "incomplete_axes": [],
+        "byte_identical_to_retained_candidate2": null
+      }
+    }
+  }
+}

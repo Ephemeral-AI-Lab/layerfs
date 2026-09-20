@@ -1,0 +1,9 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--check"
+  ],
+  "exit_code": 0,
+  "wall_ns": 34851667
+}

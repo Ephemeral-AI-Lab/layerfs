@@ -1,0 +1,22 @@
+{
+  "operation_ns": 19660740792,
+  "provider": {
+    "read_waves": 66616,
+    "requested_objects": 74279,
+    "returned_objects": 74279,
+    "returned_canonical_bytes": 148826516,
+    "failed_waves": 0,
+    "read_elapsed_ns": 9856060754,
+    "pooled.leaf_requests": 11268,
+    "pooled.chain_edges": 16570,
+    "pooled.physical_record_calls": 55676,
+    "pooled.physical_group_decodes": 55676,
+    "pooled.physical_group_decoded_bytes": 2522862738,
+    "pooled.physical_group_cache_hits": 0,
+    "pooled.value_group_decodes": 65337,
+    "pooled.pack_fetches": 79784,
+    "pooled.pack_bytes": 7378994999,
+    "group_decodes": 513,
+    "connection_opens": 16
+  }
+}

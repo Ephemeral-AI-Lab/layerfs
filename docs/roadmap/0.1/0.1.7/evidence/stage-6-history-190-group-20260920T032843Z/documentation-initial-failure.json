@@ -1,0 +1,4 @@
+{
+  "failure": "CORRECTNESS.md missing required explicit status banner",
+  "resolution": "Added status banner; source findings unchanged; no product change"
+}

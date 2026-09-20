@@ -1,0 +1,31 @@
+diff --git a/core/crates/layerfs-content/src/filesystem/update.rs b/core/crates/layerfs-content/src/filesystem/update.rs
+index 5b096f857..dc981ab7c 100644
+--- a/core/crates/layerfs-content/src/filesystem/update.rs
++++ b/core/crates/layerfs-content/src/filesystem/update.rs
+@@ -360,15 +360,17 @@ fn run_body<'b>(
+     if checked.topology.table.is_some() {
+         // Only an update can release descendants: a new filesystem has no base
+         // binding to lose, and its root is never released.
+-        let zero = zero_count_serials(
+-            reader,
+-            table,
+-            &mut reducer,
+-            input.resources.base_read_batch,
+-            input.root_serial,
+-            &unreachable,
+-            input.resources.maximum_touched_serials(),
+-        )?;
++        let zero = phases.phase("zero_count", || {
++            zero_count_serials(
++                reader,
++                table,
++                &mut reducer,
++                input.resources.base_read_batch,
++                input.root_serial,
++                &unreachable,
++                input.resources.maximum_touched_serials(),
++            )
++        })?;
+         counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
+         counters.release = release_zero_count(
+             reader,

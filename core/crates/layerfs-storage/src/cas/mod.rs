@@ -16,7 +16,7 @@ mod save;
 mod selection;
 mod store;
 
-pub use owner::OutcomeCounters;
+pub use owner::{OutcomeCounters, ResolveProfile, SaveProfile};
 pub use pool_lane::PoolCounters;
 pub use provider::StoreProvider;
 pub use read::ReadCounters;

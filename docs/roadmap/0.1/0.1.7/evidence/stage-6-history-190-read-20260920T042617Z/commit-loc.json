@@ -1,0 +1,8 @@
+{
+  "first_parent": "9fe8eb290072d09594cde3ba67c3bbd1963d5e56",
+  "staged_tree": "6d46da80bcd1f8b5d5bfd97702e40ef31bf20052",
+  "method": "tools/production_loc.py --root <exact git archive of the first parent and of the staged tree, crates + core/crates> --json; runtime SQL included; tests including legacy inline branches, comments, blanks, harnesses, docs, tools and generated artifacts excluded",
+  "delta": 3,
+  "before": {"combined": 85722, "reference": 65417, "core": 20305, "core_layerfs_storage": 6981},
+  "after": {"combined": 85725, "reference": 65417, "core": 20308, "core_layerfs_storage": 6984}
+}

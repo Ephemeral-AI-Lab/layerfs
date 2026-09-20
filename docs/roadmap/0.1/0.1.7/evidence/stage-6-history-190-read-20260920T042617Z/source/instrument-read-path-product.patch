@@ -1,0 +1,760 @@
+diff --git a/core/crates/layerfs-storage/src/cas/owner.rs b/core/crates/layerfs-storage/src/cas/owner.rs
+index 529e5e115..f84a739e8 100644
+--- a/core/crates/layerfs-storage/src/cas/owner.rs
++++ b/core/crates/layerfs-storage/src/cas/owner.rs
+@@ -164,6 +164,9 @@ impl MutationOwner {
+     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
+         let value = {
+             let mut groups = crate::encoding::GroupCache::new();
++            // Diagnostic attribution is a read-path receipt, not save-side policy:
++            // this save's own reconstruction keeps a local sink and reports none.
++            let mut work = crate::encoding::ReadPathWork::new();
+             let mut resolver = crate::encoding::delta::read::Resolver::new(
+                 &self.connection,
+                 i64::MAX,
+@@ -172,6 +175,7 @@ impl MutationOwner {
+                 &mut groups,
+                 &mut self.decompression,
+                 &mut self.chain,
++                &mut work,
+             );
+             resolver.resolve_at(location)?.0
+         };
+diff --git a/core/crates/layerfs-storage/src/cas/provider.rs b/core/crates/layerfs-storage/src/cas/provider.rs
+index d1d795a66..c83bfd34e 100644
+--- a/core/crates/layerfs-storage/src/cas/provider.rs
++++ b/core/crates/layerfs-storage/src/cas/provider.rs
+@@ -78,6 +78,8 @@ pub struct StoreProvider<'a> {
+     /// the figure a decoded-group cache is measured against.
+     group_decodes: Cell<u64>,
+     pooled: Cell<crate::encoding::pool::PoolReadCounters>,
++    /// Diagnostic read-path attribution over every wave of this operation.
++    work: Cell<crate::encoding::ReadPathWork>,
+ }
+ 
+ impl<'a> StoreProvider<'a> {
+@@ -89,6 +91,7 @@ impl<'a> StoreProvider<'a> {
+             opens: Cell::new(0),
+             group_decodes: Cell::new(0),
+             pooled: Cell::new(crate::encoding::pool::PoolReadCounters::new()),
++            work: Cell::new(crate::encoding::ReadPathWork::new()),
+         }
+     }
+ 
+@@ -107,6 +110,11 @@ impl<'a> StoreProvider<'a> {
+         self.pooled.get()
+     }
+ 
++    /// Diagnostic read-path attribution over every successful wave.
++    pub fn read_path_work(&self) -> crate::encoding::ReadPathWork {
++        self.work.get()
++    }
++
+     /// Reads one wave through the operation's session.
+     ///
+     /// This is the form an adapter with a timing tree of its own uses: the
+@@ -137,6 +145,9 @@ impl<'a> StoreProvider<'a> {
+             let mut pooled = self.pooled.get();
+             pooled.accumulate(counters.pooled);
+             self.pooled.set(pooled);
++            let mut work = self.work.get();
++            work.accumulate(counters.work);
++            self.work.set(work);
+             self.group_decodes
+                 .set(self.group_decodes.get() + counters.group_decodes);
+             Ok((
+@@ -151,6 +162,7 @@ impl<'a> StoreProvider<'a> {
+                     canonical_bytes: counters.canonical_bytes,
+                     group_decodes: counters.group_decodes,
+                     pooled: counters.pooled,
++                    work: counters.work,
+                     opens: u64::from(opened),
+                 },
+             ))
+diff --git a/core/crates/layerfs-storage/src/cas/read.rs b/core/crates/layerfs-storage/src/cas/read.rs
+index 274eceee6..b84113ab4 100644
+--- a/core/crates/layerfs-storage/src/cas/read.rs
++++ b/core/crates/layerfs-storage/src/cas/read.rs
+@@ -45,6 +45,8 @@ pub struct ReadCounters {
+     pub group_decodes: u64,
+     /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+     pub pooled: crate::encoding::pool::PoolReadCounters,
++    /// Diagnostic read-path attribution over this wave.
++    pub work: crate::encoding::ReadPathWork,
+ }
+ 
+ /// Reads every requested object in demand order under one ceiling.
+@@ -60,7 +62,12 @@ pub fn read_objects(
+     // but is not yet published must be reported as a visibility refusal, never
+     // mistaken for a missing object. Dependency reads inside the resolver do use
+     // the captured ceiling.
++    let mut work = crate::encoding::ReadPathWork::new();
++    let located = std::time::Instant::now();
+     let locations = lookup::locations(connection, ids, i64::MAX)?;
++    work.locator_ns = work
++        .locator_ns
++        .saturating_add(crate::encoding::elapsed(located));
+     let mut counters = ReadCounters {
+         ceiling,
+         pages: ids.len().div_ceil(crate::policy::LOOKUP_PAGE_IDS) as u64,
+@@ -87,7 +94,14 @@ pub fn read_objects(
+             .ok_or(StorageError::ObjectMissing(*id))?;
+         let ((canonical, verified), packs_fetched) = {
+             let mut resolver = Resolver::new(
+-                connection, ceiling, capacities, &mut packs, groups, workspace, &mut chain,
++                connection,
++                ceiling,
++                capacities,
++                &mut packs,
++                groups,
++                workspace,
++                &mut chain,
++                &mut work,
+             );
+             let resolved = resolver.resolve_at(location)?;
+             (resolved, resolver.packs_read())
+@@ -114,6 +128,7 @@ pub fn read_objects(
+     counters.canonical_bytes = totals.canonical_bytes;
+     counters.group_decodes = totals.group_decodes;
+     counters.pooled = totals.pooled;
++    counters.work = work;
+     Ok((values, counters))
+ }
+ 
+diff --git a/core/crates/layerfs-storage/src/cas/store.rs b/core/crates/layerfs-storage/src/cas/store.rs
+index c3f2785ed..50a444877 100644
+--- a/core/crates/layerfs-storage/src/cas/store.rs
++++ b/core/crates/layerfs-storage/src/cas/store.rs
+@@ -104,6 +104,8 @@ pub struct StoreReadCounters {
+     pub group_decodes: u64,
+     /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+     pub pooled: crate::encoding::pool::PoolReadCounters,
++    /// Diagnostic read-path attribution over this wave.
++    pub work: crate::encoding::ReadPathWork,
+     /// Connections this read opened.
+     ///
+     /// One `read_batch` call is one wave and opens one connection; a demand
+@@ -337,6 +339,7 @@ impl Store {
+                     canonical_bytes: counters.canonical_bytes,
+                     group_decodes: counters.group_decodes,
+                     pooled: counters.pooled,
++                    work: counters.work,
+                     opens: 1,
+                 },
+             ))
+diff --git a/core/crates/layerfs-storage/src/encoding/decode.rs b/core/crates/layerfs-storage/src/encoding/decode.rs
+index 728bf1fb1..4925ab47c 100644
+--- a/core/crates/layerfs-storage/src/encoding/decode.rs
++++ b/core/crates/layerfs-storage/src/encoding/decode.rs
+@@ -8,12 +8,15 @@
+ //! is decoded only against the exact base payload the resolver reconstructed and
+ //! authenticated; there is no trial decode and no fallback.
+ 
++use std::time::Instant;
++
+ use layerfs_content::encode_whole_file_payload;
+ use layerfs_content::file::mapping::encode_chunk_object;
+ use layerfs_content::ObjectRole;
+ 
+ use crate::encoding::codec::{CodecProfile, DecompressionWorkspace};
+ use crate::encoding::delta::record;
++use crate::encoding::work::{elapsed, ReadPathWork};
+ use crate::error::{StorageError, StorageResult};
+ use crate::pack::assemble::FULL_TAG as ORDINARY_FULL_TAG;
+ use crate::pack::layout::{group_view, parse_header, record_range, GroupCodec, PackLane};
+@@ -82,16 +85,19 @@ pub fn decode_canonical(
+     workspace: &mut DecompressionWorkspace,
+     groups: &mut GroupCache,
+     group_decodes: &mut u64,
++    work: &mut ReadPathWork,
+ ) -> StorageResult<Vec<u8>> {
+     let canonical_length = location.canonical_length;
+     if canonical_length == 0 || canonical_length > CANONICAL_LIMIT {
+         return Err(StorageError::Integrity("canonical length"));
+     }
++    let control_started = Instant::now();
+     let header = parse_header(pack)?;
+     let view = group_view(pack, header, location.group_number)?;
+     let selected = pack
+         .get(view.start..view.end)
+         .ok_or(StorageError::Integrity("group body range"))?;
++    work.control_ns = work.control_ns.saturating_add(elapsed(control_started));
+     match header.lane {
+         PackLane::Ordinary => {
+             // A group body cached by this wave is served as it stands; otherwise it
+@@ -104,8 +110,12 @@ pub fn decode_canonical(
+                     match groups.get(location.pack_id, location.group_number) {
+                         Some(cached) => cached,
+                         None => {
++                            let decode_started = Instant::now();
+                             let decompressed =
+                                 workspace.decompress_group(selected, view.decoded_length)?;
++                            work.group_decode_ns = work
++                                .group_decode_ns
++                                .saturating_add(elapsed(decode_started));
+                             *group_decodes = group_decodes.saturating_add(1);
+                             groups.insert(location.pack_id, location.group_number, decompressed);
+                             groups
+@@ -118,7 +128,11 @@ pub fn decode_canonical(
+             if body.len() != view.decoded_length {
+                 return Err(StorageError::Integrity("group body length"));
+             }
++            let frame_started = Instant::now();
+             let bytes = framed_record(body, location.record_number)?;
++            work.record_frame_ns = work
++                .record_frame_ns
++                .saturating_add(elapsed(frame_started));
+             if bytes.first() != Some(&ORDINARY_FULL_TAG) {
+                 return Err(StorageError::Integrity("record tag is not FULL"));
+             }
+@@ -132,7 +146,11 @@ pub fn decode_canonical(
+             if view.codec != GroupCodec::Raw {
+                 return Err(StorageError::Integrity("native group codec"));
+             }
++            let frame_started = Instant::now();
+             let bytes = framed_record(selected, location.record_number)?;
++            work.record_frame_ns = work
++                .record_frame_ns
++                .saturating_add(elapsed(frame_started));
+             let parsed = record::parse_native(bytes)?;
+             let raw = decode_payload(
+                 PackLane::Native,
+diff --git a/core/crates/layerfs-storage/src/encoding/delta/read.rs b/core/crates/layerfs-storage/src/encoding/delta/read.rs
+index 13c0011a8..eeb179915 100644
+--- a/core/crates/layerfs-storage/src/encoding/delta/read.rs
++++ b/core/crates/layerfs-storage/src/encoding/delta/read.rs
+@@ -9,6 +9,7 @@
+ //! must be located strictly before its dependent.
+ 
+ use std::collections::BTreeMap;
++use std::time::Instant;
+ 
+ use rusqlite::Connection;
+ 
+@@ -17,6 +18,7 @@ use layerfs_content::ObjectId;
+ use crate::encoding::codec::DecompressionWorkspace;
+ use crate::encoding::decode::{decode_canonical, GroupCache};
+ use crate::encoding::full::raw_payload;
++use crate::encoding::work::{elapsed, ReadPathWork};
+ use crate::error::{StorageError, StorageResult};
+ use crate::pack::layout::PackLane;
+ use crate::policy::StorageCapacities;
+@@ -62,6 +64,8 @@ pub struct Resolver<'a> {
+     workspace: &'a mut DecompressionWorkspace,
+     counters: &'a mut ChainCounters,
+     packs_read: u64,
++    /// Diagnostic read-path attribution for this wave.
++    work: &'a mut ReadPathWork,
+ }
+ 
+ impl<'a> Resolver<'a> {
+@@ -74,6 +78,7 @@ impl<'a> Resolver<'a> {
+         groups: &'a mut GroupCache,
+         workspace: &'a mut DecompressionWorkspace,
+         counters: &'a mut ChainCounters,
++        work: &'a mut ReadPathWork,
+     ) -> Self {
+         Self {
+             connection,
+@@ -84,6 +89,7 @@ impl<'a> Resolver<'a> {
+             workspace,
+             counters,
+             packs_read: 0,
++            work,
+         }
+     }
+ 
+@@ -102,8 +108,10 @@ impl<'a> Resolver<'a> {
+     /// already computed and checked against the locator, so a caller comparing
+     /// identities does not have to hash the same bytes again (P2-6).
+     pub fn resolve(&mut self, id: ObjectId) -> StorageResult<(Vec<u8>, ObjectId)> {
++        let located = Instant::now();
+         let root = lookup::location(self.connection, id, self.ceiling)?
+             .ok_or(StorageError::ObjectMissing(id))?;
++        self.work.locator_ns = self.work.locator_ns.saturating_add(elapsed(located));
+         self.resolve_at(root)
+     }
+ 
+@@ -113,8 +121,10 @@ impl<'a> Resolver<'a> {
+     /// itself, so a selection can refuse to build a chain that a later read could
+     /// not reconstruct.
+     pub fn resolve_dependency(&mut self, id: ObjectId) -> StorageResult<(Vec<u8>, ObjectId)> {
++        let located = Instant::now();
+         let root = lookup::location(self.connection, id, self.ceiling)?
+             .ok_or(StorageError::ObjectMissing(id))?;
++        self.work.locator_ns = self.work.locator_ns.saturating_add(elapsed(located));
+         self.resolve_charged(root, true)
+     }
+ 
+@@ -158,6 +168,7 @@ impl<'a> Resolver<'a> {
+                 .canonical_bytes
+                 .saturating_add(canonical.len() as u64);
+             self.counters.pooled = pool.counters();
++            self.work.accumulate(pool.work());
+             return Ok((canonical, id));
+         }
+         let role_depth = self.capacities.delta_depth_for_role(root.role);
+@@ -171,8 +182,10 @@ impl<'a> Resolver<'a> {
+             if chain.len() > usize::from(role_depth) {
+                 return Err(StorageError::Integrity("dependency chain depth"));
+             }
++            let located = Instant::now();
+             let location = lookup::location(self.connection, base, self.ceiling)?
+                 .ok_or(StorageError::ObjectMissing(base))?;
++            self.work.locator_ns = self.work.locator_ns.saturating_add(elapsed(located));
+             if location.role != current.role {
+                 return Err(StorageError::Integrity("dependency role"));
+             }
+@@ -218,7 +231,7 @@ impl<'a> Resolver<'a> {
+         // The body is charged here, where it is fetched, and not inferred later
+         // from the cache: the walk now reads it, so a decode that follows is a
+         // cache hit and would otherwise report a read that never happened.
+-        let (_, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
++        let (_, fetched) = pack_of(self.packs, self.connection, location.pack_id, self.work)?;
+         if fetched {
+             self.packs_read = self.packs_read.saturating_add(1);
+         }
+@@ -228,6 +241,7 @@ impl<'a> Resolver<'a> {
+             self.groups,
+             self.workspace,
+             &mut self.counters.group_decodes,
++            self.work,
+             location,
+         )
+     }
+@@ -264,7 +278,8 @@ impl<'a> Resolver<'a> {
+             });
+         }
+         let record_bytes = {
+-            let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
++            let (pack, fetched) =
++                pack_of(self.packs, self.connection, location.pack_id, self.work)?;
+             if fetched {
+                 self.packs_read = self.packs_read.saturating_add(1);
+             }
+@@ -277,11 +292,12 @@ impl<'a> Resolver<'a> {
+             }
+             self.counters.encoded_bytes = encoded;
+         }
+-        let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id)?;
++        let (pack, fetched) = pack_of(self.packs, self.connection, location.pack_id, self.work)?;
+         if fetched {
+             self.packs_read = self.packs_read.saturating_add(1);
+         }
+-        decode_canonical(
++        let decode_started = Instant::now();
++        let decoded = decode_canonical(
+             pack,
+             location,
+             self.capacities,
+@@ -289,7 +305,13 @@ impl<'a> Resolver<'a> {
+             self.workspace,
+             self.groups,
+             &mut self.counters.group_decodes,
+-        )
++            self.work,
++        )?;
++        self.work.decode_call_ns = self
++            .work
++            .decode_call_ns
++            .saturating_add(elapsed(decode_started));
++        Ok(decoded)
+     }
+ }
+ 
+@@ -304,6 +326,8 @@ pub struct ChainBases<'a> {
+     packs: &'a mut BTreeMap<i64, Vec<u8>>,
+     groups: GroupCache,
+     group_decodes: u64,
++    /// Diagnostic read-path attribution for this walk.
++    work: ReadPathWork,
+ }
+ 
+ impl<'a> ChainBases<'a> {
+@@ -313,6 +337,7 @@ impl<'a> ChainBases<'a> {
+             packs,
+             groups: GroupCache::new(),
+             group_decodes: 0,
++            work: ReadPathWork::new(),
+         }
+     }
+ 
+@@ -337,6 +362,7 @@ impl<'a> ChainBases<'a> {
+             &mut self.groups,
+             workspace,
+             &mut self.group_decodes,
++            &mut self.work,
+             location,
+         )
+     }
+@@ -354,13 +380,14 @@ pub fn stored_base(
+     groups: &mut GroupCache,
+     workspace: &mut DecompressionWorkspace,
+     group_decodes: &mut u64,
++    work: &mut ReadPathWork,
+     location: &ObjectLocation,
+ ) -> StorageResult<Option<ObjectId>> {
+     let header = {
+-        let (pack, _) = pack_of(packs, connection, location.pack_id)?;
++        let (pack, _) = pack_of(packs, connection, location.pack_id, work)?;
+         crate::pack::layout::parse_header(pack)?
+     };
+-    let (pack, _) = pack_of(packs, connection, location.pack_id)?;
++    let (pack, _) = pack_of(packs, connection, location.pack_id, work)?;
+     let view = crate::pack::layout::group_view(pack, header, location.group_number)?;
+     let selected = pack
+         .get(view.start..view.end)
+@@ -455,10 +482,16 @@ fn pack_of<'b>(
+     packs: &'b mut BTreeMap<i64, Vec<u8>>,
+     connection: &Connection,
+     pack_id: i64,
++    work: &mut ReadPathWork,
+ ) -> StorageResult<(&'b [u8], bool)> {
+     let mut fetched = false;
++    work.pack_demands = work.pack_demands.saturating_add(1);
+     if !packs.contains_key(&pack_id) {
++        let fetch_started = Instant::now();
+         let bytes = lookup::pack_bytes(connection, pack_id)?;
++        work.pack_fetch_ns = work.pack_fetch_ns.saturating_add(elapsed(fetch_started));
++        work.pack_fetches = work.pack_fetches.saturating_add(1);
++        work.pack_bytes = work.pack_bytes.saturating_add(bytes.len() as u64);
+         let retained: usize = packs.values().map(Vec::len).sum();
+         if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
+             packs.clear();
+diff --git a/core/crates/layerfs-storage/src/encoding/delta/select.rs b/core/crates/layerfs-storage/src/encoding/delta/select.rs
+index 839309044..e89957d9d 100644
+--- a/core/crates/layerfs-storage/src/encoding/delta/select.rs
++++ b/core/crates/layerfs-storage/src/encoding/delta/select.rs
+@@ -433,6 +433,9 @@ fn eligible(
+ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
+     let value = {
+         let mut groups = crate::encoding::GroupCache::new();
++        // Diagnostic attribution is a read-path receipt, not save-side policy:
++        // this selection's own reconstruction keeps a local sink and reports none.
++        let mut work = crate::encoding::ReadPathWork::new();
+         let mut resolver = Resolver::new(
+             input.connection,
+             i64::MAX,
+@@ -441,6 +444,7 @@ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>>
+             &mut groups,
+             input.decode,
+             input.chain,
++            &mut work,
+         );
+         resolver.resolve_dependency(id)?.0
+     };
+diff --git a/core/crates/layerfs-storage/src/encoding/mod.rs b/core/crates/layerfs-storage/src/encoding/mod.rs
+index 18a02955f..796732f78 100644
+--- a/core/crates/layerfs-storage/src/encoding/mod.rs
++++ b/core/crates/layerfs-storage/src/encoding/mod.rs
+@@ -16,6 +16,7 @@ pub mod pool;
+ 
+ mod decode;
+ mod full;
++mod work;
+ 
+ pub use codec::{
+     CodecProfile, CompressionWorkspace, DecompressionWorkspace, DECODE_WORKSPACE_BYTES,
+@@ -23,3 +24,4 @@ pub use codec::{
+ };
+ pub use decode::{decode_canonical, framed_record, group_records, GroupCache};
+ pub use full::{encode_full, encode_prefix, lane_body_limit, raw_payload, EncodedRecord};
++pub use work::{elapsed, ReadPathWork};
+diff --git a/core/crates/layerfs-storage/src/encoding/pool/read.rs b/core/crates/layerfs-storage/src/encoding/pool/read.rs
+index 28774d3b2..7d27a0b2e 100644
+--- a/core/crates/layerfs-storage/src/encoding/pool/read.rs
++++ b/core/crates/layerfs-storage/src/encoding/pool/read.rs
+@@ -8,6 +8,7 @@
+ 
+ use std::borrow::Cow;
+ use std::collections::BTreeMap;
++use std::time::Instant;
+ 
+ use rusqlite::Connection;
+ 
+@@ -18,6 +19,7 @@ use layerfs_content::ObjectId;
+ 
+ use crate::encoding::codec::DecompressionWorkspace;
+ use crate::encoding::pool::{delta, leaf, value_group, PoolReadCounters};
++use crate::encoding::work::{elapsed, ReadPathWork};
+ use crate::encoding::GroupCache;
+ use crate::error::{StorageError, StorageResult};
+ use crate::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
+@@ -35,6 +37,8 @@ pub struct PoolReader {
+     chain_encoded: u64,
+     chain_canonical: u64,
+     counters: PoolReadCounters,
++    /// Diagnostic read-path attribution for this reader.
++    work: ReadPathWork,
+ }
+ 
+ impl PoolReader {
+@@ -48,6 +52,11 @@ impl PoolReader {
+         self.counters
+     }
+ 
++    /// Diagnostic read-path attribution accumulated over this reader's lifetime.
++    pub fn work(&self) -> ReadPathWork {
++        self.work
++    }
++
+     /// Restarts the per-chain decoded-work allowance.
+     ///
+     /// The decoded-value cache survives: it is bounded independently, and dropping
+@@ -161,12 +170,17 @@ impl PoolReader {
+         if self.decoded_work > METADATA_DECODED_WORK_LIMIT {
+             return Err(StorageError::Integrity("metadata decoded work"));
+         }
++        let value_started = Instant::now();
+         value_group::authenticate(&body, row.digest)?;
+         let canonical = value_group::decode(&body, row.count)?;
+         let mut values = Vec::with_capacity(canonical.len());
+         for value in canonical {
+             values.push(layerfs_content::inode_leaf::decode_pooled_value(&value)?);
+         }
++        self.work.value_decode_ns = self
++            .work
++            .value_decode_ns
++            .saturating_add(elapsed(value_started));
+         let charged = values.len() * INODE_VALUE_BYTES;
+         if self.retained_bytes + charged > crate::policy::POOLED_VALUE_CACHE_BYTES {
+             self.groups.clear();
+@@ -183,20 +197,35 @@ impl PoolReader {
+         workspace: &mut DecompressionWorkspace,
+         row: &pool::ValueGroupRow,
+     ) -> StorageResult<Vec<u8>> {
+-        let pack = self.pack(connection, row.pack_id)?;
+-        let header = parse_header(pack)?;
+-        if header.lane != PackLane::PooledMetadata {
+-            return Err(StorageError::Integrity("value group lane"));
+-        }
+-        let view = group_view(pack, header, row.group_number)?;
+-        let selected = pack
+-            .get(view.start..view.end)
+-            .ok_or(StorageError::Integrity("group body range"))?;
+-        let body = match view.codec {
+-            GroupCodec::Raw => selected.to_vec(),
+-            GroupCodec::Zstandard => workspace.decompress_group(selected, view.decoded_length)?,
++        let (body, decoded_length, control_ns, materialize_ns) = {
++            let pack = self.pack(connection, row.pack_id)?;
++            let control_started = Instant::now();
++            let header = parse_header(pack)?;
++            if header.lane != PackLane::PooledMetadata {
++                return Err(StorageError::Integrity("value group lane"));
++            }
++            let view = group_view(pack, header, row.group_number)?;
++            let selected = pack
++                .get(view.start..view.end)
++                .ok_or(StorageError::Integrity("group body range"))?;
++            let control_ns = elapsed(control_started);
++            let materialize_started = Instant::now();
++            let body = match view.codec {
++                GroupCodec::Raw => selected.to_vec(),
++                GroupCodec::Zstandard => {
++                    workspace.decompress_group(selected, view.decoded_length)?
++                }
++            };
++            (
++                body,
++                view.decoded_length,
++                control_ns,
++                elapsed(materialize_started),
++            )
+         };
+-        if body.len() != view.decoded_length {
++        self.work.control_ns = self.work.control_ns.saturating_add(control_ns);
++        self.work.value_decode_ns = self.work.value_decode_ns.saturating_add(materialize_ns);
++        if body.len() != decoded_length {
+             return Err(StorageError::Integrity("value group body length"));
+         }
+         Ok(body)
+@@ -207,8 +236,16 @@ impl PoolReader {
+     /// the declared bound, so a wave's retained pack bytes are a constant rather
+     /// than a function of how many packs it reads.
+     fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
++        self.work.pack_demands = self.work.pack_demands.saturating_add(1);
+         if !self.packs.contains_key(&pack_id) {
++            let fetch_started = Instant::now();
+             let bytes = lookup::pack_bytes(connection, pack_id)?;
++            self.work.pack_fetch_ns = self
++                .work
++                .pack_fetch_ns
++                .saturating_add(elapsed(fetch_started));
++            self.work.pack_fetches = self.work.pack_fetches.saturating_add(1);
++            self.work.pack_bytes = self.work.pack_bytes.saturating_add(bytes.len() as u64);
+             self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
+             self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
+             let retained: usize = self.packs.values().map(Vec::len).sum();
+@@ -296,6 +333,7 @@ impl PoolReader {
+             }
+             self.chain_canonical = canonical_work;
+             self.chain_encoded = encoded_work;
++            let rebuild_started = Instant::now();
+             body = Some(match leaf::parse(&record)? {
+                 leaf::PooledRecord::Full(stored) => stored.to_vec(),
+                 leaf::PooledRecord::Delta {
+@@ -317,6 +355,10 @@ impl PoolReader {
+                     delta::apply(base_body, instructions, count, output_length)?
+                 }
+             });
++            self.work.physical_rebuild_ns = self
++                .work
++                .physical_rebuild_ns
++                .saturating_add(elapsed(rebuild_started));
+             decoded_id = Some(location.object_id);
+         }
+         body.ok_or(StorageError::Integrity("pooled chain empty"))
+@@ -349,8 +391,12 @@ impl PoolReader {
+             return Err(StorageError::Integrity("inode leaf length"));
+         }
+         let mut work = PoolReadCounters::default();
++        let mut control_ns = 0_u64;
++        let mut decode_ns = 0_u64;
++        let mut frame_ns = 0_u64;
+         let result = (|| {
+             let pack = self.pack(connection, location.pack_id)?;
++            let control_started = Instant::now();
+             let header = parse_header(pack)?;
+             if header.lane != PackLane::Ordinary {
+                 return Err(StorageError::Integrity("pooled leaf lane"));
+@@ -359,6 +405,7 @@ impl PoolReader {
+             let selected = pack
+                 .get(view.start..view.end)
+                 .ok_or(StorageError::Integrity("group body range"))?;
++            control_ns = elapsed(control_started);
+             let body: Cow<'_, [u8]> = match view.codec {
+                 GroupCodec::Raw => Cow::Owned(selected.to_vec()),
+                 GroupCodec::Zstandard => match groups {
+@@ -369,8 +416,10 @@ impl PoolReader {
+                         {
+                             work.physical_group_cache_hits = 1;
+                         } else {
++                            let decode_started = Instant::now();
+                             let decoded =
+                                 workspace.decompress_group(selected, view.decoded_length)?;
++                            decode_ns = decode_ns.saturating_add(elapsed(decode_started));
+                             work.physical_group_decodes = 1;
+                             work.physical_group_decoded_bytes = decoded.len() as u64;
+                             groups.insert(location.pack_id, location.group_number, decoded);
+@@ -382,7 +431,9 @@ impl PoolReader {
+                         )
+                     }
+                     None => {
++                        let decode_started = Instant::now();
+                         let decoded = workspace.decompress_group(selected, view.decoded_length)?;
++                        decode_ns = decode_ns.saturating_add(elapsed(decode_started));
+                         work.physical_group_decodes = 1;
+                         work.physical_group_decoded_bytes = decoded.len() as u64;
+                         Cow::Owned(decoded)
+@@ -392,13 +443,18 @@ impl PoolReader {
+             if body.len() != view.decoded_length {
+                 return Err(StorageError::Integrity("group body length"));
+             }
++            let frame_started = Instant::now();
+             let record = crate::encoding::decode::framed_record(&body, location.record_number)?;
++            frame_ns = frame_ns.saturating_add(elapsed(frame_started));
+             if record.len() > METADATA_RECORD_LIMIT {
+                 return Err(StorageError::Integrity("pooled record limit"));
+             }
+             Ok(record.to_vec())
+         })();
+         self.counters.accumulate(work);
++        self.work.control_ns = self.work.control_ns.saturating_add(control_ns);
++        self.work.group_decode_ns = self.work.group_decode_ns.saturating_add(decode_ns);
++        self.work.record_frame_ns = self.work.record_frame_ns.saturating_add(frame_ns);
+         result
+     }
+ 
+@@ -435,7 +491,12 @@ impl PoolReader {
+         self.begin_chain();
+         let body =
+             self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, groups)?;
++        let decode_started = Instant::now();
+         let (prefix, rows) = decode_pooled_body(&body)?;
++        self.work.body_decode_ns = self
++            .work
++            .body_decode_ns
++            .saturating_add(elapsed(decode_started));
+         if rows.len() > MAXIMUM_LEAF_ROWS {
+             return Err(StorageError::Integrity("pooled row count"));
+         }
+@@ -451,11 +512,18 @@ impl PoolReader {
+                         && u64::from(row.ordinal)
+                             < u64::from(group.first_ordinal) + group.count as u64 =>
+                 {
++                    self.work.covering_reuse = self.work.covering_reuse.saturating_add(1);
+                     group
+                 }
+                 _ => {
++                    let catalogue_started = Instant::now();
++                    self.work.catalogue_calls = self.work.catalogue_calls.saturating_add(1);
+                     let group = pool::group_for(connection, row.ordinal)?
+                         .ok_or(StorageError::Integrity("metadata ordinal missing"))?;
++                    self.work.catalogue_ns = self
++                        .work
++                        .catalogue_ns
++                        .saturating_add(elapsed(catalogue_started));
+                     covering = Some(group);
+                     group
+                 }
+@@ -469,7 +537,12 @@ impl PoolReader {
+                 row.ordinal,
+             )?);
+         }
++        let encode_started = Instant::now();
+         let canonical = rebuild_leaf(&prefix, &rows, &values)?;
++        self.work.leaf_encode_ns = self
++            .work
++            .leaf_encode_ns
++            .saturating_add(elapsed(encode_started));
+         if canonical.len() != root.canonical_length {
+             return Err(StorageError::Integrity("pooled canonical length"));
+         }
+diff --git a/core/crates/layerfs-storage/tests/metadata_pool.rs b/core/crates/layerfs-storage/tests/metadata_pool.rs
+index 515d8dba7..c6a86646b 100644
+--- a/core/crates/layerfs-storage/tests/metadata_pool.rs
++++ b/core/crates/layerfs-storage/tests/metadata_pool.rs
+@@ -190,6 +190,7 @@ fn observe_pooled_physical_decodes(elements: usize) {
+             let mut packs = std::collections::BTreeMap::new();
+             let mut decode = DecompressionWorkspace::new().expect("decode");
+             let mut counters = ChainCounters::default();
++            let mut work = layerfs_storage::encoding::ReadPathWork::new();
+             Resolver::new(
+                 &connection,
+                 i64::MAX,
+@@ -198,6 +199,7 @@ fn observe_pooled_physical_decodes(elements: usize) {
+                 groups,
+                 &mut decode,
+                 &mut counters,
++                &mut work,
+             )
+             .resolve_at(location)
+         };
+diff --git a/core/crates/layerfs-storage/tests/visibility.rs b/core/crates/layerfs-storage/tests/visibility.rs
+index 34afb23a1..6c0dcd958 100644
+--- a/core/crates/layerfs-storage/tests/visibility.rs
++++ b/core/crates/layerfs-storage/tests/visibility.rs
+@@ -517,6 +517,7 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
+         .expect("the saved root has a locator");
+ 
+     // Under an unbounded ceiling the object resolves, and its group is retained.
++    let mut work = layerfs_storage::encoding::ReadPathWork::new();
+     let (canonical, verified) = Resolver::new(
+         &connection,
+         i64::MAX,
+@@ -525,6 +526,7 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
+         &mut cache,
+         &mut workspace,
+         &mut counters,
++        &mut work,
+     )
+     .resolve_at(location)
+     .expect("the object resolves under an unbounded ceiling");
+@@ -545,6 +547,7 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
+         &mut cache,
+         &mut workspace,
+         &mut counters,
++        &mut work,
+     )
+     .resolve_at(location)
+     .expect_err("a location above the ceiling is refused");

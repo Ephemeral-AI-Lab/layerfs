@@ -1,0 +1,23 @@
+{
+  "first_parent": "437683aa054d4cbd618d9f7abba509cd88660f54",
+  "staged_tree_before_evidence_record": "09fa8a72fb60b6a1de6f5d6fa27a6187dbbf245c",
+  "counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "method": "Identical tools/production_loc.py --root <git archive exact first-parent/staged crates and core/crates> --json; runtime SQL included; tests/legacy inline test branches/comments/harness/docs/tools/generated excluded",
+  "delta": 0,
+  "before": {
+    "combined": 85725,
+    "scopes": {
+      "core": 20308,
+      "reference": 65417
+    }
+  },
+  "after": {
+    "combined": 85725,
+    "scopes": {
+      "core": 20308,
+      "reference": 65417
+    }
+  },
+  "per_file_detail_identical": true,
+  "note": "Documentation and evidence only. No production, core, harness-Rust or test file changed; the two counted trees are identical per-file."
+}

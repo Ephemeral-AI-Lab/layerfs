@@ -7,20 +7,35 @@
 
 use layerfs_content::{FinalizedObject, ObjectId};
 
-use crate::cas::owner::MutationOwner;
+use crate::cas::owner::{MutationOwner, SaveProfile};
 use crate::error::{StorageError, StorageResult};
 use crate::sqlite::lookup::ObjectLocation;
+use std::time::Instant;
 
 /// Reads the stored canonical bytes at one locator, reconstructing its chain.
+///
+/// The charge covers the whole verification, not only the chain walk: the
+/// reconstruction, the identity re-hash that authenticates it, and the identity
+/// comparison. `#205`'s own definition of `storage.resolve` is "base acquisition
+/// **and the exact reuse comparison**", and the re-hash is the largest
+/// byte-proportional part of that comparison - leaving it unnamed would put a term
+/// that grows with the reuse count outside every bucket, which is the failure this
+/// instrument exists to prevent. What is *not* charged here is the caller's byte
+/// comparison, which is charged where it happens.
 pub fn stored_canonical(
     owner: &mut MutationOwner,
     location: ObjectLocation,
 ) -> StorageResult<Vec<u8>> {
-    let canonical = owner.resolve_location(location)?;
-    if ObjectId::for_bytes(&canonical) != location.object_id {
-        return Err(StorageError::Integrity("stored object identity"));
-    }
-    Ok(canonical)
+    let started = Instant::now();
+    let verified = (|| -> StorageResult<Vec<u8>> {
+        let canonical = owner.resolve_location(location)?;
+        if ObjectId::for_bytes(&canonical) != location.object_id {
+            return Err(StorageError::Integrity("stored object identity"));
+        }
+        Ok(canonical)
+    })();
+    SaveProfile::charge(&mut owner.profile.resolve.reuse_ns, started);
+    verified
 }
 
 /// Reuses the existing row when the stored bytes match the offered bytes exactly.
@@ -39,7 +54,21 @@ pub fn reuse_or_collide(
         return Err(StorageError::Collision(object.id()));
     }
     let stored = stored_canonical(owner, location)?;
-    if stored == object.canonical() {
+    // A verification has completed: this identity's stored bytes were
+    // reconstructed and the identity was re-authenticated against them. The probe
+    // records that fact and counts a repeat of an identity this operation already
+    // verified. It observes the result and changes nothing - the comparison below
+    // runs on every occurrence whether the probe is enabled or not, and a
+    // colliding record still fails the save here.
+    if let Some(probe) = owner.probe.as_mut() {
+        if probe.observe(object.id()) {
+            owner.profile.reuse_repeat = owner.profile.reuse_repeat.saturating_add(1);
+        }
+    }
+    let started = Instant::now();
+    let equal = stored == object.canonical();
+    SaveProfile::charge(&mut owner.profile.resolve.reuse_ns, started);
+    if equal {
         Ok(())
     } else {
         Err(StorageError::Collision(object.id()))

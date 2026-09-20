@@ -1,0 +1,134 @@
+[
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs",
+    "line": 1525,
+    "statement": "let mut prior_unavailable: u64 = 0;",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs",
+    "line": 642,
+    "statement": "(counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs",
+    "line": 884,
+    "statement": "(counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/c2.rs",
+    "line": 1517,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/c2.rs",
+    "line": 1571,
+    "statement": "let sampled = match context.verify_sample {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/c2.rs",
+    "line": 2514,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs",
+    "line": 435,
+    "statement": "&\"g1.o4-inode-table\",",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs",
+    "line": 625,
+    "statement": ".map_err(|error| OpError::Io(error))?;",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs",
+    "line": 943,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs",
+    "line": 1171,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs",
+    "line": 1306,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs",
+    "line": 1548,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs",
+    "line": 1608,
+    "statement": "|content: &TimingScope<'_, Active>| -> Result<",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs",
+    "line": 1855,
+    "statement": "for candidate in &eligible {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+    "line": 292,
+    "statement": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+    "line": 292,
+    "statement": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+    "line": 474,
+    "statement": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+    "line": 474,
+    "statement": "emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) == emitted,",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+    "line": 553,
+    "statement": ".map(|outcome| {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/support/phases.rs",
+    "line": 341,
+    "statement": "out.push_str(&format!(\"  \\\"schema\\\": \\\"layerfs-phases-v1\\\",\\n\"));",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/digest.rs",
+    "line": 179,
+    "statement": "for index in 0..8 {",
+    "exists_in_parent": true
+  },
+  {
+    "path": "core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs",
+    "line": 712,
+    "statement": ") -> Result<BTreeMap<Vec<u8>, ([u8; 20], u16)>, HistoryError> {",
+    "exists_in_parent": true
+  }
+]

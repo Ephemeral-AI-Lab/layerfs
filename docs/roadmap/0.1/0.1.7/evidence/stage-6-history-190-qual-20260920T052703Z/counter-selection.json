@@ -1,0 +1,171 @@
+{
+  "campaign": "stage-6-history-190-read-20260920T042617Z",
+  "pin_table": "core/benchmark/fs-bench-pro-storage-content/tests/golden/expected.tsv",
+  "precedent_keys": 156,
+  "cases": {
+    "history-stride10": {
+      "published_numeric_counters": 410,
+      "distinct_family_local_names": 42,
+      "moved_under_the_retained_optimization": [
+        {
+          "key": "history.children_ns",
+          "baseline": 21905900168,
+          "candidate": 19888424711,
+          "unit": "ns",
+          "basis": "the sum of this row's named children; the published operation_ns"
+        },
+        {
+          "key": "history.root_ns",
+          "baseline": 38174166166,
+          "candidate": 36067700458,
+          "unit": "ns",
+          "basis": "the product's own root: the chain including the harness's untimed corpus reading"
+        }
+      ],
+      "durations_excluded_by_r2": 2,
+      "invariant_candidates_r3": 408,
+      "invariant_with_217_precedent_r4": 8,
+      "invariant_without_precedent": [
+        "changed_bytes",
+        "changed_paths",
+        "delta.absent_candidates",
+        "delta.ineligible_candidates",
+        "delta.packs_created",
+        "delta.prepared_full",
+        "delta.trials",
+        "filesystem.directories.pages_read",
+        "filesystem.inodes.pages_read",
+        "filesystem.provider.connection_opens",
+        "filesystem.provider.group_decodes",
+        "filesystem.references.base_records_read",
+        "filesystem.references.base_waves",
+        "filesystem.references.rows_read",
+        "filesystem.references.rows_spilled",
+        "filesystem.references.rows_touched",
+        "filesystem.references.rows_written",
+        "filesystem.references.runs_created",
+        "filesystem.references.serials_scanned",
+        "filesystem.validation.directory_pages_read",
+        "filesystem.validation.entries_examined",
+        "filesystem.validation.inode_demands",
+        "filesystem.validation.inode_pages_read",
+        "filesystem.validation.objects_read",
+        "filesystem.validation.read_waves",
+        "history.advisory_bases",
+        "history.advisory_depth_limit",
+        "history.advisory_model",
+        "history.prior_unavailable",
+        "inserted",
+        "objects",
+        "save.commits"
+      ],
+      "families": {
+        "state": 391,
+        "absent_candidates": 1,
+        "full_losses": 1,
+        "full_records": 1,
+        "ineligible_candidates": 1,
+        "inserted": 1,
+        "no_candidate": 1,
+        "packs_created": 1,
+        "prefix_records": 1,
+        "prefix_selected": 1,
+        "prepared_full": 1,
+        "reused": 1,
+        "trials": 1,
+        "work_exceeded": 1,
+        "advisory_bases": 1,
+        "advisory_depth_limit": 1,
+        "advisory_model": 1,
+        "children_ns": 1,
+        "prior_unavailable": 1,
+        "root_ns": 1
+      },
+      "per_state_name_template_example": [
+        "changed_bytes"
+      ]
+    },
+    "history-stride3": {
+      "published_numeric_counters": 1238,
+      "distinct_family_local_names": 42,
+      "moved_under_the_retained_optimization": [
+        {
+          "key": "history.children_ns",
+          "baseline": 56597343506,
+          "candidate": 49501013748,
+          "unit": "ns",
+          "basis": "the sum of this row's named children; the published operation_ns"
+        },
+        {
+          "key": "history.root_ns",
+          "baseline": 79832087833,
+          "candidate": 72472473000,
+          "unit": "ns",
+          "basis": "the product's own root: the chain including the harness's untimed corpus reading"
+        }
+      ],
+      "durations_excluded_by_r2": 2,
+      "invariant_candidates_r3": 1236,
+      "invariant_with_217_precedent_r4": 8,
+      "invariant_without_precedent": [
+        "changed_bytes",
+        "changed_paths",
+        "delta.absent_candidates",
+        "delta.ineligible_candidates",
+        "delta.packs_created",
+        "delta.prepared_full",
+        "delta.trials",
+        "filesystem.directories.pages_read",
+        "filesystem.inodes.pages_read",
+        "filesystem.provider.connection_opens",
+        "filesystem.provider.group_decodes",
+        "filesystem.references.base_records_read",
+        "filesystem.references.base_waves",
+        "filesystem.references.rows_read",
+        "filesystem.references.rows_spilled",
+        "filesystem.references.rows_touched",
+        "filesystem.references.rows_written",
+        "filesystem.references.runs_created",
+        "filesystem.references.serials_scanned",
+        "filesystem.validation.directory_pages_read",
+        "filesystem.validation.entries_examined",
+        "filesystem.validation.inode_demands",
+        "filesystem.validation.inode_pages_read",
+        "filesystem.validation.objects_read",
+        "filesystem.validation.read_waves",
+        "history.advisory_bases",
+        "history.advisory_depth_limit",
+        "history.advisory_model",
+        "history.prior_unavailable",
+        "inserted",
+        "objects",
+        "save.commits"
+      ],
+      "families": {
+        "state": 1219,
+        "absent_candidates": 1,
+        "full_losses": 1,
+        "full_records": 1,
+        "ineligible_candidates": 1,
+        "inserted": 1,
+        "no_candidate": 1,
+        "packs_created": 1,
+        "prefix_records": 1,
+        "prefix_selected": 1,
+        "prepared_full": 1,
+        "reused": 1,
+        "trials": 1,
+        "work_exceeded": 1,
+        "advisory_bases": 1,
+        "advisory_depth_limit": 1,
+        "advisory_model": 1,
+        "children_ns": 1,
+        "prior_unavailable": 1,
+        "root_ns": 1
+      },
+      "per_state_name_template_example": [
+        "changed_bytes"
+      ]
+    }
+  }
+}

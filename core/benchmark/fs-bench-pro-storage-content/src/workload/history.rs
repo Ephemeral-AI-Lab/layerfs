@@ -62,6 +62,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+
+use crate::support::instruments;
 
 use super::digest::{hex, sha256, Sha256};
 use super::gitoid::{blob_oid, hex_oid, parse_oid};
@@ -448,6 +451,21 @@ impl Transition {
     /// How many paths of each kind.
     pub fn count(&self, kind: Change) -> usize {
         self.changed.iter().filter(|entry| entry.kind == kind).count()
+    }
+
+    /// Logical bytes of each kind, from the same `size` field `changed_bytes` sums.
+    ///
+    /// `changed_bytes` is the added+modified total; this is the same number split by
+    /// operation, plus the two kinds that contribute no content. A removal carries
+    /// the **previous** state's size, which is the byte volume a delete has to
+    /// reconcile and not content it has to store - published so the two can be told
+    /// apart, and never added into a store-volume figure.
+    pub fn bytes(&self, kind: Change) -> u64 {
+        self.changed
+            .iter()
+            .filter(|entry| entry.kind == kind)
+            .map(|entry| entry.size)
+            .sum()
     }
 }
 
@@ -1218,7 +1236,85 @@ fn verify_blob(
     Ok(())
 }
 
+/// Residency of the corpus files **before this invocation first read them**.
+///
+/// The corpus axis of the cache stance: the corpus is immutable and identity-pinned
+/// (manifest and tip are checked at open), so whether its pages were already
+/// resident is a fact about the input, never about correctness. This measures that
+/// fact instead of assuming it — `mincore` over a fresh mapping, taken *before* the
+/// first read of each distinct path, so the reading cannot be polluted by the read
+/// it precedes.
+///
+/// It is a **diagnostic**. Nothing fails on it, nothing is de-warmed, and it is not
+/// a cold claim: a resident page here is the previous run's leavings, reported
+/// rather than removed.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ReadProbe {
+    /// Distinct files probed before their first read in this invocation.
+    pub files: u64,
+    /// Summed lengths of those files.
+    pub length_bytes: u64,
+    /// Pages examined across them.
+    pub total_pages: u64,
+    /// Pages the kernel reported resident before the first read.
+    pub resident_pages: u64,
+}
+
+static READ_PROBE: OnceLock<Mutex<ReadProbe>> = OnceLock::new();
+static READ_PROBE_PATHS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+
+fn read_probe_state() -> &'static Mutex<ReadProbe> {
+    READ_PROBE.get_or_init(|| Mutex::new(ReadProbe::default()))
+}
+
+fn read_probe_paths() -> &'static Mutex<HashSet<PathBuf>> {
+    READ_PROBE_PATHS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Clears the probe, so the next reading covers the reads that follow it.
+pub fn read_probe_begin() {
+    *read_probe_state()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = ReadProbe::default();
+    read_probe_paths()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clear();
+}
+
+/// The probe's reading so far.
+pub fn read_probe() -> ReadProbe {
+    *read_probe_state()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Reads one path's residency, once per distinct path, before the read itself.
+fn probe_read(path: &Path) {
+    {
+        let mut seen = read_probe_paths()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !seen.insert(path.to_path_buf()) {
+            return;
+        }
+    }
+    // An unreadable or unmappable file is not probed and not counted: a diagnostic
+    // that cannot see a file must say nothing about it rather than report zero.
+    let Ok(reading) = instruments::residency(path) else {
+        return;
+    };
+    let mut held = read_probe_state()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    held.files += 1;
+    held.length_bytes = held.length_bytes.saturating_add(reading.length_bytes);
+    held.total_pages = held.total_pages.saturating_add(reading.total_pages);
+    held.resident_pages = held.resident_pages.saturating_add(reading.resident_pages);
+}
+
 fn read(path: &Path) -> Result<Vec<u8>, HistoryError> {
+    probe_read(path);
     std::fs::read(path).map_err(|error| HistoryError::io(path, error))
 }
 

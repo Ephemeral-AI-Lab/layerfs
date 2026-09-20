@@ -1,0 +1,68 @@
+[
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/baseline-instrumented.bin",
+    "bytes": 3585040,
+    "sha256": "7e17aca502990c5ed054ff1ada20b744833e8ef6e767492e0758b9908bdd99cf",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/baseline2-instrumented.bin",
+    "bytes": 3585040,
+    "sha256": "371ee8c28edee240f3627e16935b1f259cf045f30ba63890cf1ee6caaadc4fdb",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/candidate.bin",
+    "bytes": 3602128,
+    "sha256": "9958e0d1a09e2e1b7148b1f76b4be2f5cd84c620c9022c5028ded3df38d7abe0",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/candidate2.bin",
+    "bytes": 3602208,
+    "sha256": "2e1fd754961ea50bcdc85ac07c9a1131c1c9745c61665638d69015414b567089",
+    "custody": "local immutable binary; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/baseline-history-stride10/raw/sample.sqlite",
+    "bytes": 49324032,
+    "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/baseline2-history-stride10/raw/sample.sqlite",
+    "bytes": 49324032,
+    "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/baseline2-history-stride3/raw/sample.sqlite",
+    "bytes": 62152704,
+    "sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/candidate-history-stride10/raw/sample.sqlite",
+    "bytes": 49324032,
+    "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/candidate-history-stride3/raw/sample.sqlite",
+    "bytes": 62152704,
+    "sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/candidate2-history-stride10/raw/sample.sqlite",
+    "bytes": 49324032,
+    "sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+    "custody": "local retained Store; not committed"
+  },
+  {
+    "path": "/Users/yifanxu/.codex/worktrees/history-data-access/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z/runs/candidate2-history-stride3/raw/sample.sqlite",
+    "bytes": 62152704,
+    "sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+    "custody": "local retained Store; not committed"
+  }
+]

@@ -1,0 +1,159 @@
+{
+  "campaign": "stage-6-history-190-read-20260920T042617Z",
+  "runs": {
+    "baseline2-history-stride10": {
+      "wall_ns": 40220718250,
+      "declared_phases_ns": 22117310836,
+      "budgeted_ns": 22367310836,
+      "phase_reconciliation": "INCOMPLETE",
+      "trace_status": "INCOMPLETE",
+      "published_numeric_counters": 421,
+      "pin_re_derivation": {
+        "status": "FAIL",
+        "reason": "history-stride10 has no pinned O3 constant; the oracle cannot have been gated"
+      },
+      "status_matrix": {
+        "ordinary/sample": {
+          "budgeted_ns": 22367310836,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "INCOMPLETE"
+        },
+        "ordinary/full": {
+          "budgeted_ns": 22367310836,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "NOT_RUN"
+        },
+        "exception/sample": {
+          "budgeted_ns": 22367310836,
+          "budget_status": "PASS",
+          "budget_limit_s": 25.0,
+          "published_status": "INCOMPLETE"
+        },
+        "exception/full": {
+          "budgeted_ns": 22367310836,
+          "budget_status": "PASS",
+          "budget_limit_s": 25.0,
+          "published_status": "INCOMPLETE"
+        }
+      }
+    },
+    "candidate2-history-stride10": {
+      "wall_ns": 38101144250,
+      "declared_phases_ns": 20098336503,
+      "budgeted_ns": 20348336503,
+      "phase_reconciliation": "INCOMPLETE",
+      "trace_status": "INCOMPLETE",
+      "published_numeric_counters": 421,
+      "pin_re_derivation": {
+        "status": "FAIL",
+        "reason": "history-stride10 has no pinned O3 constant; the oracle cannot have been gated"
+      },
+      "status_matrix": {
+        "ordinary/sample": {
+          "budgeted_ns": 20348336503,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "INCOMPLETE"
+        },
+        "ordinary/full": {
+          "budgeted_ns": 20348336503,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "NOT_RUN"
+        },
+        "exception/sample": {
+          "budgeted_ns": 20348336503,
+          "budget_status": "PASS",
+          "budget_limit_s": 25.0,
+          "published_status": "INCOMPLETE"
+        },
+        "exception/full": {
+          "budgeted_ns": 20348336503,
+          "budget_status": "PASS",
+          "budget_limit_s": 25.0,
+          "published_status": "INCOMPLETE"
+        }
+      }
+    },
+    "baseline2-history-stride3": {
+      "wall_ns": 80483422875,
+      "declared_phases_ns": 57169005256,
+      "budgeted_ns": 57419005256,
+      "phase_reconciliation": "INCOMPLETE",
+      "trace_status": "INCOMPLETE",
+      "published_numeric_counters": 1249,
+      "pin_re_derivation": {
+        "status": "FAIL",
+        "reason": "history-stride3 has no pinned O3 constant; the oracle cannot have been gated"
+      },
+      "status_matrix": {
+        "ordinary/sample": {
+          "budgeted_ns": 57419005256,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "INCOMPLETE"
+        },
+        "ordinary/full": {
+          "budgeted_ns": 57419005256,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "NOT_RUN"
+        },
+        "exception/sample": {
+          "budgeted_ns": 57419005256,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 25.0,
+          "published_status": "INCOMPLETE"
+        },
+        "exception/full": {
+          "budgeted_ns": 57419005256,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 25.0,
+          "published_status": "NOT_RUN"
+        }
+      }
+    },
+    "candidate2-history-stride3": {
+      "wall_ns": 73127405000,
+      "declared_phases_ns": 50105785749,
+      "budgeted_ns": 50355785749,
+      "phase_reconciliation": "INCOMPLETE",
+      "trace_status": "INCOMPLETE",
+      "published_numeric_counters": 1249,
+      "pin_re_derivation": {
+        "status": "FAIL",
+        "reason": "history-stride3 has no pinned O3 constant; the oracle cannot have been gated"
+      },
+      "status_matrix": {
+        "ordinary/sample": {
+          "budgeted_ns": 50355785749,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "INCOMPLETE"
+        },
+        "ordinary/full": {
+          "budgeted_ns": 50355785749,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 15.0,
+          "published_status": "NOT_RUN"
+        },
+        "exception/sample": {
+          "budgeted_ns": 50355785749,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 25.0,
+          "published_status": "INCOMPLETE"
+        },
+        "exception/full": {
+          "budgeted_ns": 50355785749,
+          "budget_status": "NOT_RUN",
+          "budget_limit_s": 25.0,
+          "published_status": "NOT_RUN"
+        }
+      }
+    }
+  },
+  "history_pins": {},
+  "pinned_case_ids": 217
+}

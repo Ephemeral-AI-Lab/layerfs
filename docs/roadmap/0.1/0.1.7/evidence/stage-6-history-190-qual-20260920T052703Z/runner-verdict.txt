@@ -1,0 +1,80 @@
+=== the frozen O3 table as the runner reads it
+  case ids carrying at least one pinned counter : 217
+  of those, history.* rows                      : 0
+  history lanes the runner offers               : ['history-stride10', 'history-stride3', 'history-stride1']
+  verification mode defaulted for those lanes    : 'sample' (explicit --case: 'sample'; lane full: 'full')
+  mode a caller can still declare explicitly     : ['full', 'sample', 'none'] via --verify
+  history lanes in DECLARED_EXCEPTIONS           : []
+  ordinary limit / exception limit / lifecycle   : 15 s / 25 s / 250 ms
+
+=== baseline2 history-stride10
+  recorded wall (complete command)          : 40.221 s
+  declared phases (prep+op+verif+cleanup)   : 22.117 s
+  budgeted quantity (+0.250 s lifecycle)    : 22.367 s
+  phase reconciliation                      : INCOMPLETE
+  trace status (driver's own gates)         : INCOMPLETE
+  published numeric counters (whole trace)  : 421
+  reconciliation problems                   : ['perf: 18103407414 ns of the 40220718250 ns wall is outside every declared phase, more than the declared 1054414365 ns tolerance']
+  runner pin re-derivation                  : FAIL: history-stride10 has no pinned O3 constant; the oracle cannot have been gated
+    ordinary/sample      -> budget NOT_RUN limit 15 s, published status INCOMPLETE
+    ordinary/full        -> budget NOT_RUN limit 15 s, published status NOT_RUN
+    exception/sample     -> budget PASS   limit 25 s, published status INCOMPLETE
+    exception/full       -> budget PASS   limit 25 s, published status INCOMPLETE
+
+=== candidate2 history-stride10
+  recorded wall (complete command)          : 38.101 s
+  declared phases (prep+op+verif+cleanup)   : 20.098 s
+  budgeted quantity (+0.250 s lifecycle)    : 20.348 s
+  phase reconciliation                      : INCOMPLETE
+  trace status (driver's own gates)         : INCOMPLETE
+  published numeric counters (whole trace)  : 421
+  reconciliation problems                   : ['perf: 18002807747 ns of the 38101144250 ns wall is outside every declared phase, more than the declared 1012022885 ns tolerance']
+  runner pin re-derivation                  : FAIL: history-stride10 has no pinned O3 constant; the oracle cannot have been gated
+    ordinary/sample      -> budget NOT_RUN limit 15 s, published status INCOMPLETE
+    ordinary/full        -> budget NOT_RUN limit 15 s, published status NOT_RUN
+    exception/sample     -> budget PASS   limit 25 s, published status INCOMPLETE
+    exception/full       -> budget PASS   limit 25 s, published status INCOMPLETE
+
+=== baseline2 history-stride3
+  recorded wall (complete command)          : 80.483 s
+  declared phases (prep+op+verif+cleanup)   : 57.169 s
+  budgeted quantity (+0.250 s lifecycle)    : 57.419 s
+  phase reconciliation                      : INCOMPLETE
+  trace status (driver's own gates)         : INCOMPLETE
+  published numeric counters (whole trace)  : 1249
+  reconciliation problems                   : ['perf: 23314417619 ns of the 80483422875 ns wall is outside every declared phase, more than the declared 1859668457 ns tolerance']
+  runner pin re-derivation                  : FAIL: history-stride3 has no pinned O3 constant; the oracle cannot have been gated
+    ordinary/sample      -> budget NOT_RUN limit 15 s, published status INCOMPLETE
+    ordinary/full        -> budget NOT_RUN limit 15 s, published status NOT_RUN
+    exception/sample     -> budget NOT_RUN limit 25 s, published status INCOMPLETE
+    exception/full       -> budget NOT_RUN limit 25 s, published status NOT_RUN
+
+=== candidate2 history-stride3
+  recorded wall (complete command)          : 73.127 s
+  declared phases (prep+op+verif+cleanup)   : 50.106 s
+  budgeted quantity (+0.250 s lifecycle)    : 50.356 s
+  phase reconciliation                      : INCOMPLETE
+  trace status (driver's own gates)         : INCOMPLETE
+  published numeric counters (whole trace)  : 1249
+  reconciliation problems                   : ['perf: 23021619251 ns of the 73127405000 ns wall is outside every declared phase, more than the declared 1712548100 ns tolerance']
+  runner pin re-derivation                  : FAIL: history-stride3 has no pinned O3 constant; the oracle cannot have been gated
+    ordinary/sample      -> budget NOT_RUN limit 15 s, published status INCOMPLETE
+    ordinary/full        -> budget NOT_RUN limit 15 s, published status NOT_RUN
+    exception/sample     -> budget NOT_RUN limit 25 s, published status INCOMPLETE
+    exception/full       -> budget NOT_RUN limit 25 s, published status NOT_RUN
+
+=== can the pin generator bootstrap a new row?
+  history-stride10   receipt status INCOMPLETE  -> 0 pinned constant(s)
+  history-stride10   receipt status NOT_RUN     -> 0 pinned constant(s)
+  history-stride10   receipt status PASS        -> 421 pinned constant(s)
+  history-stride10   receipt status INCOMPLETE  -> 0 pinned constant(s)
+  history-stride10   receipt status NOT_RUN     -> 0 pinned constant(s)
+  history-stride10   receipt status PASS        -> 421 pinned constant(s)
+  history-stride3    receipt status INCOMPLETE  -> 0 pinned constant(s)
+  history-stride3    receipt status NOT_RUN     -> 0 pinned constant(s)
+  history-stride3    receipt status PASS        -> 1249 pinned constant(s)
+  history-stride3    receipt status INCOMPLETE  -> 0 pinned constant(s)
+  history-stride3    receipt status NOT_RUN     -> 0 pinned constant(s)
+  history-stride3    receipt status PASS        -> 1249 pinned constant(s)
+  (a synthesized runner-shaped receipt, replayed through the real `pin_expected.counters_of`; the status column is the value the
+   runner's own rules compose above, not a measurement)

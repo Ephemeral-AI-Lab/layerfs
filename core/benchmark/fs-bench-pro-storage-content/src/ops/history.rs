@@ -37,11 +37,17 @@
 //! unrepresentable axis is not exercised by this workload. It is recorded rather
 //! than left as an assumption.
 
+#[path = "history_reads.rs"]
+pub mod reads;
+
+use reads::{ReadCounters, ReadWork};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use layerfs_content::filesystem::references::backing::FileBacking;
 use layerfs_content::filesystem::{
-    build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
+    build_filesystem, build_filesystem_timed, scope_for_seed, update_filesystem,
+    update_filesystem_timed, DirectoryUpdate, FilesystemInput, FilesystemPhases,
+    FilesystemUpdateCounters,
     FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRootId, InodeUpdate,
     LogicalPath, PathName,
 };
@@ -59,7 +65,7 @@ use crate::registry::Case;
 use crate::support::{instruments, phases};
 use super::c1;
 use crate::support::trace::Kind;
-use crate::workload::history::{Change, Corpus, HistoryError, Row};
+use crate::workload::history::{read_probe, read_probe_begin, Change, Corpus, HistoryError, Row};
 use crate::workload::providers::TreeStore;
 
 /// The root directory's serial. `build_filesystem` requires it to be one of the
@@ -301,11 +307,19 @@ fn advisory_depth_limit() -> u8 {
         .unwrap_or(u8::MAX)
 }
 
-/// Chain totals of the save counters this row did not previously publish.
+/// The save counters this row did not previously publish, per state and in total.
 ///
 /// "Cannot see it" and "sees it and declines it" were indistinguishable without
 /// these: the selection counters live in `DeltaCounters`, which `SaveOutcome`
-/// already carries, and nothing read them.
+/// already carries, and nothing read them. The `#190` save-attribution round needs
+/// the same figures **per state**, because the question there is which part of
+/// `storage.accept_loop` grows with chain depth - a chain total cannot answer it.
+///
+/// Nothing here is new product instrumentation: every field is read from the
+/// `SaveOutcome` the product already returns, at the same place and with the same
+/// lifetime the existing `delta.*` totals used. The struct is a plain accumulator
+/// so one state's figures can be published after the measured region closes, which
+/// is where the rest of this driver's counters are written.
 #[derive(Default, Clone, Copy)]
 struct SaveTotals {
     reused: u64,
@@ -313,6 +327,10 @@ struct SaveTotals {
     full_records: u64,
     prefix_records: u64,
     packs_created: u64,
+    pack_appends: u64,
+    commits: u64,
+    statements: u64,
+    presence_queries: u64,
     prepared_full: u64,
     trials: u64,
     prefix_selected: u64,
@@ -321,6 +339,33 @@ struct SaveTotals {
     absent_candidates: u64,
     ineligible_candidates: u64,
     work_exceeded: u64,
+    chain_objects: u64,
+    chain_edges: u64,
+    chain_encoded_bytes: u64,
+    chain_canonical_bytes: u64,
+    chain_max_depth: u64,
+    chain_group_decodes: u64,
+    pool_leaves: u64,
+    pool_new_values: u64,
+    pool_reused_values: u64,
+    pool_groups: u64,
+    pool_delta_leaves: u64,
+    pool_full_leaves: u64,
+    pool_trials: u64,
+    pool_work_exceeded: u64,
+    profile_resolve_ns: u64,
+    profile_reuse_repeat: u64,
+    profile_resolve_eligible_ns: u64,
+    profile_resolve_acquire_ns: u64,
+    profile_resolve_cost_ns: u64,
+    profile_resolve_reuse_ns: u64,
+    profile_resolve_pooled_ns: u64,
+    profile_full_ns: u64,
+    profile_delta_ns: u64,
+    profile_group_ns: u64,
+    profile_place_ns: u64,
+    profile_sql_ns: u64,
+    profile_commit_ns: u64,
 }
 
 impl SaveTotals {
@@ -330,6 +375,12 @@ impl SaveTotals {
         self.full_records = self.full_records.saturating_add(saved.full_records);
         self.prefix_records = self.prefix_records.saturating_add(saved.prefix_records);
         self.packs_created = self.packs_created.saturating_add(saved.packs_created);
+        self.pack_appends = self.pack_appends.saturating_add(saved.pack_appends);
+        self.commits = self.commits.saturating_add(saved.commits);
+        self.statements = self.statements.saturating_add(saved.statements);
+        self.presence_queries = self
+            .presence_queries
+            .saturating_add(saved.presence_queries);
         let delta = saved.delta;
         self.prepared_full = self.prepared_full.saturating_add(delta.prepared_full);
         self.trials = self.trials.saturating_add(delta.trials);
@@ -343,6 +394,130 @@ impl SaveTotals {
             .ineligible_candidates
             .saturating_add(delta.ineligible_candidates);
         self.work_exceeded = self.work_exceeded.saturating_add(delta.work_exceeded);
+        let chain = saved.chain;
+        self.chain_objects = self.chain_objects.saturating_add(chain.objects);
+        self.chain_edges = self.chain_edges.saturating_add(chain.edges);
+        self.chain_encoded_bytes = self
+            .chain_encoded_bytes
+            .saturating_add(chain.encoded_bytes);
+        self.chain_canonical_bytes = self
+            .chain_canonical_bytes
+            .saturating_add(chain.canonical_bytes);
+        self.chain_max_depth = self.chain_max_depth.max(chain.max_depth);
+        self.chain_group_decodes = self
+            .chain_group_decodes
+            .saturating_add(chain.group_decodes);
+        let pool = saved.pool;
+        self.pool_leaves = self.pool_leaves.saturating_add(pool.leaves);
+        self.pool_new_values = self.pool_new_values.saturating_add(pool.new_values);
+        self.pool_reused_values = self
+            .pool_reused_values
+            .saturating_add(pool.reused_values);
+        self.pool_groups = self.pool_groups.saturating_add(pool.groups);
+        self.pool_delta_leaves = self.pool_delta_leaves.saturating_add(pool.delta_leaves);
+        self.pool_full_leaves = self.pool_full_leaves.saturating_add(pool.full_leaves);
+        self.pool_trials = self.pool_trials.saturating_add(pool.trials);
+        self.pool_work_exceeded = self
+            .pool_work_exceeded
+            .saturating_add(pool.work_exceeded);
+        let profile = saved.profile;
+        self.profile_resolve_ns = self.profile_resolve_ns.saturating_add(profile.resolve_ns());
+        self.profile_reuse_repeat = self
+            .profile_reuse_repeat
+            .saturating_add(profile.reuse_repeat);
+        self.profile_resolve_eligible_ns = self
+            .profile_resolve_eligible_ns
+            .saturating_add(profile.resolve.eligible_ns);
+        self.profile_resolve_acquire_ns = self
+            .profile_resolve_acquire_ns
+            .saturating_add(profile.resolve.acquire_ns);
+        self.profile_resolve_cost_ns = self
+            .profile_resolve_cost_ns
+            .saturating_add(profile.resolve.cost_ns);
+        self.profile_resolve_reuse_ns = self
+            .profile_resolve_reuse_ns
+            .saturating_add(profile.resolve.reuse_ns);
+        self.profile_resolve_pooled_ns = self
+            .profile_resolve_pooled_ns
+            .saturating_add(profile.resolve.pooled_ns);
+        self.profile_full_ns = self.profile_full_ns.saturating_add(profile.full_ns);
+        self.profile_delta_ns = self.profile_delta_ns.saturating_add(profile.delta_ns);
+        self.profile_group_ns = self.profile_group_ns.saturating_add(profile.group_ns);
+        self.profile_place_ns = self.profile_place_ns.saturating_add(profile.place_ns);
+        self.profile_sql_ns = self.profile_sql_ns.saturating_add(profile.sql_ns);
+        self.profile_commit_ns = self.profile_commit_ns.saturating_add(profile.commit_ns);
+    }
+
+    /// The same figures as trace rows: `(suffix, value, unit)`.
+    ///
+    /// `inserted` and `commits` are deliberately absent - this row already
+    /// publishes them as `history.state.<n>.inserted` and `.save.commits`, and a
+    /// key written twice would make a reader's first-match lookup ambiguous.
+    fn rows(&self) -> [(&'static str, u64, &'static str); 42] {
+        [
+            ("save.reused", self.reused, "objects"),
+            ("save.full_records", self.full_records, "objects"),
+            ("save.prefix_records", self.prefix_records, "objects"),
+            ("save.packs_created", self.packs_created, "packs"),
+            ("save.pack_appends", self.pack_appends, "packs"),
+            ("save.statements", self.statements, "statements"),
+            ("save.presence_queries", self.presence_queries, "queries"),
+            ("save.delta.prepared_full", self.prepared_full, "objects"),
+            ("save.delta.trials", self.trials, "trials"),
+            ("save.delta.prefix_selected", self.prefix_selected, "objects"),
+            ("save.delta.full_losses", self.full_losses, "objects"),
+            ("save.delta.no_candidate", self.no_candidate, "objects"),
+            ("save.delta.absent_candidates", self.absent_candidates, "objects"),
+            (
+                "save.delta.ineligible_candidates",
+                self.ineligible_candidates,
+                "objects",
+            ),
+            ("save.delta.work_exceeded", self.work_exceeded, "objects"),
+            ("save.chain.objects", self.chain_objects, "objects"),
+            ("save.chain.edges", self.chain_edges, "edges"),
+            ("save.chain.encoded_bytes", self.chain_encoded_bytes, "bytes"),
+            (
+                "save.chain.canonical_bytes",
+                self.chain_canonical_bytes,
+                "bytes",
+            ),
+            ("save.chain.max_depth", self.chain_max_depth, "edges"),
+            ("save.chain.group_decodes", self.chain_group_decodes, "count"),
+            ("save.pool.leaves", self.pool_leaves, "objects"),
+            ("save.pool.new_values", self.pool_new_values, "values"),
+            ("save.pool.reused_values", self.pool_reused_values, "values"),
+            ("save.pool.groups", self.pool_groups, "groups"),
+            ("save.pool.delta_leaves", self.pool_delta_leaves, "objects"),
+            ("save.pool.full_leaves", self.pool_full_leaves, "objects"),
+            ("save.pool.trials", self.pool_trials, "trials"),
+            ("save.pool.work_exceeded", self.pool_work_exceeded, "objects"),
+            ("save.resolve_ns", self.profile_resolve_ns, "ns"),
+            ("save.reuse_repeat", self.profile_reuse_repeat, "objects"),
+            (
+                "save.resolve.eligible_ns",
+                self.profile_resolve_eligible_ns,
+                "ns",
+            ),
+            (
+                "save.resolve.acquire_ns",
+                self.profile_resolve_acquire_ns,
+                "ns",
+            ),
+            ("save.resolve.cost_ns", self.profile_resolve_cost_ns, "ns"),
+            ("save.resolve.reuse_ns", self.profile_resolve_reuse_ns, "ns"),
+            (
+                "save.resolve.pooled_ns",
+                self.profile_resolve_pooled_ns,
+                "ns",
+            ),
+            ("save.full_ns", self.profile_full_ns, "ns"),
+            ("save.delta_ns", self.profile_delta_ns, "ns"),
+            ("save.group_ns", self.profile_group_ns, "ns"),
+            ("save.place_ns", self.profile_place_ns, "ns"),
+            ("save.sql_ns", self.profile_sql_ns, "ns"),
+            ("save.commit_ns", self.profile_commit_ns, "ns"),
+        ]
     }
 }
 
@@ -1086,6 +1261,70 @@ impl<'a> Sampler<'a> {
     }
 }
 
+/// One state's changed-set composition, split by the operation that caused it.
+///
+/// The driver already computes every one of these - it walks the changed set to
+/// build the tree - and only the aggregate `changed_paths` and `changed_bytes` were
+/// ever published. Publishing the split is what lets a state's save cost be read
+/// against the operations that produced it: a *construct* offers content the Store
+/// may already hold, an *edit* offers content it usually does not, a *delete* offers
+/// no content at all, and `metadata_only` is counted and never dropped.
+#[derive(Default, Clone, Copy)]
+struct ChangeMix {
+    /// Paths added (a construct: new name, possibly existing content).
+    added_paths: u64,
+    /// Logical bytes of those paths.
+    added_bytes: u64,
+    /// Paths whose content changed (an edit or a rewrite).
+    modified_paths: u64,
+    /// Logical bytes of those paths.
+    modified_bytes: u64,
+    /// Paths whose mode changed and whose content did not.
+    metadata_paths: u64,
+    /// Paths removed (a delete). Bytes are the **previous** state's.
+    removed_paths: u64,
+    /// Logical bytes those removals carried before they were removed.
+    removed_bytes: u64,
+}
+
+impl ChangeMix {
+    fn of(transition: &crate::workload::history::Transition) -> Self {
+        use crate::workload::history::Change;
+        Self {
+            added_paths: transition.count(Change::Added) as u64,
+            added_bytes: transition.bytes(Change::Added),
+            modified_paths: transition.count(Change::Modified) as u64,
+            modified_bytes: transition.bytes(Change::Modified),
+            metadata_paths: transition.count(Change::MetadataOnly) as u64,
+            removed_paths: transition.count(Change::Removed) as u64,
+            removed_bytes: transition.bytes(Change::Removed),
+        }
+    }
+
+    fn add(&mut self, other: &Self) {
+        self.added_paths = self.added_paths.saturating_add(other.added_paths);
+        self.added_bytes = self.added_bytes.saturating_add(other.added_bytes);
+        self.modified_paths = self.modified_paths.saturating_add(other.modified_paths);
+        self.modified_bytes = self.modified_bytes.saturating_add(other.modified_bytes);
+        self.metadata_paths = self.metadata_paths.saturating_add(other.metadata_paths);
+        self.removed_paths = self.removed_paths.saturating_add(other.removed_paths);
+        self.removed_bytes = self.removed_bytes.saturating_add(other.removed_bytes);
+    }
+
+    /// `(suffix, value)` rows, published per state and in total.
+    fn rows(&self) -> [(&'static str, u64); 7] {
+        [
+            ("change.added_paths", self.added_paths),
+            ("change.added_bytes", self.added_bytes),
+            ("change.modified_paths", self.modified_paths),
+            ("change.modified_bytes", self.modified_bytes),
+            ("change.metadata_paths", self.metadata_paths),
+            ("change.removed_paths", self.removed_paths),
+            ("change.removed_bytes", self.removed_bytes),
+        ]
+    }
+}
+
 /// What one state's child produced, carried out of the measured region so the
 /// trace is written **after** the timer rather than inside it.
 struct StateOutcome {
@@ -1093,6 +1332,8 @@ struct StateOutcome {
     root: FilesystemRootId,
     changed_paths: usize,
     changed_bytes: u64,
+    /// The same changed set, split by the operation that caused it.
+    change_mix: ChangeMix,
     inserted: u64,
     objects: u64,
     peak_heap_bytes: u64,
@@ -1101,6 +1342,15 @@ struct StateOutcome {
     input_ns: u64,
     build_ns: u64,
     save_ns: u64,
+    commits: u64,
+    /// This state's save counters, published after the measured region closes.
+    save: SaveTotals,
+    group_decodes: u64,
+    pooled_reads: layerfs_storage::encoding::pool::PoolReadCounters,
+    connection_opens: u64,
+    filesystem: FilesystemUpdateCounters,
+    filesystem_reads: ReadCounters,
+    content_reads: ReadCounters,
 }
 
 /// The driver.
@@ -1441,6 +1691,20 @@ fn prepare(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutc
     )))
 }
 
+/// Optional diagnostic nodes use the existing timer without changing product work.
+fn history_phase<T>(
+    child: &TimingScope<'_, Active>,
+    enabled: bool,
+    name: &'static str,
+    body: impl FnOnce(&TimingScope<'_, Active>) -> Result<T, OpError>,
+) -> Result<T, OpError> {
+    if enabled {
+        child.child(name).run(body)
+    } else {
+        Timing::disabled(name, body).0
+    }
+}
+
 /// The measured chain.
 fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
     context.create_output()?;
@@ -1497,8 +1761,28 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut advisory_bases: u64 = 0;
     let mut prior_unavailable: u64 = 0;
     let mut totals = SaveTotals::default();
+    let mut change_totals = ChangeMix::default();
 
     let count = corpus.states().len();
+    // Extra nodes fit stride10/stride3; stride1 remains the ordinary recording.
+    let detailed = matches!(
+        std::env::var("LAYERFS_HISTORY_PHASES").as_deref(),
+        Ok("1") | Ok("true")
+    );
+    if detailed && count > 53 {
+        return Err(OpError::Io(
+            "history phase diagnostics support at most 53 states (timer node bound)".into(),
+        ));
+    }
+
+    // **The corpus-axis diagnostic.** Residency of the corpus files *before this
+    // invocation first reads them*, and the process's device reads across the
+    // chain. Both are diagnostics: nothing fails on them, nothing is de-warmed, and
+    // neither is a cold claim. They answer the one question the declared cache
+    // stance left open — whether the input pages were already resident when the
+    // operation started — by measuring it rather than assuming it.
+    read_probe_begin();
+    let disk_reads_before = instruments::process_usage();
 
     // **One root, N named children.** The corpus reading sits inside the root and
     // outside every child, so the row's `operation_ns` is the sum of the children
@@ -1544,7 +1828,13 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             } else {
                 BTreeMap::new()
             };
-            corpus_read_ns = corpus_read_ns.saturating_add(t_corpus.elapsed().as_nanos() as u64);
+            let corpus_span_ns = t_corpus.elapsed().as_nanos() as u64;
+            corpus_read_ns = corpus_read_ns.saturating_add(corpus_span_ns);
+            // Declared, not left between the phases. The span is inside the
+            // invocation and outside every measured child, so preparation is the
+            // phase that accounts for it, and `history.corpus_read_ns` publishes it
+            // in its own right so a reader can subtract it.
+            phases::add_preparation(corpus_span_ns);
             let ordinal = transition.state.ordinal;
             let mut peak_heap = 0u64;
             let outcome = root
@@ -1564,6 +1854,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     // measured inside this node; the node itself is per state, so a
                     // 157-state chain needs 3 x 157 + 1 nodes rather than tens of
                     // thousands.
+                    let mut content_reads = ReadCounters::default();
                     let constructed = child
                         .child("content")
                         .run(
@@ -1581,7 +1872,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                 // once per state and reads nothing until a chunked
                                 // construction asks it for a mapping page.
                                 let cursor_reader = if chunk_predecessors_enabled() {
-                                    store.as_ref().map(StoreProvider::new)
+                                    store.as_ref().map(|store| ReadWork::new(StoreProvider::new(store), detailed))
                                 } else {
                                     None
                                 };
@@ -1659,172 +1950,178 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                                     state_signatures.insert(root, raw_signature);
                                     constructed.insert(changed.path.clone(), root);
                                 }
+                                if let Some(reader) = cursor_reader {
+                                    content_reads = reader.counters();
+                                }
                                 Ok((constructed, state_signatures))
                             },
                         )?;
                     let (constructed, state_signatures) = constructed;
-                    // **Step 0 of #187.** A faithful history save reads the
-                    // previous version of a path and produces the new one as an
-                    // **edit**, which is what `file/edit/apply.rs` does when it
-                    // attaches `AdvisoryPredecessors::explicit(view.root())`.
-                    // This driver instead calls `construct_bytes`, which builds
-                    // `FinalizedObject::new(role, canonical)` with **no
-                    // predecessors at all** — so without this the Store is asked
-                    // to hold every version as though it had never existed, and
-                    // the only cross-save route to a delta base is never taken.
-                    //
-                    // Keyed by the NEW content root, because that is the object
-                    // the save will offer; the value is the previous version's
-                    // content root for the same path. An identical root is
-                    // skipped for the same reason `apply.rs` skips it: the
-                    // content did not change, so there is nothing to encode
-                    // against.
-                    // The producer's earlier versions, constructed inside the
-                    // measured region: a producer builds the base it declares.
-                    let mut prior_roots: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
-                    let mut prior_missing: BTreeSet<Vec<u8>> = BTreeSet::new();
-                    if faithful {
-                        let (built, _) = Timing::disabled(
-                            "content.prior",
-                            |scope: &TimingScope<'_, Active>| -> Result<
-                                BTreeMap<Vec<u8>, ObjectId>,
-                                OpError,
-                            > {
-                                let mut built: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
-                                for (path, bytes) in &prior_inputs {
-                                    match construct_bytes(
-                                        policy,
-                                        &capacities,
-                                        bytes,
-                                        &mut consumer,
-                                        scope.child("content.prior"),
-                                    ) {
-                                        Ok(file) => {
-                                            built.insert(path.clone(), file.root);
-                                        }
-                                        Err(error) => {
-                                            let _ = error;
-                                            prior_missing.insert(path.clone());
+                    let (bases, _prior_roots, _prior_missing) = history_phase(child, detailed, "harness.predecessors", |_| {
+                        // **Step 0 of #187.** A faithful history save reads the
+                        // previous version of a path and produces the new one as an
+                        // **edit**, which is what `file/edit/apply.rs` does when it
+                        // attaches `AdvisoryPredecessors::explicit(view.root())`.
+                        // This driver instead calls `construct_bytes`, which builds
+                        // `FinalizedObject::new(role, canonical)` with **no
+                        // predecessors at all** — so without this the Store is asked
+                        // to hold every version as though it had never existed, and
+                        // the only cross-save route to a delta base is never taken.
+                        //
+                        // Keyed by the NEW content root, because that is the object
+                        // the save will offer; the value is the previous version's
+                        // content root for the same path. An identical root is
+                        // skipped for the same reason `apply.rs` skips it: the
+                        // content did not change, so there is nothing to encode
+                        // against.
+                        // The producer's earlier versions, constructed inside the
+                        // measured region: a producer builds the base it declares.
+                        let mut prior_roots: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
+                        let mut prior_missing: BTreeSet<Vec<u8>> = BTreeSet::new();
+                        if faithful {
+                            let (built, _) = Timing::disabled(
+                                "content.prior",
+                                |scope: &TimingScope<'_, Active>| -> Result<
+                                    BTreeMap<Vec<u8>, ObjectId>,
+                                    OpError,
+                                > {
+                                    let mut built: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
+                                    for (path, bytes) in &prior_inputs {
+                                        match construct_bytes(
+                                            policy,
+                                            &capacities,
+                                            bytes,
+                                            &mut consumer,
+                                            scope.child("content.prior"),
+                                        ) {
+                                            Ok(file) => {
+                                                built.insert(path.clone(), file.root);
+                                            }
+                                            Err(error) => {
+                                                let _ = error;
+                                                prior_missing.insert(path.clone());
+                                            }
                                         }
                                     }
+                                    Ok(built)
+                                },
+                            );
+                            match built {
+                                Ok(built) => prior_roots = built,
+                                Err(error) => {
+                                    return Err(OpError::Product(format!("{error:?}")));
                                 }
-                                Ok(built)
-                            },
-                        );
-                        match built {
-                            Ok(built) => prior_roots = built,
-                            Err(error) => {
-                                return Err(OpError::Product(format!("{error:?}")));
                             }
                         }
-                    }
-                    // **R0's declaration, in the measured best order.** The
-                    // selector probes these in order and returns the first
-                    // *eligible* one (`encoding/delta/select.rs:342`), so the order
-                    // is the parameter that decides the result — and "try all four
-                    // and keep the smallest frame" is measurably worse because it
-                    // deepens chains past the depth cap.
-                    let mut bases: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
-                    if faithful {
-                        for changed in &transition.changed {
-                            if matches!(changed.kind, Change::Removed | Change::MetadataOnly) {
-                                continue;
-                            }
-                            let Some(new_root) = constructed.get(&changed.path).copied() else {
-                                continue;
-                            };
-                            let Some(signature) = state_signatures.get(&new_root).copied() else {
-                                continue;
-                            };
-                            let previous = same_path_root.get(&changed.path).copied();
-                            if previous == Some(new_root) {
-                                continue;
-                            }
-                            let ordered = if ordered_predecessors_enabled() {
-                                ordered_predecessors(
-                                    &index,
-                                    new_root,
-                                    &changed.path,
-                                    signature,
-                                    previous,
-                                )
-                            } else if similarity_candidates_enabled() {
-                                // **One variable against the default arm.** The
-                                // same-path previous version is still the whole list
-                                // when it exists; the cross-save index is consulted
-                                // only when it does not. The candidates are the
-                                // ordered arm's own, so the gain this arm shows is
-                                // the ordered arm's gain with its base-replacement
-                                // loss removed.
-                                match previous {
-                                    Some(previous) => vec![previous],
-                                    None => cross_path_predecessors(
+                        // **R0's declaration, in the measured best order.** The
+                        // selector probes these in order and returns the first
+                        // *eligible* one (`encoding/delta/select.rs:342`), so the order
+                        // is the parameter that decides the result — and "try all four
+                        // and keep the smallest frame" is measurably worse because it
+                        // deepens chains past the depth cap.
+                        let mut bases: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
+                        if faithful {
+                            for changed in &transition.changed {
+                                if matches!(changed.kind, Change::Removed | Change::MetadataOnly) {
+                                    continue;
+                                }
+                                let Some(new_root) = constructed.get(&changed.path).copied() else {
+                                    continue;
+                                };
+                                let Some(signature) = state_signatures.get(&new_root).copied() else {
+                                    continue;
+                                };
+                                let previous = same_path_root.get(&changed.path).copied();
+                                if previous == Some(new_root) {
+                                    continue;
+                                }
+                                let ordered = if ordered_predecessors_enabled() {
+                                    ordered_predecessors(
                                         &index,
                                         new_root,
                                         &changed.path,
                                         signature,
-                                        fallback_candidate_limit(),
-                                    ),
+                                        previous,
+                                    )
+                                } else if similarity_candidates_enabled() {
+                                    // **One variable against the default arm.** The
+                                    // same-path previous version is still the whole list
+                                    // when it exists; the cross-save index is consulted
+                                    // only when it does not. The candidates are the
+                                    // ordered arm's own, so the gain this arm shows is
+                                    // the ordered arm's gain with its base-replacement
+                                    // loss removed.
+                                    match previous {
+                                        Some(previous) => vec![previous],
+                                        None => cross_path_predecessors(
+                                            &index,
+                                            new_root,
+                                            &changed.path,
+                                            signature,
+                                            fallback_candidate_limit(),
+                                        ),
+                                    }
+                                } else {
+                                    // The measured best for this lane: the single
+                                    // same-path previous version. Everything else is
+                                    // shared, so the two arms differ in exactly one
+                                    // parameter — the list — and the comparison is one
+                                    // variable wide.
+                                    previous.into_iter().collect()
+                                };
+                                // Drop a candidate whose chain is already at the cap:
+                                // declaring it would make the writer build a chain the
+                                // reader refuses. The driver's own depth account is the
+                                // only one it has, and it is an over-estimate, which is
+                                // the safe direction.
+                                let depth_limit = advisory_depth_limit();
+                                // A candidate at or near the cap is a **bad base** even
+                                // when it is eligible: the frame it produces is deeper,
+                                // and a deeper chain is the spec's measured failure mode
+                                // for a greedy four-slot order. Rank by the candidate's
+                                // own depth first, then keep the measured
+                                // cross-path-then-same-path order within a depth, so a
+                                // shallow base is preferred to a deep one.
+                                let mut ranked: Vec<(u8, usize, ObjectId)> = ordered
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(position, candidate)| {
+                                        let depth = index
+                                            .path_of
+                                            .get(candidate)
+                                            .and_then(|path| chain_depth.get(path))
+                                            .copied()
+                                            .unwrap_or(0);
+                                        (depth, position, *candidate)
+                                    })
+                                    .collect();
+                                ranked.sort_by_key(|(depth, position, _)| (*depth, *position));
+                                let eligible: Vec<ObjectId> = ranked
+                                    .into_iter()
+                                    .filter(|(depth, _, _)| *depth < depth_limit)
+                                    .map(|(_, _, candidate)| candidate)
+                                    .collect();
+                                if eligible.is_empty() {
+                                    chain_depth.insert(changed.path.clone(), 0);
+                                    continue;
                                 }
-                            } else {
-                                // The measured best for this lane: the single
-                                // same-path previous version. Everything else is
-                                // shared, so the two arms differ in exactly one
-                                // parameter — the list — and the comparison is one
-                                // variable wide.
-                                previous.into_iter().collect()
-                            };
-                            // Drop a candidate whose chain is already at the cap:
-                            // declaring it would make the writer build a chain the
-                            // reader refuses. The driver's own depth account is the
-                            // only one it has, and it is an over-estimate, which is
-                            // the safe direction.
-                            let depth_limit = advisory_depth_limit();
-                            // A candidate at or near the cap is a **bad base** even
-                            // when it is eligible: the frame it produces is deeper,
-                            // and a deeper chain is the spec's measured failure mode
-                            // for a greedy four-slot order. Rank by the candidate's
-                            // own depth first, then keep the measured
-                            // cross-path-then-same-path order within a depth, so a
-                            // shallow base is preferred to a deep one.
-                            let mut ranked: Vec<(u8, usize, ObjectId)> = ordered
-                                .iter()
-                                .enumerate()
-                                .map(|(position, candidate)| {
+                                for candidate in &eligible {
                                     let depth = index
                                         .path_of
                                         .get(candidate)
                                         .and_then(|path| chain_depth.get(path))
                                         .copied()
                                         .unwrap_or(0);
-                                    (depth, position, *candidate)
-                                })
-                                .collect();
-                            ranked.sort_by_key(|(depth, position, _)| (*depth, *position));
-                            let eligible: Vec<ObjectId> = ranked
-                                .into_iter()
-                                .filter(|(depth, _, _)| *depth < depth_limit)
-                                .map(|(_, _, candidate)| candidate)
-                                .collect();
-                            if eligible.is_empty() {
-                                chain_depth.insert(changed.path.clone(), 0);
-                                continue;
+                                    chain_depth
+                                        .insert(changed.path.clone(), depth.saturating_add(1));
+                                    break;
+                                }
+                                bases.insert(new_root, eligible);
                             }
-                            for candidate in &eligible {
-                                let depth = index
-                                    .path_of
-                                    .get(candidate)
-                                    .and_then(|path| chain_depth.get(path))
-                                    .copied()
-                                    .unwrap_or(0);
-                                chain_depth
-                                    .insert(changed.path.clone(), depth.saturating_add(1));
-                                break;
-                            }
-                            bases.insert(new_root, eligible);
+                            advisory_bases = advisory_bases.saturating_add(bases.len() as u64);
                         }
-                        advisory_bases = advisory_bases.saturating_add(bases.len() as u64);
-                    }
+                        Ok((bases, prior_roots, prior_missing))
+                    })?;
                     // The Store is created inside state 1's child, so the fixed
                     // cost is visible and subtractable rather than buried.
                     if store.is_none() {
@@ -1838,15 +2135,17 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     }
                     let held = store.as_ref().expect("the Store was just created");
                     let t_input = std::time::Instant::now();
-                    filesystem_input(
-                        &mut chain,
-                        &transition,
-                        &constructed,
-                        previous_root.is_none(),
-                        &mut directories,
-                        &mut inodes,
-                        &mut new_inodes,
-                    )?;
+                    history_phase(child, detailed, "harness.input", |_| {
+                        filesystem_input(
+                            &mut chain,
+                            &transition,
+                            &constructed,
+                            previous_root.is_none(),
+                            &mut directories,
+                            &mut inodes,
+                            &mut new_inodes,
+                        )
+                    })?;
                     let input_ns = t_input.elapsed().as_nanos() as u64;
                     let t_build = std::time::Instant::now();
                     let input = FilesystemInput {
@@ -1858,7 +2157,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         new_inodes: &new_inodes,
                         resources: FilesystemResources::default(),
                     };
-                    let provider = StoreProvider::new(held);
+                    let provider = ReadWork::new(StoreProvider::new(held), detailed);
                     let bindings: usize =
                         directories.iter().map(|update| update.changes.len()).sum();
                     // **Always supply the ordering backing.**
@@ -1881,57 +2180,76 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     // byte-identical across this change.
                     let _ = bindings;
                     let mut backing = Some(FileBacking::new(&backing_directory));
-                    let built = {
+                    let built = history_phase(child, detailed, "filesystem", |scope| {
                         let mut objects = FilesystemObjects::new(&provider, &mut consumer);
                         let backing = backing.as_mut().map(|backing| {
                             backing
                                 as &mut dyn layerfs_content::filesystem::references::backing::OrderingBacking
                         });
-                        match previous_root {
-                            None => build_filesystem(&mut objects, &input, backing),
-                            Some(_) => update_filesystem(&mut objects, &input, backing),
-                        }
-                    };
-                    let built = built.map_err(|error| OpError::Product(format!("{error:?}")))?;
+                        let result = match (previous_root, detailed) {
+                            (None, false) => build_filesystem(&mut objects, &input, backing),
+                            (Some(_), false) => update_filesystem(&mut objects, &input, backing),
+                            (None, true) => build_filesystem_timed(
+                                &mut objects, &input, backing, &FilesystemPhases::new(scope),
+                            ),
+                            (Some(_), true) => update_filesystem_timed(
+                                &mut objects, &input, backing, &FilesystemPhases::new(scope),
+                            ),
+                        };
+                        result.map_err(|error| OpError::Product(format!("{error:?}")))
+                    })?;
                     let build_ns = t_build.elapsed().as_nanos() as u64;
                     let t_save = std::time::Instant::now();
                     let mut operation = held
                         .begin_save(child.child("storage.begin"))
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                    for id in consumer.insertion_order() {
-                        let mut object = consumer
-                            .cloned_object(*id)
-                            .ok_or_else(|| OpError::Io(format!("object {id:?} vanished")))?;
-                        if let Some(ordered) = bases.get(id) {
-                            let mut list = AdvisoryPredecessors::new();
-                            for candidate in ordered {
-                                list.push(*candidate, PredecessorProvenance::OriginalBase)
-                                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                    history_phase(child, detailed, "storage.accept_loop", |_| {
+                        for id in consumer.insertion_order() {
+                            let mut object = consumer
+                                .cloned_object(*id)
+                                .ok_or_else(|| OpError::Io(format!("object {id:?} vanished")))?;
+                            if let Some(ordered) = bases.get(id) {
+                                let mut list = AdvisoryPredecessors::new();
+                                for candidate in ordered {
+                                    list.push(*candidate, PredecessorProvenance::OriginalBase)
+                                        .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                                }
+                                object = object.with_predecessors(list);
                             }
-                            object = object.with_predecessors(list);
+                            operation
+                                .accept(object)
+                                .map_err(|error| OpError::Product(format!("{error:?}")))?;
                         }
-                        operation
-                            .accept(object)
-                            .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                    }
-                    if faithful {
-                        // The objects this save admitted are the candidates the
-                        // **next** state may declare. Indexing after the save is
-                        // what makes the correspondence cross-save, which the
-                        // product's per-save cache cannot be at any size.
-                        for (path, root) in &constructed {
-                            if let Some(signature) = state_signatures.get(root).copied() {
-                                index.insert(*root, path, signature);
+                        Ok(())
+                    })?;
+                    history_phase(child, detailed, "harness.index", |_| {
+                        if faithful {
+                            // The objects this save admitted are the candidates the
+                            // **next** state may declare. Indexing after the save is
+                            // what makes the correspondence cross-save, which the
+                            // product's per-save cache cannot be at any size.
+                            for (path, root) in &constructed {
+                                if let Some(signature) = state_signatures.get(root).copied() {
+                                    index.insert(*root, path, signature);
+                                }
+                                previous_content.insert(path.clone(), *root);
+                                same_path_root.insert(path.clone(), *root);
                             }
-                            previous_content.insert(path.clone(), *root);
-                            same_path_root.insert(path.clone(), *root);
                         }
-                    }
+                        Ok(())
+                    })?;
                     let saved = operation
                         .finish(child.child("storage.finish"))
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
                     let save_ns = t_save.elapsed().as_nanos() as u64;
+                    let mut state_save = SaveTotals::default();
+                    state_save.add(&saved);
                     totals.add(&saved);
+                    // Computed once here and carried on `StateOutcome`, so the
+                    // per-state trace rows and the whole-run totals are the same
+                    // numbers taken from the same walk of the changed set.
+                    let state_mix = ChangeMix::of(&transition);
+                    change_totals.add(&state_mix);
                     peak_heap = instruments::heap_end().peak_incremental_bytes;
                     previous_root = Some(built.root);
                     Ok(StateOutcome {
@@ -1939,12 +2257,21 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         root: built.root,
                         changed_paths: transition.changed.len(),
                         changed_bytes: transition.changed_bytes(),
+                        change_mix: state_mix,
                         inserted: saved.inserted,
                         objects: built.counters.objects.objects_emitted,
                         peak_heap_bytes: 0,
                         input_ns,
                         build_ns,
                         save_ns,
+                        commits: saved.commits,
+                        save: state_save,
+                        group_decodes: provider.inner.group_decodes(),
+                        pooled_reads: provider.inner.pooled_read_counters(),
+                        connection_opens: provider.inner.connection_opens(),
+                        filesystem_reads: provider.counters(),
+                        content_reads,
+                        filesystem: built.counters,
                     })
                 })?;
             outcomes.push(StateOutcome {
@@ -1957,6 +2284,15 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let (outcomes, corpus_read_ns) = match result {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&error, gates)),
+    };
+    // The device half of the corpus diagnostic, from the same `rusage` instrument
+    // the cold contract uses. Process-wide, so corpus reads and the Store's own
+    // device traffic are one number here; it is not a gate.
+    let disk_read_bytes_chain = match (disk_reads_before, instruments::process_usage()) {
+        (Some(before), Some(after)) => {
+            Some(after.disk_read_bytes.saturating_sub(before.disk_read_bytes))
+        }
+        _ => None,
     };
     drop(store);
 
@@ -2001,6 +2337,24 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "bytes",
             "logical bytes this transition changed",
         )?;
+        for (suffix, value) in outcome.change_mix.rows() {
+            // Units differ by row: `*_paths` counts entries, `*_bytes` is logical
+            // volume. A removal's bytes are the previous state's size, so the two
+            // are published separately and never summed into a store figure.
+            let unit = if suffix.ends_with("_bytes") { "bytes" } else { "paths" };
+            let basis = if suffix.ends_with("_bytes") {
+                "logical size of the paths this transition added, modified or removed; a removal's bytes are the previous state's"
+            } else {
+                "entries this transition added, modified, removed or changed in mode only"
+            };
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("history.state.{}.{}", outcome.ordinal, suffix),
+                value as i128,
+                unit,
+                basis,
+            )?;
+        }
         context.trace.write_number(
             Kind::Counter,
             &format!("history.state.{}.inserted", outcome.ordinal),
@@ -2022,6 +2376,94 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "bytes",
             "counting GlobalAlloc, this state's child alone",
         )?;
+        if detailed {
+            for (provider, reads) in [
+                ("filesystem.provider", outcome.filesystem_reads),
+                ("content.predecessor_provider", outcome.content_reads),
+            ] {
+                for (suffix, value, unit) in [
+                    ("read_waves", reads.waves, "count"),
+                    ("requested_objects", reads.requested_objects, "objects"),
+                    ("returned_objects", reads.returned_objects, "objects"),
+                    ("returned_canonical_bytes", reads.returned_bytes, "bytes"),
+                    ("failed_waves", reads.failed_waves, "count"),
+                    ("read_elapsed_ns", reads.elapsed_ns, "ns"),
+                ] {
+                    context.trace.write_number(
+                        Kind::Resource,
+                        &format!("history.state.{}.{provider}.{suffix}", outcome.ordinal),
+                        i128::from(value),
+                        unit,
+                        "aggregate original provider calls; elapsed overlaps enclosing phase; bytes are returned canonical bytes, not disk/pack traffic",
+                    )?;
+                }
+            }
+        }
+        if detailed {
+            let pooled = outcome.pooled_reads;
+            for (suffix, value, unit) in [
+                ("leaf_requests", pooled.leaf_requests, "count"),
+                ("chain_edges", pooled.chain_edges, "count"),
+                ("physical_record_calls", pooled.physical_record_calls, "count"),
+                ("physical_group_decodes", pooled.physical_group_decodes, "count"),
+                ("physical_group_decoded_bytes", pooled.physical_group_decoded_bytes, "bytes"),
+                ("physical_group_cache_hits", pooled.physical_group_cache_hits, "count"),
+                ("value_group_decodes", pooled.value_group_decodes, "count"),
+                ("pack_fetches", pooled.pack_fetches, "count"),
+                ("pack_bytes", pooled.pack_bytes, "bytes"),
+            ] {
+                context.trace.write_number(
+                    Kind::Resource,
+                    &format!("history.state.{}.filesystem.provider.pooled.{suffix}", outcome.ordinal),
+                    i128::from(value),
+                    unit,
+                    "successful provider waves; physical decodes are actual Zstd calls; value decodes include raw materialization; pack bytes are BLOB acquisitions, not disk traffic",
+                )?;
+            }
+        }
+        let fs = outcome.filesystem;
+        for (suffix, value) in [
+            ("save.commits", outcome.commits),
+            ("filesystem.provider.group_decodes", outcome.group_decodes),
+            ("filesystem.provider.connection_opens", outcome.connection_opens),
+            ("filesystem.validation.objects_read", fs.validation.objects_read),
+            ("filesystem.validation.read_waves", fs.validation.read_waves),
+            ("filesystem.validation.inode_demands", fs.validation.inode_demands),
+            ("filesystem.validation.inode_pages_read", fs.validation.inode_pages_read),
+            ("filesystem.validation.directory_pages_read", fs.validation.directory_pages_read),
+            ("filesystem.validation.entries_examined", fs.validation.entries_examined),
+            ("filesystem.references.rows_touched", fs.references.rows_touched),
+            ("filesystem.references.rows_spilled", fs.references.rows_spilled),
+            ("filesystem.references.serials_scanned", fs.references.serials_scanned),
+            ("filesystem.references.base_records_read", fs.references.base_records_read),
+            ("filesystem.references.base_waves", fs.references.base_waves),
+            ("filesystem.references.runs_created", fs.references.runs.runs_created),
+            ("filesystem.references.rows_read", fs.references.runs.rows_read),
+            ("filesystem.references.rows_written", fs.references.runs.rows_written),
+            ("filesystem.directories.pages_read", fs.directories.pages_read),
+            ("filesystem.inodes.pages_read", fs.inodes.pages_read),
+        ] {
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("history.state.{}.{suffix}", outcome.ordinal),
+                i128::from(value),
+                "count",
+                "public SaveOutcome or FilesystemUpdateCounters; overlapping work counters are not summed",
+            )?;
+        }
+        // The save's own counters, per state. `storage.accept_loop` is one span and
+        // several kinds of work; these are the product's figures for which kinds
+        // happened, so a cost that grows with depth can be attributed to one of
+        // them instead of to the span's name.
+        for (suffix, value, unit) in outcome.save.rows() {
+            context.trace.write_number(
+                Kind::Counter,
+                &format!("history.state.{}.{suffix}", outcome.ordinal),
+                i128::from(value),
+                unit,
+                "SaveOutcome's own counters for this state; work counters, not times",
+            )?;
+        }
         for (suffix, nanos, basis) in [
             ("input_ns", outcome.input_ns, "harness input assembly inside the child"),
             ("build_ns", outcome.build_ns, "build/update_filesystem"),
@@ -2060,8 +2502,46 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         "history.corpus_read_ns",
         corpus_read_ns as i128,
         "ns",
-        "the harness's own corpus reading: inside the root, between the children, untimed",
+        "the harness's own corpus reading: inside the root, between the children, untimed, and attributed to the preparation phase so the declared phases account for the invocation",
     )?;
+    let probe = read_probe();
+    for (key, value, unit, basis) in [
+        (
+            "history.corpus.probe.files",
+            probe.files,
+            "files",
+            "distinct corpus files the chain read, probed for residency before their first read",
+        ),
+        (
+            "history.corpus.probe.bytes",
+            probe.length_bytes,
+            "bytes",
+            "the summed lengths of those files (diagnostic, not a gate)",
+        ),
+        (
+            "history.corpus.probe.pages",
+            probe.total_pages,
+            "pages",
+            "pages examined across those files (diagnostic, not a gate)",
+        ),
+        (
+            "history.corpus.probe.resident_pages",
+            probe.resident_pages,
+            "pages",
+            "pages resident before the first read: what an earlier run may have left, measured rather than assumed; nothing is de-warmed and this is not a cold claim",
+        ),
+    ] {
+        context.trace.write_number(Kind::Resource, key, value as i128, unit, basis)?;
+    }
+    if let Some(bytes) = disk_read_bytes_chain {
+        context.trace.write_number(
+            Kind::Resource,
+            "history.operation.disk_read_bytes",
+            bytes as i128,
+            "bytes",
+            "device bytes this process read across the chain, from rusage; process-wide, so corpus and Store reads are one number, and not a gate",
+        )?;
+    }
     context.trace.write_number(
         Kind::Counter,
         "history.children_ns",
@@ -2081,6 +2561,9 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         ("delta.full_records", totals.full_records),
         ("delta.prefix_records", totals.prefix_records),
         ("delta.packs_created", totals.packs_created),
+        ("delta.pack_appends", totals.pack_appends),
+        ("delta.statements", totals.statements),
+        ("delta.presence_queries", totals.presence_queries),
         ("delta.prepared_full", totals.prepared_full),
         ("delta.trials", totals.trials),
         ("delta.prefix_selected", totals.prefix_selected),
@@ -2089,6 +2572,20 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         ("delta.absent_candidates", totals.absent_candidates),
         ("delta.ineligible_candidates", totals.ineligible_candidates),
         ("delta.work_exceeded", totals.work_exceeded),
+        ("delta.chain_objects", totals.chain_objects),
+        ("delta.chain_edges", totals.chain_edges),
+        ("delta.chain_encoded_bytes", totals.chain_encoded_bytes),
+        ("delta.chain_canonical_bytes", totals.chain_canonical_bytes),
+        ("delta.chain_max_depth", totals.chain_max_depth),
+        ("delta.chain_group_decodes", totals.chain_group_decodes),
+        ("delta.pool_leaves", totals.pool_leaves),
+        ("delta.pool_new_values", totals.pool_new_values),
+        ("delta.pool_reused_values", totals.pool_reused_values),
+        ("delta.pool_groups", totals.pool_groups),
+        ("delta.pool_delta_leaves", totals.pool_delta_leaves),
+        ("delta.pool_full_leaves", totals.pool_full_leaves),
+        ("delta.pool_trials", totals.pool_trials),
+        ("delta.pool_work_exceeded", totals.pool_work_exceeded),
     ] {
         context.trace.write_number(
             Kind::Counter,
@@ -2098,6 +2595,64 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             "chain total of the save's own counters",
         )?;
     }
+    // The changed-set composition, totalled over every state: what the operations
+    // were, as opposed to what the save did about them. Published in its own group
+    // because the unit is `paths` or `bytes`, not the `objects` above.
+    for (key, value) in change_totals.rows() {
+        let unit = if key.ends_with("_bytes") { "bytes" } else { "paths" };
+        context.trace.write_number(
+            Kind::Counter,
+            &format!("delta.{key}"),
+            value as i128,
+            unit,
+            "whole-run changed-set composition, from the driver's own walk of each transition",
+        )?;
+    }
+    // The save's own nanosecond split, totalled over every state. Seven disjoint
+    // buckets charged inside `storage.accept_loop`; their sum is charged work and
+    // the difference from the accept span is the remainder the instrument does
+    // not name. Published as a separate group because the unit is `ns`, not the
+    // `objects` the counters above carry.
+    for (key, value) in [
+        ("delta.profile_resolve_ns", totals.profile_resolve_ns),
+        (
+            "delta.profile_resolve_eligible_ns",
+            totals.profile_resolve_eligible_ns,
+        ),
+        (
+            "delta.profile_resolve_acquire_ns",
+            totals.profile_resolve_acquire_ns,
+        ),
+        ("delta.profile_resolve_cost_ns", totals.profile_resolve_cost_ns),
+        ("delta.profile_resolve_reuse_ns", totals.profile_resolve_reuse_ns),
+        (
+            "delta.profile_resolve_pooled_ns",
+            totals.profile_resolve_pooled_ns,
+        ),
+        ("delta.profile_full_ns", totals.profile_full_ns),
+        ("delta.profile_delta_ns", totals.profile_delta_ns),
+        ("delta.profile_group_ns", totals.profile_group_ns),
+        ("delta.profile_place_ns", totals.profile_place_ns),
+        ("delta.profile_sql_ns", totals.profile_sql_ns),
+        ("delta.profile_commit_ns", totals.profile_commit_ns),
+    ] {
+        context.trace.write_number(
+            Kind::Counter,
+            key,
+            value as i128,
+            "ns",
+            "chain total of the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
+        )?;
+    }
+    // A count, not a duration: it is the population the B1 probe measured, so it
+    // is published in its own unit rather than folded into the `ns` group above.
+    context.trace.write_number(
+        Kind::Counter,
+        "delta.profile_reuse_repeat",
+        totals.profile_reuse_repeat as i128,
+        "objects",
+        "reuse occurrences that repeated an identity this same operation had already verified; zero unless LAYERFS_STORAGE_REUSE_PROBE=1",
+    )?;
     context.trace.write_number(
         Kind::Counter,
         "history.advisory_model",
@@ -2168,7 +2723,9 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
             format!("history_path_states: {}", pins.path_states),
             "measured_region: construct + build/update + save, one named child per state".to_string(),
             "operation_ns: the sum of the named children, not the root".to_string(),
-            "corpus_reading: between the children, untimed".to_string(),
+            "corpus_reading: between the children, untimed, attributed to the preparation phase"
+                .to_string(),
+            "cache_diagnostic: corpus residency before the first read and process device reads; diagnostics, not gates, and not a cold claim".to_string(),
             "prepared: none (Preparation::InProcess)".to_string(),
             // The runner reads this to decide whether the row has a deferred
             // oracle. Without it the verify invocation is never scheduled and a

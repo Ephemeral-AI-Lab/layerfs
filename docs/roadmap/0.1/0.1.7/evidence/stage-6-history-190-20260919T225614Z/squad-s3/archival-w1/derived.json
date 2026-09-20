@@ -1,0 +1,36 @@
+{
+  "armA_sweep.txt": {
+    "group_level_1": {
+      "stored_total_bytes": 3071158,
+      "frame_total_bytes": 3042617,
+      "codec_cpu_ns": 18010000
+    },
+    "group_level_19": {
+      "stored_total_bytes": 2808936,
+      "frame_total_bytes": 2780395,
+      "codec_cpu_ns": 1029845000
+    },
+    "delta": {
+      "stored_total_bytes": -262222,
+      "frame_total_bytes": -262222,
+      "codec_cpu_ns": 1011835000
+    }
+  },
+  "rest2.txt": {
+    "group_level_1": {
+      "stored_total_bytes": 3071158,
+      "frame_total_bytes": 3042617,
+      "codec_cpu_ns": 23713000
+    },
+    "group_level_19": {
+      "stored_total_bytes": 2808936,
+      "frame_total_bytes": 2780395,
+      "codec_cpu_ns": 1449205000
+    },
+    "delta": {
+      "stored_total_bytes": -262222,
+      "frame_total_bytes": -262222,
+      "codec_cpu_ns": 1425492000
+    }
+  }
+}

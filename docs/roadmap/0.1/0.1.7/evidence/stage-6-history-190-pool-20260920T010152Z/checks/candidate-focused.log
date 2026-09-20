@@ -1,0 +1,59 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.02s
+     Running tests/metadata_chain.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/metadata_chain-52d8e83b759a9ee7)
+
+running 2 tests
+test small_records_reach_the_depth_cap_and_the_next_edge_is_stored_in_full ... ok
+test maximal_records_hit_the_canonical_budget_before_the_depth_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/metadata_pool.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 19 tests
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_pooled_reader_releases_pack_bodies_when_the_store_writes ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_compressed_full_pooled_leaf_reports_its_physical_decode_work ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test a_pooled_delta_chain_reports_its_physical_decode_work ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test pooled_physical_groups_evict_at_the_existing_decoded_byte_bound ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.21s
+
+     Running tests/provider_errors.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/provider_errors-bf3f290b9fdad8ff)
+
+running 3 tests
+test an_object_the_store_does_not_hold_is_absence ... ok
+test a_corrupt_pack_is_not_reported_as_absence ... ok
+test a_record_above_the_publication_watermark_is_not_reported_as_absence ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/visibility.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/visibility-4510e3f48dbad30c)
+
+running 9 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_interrupted_save_leaves_the_store_readable_until_an_operator_decides ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+

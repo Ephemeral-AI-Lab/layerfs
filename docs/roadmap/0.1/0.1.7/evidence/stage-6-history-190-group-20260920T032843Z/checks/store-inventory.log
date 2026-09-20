@@ -1,0 +1,66 @@
+{
+  "history-stride10": {
+    "baseline": {
+      "canonical_object_count": 52032,
+      "canonical_bytes": 380921328,
+      "canonical_inventory_sha256": "18a925c78bae5076e07200d324556b10dbd4d0a46641170ebde29a4be3eb3fab",
+      "packs": [
+        255,
+        45035732
+      ],
+      "quick_check": [
+        [
+          "ok"
+        ]
+      ],
+      "store_sha256": "ab64dab7aaed512ab93b7ccc46fd14f22e57791f642b39fdf2b94650a41a965f"
+    },
+    "candidate": {
+      "canonical_object_count": 52032,
+      "canonical_bytes": 380921328,
+      "canonical_inventory_sha256": "18a925c78bae5076e07200d324556b10dbd4d0a46641170ebde29a4be3eb3fab",
+      "packs": [
+        255,
+        45297954
+      ],
+      "quick_check": [
+        [
+          "ok"
+        ]
+      ],
+      "store_sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487"
+    }
+  },
+  "history-stride3": {
+    "baseline": {
+      "canonical_object_count": 72560,
+      "canonical_bytes": 589916570,
+      "canonical_inventory_sha256": "e93b492b77c6eb6d3dda180833454f3be17b9223360390cf7f8e510500b6c43d",
+      "packs": [
+        437,
+        56192535
+      ],
+      "quick_check": [
+        [
+          "ok"
+        ]
+      ],
+      "store_sha256": "cfb74bc9b1db6c9470129613283a8f4afa3b139c2819ae7bd7a4f14e548ecdb5"
+    },
+    "candidate": {
+      "canonical_object_count": 72560,
+      "canonical_bytes": 589916570,
+      "canonical_inventory_sha256": "e93b492b77c6eb6d3dda180833454f3be17b9223360390cf7f8e510500b6c43d",
+      "packs": [
+        437,
+        56590252
+      ],
+      "quick_check": [
+        [
+          "ok"
+        ]
+      ],
+      "store_sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e"
+    }
+  }
+}

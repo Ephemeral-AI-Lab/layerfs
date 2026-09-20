@@ -13,6 +13,7 @@ use rusqlite::Connection;
 
 use layerfs_content::{ObjectId, ObjectRole};
 
+use crate::cas::SaveProfile;
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
 use crate::encoding::delta::read::{ChainBases, ChainCounters, Resolver};
@@ -22,6 +23,7 @@ use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
 use crate::sqlite::lookup::{self, ObjectLocation};
 use layerfs_content::MAXIMUM_DELTA_MAX_DEPTH;
+use std::time::Instant;
 
 /// Live entries of the per-save chain-depth cache.
 const DEPTH_CACHE_ENTRIES: usize = 4_096;
@@ -208,6 +210,13 @@ pub struct SelectInput<'a> {
     /// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and released wholesale when
     /// the next body would cross it.
     pub packs: &'a mut BTreeMap<i64, Vec<u8>>,
+    /// The operation's pooled metadata reader.
+    ///
+    /// A selection of a non-pooled role never reaches the pooled branch, but the
+    /// resolver it builds takes the reader from its caller rather than making one:
+    /// a reader whose lifetime is one leaf cannot serve the next leaf, and the
+    /// operation already owns one. See [`super::read::BodyCaches`].
+    pub pool: &'a mut crate::encoding::pool::PoolReader,
     /// Decode workspace for base reconstruction.
     pub decode: &'a mut DecompressionWorkspace,
     /// Work performed while acquiring the base just resolved.
@@ -220,6 +229,12 @@ pub struct SelectInput<'a> {
     pub chain_total: &'a mut ChainCounters,
     /// Selection outcomes.
     pub counters: &'a mut DeltaCounters,
+    /// Nanosecond cost split of the operation this selection belongs to.
+    ///
+    /// A disjoint field of the same input the walk and the acquisition reborrow,
+    /// so a charge can be taken after a call returns even while another field of
+    /// this struct is still lent to it.
+    pub profile: &'a mut SaveProfile,
 }
 
 /// Chooses the physical representation of one canonical object.
@@ -259,7 +274,10 @@ pub fn select(
         // group and never choose a payload delta base. The advisory predecessor an
         // unchanged subtree carries stays a physical placement hint, not a
         // representation this route may act on.
-        return encode_full(canonical, role, input.capacities, encode);
+        let started = Instant::now();
+        let record = encode_full(canonical, role, input.capacities, encode);
+        SaveProfile::charge(&mut input.profile.full_ns, started);
+        return record;
     }
     if role == ObjectRole::InodeLeaf {
         // A pooled leaf has its own grammar, its own lane and its own reader; the
@@ -267,7 +285,10 @@ pub fn select(
         // Reaching here is a caller error, not a representation to choose.
         return Err(StorageError::Integrity("pooled metadata leaf selection"));
     }
-    let full = encode_full(canonical, role, input.capacities, encode)?;
+    let started = Instant::now();
+    let full = encode_full(canonical, role, input.capacities, encode);
+    SaveProfile::charge(&mut input.profile.full_ns, started);
+    let full = full?;
     input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
     let lane = full.lane;
     let depth_cap = input.capacities.delta_depth_for_role(role);
@@ -339,21 +360,24 @@ pub fn select(
     }
     let base_raw = raw_payload(&base, role)?;
     input.counters.trials = input.counters.trials.saturating_add(1);
-    let prefix = encode_prefix(canonical, role, base_id, base_raw, input.capacities, encode)?;
+    let started = Instant::now();
+    let prefix = encode_prefix(canonical, role, base_id, base_raw, input.capacities, encode);
+    SaveProfile::charge(&mut input.profile.delta_ns, started);
+    let prefix = prefix?;
     if prefix.record.len() < full.record.len() {
         // The walk reads each edge from its record through the selection's own
         // pack cache, which the acquisition of this same base already filled: the
         // bodies are fetched once, not once per walk and once per read.
         let mut bases = ChainBases::new(input.packs);
-        let base_cost = input
-            .depths
-            .cost_of(
-                input.connection,
-                input.decode,
-                base_id,
-                |connection, workspace, location| bases.base_of(connection, workspace, location),
-            )?
-            .ok_or(StorageError::Integrity("selected base is not stored"))?;
+        let started = Instant::now();
+        let base_cost = input.depths.cost_of(
+            input.connection,
+            input.decode,
+            base_id,
+            |connection, workspace, location| bases.base_of(connection, workspace, location),
+        );
+        SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
+        let base_cost = base_cost?.ok_or(StorageError::Integrity("selected base is not stored"))?;
         input.depths.record(
             id,
             ChainCost {
@@ -417,12 +441,15 @@ fn eligible(
         return Ok(false);
     }
     let mut bases = ChainBases::new(input.packs);
+    let started = Instant::now();
     let depth = input.depths.depth_of(
         input.connection,
         input.decode,
         id,
         |connection, workspace, location| bases.base_of(connection, workspace, location),
-    )?;
+    );
+    SaveProfile::charge(&mut input.profile.resolve.eligible_ns, started);
+    let depth = depth?;
     let Some(depth) = depth else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
@@ -431,13 +458,17 @@ fn eligible(
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
+    let started = Instant::now();
     let value = {
         let mut groups = crate::encoding::GroupCache::new();
         let mut resolver = Resolver::new(
             input.connection,
             i64::MAX,
             input.capacities,
-            input.packs,
+            crate::encoding::delta::read::BodyCaches {
+                packs: input.packs,
+                pool: input.pool,
+            },
             &mut groups,
             input.decode,
             input.chain,
@@ -445,5 +476,6 @@ fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> 
         resolver.resolve_dependency(id)?.0
     };
     crate::encoding::delta::read::accumulate(input.chain_total, *input.chain);
+    SaveProfile::charge(&mut input.profile.resolve.acquire_ns, started);
     Ok(value)
 }

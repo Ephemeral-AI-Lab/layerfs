@@ -13,6 +13,7 @@ use layerfs_content::inode_leaf::{
 };
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::encoding::codec::DecompressionWorkspace;
+use layerfs_storage::encoding::delta::read::BodyCaches;
 use layerfs_storage::encoding::pool::{PoolIndex, PoolReader};
 use layerfs_storage::sqlite::pool::ValueGroupRow;
 use layerfs_storage::{SaveHandoff, StorageError, StoragePolicy, Store};
@@ -512,6 +513,7 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
     let mut packs = std::collections::BTreeMap::new();
     let mut cache = GroupCache::new();
     let mut counters = ChainCounters::default();
+    let mut pool = PoolReader::new();
     let location = lookup::location(&connection, root, i64::MAX)
         .expect("location")
         .expect("the saved root has a locator");
@@ -521,7 +523,10 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
         &connection,
         i64::MAX,
         &capacities,
-        &mut packs,
+        BodyCaches {
+            packs: &mut packs,
+            pool: &mut pool,
+        },
         &mut cache,
         &mut workspace,
         &mut counters,
@@ -541,7 +546,10 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
         &connection,
         hidden,
         &capacities,
-        &mut packs,
+        BodyCaches {
+            packs: &mut packs,
+            pool: &mut pool,
+        },
         &mut cache,
         &mut workspace,
         &mut counters,

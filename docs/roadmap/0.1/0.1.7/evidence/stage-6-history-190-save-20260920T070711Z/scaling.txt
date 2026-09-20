@@ -1,0 +1,49 @@
+## 1. The curve: cost per changed byte against how many versions hold the history
+
+  row       versions operation pre       post  changed MB    ns/MB pre         post   change
+  history-stride10       17       19.739 s    16.908 s       377.4   52,297,706   44,796,163  -14.3%
+  history-stride3       53       48.976 s    36.810 s       713.7   68,625,861   51,579,091  -24.8%
+  history-stride1      157      146.178 s   105.726 s      1719.8   84,996,709   61,475,883  -27.7%
+
+  per e-fold of version count (least squares over the three rows): pre **14,706,448** ns/MB, post **7,491,080** ns/MB  (-49%)
+  finest against coarsest: 1.625x before, 1.372x after
+
+## 2. The depth term inside one chain, at matched changed volume
+
+  row                 band MB      pre (n e/l)     post (n e/l)    change
+  history-stride10      14-22        1.22x           (3/2)        1.12x           (3/2)      -8%
+  history-stride3         4-7        1.71x           (8/2)        1.52x           (8/2)     -11%
+  history-stride3        7-10        2.31x           (9/2)        1.93x           (9/2)     -16%
+  history-stride3       10-14        1.50x           (3/6)        1.53x           (3/6)       2%
+  history-stride3       14-22        1.66x          (3/10)        1.51x          (3/10)      -9%
+  history-stride1         4-7        1.58x          (14/7)        1.54x          (14/7)      -2%
+  history-stride1        7-10        1.95x         (21/14)        1.84x         (21/14)      -6%
+  history-stride1       10-14        1.56x         (13/17)        1.54x         (13/17)      -1%
+  history-stride1       14-22        1.25x          (8/16)        1.32x          (8/16)       6%
+
+## 3. Depth elasticity of the state total against ln(state), all three rows
+
+  history-stride10  ns/MB per e-fold: pre    12,461,811 | baseline    12,470,342 | post     8,201,141
+  history-stride3   ns/MB per e-fold: pre    17,892,411 | baseline    17,191,734 | post    11,130,816
+  history-stride1   ns/MB per e-fold: pre    25,328,300 | baseline    24,350,575 | post    14,954,837
+
+## 4. The save path at 157 versions (its own counters, published per state now)
+
+  history-stride3 (early n=5, late n=6; 2,959 / 13,869 objects written)
+    prefix trials            per inserted object:   0.5887 ->   0.7838  ( 1.33x)
+    chain objects read       per inserted object:   1.0889 ->   2.7363  ( 2.51x)
+    chain edges walked       per inserted object:   0.4900 ->   1.9271  ( 3.93x)
+    FULL preparations        per inserted object:   0.7928 ->   0.8626  ( 1.09x)
+    pack BLOB rewrites       per inserted object:   0.8009 ->   0.8932  ( 1.12x)
+    INSERT statements        per inserted object:   0.7793 ->   0.8324  ( 1.07x)
+    commits                  per inserted object:   0.0267 ->   0.0190  ( 0.71x)
+
+  history-stride1 (early n=18, late n=19; 5,531 / 20,272 objects written)
+    prefix trials            per inserted object:   0.6773 ->   0.7451  ( 1.10x)
+    chain objects read       per inserted object:   2.0427 ->   6.3183  ( 3.09x)
+    chain edges walked       per inserted object:   1.2529 ->   4.5394  ( 3.62x)
+    FULL preparations        per inserted object:   0.8053 ->   0.8091  ( 1.00x)
+    pack BLOB rewrites       per inserted object:   0.8331 ->   0.8725  ( 1.05x)
+    INSERT statements        per inserted object:   0.7932 ->   0.7757  ( 0.98x)
+    commits                  per inserted object:   0.0208 ->   0.0180  ( 0.86x)
+

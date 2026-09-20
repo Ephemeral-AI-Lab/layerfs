@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--examples"
+  ],
+  "exit_code": 0,
+  "wall_ns": 7948397750
+}

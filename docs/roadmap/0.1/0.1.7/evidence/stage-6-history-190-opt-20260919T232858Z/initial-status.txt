@@ -1,0 +1,13 @@
+ M core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+ M core/docs/architecture/proposal/04-boundary-and-trust.md
+ M core/docs/architecture/proposal/service-daemon-transport/01-architecture-and-portability.md
+ M core/docs/architecture/proposal/service-daemon-transport/02-file-layout-and-boundaries.md
+ M core/docs/architecture/proposal/service-daemon-transport/03-operations-and-transport.md
+ M core/docs/architecture/proposal/service-daemon-transport/06-future-fuse-and-cloud.md
+ M core/docs/architecture/proposal/service-daemon-transport/README.md
+ M docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md
+ M docs/roadmap/0.1/0.1.7/README.md
+?? core/docs/architecture/proposal/service-daemon-transport/07-public-operations.md
+?? docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-20260919T225614Z/
+?? docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-opt-20260919T232858Z/
+?? docs/roadmap/0.1/0.1.7/retained-history-optimization-plan.md

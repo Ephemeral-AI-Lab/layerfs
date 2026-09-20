@@ -1,0 +1,515 @@
+{
+  "schema": "h190-save-attribution-analysis-v1",
+  "runs": {
+    "baseline-history-stride10": {
+      "wall_ns": 40410621625,
+      "phases": {
+        "preparation_wall_ns": 18694485751,
+        "operation_ns": 19638073958,
+        "verification_wall_ns": 32421208,
+        "cleanup_wall_ns": 1667
+      },
+      "declared_ns": 38364982584,
+      "reconciliation": {
+        "status": "INCOMPLETE",
+        "reason": "perf: 2045639041 ns of the 40410621625 ns wall is outside every declared phase, more than the declared 1058212432 ns tolerance",
+        "problems": [
+          "perf: 2045639041 ns of the 40410621625 ns wall is outside every declared phase, more than the declared 1058212432 ns tolerance"
+        ],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 2017551666,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 0,
+      "corpus_pages": 62319,
+      "subphases_ns": {
+        "content": 1632745422,
+        "harness.predecessors": 96637583,
+        "store.create": 3774000,
+        "harness.input": 97072418,
+        "filesystem": 8076690127,
+        "storage.begin": 13573707,
+        "storage.accept_loop": 9133778832,
+        "harness.index": 114734959,
+        "storage.finish": 401428708
+      }
+    },
+    "candidate-history-stride10": {
+      "wall_ns": 36072271000,
+      "phases": {
+        "preparation_wall_ns": 17286893371,
+        "operation_ns": 16907647372,
+        "verification_wall_ns": 27610209,
+        "cleanup_wall_ns": 625
+      },
+      "declared_ns": 34222151577,
+      "reconciliation": {
+        "status": "INCOMPLETE",
+        "reason": "perf: 1850119423 ns of the 36072271000 ns wall is outside every declared phase, more than the declared 971445420 ns tolerance",
+        "problems": [
+          "perf: 1850119423 ns of the 36072271000 ns wall is outside every declared phase, more than the declared 971445420 ns tolerance"
+        ],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 1822921583,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 5141,
+      "corpus_pages": 62319,
+      "subphases_ns": {
+        "content": 1637622209,
+        "harness.predecessors": 96408208,
+        "store.create": 3408083,
+        "harness.input": 95554832,
+        "filesystem": 5322774793,
+        "storage.begin": 12448252,
+        "storage.accept_loop": 9164111416,
+        "harness.index": 114688042,
+        "storage.finish": 384443167
+      }
+    },
+    "baseline-history-stride3": {
+      "wall_ns": 74379742125,
+      "phases": {
+        "preparation_wall_ns": 25627346453,
+        "operation_ns": 48637989422,
+        "verification_wall_ns": 34971875,
+        "cleanup_wall_ns": 1167
+      },
+      "declared_ns": 74300308917,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 36634958,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 4298,
+      "corpus_pages": 107780,
+      "subphases_ns": {
+        "content": 3030946583,
+        "harness.predecessors": 172277584,
+        "store.create": 3339625,
+        "harness.input": 223612623,
+        "filesystem": 24678984789,
+        "storage.begin": 33207336,
+        "storage.accept_loop": 18526357538,
+        "harness.index": 189007036,
+        "storage.finish": 1595547079
+      }
+    },
+    "candidate-history-stride3": {
+      "wall_ns": 61901518125,
+      "phases": {
+        "preparation_wall_ns": 24963757418,
+        "operation_ns": 36810305956,
+        "verification_wall_ns": 30427000,
+        "cleanup_wall_ns": 541
+      },
+      "declared_ns": 61804490915,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 46335292,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 7022,
+      "corpus_pages": 107780,
+      "subphases_ns": {
+        "content": 3018881460,
+        "harness.predecessors": 167955005,
+        "store.create": 4085916,
+        "harness.input": 218218248,
+        "filesystem": 13013132252,
+        "storage.begin": 30243793,
+        "storage.accept_loop": 18441152881,
+        "harness.index": 186182586,
+        "storage.finish": 1548583755
+      }
+    },
+    "baseline-history-stride1": {
+      "wall_ns": 204353565333,
+      "phases": {
+        "preparation_wall_ns": 54078341206,
+        "operation_ns": 150040992089,
+        "verification_wall_ns": 61540375,
+        "cleanup_wall_ns": 625
+      },
+      "declared_ns": 204180874295,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 88409041,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 0,
+      "corpus_pages": 245733,
+      "subphases_ns": {
+        "content": 7265216659,
+        "store.create": 3973666,
+        "storage.begin": 85299665,
+        "storage.finish": 5052465164
+      }
+    },
+    "candidate-history-stride1": {
+      "wall_ns": 158464376500,
+      "phases": {
+        "preparation_wall_ns": 50728102374,
+        "operation_ns": 105726493875,
+        "verification_wall_ns": 45901042,
+        "cleanup_wall_ns": 583
+      },
+      "declared_ns": 156500497874,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "outside_child_clock_ns": 1878281959,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "corpus_resident_pages": 12131,
+      "corpus_pages": 245733,
+      "subphases_ns": {
+        "content": 7266655495,
+        "store.create": 3832667,
+        "storage.begin": 86009454,
+        "storage.finish": 4896968295
+      }
+    }
+  },
+  "save": {
+    "history-stride10": {
+      "totals": {
+        "inserted": 52032,
+        "save.reused": 1121,
+        "save.delta.prepared_full": 45239,
+        "save.delta.trials": 38230,
+        "save.delta.prefix_selected": 38163,
+        "save.prefix_records": 39080,
+        "save.full_records": 12952,
+        "save.chain.objects": 107628,
+        "save.chain.edges": 68256,
+        "save.chain.encoded_bytes": 133882087,
+        "save.pool.new_values": 48925,
+        "save.pool.reused_values": 53355,
+        "save.pool.groups": 1737,
+        "save.pool.leaves": 1738,
+        "save.statements": 44331,
+        "save.presence_queries": 112,
+        "save.packs_created": 255,
+        "save.pack_appends": 45791,
+        "save.commits": 1149
+      },
+      "per_object_early": {
+        "inserted": 1.0,
+        "save.reused": 0.00568577396147598,
+        "save.delta.prepared_full": 0.8288466001392435,
+        "save.delta.trials": 0.600023207240659,
+        "save.delta.prefix_selected": 0.5982826641912277,
+        "save.prefix_records": 0.6079136690647482,
+        "save.full_records": 0.3920863309352518,
+        "save.chain.objects": 1.038756091900673,
+        "save.chain.edges": 0.43304711069853796,
+        "save.chain.encoded_bytes": 1789.3597122302158,
+        "save.pool.new_values": 0.9516129032258065,
+        "save.pool.reused_values": 0.5342306799721513,
+        "save.pool.groups": 0.026456254351357622,
+        "save.pool.leaves": 0.026456254351357622,
+        "save.statements": 0.8143420747273149,
+        "save.presence_queries": 0.002088651659317707,
+        "save.packs_created": 0.006149918774657693,
+        "save.pack_appends": 0.8338361568809468,
+        "save.commits": 0.025179856115107913
+      },
+      "per_object_late": {
+        "inserted": 1.0,
+        "save.reused": 0.027574829130332313,
+        "save.delta.prepared_full": 0.8773273627150601,
+        "save.delta.trials": 0.7776337497053971,
+        "save.delta.prefix_selected": 0.7759839736035824,
+        "save.prefix_records": 0.7924424542383534,
+        "save.full_records": 0.20755754576164664,
+        "save.chain.objects": 2.409144473250059,
+        "save.chain.edges": 1.603385969047058,
+        "save.chain.encoded_bytes": 2794.2579149972503,
+        "save.pool.new_values": 0.940686621101422,
+        "save.pool.reused_values": 1.0386126168591405,
+        "save.pool.groups": 0.033466886636813575,
+        "save.pool.leaves": 0.03350616702019012,
+        "save.statements": 0.8606331997800298,
+        "save.presence_queries": 0.001924738785450546,
+        "save.packs_created": 0.004320842171419593,
+        "save.pack_appends": 0.889425720795035,
+        "save.commits": 0.020975724723073297
+      },
+      "identical_between_arms": true
+    },
+    "history-stride3": {
+      "totals": {
+        "inserted": 72560,
+        "save.reused": 21653,
+        "save.delta.prepared_full": 61766,
+        "save.delta.trials": 54397,
+        "save.delta.prefix_selected": 54333,
+        "save.prefix_records": 57539,
+        "save.full_records": 15021,
+        "save.chain.objects": 235563,
+        "save.chain.edges": 159442,
+        "save.chain.encoded_bytes": 266710132,
+        "save.pool.new_values": 65528,
+        "save.pool.reused_values": 216158,
+        "save.pool.groups": 4225,
+        "save.pool.leaves": 4442,
+        "save.statements": 60076,
+        "save.presence_queries": 286,
+        "save.packs_created": 437,
+        "save.pack_appends": 63840,
+        "save.commits": 1471
+      },
+      "per_object_early": {
+        "inserted": 1.0,
+        "save.reused": 0.01013856032443393,
+        "save.delta.prepared_full": 0.7928354173707334,
+        "save.delta.trials": 0.5887124028387969,
+        "save.delta.prefix_selected": 0.5870226427847246,
+        "save.prefix_records": 0.6045961473470767,
+        "save.full_records": 0.39540385265292327,
+        "save.chain.objects": 1.0888813788442042,
+        "save.chain.edges": 0.4900304156809733,
+        "save.chain.encoded_bytes": 1926.8810408921934,
+        "save.pool.new_values": 0.9449138222372423,
+        "save.pool.reused_values": 0.9618114227779655,
+        "save.pool.groups": 0.032105441027374115,
+        "save.pool.leaves": 0.032105441027374115,
+        "save.statements": 0.7793173369381547,
+        "save.presence_queries": 0.0037174721189591076,
+        "save.packs_created": 0.01013856032443393,
+        "save.pack_appends": 0.8009462656302805,
+        "save.commits": 0.026698208854342684
+      },
+      "per_object_late": {
+        "inserted": 1.0,
+        "save.reused": 0.024592220828105395,
+        "save.delta.prepared_full": 0.8659974905897114,
+        "save.delta.trials": 0.7994144709326642,
+        "save.delta.prefix_selected": 0.7989962358845671,
+        "save.prefix_records": 0.8448347971560016,
+        "save.full_records": 0.15516520284399832,
+        "save.chain.objects": 2.8138854035968213,
+        "save.chain.edges": 1.9885403596821414,
+        "save.chain.encoded_bytes": 3444.4598076118777,
+        "save.pool.new_values": 0.8928481806775408,
+        "save.pool.reused_values": 3.198912588874948,
+        "save.pool.groups": 0.06340443329150983,
+        "save.pool.leaves": 0.06424090338770388,
+        "save.statements": 0.8371392722710164,
+        "save.presence_queries": 0.0035131744040150566,
+        "save.packs_created": 0.004767879548306148,
+        "save.pack_appends": 0.8955248849853618,
+        "save.commits": 0.01806775407779172
+      },
+      "identical_between_arms": true
+    },
+    "history-stride1": {
+      "totals": {
+        "inserted": 97788,
+        "save.reused": 121301,
+        "save.delta.prepared_full": 78619,
+        "save.delta.trials": 70710,
+        "save.delta.prefix_selected": 70637,
+        "save.prefix_records": 78695,
+        "save.full_records": 19093,
+        "save.chain.objects": 648299,
+        "save.chain.edges": 456142,
+        "save.chain.encoded_bytes": 653680552,
+        "save.pool.new_values": 82539,
+        "save.pool.reused_values": 616852,
+        "save.pool.groups": 9381,
+        "save.pool.leaves": 10681,
+        "save.statements": 75977,
+        "save.presence_queries": 723,
+        "save.packs_created": 855,
+        "save.pack_appends": 84473,
+        "save.commits": 1797
+      },
+      "per_object_early": {
+        "inserted": 1.0,
+        "save.reused": 0.0662751677852349,
+        "save.delta.prepared_full": 0.7600671140939598,
+        "save.delta.trials": 0.6166107382550335,
+        "save.delta.prefix_selected": 0.6115771812080537,
+        "save.prefix_records": 0.6325503355704698,
+        "save.full_records": 0.3674496644295302,
+        "save.chain.objects": 1.0830536912751678,
+        "save.chain.edges": 0.4001677852348993,
+        "save.chain.encoded_bytes": 1785.0545302013422,
+        "save.pool.new_values": 0.9362416107382551,
+        "save.pool.reused_values": 1.4253355704697988,
+        "save.pool.groups": 0.03859060402684564,
+        "save.pool.leaves": 0.03859060402684564,
+        "save.statements": 0.7558724832214765,
+        "save.presence_queries": 0.0050335570469798654,
+        "save.packs_created": 0.016778523489932886,
+        "save.pack_appends": 0.7768456375838926,
+        "save.commits": 0.02097315436241611
+      },
+      "per_object_late": {
+        "inserted": 1.0,
+        "save.reused": 2.8856742883807747,
+        "save.delta.prepared_full": 0.7995022554051953,
+        "save.delta.trials": 0.7435059884896562,
+        "save.delta.prefix_selected": 0.7428838077461503,
+        "save.prefix_records": 0.7973246228029243,
+        "save.full_records": 0.20267537719707576,
+        "save.chain.objects": 12.483434437704153,
+        "save.chain.edges": 8.852387618603204,
+        "save.chain.encoded_bytes": 10878.367708819413,
+        "save.pool.new_values": 0.836677554829678,
+        "save.pool.reused_values": 6.454347487945248,
+        "save.pool.groups": 0.0808834966557785,
+        "save.pool.leaves": 0.11743661533675533,
+        "save.statements": 0.7767926582672267,
+        "save.presence_queries": 0.006532897806812879,
+        "save.packs_created": 0.00591071706330689,
+        "save.pack_appends": 0.8514543474879452,
+        "save.commits": 0.01835433193342666
+      },
+      "identical_between_arms": true
+    }
+  },
+  "equivalence": {
+    "history-stride10": {
+      "state_roots_equal": true,
+      "state_counters_equal": {
+        "changed_bytes": true,
+        "changed_paths": true,
+        "objects": true,
+        "inserted": true,
+        "root": true
+      },
+      "store_sha256": {
+        "baseline": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+        "candidate": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487"
+      },
+      "store_matches_recorded_constant": {
+        "baseline": true,
+        "candidate": true
+      },
+      "store_identical_between_arms": true,
+      "store": {
+        "packs": 255,
+        "pack_bytes": 45297954,
+        "ordinary_groups": 44309,
+        "objects": 52032,
+        "value_groups": 1737,
+        "singleton_groups": 44142
+      }
+    },
+    "history-stride3": {
+      "state_roots_equal": true,
+      "state_counters_equal": {
+        "changed_bytes": true,
+        "changed_paths": true,
+        "objects": true,
+        "inserted": true,
+        "root": true
+      },
+      "store_sha256": {
+        "baseline": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+        "candidate": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e"
+      },
+      "store_matches_recorded_constant": {
+        "baseline": true,
+        "candidate": true
+      },
+      "store_identical_between_arms": true,
+      "store": {
+        "packs": 437,
+        "pack_bytes": 56590252,
+        "ordinary_groups": 60052,
+        "objects": 72560,
+        "value_groups": 4225,
+        "singleton_groups": 59772
+      }
+    },
+    "history-stride1": {
+      "state_roots_equal": true,
+      "state_counters_equal": {
+        "changed_bytes": true,
+        "changed_paths": true,
+        "objects": true,
+        "inserted": true,
+        "root": true
+      },
+      "store_sha256": {
+        "baseline": "1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418",
+        "candidate": "1635cf7bbbabdc7f9e4af81ac9c6b6a88f45be35b4100dda0f52394c85dcf418"
+      },
+      "store_matches_recorded_constant": {
+        "baseline": true,
+        "candidate": true
+      },
+      "store_identical_between_arms": true,
+      "store": {
+        "packs": 855,
+        "pack_bytes": 73043937,
+        "ordinary_groups": 75947,
+        "objects": 97788,
+        "value_groups": 9381,
+        "singleton_groups": 75404
+      },
+      "verification": {
+        "baseline": {
+          "wall_ns": 53981531042,
+          "sampled": true,
+          "compared": 9996,
+          "path_states": 904143,
+          "mismatches": 0,
+          "missing": 0,
+          "unexpected": 0,
+          "files_read": 8151
+        },
+        "candidate": {
+          "wall_ns": 31656713208,
+          "sampled": true,
+          "compared": 9996,
+          "path_states": 904143,
+          "mismatches": 0,
+          "missing": 0,
+          "unexpected": 0,
+          "files_read": 8151
+        }
+      },
+      "verification_equal_between_arms": false
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked"
+  ],
+  "exit_code": 0,
+  "wall_ns": 22589504167
+}

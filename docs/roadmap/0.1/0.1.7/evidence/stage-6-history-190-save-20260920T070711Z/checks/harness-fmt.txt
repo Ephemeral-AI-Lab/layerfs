@@ -1,0 +1,2697 @@
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c1_many_tiny.rs:7:
+ //! golden TSV records the choice per row.
+ 
+ use super::{profile_for_tier, CaseSpec, ENTRY_LADDER};
+-use crate::registry::{CacheState, Case, Shape, TinyOp};
+ use crate::families::leak;
++use crate::registry::{CacheState, Case, Shape, TinyOp};
+ 
+ /// Family identifier.
+ pub const FAMILY: &str = "c1.many-tiny";
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c1_many_tiny.rs:20:
+         (TinyOp::Stat, "stat"),
+         (TinyOp::Unlink, "unlink"),
+     ];
+-    let bulk = [(TinyOp::BulkCreate, "create"), (TinyOp::BulkDelete, "delete")];
++    let bulk = [
++        (TinyOp::BulkCreate, "create"),
++        (TinyOp::BulkDelete, "delete"),
++    ];
+     let mut out = Vec::with_capacity(20);
+     for (op, name) in per_file {
+         for (index, (entries, label)) in ENTRY_LADDER.iter().enumerate() {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c1_tree.rs:6:
+ //! mechanism (O5) evidence that the release actually happened.
+ 
+ use super::{leak, profile_for_tier, CaseSpec, ENTRY_LADDER};
+-use crate::registry::{CacheState, Case, Shape, TreeOp};
+ use crate::families::leak as leak_id;
++use crate::registry::{CacheState, Case, Shape, TreeOp};
+ 
+ /// Family identifier.
+ pub const CONSTRUCT_TRAVERSE: &str = "c1.tree.construct-traverse";
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c1_tree.rs:51:
+             let profile = profile_for_tier(index, "mixed-v4", "compact-v2");
+             let _ = leak_id;
+             CaseSpec::new(
+-                leak(format!("namespace-subtree-relocate-delete-{label}-{profile}")),
++                leak(format!(
++                    "namespace-subtree-relocate-delete-{label}-{profile}"
++                )),
+                 NAMESPACE_MUTATION,
+                 Shape::Namespace,
+             )
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c2_footprint.rs:16:
+ /// Six rows: three controls at 100k files / 500 MB, three low controls.
+ pub fn cases() -> Vec<Case> {
+     let controls = [
+-        (FootprintOp::Unique, "store-footprint-unique-100000", 100_000u32, 524_288_000u64),
+         (
++            FootprintOp::Unique,
++            "store-footprint-unique-100000",
++            100_000u32,
++            524_288_000u64,
++        ),
++        (
+             FootprintOp::MetadataCardinality,
+             "store-footprint-metadata-cardinality-100000",
+             100_000,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c2_footprint.rs:24:
+             524_288_000,
+         ),
+-        (FootprintOp::LargeObject, "store-footprint-large-object-500m", 1, 524_288_000),
+-        (FootprintOp::Unique, "store-footprint-unique-100-low-v1", 100, 5_242_880),
++        (
++            FootprintOp::LargeObject,
++            "store-footprint-large-object-500m",
++            1,
++            524_288_000,
++        ),
++        (
++            FootprintOp::Unique,
++            "store-footprint-unique-100-low-v1",
++            100,
++            5_242_880,
++        ),
+         (
+             FootprintOp::MetadataCardinality,
+             "store-footprint-metadata-cardinality-100-low-v1",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c2_lifecycle.rs:17:
+     [
+         (LifecycleStep::Create, "create", StoreState::CreatedInSample),
+         (LifecycleStep::Open, "open", StoreState::OpenedFromCopy),
+-        (LifecycleStep::BeginSave, "begin-save", StoreState::OpenedFromCopy),
++        (
++            LifecycleStep::BeginSave,
++            "begin-save",
++            StoreState::OpenedFromCopy,
++        ),
+         (
+             LifecycleStep::FinishEmpty,
+             "finish-empty",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c2_reuse.rs:29:
+         .entry_tier(0, 1, "1")
+         .cache(CacheState::PreparedDewarmed)
+         .store(StoreState::OpenedFromCopy)
+-                .prepared(Preparation::ObjectSet)
++        .prepared(Preparation::ObjectSet)
+         .smoke()
+         .build(),
+     );
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/c2_reuse.rs:94:
+             .profile("base128-v3")
+             .cache(CacheState::PreparedDewarmed)
+             .store(StoreState::OpenedFromCopy)
+-                .prepared(Preparation::BaseStore)
++            .prepared(Preparation::BaseStore)
+             .build(),
+         );
+     }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/families/pipeline.rs:22:
+             PipelineOp::EditsLargeToSmall,
+             "pipeline-edits-large-to-small",
+         ),
+-        (
+-            PipelineOp::FilesystemBuild,
+-            "pipeline-filesystem-build",
+-        ),
++        (PipelineOp::FilesystemBuild, "pipeline-filesystem-build"),
+     ]
+     .iter()
+     .map(|(op, id)| {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/fixture.rs:82:
+ /// Text-like bytes: long repeated words, which is the `-text-v1` fixture shape.
+ pub fn text(len: u64, seed: u64) -> Vec<u8> {
+     let words = [
+-        "layerfs ", "canonical ", "content ", "storage ", "namespace ", "delta ",
++        "layerfs ",
++        "canonical ",
++        "content ",
++        "storage ",
++        "namespace ",
++        "delta ",
+     ];
+     let mut out = Vec::with_capacity(len as usize + 16);
+     let mut rng = Rng::new(seed);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/fixture.rs:192:
+ pub fn census_of_entries(count: u32, sizes: &[u64], directory: &str) -> Census {
+     let mut entries = Vec::with_capacity(count as usize);
+     for index in 0..count {
+-        let len = sizes.get(index as usize % sizes.len()).copied().unwrap_or(0);
++        let len = sizes
++            .get(index as usize % sizes.len())
++            .copied()
++            .unwrap_or(0);
+         entries.push(CensusEntry {
+             key: format!("{directory}/f{index:05}"),
+             len,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/gates.rs:181:
+ }
+ 
+ /// A boolean gate, expressed as a limit so a failure names what it missed.
+-pub fn require(class: GateClass, id: &'static str, held: bool, measured: &str, limit: &str) -> Gate {
++pub fn require(
++    class: GateClass,
++    id: &'static str,
++    held: bool,
++    measured: &str,
++    limit: &str,
++) -> Gate {
+     if held {
+         Gate::pass(class, id, measured, limit)
+     } else {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/gates.rs:267:
+     use Growth::{Constant, Linear, Linearithmic, Quadratic};
+     use Metric::{Counter, Disk, Heap, Time};
+     match (growth, metric) {
+-        (Constant, Counter) => Band { low: Some(0.90), high: Some(1.11) },
+-        (Constant, Heap) | (Constant, Disk) => Band { low: Some(0.90), high: Some(1.11) },
+-        (Constant, Time) => Band { low: Some(0.60), high: Some(1.67) },
+-        (Linear, Counter) => Band { low: Some(1.90), high: Some(2.10) },
+-        (Linear, Heap) | (Linear, Disk) => Band { low: Some(1.80), high: Some(2.22) },
+-        (Linear, Time) => Band { low: Some(1.60), high: Some(2.40) },
+-        (Linearithmic, Counter) => Band { low: Some(1.95), high: Some(2.55) },
+-        (Linearithmic, Heap) | (Linearithmic, Disk) => Band { low: Some(1.90), high: Some(2.60) },
+-        (Linearithmic, Time) => Band { low: Some(1.60), high: Some(2.90) },
+-        (Quadratic, Counter) => Band { low: Some(3.6), high: None },
+-        (Quadratic, Heap) | (Quadratic, Disk) => Band { low: Some(3.4), high: None },
+-        (Quadratic, Time) => Band { low: Some(2.6), high: None },
++        (Constant, Counter) => Band {
++            low: Some(0.90),
++            high: Some(1.11),
++        },
++        (Constant, Heap) | (Constant, Disk) => Band {
++            low: Some(0.90),
++            high: Some(1.11),
++        },
++        (Constant, Time) => Band {
++            low: Some(0.60),
++            high: Some(1.67),
++        },
++        (Linear, Counter) => Band {
++            low: Some(1.90),
++            high: Some(2.10),
++        },
++        (Linear, Heap) | (Linear, Disk) => Band {
++            low: Some(1.80),
++            high: Some(2.22),
++        },
++        (Linear, Time) => Band {
++            low: Some(1.60),
++            high: Some(2.40),
++        },
++        (Linearithmic, Counter) => Band {
++            low: Some(1.95),
++            high: Some(2.55),
++        },
++        (Linearithmic, Heap) | (Linearithmic, Disk) => Band {
++            low: Some(1.90),
++            high: Some(2.60),
++        },
++        (Linearithmic, Time) => Band {
++            low: Some(1.60),
++            high: Some(2.90),
++        },
++        (Quadratic, Counter) => Band {
++            low: Some(3.6),
++            high: None,
++        },
++        (Quadratic, Heap) | (Quadratic, Disk) => Band {
++            low: Some(3.4),
++            high: None,
++        },
++        (Quadratic, Time) => Band {
++            low: Some(2.6),
++            high: None,
++        },
+     }
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:9:
+ use std::path::Path;
+ 
+ use layerfs_content::{
+-    apply_edits, construct_bytes, construct_stream, ConstructionPolicy, DiscardingConsumer,
+-    Edit, EditRequest, EditStream, FileContent, FileView, ObjectId, Replacements,
++    apply_edits, construct_bytes, construct_stream, ConstructionPolicy, DiscardingConsumer, Edit,
++    EditRequest, EditStream, FileContent, FileView, ObjectId, Replacements,
+ };
+ use layerfs_telemetry::timer::{Active, Timing, TimingScope};
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:20:
+ use crate::registry::{Case, CountOp, EditOp, Route, Transition};
+ use crate::support::instruments;
+ use crate::support::trace::Kind;
+-use crate::workload::oracle::{self, Expectation};
+ use crate::workload::artifact::{Artifact, Member};
++use crate::workload::oracle::{self, Expectation};
+ use crate::workload::providers::{PairProvider, TreeStore};
+ 
+ /// The 4 KiB replacement every edit family uses.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:28:
+ pub const REPLACEMENT_LEN: u64 = 4_096;
+ 
+ /// Writes the product's own timing tree, byte-verbatim, as `timing.json`.
+-pub(super) fn write_timing(directory: &Path, report: &layerfs_telemetry::timer::TimingReport) -> Result<u64, OpError> {
++pub(super) fn write_timing(
++    directory: &Path,
++    report: &layerfs_telemetry::timer::TimingReport,
++) -> Result<u64, OpError> {
+     let path = directory.join("timing.json");
+     let mut file = std::fs::File::create(&path)
+         .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:37:
+         .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
+     file.flush()
+         .map_err(|error| OpError::Io(format!("{}: {error}", path.display())))?;
+-    Ok(file
+-        .metadata()
+-        .map(|metadata| metadata.len())
+-        .unwrap_or(0))
++    Ok(file.metadata().map(|metadata| metadata.len()).unwrap_or(0))
+ }
+ 
+ /// Records the product report's completeness as G7 evidence.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:47:
+-pub(super) fn completeness_gate(report: &layerfs_telemetry::timer::TimingReport, id: &'static str) -> Gate {
++pub(super) fn completeness_gate(
++    report: &layerfs_telemetry::timer::TimingReport,
++    id: &'static str,
++) -> Gate {
+     if report.root().is_none() {
+         return Gate::incomplete(
+             GateClass::TimingPurity,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:65:
+ /// `FileView` is the product's own logical view of a root: it classifies the root
+ /// without the harness decoding a mapping page by hand, and it is a *read* path,
+ /// distinct from the operation that produced the root.
+-pub(super) fn representation_of(store: &dyn layerfs_content::AuthenticatedObjects, root: ObjectId) -> Result<FileContent, OpError> {
++pub(super) fn representation_of(
++    store: &dyn layerfs_content::AuthenticatedObjects,
++    root: ObjectId,
++) -> Result<FileContent, OpError> {
+     let (result, _) = Timing::disabled("oracle.view", |scope: &TimingScope<'_, Active>| {
+         let view = FileView::open(store, root, scope.child("view"))?;
+         let logical_len = view.logical_len();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:78:
+ }
+ 
+ /// Extents (chunks) the chunked representation of `root` holds; `0` for whole-file.
+-pub(super) fn extent_count_of(store: &dyn layerfs_content::AuthenticatedObjects, root: ObjectId) -> Result<u64, OpError> {
++pub(super) fn extent_count_of(
++    store: &dyn layerfs_content::AuthenticatedObjects,
++    root: ObjectId,
++) -> Result<u64, OpError> {
+     match representation_of(store, root)? {
+         FileContent::WholeFile { .. } => Ok(0),
+         FileContent::Chunked(state) => Ok(state.extent_count),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:141:
+     let timing_bytes = crate::support::phases::timing_json_bytes();
+     let (measured_file, measured_consumer) = match measured {
+         Ok(value) => value,
+-        Err(error) => {
+-            return Ok(unmeasured(
+-                &OpError::Product(format!("{error:?}")),
+-                gates,
+-            ))
+-        }
++        Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
+     };
+ 
+     context.trace.write_number(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:184:
+         "bytes",
+         "product timing.json, byte-verbatim",
+     )?;
+-    context
+-        .trace
+-        .write(Kind::Receipt, "route", &format!("{route:?}"), "", "registry row")?;
++    context.trace.write(
++        Kind::Receipt,
++        "route",
++        &format!("{route:?}"),
++        "",
++        "registry row",
++    )?;
+ 
+     gates.push(completeness_gate(&report, "g7.tree-complete"));
+     gates.push(gates::require(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:201:
+     // Oracle: a second, unmeasured, byte-identical construction into a store that
+     // authenticates every read.
+     let mut store = TreeStore::new();
+-    let (replay, replay_report) = Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
+-        match route {
+-            Route::Bytes => construct_bytes(policy, &capacities, &bytes, &mut store, scope.child("content")),
++    let (replay, replay_report) = Timing::disabled(
++        "oracle.replay",
++        |scope: &TimingScope<'_, Active>| match route {
++            Route::Bytes => construct_bytes(
++                policy,
++                &capacities,
++                &bytes,
++                &mut store,
++                scope.child("content"),
++            ),
+             Route::Stream => construct_stream(
+                 policy,
+                 &capacities,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:211:
+                 &mut store,
+                 scope.child("content"),
+             ),
+-        }
+-    });
++        },
++    );
+     let _ = replay_report;
+     let replay = match replay {
+         Ok(file) => file,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:221:
+     // O1 for real: the measured root is published so the pinned-constant gate in
+     // `main` can compare it with `tests/golden/expected.tsv`. The replay gate below
+     // is self-consistency and stays as a second, weaker check.
+-    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
++    crate::workload::expected::publish(
++        context.trace,
++        "file_root",
++        &measured_file.root.to_string(),
++    )?;
+     gates.push(gates::require(
+         GateClass::Correctness,
+         "g1.o1-replay-root",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:236:
+         &format!("{} bytes", measured_file.logical_len),
+         &format!("{} bytes declared by the tier", case.bytes),
+     ));
+-    let (readback, read_scope_report) = Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
+-        oracle::read_back(&store, replay.root, &expectation, scope.child("content"))
+-    });
++    let (readback, read_scope_report) =
++        Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
++            oracle::read_back(&store, replay.root, &expectation, scope.child("content"))
++        });
+     let _ = read_scope_report;
+     match readback {
+         Ok(readback) => {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:253:
+                 GateClass::Correctness,
+                 "g1.o2-readback",
+                 readback.matches(),
+-                &format!("{} bytes, {} bytes read", readback.bytes, readback.expected_bytes),
+-                &format!("{} bytes, sha256 {}", readback.expected_bytes, readback.expected_digest),
++                &format!(
++                    "{} bytes, {} bytes read",
++                    readback.bytes, readback.expected_bytes
++                ),
++                &format!(
++                    "{} bytes, sha256 {}",
++                    readback.expected_bytes, readback.expected_digest
++                ),
+             ));
+         }
+         Err(error) => gates.push(Gate::incomplete(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:283:
+         &format!(
+             "cutoff {} selects {}",
+             policy.small_file_threshold_bytes(),
+-            if expected_chunked { "chunked" } else { "whole-file" }
++            if expected_chunked {
++                "chunked"
++            } else {
++                "whole-file"
++            }
+         ),
+     ));
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:319:
+     match op {
+         EditOp::OverwriteHead => (0, REPLACEMENT_LEN, REPLACEMENT_LEN),
+         EditOp::OverwriteMiddle => (middle, middle + REPLACEMENT_LEN, REPLACEMENT_LEN),
+-        EditOp::OverwriteTail => (
+-            base_len - REPLACEMENT_LEN,
+-            base_len,
+-            REPLACEMENT_LEN,
+-        ),
++        EditOp::OverwriteTail => (base_len - REPLACEMENT_LEN, base_len, REPLACEMENT_LEN),
+         EditOp::InsertMiddle | EditOp::Grow => (middle, middle, REPLACEMENT_LEN),
+         EditOp::DeleteMiddle => (middle, middle + REPLACEMENT_LEN, 0),
+         EditOp::Shrink => (base_len - REPLACEMENT_LEN, base_len, 0),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:386:
+ }
+ 
+ /// The replacement bytes one chunk-count row applies.
+-fn chunk_count_replacement(op: CountOp, base: &[u8], start: u64, end: u64, len: u64, seed: u64) -> Vec<u8> {
++fn chunk_count_replacement(
++    op: CountOp,
++    base: &[u8],
++    start: u64,
++    end: u64,
++    len: u64,
++    seed: u64,
++) -> Vec<u8> {
+     match op {
+         CountOp::Preserve => base[start as usize..end as usize].to_vec(),
+         CountOp::Increase => fixture::noise(len, seed ^ 0x1111),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:571:
+     let oracle_provider = PairProvider::new(&result_store, store);
+     let final_count = extent_count_of(&oracle_provider, replay.root)?;
+ 
+-    context.trace.write_number(Kind::Counter, "chunk_count.initial_count", initial as i128, "extents", "FileState.extent_count of the base root")?;
+-    context.trace.write_number(Kind::Counter, "chunk_count.final_count", final_count as i128, "extents", "FileState.extent_count of the result root")?;
+-    context.trace.write_number(Kind::Counter, "edit.nodes_read", counters.nodes_read as i128, "nodes", "EditCounters.nodes_read")?;
+-    context.trace.write_number(Kind::Counter, "edit.nodes_created", counters.nodes_created as i128, "nodes", "EditCounters.nodes_created")?;
+-    context.trace.write_number(Kind::Counter, "edit.payloads_created", counters.payloads_created as i128, "objects", "EditCounters.payloads_created")?;
+-    context.trace.write_number(Kind::Counter, "edit.payload_bytes", counters.payload_bytes as i128, "bytes", "EditCounters.payload_bytes")?;
+-    context.trace.write_number(Kind::Counter, "edit.peak_deferred_bytes", counters.peak_deferred_bytes as i128, "bytes", "EditCounters.peak_deferred_bytes")?;
+-    context.trace.write_number(Kind::Counter, "consumer.objects", measured_consumer.objects() as i128, "objects", "DiscardingConsumer.objects, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
++    context.trace.write_number(
++        Kind::Counter,
++        "chunk_count.initial_count",
++        initial as i128,
++        "extents",
++        "FileState.extent_count of the base root",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "chunk_count.final_count",
++        final_count as i128,
++        "extents",
++        "FileState.extent_count of the result root",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.nodes_read",
++        counters.nodes_read as i128,
++        "nodes",
++        "EditCounters.nodes_read",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.nodes_created",
++        counters.nodes_created as i128,
++        "nodes",
++        "EditCounters.nodes_created",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.payloads_created",
++        counters.payloads_created as i128,
++        "objects",
++        "EditCounters.payloads_created",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.payload_bytes",
++        counters.payload_bytes as i128,
++        "bytes",
++        "EditCounters.payload_bytes",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.peak_deferred_bytes",
++        counters.peak_deferred_bytes as i128,
++        "bytes",
++        "EditCounters.peak_deferred_bytes",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "consumer.objects",
++        measured_consumer.objects() as i128,
++        "objects",
++        "DiscardingConsumer.objects, measured phase",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "timing_json_bytes",
++        timing_bytes as i128,
++        "bytes",
++        "product timing.json, byte-verbatim",
++    )?;
++    context.trace.write_number(
++        Kind::Resource,
++        "heap.peak_incremental_bytes",
++        heap.peak_incremental_bytes as i128,
++        "bytes",
++        "counting GlobalAlloc, measured phase",
++    )?;
+ 
+     gates.push(completeness_gate(&report, "g7.tree-complete"));
+     // O1 for real: the measured root is published so the pinned-constant gate in
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:587:
+     // `main` can compare it with `tests/golden/expected.tsv`. The replay gate below
+     // is self-consistency and stays as a second, weaker check.
+-    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
++    crate::workload::expected::publish(
++        context.trace,
++        "file_root",
++        &measured_file.root.to_string(),
++    )?;
+     gates.push(gates::require(
+         GateClass::Correctness,
+         "g1.o1-replay-root",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:602:
+         &format!("{base_len} bytes (a length-preserving overwrite)"),
+     ));
+     let (readback, _) = Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
+-        oracle::read_back(&oracle_provider, replay.root, &expectation, scope.child("content"))
++        oracle::read_back(
++            &oracle_provider,
++            replay.root,
++            &expectation,
++            scope.child("content"),
++        )
+     });
+     match readback {
+         Ok(readback) => gates.push(gates::require(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:610:
+             "g1.o2-readback",
+             readback.matches(),
+             &format!("{} bytes read, {}", readback.bytes, readback.digest),
+-            &format!("{} bytes, sha256 {}", readback.expected_bytes, readback.expected_digest),
++            &format!(
++                "{} bytes, sha256 {}",
++                readback.expected_bytes, readback.expected_digest
++            ),
+         )),
+         Err(error) => gates.push(Gate::incomplete(
+             GateClass::Correctness,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:633:
+         GateClass::Mechanism,
+         "g2.chunk-count-direction",
+         direction,
+-        &format!("{initial} -> {final_count} extents ({})", if direction { direction_name } else { "opposite direction" }),
++        &format!(
++            "{initial} -> {final_count} extents ({})",
++            if direction {
++                direction_name
++            } else {
++                "opposite direction"
++            }
++        ),
+         &format!("the row's own ID declares the count {direction_name}"),
+     ));
+     gates.push(gates::require(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:641:
+         "g4.peak-deferred",
+         (counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
+         &format!("{} bytes", counters.peak_deferred_bytes),
+-        &format!("<= EDIT_DEFERRED_LIMIT ({})", layerfs_content::file::edit::EDIT_DEFERRED_LIMIT),
++        &format!(
++            "<= EDIT_DEFERRED_LIMIT ({})",
++            layerfs_content::file::edit::EDIT_DEFERRED_LIMIT
++        ),
+     ));
+     gates.push(gates::swap_gate(instruments::swaps()));
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:685:
+ }
+ 
+ /// C1-4/C1-5 `prepare`: acquire the base once, with the expectation its oracle needs.
+-fn edit_prepare(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
++fn edit_prepare(
++    case: &Case,
++    op: EditOp,
++    context: &mut OpContext<'_>,
++) -> Result<OpOutcome, OpError> {
+     let directory = context.artifact_directory()?;
+     let seed = seed_of(case.id);
+     let policy = ConstructionPolicy::frozen_default();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:699:
+         base.len() as u64,
+         vec![Edit::new(start, end, replacement_len)],
+     ) {
+-        Ok(stream) => match stream.edits().first().map(|edit| edit.apply_len(base.len() as u64)) {
++        Ok(stream) => match stream
++            .edits()
++            .first()
++            .map(|edit| edit.apply_len(base.len() as u64))
++        {
+             Some(Ok(len)) => len,
+-            Some(Err(error)) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), Vec::new())),
++            Some(Err(error)) => {
++                return Ok(unmeasured(
++                    &OpError::Product(format!("{error:?}")),
++                    Vec::new(),
++                ))
++            }
+             None => base.len() as u64,
+         },
+-        Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), Vec::new())),
++        Err(error) => {
++            return Ok(unmeasured(
++                &OpError::Product(format!("{error:?}")),
++                Vec::new(),
++            ))
++        }
+     };
+     let expectation = Expectation::spliced(&base, start, end, &replacement);
+     let ids = store.insertion_order().to_vec();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:717:
+     artifact.values.set_scalar("base_len", base.len() as u64);
+     artifact.values.set_scalar("start", start);
+     artifact.values.set_scalar("end", end);
+-    artifact.values.set_scalar("replacement_len", replacement_len);
++    artifact
++        .values
++        .set_scalar("replacement_len", replacement_len);
+     artifact.values.set_scalar("expected_len", expected_len);
+     artifact.values.set_expectation("result", expectation);
+     let written = artifact
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:794:
+     instruments::heap_begin();
+     let (measured, report) = super::measure("c1.edit", |scope: &TimingScope<'_, Active>| {
+         let mut consumer = DiscardingConsumer::new();
+-        let request = EditRequest { root: base_member.root, edits: &stream, source: &source };
+-        apply_edits(policy, &capacities, store, request, &mut consumer, scope.child("edit"))
+-            .map(|file| (file, consumer))
++        let request = EditRequest {
++            root: base_member.root,
++            edits: &stream,
++            source: &source,
++        };
++        apply_edits(
++            policy,
++            &capacities,
++            store,
++            request,
++            &mut consumer,
++            scope.child("edit"),
++        )
++        .map(|file| (file, consumer))
+     });
+     let heap = instruments::heap_end();
+     let timing_bytes = crate::support::phases::timing_json_bytes();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:808:
+ 
+     let mut result_store = TreeStore::new();
+     let (replay, _) = Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
+-        let request = EditRequest { root: base_member.root, edits: &stream, source: &source };
+-        apply_edits(policy, &capacities, store, request, &mut result_store, scope.child("edit"))
++        let request = EditRequest {
++            root: base_member.root,
++            edits: &stream,
++            source: &source,
++        };
++        apply_edits(
++            policy,
++            &capacities,
++            store,
++            request,
++            &mut result_store,
++            scope.child("edit"),
++        )
+     });
+     let replay = match replay {
+         Ok(file) => file,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:818:
+     let oracle_provider = PairProvider::new(&result_store, store);
+     let final_extents = extent_count_of(&oracle_provider, replay.root)?;
+ 
+-    context.trace.write_number(Kind::Counter, "edit.base_bytes", base_len as i128, "bytes", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "edit.final_bytes", measured_file.logical_len as i128, "bytes", "ConstructedFile.logical_len")?;
+-    context.trace.write_number(Kind::Counter, "edit.expected_final_bytes", expected_len as i128, "bytes", "base - removed + replacement, computed by the oracle")?;
+-    context.trace.write_number(Kind::Counter, "edit.nodes_read", counters.nodes_read as i128, "nodes", "EditCounters.nodes_read")?;
+-    context.trace.write_number(Kind::Counter, "edit.nodes_created", counters.nodes_created as i128, "nodes", "EditCounters.nodes_created")?;
+-    context.trace.write_number(Kind::Counter, "edit.payloads_created", counters.payloads_created as i128, "objects", "EditCounters.payloads_created")?;
+-    context.trace.write_number(Kind::Counter, "edit.payload_bytes", counters.payload_bytes as i128, "bytes", "EditCounters.payload_bytes")?;
+-    context.trace.write_number(Kind::Counter, "edit.peak_deferred_bytes", counters.peak_deferred_bytes as i128, "bytes", "EditCounters.peak_deferred_bytes")?;
+-    context.trace.write_number(Kind::Counter, "edit.base_extents", base_extents as i128, "extents", "FileState.extent_count of the base root")?;
+-    context.trace.write_number(Kind::Counter, "edit.final_extents", final_extents as i128, "extents", "FileState.extent_count of the result root")?;
+-    context.trace.write_number(Kind::Counter, "consumer.objects", measured_consumer.objects() as i128, "objects", "DiscardingConsumer.objects, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.base_bytes",
++        base_len as i128,
++        "bytes",
++        "fixture recipe",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.final_bytes",
++        measured_file.logical_len as i128,
++        "bytes",
++        "ConstructedFile.logical_len",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.expected_final_bytes",
++        expected_len as i128,
++        "bytes",
++        "base - removed + replacement, computed by the oracle",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.nodes_read",
++        counters.nodes_read as i128,
++        "nodes",
++        "EditCounters.nodes_read",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.nodes_created",
++        counters.nodes_created as i128,
++        "nodes",
++        "EditCounters.nodes_created",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.payloads_created",
++        counters.payloads_created as i128,
++        "objects",
++        "EditCounters.payloads_created",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.payload_bytes",
++        counters.payload_bytes as i128,
++        "bytes",
++        "EditCounters.payload_bytes",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.peak_deferred_bytes",
++        counters.peak_deferred_bytes as i128,
++        "bytes",
++        "EditCounters.peak_deferred_bytes",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.base_extents",
++        base_extents as i128,
++        "extents",
++        "FileState.extent_count of the base root",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "edit.final_extents",
++        final_extents as i128,
++        "extents",
++        "FileState.extent_count of the result root",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "consumer.objects",
++        measured_consumer.objects() as i128,
++        "objects",
++        "DiscardingConsumer.objects, measured phase",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "timing_json_bytes",
++        timing_bytes as i128,
++        "bytes",
++        "product timing.json, byte-verbatim",
++    )?;
++    context.trace.write_number(
++        Kind::Resource,
++        "heap.peak_incremental_bytes",
++        heap.peak_incremental_bytes as i128,
++        "bytes",
++        "counting GlobalAlloc, measured phase",
++    )?;
+ 
+     gates.push(completeness_gate(&report, "g7.tree-complete"));
+     // O1 for real: the measured root is published so the pinned-constant gate in
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:837:
+     // `main` can compare it with `tests/golden/expected.tsv`. The replay gate below
+     // is self-consistency and stays as a second, weaker check.
+-    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
++    crate::workload::expected::publish(
++        context.trace,
++        "file_root",
++        &measured_file.root.to_string(),
++    )?;
+     gates.push(gates::require(
+         GateClass::Correctness,
+         "g1.o1-replay-root",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:861:
+         ));
+     }
+     let (readback, _) = Timing::disabled("oracle.readback", |scope: &TimingScope<'_, Active>| {
+-        oracle::read_back(&oracle_provider, replay.root, &expectation, scope.child("content"))
++        oracle::read_back(
++            &oracle_provider,
++            replay.root,
++            &expectation,
++            scope.child("content"),
++        )
+     });
+     match readback {
+         Ok(readback) => gates.push(gates::require(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:869:
+             "g1.o2-readback",
+             readback.matches(),
+             &format!("{} bytes read, {}", readback.bytes, readback.digest),
+-            &format!("{} bytes, sha256 {}", readback.expected_bytes, readback.expected_digest),
++            &format!(
++                "{} bytes, sha256 {}",
++                readback.expected_bytes, readback.expected_digest
++            ),
+         )),
+         Err(error) => gates.push(Gate::incomplete(
+             GateClass::Correctness,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:883:
+         "g4.peak-deferred",
+         (counters.peak_deferred_bytes as usize) <= layerfs_content::file::edit::EDIT_DEFERRED_LIMIT,
+         &format!("{} bytes", counters.peak_deferred_bytes),
+-        &format!("<= EDIT_DEFERRED_LIMIT ({})", layerfs_content::file::edit::EDIT_DEFERRED_LIMIT),
++        &format!(
++            "<= EDIT_DEFERRED_LIMIT ({})",
++            layerfs_content::file::edit::EDIT_DEFERRED_LIMIT
++        ),
+     ));
+     gates.push(gates::swap_gate(instruments::swaps()));
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:920:
+         Transition::Exact => crate::families::c1_transition::BOUNDARY_EXACT,
+         Transition::Above => crate::families::c1_transition::BOUNDARY_ABOVE,
+         Transition::LargeControl => crate::families::c1_transition::LARGE_CONTROL,
+-        Transition::Roundtrip | Transition::AliasRoundtrip => crate::families::c1_transition::LARGE_CONTROL,
++        Transition::Roundtrip | Transition::AliasRoundtrip => {
++            crate::families::c1_transition::LARGE_CONTROL
++        }
+     };
+     let bytes = fixture::noise(build_len, seed);
+     let mut store = TreeStore::new();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:928:
+     instruments::heap_begin();
+     let (measured, report) = super::measure("c1.transition", |scope: &TimingScope<'_, Active>| {
+         let mut consumer = DiscardingConsumer::new();
+-        construct_bytes(policy, &capacities, &bytes, &mut consumer, scope.child("content"))
+-            .map(|file| (file, consumer))
++        construct_bytes(
++            policy,
++            &capacities,
++            &bytes,
++            &mut consumer,
++            scope.child("content"),
++        )
++        .map(|file| (file, consumer))
+     });
+     let heap = instruments::heap_end();
+     let timing_bytes = crate::support::phases::timing_json_bytes();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:948:
+             let end = bytes.len() as u64;
+             let stream = match EditStream::new(bytes.len() as u64, vec![Edit::delete(start, end)]) {
+                 Ok(stream) => stream,
+-                Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
++                Err(error) => {
++                    return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates))
++                }
+             };
+             let source = Replacements::new();
+-            let (replayed, _) = Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
+-                let request = EditRequest { root: base_file.root, edits: &stream, source: &source };
+-                apply_edits(policy, &capacities, &store, request, &mut result_store, scope.child("edit"))
+-            });
++            let (replayed, _) =
++                Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
++                    let request = EditRequest {
++                        root: base_file.root,
++                        edits: &stream,
++                        source: &source,
++                    };
++                    apply_edits(
++                        policy,
++                        &capacities,
++                        &store,
++                        request,
++                        &mut result_store,
++                        scope.child("edit"),
++                    )
++                });
+             match replayed {
+                 Ok(file) => (
+                     file.root,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:961:
+                     file.logical_len,
+                     format!("chunked base shrunk to {start} bytes, below the {cutoff} cutoff"),
+                 ),
+-                Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
++                Err(error) => {
++                    return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates))
++                }
+             }
+         }
+         _ => (
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:979:
+         FileContent::WholeFile { .. } => ("whole-file".to_string(), 0_u64),
+         FileContent::Chunked(state) => ("chunked".to_string(), state.extent_count),
+     };
+-    let expected_representation = if result_len < cutoff { "whole-file" } else { "chunked" };
++    let expected_representation = if result_len < cutoff {
++        "whole-file"
++    } else {
++        "chunked"
++    };
+ 
+     // The alias check: identity is content-addressed, so a second construction of
+     // the same bytes must produce the same root, and rewriting one must leave the
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:992:
+         alias_ok = alias.root == base_file.root;
+         let expectation = Expectation::of(&bytes);
+         let (readback, _) = Timing::disabled("oracle.alias", |scope: &TimingScope<'_, Active>| {
+-            oracle::read_back(&alias_store, alias.root, &expectation, scope.child("content"))
++            oracle::read_back(
++                &alias_store,
++                alias.root,
++                &expectation,
++                scope.child("content"),
++            )
+         });
+         alias_ok = alias_ok && readback.map(|back| back.matches()).unwrap_or(false);
+         alias_note = format!("alias root {} ", alias.root);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:999:
+     }
+ 
+-    context.trace.write_number(Kind::Counter, "transition.build_bytes", build_len as i128, "bytes", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "transition.result_bytes", result_len as i128, "bytes", "ConstructedFile.logical_len")?;
+-    context.trace.write_number(Kind::Counter, "transition.extents", extents as i128, "extents", "FileState.extent_count of the result root")?;
+-    context.trace.write_number(Kind::Counter, "transition.base_extents", base_extents as i128, "extents", "FileState.extent_count of the base root")?;
+-    context.trace.write_number(Kind::Counter, "construct.objects", measured_consumer.objects() as i128, "objects", "DiscardingConsumer.objects, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
++    context.trace.write_number(
++        Kind::Counter,
++        "transition.build_bytes",
++        build_len as i128,
++        "bytes",
++        "fixture recipe",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "transition.result_bytes",
++        result_len as i128,
++        "bytes",
++        "ConstructedFile.logical_len",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "transition.extents",
++        extents as i128,
++        "extents",
++        "FileState.extent_count of the result root",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "transition.base_extents",
++        base_extents as i128,
++        "extents",
++        "FileState.extent_count of the base root",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "construct.objects",
++        measured_consumer.objects() as i128,
++        "objects",
++        "DiscardingConsumer.objects, measured phase",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "timing_json_bytes",
++        timing_bytes as i128,
++        "bytes",
++        "product timing.json, byte-verbatim",
++    )?;
++    context.trace.write_number(
++        Kind::Resource,
++        "heap.peak_incremental_bytes",
++        heap.peak_incremental_bytes as i128,
++        "bytes",
++        "counting GlobalAlloc, measured phase",
++    )?;
+ 
+     gates.push(completeness_gate(&report, "g7.tree-complete"));
+-    crate::workload::expected::publish(context.trace, "file_root", &measured_file.root.to_string())?;
++    crate::workload::expected::publish(
++        context.trace,
++        "file_root",
++        &measured_file.root.to_string(),
++    )?;
+     gates.push(gates::require(
+         GateClass::Correctness,
+         "g1.o1-replay-root",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:1026:
+         GateClass::Correctness,
+         "g1.o2-base-representation",
+         match target {
+-            Transition::Below | Transition::SmallControl => matches!(base_content, FileContent::WholeFile { .. }),
++            Transition::Below | Transition::SmallControl => {
++                matches!(base_content, FileContent::WholeFile { .. })
++            }
+             _ => matches!(base_content, FileContent::Chunked(_)),
+         },
+-        &format!("base {} at {build_len} bytes", match base_content { FileContent::WholeFile { .. } => "whole-file", FileContent::Chunked(_) => "chunked" }),
++        &format!(
++            "base {} at {build_len} bytes",
++            match base_content {
++                FileContent::WholeFile { .. } => "whole-file",
++                FileContent::Chunked(_) => "chunked",
++            }
++        ),
+         &format!("the declared route at cutoff {cutoff}"),
+     ));
+     if target == Transition::AliasRoundtrip {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/c1.rs:1050:
+             format!("transition: {transition_note}"),
+             format!("heap_charged_bytes: {}", heap.charged_bytes),
+             format!("heap_allocations: {}", heap.allocations),
+-            "cache_state: warm-in-process-fixture; the base is built before the timed region".to_string(),
++            "cache_state: warm-in-process-fixture; the base is built before the timed region"
++                .to_string(),
+             "oracle_phase: separate-unmeasured-replay".to_string(),
+         ],
+     })
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:621:
+         // loaded here rather than replayed: replaying it inside the performance
+         // invocation charges the same 33 operations to preparation that the row
+         // then charges again to its own timer, and neither copy is the row's claim.
+-        let artifact = Artifact::read(&context.artifact_directory()?)
+-            .map_err(|error| OpError::Io(error))?;
++        let artifact =
++            Artifact::read(&context.artifact_directory()?).map_err(|error| OpError::Io(error))?;
+         let chain = chain_of(artifact)?;
+         return run_batched_build_row(case, &prepared, scope, context, "fs_build", &chain);
+     }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:861:
+         heap,
+     };
+     record_counters(context, &measured, label)?;
+-    let largest = batches.iter().map(|batch| batch.bindings()).max().unwrap_or(0);
++    let largest = batches
++        .iter()
++        .map(|batch| batch.bindings())
++        .max()
++        .unwrap_or(0);
+     context.trace.write_number(
+         Kind::Counter,
+         &format!("{label}.operations"),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:994:
+         artifact.values.set_scalar("chained", 1);
+         artifact.values.set_scalar("batches", chained as u64);
+     }
+-    artifact.values.set_scalar("bindings", prepared.bindings() as u64);
+-    artifact.values.set_scalar("entries", u64::from(recipe.entries));
++    artifact
++        .values
++        .set_scalar("bindings", prepared.bindings() as u64);
++    artifact
++        .values
++        .set_scalar("entries", u64::from(recipe.entries));
+     let written = artifact
+         .write(&directory)
+         .map_err(|error| OpError::Io(format!("{}: {error}", directory.display())))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:1049:
+     }
+     Ok(PreparedChain {
+         fixture: artifact.objects,
+-        roots: artifact.members.iter().map(|member| FilesystemRootId(member.root)).collect(),
++        roots: artifact
++            .members
++            .iter()
++            .map(|member| FilesystemRootId(member.root))
++            .collect(),
+     })
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:1271:
+             &format!("{} files in the fixture manifest", prepared.files.len()),
+         ),
+     ];
+-    crate::workload::expected::publish(
+-        context.trace,
+-        "filesystem_root",
+-        &base.root.0.to_string(),
+-    )?;
++    crate::workload::expected::publish(context.trace, "filesystem_root", &base.root.0.to_string())?;
+     let listing = listings_match(&store, base.root, prepared)?;
+     match listing {
+         Ok(directories) => gates.push(gates::require(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:1368:
+     };
+ 
+     let mut backing = backing_for(&removal_input, context);
+-    let (measured, served_result, served_base) =
+-        match measure_update(
+-            &store,
+-            &fixture,
+-            base.root,
+-            &removal_input,
+-            scope,
+-            as_backing(backing.as_mut()),
+-            label,
+-        ) {
+-            Ok(measured) => measured,
+-            Err(layerfs_content::ContentError::MissingObject) => return Ok(unmeasured(
++    let (measured, served_result, served_base) = match measure_update(
++        &store,
++        &fixture,
++        base.root,
++        &removal_input,
++        scope,
++        as_backing(backing.as_mut()),
++        label,
++    ) {
++        Ok(measured) => measured,
++        Err(layerfs_content::ContentError::MissingObject) => {
++            return Ok(unmeasured(
+                 &OpError::Product(
+                     "filesystem-update: MissingObject from a discarding measured phase whose \
+                      fixture is the byte-identical unmeasured replay; the replay and the \
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/fs.rs:1387:
+                         .to_string(),
+                 ),
+                 Vec::new(),
+-            )),
+-            Err(error) => {
+-                return Ok(unmeasured(
+-                    &OpError::Product(format!("{error:?}")),
+-                    Vec::new(),
+-                ))
+-            }
+-        };
++            ))
++        }
++        Err(error) => {
++            return Ok(unmeasured(
++                &OpError::Product(format!("{error:?}")),
++                Vec::new(),
++            ))
++        }
++    };
+ 
+     record_counters(context, &measured, label)?;
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:40:
+ #[path = "history_reads.rs"]
+ pub mod reads;
+ 
+-use reads::{ReadCounters, ReadWork};
+-use std::collections::{BTreeMap, BTreeSet};
+-use std::path::{Path, PathBuf};
+ use layerfs_content::filesystem::references::backing::FileBacking;
+ use layerfs_content::filesystem::{
+     build_filesystem, build_filesystem_timed, scope_for_seed, update_filesystem,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:49:
+-    update_filesystem_timed, DirectoryUpdate, FilesystemInput, FilesystemPhases,
+-    FilesystemUpdateCounters,
+-    FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRootId, InodeUpdate,
++    update_filesystem_timed, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemPhases,
++    FilesystemRead, FilesystemResources, FilesystemRootId, FilesystemUpdateCounters, InodeUpdate,
+     LogicalPath, PathName,
+ };
+ use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:58:
+ };
+ use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
+ use layerfs_telemetry::timer::{Active, Timing, TimingScope};
++use reads::{ReadCounters, ReadWork};
++use std::collections::{BTreeMap, BTreeSet};
++use std::path::{Path, PathBuf};
+ 
++use super::c1;
+ use super::{OpContext, OpError, OpOutcome, Phase};
+ use crate::gates::{self, Gate, GateClass};
+ use crate::registry::Case;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:65:
+-use crate::support::{instruments, phases};
+-use super::c1;
+ use crate::support::trace::Kind;
++use crate::support::{instruments, phases};
+ use crate::workload::history::{read_probe, read_probe_begin, Change, Corpus, HistoryError, Row};
+ use crate::workload::providers::TreeStore;
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:87:
+ /// The allocation scope of one row, derived from its id so a row's identities are
+ /// reproducible from the receipt alone.
+ fn scope_of(row: Row) -> layerfs_content::InodeScope {
+-    scope_for_seed(*ObjectId::for_bytes(format!("layerfs/history/{}", row.token()).as_bytes()).as_bytes())
++    scope_for_seed(
++        *ObjectId::for_bytes(format!("layerfs/history/{}", row.token()).as_bytes()).as_bytes(),
++    )
+ }
+ 
+ /// Whether the driver models a history save faithfully — **Step 0 of #187**.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:365:
+         self.pack_appends = self.pack_appends.saturating_add(saved.pack_appends);
+         self.commits = self.commits.saturating_add(saved.commits);
+         self.statements = self.statements.saturating_add(saved.statements);
+-        self.presence_queries = self
+-            .presence_queries
+-            .saturating_add(saved.presence_queries);
++        self.presence_queries = self.presence_queries.saturating_add(saved.presence_queries);
+         let delta = saved.delta;
+         self.prepared_full = self.prepared_full.saturating_add(delta.prepared_full);
+         self.trials = self.trials.saturating_add(delta.trials);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:384:
+         let chain = saved.chain;
+         self.chain_objects = self.chain_objects.saturating_add(chain.objects);
+         self.chain_edges = self.chain_edges.saturating_add(chain.edges);
+-        self.chain_encoded_bytes = self
+-            .chain_encoded_bytes
+-            .saturating_add(chain.encoded_bytes);
++        self.chain_encoded_bytes = self.chain_encoded_bytes.saturating_add(chain.encoded_bytes);
+         self.chain_canonical_bytes = self
+             .chain_canonical_bytes
+             .saturating_add(chain.canonical_bytes);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:393:
+         self.chain_max_depth = self.chain_max_depth.max(chain.max_depth);
+-        self.chain_group_decodes = self
+-            .chain_group_decodes
+-            .saturating_add(chain.group_decodes);
++        self.chain_group_decodes = self.chain_group_decodes.saturating_add(chain.group_decodes);
+         let pool = saved.pool;
+         self.pool_leaves = self.pool_leaves.saturating_add(pool.leaves);
+         self.pool_new_values = self.pool_new_values.saturating_add(pool.new_values);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:400:
+-        self.pool_reused_values = self
+-            .pool_reused_values
+-            .saturating_add(pool.reused_values);
++        self.pool_reused_values = self.pool_reused_values.saturating_add(pool.reused_values);
+         self.pool_groups = self.pool_groups.saturating_add(pool.groups);
+         self.pool_delta_leaves = self.pool_delta_leaves.saturating_add(pool.delta_leaves);
+         self.pool_full_leaves = self.pool_full_leaves.saturating_add(pool.full_leaves);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:406:
+         self.pool_trials = self.pool_trials.saturating_add(pool.trials);
+-        self.pool_work_exceeded = self
+-            .pool_work_exceeded
+-            .saturating_add(pool.work_exceeded);
++        self.pool_work_exceeded = self.pool_work_exceeded.saturating_add(pool.work_exceeded);
+     }
+ 
+     /// The same figures as trace rows: `(suffix, value, unit)`.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:425:
+             ("save.presence_queries", self.presence_queries, "queries"),
+             ("save.delta.prepared_full", self.prepared_full, "objects"),
+             ("save.delta.trials", self.trials, "trials"),
+-            ("save.delta.prefix_selected", self.prefix_selected, "objects"),
++            (
++                "save.delta.prefix_selected",
++                self.prefix_selected,
++                "objects",
++            ),
+             ("save.delta.full_losses", self.full_losses, "objects"),
+             ("save.delta.no_candidate", self.no_candidate, "objects"),
+-            ("save.delta.absent_candidates", self.absent_candidates, "objects"),
+             (
++                "save.delta.absent_candidates",
++                self.absent_candidates,
++                "objects",
++            ),
++            (
+                 "save.delta.ineligible_candidates",
+                 self.ineligible_candidates,
+                 "objects",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:437:
+             ("save.delta.work_exceeded", self.work_exceeded, "objects"),
+             ("save.chain.objects", self.chain_objects, "objects"),
+             ("save.chain.edges", self.chain_edges, "edges"),
+-            ("save.chain.encoded_bytes", self.chain_encoded_bytes, "bytes"),
+             (
++                "save.chain.encoded_bytes",
++                self.chain_encoded_bytes,
++                "bytes",
++            ),
++            (
+                 "save.chain.canonical_bytes",
+                 self.chain_canonical_bytes,
+                 "bytes",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:445:
+             ),
+             ("save.chain.max_depth", self.chain_max_depth, "edges"),
+-            ("save.chain.group_decodes", self.chain_group_decodes, "count"),
++            (
++                "save.chain.group_decodes",
++                self.chain_group_decodes,
++                "count",
++            ),
+             ("save.pool.leaves", self.pool_leaves, "objects"),
+             ("save.pool.new_values", self.pool_new_values, "values"),
+             ("save.pool.reused_values", self.pool_reused_values, "values"),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:452:
+             ("save.pool.delta_leaves", self.pool_delta_leaves, "objects"),
+             ("save.pool.full_leaves", self.pool_full_leaves, "objects"),
+             ("save.pool.trials", self.pool_trials, "trials"),
+-            ("save.pool.work_exceeded", self.pool_work_exceeded, "objects"),
++            (
++                "save.pool.work_exceeded",
++                self.pool_work_exceeded,
++                "objects",
++            ),
+         ]
+     }
+ }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:631:
+ /// the regular-file read). It is emitted as a `Symlink` object instead, and only
+ /// when the corpus says the path changed: an unchanged symlink keeps the content
+ /// root the Store already holds, exactly as an unchanged file does.
+-fn emit_symlink_target(
+-    target: &[u8],
+-    consumer: &mut TreeStore,
+-) -> Result<ObjectId, OpError> {
++fn emit_symlink_target(target: &[u8], consumer: &mut TreeStore) -> Result<ObjectId, OpError> {
+     let target = layerfs_content::filesystem::SymlinkTarget::new(target.to_vec())
+         .map_err(|error| OpError::Product(format!("{error:?}")))?;
+     let object = target
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:873:
+             continue;
+         }
+         let record = crate::workload::json::parse(line).map_err(|error| {
+-            OpError::Io(format!("{}: not a trace record: {error}", trace_path.display()))
++            OpError::Io(format!(
++                "{}: not a trace record: {error}",
++                trace_path.display()
++            ))
+         })?;
+         let kind = record.get_str("kind").unwrap_or_default();
+         let key = record.get_str("key").unwrap_or_default();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:904:
+             .split_once("ObjectId(\"")
+             .and_then(|(_, rest)| rest.split_once('"'))
+             .map(|(digest, _)| digest)
+-            .ok_or_else(|| {
+-                OpError::Io(format!("{key} is not an ObjectId identity: {value:?}"))
+-            })?;
++            .ok_or_else(|| OpError::Io(format!("{key} is not an ObjectId identity: {value:?}")))?;
+         let id: ObjectId = digest
+             .parse()
+             .map_err(|_| OpError::Io(format!("{key} is not a hex object id: {digest:?}")))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:1056:
+             .resolve(&LogicalPath::root())
+             .map_err(|error| OpError::Product(format!("root: {error:?}")))?;
+         if resolved.value.kind != InodeKind::Directory {
+-            return Err(OpError::Io("the state's root is not a directory".to_string()));
++            return Err(OpError::Io(
++                "the state's root is not a directory".to_string(),
++            ));
+         }
+         for index in self.sample_indices() {
+             let Some((path, entry)) = self.oracle.iter().nth(index) else {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:1177:
+             )
+         } else {
+             let mut sink = crate::workload::oracle::HashingSink::new();
+-            let (result, _) =
+-                Timing::disabled("verify.read", |scope: &TimingScope<'_, Active>| {
+-                    layerfs_content::read_all(
+-                        self.reader,
+-                        id,
+-                        &mut sink,
+-                        scope.child("content.acquire"),
+-                    )
+-                });
++            let (result, _) = Timing::disabled("verify.read", |scope: &TimingScope<'_, Active>| {
++                layerfs_content::read_all(
++                    self.reader,
++                    id,
++                    &mut sink,
++                    scope.child("content.acquire"),
++                )
++            });
+             result.map_err(|error| OpError::Product(format!("{path}: reading {id}: {error:?}")))?;
+             let bytes = sink.bytes();
+             (sink.finish(), bytes)
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:1288:
+             .states()
+             .get(ordinal.saturating_sub(1))
+             .ok_or_else(|| {
+-                OpError::Io(format!("history.state.{ordinal}.root has no matching state"))
++                OpError::Io(format!(
++                    "history.state.{ordinal}.root has no matching state"
++                ))
+             })?;
+         let oracle = corpus.oracle(state).map_err(corpus_error)?;
+         if oracle.is_empty() {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:1360:
+             "ordinary-lane group bodies this phase decompressed",
+         ),
+     ] {
+-        context.trace.write_number(Kind::Resource, key, value, unit, basis)?;
++        context
++            .trace
++            .write_number(Kind::Resource, key, value, unit, basis)?;
+     }
+     for (ordinal, nanos) in &per_state_ns {
+         context.trace.write_number(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:1427:
+             "sampled symlink targets read back",
+         ),
+     ] {
+-        context.trace.write_number(Kind::Counter, key, value, unit, basis)?;
++        context
++            .trace
++            .write_number(Kind::Counter, key, value, unit, basis)?;
+     }
+     // The mode ladder's unit, declared by the row. The unit is one
+     // content-bearing path-state, and the sample is the declared one; a sampled
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:1493:
+ /// The corpus root this row was handed, or a refusal.
+ fn corpus_root(context: &OpContext<'_>) -> Result<std::path::PathBuf, OpError> {
+     context.corpus.clone().ok_or_else(|| {
+-        OpError::Io("history.* requires --corpus PATH; an absent corpus is never defaulted".to_string())
++        OpError::Io(
++            "history.* requires --corpus PATH; an absent corpus is never defaulted".to_string(),
++        )
+     })
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:2216:
+         )?;
+         context.trace.write_number(
+             Kind::Resource,
+-            &format!("history.state.{}.heap_peak_incremental_bytes", outcome.ordinal),
++            &format!(
++                "history.state.{}.heap_peak_incremental_bytes",
++                outcome.ordinal
++            ),
+             outcome.peak_heap_bytes as i128,
+             "bytes",
+             "counting GlobalAlloc, this state's child alone",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:2249:
+             for (suffix, value, unit) in [
+                 ("leaf_requests", pooled.leaf_requests, "count"),
+                 ("chain_edges", pooled.chain_edges, "count"),
+-                ("physical_record_calls", pooled.physical_record_calls, "count"),
+-                ("physical_group_decodes", pooled.physical_group_decodes, "count"),
+-                ("physical_group_decoded_bytes", pooled.physical_group_decoded_bytes, "bytes"),
+-                ("physical_group_cache_hits", pooled.physical_group_cache_hits, "count"),
++                (
++                    "physical_record_calls",
++                    pooled.physical_record_calls,
++                    "count",
++                ),
++                (
++                    "physical_group_decodes",
++                    pooled.physical_group_decodes,
++                    "count",
++                ),
++                (
++                    "physical_group_decoded_bytes",
++                    pooled.physical_group_decoded_bytes,
++                    "bytes",
++                ),
++                (
++                    "physical_group_cache_hits",
++                    pooled.physical_group_cache_hits,
++                    "count",
++                ),
+                 ("value_group_decodes", pooled.value_group_decodes, "count"),
+                 ("pack_fetches", pooled.pack_fetches, "count"),
+                 ("pack_bytes", pooled.pack_bytes, "bytes"),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:2270:
+         for (suffix, value) in [
+             ("save.commits", outcome.commits),
+             ("filesystem.provider.group_decodes", outcome.group_decodes),
+-            ("filesystem.provider.connection_opens", outcome.connection_opens),
+-            ("filesystem.validation.objects_read", fs.validation.objects_read),
++            (
++                "filesystem.provider.connection_opens",
++                outcome.connection_opens,
++            ),
++            (
++                "filesystem.validation.objects_read",
++                fs.validation.objects_read,
++            ),
+             ("filesystem.validation.read_waves", fs.validation.read_waves),
+-            ("filesystem.validation.inode_demands", fs.validation.inode_demands),
+-            ("filesystem.validation.inode_pages_read", fs.validation.inode_pages_read),
+-            ("filesystem.validation.directory_pages_read", fs.validation.directory_pages_read),
+-            ("filesystem.validation.entries_examined", fs.validation.entries_examined),
+-            ("filesystem.references.rows_touched", fs.references.rows_touched),
+-            ("filesystem.references.rows_spilled", fs.references.rows_spilled),
+-            ("filesystem.references.serials_scanned", fs.references.serials_scanned),
+-            ("filesystem.references.base_records_read", fs.references.base_records_read),
++            (
++                "filesystem.validation.inode_demands",
++                fs.validation.inode_demands,
++            ),
++            (
++                "filesystem.validation.inode_pages_read",
++                fs.validation.inode_pages_read,
++            ),
++            (
++                "filesystem.validation.directory_pages_read",
++                fs.validation.directory_pages_read,
++            ),
++            (
++                "filesystem.validation.entries_examined",
++                fs.validation.entries_examined,
++            ),
++            (
++                "filesystem.references.rows_touched",
++                fs.references.rows_touched,
++            ),
++            (
++                "filesystem.references.rows_spilled",
++                fs.references.rows_spilled,
++            ),
++            (
++                "filesystem.references.serials_scanned",
++                fs.references.serials_scanned,
++            ),
++            (
++                "filesystem.references.base_records_read",
++                fs.references.base_records_read,
++            ),
+             ("filesystem.references.base_waves", fs.references.base_waves),
+-            ("filesystem.references.runs_created", fs.references.runs.runs_created),
+-            ("filesystem.references.rows_read", fs.references.runs.rows_read),
+-            ("filesystem.references.rows_written", fs.references.runs.rows_written),
+-            ("filesystem.directories.pages_read", fs.directories.pages_read),
++            (
++                "filesystem.references.runs_created",
++                fs.references.runs.runs_created,
++            ),
++            (
++                "filesystem.references.rows_read",
++                fs.references.runs.rows_read,
++            ),
++            (
++                "filesystem.references.rows_written",
++                fs.references.runs.rows_written,
++            ),
++            (
++                "filesystem.directories.pages_read",
++                fs.directories.pages_read,
++            ),
+             ("filesystem.inodes.pages_read", fs.inodes.pages_read),
+         ] {
+             context.trace.write_number(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:2310:
+             )?;
+         }
+         for (suffix, nanos, basis) in [
+-            ("input_ns", outcome.input_ns, "harness input assembly inside the child"),
++            (
++                "input_ns",
++                outcome.input_ns,
++                "harness input assembly inside the child",
++            ),
+             ("build_ns", outcome.build_ns, "build/update_filesystem"),
+             ("save_ns", outcome.save_ns, "begin_save + accept + finish"),
+         ] {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:2476:
+         "path",
+         "the Store this row created and grew",
+     )?;
+-    let space = instruments::space(&store_path)
+-        .map_err(|error| OpError::Io(format!("{error}")))?;
++    let space = instruments::space(&store_path).map_err(|error| OpError::Io(format!("{error}")))?;
+     context.trace.write_number(
+         Kind::Resource,
+         "space.allocated_bytes",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs:2531:
+         &format!("{error}"),
+         "every state of the selection is saved, in order",
+     ));
+-    OpOutcome { gates, notes: Vec::new() }
++    OpOutcome {
++        gates,
++        notes: Vec::new(),
++    }
+ }
+-
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/mod.rs:128:
+     } else {
+         requested.min(units.max(1))
+     };
+-    (0..units).filter(|index| index % 10 == 0).take(selected).collect()
++    (0..units)
++        .filter(|index| index % 10 == 0)
++        .take(selected)
++        .collect()
+ }
+ 
+ impl OpContext<'_> {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/mod.rs:160:
+     pub fn artifact_directory(&self) -> Result<PathBuf, OpError> {
+         self.prepared_input.clone().ok_or_else(|| {
+             OpError::Io(
+-                "this row declares a prepared master and needs --emit-input/--load-input".to_string(),
++                "this row declares a prepared master and needs --emit-input/--load-input"
++                    .to_string(),
+             )
+         })
+     }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:114:
+ }
+ 
+ /// Runs the one registered row.
+-pub fn run(
+-    case: &Case,
+-    op: PipelineOp,
+-    context: &mut OpContext<'_>,
+-) -> Result<OpOutcome, OpError> {
++pub fn run(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
+     context.create_output()?;
+     match op {
+         PipelineOp::FilesystemBuild => filesystem(case, op, context),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:257:
+         }
+     };
+ 
+-    context.trace.write_number(Kind::Counter, "pipeline.base_bytes", setup.base_bytes as i128, "bytes", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.final_bytes", file.logical_len as i128, "bytes", "ConstructedFile.logical_len")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.expected_final_bytes", setup.expectation.logical_len as i128, "bytes", "base - removed + replacement, computed by the oracle")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveHandoff path, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.statements", i128::from(outcome.statements), "statements", "SaveOutcome.statements")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.nodes_read", file.counters.nodes_read as i128, "nodes", "EditCounters.nodes_read")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.nodes_created", file.counters.nodes_created as i128, "nodes", "EditCounters.nodes_created")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.base_bytes",
++        setup.base_bytes as i128,
++        "bytes",
++        "fixture recipe",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.final_bytes",
++        file.logical_len as i128,
++        "bytes",
++        "ConstructedFile.logical_len",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.expected_final_bytes",
++        setup.expectation.logical_len as i128,
++        "bytes",
++        "base - removed + replacement, computed by the oracle",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.handoff_objects",
++        emitted as i128,
++        "objects",
++        "CountingConsumer on the SaveHandoff path, measured phase",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.inserted",
++        i128::from(outcome.inserted),
++        "objects",
++        "SaveOutcome.inserted",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.reused",
++        i128::from(outcome.reused),
++        "objects",
++        "SaveOutcome.reused",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.commits",
++        i128::from(outcome.commits),
++        "transactions",
++        "SaveOutcome.commits",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.statements",
++        i128::from(outcome.statements),
++        "statements",
++        "SaveOutcome.statements",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.nodes_read",
++        file.counters.nodes_read as i128,
++        "nodes",
++        "EditCounters.nodes_read",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.nodes_created",
++        file.counters.nodes_created as i128,
++        "nodes",
++        "EditCounters.nodes_created",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "timing_json_bytes",
++        timing_bytes as i128,
++        "bytes",
++        "product timing.json, byte-verbatim",
++    )?;
++    context.trace.write_number(
++        Kind::Resource,
++        "heap.peak_incremental_bytes",
++        heap.peak_incremental_bytes as i128,
++        "bytes",
++        "counting GlobalAlloc, measured phase",
++    )?;
+ 
+     gates.push(c1::completeness_gate(&report, "g7.tree-complete"));
+     crate::workload::expected::publish(context.trace, "file_root", &file.root.to_string())?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:284:
+         "g1.o2-length-equation",
+         file.logical_len == setup.expectation.logical_len,
+         &format!("{} bytes", file.logical_len),
+-        &format!("{} bytes = base - removed + replacement", setup.expectation.logical_len),
++        &format!(
++            "{} bytes = base - removed + replacement",
++            setup.expectation.logical_len
++        ),
+     ));
+     gates.push(gates::require(
+         GateClass::Mechanism,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:328:
+         notes: vec![
+             format!("pipeline_op: {op:?}"),
+             format!("declared_base_bytes: {}", config.base_bytes),
+-            format!("declared_edit: {}..{} -> {} bytes", config.start, config.end, config.replacement),
++            format!(
++                "declared_edit: {}..{} -> {} bytes",
++                config.start, config.end, config.replacement
++            ),
+             format!("cutoff_bytes: {}", cutoff()),
+             "measured_region: Store::open + apply_edits + save + acknowledgement".to_string(),
+             "base_reader: StoreProvider over the sample copy".to_string(),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:335:
+-            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter".to_string(),
++            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter"
++                .to_string(),
+             format!("store_state: opened-from-copy"),
+             format!("copy_rung: {}", c2::COPY_RUNG),
+             format!("allocation_attribution: {}", c2::ATTRIBUTION),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:370:
+ }
+ 
+ /// One integrated filesystem row: build a tree and save every emitted object.
+-fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
++fn filesystem(
++    case: &Case,
++    op: PipelineOp,
++    context: &mut OpContext<'_>,
++) -> Result<OpOutcome, OpError> {
+     let config = configuration(op);
+     let seed = seed_of(case.id);
+     let prepared: PreparedTree = Recipe {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:432:
+     let timing_bytes = crate::support::phases::timing_json_bytes();
+     let (result, outcome) = match measured {
+         Ok(value) => value,
+-        Err(error) => {
+-            return Ok(c1::unmeasured(
+-                &OpError::Product(format!("{error}")),
+-                gates,
+-            ))
+-        }
++        Err(error) => return Ok(c1::unmeasured(&OpError::Product(format!("{error}")), gates)),
+     };
+ 
+     // Oracle: the same build, unmeasured, into an authenticating store.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:444:
+     let (store, replay) = fs::replay_build(&prepared, scope, None)?;
+     let listing = fs::listings_match(&store, replay.root, &prepared)?;
+ 
+-    context.trace.write_number(Kind::Counter, "pipeline.declared_files", config.files as i128, "files", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.declared_directories", config.directories as i128, "directories", "fixture recipe")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.bindings", prepared.bindings() as i128, "bindings", "fixture manifest")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.handoff_objects", emitted as i128, "objects", "CountingConsumer on the SaveHandoff path, measured phase")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.inserted", i128::from(outcome.inserted), "objects", "SaveOutcome.inserted")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.reused", i128::from(outcome.reused), "objects", "SaveOutcome.reused")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.commits", i128::from(outcome.commits), "transactions", "SaveOutcome.commits")?;
+-    context.trace.write_number(Kind::Counter, "pipeline.objects_emitted", result.counters.objects.objects_emitted as i128, "objects", "ObjectWork.objects_emitted")?;
+-    context.trace.write_number(Kind::Counter, "timing_json_bytes", timing_bytes as i128, "bytes", "product timing.json, byte-verbatim")?;
+-    context.trace.write_number(Kind::Resource, "heap.peak_incremental_bytes", heap.peak_incremental_bytes as i128, "bytes", "counting GlobalAlloc, measured phase")?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.declared_files",
++        config.files as i128,
++        "files",
++        "fixture recipe",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.declared_directories",
++        config.directories as i128,
++        "directories",
++        "fixture recipe",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.bindings",
++        prepared.bindings() as i128,
++        "bindings",
++        "fixture manifest",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.handoff_objects",
++        emitted as i128,
++        "objects",
++        "CountingConsumer on the SaveHandoff path, measured phase",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.inserted",
++        i128::from(outcome.inserted),
++        "objects",
++        "SaveOutcome.inserted",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.reused",
++        i128::from(outcome.reused),
++        "objects",
++        "SaveOutcome.reused",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.commits",
++        i128::from(outcome.commits),
++        "transactions",
++        "SaveOutcome.commits",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "pipeline.objects_emitted",
++        result.counters.objects.objects_emitted as i128,
++        "objects",
++        "ObjectWork.objects_emitted",
++    )?;
++    context.trace.write_number(
++        Kind::Counter,
++        "timing_json_bytes",
++        timing_bytes as i128,
++        "bytes",
++        "product timing.json, byte-verbatim",
++    )?;
++    context.trace.write_number(
++        Kind::Resource,
++        "heap.peak_incremental_bytes",
++        heap.peak_incremental_bytes as i128,
++        "bytes",
++        "counting GlobalAlloc, measured phase",
++    )?;
+ 
+     gates.push(c1::completeness_gate(&report, "g7.tree-complete"));
+     crate::workload::expected::publish(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs:543:
+             format!("declared_files: {}", config.files),
+             format!("declared_directories: {}", config.directories),
+             "measured_region: Store::open + build_filesystem + save + acknowledgement".to_string(),
+-            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter".to_string(),
++            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter"
++                .to_string(),
+             "store_state: opened-from-copy".to_string(),
+             format!("copy_rung: {}", c2::COPY_RUNG),
+             format!("allocation_attribution: {}", c2::ATTRIBUTION),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/registry.rs:620:
+             } else {
+                 case.tier_label
+             },
+-            if case.profile.is_empty() { "-" } else { case.profile },
++            if case.profile.is_empty() {
++                "-"
++            } else {
++                case.profile
++            },
+             case.bytes,
+             case.entries,
+             if case.smoke { "yes" } else { "no" },
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/instruments.rs:337:
+         let mut usage = DarwinRusageInfoV2::default();
+         let pid = i32::try_from(std::process::id()).ok()?;
+         // SAFETY: proc_pid_rusage receives a correctly sized C-layout V2 buffer.
+-        let status = unsafe { proc_pid_rusage(pid, RUSAGE_INFO_V2, std::ptr::from_mut(&mut usage).cast()) };
++        let status =
++            unsafe { proc_pid_rusage(pid, RUSAGE_INFO_V2, std::ptr::from_mut(&mut usage).cast()) };
+         if status != 0 {
+             return None;
+         }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/instruments.rs:456:
+                     Some(usage) => {
+                         let count = worker.samples.fetch_add(1, Ordering::Relaxed);
+                         if count == 0 {
+-                            worker.baseline.store(usage.resident_bytes, Ordering::Relaxed);
++                            worker
++                                .baseline
++                                .store(usage.resident_bytes, Ordering::Relaxed);
+                             worker.first_ns.store(stamp, Ordering::Relaxed);
+                         }
+-                        worker.peak.fetch_max(usage.resident_bytes, Ordering::Relaxed);
+-                        worker.final_bytes.store(usage.resident_bytes, Ordering::Relaxed);
++                        worker
++                            .peak
++                            .fetch_max(usage.resident_bytes, Ordering::Relaxed);
++                        worker
++                            .final_bytes
++                            .store(usage.resident_bytes, Ordering::Relaxed);
+                         worker.last_ns.store(stamp, Ordering::Relaxed);
+                         if previous != 0 {
+                             worker
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/instruments.rs:660:
+     #[cfg(not(unix))]
+     {
+         let _ = path;
+-        Err(std::io::Error::other("residency is unsupported on this host"))
++        Err(std::io::Error::other(
++            "residency is unsupported on this host",
++        ))
+     }
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/instruments.rs:685:
+         }
+         use std::os::unix::io::AsRawFd;
+ 
+-        let file = std::fs::OpenOptions::new().read(true).write(true).open(path)?;
++        let file = std::fs::OpenOptions::new()
++            .read(true)
++            .write(true)
++            .open(path)?;
+         let mapped = usize::try_from(first.length_bytes)
+             .map_err(|_| std::io::Error::other("mapping larger than this address space"))?;
+         // SAFETY: as `residency`: a mapping this process owns, checked before use.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/trace.rs:230:
+ /// can re-derive, and a gate that accepted one would be deciding on a number the
+ /// evidence does not contain.
+ pub fn read_flat(path: &Path) -> Result<Vec<FlatRecord>, String> {
+-    let text = std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
++    let text =
++        std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+     let mut records = Vec::new();
+     for (number, line) in text.lines().enumerate() {
+         if line.trim().is_empty() {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/trace.rs:238:
+         }
+         let kind = field(line, "kind").ok_or_else(|| format!("line {}: no kind", number + 1))?;
+         let key = field(line, "key").ok_or_else(|| format!("line {}: no key", number + 1))?;
+-        let raw = raw_field(line, "value")
+-            .ok_or_else(|| format!("line {}: no value", number + 1))?;
++        let raw =
++            raw_field(line, "value").ok_or_else(|| format!("line {}: no value", number + 1))?;
+         let numeric = !raw.starts_with('"');
+         let value = if numeric {
+             raw.to_string()
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/trace.rs:259:
+ /// Extracts one quoted string field from a flat record.
+ fn field(line: &str, name: &str) -> Option<String> {
+     let raw = raw_field(line, name)?;
+-    raw.strip_prefix('"').map(|rest| {
+-        unescape(rest.trim_end_matches('"'))
+-    })
++    raw.strip_prefix('"')
++        .map(|rest| unescape(rest.trim_end_matches('"')))
+ }
+ 
+ /// Extracts one field's raw text, quoted or not.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/support/window.rs:174:
+                         });
+                         continue;
+                     };
+-                    if bracket.open_ns < enclosing.open_ns || bracket.close_ns > enclosing.close_ns {
++                    if bracket.open_ns < enclosing.open_ns || bracket.close_ns > enclosing.close_ns
++                    {
+                         defects.push(Defect::NotContained {
+                             id: bracket.id,
+                             parent,
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:146:
+ 
+     /// Every scalar, in name order.
+     pub fn scalars(&self) -> impl Iterator<Item = (&str, u64)> + '_ {
+-        self.scalars.iter().map(|(name, value)| (name.as_str(), *value))
++        self.scalars
++            .iter()
++            .map(|(name, value)| (name.as_str(), *value))
+     }
+ 
+     /// Whether nothing is declared.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:214:
+                 continue;
+             };
+             let canonical = object.canonical();
+-            pack.write_all(canonical).map_err(|error| error.to_string())?;
++            pack.write_all(canonical)
++                .map_err(|error| error.to_string())?;
+             let length = canonical.len() as u64;
+             index.push_str(&format!(
+                 "object\t{id}\t{}\t{offset}\t{length}\t{}\t{}\n",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:246:
+                 ids.join(","),
+             ));
+         }
+-        std::fs::write(directory.join("members.tsv"), members).map_err(|error| error.to_string())?;
++        std::fs::write(directory.join("members.tsv"), members)
++            .map_err(|error| error.to_string())?;
+ 
+         let mut values = String::from(VALUES_FORMAT);
+         values.push('\n');
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:309:
+             let id: ObjectId = id.parse().map_err(|_| format!("object id: {id}"))?;
+             let code: u8 = role.parse().map_err(|_| format!("object role: {role}"))?;
+             let role = ObjectRole::from_code(code).map_err(|error| format!("{error:?}"))?;
+-            let offset: u64 = offset.parse().map_err(|_| format!("object offset: {offset}"))?;
+-            let length: usize = length.parse().map_err(|_| format!("object length: {length}"))?;
++            let offset: u64 = offset
++                .parse()
++                .map_err(|_| format!("object offset: {offset}"))?;
++            let length: usize = length
++                .parse()
++                .map_err(|_| format!("object length: {length}"))?;
+             let mut canonical = vec![0_u8; length];
+             pack.read_exact(&mut canonical)
+                 .map_err(|error| format!("{} at {offset}: {error}", pack_path.display()))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:338:
+             let ["member", index, root, len, digest, ids] = fields.as_slice() else {
+                 return Err(format!("members.tsv line: {line:?}"));
+             };
+-            let index: usize = index.parse().map_err(|_| format!("member index: {index}"))?;
++            let index: usize = index
++                .parse()
++                .map_err(|_| format!("member index: {index}"))?;
+             let root: ObjectId = root.parse().map_err(|_| format!("member root: {root}"))?;
+             let expectation = if *len == "-" && *digest == "-" {
+                 None
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:345:
+             } else {
+                 let logical_len: u64 = len.parse().map_err(|_| format!("member length: {len}"))?;
+-                let sha256 = super::digest::unhex(digest).ok_or(format!("member digest: {digest}"))?;
+-                Some(Expectation { logical_len, sha256 })
++                let sha256 =
++                    super::digest::unhex(digest).ok_or(format!("member digest: {digest}"))?;
++                Some(Expectation {
++                    logical_len,
++                    sha256,
++                })
+             };
+             let mut list = Vec::new();
+             for id in ids.split(',').filter(|id| !id.is_empty()) {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:352:
+                 let id: ObjectId = id.parse().map_err(|_| format!("member id: {id}"))?;
+                 if store.object(id).is_none() {
+-                    return Err(format!("member {index} names {id}, which the object set lacks"));
++                    return Err(format!(
++                        "member {index} names {id}, which the object set lacks"
++                    ));
+                 }
+                 list.push(id);
+             }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:385:
+             let fields: Vec<&str> = line.split('\t').collect();
+             match fields.as_slice() {
+                 ["scalar", name, value] => {
+-                    let value: u64 = value.parse().map_err(|_| format!("scalar {name}: {value}"))?;
++                    let value: u64 = value
++                        .parse()
++                        .map_err(|_| format!("scalar {name}: {value}"))?;
+                     values.set_scalar(name, value);
+                 }
+                 ["identity", name, value] => {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:392:
+-                    let value: ObjectId = value.parse().map_err(|_| format!("identity {name}: {value}"))?;
++                    let value: ObjectId = value
++                        .parse()
++                        .map_err(|_| format!("identity {name}: {value}"))?;
+                     values.set_identity(name, value);
+                 }
+                 ["expectation", name, len, digest] => {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:396:
+-                    let logical_len: u64 = len.parse().map_err(|_| format!("expectation {name}: {len}"))?;
+-                    let sha256 =
+-                        super::digest::unhex(digest).ok_or(format!("expectation {name}: {digest}"))?;
+-                    values.set_expectation(name, Expectation { logical_len, sha256 });
++                    let logical_len: u64 = len
++                        .parse()
++                        .map_err(|_| format!("expectation {name}: {len}"))?;
++                    let sha256 = super::digest::unhex(digest)
++                        .ok_or(format!("expectation {name}: {digest}"))?;
++                    values.set_expectation(
++                        name,
++                        Expectation {
++                            logical_len,
++                            sha256,
++                        },
++                    );
+                 }
+                 other => return Err(format!("values.tsv line: {other:?}")),
+             }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:436:
+     if ids.is_empty() {
+         return "-".to_string();
+     }
+-    ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",")
++    ids.iter()
++        .map(|id| id.to_string())
++        .collect::<Vec<_>>()
++        .join(",")
+ }
+ 
+ /// Renders an advisory predecessor list as `<id>:<provenance code>` pairs.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:480:
+     }
+     field
+         .split(',')
+-        .map(|id| id.parse::<ObjectId>().map_err(|_| format!("reference id: {id}")))
++        .map(|id| {
++            id.parse::<ObjectId>()
++                .map_err(|_| format!("reference id: {id}"))
++        })
+         .collect()
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/artifact.rs:495:
+             .split_once(':')
+             .ok_or_else(|| format!("predecessor entry: {entry}"))?;
+         let id: ObjectId = id.parse().map_err(|_| format!("predecessor id: {id}"))?;
+-        let code: u8 = code.parse().map_err(|_| format!("predecessor code: {code}"))?;
++        let code: u8 = code
++            .parse()
++            .map_err(|_| format!("predecessor code: {code}"))?;
+         list.push(id, provenance_from_code(code)?)
+             .map_err(|error| format!("{error:?}"))?;
+     }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/gitoid.rs:193:
+     /// The three vectors FIPS 180-1 publishes, plus the empty string.
+     #[test]
+     fn sha1_matches_the_published_vectors() {
+-        assert_eq!(hex_oid(&sha1(b"")), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
++        assert_eq!(
++            hex_oid(&sha1(b"")),
++            "da39a3ee5e6b4b0d3255bfef95601890afd80709"
++        );
+         assert_eq!(
+             hex_oid(&sha1(b"abc")),
+             "a9993e364706816aba3e25717850c26c9cd0d89d"
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:71:
+ use super::json::{self, Value};
+ 
+ /// SHA-256 of `checkpoint-manifest.json`. The corpus's root identity.
+-pub const MANIFEST_SHA256: &str = "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271";
++pub const MANIFEST_SHA256: &str =
++    "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271";
+ 
+ /// The pinned source tip the manifest must name.
+ pub const SOURCE_TIP: &str = "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed";
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:319:
+             ),
+             Self::SelectionShape(reason) => write!(formatter, "selection shape: {reason}"),
+             Self::TreeManifest { path, line, reason } => {
+-                write!(formatter, "tree manifest {}:{line}: {reason}", path.display())
++                write!(
++                    formatter,
++                    "tree manifest {}:{line}: {reason}",
++                    path.display()
++                )
+             }
+             Self::OracleMissing(path) => write!(formatter, "oracle missing: {}", path.display()),
+             Self::BlobIdentity { oid, path, reason } => write!(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:450:
+ 
+     /// How many paths of each kind.
+     pub fn count(&self, kind: Change) -> usize {
+-        self.changed.iter().filter(|entry| entry.kind == kind).count()
++        self.changed
++            .iter()
++            .filter(|entry| entry.kind == kind)
++            .count()
+     }
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:501:
+ 
+     /// How many entries are directories.
+     pub fn directories(&self) -> usize {
+-        self.entries.values().filter(|entry| entry.is_directory()).count()
++        self.entries
++            .values()
++            .filter(|entry| entry.is_directory())
++            .count()
+     }
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:606:
+         let mut states = Vec::with_capacity(selection.len());
+         for (position, &full157_index) in selection.iter().enumerate() {
+             let checkpoint = &checkpoints[full157_index as usize - 1];
+-            let oracle_path = root.join("oracles").join(format!("{}.json", checkpoint.sha));
++            let oracle_path = root
++                .join("oracles")
++                .join(format!("{}.json", checkpoint.sha));
+             if !oracle_path.is_file() {
+                 return Err(HistoryError::OracleMissing(oracle_path));
+             }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:664:
+             manifest_files: self
+                 .states
+                 .iter()
+-                .map(|state| {
+-                    u64::from(
+-                        self.checkpoints[state.full157_index as usize - 1].paths,
+-                    )
+-                })
++                .map(|state| u64::from(self.checkpoints[state.full157_index as usize - 1].paths))
+                 .sum(),
+         }
+     }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:801:
+     /// transition spans, and every one served is re-hashed against both its oid and
+     /// its recorded digest.
+     pub fn transition(&mut self, position: usize) -> Result<Transition, HistoryError> {
+-        let state = self
+-            .states
+-            .get(position)
+-            .cloned()
+-            .ok_or_else(|| HistoryError::SelectionShape(format!("no state at position {position}")))?;
++        let state = self.states.get(position).cloned().ok_or_else(|| {
++            HistoryError::SelectionShape(format!("no state at position {position}"))
++        })?;
+ 
+         let manifest_path = self
+             .root
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:878:
+         let mut receipts: HashMap<u16, HashMap<String, String>> = HashMap::new();
+         let mut blobs = BlobMap::new();
+         for oid in &wanted {
+-            let (checkpoint_index, path) = located.get(oid).ok_or_else(|| {
+-                HistoryError::TreeManifest {
++            let (checkpoint_index, path) =
++                located.get(oid).ok_or_else(|| HistoryError::TreeManifest {
+                     path: manifest_path.clone(),
+                     line: 0,
+                     reason: format!(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:889:
+                         from,
+                         to
+                     ),
+-                }
+-            })?;
++                })?;
+             let bytes = read(path)?;
+             if !receipts.contains_key(checkpoint_index) {
+                 let digests = self.read_receipt(*checkpoint_index)?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:959:
+     /// assumed.
+     fn read_receipt(&self, checkpoint_index: u16) -> Result<HashMap<String, String>, HistoryError> {
+         let sha = &self.checkpoints[checkpoint_index as usize - 1].sha;
+-        let receipt_path = self
+-            .root
+-            .join("inputs")
+-            .join(format!("{sha}.receipt.json"));
++        let receipt_path = self.root.join("inputs").join(format!("{sha}.receipt.json"));
+         let bytes = read(&receipt_path)?;
+-        let text = std::str::from_utf8(&bytes)
+-            .map_err(|error| HistoryError::document(&receipt_path, format!("not UTF-8: {error}")))?;
++        let text = std::str::from_utf8(&bytes).map_err(|error| {
++            HistoryError::document(&receipt_path, format!("not UTF-8: {error}"))
++        })?;
+         let document = json::parse(text)
+             .map_err(|error| HistoryError::document(&receipt_path, error.to_string()))?;
+         let mut digests: HashMap<String, String> = HashMap::new();
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:1038:
+         Ok(field(name)?
+             .as_str()
+             .ok_or_else(|| {
+-                HistoryError::document(path, format!("checkpoint {index}: `{name}` is not a string"))
++                HistoryError::document(
++                    path,
++                    format!("checkpoint {index}: `{name}` is not a string"),
++                )
+             })?
+             .to_string())
+     };
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:1045:
+-    let logical_bytes = field("logical_bytes")?
+-        .as_i64()
+-        .ok_or_else(|| {
+-            HistoryError::document(path, format!("checkpoint {index}: `logical_bytes`"))
+-        })?;
++    let logical_bytes = field("logical_bytes")?.as_i64().ok_or_else(|| {
++        HistoryError::document(path, format!("checkpoint {index}: `logical_bytes`"))
++    })?;
+     let paths = field("files")?
+         .as_i64()
+         .ok_or_else(|| HistoryError::document(path, format!("checkpoint {index}: `files`")))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:1126:
+         .map_err(|error| HistoryError::document(path, format!("not UTF-8: {error}")))?;
+     let count = json::count_object_members(text)
+         .map_err(|error| HistoryError::document(path, error.to_string()))?;
+-    u32::try_from(count)
+-        .map_err(|_| HistoryError::document(path, "more than u32::MAX path-states"))
++    u32::try_from(count).map_err(|_| HistoryError::document(path, "more than u32::MAX path-states"))
+ }
+ 
+ /// Parses `oracles/<sha>.json`: `hex path -> [mode octal, size, sha256 | "-"]`.
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:1134:
+ fn parse_oracle(path: &Path, bytes: &[u8]) -> Result<Oracle, HistoryError> {
+     let text = std::str::from_utf8(bytes)
+         .map_err(|error| HistoryError::document(path, format!("not UTF-8: {error}")))?;
+-    let document = json::parse(text)
+-        .map_err(|error| HistoryError::document(path, error.to_string()))?;
++    let document =
++        json::parse(text).map_err(|error| HistoryError::document(path, error.to_string()))?;
+     let entries = document
+         .as_object()
+         .ok_or_else(|| HistoryError::document(path, "the oracle is not an object"))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:1430:
+         let oid = hex_oid(&blob_oid(b"hello\n"));
+         std::fs::write(
+             &path,
+-            format!("100644\t{oid}\t6\t{}\n120000\t{oid}\t6\t{}\n\n", "612f62", "612f63"),
++            format!(
++                "100644\t{oid}\t6\t{}\n120000\t{oid}\t6\t{}\n\n",
++                "612f62", "612f63"
++            ),
+         )
+         .expect("write");
+         let tree = parse_tree(&path).expect("parses");
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/history.rs:1455:
+         for (text, expected_line) in [
+             ("100644\tnot-an-oid\t1\t61\n".to_string(), 1),
+             ("100644\tdeadbeef\t1\t61\n".to_string(), 1),
+-            ("9z644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\t1\t61\n".to_string(), 1),
+-            ("100644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\t1\t6\n".to_string(), 1),
+-            ("100644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\tx\t61\n".to_string(), 1),
++            (
++                "9z644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\t1\t61\n".to_string(),
++                1,
++            ),
++            (
++                "100644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\t1\t6\n".to_string(),
++                1,
++            ),
++            (
++                "100644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\tx\t61\n".to_string(),
++                1,
++            ),
+             // A well-formed first line, so the fault is on the second.
+-            (format!("{good}100644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\t1\n"), 2),
++            (
++                format!("{good}100644\tdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\t1\n"),
++                2,
++            ),
+         ] {
+             std::fs::write(&path, &text).expect("write");
+             match parse_tree(&path) {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/json.rs:522:
+                 } else {
+                     first
+                 };
+-                let character = char::from_u32(code)
+-                    .ok_or_else(|| self.fail("escape is not a character"))?;
++                let character =
++                    char::from_u32(code).ok_or_else(|| self.fail("escape is not a character"))?;
+                 push(character);
+             }
+             other => return Err(self.fail(format!("invalid escape {other:#04x}"))),
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/json.rs:566:
+             _ => return Err(self.fail("expected a digit")),
+         }
+         if matches!(self.peek(), Some(b'.' | b'e' | b'E')) {
+-            return Err(self.fail(
+-                "this reader accepts integers only; a fraction or exponent is refused",
+-            ));
++            return Err(
++                self.fail("this reader accepts integers only; a fraction or exponent is refused")
++            );
+         }
+         let text = std::str::from_utf8(&self.bytes[start..self.at])
+             .map_err(|_| self.fail("invalid UTF-8 in a number"))?;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/workload/oracle.rs:13:
+ 
+ use std::io::Write;
+ 
+-use layerfs_content::{
+-    read_all, read_range, AuthenticatedObjects, ContentResult, ObjectId,
+-};
++use layerfs_content::{read_all, read_range, AuthenticatedObjects, ContentResult, ObjectId};
+ use layerfs_telemetry::timer::TimingScope;
+ 
+ use super::digest::{hex, Sha256};
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:11:
+ use fs_bench_storage_content::ops::{self, Hold, HoldPoint, OpContext, Phase};
+ use fs_bench_storage_content::registry::{self, Admission};
+ use fs_bench_storage_content::support::phases;
++use fs_bench_storage_content::support::trace::{Kind, TraceWriter};
+ use fs_bench_storage_content::workload::expected::Expected;
+ use fs_bench_storage_content::workload::history::{self, Corpus, Row as HistoryRow};
+-use fs_bench_storage_content::support::trace::{Kind, TraceWriter};
+ 
+ /// Parsed command line. Unknown arguments are refused, never ignored: a typo that
+ /// silently selected the wrong lane is exactly the class of defect this harness
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:70:
+             "--self-check" => parsed.self_check = true,
+             "--corpus" => {
+                 index += 1;
+-                parsed.corpus =
+-                    Some(PathBuf::from(args.get(index).ok_or("--corpus expects a path")?));
++                parsed.corpus = Some(PathBuf::from(
++                    args.get(index).ok_or("--corpus expects a path")?,
++                ));
+             }
+             "--history-corpus" => {
+                 index += 1;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:115:
+             "--emit-registry-tsv" => {
+                 index += 1;
+                 parsed.emit_registry_tsv = Some(PathBuf::from(
+-                    args.get(index).ok_or("--emit-registry-tsv expects a path")?,
++                    args.get(index)
++                        .ok_or("--emit-registry-tsv expects a path")?,
+                 ));
+             }
+             "--case" => {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:128:
+             }
+             "--out" => {
+                 index += 1;
+-                parsed.out = Some(PathBuf::from(args.get(index).ok_or("--out expects a path")?));
++                parsed.out = Some(PathBuf::from(
++                    args.get(index).ok_or("--out expects a path")?,
++                ));
+             }
+             "--store" => {
+                 index += 1;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:135:
+-                parsed.store = Some(PathBuf::from(args.get(index).ok_or("--store expects a path")?));
++                parsed.store = Some(PathBuf::from(
++                    args.get(index).ok_or("--store expects a path")?,
++                ));
+             }
+             "--objects" => {
+                 index += 1;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:139:
+-                parsed.objects =
+-                    Some(PathBuf::from(args.get(index).ok_or("--objects expects a path")?));
++                parsed.objects = Some(PathBuf::from(
++                    args.get(index).ok_or("--objects expects a path")?,
++                ));
+             }
+             "--emit-input" => {
+                 index += 1;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:144:
+-                parsed.prepared_input =
+-                    Some(PathBuf::from(args.get(index).ok_or("--emit-input expects a path")?));
++                parsed.prepared_input = Some(PathBuf::from(
++                    args.get(index).ok_or("--emit-input expects a path")?,
++                ));
+                 parsed.load_input = false;
+             }
+             "--load-input" => {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:149:
+                 index += 1;
+-                parsed.prepared_input =
+-                    Some(PathBuf::from(args.get(index).ok_or("--load-input expects a path")?));
++                parsed.prepared_input = Some(PathBuf::from(
++                    args.get(index).ok_or("--load-input expects a path")?,
++                ));
+                 parsed.load_input = true;
+             }
+             "--hold-save" => {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:181:
+                     .as_ref()
+                     .map(|hold| hold.point)
+                     .unwrap_or(HoldPoint::Begin);
+-                parsed.hold = Some(Hold { marker, nanos, point });
++                parsed.hold = Some(Hold {
++                    marker,
++                    nanos,
++                    point,
++                });
+             }
+             "--hold-at" => {
+                 index += 1;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:196:
+                     .map(|hold| hold.marker.clone())
+                     .ok_or("--hold-at requires --hold-save")?;
+                 let nanos = parsed.hold.as_ref().map(|hold| hold.nanos).unwrap_or(0);
+-                parsed.hold = Some(Hold { marker, nanos, point });
++                parsed.hold = Some(Hold {
++                    marker,
++                    nanos,
++                    point,
++                });
+             }
+             "--verify-sample" => {
+                 index += 1;
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:214:
+                     Some("perf") => Phase::Perf,
+                     Some("verify") => Phase::Verify,
+                     other => {
+-                        return Err(format!("--phase expects prepare|perf|verify, got {other:?}"))
++                        return Err(format!(
++                            "--phase expects prepare|perf|verify, got {other:?}"
++                        ))
+                     }
+                 };
+             }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:371:
+     for case in selected {
+         println!(
+             "{{\"id\":\"{}\",\"family\":\"{}\",\"tier\":{},\"smoke\":{}}}",
+-            case.id,
+-            case.family,
+-            case.tier,
+-            case.smoke
++            case.id, case.family, case.tier, case.smoke
+         );
+     }
+ }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:387:
+     println!("cardinality sum    : {}", counts.iter().sum::<usize>());
+     println!("registered rows    : {}", registry::cases().len());
+     println!("admission rows     : {}", registry::admission_cases().len());
+-    println!("diagnostic rows    : {}", registry::cases().len() - registry::admission_cases().len());
++    println!(
++        "diagnostic rows    : {}",
++        registry::cases().len() - registry::admission_cases().len()
++    );
+     println!("smoke lane         : {}", registry::smoke_cases().len());
+     // Outside the 217 and printed as its own line, so a reader cannot fold it in.
+     println!(
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:397:
+     if let Ok(expected) = Expected::load() {
+         let with_digest = registry::admission_cases()
+             .iter()
+-            .filter(|case| expected.digest(case.id, "file_root").is_some()
+-                || expected.digest(case.id, "filesystem_root").is_some()
+-                || expected.digest(case.id, "members").is_some()
+-                || expected.digest(case.id, "additions").is_some()
+-                || expected.digest(case.id, "leaves").is_some()
+-                || expected.digest(case.id, "supplied").is_some())
++            .filter(|case| {
++                expected.digest(case.id, "file_root").is_some()
++                    || expected.digest(case.id, "filesystem_root").is_some()
++                    || expected.digest(case.id, "members").is_some()
++                    || expected.digest(case.id, "additions").is_some()
++                    || expected.digest(case.id, "leaves").is_some()
++                    || expected.digest(case.id, "supplied").is_some()
++            })
+             .count();
+         println!(
+             "pinned constants   : {} row(s); O1 identity pinned for {with_digest} of {} admission case(s)",
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:437:
+     let history = registry::history_cases()
+         .iter()
+         .find(|case| case.id == identifier);
+-    let Some(case) = history.or_else(|| registry::cases().iter().find(|case| case.id == identifier))
++    let Some(case) =
++        history.or_else(|| registry::cases().iter().find(|case| case.id == identifier))
+     else {
+         eprintln!("fs-bench-storage-content: no registered case {identifier:?}");
+         return ExitCode::from(2);
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:548:
+             file.write_all(phases::render(invocation, &snapshot).as_bytes())
+         })
+     {
+-        eprintln!("fs-bench-storage-content: {}: {error}", phases_path.display());
++        eprintln!(
++            "fs-bench-storage-content: {}: {error}",
++            phases_path.display()
++        );
+         return ExitCode::from(2);
+     }
+     let outcome = match outcome {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:634:
+     let counters: Vec<(String, i128)> = records
+         .iter()
+         .filter(|record| record.kind == "counter" && record.numeric)
+-        .filter_map(|record| record.value.parse::<i128>().ok().map(|value| (record.key.clone(), value)))
++        .filter_map(|record| {
++            record
++                .value
++                .parse::<i128>()
++                .ok()
++                .map(|value| (record.key.clone(), value))
++        })
+         .collect();
+     let mut gates = expected.counter_gates(case_id, &counters);
+     for record in records.iter().filter(|record| record.kind == "oracle") {
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/src/main.rs:641:
+         let Some(name) = record.key.strip_prefix("identity.") else {
+             continue;
+         };
+-        gates.push(expected.digest_gate(
+-            case_id,
+-            name,
+-            "g1.o1-pinned-identity",
+-            &record.value,
+-        ));
++        gates.push(expected.digest_gate(case_id, name, "g1.o1-pinned-identity", &record.value));
+     }
+     Ok(gates)
+ }
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/tests/registry_golden.rs:32:
+     let mut sorted = ids.clone();
+     sorted.sort_unstable();
+     sorted.dedup();
+-    assert_eq!(sorted.len(), ids.len(), "duplicate case ID in the golden table");
++    assert_eq!(
++        sorted.len(),
++        ids.len(),
++        "duplicate case ID in the golden table"
++    );
+ }
+ 
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/tests/walk_ceiling.rs:219:
+             let mut backing = scratch(&format!("fixture{index}"));
+             let mut objects = FilesystemObjects::new(&reader, &mut shared);
+             let result = match base {
+-                None => build_filesystem(&mut objects, &input, Some(&mut backing as &mut dyn OrderingBacking)),
+-                Some(_) => update_filesystem(&mut objects, &input, Some(&mut backing as &mut dyn OrderingBacking)),
++                None => build_filesystem(
++                    &mut objects,
++                    &input,
++                    Some(&mut backing as &mut dyn OrderingBacking),
++                ),
++                Some(_) => update_filesystem(
++                    &mut objects,
++                    &input,
++                    Some(&mut backing as &mut dyn OrderingBacking),
++                ),
+             }
+             .unwrap_or_else(|error| panic!("fixture batch {index} failed: {error:?}"));
+             result.root
+Diff in /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/tests/walk_ceiling.rs:248:
+         let mut backing = scratch(&format!("measured{index}"));
+         let mut objects = FilesystemObjects::new(&reader, &mut consumer);
+         let result = match base {
+-            None => build_filesystem(&mut objects, &input, Some(&mut backing as &mut dyn OrderingBacking)),
+-            Some(_) => update_filesystem(&mut objects, &input, Some(&mut backing as &mut dyn OrderingBacking)),
++            None => build_filesystem(
++                &mut objects,
++                &input,
++                Some(&mut backing as &mut dyn OrderingBacking),
++            ),
++            Some(_) => update_filesystem(
++                &mut objects,
++                &input,
++                Some(&mut backing as &mut dyn OrderingBacking),
++            ),
+         }
+         .unwrap_or_else(|error| panic!("measured batch {index} failed: {error:?}"));
+         measured_roots.push(result.root);

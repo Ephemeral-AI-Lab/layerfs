@@ -1,0 +1,8 @@
+{
+  "candidate_compilation_inputs_match": true,
+  "tests_passed": {
+    "core-tests": 494,
+    "harness-tests": 117
+  },
+  "harness_clippy_and_fmt": "NOT_RUN this round; unchanged harness hashes match prior retained failures; no claim of pass"
+}

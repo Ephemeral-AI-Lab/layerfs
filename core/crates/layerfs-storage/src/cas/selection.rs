@@ -111,10 +111,12 @@ impl MutationOwner {
             candidates: &mut candidates,
             depths: &mut self.depths,
             packs: &mut self.pack_cache,
+            pool: &mut self.pool_reader,
             decode: &mut self.decompression,
             chain: &mut self.chain,
             chain_total: &mut self.chain_total,
             counters: &mut self.delta,
+            profile: &mut self.profile,
         };
         select(
             &mut input,

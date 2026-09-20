@@ -15,7 +15,8 @@ use rusqlite::Connection;
 use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
-use crate::encoding::delta::read::{ChainCounters, Resolver};
+use crate::encoding::delta::read::{BodyCaches, ChainCounters, Resolver};
+use crate::encoding::pool::PoolReader;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::StorageCapacities;
 use crate::sqlite::{connection, lookup, schema};
@@ -43,9 +44,18 @@ pub struct ReadCounters {
     /// and from `objects`: the defect this counter exists to price is one group
     /// decompression per **record** inside a pack that is read once.
     pub group_decodes: u64,
+    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+    pub pooled: crate::encoding::pool::PoolReadCounters,
 }
 
 /// Reads every requested object in demand order under one ceiling.
+///
+/// `pool` is the pooled metadata reader this read reconstructs pooled leaves
+/// through. It is the **caller's**, so its lifetime is the caller's reuse scope:
+/// the ordinary-lane pack cache below is one wave's, and a pooled reader built
+/// inside this function would be one leaf's. Both bounds are unchanged
+/// ([`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`],
+/// [`crate::policy::POOLED_VALUE_CACHE_BYTES`]).
 pub fn read_objects(
     connection: &Connection,
     ids: &[ObjectId],
@@ -53,6 +63,7 @@ pub fn read_objects(
     capacities: &StorageCapacities,
     workspace: &mut DecompressionWorkspace,
     groups: &mut crate::encoding::GroupCache,
+    pool: &mut PoolReader,
 ) -> StorageResult<(Vec<Vec<u8>>, ReadCounters)> {
     // Locators are collected above the ceiling on purpose: a record that exists
     // but is not yet published must be reported as a visibility refusal, never
@@ -85,11 +96,21 @@ pub fn read_objects(
             .ok_or(StorageError::ObjectMissing(*id))?;
         let ((canonical, verified), packs_fetched) = {
             let mut resolver = Resolver::new(
-                connection, ceiling, capacities, &mut packs, groups, workspace, &mut chain,
+                connection,
+                ceiling,
+                capacities,
+                BodyCaches {
+                    packs: &mut packs,
+                    pool: &mut *pool,
+                },
+                groups,
+                workspace,
+                &mut chain,
             );
             let resolved = resolver.resolve_at(location)?;
             (resolved, resolver.packs_read())
         };
+        totals.pooled.accumulate(chain.pooled);
         totals.objects = totals.objects.saturating_add(chain.objects);
         totals.edges = totals.edges.saturating_add(chain.edges);
         totals.encoded_bytes = totals.encoded_bytes.saturating_add(chain.encoded_bytes);
@@ -110,6 +131,7 @@ pub fn read_objects(
     counters.max_depth = totals.max_depth;
     counters.canonical_bytes = totals.canonical_bytes;
     counters.group_decodes = totals.group_decodes;
+    counters.pooled = totals.pooled;
     Ok((values, counters))
 }
 
@@ -157,6 +179,29 @@ pub struct ReadSession {
     /// resolver checks the location's pack against its own ceiling *before* the
     /// cache is consulted.
     groups: crate::encoding::GroupCache,
+    /// The operation's pooled metadata reader: pack bodies and decoded value groups.
+    ///
+    /// It belongs to the **operation**, exactly as the decoded-group cache above
+    /// does and for the same reason. The pooled reader used to be built once per
+    /// resolved inode leaf, so a pack a later leaf of the same operation demanded
+    /// was copied out of SQLite again - measured as 176x the whole pack space over
+    /// one stride10 run. Nothing about its bounds changes here: the pack cache is
+    /// still [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and the decoded value
+    /// cache still [`crate::policy::POOLED_VALUE_CACHE_BYTES`], both released
+    /// wholesale when the next body would cross them.
+    ///
+    /// **Why this lifetime is sound.** A pack body at or below the ceiling a wave
+    /// was authorized under is immutable - a save creates its packs above the
+    /// baseline publication watermark and publishes them only by advancing that
+    /// watermark - so a retained body cannot go stale for a reader that never
+    /// writes. The ceiling itself is *not* pooled: it is re-read for every wave,
+    /// and every pooled consult checks the location's pack against the current
+    /// ceiling before the cache is consulted, so a body cached under an older,
+    /// higher ceiling can never answer a location this wave must not see. A
+    /// **writing** owner keeps its own reader instead and releases its pack cache
+    /// on every pack write (`cas::placement::MutationOwner::write_pack`), because
+    /// placing a group into a pack rewrites that pack's BLOB.
+    pool: PoolReader,
 }
 
 impl ReadSession {
@@ -167,6 +212,7 @@ impl ReadSession {
             connection: connection::open(path, false)?,
             workspace: DecompressionWorkspace::new()?,
             groups: crate::encoding::GroupCache::new(),
+            pool: PoolReader::new(),
         })
     }
 
@@ -185,6 +231,7 @@ impl ReadSession {
             capacities,
             &mut self.workspace,
             &mut self.groups,
+            &mut self.pool,
         )
     }
 }

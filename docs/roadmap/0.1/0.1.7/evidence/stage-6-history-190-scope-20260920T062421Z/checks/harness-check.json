@@ -1,0 +1,21 @@
+{
+  "schema": "h190-scope-lock-v1",
+  "label": "harness-check",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "check",
+    "--manifest-path",
+    "core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked"
+  ],
+  "utc": "2026-09-20T07:06:57Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T07:06:57Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 3487592167
+}

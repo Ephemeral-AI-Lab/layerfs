@@ -1,0 +1,25 @@
+{
+  "schema": "h205-save-split-lock-v1",
+  "label": "v2-clippy",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "utc": "2026-09-20T08:40:39Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T08:40:39Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 2128461458
+}

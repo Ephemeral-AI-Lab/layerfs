@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-group-20260920T032843Z/compare_stores.py"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "exit_code": 0,
+  "wall_ns": 1128950000,
+  "cargo_target_dir": null,
+  "dependency_reuse": "existing incremental pinned-toolchain Cargo target"
+}

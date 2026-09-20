@@ -1,0 +1,26 @@
+=== history-stride10
+  baseline  wall  38.871 s | preparation  19.252 s | OPERATION  19.500 s | verification  0.018 s | declared  38.770 s
+            child invocation 38.800 s, unaccounted inside the child 29.7 ms, outside the child's clock 71.9 ms
+            reconciliation PASS | budget ordinary NOT_RUN / declared exception NOT_RUN
+            corpus 19.050 s, resident before first read 0 of 62,319 pages (0.00%)
+  candidate wall  35.792 s | preparation  17.102 s | OPERATION  16.746 s | verification  0.032 s | declared  33.881 s
+            child invocation 33.909 s, unaccounted inside the child 28.6 ms, outside the child's clock 1882.7 ms
+            reconciliation INCOMPLETE | budget ordinary NOT_RUN / declared exception NOT_RUN
+            corpus 16.919 s, resident before first read 5,141 of 62,319 pages (8.25%)
+            verification baseline   4.681 s, 1,083 of 101,477 path-states sampled, mismatches 0, missing 0, unexpected 0, 893 files read
+            verification candidate  2.911 s, 1,083 of 101,477 path-states sampled, mismatches 0, missing 0, unexpected 0, 893 files read
+  delta   wall -3.079 s | preparation -2.150 s | OPERATION -2.754 s
+
+=== history-stride3
+  baseline  wall  74.980 s | preparation  26.056 s | OPERATION  48.813 s | verification  0.026 s | declared  74.894 s
+            child invocation 74.940 s, unaccounted inside the child 46.1 ms, outside the child's clock 39.5 ms
+            reconciliation PASS | budget ordinary NOT_RUN / declared exception NOT_RUN
+            corpus 25.526 s, resident before first read 4,298 of 107,780 pages (3.99%)
+  candidate wall  62.355 s | preparation  25.172 s | OPERATION  37.066 s | verification  0.030 s | declared  62.268 s
+            child invocation 62.318 s, unaccounted inside the child 50.1 ms, outside the child's clock 36.3 ms
+            reconciliation PASS | budget ordinary NOT_RUN / declared exception NOT_RUN
+            corpus 24.618 s, resident before first read 7,022 of 107,780 pages (6.52%)
+            verification baseline  16.293 s, 3,377 of 306,861 path-states sampled, mismatches 0, missing 0, unexpected 0, 2,756 files read
+            verification candidate  9.712 s, 3,377 of 306,861 path-states sampled, mismatches 0, missing 0, unexpected 0, 2,756 files read
+  delta   wall -12.625 s | preparation -0.883 s | OPERATION -11.747 s
+

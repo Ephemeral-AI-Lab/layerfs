@@ -1,0 +1,3 @@
+Owner ruling recorded: **small allocated-storage overages are acceptable when they bring good time reduction**. Together with the preceding one-second ruling, this allows a worthwhile one-second optimization to be retained despite a small allocation miss, with both measurements disclosed. It is not an unlimited storage waiver or a waiver of cache/O3 qualification.
+
+The current zero-count filter remains rejected for its **0.156679583-second operation difference**, not its allocation overage. Historical readings stay unchanged: +24,576 / +303,104 B against the storage target. No earlier receipt is relabelled. Future candidate decisions will apply this conditional tradeoff.

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "exit_code": 0,
+  "wall_ns": 3000333208,
+  "cargo_target_dir": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target",
+  "dependency_reuse": "existing incremental pinned-toolchain Cargo target"
+}

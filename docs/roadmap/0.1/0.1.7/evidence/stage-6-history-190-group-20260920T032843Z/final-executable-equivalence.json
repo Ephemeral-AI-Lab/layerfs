@@ -1,0 +1,7 @@
+{
+  "measured_codec_sha256": "ed32e4ff1aeab6c1f27e1a942e3ecca2bc5e7b53b44e3c4452cd9636a4898f64",
+  "final_codec_sha256": "0625a4e9e481828b58afb3bdf7805ef93debfdfa407cd6065f7fe19f2428c5ef",
+  "nonblank_non_line_comment_lines_equal": true,
+  "method": "Exact list comparison of all nonblank lines except complete // doc/comment lines; accompanying diff manually restricted to comments. Measured source patch and identity remain unchanged.",
+  "benchmark_identity": "timings belong to archived measured candidate; final source has comments-only differences, not identical full source SHA"
+}

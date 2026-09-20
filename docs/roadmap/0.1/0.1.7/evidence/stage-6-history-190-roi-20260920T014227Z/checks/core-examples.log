@@ -1,0 +1,74 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running unittests examples/edit_memory_probe.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/edit_memory_probe-c698750a4ac9e305)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/edit_timing_c1.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/edit_timing_c1-61b36f1d83bc0e9b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/filesystem_primitives_candidate.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/filesystem_primitives_candidate-81f3feb222342cbf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/filesystem_timing_c1.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/filesystem_timing_c1-ad6f5b6e36a5927e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/fingerprint_collision_search.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/fingerprint_collision_search-3545b85346e627d7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/measure_components.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/measure_components-f1a2dd6da7e30426)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/measure_edits.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/measure_edits-ae1aa251807baa9f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/measure_filesystem.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/measure_filesystem-ef2ac8f9a9303184)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/measure_pooled.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/measure_pooled-1e67c237b684d2fd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/memory_ledger.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/memory_ledger-ebc549b8054b36f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/timer_composition.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/timer_composition-499bbe15fb7aaeed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/timer_nested.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/examples/timer_nested-25acc373a4feac07)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,536 @@
+{
+  "runs": {
+    "baseline-history-stride10": {
+      "operation_ns": 47161768126,
+      "root_ns": 64568956917,
+      "state_count": 17,
+      "root_minus_children_ns": 17407188791,
+      "spans": {
+        "content": 1552031126,
+        "harness.predecessors": 72045042,
+        "store.create": 2967334,
+        "harness.input": 91208251,
+        "filesystem": 34686235752,
+        "storage.begin": 11056169,
+        "storage.accept_loop": 9395753126,
+        "harness.index": 109171001,
+        "storage.finish": 1183859628,
+        "state.residual": 57440697
+      },
+      "filesystem_spans": {
+        "validate": 3429981622,
+        "directories": 11506307751,
+        "references": 653623,
+        "inodes": 4470610374,
+        "cleanup": 11291,
+        "root.encode": 27998,
+        "filesystem.residual": 15278643093
+      },
+      "work": {
+        "changed_paths": 52417,
+        "changed_bytes": 377435167,
+        "inserted": 52032,
+        "objects": 7264,
+        "heap_peak_incremental_bytes": 870592837,
+        "filesystem.provider.read_waves": 110715,
+        "filesystem.provider.requested_objects": 117533,
+        "filesystem.provider.returned_objects": 117533,
+        "filesystem.provider.returned_canonical_bytes": 286247942,
+        "filesystem.provider.failed_waves": 0,
+        "filesystem.provider.read_elapsed_ns": 33559231582,
+        "content.predecessor_provider.read_waves": 143,
+        "content.predecessor_provider.requested_objects": 143,
+        "content.predecessor_provider.returned_objects": 143,
+        "content.predecessor_provider.returned_canonical_bytes": 1994570,
+        "content.predecessor_provider.failed_waves": 0,
+        "content.predecessor_provider.read_elapsed_ns": 29331372,
+        "save.commits": 1149,
+        "filesystem.provider.group_decodes": 513,
+        "filesystem.provider.connection_opens": 16,
+        "filesystem.validation.objects_read": 67826,
+        "filesystem.validation.read_waves": 47541,
+        "filesystem.validation.inode_demands": 67826,
+        "filesystem.validation.inode_pages_read": 49084,
+        "filesystem.validation.directory_pages_read": 0,
+        "filesystem.validation.entries_examined": 359,
+        "filesystem.references.rows_touched": 100649,
+        "filesystem.references.rows_spilled": 69632,
+        "filesystem.references.serials_scanned": 63642,
+        "filesystem.references.base_records_read": 45300,
+        "filesystem.references.base_waves": 1425,
+        "filesystem.references.runs_created": 27,
+        "filesystem.references.rows_read": 16061248,
+        "filesystem.references.rows_written": 133989,
+        "filesystem.directories.pages_read": 9298,
+        "filesystem.inodes.pages_read": 1645,
+        "input_ns": 91215832,
+        "build_ns": 34687771917,
+        "save_ns": 10708222167
+      },
+      "roots": {
+        "1": "FilesystemRootId(ObjectId(\"ff484f8d92f57413ee83e7201fb04c8512ffd7bed3083471713db4e8e17c70d3\"))",
+        "2": "FilesystemRootId(ObjectId(\"72f064ddbe6da11b338a115e2a258d92edf3a5c0864bd47c5dc2bd648e63931a\"))",
+        "3": "FilesystemRootId(ObjectId(\"8e6d4cf0b86079f10b83333e97da4ea293865073c74a13928f007c174a97b0e8\"))",
+        "4": "FilesystemRootId(ObjectId(\"21c6e06308aba3d67bbf2c6e4db2c712dd21e38f3efcc3869cc1cb4df80b05b2\"))",
+        "5": "FilesystemRootId(ObjectId(\"e7068fcff3be5d9a282df1d544c7e5f115540f890034aa0fe62b0a112db74884\"))",
+        "6": "FilesystemRootId(ObjectId(\"4969a796d0770e33f907e5855e5473e2401ed22726b015fec5f7fa54cf9cc3d6\"))",
+        "7": "FilesystemRootId(ObjectId(\"604840dde1420c025b9d5ed2371eefe093a5eeb346f10932ea6756c01c72a910\"))",
+        "8": "FilesystemRootId(ObjectId(\"bc2f2b9113ed2688944c04578ccfac4e4934f59dc50b19d495d9e7bc8e6a4734\"))",
+        "9": "FilesystemRootId(ObjectId(\"f523a1bb9ec971e4ffe4b23c87b372314f032ab8919f5f800942e29f9607a9dc\"))",
+        "10": "FilesystemRootId(ObjectId(\"47df3547b1ca28c92b3a37c42eb349f88368e012b5cfcedfaa6b9f2add1248d6\"))",
+        "11": "FilesystemRootId(ObjectId(\"456f996cc885c96046f3ac0908602e354c5ade03fd2bc1315921440bc30224f9\"))",
+        "12": "FilesystemRootId(ObjectId(\"ad8124295a04fa0e5dae91bb96754ab1d2ecff549cdb8b48411e74f6d2aff8e3\"))",
+        "13": "FilesystemRootId(ObjectId(\"a7c2492b9eacab5a77ecc4f71cb051ffd5db2c552d87a43471ce35d3344a4dae\"))",
+        "14": "FilesystemRootId(ObjectId(\"de3c194dc9baedef33c8f8d904db92f0b78e28612b77a5514269a7082b9cddf7\"))",
+        "15": "FilesystemRootId(ObjectId(\"b380d38dd584236a15fc464b4a98a871af5c451d0d1e45938c11868673ef27ab\"))",
+        "16": "FilesystemRootId(ObjectId(\"e28065192af86223a7149bd30f0f5ba96dc8c071403a85e820e78cf72ae5e234\"))",
+        "17": "FilesystemRootId(ObjectId(\"215e1f8a4288fcaa5fec75cff70bdcad3779ce75e6a2598e9f7f3c24618a83f4\"))"
+      },
+      "states": [
+        {
+          "name": "history.state.1",
+          "elapsed_ns": 53035166,
+          "spans": {
+            "content": 6421167,
+            "harness.predecessors": 213375,
+            "store.create": 2967334,
+            "harness.input": 529042,
+            "filesystem": 780250,
+            "storage.begin": 1475459,
+            "storage.accept_loop": 20240292,
+            "harness.index": 470209,
+            "storage.finish": 19492500,
+            "state.residual": 445538
+          },
+          "filesystem_spans": {
+            "validate": 148750,
+            "directories": 254250,
+            "references": 4833,
+            "inodes": 154750,
+            "cleanup": 250,
+            "root.encode": 792,
+            "filesystem.residual": 216625
+          }
+        },
+        {
+          "name": "history.state.2",
+          "elapsed_ns": 298182917,
+          "spans": {
+            "content": 27974500,
+            "harness.predecessors": 1402833,
+            "harness.input": 1627875,
+            "filesystem": 116913750,
+            "storage.begin": 425625,
+            "storage.accept_loop": 102263084,
+            "harness.index": 1227417,
+            "storage.finish": 45107709,
+            "state.residual": 1240124
+          },
+          "filesystem_spans": {
+            "validate": 80528333,
+            "directories": 14572792,
+            "references": 17625,
+            "inodes": 4574167,
+            "cleanup": 500,
+            "root.encode": 750,
+            "filesystem.residual": 17219583
+          }
+        },
+        {
+          "name": "history.state.3",
+          "elapsed_ns": 426577916,
+          "spans": {
+            "content": 36705334,
+            "harness.predecessors": 1401417,
+            "harness.input": 1856708,
+            "filesystem": 211130792,
+            "storage.begin": 368833,
+            "storage.accept_loop": 132395750,
+            "harness.index": 1504375,
+            "storage.finish": 40218125,
+            "state.residual": 996582
+          },
+          "filesystem_spans": {
+            "validate": 67308541,
+            "directories": 62544584,
+            "references": 18750,
+            "inodes": 15402791,
+            "cleanup": 500,
+            "root.encode": 750,
+            "filesystem.residual": 65854876
+          }
+        },
+        {
+          "name": "history.state.4",
+          "elapsed_ns": 643139875,
+          "spans": {
+            "content": 38569166,
+            "harness.predecessors": 1406333,
+            "harness.input": 1892292,
+            "filesystem": 408463875,
+            "storage.begin": 405417,
+            "storage.accept_loop": 162994792,
+            "harness.index": 1748125,
+            "storage.finish": 26885333,
+            "state.residual": 774542
+          },
+          "filesystem_spans": {
+            "validate": 56712292,
+            "directories": 145531292,
+            "references": 27875,
+            "inodes": 40005542,
+            "cleanup": 542,
+            "root.encode": 917,
+            "filesystem.residual": 166185415
+          }
+        },
+        {
+          "name": "history.state.5",
+          "elapsed_ns": 1322727917,
+          "spans": {
+            "content": 71887125,
+            "harness.predecessors": 2870375,
+            "harness.input": 4352959,
+            "filesystem": 839978500,
+            "storage.begin": 420375,
+            "storage.accept_loop": 301158042,
+            "harness.index": 4015542,
+            "storage.finish": 96709833,
+            "state.residual": 1335166
+          },
+          "filesystem_spans": {
+            "validate": 170578958,
+            "directories": 267660042,
+            "references": 56292,
+            "inodes": 75465292,
+            "cleanup": 500,
+            "root.encode": 750,
+            "filesystem.residual": 326216666
+          }
+        },
+        {
+          "name": "history.state.6",
+          "elapsed_ns": 1369588250,
+          "spans": {
+            "content": 65221916,
+            "harness.predecessors": 2722500,
+            "harness.input": 3680500,
+            "filesystem": 916200375,
+            "storage.begin": 404375,
+            "storage.accept_loop": 367084667,
+            "harness.index": 3689375,
+            "storage.finish": 8822792,
+            "state.residual": 1761750
+          },
+          "filesystem_spans": {
+            "validate": 115881166,
+            "directories": 319230458,
+            "references": 42666,
+            "inodes": 96525250,
+            "cleanup": 584,
+            "root.encode": 875,
+            "filesystem.residual": 384519376
+          }
+        },
+        {
+          "name": "history.state.7",
+          "elapsed_ns": 1947407709,
+          "spans": {
+            "content": 75707083,
+            "harness.predecessors": 3642125,
+            "harness.input": 5002875,
+            "filesystem": 1352753334,
+            "storage.begin": 418125,
+            "storage.accept_loop": 416273708,
+            "harness.index": 4903083,
+            "storage.finish": 87167917,
+            "state.residual": 1539459
+          },
+          "filesystem_spans": {
+            "validate": 182628750,
+            "directories": 473245292,
+            "references": 60000,
+            "inodes": 138295667,
+            "cleanup": 416,
+            "root.encode": 875,
+            "filesystem.residual": 558522334
+          }
+        },
+        {
+          "name": "history.state.8",
+          "elapsed_ns": 1972901250,
+          "spans": {
+            "content": 53566750,
+            "harness.predecessors": 2555167,
+            "harness.input": 3776667,
+            "filesystem": 1549889875,
+            "storage.begin": 438542,
+            "storage.accept_loop": 319731666,
+            "harness.index": 3532125,
+            "storage.finish": 37293708,
+            "state.residual": 2116750
+          },
+          "filesystem_spans": {
+            "validate": 109220750,
+            "directories": 583655833,
+            "references": 48125,
+            "inodes": 185731916,
+            "cleanup": 458,
+            "root.encode": 792,
+            "filesystem.residual": 671232001
+          }
+        },
+        {
+          "name": "history.state.9",
+          "elapsed_ns": 2336004833,
+          "spans": {
+            "content": 83854917,
+            "harness.predecessors": 3699917,
+            "harness.input": 4777666,
+            "filesystem": 1665555750,
+            "storage.begin": 545709,
+            "storage.accept_loop": 499061875,
+            "harness.index": 4482375,
+            "storage.finish": 71238667,
+            "state.residual": 2787957
+          },
+          "filesystem_spans": {
+            "validate": 159741917,
+            "directories": 573535708,
+            "references": 73250,
+            "inodes": 242308250,
+            "cleanup": 333,
+            "root.encode": 958,
+            "filesystem.residual": 689895334
+          }
+        },
+        {
+          "name": "history.state.10",
+          "elapsed_ns": 2513644667,
+          "spans": {
+            "content": 75918375,
+            "harness.predecessors": 3227541,
+            "harness.input": 4993875,
+            "filesystem": 1898737916,
+            "storage.begin": 1789667,
+            "storage.accept_loop": 411059667,
+            "harness.index": 3974708,
+            "storage.finish": 111505625,
+            "state.residual": 2437293
+          },
+          "filesystem_spans": {
+            "validate": 187115583,
+            "directories": 637957709,
+            "references": 46083,
+            "inodes": 294655292,
+            "cleanup": 1042,
+            "root.encode": 958,
+            "filesystem.residual": 778961249
+          }
+        },
+        {
+          "name": "history.state.11",
+          "elapsed_ns": 4529954042,
+          "spans": {
+            "content": 116874542,
+            "harness.predecessors": 6049958,
+            "harness.input": 7141417,
+            "filesystem": 3477287291,
+            "storage.begin": 433708,
+            "storage.accept_loop": 815610625,
+            "harness.index": 18328292,
+            "storage.finish": 84817625,
+            "state.residual": 3410584
+          },
+          "filesystem_spans": {
+            "validate": 262412917,
+            "directories": 1183317625,
+            "references": 33250,
+            "inodes": 467441625,
+            "cleanup": 917,
+            "root.encode": 1458,
+            "filesystem.residual": 1564079499
+          }
+        },
+        {
+          "name": "history.state.12",
+          "elapsed_ns": 4524247042,
+          "spans": {
+            "content": 128617042,
+            "harness.predecessors": 6144958,
+            "harness.input": 7463625,
+            "filesystem": 3512493209,
+            "storage.begin": 385875,
+            "storage.accept_loop": 721325917,
+            "harness.index": 9179083,
+            "storage.finish": 136252042,
+            "state.residual": 2385291
+          },
+          "filesystem_spans": {
+            "validate": 319811000,
+            "directories": 1178970916,
+            "references": 43083,
+            "inodes": 431403584,
+            "cleanup": 667,
+            "root.encode": 1375,
+            "filesystem.residual": 1582262584
+          }
+        },
+        {
+          "name": "history.state.13",
+          "elapsed_ns": 4464009583,
+          "spans": {
+            "content": 124038083,
+            "harness.predecessors": 6018250,
+            "harness.input": 6865541,
+            "filesystem": 3447549042,
+            "storage.begin": 474000,
+            "storage.accept_loop": 765164875,
+            "harness.index": 7150417,
+            "storage.finish": 101033792,
+            "state.residual": 5715583
+          },
+          "filesystem_spans": {
+            "validate": 238369666,
+            "directories": 1147848125,
+            "references": 20667,
+            "inodes": 458442333,
+            "cleanup": 1000,
+            "root.encode": 1833,
+            "filesystem.residual": 1602865418
+          }
+        },
+        {
+          "name": "history.state.14",
+          "elapsed_ns": 5784064584,
+          "spans": {
+            "content": 174404167,
+            "harness.predecessors": 8699500,
+            "harness.input": 9482125,
+            "filesystem": 4340453542,
+            "storage.begin": 619709,
+            "storage.accept_loop": 1157705583,
+            "harness.index": 10839834,
+            "storage.finish": 75216709,
+            "state.residual": 6643415
+          },
+          "filesystem_spans": {
+            "validate": 402407250,
+            "directories": 1461512458,
+            "references": 35458,
+            "inodes": 531078208,
+            "cleanup": 708,
+            "root.encode": 10208,
+            "filesystem.residual": 1945409252
+          }
+        },
+        {
+          "name": "history.state.15",
+          "elapsed_ns": 5258073250,
+          "spans": {
+            "content": 170441375,
+            "harness.predecessors": 7895084,
+            "harness.input": 10126292,
+            "filesystem": 3838899125,
+            "storage.begin": 389750,
+            "storage.accept_loop": 1112857416,
+            "harness.index": 12285583,
+            "storage.finish": 98449125,
+            "state.residual": 6729500
+          },
+          "filesystem_spans": {
+            "validate": 429985666,
+            "directories": 1220666042,
+            "references": 50750,
+            "inodes": 443761291,
+            "cleanup": 958,
+            "root.encode": 1416,
+            "filesystem.residual": 1744433002
+          }
+        },
+        {
+          "name": "history.state.16",
+          "elapsed_ns": 4729469875,
+          "spans": {
+            "content": 152876292,
+            "harness.predecessors": 7317834,
+            "harness.input": 8319667,
+            "filesystem": 3447419917,
+            "storage.begin": 1541459,
+            "storage.accept_loop": 1046726500,
+            "harness.index": 9982375,
+            "storage.finish": 46324667,
+            "state.residual": 8961164
+          },
+          "filesystem_spans": {
+            "validate": 268215250,
+            "directories": 1117248458,
+            "references": 47833,
+            "inodes": 492838208,
+            "cleanup": 875,
+            "root.encode": 1375,
+            "filesystem.residual": 1569067918
+          }
+        },
+        {
+          "name": "history.state.17",
+          "elapsed_ns": 4988739250,
+          "spans": {
+            "content": 148953292,
+            "harness.predecessors": 6777875,
+            "harness.input": 9319125,
+            "filesystem": 3661729209,
+            "storage.begin": 519541,
+            "storage.accept_loop": 1044098667,
+            "harness.index": 11858083,
+            "storage.finish": 97323459,
+            "state.residual": 8159999
+          },
+          "filesystem_spans": {
+            "validate": 378914833,
+            "directories": 1118556167,
+            "references": 27083,
+            "inodes": 552526208,
+            "cleanup": 1041,
+            "root.encode": 1916,
+            "filesystem.residual": 1611701961
+          }
+        }
+      ],
+      "phases": {
+        "schema": "layerfs-phases-v1",
+        "invocation": "perf",
+        "preparation_ns": 178495125,
+        "acquisition_ns": 0,
+        "operation_ns": 47161768126,
+        "verification_ns": 19992833,
+        "cleanup_ns": 375,
+        "handoff_ns": 44124415,
+        "invocation_ns": 64775917791,
+        "timing_json_bytes": 20502,
+        "cpu_user_ns": 42796805000,
+        "cpu_system_ns": 14576236000,
+        "process_peak_rss_bytes": 254197760
+      },
+      "raw_hashes": {
+        "timing.json": "739614f7efe55e67f25bd73b9fdecb9b6ab5465442af1ee774c3426f4343193d",
+        "phases-perf.json": "15041552a92443384c4077c792a0b10ca0a690bba9c0f94be65093df40877c80",
+        "trace-perf.jsonl": "beb1345c80563afc6f9131059c789e54010966cf517166d3396345bbbed09649"
+      },
+      "command_wall_ns": 66657423500,
+      "execution_status": "COMPLETED",
+      "nonpassing": [
+        {
+          "schema": "layerfs-trace-v1",
+          "seq": 718,
+          "kind": "gate",
+          "key": "g1.o3-pinned-counters",
+          "value": "INCOMPLETE|no pinned counters for this case|at least one O3 constant pinned for every admission case",
+          "unit": "",
+          "basis": "G1"
+        }
+      ]
+    }
+  },
+  "comparisons": {}
+}

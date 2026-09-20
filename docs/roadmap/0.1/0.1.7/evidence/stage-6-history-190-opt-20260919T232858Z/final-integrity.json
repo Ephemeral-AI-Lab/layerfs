@@ -1,0 +1,12 @@
+{
+  "broken_local_links": [],
+  "git_diff_check_exit": 0,
+  "git_diff_check_output": "",
+  "product_changed_paths": [
+    "core/crates/layerfs-content/src/filesystem/update.rs",
+    "core/crates/layerfs-content/tests/filesystem_bounds.rs"
+  ],
+  "production_counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "committed": false,
+  "pushed": false
+}
