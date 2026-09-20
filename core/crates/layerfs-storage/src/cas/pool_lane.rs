@@ -10,11 +10,12 @@
 
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 
-use crate::cas::owner::MutationOwner;
+use crate::cas::owner::{MutationOwner, SaveProfile};
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::sqlite::lookup;
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 /// Distinct values the pooled lane's per-save ordinal memo may hold at once.
 ///
@@ -63,7 +64,10 @@ impl MutationOwner {
         advisory: &[ObjectId],
     ) -> StorageResult<crate::encoding::EncodedRecord> {
         use layerfs_content::inode_leaf::{pooled_body, INODE_VALUE_BYTES};
-        self.sync_pool_index()?;
+        let started = Instant::now();
+        let synced = self.sync_pool_index();
+        SaveProfile::charge(&mut self.profile.resolve_ns, started);
+        synced?;
         let leaf = layerfs_content::inode_leaf::InodeLeaf::decode(object.canonical())?;
         // One batch demand for every distinct value of this leaf that the save's
         // own memo cannot answer, in first-encounter order. Asking per row cost
@@ -86,14 +90,17 @@ impl MutationOwner {
             // The owner's own ceiling, not an unbounded one: a catalogue row
             // belonging to a pack this save has not published (and did not
             // create) is refused here rather than resolved.
-            index.find(
+            let started = Instant::now();
+            let found = index.find(
                 &self.connection,
                 &self.capacities,
                 self.ceiling,
                 &mut self.pool_reader,
                 &mut self.decompression,
                 &unknown,
-            )?
+            );
+            SaveProfile::charge(&mut self.profile.resolve_ns, started);
+            found?
         };
         let mut ordinals = Vec::with_capacity(leaf.rows.len());
         let mut fresh: Vec<[u8; INODE_VALUE_BYTES]> = Vec::new();
@@ -135,16 +142,25 @@ impl MutationOwner {
         self.pending_values.clear();
         let body = pooled_body(object.canonical(), &ordinals)?;
         self.pool.leaves += 1;
-        let full = crate::encoding::pool::leaf::encode_full(&body)?;
+        let started = Instant::now();
+        let full = crate::encoding::pool::leaf::encode_full(&body);
+        SaveProfile::charge(&mut self.profile.full_ns, started);
+        let full = full?;
         // One base acquisition, then one instruction trial. A missing or
         // ineligible base, or a losing comparison, stores the leaf in full.
-        let base = self.pool_base(advisory, object.canonical_len() as u64, full.len() as u64)?;
+        let started = Instant::now();
+        let base = self.pool_base(advisory, object.canonical_len() as u64, full.len() as u64);
+        SaveProfile::charge(&mut self.profile.resolve_ns, started);
+        let base = base?;
         let Some((base_id, base_body)) = base else {
             return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
         };
         self.pool.trials += 1;
         let mut budget = crate::policy::METADATA_MATCH_BUDGET_BYTES;
-        let program = crate::encoding::pool::delta::build(base_id, &base_body, &body, &mut budget)?;
+        let started = Instant::now();
+        let program = crate::encoding::pool::delta::build(base_id, &base_body, &body, &mut budget);
+        SaveProfile::charge(&mut self.profile.delta_ns, started);
+        let program = program?;
         let Some(program) = program else {
             return Ok(self.pooled_full(full, object.canonical_len(), body.len()));
         };
@@ -234,8 +250,11 @@ impl MutationOwner {
                 .iter()
                 .map(crate::encoding::pool::value_group::canonical_value)
                 .collect::<StorageResult<Vec<_>>>()?;
+            let started = Instant::now();
             let group =
-                crate::encoding::pool::value_group::build(&canonical, &mut self.compression)?;
+                crate::encoding::pool::value_group::build(&canonical, &mut self.compression);
+            SaveProfile::charge(&mut self.profile.group_ns, started);
+            let group = group?;
             built.push((
                 first + (number * crate::policy::VALUES_PER_GROUP) as u32,
                 group,
@@ -244,8 +263,11 @@ impl MutationOwner {
         let lane = PackLane::PooledMetadata;
         let encoded: Vec<crate::pack::layout::EncodedGroup> =
             built.iter().map(|(_, group)| group.group.clone()).collect();
+        let started = Instant::now();
         let writes =
-            self.placement[lane.index()].select_many(lane, encoded, &mut self.next_pack_id)?;
+            self.placement[lane.index()].select_many(lane, encoded, &mut self.next_pack_id);
+        SaveProfile::charge(&mut self.profile.place_ns, started);
+        let writes = writes?;
         let mut next_group = 0_usize;
         for write in &writes {
             self.write_pack(write)?;
@@ -254,7 +276,8 @@ impl MutationOwner {
                     .get(next_group)
                     .ok_or(StorageError::Integrity("placed value group count"))?;
                 next_group += 1;
-                crate::sqlite::pool::insert_group(
+                let started = Instant::now();
+                let inserted = crate::sqlite::pool::insert_group(
                     &self.connection,
                     &crate::sqlite::pool::ValueGroupRow {
                         first_ordinal: *first_ordinal,
@@ -263,7 +286,9 @@ impl MutationOwner {
                         group_number: placed.group_number,
                         digest: group.digest,
                     },
-                )?;
+                );
+                SaveProfile::charge(&mut self.profile.sql_ns, started);
+                inserted?;
                 self.transaction.rows += 1;
                 self.transaction.bytes += group.body.len() as u64;
                 self.pool.groups += 1;

@@ -10,7 +10,7 @@
 use rusqlite::Connection;
 
 use crate::cas::dependencies::Availability;
-use crate::cas::owner::{MutationOwner, OutcomeCounters};
+use crate::cas::owner::{MutationOwner, OutcomeCounters, SaveProfile};
 use crate::cas::placement::PendingGroup;
 use crate::cas::pool_lane::PoolCounters;
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
@@ -24,6 +24,7 @@ use crate::policy::StorageCapacities;
 use crate::sqlite::lookup;
 use crate::sqlite::write::{self, TransactionState};
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 impl MutationOwner {
     /// Acquires ownership once and establishes the operation's cursors.
@@ -100,6 +101,7 @@ impl MutationOwner {
                 transactions: 1,
                 ..OutcomeCounters::default()
             },
+            profile: SaveProfile::default(),
             candidates,
             depths: DepthCache::new(),
             pack_cache: BTreeMap::new(),
@@ -131,13 +133,17 @@ impl MutationOwner {
             && (self.transaction.rows >= self.capacities.transaction_rows
                 || self.transaction.bytes >= self.capacities.transaction_bytes)
         {
+            let started = Instant::now();
             write::commit(&self.connection)?;
+            SaveProfile::charge(&mut self.profile.commit_ns, started);
             // Clear the flag before the re-acquire: if the lock is lost here, no
             // transaction is open and cleanup must proceed to the deletion pass
             // instead of trying to roll back a transaction that does not exist.
             self.transaction_open = false;
             self.counters.commits += 1;
+            let started = Instant::now();
             write::begin_immediate(&self.connection)?;
+            SaveProfile::charge(&mut self.profile.commit_ns, started);
             self.transaction_open = true;
             self.transaction = TransactionState { rows: 1, bytes: 0 };
             self.counters.transactions += 1;
@@ -160,6 +166,7 @@ impl MutationOwner {
                 counters.delta = self.delta;
                 counters.chain = self.chain_total;
                 counters.pool = self.pool;
+                counters.profile = self.profile;
                 Ok(counters)
             }
             Err(error) => {
@@ -183,7 +190,9 @@ impl MutationOwner {
             return Ok(self.counters);
         }
         if !has_pending && !publishes {
+            let started = Instant::now();
             write::rollback(&self.connection)?;
+            SaveProfile::charge(&mut self.profile.commit_ns, started);
             self.transaction_open = false;
             return Ok(self.counters);
         }
@@ -194,8 +203,12 @@ impl MutationOwner {
             // the publication. It is the last thing this save does; if it is lost,
             // the packs stay unpublished and the Store is uninspected rather than
             // silently exposed.
+            let started = Instant::now();
             write::rollback(&self.connection)?;
+            SaveProfile::charge(&mut self.profile.commit_ns, started);
+            let started = Instant::now();
             write::begin_immediate(&self.connection)?;
+            SaveProfile::charge(&mut self.profile.commit_ns, started);
             self.counters.transactions += 1;
         }
         // **W2 (#188d).** The content index is written in the transaction that
@@ -203,18 +216,27 @@ impl MutationOwner {
         // are written. Either the save's output and its index both become visible,
         // or neither does: a rolled-back transaction leaves the table exactly as
         // the last acknowledged save left it.
-        {
+        let started = Instant::now();
+        let flushed = {
             let mut index = self
                 .candidates
                 .lock()
                 .map_err(|_| StorageError::Integrity("candidate index lock"))?;
-            index.flush(&self.connection)?;
-        }
+            index.flush(&self.connection)
+        };
+        SaveProfile::charge(&mut self.profile.sql_ns, started);
+        flushed?;
         // The watermark names the packs this save created. It advances only here,
         // so either the save's output and its watermark both become visible, or
         // neither does.
-        crate::sqlite::schema::advance_retained_pack_ceiling(&self.connection, self.ceiling)?;
+        let started = Instant::now();
+        let advanced =
+            crate::sqlite::schema::advance_retained_pack_ceiling(&self.connection, self.ceiling);
+        SaveProfile::charge(&mut self.profile.sql_ns, started);
+        advanced?;
+        let started = Instant::now();
         write::commit(&self.connection)?;
+        SaveProfile::charge(&mut self.profile.commit_ns, started);
         self.counters.commits += 1;
         self.transaction_open = false;
         Ok(self.counters)

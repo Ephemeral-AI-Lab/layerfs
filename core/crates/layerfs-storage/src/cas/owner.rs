@@ -25,6 +25,86 @@ use crate::policy::StorageCapacities;
 use crate::sqlite::lookup;
 use crate::sqlite::write::TransactionState;
 use std::collections::BTreeMap;
+use std::time::Instant;
+
+/// Nanosecond cost split of one save operation's accept path.
+///
+/// Seven disjoint buckets, each charged at the call site that does that kind of
+/// work. The profile is an **aggregate over the whole operation**, never a span
+/// per object: a stride1 row accepts about 10^5 objects and the recorder refuses a
+/// node per object, so the cost accumulates into seven `u64` fields and is
+/// published once per state. Charging costs one `Instant::now()` pair per site.
+///
+/// Every charged interval is disjoint from every other: no bucket contains
+/// another, and a bucket's sites are the only places that kind of work happens.
+/// The instrument measures the accept path, so the caller's own per-object work
+/// (presence validation, group assembly outside the codec, `raw_payload`) is
+/// deliberately outside all seven and is reported as the remainder.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SaveProfile {
+    /// Chain/edge walks and stored-object reconstruction: candidate eligibility,
+    /// base acquisition, the post-trial cost walk, exact-reuse verification, and
+    /// the pooled lane's value lookup and base acquisition.
+    pub resolve_ns: u64,
+    /// FULL representation encode: the ordinary lane's tree-role and payload
+    /// frames, and the pooled lane's leaf body.
+    pub full_ns: u64,
+    /// Delta representation encode: ordinary prefix frames and pooled
+    /// COPY/INSERT program construction.
+    pub delta_ns: u64,
+    /// Group codec: ordinary group framing and pooled value-group compression.
+    pub group_ns: u64,
+    /// Pack placement: lane selection and the write it produces.
+    pub place_ns: u64,
+    /// SQL: object rows, pack bodies, value-group rows, the content-signature
+    /// flush and the publication watermark.
+    pub sql_ns: u64,
+    /// Transaction cadence: `COMMIT`, `ROLLBACK`, and the `BEGIN IMMEDIATE` that
+    /// restarts a bounded transaction.
+    pub commit_ns: u64,
+}
+
+impl SaveProfile {
+    /// Adds another profile's buckets into this one.
+    pub fn accumulate(&mut self, other: &Self) {
+        self.resolve_ns = self.resolve_ns.saturating_add(other.resolve_ns);
+        self.full_ns = self.full_ns.saturating_add(other.full_ns);
+        self.delta_ns = self.delta_ns.saturating_add(other.delta_ns);
+        self.group_ns = self.group_ns.saturating_add(other.group_ns);
+        self.place_ns = self.place_ns.saturating_add(other.place_ns);
+        self.sql_ns = self.sql_ns.saturating_add(other.sql_ns);
+        self.commit_ns = self.commit_ns.saturating_add(other.commit_ns);
+    }
+
+    /// Sum of the seven buckets.
+    ///
+    /// This is charged work, not the accept path: the difference between it and
+    /// `storage.accept_loop` is the remainder the instrument does not name.
+    pub fn total_ns(&self) -> u64 {
+        [
+            self.resolve_ns,
+            self.full_ns,
+            self.delta_ns,
+            self.group_ns,
+            self.place_ns,
+            self.sql_ns,
+            self.commit_ns,
+        ]
+        .into_iter()
+        .fold(0_u64, u64::saturating_add)
+    }
+
+    /// Charges `slot` with the nanoseconds elapsed since `started`.
+    ///
+    /// One `Instant::now()` pair per site. The caller owns the `started` reading
+    /// so a charged interval can wrap a `?` without either charging twice or
+    /// losing the charge, and the pair is deliberately not an RAII guard: a guard
+    /// that charges on drop would charge an error path whose profile is never
+    /// published, at the cost of an extra branch per object.
+    pub(crate) fn charge(slot: &mut u64, started: Instant) {
+        *slot = slot.saturating_add(started.elapsed().as_nanos() as u64);
+    }
+}
 
 /// Counters describing what one save operation actually did.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -67,6 +147,8 @@ pub struct OutcomeCounters {
     pub chain: ChainCounters,
     /// Pooled metadata lane outcomes.
     pub pool: PoolCounters,
+    /// Nanosecond cost split of the accept path.
+    pub profile: SaveProfile,
 }
 
 /// Exclusive writer state for one save operation.
@@ -100,6 +182,8 @@ pub struct MutationOwner {
     pub(super) cleanup_attempted: bool,
     pub(super) quarantined: bool,
     pub(super) counters: OutcomeCounters,
+    /// Nanosecond cost split of this operation's accept path.
+    pub(super) profile: SaveProfile,
     /// Store-owned bounded content-signature index.
     ///
     /// **W2 (#188d).** It is shared with the `Store` and persisted in

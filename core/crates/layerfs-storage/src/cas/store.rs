@@ -13,7 +13,7 @@ use layerfs_content::{ContentError, FinalizedConsumer, FinalizedObject, ObjectId
 use layerfs_telemetry::timer::TimingScope;
 
 use crate::cas::batch::PendingBatch;
-use crate::cas::owner::{MutationOwner, OutcomeCounters};
+use crate::cas::owner::{MutationOwner, OutcomeCounters, SaveProfile};
 use crate::cas::read::check_read_demand;
 use crate::cas::{finish, read, save};
 use crate::encoding::delta::candidates::Candidates;
@@ -26,7 +26,9 @@ use crate::policy::{StorageCapacities, StoragePolicy};
 use crate::sqlite::{connection, lookup, schema};
 
 /// Result of one completed save operation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+///
+/// Equality is deliberately manual: see [`SaveOutcome`]'s `PartialEq` below.
+#[derive(Clone, Copy, Debug)]
 pub struct SaveOutcome {
     /// Occurrences served by an exact existing row.
     pub reused: u64,
@@ -62,7 +64,43 @@ pub struct SaveOutcome {
     pub chain: ChainCounters,
     /// Pooled metadata lane outcomes.
     pub pool: crate::cas::PoolCounters,
+    /// Nanosecond cost split of this operation's accept path.
+    ///
+    /// Seven disjoint buckets accumulated over the whole operation; see
+    /// [`SaveProfile`]. It is reported work, not the accept span: the difference
+    /// is the remainder the instrument does not name.
+    pub profile: SaveProfile,
 }
+
+/// Two outcomes are equal when they describe the **same work**.
+///
+/// Every work counter participates; `profile` deliberately does not. It is a
+/// wall-clock observation of the accept path, not a description of what the
+/// operation did, so two runs of identical work never have equal profiles - and a
+/// comparison that included them could never assert determinism. The integrated
+/// recording-on/recording-off equality case is exactly that caller: with `profile`
+/// in the comparison it reported "recording changed the operation" for a pair whose
+/// every counter, root and read-back byte was identical, differing only in
+/// nanoseconds. Compare `profile` explicitly when the durations are the question;
+/// [`SaveProfile`] keeps its own derived equality for that.
+impl PartialEq for SaveOutcome {
+    fn eq(&self, other: &Self) -> bool {
+        self.reused == other.reused
+            && self.inserted == other.inserted
+            && self.packs_created == other.packs_created
+            && self.pack_appends == other.pack_appends
+            && self.commits == other.commits
+            && self.full_records == other.full_records
+            && self.prefix_records == other.prefix_records
+            && self.statements == other.statements
+            && self.presence_queries == other.presence_queries
+            && self.delta == other.delta
+            && self.chain == other.chain
+            && self.pool == other.pool
+    }
+}
+
+impl Eq for SaveOutcome {}
 
 impl From<OutcomeCounters> for SaveOutcome {
     fn from(counters: OutcomeCounters) -> Self {
@@ -79,6 +117,7 @@ impl From<OutcomeCounters> for SaveOutcome {
             delta: counters.delta,
             chain: counters.chain,
             pool: counters.pool,
+            profile: counters.profile,
         }
     }
 }

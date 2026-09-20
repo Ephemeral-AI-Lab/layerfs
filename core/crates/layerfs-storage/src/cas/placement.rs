@@ -8,13 +8,14 @@
 
 use layerfs_content::{ObjectId, ObjectRole};
 
-use crate::cas::owner::MutationOwner;
+use crate::cas::owner::{MutationOwner, SaveProfile};
 
 use crate::cas::dependencies::Availability;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::pack::{build_group, SelectedWrite};
 use crate::sqlite::write::{self, ObjectRow};
+use std::time::Instant;
 
 /// One record waiting for its group to be framed and placed.
 ///
@@ -115,15 +116,20 @@ impl MutationOwner {
             return Ok(());
         }
         let mut pending = std::mem::take(&mut self.groups[index]);
-        let group = match build_group(lane, &pending.records, Some(&mut self.compression)) {
+        let started = Instant::now();
+        let framed = build_group(lane, &pending.records, Some(&mut self.compression));
+        SaveProfile::charge(&mut self.profile.group_ns, started);
+        let group = match framed {
             Ok(group) => group,
             Err(error) => {
                 pending.clear();
                 return Err(error);
             }
         };
-        let writes =
-            self.placement[index].select_many(lane, vec![group], &mut self.next_pack_id)?;
+        let started = Instant::now();
+        let writes = self.placement[index].select_many(lane, vec![group], &mut self.next_pack_id);
+        SaveProfile::charge(&mut self.profile.place_ns, started);
+        let writes = writes?;
         let write = writes
             .first()
             .ok_or(StorageError::Integrity("placement produced no write"))?;
@@ -152,7 +158,10 @@ impl MutationOwner {
                 record_number,
             })
             .collect();
-        let statements = write::insert_objects(&self.connection, &rows)?;
+        let started = Instant::now();
+        let statements = write::insert_objects(&self.connection, &rows);
+        SaveProfile::charge(&mut self.profile.sql_ns, started);
+        let statements = statements?;
         self.counters.statements = self.counters.statements.saturating_add(statements);
         for member in &pending.members {
             if member.base_object_id.is_some() {
@@ -188,11 +197,17 @@ impl MutationOwner {
         // cannot be skipped: the pack is append-only, so the cached copy is valid
         // only until the next append.
         self.pack_cache.remove(&write.pack_id);
+        let started = Instant::now();
+        let written = if write.created {
+            write::insert_pack(&self.connection, write.pack_id, &write.bytes)
+        } else {
+            write::append_pack(&self.connection, write.pack_id, &write.bytes)
+        };
+        SaveProfile::charge(&mut self.profile.sql_ns, started);
+        written?;
         if write.created {
-            write::insert_pack(&self.connection, write.pack_id, &write.bytes)?;
             self.counters.packs_created += 1;
         } else {
-            write::append_pack(&self.connection, write.pack_id, &write.bytes)?;
             self.counters.pack_appends += 1;
         }
         self.ceiling = self.ceiling.max(write.pack_id);

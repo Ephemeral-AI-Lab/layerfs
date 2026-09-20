@@ -116,6 +116,7 @@ impl MutationOwner {
             chain: &mut self.chain,
             chain_total: &mut self.chain_total,
             counters: &mut self.delta,
+            profile: &mut self.profile,
         };
         select(
             &mut input,
