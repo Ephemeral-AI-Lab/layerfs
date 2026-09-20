@@ -5,6 +5,14 @@
 > **INITIALIZED — decisions open.** This document records the coupling, what is
 > already settled with its evidence, and every open decision. The design itself is
 > **not written**. Issue: [#180](https://github.com/Ephemeral-AI-Lab/layerfs/issues/180).
+>
+> **Implementation status (2026-09-21):** C5 history is implemented in
+> `core/crates/layerfs-history/` through the existing service, per the reviewed
+> [pair 2 implementation specification](commit-history/implementation.md) and its
+> [pre-publication audit](commit-history/review-20260921.md). Where this document
+> and that specification disagree, the specification and the source-backed
+> [paper 16](../../16-history.md) are authoritative; this page is not updated to
+> restate the implemented contract.
 
 Operational half: [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) — the five phases, every DB operation, and the concurrency cases.
 Folder index and conventions: [`README.md`](README.md).

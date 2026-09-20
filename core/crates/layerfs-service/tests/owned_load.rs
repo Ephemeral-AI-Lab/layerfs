@@ -177,6 +177,7 @@ fn two_native_writers_keep_streaming_heap_bounded_as_input_grows() {
                         operations: 31,
                         expires_unix: u64::MAX,
                     }],
+                    history: None,
                 }],
                 runtime.recorder(),
             )

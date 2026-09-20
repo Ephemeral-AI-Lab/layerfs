@@ -40,6 +40,7 @@ fn fixture() -> (Temp, Service, VerifiedPeer) {
         vec![StoreAccess {
             id: 1,
             store,
+            history: None,
             grants: vec![Grant {
                 public_key: *peer.public_key(),
                 operations: 31,

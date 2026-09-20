@@ -80,6 +80,7 @@ pub fn run() -> Result<(), Failure> {
             id: 1,
             store,
             grants,
+            history: super::config::history()?,
         }],
         runtime.recorder(),
     )?);

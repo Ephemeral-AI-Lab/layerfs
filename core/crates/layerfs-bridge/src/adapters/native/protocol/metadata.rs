@@ -177,25 +177,467 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.put(base)?;
             e.put(scope)?;
             e.u64(*root_serial)?;
-            e.count(directories.len())?;
-            for d in directories {
-                e.u64(d.parent)?;
-                e.count(d.changes.len())?;
-                for (name, serial) in &d.changes {
-                    e.blob(name)?;
-                    e.u64(serial.unwrap_or(0))?;
-                }
-            }
-            e.count(inodes.len())?;
-            for i in inodes {
-                e.u64(i.serial)?;
-                e.u8(i.kind)?;
-                e.put(&i.content)?;
-                e.put(&i.metadata)?;
-            }
+            put_directories(&mut e, directories)?;
+            put_inodes(&mut e, inodes)?;
         }
+        Operation::HistoryQuery(query) => put_query(&mut e, query)?,
+        Operation::HistoryCommand(command) => put_command(&mut e, command)?,
     }
     Ok(e.finish())
+}
+
+/// Writes the final directory bindings of one prepared filesystem update.
+fn put_directories(e: &mut Encoder, directories: &[DirectoryChange]) -> Result<(), Failure> {
+    e.count(directories.len())?;
+    for d in directories {
+        e.u64(d.parent)?;
+        e.count(d.changes.len())?;
+        for (name, serial) in &d.changes {
+            e.blob(name)?;
+            e.u64(serial.unwrap_or(0))?;
+        }
+    }
+    Ok(())
+}
+
+/// Reads the final directory bindings of one prepared filesystem update.
+fn take_directories(d: &mut Decoder<'_>) -> Result<Vec<DirectoryChange>, Failure> {
+    let count = d.count(128, 10)?;
+    let mut directories = Vec::with_capacity(count);
+    let mut total = 0;
+    for _ in 0..count {
+        let parent = d.u64()?;
+        let n = d.count(128 - total, 10)?;
+        total += n;
+        let mut changes = Vec::with_capacity(n);
+        for _ in 0..n {
+            let name = d.blob(255)?;
+            let serial = d.u64()?;
+            changes.push((name, (serial != 0).then_some(serial)));
+        }
+        directories.push(DirectoryChange { parent, changes });
+    }
+    Ok(directories)
+}
+
+/// Writes the typed final inode values of one prepared filesystem update.
+fn put_inodes(e: &mut Encoder, inodes: &[InodeChange]) -> Result<(), Failure> {
+    e.count(inodes.len())?;
+    for i in inodes {
+        e.u64(i.serial)?;
+        e.u8(i.kind)?;
+        e.put(&i.content)?;
+        e.put(&i.metadata)?;
+    }
+    Ok(())
+}
+
+/// Reads the typed final inode values of one prepared filesystem update.
+fn take_inodes(d: &mut Decoder<'_>) -> Result<Vec<InodeChange>, Failure> {
+    let n = d.count(128, 73)?;
+    let mut inodes = Vec::with_capacity(n);
+    for _ in 0..n {
+        inodes.push(InodeChange {
+            serial: d.u64()?,
+            kind: d.u8()?,
+            content: d.root()?,
+            metadata: d.root()?,
+        });
+    }
+    Ok(inodes)
+}
+
+/// Reads one fixed-width identity of `N` bytes.
+fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
+    d.take(N)?.try_into().map_err(|_| Code::InvalidInput.into())
+}
+
+/// Writes an optional fixed-width identity.
+fn put_optional<const N: usize>(e: &mut Encoder, value: Option<&[u8; N]>) -> Result<(), Failure> {
+    match value {
+        Some(value) => {
+            e.u8(1)?;
+            e.put(value)
+        }
+        None => e.u8(0),
+    }
+}
+
+/// Reads an optional fixed-width identity.
+fn take_optional<const N: usize>(d: &mut Decoder<'_>) -> Result<Option<[u8; N]>, Failure> {
+    match d.u8()? {
+        0 => Ok(None),
+        1 => Ok(Some(take_array::<N>(d)?)),
+        _ => Err(Code::InvalidInput.into()),
+    }
+}
+
+/// Writes one page request: continuation then limit.
+fn put_page(e: &mut Encoder, cursor: &[u8], limit: u16) -> Result<(), Failure> {
+    e.blob(cursor)?;
+    e.u16(limit)
+}
+
+fn take_page(d: &mut Decoder<'_>) -> Result<(Vec<u8>, u16), Failure> {
+    let cursor = d.blob(CURSOR_BYTES)?;
+    Ok((cursor, d.u16()?))
+}
+
+/// Writes the prepared filesystem update history carries.
+fn put_prepared(e: &mut Encoder, changes: &PreparedChanges) -> Result<(), Failure> {
+    e.put(&changes.workspace)?;
+    e.put(&changes.branch)?;
+    put_optional(e, changes.expected_head.as_ref())?;
+    e.put(&changes.expected_base)?;
+    e.u64(changes.generation)?;
+    e.put(&changes.base)?;
+    e.put(&changes.scope)?;
+    e.u64(changes.root_serial)?;
+    put_directories(e, &changes.directories)?;
+    put_inodes(e, &changes.inodes)
+}
+
+fn take_prepared(d: &mut Decoder<'_>) -> Result<PreparedChanges, Failure> {
+    let workspace = take_array::<32>(d)?;
+    let branch = take_array::<17>(d)?;
+    let expected_head = take_optional::<33>(d)?;
+    let expected_base = take_array::<33>(d)?;
+    let generation = d.u64()?;
+    let base = d.root()?;
+    let scope = d.root()?;
+    let root_serial = d.u64()?;
+    let directories = take_directories(d)?;
+    let inodes = take_inodes(d)?;
+    Ok(PreparedChanges {
+        workspace,
+        branch,
+        expected_head,
+        expected_base,
+        generation,
+        base,
+        scope,
+        root_serial,
+        directories,
+        inodes,
+    })
+}
+
+/// Writes one pathless manifest.
+fn put_manifest(e: &mut Encoder, entries: &[ManifestEntry]) -> Result<(), Failure> {
+    e.count(entries.len())?;
+    for entry in entries {
+        e.u16(entry.parent)?;
+        e.blob(&entry.name)?;
+        e.u8(entry.kind)?;
+        e.u32(entry.mode)?;
+        e.u64(entry.mtime_seconds as u64)?;
+        e.u32(entry.mtime_nanoseconds)?;
+        match &entry.content {
+            Some(root) => {
+                e.u8(1)?;
+                e.put(root)?;
+            }
+            None => e.u8(0)?,
+        }
+        e.blob(&entry.target)?;
+    }
+    Ok(())
+}
+
+fn take_manifest(d: &mut Decoder<'_>) -> Result<Vec<ManifestEntry>, Failure> {
+    let count = d.count(MANIFEST_ENTRIES, 56)?;
+    let mut entries = Vec::with_capacity(count);
+    for _ in 0..count {
+        let parent = d.u16()?;
+        let name = d.blob(255)?;
+        let kind = d.u8()?;
+        let mode = d.u32()?;
+        let mtime_seconds = d.u64()? as i64;
+        let mtime_nanoseconds = d.u32()?;
+        let content = match d.u8()? {
+            0 => None,
+            1 => Some(d.root()?),
+            _ => return Err(Code::InvalidInput.into()),
+        };
+        let target = d.blob(MANIFEST_TARGET_BYTES)?;
+        entries.push(ManifestEntry {
+            parent,
+            name,
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+            content,
+            target,
+        });
+    }
+    Ok(entries)
+}
+
+/// Writes one read-only history query.
+fn put_query(e: &mut Encoder, query: &HistoryQuery) -> Result<(), Failure> {
+    match query {
+        HistoryQuery::GetStack { stack } => {
+            e.u8(1)?;
+            e.put(stack)?;
+        }
+        HistoryQuery::ListStacks { cursor, limit } => {
+            e.u8(2)?;
+            put_page(e, cursor, *limit)?;
+        }
+        HistoryQuery::GetBranch { branch } => {
+            e.u8(3)?;
+            e.put(branch)?;
+        }
+        HistoryQuery::ListBranches {
+            stack,
+            cursor,
+            limit,
+        } => {
+            e.u8(4)?;
+            e.put(stack)?;
+            put_page(e, cursor, *limit)?;
+        }
+        HistoryQuery::GetCommit { commit } => {
+            e.u8(5)?;
+            e.put(commit)?;
+        }
+        HistoryQuery::CommitHistory {
+            branch,
+            start,
+            cursor,
+            limit,
+        } => {
+            e.u8(6)?;
+            e.put(branch)?;
+            put_optional(e, start.as_ref())?;
+            put_page(e, cursor, *limit)?;
+        }
+        HistoryQuery::GetLayer { layer } => {
+            e.u8(7)?;
+            e.put(layer)?;
+        }
+        HistoryQuery::LayerHistory {
+            stack,
+            start,
+            cursor,
+            limit,
+        } => {
+            e.u8(8)?;
+            e.put(stack)?;
+            put_optional(e, start.as_ref())?;
+            put_page(e, cursor, *limit)?;
+        }
+        HistoryQuery::GetStage { workspace } => {
+            e.u8(9)?;
+            e.put(workspace)?;
+        }
+        HistoryQuery::ListStages {
+            branch,
+            cursor,
+            limit,
+        } => {
+            e.u8(10)?;
+            e.put(branch)?;
+            put_page(e, cursor, *limit)?;
+        }
+    }
+    Ok(())
+}
+
+fn take_query(d: &mut Decoder<'_>) -> Result<HistoryQuery, Failure> {
+    Ok(match d.u8()? {
+        1 => HistoryQuery::GetStack {
+            stack: take_array::<17>(d)?,
+        },
+        2 => {
+            let (cursor, limit) = take_page(d)?;
+            HistoryQuery::ListStacks { cursor, limit }
+        }
+        3 => HistoryQuery::GetBranch {
+            branch: take_array::<17>(d)?,
+        },
+        4 => {
+            let stack = take_array::<17>(d)?;
+            let (cursor, limit) = take_page(d)?;
+            HistoryQuery::ListBranches {
+                stack,
+                cursor,
+                limit,
+            }
+        }
+        5 => HistoryQuery::GetCommit {
+            commit: take_array::<33>(d)?,
+        },
+        6 => {
+            let branch = take_array::<17>(d)?;
+            let start = take_optional::<33>(d)?;
+            let (cursor, limit) = take_page(d)?;
+            HistoryQuery::CommitHistory {
+                branch,
+                start,
+                cursor,
+                limit,
+            }
+        }
+        7 => HistoryQuery::GetLayer {
+            layer: take_array::<33>(d)?,
+        },
+        8 => {
+            let stack = take_array::<17>(d)?;
+            let start = take_optional::<33>(d)?;
+            let (cursor, limit) = take_page(d)?;
+            HistoryQuery::LayerHistory {
+                stack,
+                start,
+                cursor,
+                limit,
+            }
+        }
+        9 => HistoryQuery::GetStage {
+            workspace: take_array::<32>(d)?,
+        },
+        10 => {
+            let branch = take_array::<17>(d)?;
+            let (cursor, limit) = take_page(d)?;
+            HistoryQuery::ListStages {
+                branch,
+                cursor,
+                limit,
+            }
+        }
+        _ => return Err(Code::Unsupported.into()),
+    })
+}
+
+/// Writes one mutating history command.
+fn put_command(e: &mut Encoder, command: &HistoryCommand) -> Result<(), Failure> {
+    match command {
+        HistoryCommand::InitLayerStack {
+            stack,
+            name,
+            scope_seed,
+            manifest,
+        } => {
+            e.u8(1)?;
+            e.put(stack)?;
+            e.blob(name)?;
+            e.put(scope_seed)?;
+            put_manifest(e, manifest)?;
+        }
+        HistoryCommand::Fork {
+            stack,
+            branch,
+            name,
+            source,
+        } => {
+            e.u8(2)?;
+            e.put(stack)?;
+            e.put(branch)?;
+            e.blob(name)?;
+            match source {
+                HistoryForkSource::Layer(layer) => {
+                    e.u8(1)?;
+                    e.put(layer)?;
+                }
+                HistoryForkSource::Commit { branch, commit } => {
+                    e.u8(2)?;
+                    e.put(branch)?;
+                    e.put(commit)?;
+                }
+            }
+        }
+        HistoryCommand::StageChanges(changes) => {
+            e.u8(3)?;
+            put_prepared(e, changes)?;
+        }
+        HistoryCommand::CommitStaged { workspace, token } => {
+            e.u8(4)?;
+            e.put(workspace)?;
+            e.u64(*token)?;
+        }
+        HistoryCommand::Commit(changes) => {
+            e.u8(5)?;
+            put_prepared(e, changes)?;
+        }
+        HistoryCommand::AddLayer {
+            stack,
+            branch,
+            commit,
+            expected_stack_head,
+            expected_branch_base,
+        } => {
+            e.u8(6)?;
+            e.put(stack)?;
+            e.put(branch)?;
+            e.put(commit)?;
+            e.put(expected_stack_head)?;
+            e.put(expected_branch_base)?;
+        }
+        HistoryCommand::DiscardStage { workspace, token } => {
+            e.u8(7)?;
+            e.put(workspace)?;
+            e.u64(*token)?;
+        }
+        HistoryCommand::ReserveInodes { scope, count } => {
+            e.u8(8)?;
+            e.put(scope)?;
+            e.u64(*count)?;
+        }
+    }
+    Ok(())
+}
+
+fn take_command(d: &mut Decoder<'_>) -> Result<HistoryCommand, Failure> {
+    Ok(match d.u8()? {
+        1 => HistoryCommand::InitLayerStack {
+            stack: take_array::<16>(d)?,
+            name: d.blob(NAME_MAX_BYTES)?,
+            scope_seed: d.root()?,
+            manifest: take_manifest(d)?,
+        },
+        2 => {
+            let stack = take_array::<17>(d)?;
+            let branch = take_array::<16>(d)?;
+            let name = d.blob(NAME_MAX_BYTES)?;
+            let source = match d.u8()? {
+                1 => HistoryForkSource::Layer(take_array::<33>(d)?),
+                2 => HistoryForkSource::Commit {
+                    branch: take_array::<17>(d)?,
+                    commit: take_array::<33>(d)?,
+                },
+                _ => return Err(Code::Unsupported.into()),
+            };
+            HistoryCommand::Fork {
+                stack,
+                branch,
+                name,
+                source,
+            }
+        }
+        3 => HistoryCommand::StageChanges(take_prepared(d)?),
+        4 => HistoryCommand::CommitStaged {
+            workspace: take_array::<32>(d)?,
+            token: d.u64()?,
+        },
+        5 => HistoryCommand::Commit(take_prepared(d)?),
+        6 => HistoryCommand::AddLayer {
+            stack: take_array::<17>(d)?,
+            branch: take_array::<17>(d)?,
+            commit: take_array::<33>(d)?,
+            expected_stack_head: take_array::<33>(d)?,
+            expected_branch_base: take_array::<33>(d)?,
+        },
+        7 => HistoryCommand::DiscardStage {
+            workspace: take_array::<32>(d)?,
+            token: d.u64()?,
+        },
+        8 => HistoryCommand::ReserveInodes {
+            scope: d.root()?,
+            count: d.u64()?,
+        },
+        _ => return Err(Code::Unsupported.into()),
+    })
 }
 pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     let mut d = Decoder::new(b)?;
@@ -253,31 +695,8 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             let base = d.root()?;
             let scope = d.root()?;
             let root_serial = d.u64()?;
-            let count = d.count(128, 10)?;
-            let mut directories = Vec::with_capacity(count);
-            let mut total = 0;
-            for _ in 0..count {
-                let parent = d.u64()?;
-                let n = d.count(128 - total, 10)?;
-                total += n;
-                let mut changes = Vec::with_capacity(n);
-                for _ in 0..n {
-                    let name = d.blob(255)?;
-                    let serial = d.u64()?;
-                    changes.push((name, (serial != 0).then_some(serial)));
-                }
-                directories.push(DirectoryChange { parent, changes });
-            }
-            let n = d.count(128, 73)?;
-            let mut inodes = Vec::with_capacity(n);
-            for _ in 0..n {
-                inodes.push(InodeChange {
-                    serial: d.u64()?,
-                    kind: d.u8()?,
-                    content: d.root()?,
-                    metadata: d.root()?,
-                });
-            }
+            let directories = take_directories(&mut d)?;
+            let inodes = take_inodes(&mut d)?;
             Operation::UpdatePreparedFilesystem {
                 base,
                 scope,
@@ -286,6 +705,8 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                 inodes,
             }
         }
+        6 => Operation::HistoryQuery(take_query(&mut d)?),
+        7 => Operation::HistoryCommand(take_command(&mut d)?),
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;

@@ -1,11 +1,15 @@
 //! Configured Store authority and service-wide Q=0 admission.
 use crate::operation::dispatch;
 use layerfs_bridge::contract::*;
+use layerfs_history::HistoryCatalog;
 use layerfs_storage::Store;
 use layerfs_telemetry::operation::{Diagnostic, OperationRecorder};
 use std::{
     io::{Read, Write},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -18,6 +22,12 @@ pub struct StoreAccess {
     pub id: u32,
     pub store: Store,
     pub grants: Vec<Grant>,
+    /// History catalog bound to this Store, when the operator configured one.
+    ///
+    /// It is shared by every connection of this service process, which is what
+    /// lets a stage be created on one connection and committed on another while
+    /// the same continuing authority owns the serials.
+    pub history: Option<Arc<dyn HistoryCatalog>>,
 }
 pub struct Service {
     stores: Vec<StoreAccess>,
@@ -90,10 +100,14 @@ impl Service {
                 .iter()
                 .find(|s| s.id == r.store)
                 .ok_or(Code::Denied)?;
+            // The permission mapping is checked and exhaustive: an opcode with
+            // no declared bit cannot be granted by any mask, and a legacy mask
+            // of 31 therefore grants neither history opcode.
+            let bit = permission_bit(r.operation.opcode()).ok_or(Code::Unsupported)?;
             if !store.grants.iter().any(|g| {
                 g.public_key == *peer.public_key()
                     && g.expires_unix > now
-                    && g.operations & (1 << (r.operation.opcode() - 1)) != 0
+                    && g.operations & bit != 0
             }) {
                 return Err(Code::Denied.into());
             }
@@ -107,7 +121,15 @@ impl Service {
                 return Err(Code::Capacity.into());
             }
             let _active = Active(&self.active);
-            dispatch(&store.store, r, input, output, deadline, scope)
+            dispatch(
+                &store.store,
+                store.history.as_deref(),
+                r,
+                input,
+                output,
+                deadline,
+                scope,
+            )
         })
     }
 }

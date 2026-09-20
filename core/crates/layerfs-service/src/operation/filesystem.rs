@@ -1,4 +1,9 @@
 //! Existing-identity updates only; every supplied root is retained beforehand.
+//!
+//! The prepared-update surface is shared by the legacy content operation and by
+//! history staging. It is the same production body in both cases: one builder,
+//! one ownership rule, one place where a supplied root is checked against the
+//! base tree. History adds semantic-role validation before calling it.
 use super::{failure::content, read::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::{
@@ -10,25 +15,37 @@ use layerfs_content::{
     FilesystemResources, FinalizedConsumer, InodeScope, InodeUpdate, PathName,
 };
 use layerfs_telemetry::timer::{Active, TimingScope};
-pub fn update(
+/// One checked prepared update: an existing root plus its final changes.
+#[derive(Clone, Copy)]
+pub(crate) struct PreparedUpdate<'a> {
+    /// Immutable base root the update is applied to.
+    pub(crate) base: Root,
+    /// Allocation scope the base root records.
+    pub(crate) scope: Root,
+    /// Root directory serial of the base tree.
+    pub(crate) root_serial: u64,
+    /// Final directory bindings.
+    pub(crate) directories: &'a [DirectoryChange],
+    /// Typed final inode values.
+    pub(crate) inodes: &'a [InodeChange],
+}
+
+pub(crate) fn update(
     provider: &dyn AuthenticatedObjects,
-    op: &Operation,
+    update: &PreparedUpdate<'_>,
     consumer: &mut dyn FinalizedConsumer,
     scope: &TimingScope<'_, Active>,
 ) -> Result<(Root, u64), Failure> {
-    let Operation::UpdatePreparedFilesystem {
+    let PreparedUpdate {
         base,
         scope: allocation,
         root_serial,
         directories,
         inodes,
-    } = op
-    else {
-        return Err(Code::Unsupported.into());
-    };
-    let mut fs = FilesystemRead::new(provider, FilesystemRootId(id(base))).map_err(content)?;
-    if fs.root().scope().object() != id(allocation)
-        || fs.root().root_inode().serial() != *root_serial
+    } = *update;
+    let mut fs = FilesystemRead::new(provider, FilesystemRootId(id(&base))).map_err(content)?;
+    if fs.root().scope().object() != id(&allocation)
+        || fs.root().root_inode().serial() != root_serial
     {
         return Err(Code::InvalidInput.into());
     }
@@ -88,9 +105,9 @@ pub fn update(
         })
         .collect::<Result<Vec<_>, Failure>>()?;
     let input = FilesystemInput {
-        base: Some(FilesystemRootId(id(base))),
-        scope: InodeScope::from_object(id(allocation)),
-        root_serial: *root_serial,
+        base: Some(FilesystemRootId(id(&base))),
+        scope: InodeScope::from_object(id(&allocation)),
+        root_serial,
         directories: &directories,
         inodes: &values,
         new_inodes: &[],
