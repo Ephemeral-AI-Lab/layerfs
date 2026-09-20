@@ -1350,3 +1350,107 @@ fn read_only_reopen_supports_reads_and_refuses_every_mutation() {
         Ok(_) => panic!("a foreign binding key must not open the catalog"),
     }
 }
+
+/// The catalog bounds a page by a per-record byte budget the bridge must honour.
+///
+/// The catalog decides how many records fit from a declared worst-case width,
+/// and the bridge writes the actual bytes. If the bridge could write more than
+/// the catalog assumed, a legal page would be refused by the codec; this test
+/// measures the real encoded width of a maximal record and holds the two
+/// together.
+#[test]
+fn encoded_record_widths_match_the_catalog_bounds() {
+    use layerfs_bridge::adapters::native::protocol::{decode_response, encode_response};
+    use layerfs_history::{BranchRecord, CommitRecord, LayerRecord, LayerStackRecord, StageRecord};
+
+    let longest = vec![b'a'; NAME_MAX_BYTES];
+    let page = |records: Vec<LayerWire>| {
+        let response = Response::History(Box::new(HistoryResult::Layers {
+            continuation: Vec::new(),
+            records,
+        }));
+        encode_response(&response).expect("encode")
+    };
+    let layer = LayerWire {
+        layer: [0x32; 33],
+        stack: [0x31; 17],
+        parent: Some([0x32; 33]),
+        root: [0x01; 32],
+        source_branch: Some([0x11; 17]),
+        source_commit: Some([0x12; 33]),
+    };
+    let empty = page(Vec::new()).len();
+    let one = page(vec![layer.clone()]).len();
+    assert!(one - empty <= LayerRecord::MAXIMUM_ENCODED_BYTES);
+
+    let sized = |result: HistoryResult, bound: usize| {
+        let response = Response::History(Box::new(result));
+        let bytes = encode_response(&response).expect("encode");
+        assert_eq!(decode_response(&bytes).expect("decode"), response);
+        assert!(bytes.len() <= bound + 8, "{} > {}", bytes.len(), bound + 8);
+    };
+    let stack = StackWire {
+        stack: [0x31; 17],
+        name: longest.clone(),
+        scope: [0x01; 32],
+        profile: [0x02; 32],
+        head_layer: [0x32; 33],
+    };
+    sized(
+        HistoryResult::Stacks {
+            continuation: Vec::new(),
+            records: vec![stack],
+        },
+        LayerStackRecord::MAXIMUM_ENCODED_BYTES,
+    );
+    let branch = BranchWire {
+        branch: [0x11; 17],
+        stack: [0x31; 17],
+        name: longest.clone(),
+        base_layer: [0x32; 33],
+        head_commit: Some([0x12; 33]),
+    };
+    sized(
+        HistoryResult::Branches {
+            continuation: Vec::new(),
+            records: vec![branch],
+        },
+        BranchRecord::MAXIMUM_ENCODED_BYTES,
+    );
+    let commit = CommitWire {
+        commit: [0x12; 33],
+        stack: [0x31; 17],
+        root: [0x01; 32],
+        parent: Some([0x12; 33]),
+        base_layer: [0x32; 33],
+    };
+    sized(
+        HistoryResult::Commits {
+            continuation: Vec::new(),
+            records: vec![commit],
+        },
+        CommitRecord::MAXIMUM_ENCODED_BYTES,
+    );
+    let stage = StageWire {
+        workspace: [0x01; 32],
+        token: 1,
+        stack: [0x31; 17],
+        branch: [0x11; 17],
+        expected_head: Some([0x12; 33]),
+        expected_base: [0x32; 33],
+        expected_root: [0x01; 32],
+        construction_base_root: [0x01; 32],
+        intended_commit_base: [0x32; 33],
+        candidate_root: [0x01; 32],
+        profile: [0x02; 32],
+        scope: [0x01; 32],
+        generation: 1,
+    };
+    sized(
+        HistoryResult::Stages {
+            continuation: Vec::new(),
+            records: vec![stage],
+        },
+        StageRecord::MAXIMUM_ENCODED_BYTES,
+    );
+}

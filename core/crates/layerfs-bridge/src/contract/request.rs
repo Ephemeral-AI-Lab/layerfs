@@ -530,7 +530,10 @@ fn check_history_command(command: &HistoryCommand) -> Result<(), Failure> {
             check_identity(expected_branch_base, LAYER_BYTES, 0x32)
         }
         HistoryCommand::ReserveInodes { count, .. } => {
-            if *count == 0 || *count > 65_536 {
+            if *count == 0 {
+                return Err(Code::InvalidInput.into());
+            }
+            if *count > 65_536 {
                 return Err(Code::Capacity.into());
             }
             Ok(())

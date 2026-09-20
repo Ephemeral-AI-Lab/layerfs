@@ -535,8 +535,13 @@ impl NamespaceManifest {
 /// most [`MAXIMUM_PAGE_RECORDS`] records and at most [`MAXIMUM_RESULT_BYTES`]
 /// encoded bytes, and a page that cannot carry the caller's full `limit` inside
 /// the byte budget is cut short with a continuation. The catalog therefore has
-/// to know the same widths the codec writes, and the bridge's protocol tests
-/// assert the agreement.
+/// to know the same widths the codec writes.
+///
+/// Each figure is the exact sum of the record's fields at their declared
+/// maxima, including every length prefix, and an understated figure is a real
+/// defect: the catalog would pack a page the codec then refuses. The service's
+/// external test measures the encoded width of a maximal record of each kind
+/// and holds it to the figure here.
 macro_rules! encoded_width {
     ($name:ident, $bytes:expr) => {
         impl $name {
@@ -546,7 +551,7 @@ macro_rules! encoded_width {
     };
 }
 
-encoded_width!(LayerStackRecord, 116);
+encoded_width!(LayerStackRecord, 179);
 encoded_width!(BranchRecord, 166);
 encoded_width!(CommitRecord, 149);
 encoded_width!(LayerRecord, 168);
