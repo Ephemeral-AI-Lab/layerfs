@@ -301,7 +301,32 @@ shipped tree. **The capability that was bought is still bought.**
 - **It does not touch the locator query**, the step size, the cadence, or the
   arbitration invariants.
 
-## 9. Reproduce
+## 9. Addendum — the per-append multiple, and the regression, re-measured in one window
+
+[`previous-model-window.md`](previous-model-window.md) re-measures the **previous**
+model against this one, back to back in a single window, because the previous-model
+figure this round compared against was from a different session. The previous model's
+binary was never archived; it was rebuilt from `f039bcaf2`, validated by saving the
+byte-identical retained Store constant `4af37932…`, and both sides carry the same
+harness seal. Balanced over the two orders (`prev → shipped → shipped → prev`), four
+rows:
+
+| | previous | shipped | multiple |
+| --- | ---: | ---: | ---: |
+| operation | 10.977 s | 16.598 s | **1.51×** |
+| `commit_ns` | 0.235 s | 1.806 s | **7.67×** |
+| per append | 5.14 µs | 39.43 µs | **7.67×** |
+
+That corrects two numbers in circulation: the per-append commit multiple is **~7.7×,
+not ~4×** (the 4× divided this window's numerator by the 08:10 window's denominator;
+the 08:10 same-session pair gives 7.17×, so the ratio is window-stable while the
+absolute prices are not), and `gap-attribution.md` §3's **6.8× is a units mismatch**
+— it divided `commit_ns` per *commit* by a per-*append* figure; per append it is 7.2×.
+It also records that the **operation-level regression is 1.51× in this window against
+the 2.02× the #205 pair measured in its own**: both models got faster, by different
+factors, so the commit multiple held and the operation multiple did not.
+
+## 10. Reproduce
 
 ```sh
 # build the measured binary (the lever is gone from the shipped tree)

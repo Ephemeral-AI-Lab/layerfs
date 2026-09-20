@@ -10,7 +10,9 @@ RUNS = CAMPAIGN / "runs"
 LABELS = [("gate control", "control2"), ("gate treatment", "treat2"),
           ("ABBA 1 a", "abba-1ar1"), ("ABBA 2 b", "abba-2b"),
           ("ABBA 3 b", "abba-3b"), ("ABBA 4 a", "abba-4a"),
-          ("shipped", "shipped"), ("RCA binary now", "rca-binary-now3")]
+          ("shipped", "shipped"), ("RCA binary now", "rca-binary-now3"),
+          ("prev 1", "prev-model"), ("shipped b", "shipped-b"),
+          ("shipped c", "shipped-c"), ("prev 2", "prev-model-b")]
 RCA = CAMPAIGN.parent / "stage-6-history-209-rca-20260920T191016Z"
 
 
@@ -90,6 +92,16 @@ def main() -> int:
         a = sum(d[term] for d in abba_a) / 2
         b = sum(d[term] for d in abba_b) / 2
         print(f"ABBA only {term:<14} a {a/1e9:>8.3f}s  b {b/1e9:>8.3f}s  delta {(b-a)/1e9:>+7.3f}s")
+    by_name = dict(loaded)
+    for prev_name, ship_name, label in (("prev 1", "shipped b", "order prev -> shipped"),
+                                        ("prev 2", "shipped c", "order shipped -> prev")):
+        a, b = by_name[prev_name], by_name[ship_name]
+        print(f"{label}: operation {a['operation_ns']/1e9:.3f} -> {b['operation_ns']/1e9:.3f} s "
+              f"= {b['operation_ns']/a['operation_ns']:.2f}x | commit "
+              f"{a['commit_ns']/1e9:.3f} -> {b['commit_ns']/1e9:.3f} s "
+              f"= {b['commit_ns']/a['commit_ns']:.2f}x | per append "
+              f"{a['commit_ns']/a['pack_appends']/1000:.2f} -> "
+              f"{b['commit_ns']/b['pack_appends']/1000:.2f} us")
     print(f"\ndrift across the ABBA window (4a - 1a): "
           f"{(abba_a[1]['operation_ns']-abba_a[0]['operation_ns'])/1e9:+.3f}s operation, "
           f"{(abba_a[1]['commit_ns']-abba_a[0]['commit_ns'])/1e9:+.3f}s commit")
