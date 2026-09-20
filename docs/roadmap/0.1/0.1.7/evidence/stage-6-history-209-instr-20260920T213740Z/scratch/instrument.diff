@@ -1,0 +1,433 @@
+diff --git a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+index cbbbee972..89dad6bf6 100644
+--- a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
++++ b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+@@ -56,6 +56,7 @@ use layerfs_content::{
+     construct_bytes, construct_bytes_with_predecessor, AdvisoryPredecessors,
+     ConstructionCapacities, ConstructionPolicy, ObjectId, PredecessorBase, PredecessorProvenance,
+ };
++use layerfs_storage::sqlite::step_probe::StepProbe;
+ use layerfs_storage::{SaveOutcome, StoragePolicy, Store, StoreProvider};
+ use layerfs_telemetry::timer::{Active, Timing, TimingScope};
+ 
+@@ -366,6 +367,9 @@ struct SaveTotals {
+     profile_place_ns: u64,
+     profile_sql_ns: u64,
+     profile_commit_ns: u64,
++    /// Measurement-only: the #209 step probe's engine counters, summed over the
++    /// saves this total covers. Zero unless LAYERFS_STORAGE_RCA_PROBE=1.
++    rca: StepProbe,
+ }
+ 
+ impl SaveTotals {
+@@ -446,6 +450,80 @@ impl SaveTotals {
+         self.profile_place_ns = self.profile_place_ns.saturating_add(profile.place_ns);
+         self.profile_sql_ns = self.profile_sql_ns.saturating_add(profile.sql_ns);
+         self.profile_commit_ns = self.profile_commit_ns.saturating_add(profile.commit_ns);
++        self.rca.accumulate(&profile.step);
++    }
++
++    /// The step probe's own rows: one group per SQL-text bucket, then the
++    /// connection's page accounting and the per-region wall charges.
++    ///
++    /// Measurement-only and empty of meaning unless the probe was enabled; the
++    /// rows exist in every row so that a probe-off arm publishes the same keys
++    /// with the same (zero) values on both sides of a pair.
++    fn rca_rows(&self) -> Vec<(String, u64, &'static str)> {
++        let mut rows = Vec::new();
++        for (index, bucket) in layerfs_storage::sqlite::step_probe::BUCKETS
++            .iter()
++            .enumerate()
++        {
++            let counters = self.rca.buckets[index];
++            for (field, value) in [
++                ("calls", counters.calls),
++                ("engine_ns", counters.engine_ns),
++                ("fullscan_steps", counters.fullscan_steps),
++                ("sorts", counters.sorts),
++                ("autoindexes", counters.autoindexes),
++                ("vm_steps", counters.vm_steps),
++                ("reprepares", counters.reprepares),
++            ] {
++                rows.push((format!("rca.{bucket}.{field}"), value, "count"));
++            }
++        }
++        for (field, value, unit) in [
++            ("rca.cache_write", self.rca.cache_write, "pages"),
++            ("rca.cache_spill", self.rca.cache_spill, "pages"),
++            ("rca.cache_hit", self.rca.cache_hit, "pages"),
++            ("rca.cache_miss", self.rca.cache_miss, "pages"),
++            ("rca.cache_used_end", self.rca.cache_used_end, "bytes"),
++            ("rca.stmt_used_end", self.rca.stmt_used_end, "bytes"),
++            ("rca.deferred_fk_end", self.rca.deferred_fk_end, "count"),
++            ("rca.pages_at_commit", self.rca.pages_at_commit, "pages"),
++            ("rca.pages_at_commit_max", self.rca.pages_at_commit_max, "pages"),
++            ("rca.pack_payload_bytes", self.rca.pack_payload_bytes, "bytes"),
++            ("rca.pack_payload_pages", self.rca.pack_payload_pages, "pages"),
++            ("rca.appends", self.rca.appends, "packs"),
++            ("rca.creates", self.rca.creates, "packs"),
++            ("rca.begin_ns", self.rca.begin_ns, "ns"),
++            ("rca.next_pack_ns", self.rca.next_pack_ns, "ns"),
++            ("rca.advance_ns", self.rca.advance_ns, "ns"),
++            ("rca.commit_statement_ns", self.rca.commit_statement_ns, "ns"),
++            ("rca.page_count_start", self.rca.page_count_start, "pages"),
++            ("rca.page_count_end", self.rca.page_count_end, "pages"),
++            ("rca.freelist_start", self.rca.freelist_start, "pages"),
++            ("rca.freelist_end", self.rca.freelist_end, "pages"),
++            (
++                "rca.process_pages_used_end",
++                self.rca.process_pages_used_end,
++                "pages",
++            ),
++            (
++                "rca.process_pages_size_end",
++                self.rca.process_pages_size_end,
++                "pages",
++            ),
++            (
++                "rca.process_pages_overflow_end",
++                self.rca.process_pages_overflow_end,
++                "bytes",
++            ),
++            ("rca.process_heap_end", self.rca.process_heap_end, "bytes"),
++            ("rca.pack_cache_hits", self.rca.pack_cache_hits, "lookups"),
++            ("rca.pack_cache_misses", self.rca.pack_cache_misses, "lookups"),
++            ("rca.pack_cache_distinct", self.rca.pack_cache_distinct, "packs"),
++            ("rca.pack_cache_clears", self.rca.pack_cache_clears, "clears"),
++        ] {
++            rows.push((field.to_string(), value, unit));
++        }
++        rows
+     }
+ 
+     /// The same figures as trace rows: `(suffix, value, unit)`.
+@@ -2464,6 +2542,16 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                 "SaveOutcome's own counters for this state; work counters, not times",
+             )?;
+         }
++        // Measurement-only: the #209 step probe's engine counters for this state.
++        for (suffix, value, unit) in outcome.save.rca_rows() {
++            context.trace.write_number(
++                Kind::Counter,
++                &format!("history.state.{}.{suffix}", outcome.ordinal),
++                i128::from(value),
++                unit,
++                "step probe (#209 commit-time RCA); zero unless LAYERFS_STORAGE_RCA_PROBE=1",
++            )?;
++        }
+         for (suffix, nanos, basis) in [
+             ("input_ns", outcome.input_ns, "harness input assembly inside the child"),
+             ("build_ns", outcome.build_ns, "build/update_filesystem"),
+@@ -2644,6 +2732,17 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+             "chain total of the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
+         )?;
+     }
++    // The step probe's own whole-run totals, in the same units the per-state rows
++    // used. Measurement-only: every value is zero unless the probe was enabled.
++    for (suffix, value, unit) in totals.rca_rows() {
++        context.trace.write_number(
++            Kind::Counter,
++            &format!("delta.{suffix}"),
++            i128::from(value),
++            unit,
++            "step probe (#209 commit-time RCA); zero unless LAYERFS_STORAGE_RCA_PROBE=1",
++        )?;
++    }
+     // A count, not a duration: it is the population the B1 probe measured, so it
+     // is published in its own unit rather than folded into the `ns` group above.
+     context.trace.write_number(
+diff --git a/core/crates/layerfs-storage/src/cas/lifecycle.rs b/core/crates/layerfs-storage/src/cas/lifecycle.rs
+index 862d961e1..a0fdd6f33 100644
+--- a/core/crates/layerfs-storage/src/cas/lifecycle.rs
++++ b/core/crates/layerfs-storage/src/cas/lifecycle.rs
+@@ -35,6 +35,10 @@ impl MutationOwner {
+     ) -> StorageResult<Self> {
+         let guard = ownership::lock(&arbitration)?;
+         crate::sqlite::connection::verify_profile(&connection)?;
++        // Measurement-only (#209 RCA): observe this save's own connection.
++        crate::sqlite::step_probe::install(&connection);
++        let mut step = crate::sqlite::step_probe::StepProbe::default();
++        step.start_save(&connection);
+         let baseline_pack_id = lookup::highest_pack_id(&connection)?;
+         let (save_id, _) = ownership::acquire(&connection)?;
+         // Reserve before allocating writer workspaces. Capture published cache
+@@ -97,7 +101,10 @@ impl MutationOwner {
+                 commits: 1,
+                 ..OutcomeCounters::default()
+             },
+-            profile: SaveProfile::default(),
++            profile: SaveProfile {
++                step,
++                ..SaveProfile::default()
++            },
+             // Enabled only by `LAYERFS_STORAGE_REUSE_PROBE`; `None` otherwise, so
+             // an ordinary save carries no probe state at all.
+             probe: crate::cas::owner::ReuseProbe::enabled().then(Default::default),
+@@ -127,10 +134,14 @@ impl MutationOwner {
+     }
+ 
+     pub(super) fn begin_write(&mut self) -> StorageResult<()> {
++        let started = Instant::now();
+         write::begin_immediate(&self.connection)?;
++        self.profile.step.charge_begin(started);
+         self.transaction_open = true;
+         self.transaction = TransactionState::default();
++        let started = Instant::now();
+         self.next_pack_id = ownership::next_pack(&self.connection)?;
++        self.profile.step.charge_next_pack(started);
+         // The value this transaction starts from is the value the row holds, so a
+         // step that allocates no pack has nothing to write back.
+         self.committed_pack_id = self.next_pack_id;
+@@ -150,7 +161,9 @@ impl MutationOwner {
+     /// dirtied page on a commit that has nothing to do with pack allocation.
+     fn advance_pack_if_moved(&mut self) -> StorageResult<()> {
+         if self.next_pack_id != self.committed_pack_id {
++            let started = Instant::now();
+             ownership::advance_pack(&self.connection, self.next_pack_id)?;
++            self.profile.step.charge_advance(started);
+             self.committed_pack_id = self.next_pack_id;
+         }
+         Ok(())
+@@ -166,7 +179,12 @@ impl MutationOwner {
+             // arbitration lock, so every step commits before that lock is released.
+             // Batching stays inside a step; it cannot span steps.
+             self.advance_pack_if_moved()?;
++            let pages = self.profile.step.commit_pages_before(&self.connection);
++            let committed = Instant::now();
+             write::commit(&self.connection)?;
++            self.profile
++                .step
++                .charge_commit(&self.connection, committed, pages);
+             SaveProfile::charge(&mut self.profile.commit_ns, started);
+             // Clear the flag before the next step re-acquires: if the lock is lost
+             // there, no transaction is open and cleanup proceeds to the deletion
+@@ -253,7 +271,11 @@ impl MutationOwner {
+         ownership::publish(&self.connection, self.save_id)?;
+         self.advance_pack_if_moved()?;
+         let started = Instant::now();
++        let pages = self.profile.step.commit_pages_before(&self.connection);
+         write::commit(&self.connection)?;
++        self.profile
++            .step
++            .charge_commit(&self.connection, started, pages);
+         SaveProfile::charge(&mut self.profile.commit_ns, started);
+         self.counters.commits += 1;
+         self.transaction_open = false;
+@@ -268,6 +290,7 @@ impl MutationOwner {
+         {
+             *shared = private.clone();
+         }
++        self.profile.step.finish_save(&self.connection);
+         Ok(self.counters)
+     }
+ 
+diff --git a/core/crates/layerfs-storage/src/cas/owner.rs b/core/crates/layerfs-storage/src/cas/owner.rs
+index d5613c0aa..f4a9872e8 100644
+--- a/core/crates/layerfs-storage/src/cas/owner.rs
++++ b/core/crates/layerfs-storage/src/cas/owner.rs
+@@ -74,6 +74,13 @@ pub struct SaveProfile {
+     /// ordinary save is unaffected; `SaveOutcome`'s equality already excludes this
+     /// whole struct, so enabling it cannot make a determinism comparison fail.
+     pub reuse_repeat: u64,
++    /// Measurement-only step instrumentation (#209 commit-time RCA).
++    ///
++    /// Zero unless `LAYERFS_STORAGE_RCA_PROBE=1`, in which case it carries the
++    /// engine's own per-statement charges and page accounting for this save. Like
++    /// `reuse_repeat` it is excluded from `SaveOutcome`'s equality, and it is
++    /// removed with the probe before this round's commit.
++    pub step: crate::sqlite::step_probe::StepProbe,
+ }
+ 
+ /// The disjoint parts of [`SaveProfile::resolve`].
+diff --git a/core/crates/layerfs-storage/src/cas/placement.rs b/core/crates/layerfs-storage/src/cas/placement.rs
+index e1c59b287..a0ef9f91e 100644
+--- a/core/crates/layerfs-storage/src/cas/placement.rs
++++ b/core/crates/layerfs-storage/src/cas/placement.rs
+@@ -223,6 +223,7 @@ impl MutationOwner {
+         };
+         SaveProfile::charge(&mut self.profile.sql_ns, started);
+         written?;
++        self.profile.step.charge_pack_body(write.bytes.len(), write.created);
+         if write.created {
+             self.counters.packs_created += 1;
+         } else {
+diff --git a/core/crates/layerfs-storage/src/encoding/delta/read.rs b/core/crates/layerfs-storage/src/encoding/delta/read.rs
+index 22ee52fcf..14abce793 100644
+--- a/core/crates/layerfs-storage/src/encoding/delta/read.rs
++++ b/core/crates/layerfs-storage/src/encoding/delta/read.rs
+@@ -496,15 +496,18 @@ fn pack_of<'b>(
+     pack_id: i64,
+ ) -> StorageResult<(&'b [u8], bool)> {
+     let mut fetched = false;
++    let mut cleared = false;
+     if !packs.contains_key(&pack_id) {
+         let bytes = lookup::pack_bytes(connection, pack_id)?;
+         let retained: usize = packs.values().map(Vec::len).sum();
+         if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
+             packs.clear();
++            cleared = true;
+         }
+         packs.insert(pack_id, bytes);
+         fetched = true;
+     }
++    crate::sqlite::step_probe::note_pack_lookup(pack_id, !fetched, cleared);
+     let bytes = packs
+         .get(&pack_id)
+         .map(Vec::as_slice)
+diff --git a/core/crates/layerfs-storage/src/encoding/pool/read.rs b/core/crates/layerfs-storage/src/encoding/pool/read.rs
+index c12ae2cc1..de296ec65 100644
+--- a/core/crates/layerfs-storage/src/encoding/pool/read.rs
++++ b/core/crates/layerfs-storage/src/encoding/pool/read.rs
+@@ -207,16 +207,20 @@ impl PoolReader {
+     /// the declared bound, so a wave's retained pack bytes are a constant rather
+     /// than a function of how many packs it reads.
+     fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
+-        if !self.packs.contains_key(&pack_id) {
++        let mut cleared = false;
++        let hit = self.packs.contains_key(&pack_id);
++        if !hit {
+             let bytes = lookup::pack_bytes(connection, pack_id)?;
+             self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
+             self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
+             let retained: usize = self.packs.values().map(Vec::len).sum();
+             if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
+                 self.packs.clear();
++                cleared = true;
+             }
+             self.packs.insert(pack_id, bytes);
+         }
++        crate::sqlite::step_probe::note_pack_lookup(pack_id, hit, cleared);
+         self.packs
+             .get(&pack_id)
+             .map(Vec::as_slice)
+diff --git a/core/crates/layerfs-storage/src/sqlite/mod.rs b/core/crates/layerfs-storage/src/sqlite/mod.rs
+index 3812ec727..f1dd9deaa 100644
+--- a/core/crates/layerfs-storage/src/sqlite/mod.rs
++++ b/core/crates/layerfs-storage/src/sqlite/mod.rs
+@@ -8,6 +8,7 @@ pub mod lookup;
+ pub mod ownership;
+ pub mod pool;
+ pub mod schema;
++pub mod step_probe;
+ pub mod write;
+ 
+ pub use cleanup::CleanupReport;
+diff --git a/core/crates/layerfs-storage/src/sqlite/ownership.rs b/core/crates/layerfs-storage/src/sqlite/ownership.rs
+index bf5e8b7fe..a2f91363a 100644
+--- a/core/crates/layerfs-storage/src/sqlite/ownership.rs
++++ b/core/crates/layerfs-storage/src/sqlite/ownership.rs
+@@ -128,11 +128,12 @@ pub(crate) fn publish(connection: &Connection, save: i64) -> StorageResult<()> {
+ }
+ 
+ pub(crate) fn next_pack(connection: &Connection) -> StorageResult<i64> {
+-    Ok(connection.query_row(
+-        "SELECT next_pack_id FROM store_policy WHERE id = 1",
+-        [],
+-        |row| row.get(0),
+-    )?)
++    const SQL: &str = "SELECT next_pack_id FROM store_policy WHERE id = 1";
++    if crate::sqlite::step_probe::statement_cache_enabled() {
++        let mut statement = connection.prepare_cached(SQL)?;
++        return Ok(statement.query_row([], |row| row.get(0))?);
++    }
++    Ok(connection.query_row(SQL, [], |row| row.get(0))?)
+ }
+ 
+ pub(crate) fn advance_pack(connection: &Connection, next: i64) -> StorageResult<()> {
+diff --git a/core/crates/layerfs-storage/src/sqlite/write.rs b/core/crates/layerfs-storage/src/sqlite/write.rs
+index 4f4c7cd05..66e3ed650 100644
+--- a/core/crates/layerfs-storage/src/sqlite/write.rs
++++ b/core/crates/layerfs-storage/src/sqlite/write.rs
+@@ -39,37 +39,52 @@ pub struct ObjectRow {
+     pub record_number: usize,
+ }
+ 
++/// Issues one of the step's own transaction texts.
++///
++/// Measurement-only (#209 Q3): when the lever is on, the text goes through the
++/// connection's prepared-statement cache instead of being parsed per call.
++fn batch_text(connection: &Connection, sql: &'static str) -> rusqlite::Result<()> {
++    if crate::sqlite::step_probe::statement_cache_enabled() {
++        connection.prepare_cached(sql)?.execute([])?;
++        Ok(())
++    } else {
++        connection.execute_batch(sql)
++    }
++}
++
+ /// Attempts the single exclusive acquisition of this operation.
+ pub fn begin_immediate(connection: &Connection) -> StorageResult<()> {
+-    connection
+-        .execute_batch("BEGIN IMMEDIATE")
+-        .map_err(ownership_error)
++    batch_text(connection, "BEGIN IMMEDIATE").map_err(ownership_error)
+ }
+ 
+ /// Acknowledges the open transaction; a failure leaves the outcome unproven.
+ pub fn commit(connection: &Connection) -> StorageResult<()> {
+-    connection
+-        .execute_batch("COMMIT")
+-        .map_err(|error| StorageError::UnknownOutcome {
+-            original: Box::new(StorageError::Engine(error)),
+-        })
++    batch_text(connection, "COMMIT").map_err(|error| StorageError::UnknownOutcome {
++        original: Box::new(StorageError::Engine(error)),
++    })
+ }
+ 
+ /// Rolls the open transaction back; a failure leaves the outcome unproven.
+ pub fn rollback(connection: &Connection) -> StorageResult<()> {
+-    connection
+-        .execute_batch("ROLLBACK")
+-        .map_err(|error| StorageError::UnknownOutcome {
+-            original: Box::new(StorageError::Engine(error)),
+-        })
++    batch_text(connection, "ROLLBACK").map_err(|error| StorageError::UnknownOutcome {
++        original: Box::new(StorageError::Engine(error)),
++    })
+ }
+ 
+ /// Inserts a newly created pack row.
+ pub fn insert_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> StorageResult<()> {
+-    let affected = connection.execute(
+-        "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))",
+-        rusqlite::params![pack_id, bytes],
+-    )?;
++    let affected = if crate::sqlite::step_probe::statement_cache_enabled() {
++        connection
++            .prepare_cached(
++                "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))",
++            )?
++            .execute(rusqlite::params![pack_id, bytes])?
++    } else {
++        connection.execute(
++            "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))",
++            rusqlite::params![pack_id, bytes],
++        )?
++    };
+     if affected != 1 {
+         return Err(StorageError::Integrity("pack insert cardinality"));
+     }
+@@ -78,10 +93,18 @@ pub fn insert_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> Stora
+ 
+ /// Rewrites an existing pack row with its appended groups.
+ pub fn append_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> StorageResult<()> {
+-    let affected = connection.execute(
+-        "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
+-        rusqlite::params![pack_id, bytes],
+-    )?;
++    let affected = if crate::sqlite::step_probe::statement_cache_enabled() {
++        connection
++            .prepare_cached(
++                "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
++            )?
++            .execute(rusqlite::params![pack_id, bytes])?
++    } else {
++        connection.execute(
++            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
++            rusqlite::params![pack_id, bytes],
++        )?
++    };
+     if affected != 1 {
+         return Err(StorageError::Integrity("pack update cardinality"));
+     }

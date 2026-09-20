@@ -1,0 +1,12 @@
+{"schema":"layerfs-trace-v1","seq":0,"kind":"run","key":"case_id","value":"history-stride10","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":1,"kind":"run","key":"family","value":"history.*","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":2,"kind":"run","key":"admission","value":"admission","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":3,"kind":"run","key":"tier","value":"255","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":4,"kind":"run","key":"tier_label","value":"","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":5,"kind":"run","key":"profile","value":"","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":6,"kind":"run","key":"declared_bytes","value":"561010345","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":7,"kind":"run","key":"declared_entries","value":"17","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":8,"kind":"run","key":"cache_state","value":"CreatedInSample","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":9,"kind":"run","key":"store_state","value":"CreatedInSample","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":10,"kind":"run","key":"shape","value":"History(Stride10)","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":11,"kind":"run","key":"phase","value":"Perf","unit":"","basis":"registry row"}
