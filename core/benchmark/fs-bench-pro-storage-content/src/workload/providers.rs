@@ -267,6 +267,12 @@ impl PrefixKeys {
     }
 
     /// Identities admitted.
+    ///
+    /// There is deliberately no `is_empty`: an empty prefix is batch 0's state and
+    /// is not a condition any caller branches on, so naming one would add a
+    /// predicate with no reader. `clippy::len_without_is_empty` asks for it anyway,
+    /// which is why the allowance is here rather than a method.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.allowed.len()
     }
