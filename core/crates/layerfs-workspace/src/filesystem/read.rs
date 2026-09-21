@@ -199,7 +199,9 @@ impl Workspace {
             };
             let skip = position - piece.start;
             let count = (piece.length - skip).min((bytes.len() - completed) as u64) as usize;
-            if piece.payload == 0 && inode.captured {
+            if piece.kind == crate::overlay::pieces::PieceKind::Zero {
+                bytes[completed..completed + count].fill(0);
+            } else if piece.kind == crate::overlay::pieces::PieceKind::Base && inode.captured {
                 let captured = crate::overlay::pieces::CapturedBase::parse(inode.base)?;
                 let parent = root.parent.as_ref().ok_or(WorkspaceError::Io)?;
                 if parent.root()? != captured.root {
@@ -223,7 +225,7 @@ impl Workspace {
                     operation,
                     deadline,
                 )?;
-            } else if piece.payload == 0 {
+            } else if piece.kind == crate::overlay::pieces::PieceKind::Base {
                 operation.remote()?;
                 let mut output = Cursor::new(&mut bytes[completed..completed + count]);
                 let response = self.call(

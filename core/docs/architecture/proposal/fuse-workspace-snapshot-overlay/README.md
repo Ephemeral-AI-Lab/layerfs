@@ -80,6 +80,13 @@ and after a changed Commit, late D1, real save progress/loss and exact failures.
 Composite replies carry no token; local result types now represent that absence.
 Writable mounting, failure disposition, full npm and R6 remain open.
 
+**Resize prerequisite:** [existing-inode set_len and logical zeros](19-resize-zero-ranges.md)
+now support shrink, zero extension and same-length timestamp updates through the
+shared mutation/Commit path. Nine native selections pass, including exact G/D1
+truncate/zero lowering and actual-save progress; a corrected test-oracle failure
+remains recorded. Writable open/handle semantics and kernel coherence are next
+prerequisites before enabling mount writes.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

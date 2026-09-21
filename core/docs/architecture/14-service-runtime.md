@@ -397,3 +397,15 @@ token, so local Commit report/selector associations are optional and native stag
 observations remain separate. The existing shared operation, wire profile and
 one-construction-worker default are unchanged. Actual native scope and remaining
 mounted/control/failure-disposition dependencies are recorded in 18.
+
+
+From parent `573b4bbd35bdcd5d8fe55c8fc107f8c31cd791c5`,
+[Workspace resize](proposal/fuse-workspace-snapshot-overlay/19-resize-zero-ranges.md)
+adds set_len for existing cached regular inodes through the same mutation and
+Commit owners. The64-byte private piece value gains strict tag2 Zero with no
+payload/custody/offset; reads and Source synthesize only bounded requested spans.
+Zero bytes count toward the existing8 MiB replacement envelope. In-memory Piece
+is48 bytes; the conservative596,448-byte transient accounting remains below the
+existing640 KiB reservation, with unchanged windows, FD and disk reserves.
+No writable mount, shared service operation or reference change is introduced;
+actual native results, retained failures and next dependencies are recorded in19.

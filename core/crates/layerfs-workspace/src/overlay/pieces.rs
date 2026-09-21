@@ -1,7 +1,14 @@
 use crate::{backing::metadata_pages::PageRef, NodeAttributes, WorkspaceError};
 use layerfs_bridge::contract::{Root, MAX_FILE};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PieceKind {
+    Base,
+    Local,
+    Zero,
+}
 #[derive(Clone, Copy, Debug)]
 pub struct Piece {
+    pub kind: PieceKind,
     pub start: u64,
     pub length: u64,
     pub offset: u64,
@@ -11,7 +18,11 @@ pub struct Piece {
 impl Piece {
     pub fn value(self) -> [u8; 64] {
         let mut b = [0; 64];
-        b[0] = u8::from(self.payload != 0);
+        b[0] = match self.kind {
+            PieceKind::Base => 0,
+            PieceKind::Local => 1,
+            PieceKind::Zero => 2,
+        };
         b[8..16].copy_from_slice(&self.length.to_be_bytes());
         b[16..24].copy_from_slice(&self.offset.to_be_bytes());
         b[24..32].copy_from_slice(&self.payload.to_be_bytes());
@@ -19,10 +30,16 @@ impl Piece {
         b
     }
     pub fn parse(start: u64, b: &[u8]) -> Result<Self, WorkspaceError> {
-        if b.len() != 64 || b[0] > 1 || b[1..8].iter().chain(&b[40..]).any(|v| *v != 0) {
+        if b.len() != 64 || b[0] > 2 || b[1..8].iter().chain(&b[40..]).any(|v| *v != 0) {
             return Err(WorkspaceError::Io);
         }
         let p = Self {
+            kind: match b[0] {
+                0 => PieceKind::Base,
+                1 => PieceKind::Local,
+                2 => PieceKind::Zero,
+                _ => return Err(WorkspaceError::Io),
+            },
             start,
             length: get(b, 8)?,
             offset: get(b, 16)?,
@@ -30,8 +47,11 @@ impl Piece {
             custody: PageRef::parse(&b[32..40])?,
         };
         if p.length == 0
-            || (b[0] == 0) != (p.payload == 0)
-            || (p.payload == 0) != (p.custody == PageRef::NULL)
+            || match p.kind {
+                PieceKind::Base => p.payload != 0 || p.custody != PageRef::NULL,
+                PieceKind::Local => p.payload == 0 || p.custody == PageRef::NULL,
+                PieceKind::Zero => p.payload != 0 || p.custody != PageRef::NULL || p.offset != 0,
+            }
             || p.offset.checked_add(p.length).is_none_or(|n| n > MAX_FILE)
             || p.start.checked_add(p.length).is_none_or(|n| n > MAX_FILE)
         {
@@ -175,11 +195,16 @@ pub fn splice(
         }
         if let Some(last) = new.last_mut() {
             let last: &mut Piece = last;
-            if last.payload == p.payload
+            if last.kind == p.kind
+                && last.payload == p.payload
                 && last.custody == p.custody
-                && last.offset + last.length == p.offset
+                && (p.kind == PieceKind::Zero
+                    || last.offset.checked_add(last.length) == Some(p.offset))
             {
-                last.length += p.length;
+                last.length = last
+                    .length
+                    .checked_add(p.length)
+                    .ok_or(WorkspaceError::Capacity)?;
                 return Ok(());
             }
         }
@@ -205,7 +230,9 @@ pub fn splice(
         }
         let mut part = *p;
         let skip = end.saturating_sub(p.start);
-        part.offset += skip;
+        if part.kind != PieceKind::Zero {
+            part.offset = part.offset.checked_add(skip).ok_or(WorkspaceError::Io)?;
+        }
         part.length -= skip;
         push(part)?;
     }
@@ -214,7 +241,7 @@ pub fn splice(
     let mut edits = 0u16;
     let mut bytes = 0u64;
     for p in &new {
-        if p.payload != 0 {
+        if p.kind != PieceKind::Base {
             pending = pending
                 .checked_add(p.length)
                 .ok_or(WorkspaceError::Capacity)?;

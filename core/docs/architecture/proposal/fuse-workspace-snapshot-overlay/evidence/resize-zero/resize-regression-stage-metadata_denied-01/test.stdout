@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::stage_metadata_denied ... STAGE_FAILURE StageFailure { generation: 1, phase: MetadataSave, disposition: KnownBeforeStage, cause: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None }), observed_stage: None, known_stage: None, source_failure: None, pending: Some(InodeSaveObservation { serial: 2, revision: 1, length: 67108864, content: [156, 144, 130, 27, 253, 191, 178, 238, 187, 158, 48, 90, 168, 213, 175, 30, 239, 38, 121, 215, 58, 52, 95, 168, 160, 89, 128, 223, 202, 30, 11, 113], metadata: None }) }
+STAGE_CHECK known-metadata-denial-retains-saved-file-G-and-D1 PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.06s
+

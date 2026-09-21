@@ -1,0 +1,30 @@
+{
+  "source_parent": "573b4bbd35bdcd5d8fe55c8fc107f8c31cd791c5",
+  "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88",
+  "test_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/e9fef8b32a28cb6aeb11d49f1435e5fe65928177c3c0501353dedca659d8e289/resize-test",
+  "test_binary_sha256": "e9fef8b32a28cb6aeb11d49f1435e5fe65928177c3c0501353dedca659d8e289",
+  "test_source_sha256": "293578d503a7917aa52e34f036d962d3e80d81d4359343e520ce813ec3ccd79c",
+  "helper_source_sha256": "77323daa166d0c48fbb0be6f79b4f97eea129e96bd749b2510cc4a7793bb6605",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/e6727867e9de9e8d5c9fcde85b35794f9a01eca85993492f2a866201f937bc9e/host",
+  "host_binary_sha256": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "582404128f8f6409faa0cc5d1695f2e1a55aa202f9456340cf138ef8b2d4d7da",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "change": "Test oracle now asserts held canonical reply consumes Q0; old local Zero reply remains across commits, complete byte oracles unchanged",
+  "stage_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/56eef2d48c0b97a210a277213fe862cceaf086e7cade605748f95908af2b0aa3/stage-test",
+  "stage_sha256": "56eef2d48c0b97a210a277213fe862cceaf086e7cade605748f95908af2b0aa3",
+  "commit_staged_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/8cdb6608a1710cb6914bec096259affa5be7dca7db028f92101ff3def7953469/commit_staged-test",
+  "commit_staged_sha256": "8cdb6608a1710cb6914bec096259affa5be7dca7db028f92101ff3def7953469",
+  "composite_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/5254ca5afdc91b214aff2636e47150c8eeacae8f58bcdc9f10d8b2a79e0e9ddb/composite-test",
+  "composite_sha256": "5254ca5afdc91b214aff2636e47150c8eeacae8f58bcdc9f10d8b2a79e0e9ddb",
+  "local_edit_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/aafe89cafe346c2a4403041b918438e8a2b8445b1bc99ee7937d725dbeaa3935/local_edit-test",
+  "local_edit_sha256": "aafe89cafe346c2a4403041b918438e8a2b8445b1bc99ee7937d725dbeaa3935",
+  "payload_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/db6e9adcad4887aa456f79ab82e77d0271f2f13966834239f57180412b85d30f/payload-test",
+  "payload_sha256": "db6e9adcad4887aa456f79ab82e77d0271f2f13966834239f57180412b85d30f",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/cb7bb3f57c4ff639f9999d1ae5729cfb686e6b2487876d73f864be2da6801d6d/layerfs-daemon",
+  "linux_daemon_sha256": "cb7bb3f57c4ff639f9999d1ae5729cfb686e6b2487876d73f864be2da6801d6d"
+}

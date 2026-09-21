@@ -1252,3 +1252,13 @@ now pass, along with the selected existing-file/failure/resource SDK subsets.
 Composite success has no returned stage token; the local report/selector fields
 are optional and observed stage data remains separate. These results do not close
 full mounted, namespace, failure-disposition, npm or R6 acceptance.
+
+
+[19 — Existing-inode resize and zero ranges](19-resize-zero-ranges.md), from parent
+`573b4bbd35bdcd5d8fe55c8fc107f8c31cd791c5`, supplies set_len before R4's dependent
+truncate/extend callbacks. It uses the shared mutation body and strict tag2 Zero
+pieces in the existing64-byte codec; all zero bytes still count against the8 MiB
+shared replacement bound. Native S-18 subsets now cover shrink/reextend of G and
+overwriting captured zeros before the saved root arrives. The original Q0 test-
+oracle failure remains FAIL. Writable handle/open/append and kernel coherence,
+full mounted schedules, namespace/npm and R6 remain separate open work.

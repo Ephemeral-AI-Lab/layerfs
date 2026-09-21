@@ -5,7 +5,7 @@ use super::{
     segments::Window,
 };
 use crate::{
-    overlay::pieces::{Inode, Piece},
+    overlay::pieces::{Inode, Piece, PieceKind},
     WorkspaceError,
 };
 use std::time::Instant;
@@ -26,11 +26,15 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
         } else if cell.key_len == 9 && cell.key()[0] == b'I' {
             Inode::parse(cell.value())?.pieces
         } else if cell.key_len == 8 && cell.value_len == 64 {
-            Piece::parse(
+            let piece = Piece::parse(
                 u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?),
                 cell.value(),
-            )?
-            .custody
+            )?;
+            if piece.kind == PieceKind::Local {
+                piece.custody
+            } else {
+                PageRef::NULL
+            }
         } else if (cell.key_len == 9 && cell.key()[0] == b'R' && cell.value_len == 80)
             || (cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1])
         {

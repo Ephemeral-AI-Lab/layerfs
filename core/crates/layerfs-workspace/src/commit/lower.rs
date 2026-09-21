@@ -5,7 +5,7 @@ use crate::{
         metadata_pages::{self, Cell},
     },
     overlay::{
-        pieces::{get, Inode},
+        pieces::{get, Inode, PieceKind},
         snapshot::Submission,
     },
     *,
@@ -99,7 +99,7 @@ impl Workspace {
         let mut total = 0u64;
         let mut delta = 0i128;
         for piece in pieces {
-            if piece.payload != 0 {
+            if piece.kind != PieceKind::Base {
                 replacement = replacement
                     .checked_add(piece.length)
                     .ok_or(WorkspaceError::Capacity)?;

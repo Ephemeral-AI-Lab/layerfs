@@ -5,7 +5,7 @@ use crate::{
         metadata_index::vector,
         metadata_pages::{self, Cell, PageRef},
     },
-    overlay::pieces::{self, CapturedBase, Inode, Piece},
+    overlay::pieces::{self, CapturedBase, Inode, Piece, PieceKind},
     *,
 };
 use layerfs_bridge::contract::{Inspect, Operation, Root, MAX_FILE};
@@ -13,6 +13,12 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
+type Original = (NodeAttributes, Root, Root, u64);
+#[derive(Clone, Copy)]
+enum FileMutation<'a> {
+    Range(&'a RangeEdit),
+    SetLen(u64),
+}
 impl Workspace {
     pub(crate) fn overlay_inode(
         &self,
@@ -58,7 +64,7 @@ impl Workspace {
         &self,
         path: &WorkspacePath,
         deadline: Instant,
-    ) -> Result<(NodeAttributes, Root, Root, u64), WorkspaceError> {
+    ) -> Result<Original, WorkspaceError> {
         let (base, baseline) = {
             let state = self.state()?;
             if let Some(node) = state
@@ -113,6 +119,78 @@ impl Workspace {
             .map(|(attr, content, metadata)| (attr, content, metadata, baseline))
             .ok_or(WorkspaceError::InvalidInput)
     }
+    fn serial_original(&self, serial: u64, deadline: Instant) -> Result<Original, WorkspaceError> {
+        let _path = self
+            .host
+            .budget
+            .reserve(crate::runtime::state::PATH_BYTES)?;
+        let (base, baseline, path, path_len, selected) = {
+            let state = self.state()?;
+            self.available(&state)?;
+            let node = state.node(serial)?;
+            if node.attr.kind == NodeKind::Directory {
+                return Err(WorkspaceError::IsDirectory);
+            }
+            if node.attr.kind != NodeKind::File {
+                return Err(WorkspaceError::WrongKind);
+            }
+            super::namespace::check_access(node.attr, self.inner.root.uid, 2)?;
+            if node.baseline == state.baseline {
+                return Ok((node.original, node.content, node.metadata, state.baseline));
+            }
+            (
+                state.base,
+                state.baseline,
+                node.path,
+                node.path_len,
+                node.attr,
+            )
+        };
+        let _remote = self.begin(true, deadline)?;
+        let mut bytes = vector(path_len)?;
+        bytes.extend_from_slice(&path[..path_len]);
+        let response = self.call(
+            Operation::Inspect {
+                root: base,
+                query: Inspect::Attributes { path: bytes },
+            },
+            0,
+            &mut std::io::sink(),
+            deadline,
+        )?;
+        let (attr, content, metadata) = super::namespace::attributes(
+            response,
+            false,
+            self.inner.root.uid,
+            self.inner.root.gid,
+        )?;
+        if attr.serial != serial
+            || attr.kind != selected.kind
+            || attr.references != selected.references
+        {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        Ok((attr, content, metadata, baseline))
+    }
+    /// Changes an existing cached regular inode's length and modification time.
+    /// Logical extension owns Zero pieces, without accepting payload bytes.
+    pub fn set_len(
+        &self,
+        serial: u64,
+        length: u64,
+        deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        if self.inner.access != WorkspaceAccess::LocalEdit {
+            return Err(WorkspaceError::ReadOnly);
+        }
+        let deadline = Self::callback_deadline(deadline);
+        let _operation = self.begin(false, deadline)?;
+        if length > MAX_FILE {
+            return Err(WorkspaceError::Capacity);
+        }
+        let original = self.serial_original(serial, deadline)?;
+        self.mutate_file(original, FileMutation::SetLen(length), deadline)
+    }
     pub fn edit_file_range(
         &self,
         path: &WorkspacePath,
@@ -138,12 +216,21 @@ impl Workspace {
         if edit.replacement.len() > 8 * 1024 * 1024 {
             return Err(WorkspaceError::Capacity);
         }
+        let original = self.edit_original(path, deadline)?;
+        self.mutate_file(original, FileMutation::Range(edit), deadline)
+    }
+    fn mutate_file(
+        &self,
+        original: Original,
+        mutation: FileMutation<'_>,
+        deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        let (original, content, metadata, baseline) = original;
         let host = self
             .host
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let (original, content, metadata, baseline) = self.edit_original(path, deadline)?;
         let _writer = host.writer()?;
         if original.kind == NodeKind::Directory {
             return Err(WorkspaceError::IsDirectory);
@@ -187,13 +274,52 @@ impl Workspace {
             None => None,
         };
         let mut inode = old.unwrap_or_else(|| Inode::initial(original, content, metadata));
-        if edit.start > edit.end || edit.end > inode.length {
-            return Err(WorkspaceError::InvalidInput);
-        }
+        let (start, end, mut replacement, accepted_bytes) = match mutation {
+            FileMutation::Range(edit) => {
+                if edit.start > edit.end || edit.end > inode.length {
+                    return Err(WorkspaceError::InvalidInput);
+                }
+                let held = edit
+                    .replacement
+                    .record
+                    .state
+                    .lock()
+                    .map_err(|_| WorkspaceError::Io)?
+                    .custody;
+                (
+                    edit.start,
+                    edit.end,
+                    Piece {
+                        kind: PieceKind::Local,
+                        start: 0,
+                        length: edit.replacement.len(),
+                        offset: 0,
+                        payload: edit.replacement.record.id,
+                        custody: held
+                            .filter(|(id, _)| *id == arena.id)
+                            .map_or(PageRef { slot: 1, epoch: 1 }, |(_, r)| r),
+                    },
+                    edit.replacement.len(),
+                )
+            }
+            FileMutation::SetLen(length) => (
+                length.min(inode.length),
+                inode.length,
+                Piece {
+                    kind: PieceKind::Zero,
+                    start: 0,
+                    length: length.saturating_sub(inode.length),
+                    offset: 0,
+                    payload: 0,
+                    custody: PageRef::NULL,
+                },
+                0,
+            ),
+        };
         let length = inode
             .length
-            .checked_sub(edit.end - edit.start)
-            .and_then(|n| n.checked_add(edit.replacement.len()))
+            .checked_sub(end - start)
+            .and_then(|n| n.checked_add(replacement.length))
             .ok_or(WorkspaceError::Capacity)?;
         if length > MAX_FILE {
             return Err(WorkspaceError::Capacity);
@@ -224,6 +350,7 @@ impl Workspace {
             let mut pieces = vector(1024)?;
             if inode.length > 0 {
                 pieces.push(Piece {
+                    kind: PieceKind::Base,
                     start: 0,
                     length: inode.length,
                     offset: 0,
@@ -238,6 +365,7 @@ impl Workspace {
             let mut pieces = vector(1024)?;
             if inode.length > 0 {
                 pieces.push(Piece {
+                    kind: PieceKind::Base,
                     start: 0,
                     length: inode.length,
                     offset: 0,
@@ -248,30 +376,8 @@ impl Workspace {
             pieces
         };
         // Normalize and enforce the shared replay envelope before reserving or touching metadata.
-        let mut replacement = Piece {
-            start: 0,
-            length: edit.replacement.len(),
-            offset: 0,
-            payload: edit.replacement.record.id,
-            custody: {
-                let held = edit
-                    .replacement
-                    .record
-                    .state
-                    .lock()
-                    .map_err(|_| WorkspaceError::Io)?
-                    .custody;
-                held.filter(|(id, _)| *id == arena.id)
-                    .map_or(PageRef { slot: 1, epoch: 1 }, |(_, r)| r)
-            },
-        };
-        let (mut pieces, edits, replacement_bytes) = pieces::splice(
-            &old_pieces,
-            edit.start,
-            edit.end,
-            replacement,
-            inode.base_length,
-        )?;
+        let (mut pieces, edits, replacement_bytes) =
+            pieces::splice(&old_pieces, start, end, replacement, inode.base_length)?;
         let revision = expected_revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
@@ -287,11 +393,14 @@ impl Workspace {
         inode.replacement = replacement_bytes;
         inode.count = pieces.len() as u16;
         let candidate = host.candidate(arena, generation, needs_completion, parent)?;
-        if !edit.replacement.is_empty() {
-            replacement.custody = arena.custody(&candidate, &edit.replacement, window, deadline)?;
-            for p in &mut pieces {
-                if p.payload == replacement.payload {
-                    p.custody = replacement.custody;
+        if let FileMutation::Range(edit) = mutation {
+            if !edit.replacement.is_empty() {
+                replacement.custody =
+                    arena.custody(&candidate, &edit.replacement, window, deadline)?;
+                for p in &mut pieces {
+                    if p.kind == PieceKind::Local && p.payload == replacement.payload {
+                        p.custody = replacement.custody;
+                    }
                 }
             }
         }
@@ -355,7 +464,7 @@ impl Workspace {
             generation,
             inode: original.serial,
             revision,
-            accepted_bytes: edit.replacement.len(),
+            accepted_bytes,
         })
     }
 }

@@ -1,7 +1,7 @@
 //! The existing bridge Source contract over captured replacement spans.
 use crate::{
     backing::{metadata::RootOwner, reader::PayloadReader},
-    overlay::pieces::Inode,
+    overlay::pieces::{Inode, PieceKind},
     *,
 };
 use layerfs_bridge::contract::Source;
@@ -21,6 +21,7 @@ pub struct ReplacementSource {
     emitted: u64,
     reader: Option<PayloadReader>,
     left: u64,
+    zero: bool,
     pub failure: Option<WorkspaceError>,
 }
 impl ReplacementSource {
@@ -33,6 +34,7 @@ impl ReplacementSource {
             emitted: 0,
             reader: None,
             left: 0,
+            zero: false,
             failure: None,
         }
     }
@@ -53,8 +55,19 @@ impl ReplacementSource {
             return Ok(0);
         }
         loop {
+            if self.zero {
+                let count = out.len().min(MAX_READ_BYTES).min(self.left as usize);
+                if count == 0 {
+                    return Err(WorkspaceError::Io);
+                }
+                out[..count].fill(0);
+                self.left -= count as u64;
+                self.emitted += count as u64;
+                self.zero = self.left != 0;
+                return Ok(count);
+            }
             if let Some(reader) = &mut self.reader {
-                let limit = out.len().min(self.left as usize);
+                let limit = out.len().min(MAX_READ_BYTES).min(self.left as usize);
                 let count =
                     Source::read(reader, &mut out[..limit], deadline, cancel).map_err(|error| {
                         error
@@ -104,12 +117,18 @@ impl ReplacementSource {
                 .checked_add(piece.length)
                 .filter(|position| *position <= self.inode.length)
                 .ok_or(WorkspaceError::Io)?;
-            if piece.payload == 0 {
-                continue;
+            match piece.kind {
+                PieceKind::Base => continue,
+                PieceKind::Zero => {
+                    self.left = piece.length;
+                    self.zero = true;
+                }
+                PieceKind::Local => {
+                    let payload = self.root.arena.payload(piece.payload, piece.custody)?;
+                    self.left = piece.length;
+                    self.reader = Some(payload.reader(piece.offset..piece.offset + piece.length)?);
+                }
             }
-            let payload = self.root.arena.payload(piece.payload, piece.custody)?;
-            self.left = piece.length;
-            self.reader = Some(payload.reader(piece.offset..piece.offset + piece.length)?);
         }
     }
 }
