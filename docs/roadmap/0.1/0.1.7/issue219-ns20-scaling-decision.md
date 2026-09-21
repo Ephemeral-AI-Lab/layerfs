@@ -7,6 +7,29 @@
 > section 5, and it answers the two things that step left open: whether to build a
 > 100,000-entry pipeline row, and the case mapping that correction 4 says has never
 > been written down.
+>
+> **Section 3's decision was taken back by the owner the same day — see §0.** The row
+> is commissioned by [`issue219-ns20-pipeline-100k-handoff.md`](issue219-ns20-pipeline-100k-handoff.md);
+> §1, §2 and §4 still stand and are what the new row is not evidence for.
+
+## 0. Owner ruling, 2026-09-21: the rung is built anyway
+
+**Section 3's decision has been taken back by the owner.** It registered its own reversal conditions,
+and condition 3 was *"an owner ruling that the pipeline family needs a second namespace-scale point for
+a reason outside this campaign's gap"* — that ruling is given: the row is commissioned. The commission
+is [`issue219-ns20-pipeline-100k-handoff.md`](issue219-ns20-pipeline-100k-handoff.md), which carries the
+surfaces the row costs, the two hard constraints that make the obvious declaration wrong, and the one
+modelling decision that still needs a ruling of its own (the declared total).
+
+**Conditions 1 and 2 are not met and are not waived.** There is still no session control, so a
+100,000-entry row's number cannot yet be compared with the 10,000-entry row it extends; the handoff's
+section 5 is the cheap answer and the next agent is asked to do it **before the first timed run** rather
+than after. And no measured non-proportionality in the save path has been found — the row is built on
+the owner's judgement that a second point is worth having, which is a legitimate reason and is recorded
+here as the reason rather than as a measurement.
+
+Everything else on this page stands: the case mapping (§2) is what the new row is and is not evidence
+for, and the handoff's price for the row corrects two errors in the page that commissioned this round.
 
 ## 1. First, a correction to the handoff: S0 was written, and it *is* the pairing page
 
@@ -61,7 +84,7 @@ Three different registered rows answer to the name `namespace-10000`, in two har
    `pipeline-namespace-10000` moves that number, in either direction.
 2. **The campaign's row is an analogue, not a reproduction.** Its timer excludes the construction that
    the bar's timer includes and includes a Store the bar's case does not write
-   (`pipeline.rs:1156-1166` says exactly this). Comparing the two figures is a category error and the
+   (`pipeline.rs:1159-1164` says exactly this). Comparing the two figures is a category error and the
    campaign has not made it.
 3. **The one comparison that is defensible is a boundary-matched *work* comparison**, and it is labelled
    as a shape comparison rather than a pairing: round 17's boundary is
@@ -122,10 +145,10 @@ The decision reverses if **any** of these holds:
 
 The handoff costs the row as *"a new case declaration, a 600 MB fixture (500 MB + the 100 MB anchor), a
 new prepared artifact and new pins"*. **"A new prepared artifact" is wrong for this family**: the
-registry row is `prepared = -` — `Preparation::InProcess` — so the pipeline case builds its fixture
-inside its own invocation and `runner.py` acquires no master for it
-(`tests/golden/registry.tsv:219`; `pipeline.rs:731-736` constructs the tree and the content untimed, in
-process). The `600 MB` is also an inference rather than a fact: this family declares a **total**
+registry row is `prepared = -` — `Preparation::InProcess`, the default `CaseSpec::new` sets
+(`families/mod.rs:134`) and this family never overrides (`tests/golden/registry.tsv:219`) — so the
+pipeline case builds its fixture inside its own invocation (`pipeline.rs:631-637`) and `runner.py`
+acquires no master for it. The `600 MB` is also an inference rather than a fact: this family declares a **total**
 (`NAMESPACE_SCALE_BYTES = 300_000_000`, `pipeline.rs:86`) with the anchor inside it
 (`namespace_content.rs:48-51`, `:195`), so a 100,000-entry row's total is a declaration to be made, not
 one to be copied from the reference harness's `300 MB + 100 MB anchor`. The real price is a

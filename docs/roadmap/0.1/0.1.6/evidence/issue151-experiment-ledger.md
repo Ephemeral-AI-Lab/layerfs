@@ -3446,3 +3446,53 @@ is acquired. The 600 MB is an inference too: this family declares a **total**
 (`namespace_content.rs:48-51`, `:195`).
 
 Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`.
+
+## L83 — #219 round 20, filed: the `pipeline-namespace-100000` commission, and the owner ruling that reverses step 3 (2026-09-21)
+
+Status: **handoff and commission.** No product line changed, nothing was run, no performance claim is
+made. [`issue219-ns20-pipeline-100k-handoff.md`](../../0.1.7/issue219-ns20-pipeline-100k-handoff.md),
+and the ruling recorded at the head of
+[`issue219-ns20-scaling-decision.md`](../../0.1.7/issue219-ns20-scaling-decision.md) §0.
+
+**Owner ruling, 2026-09-21: build the rung.** Round 20's step 3 decided not to
+(L82, above),
+and registered its own reversal conditions. Condition 3 — *"an owner ruling that the pipeline family
+needs a second namespace-scale point for a reason outside this campaign's gap"* — is the one that fired.
+**Conditions 1 and 2 are not met and are not waived**: there is still no session control, so a
+100,000-entry row cannot yet be compared with the 10,000-entry row it extends, and no measured
+non-proportionality in the save path has been found. The commission asks for the session anchor
+**before the first timed run**, and the reason is L80's own measurement: two rows of the same product,
+driver and case are **183,412,999 ns** apart across five hours of session drift, against levers of
+20–90 ms. The anchor is free — `namespace-10000` in `c1.fs.build-scale`, `phases.operation_ns`
+68,514,625, complete command 94,736,583, **no Store**, so no product lever can reach it.
+
+**Two hard constraints the commission prices by reading**, both verified rather than assumed, and both
+of which would have cost the next agent a wasted round:
+
+1. **The row must declare 1,000 directories, not 100.** `namespace_content.rs:264` maps
+   `index = directory * FILES_PER_DIRECTORY + ordinal` with `FILES_PER_DIRECTORY = 100` a const read at
+   two sites (`namespace_content.rs:35`, `pipeline.rs:674`). At 100,000 entries over 100 directories the
+   index space wraps and **position 10,000 reuses index 100** — 100,000 files onto 10,000 distinct
+   serials. Over **1,000** directories all 100,000 are distinct, and 1,000 directories is what the C1
+   ladder's own 100,000-entry rung already declares (`c1_fs_build.rs:20`).
+2. **The declared total has a floor of 100,099,899 B.** `namespace_content.rs:222-225` computes
+   `distributable = total_bytes − anchor_bytes − positive`, and at 100,000 entries `positive = 99,899`
+   with `anchor_bytes = 100,000,000`. Anything smaller is refused with `"namespace byte budget"`.
+
+**And one decision the commission deliberately does not make.** `plan` states its own rule
+(`namespace_content.rs:153-155`): beyond the declared bands, *"a larger `entries` degrades into a
+bigger tiny band rather than a different shape"*. At 100,000 entries **90,000 files are surplus and
+every one lands in the tiny band**, so a 300,000,000 total measures *entry* scaling at constant bytes
+while ~600,000,000 measures both axes. That is a declaration about what the row is evidence for and it
+needs its own ruling before the run.
+
+**Two errors in the page that commissioned round 20 are corrected in the commission**: it prices the
+row as needing "a new prepared artifact", which this family does not use (`prepared = -`,
+`Preparation::InProcess`, the `CaseSpec::new` default at `families/mod.rs:134`, never overridden), and
+its "600 MB" is a reference-harness figure rather than this family's `NAMESPACE_SCALE_BYTES` total
+(`pipeline.rs:86`), which carries the anchor inside it. The commission also folds in the one-line
+pre-existing defect L80 filed — `FROZEN_CARDINALITY`'s pipeline entry `4` against five registered rows,
+which makes `runner.py self-check` fail today — and asks for it to be fixed in the round that changes
+the count anyway.
+
+Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`.
