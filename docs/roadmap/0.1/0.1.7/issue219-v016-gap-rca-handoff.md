@@ -64,6 +64,73 @@ store-path attribution (`docs/roadmap/0.1/0.1.7/evidence/issue216-store-path-att
 construct 617 MiB/s against save 165 MiB/s, and a dedup control where 0.3 MiB stored
 runs the save at 1778 MiB/s.
 
+## 1b. Owner correction (2026-09-21): the 700 MB/s figure is `init_namespace`
+
+The figure is not the payload-create path. `init_namespace` is one of the four
+families that **does** carry both arms, and the case sizes come from
+`benchmark/fs-bench-pro/families/init_namespace/mod.rs::NAMESPACE_SCENARIOS`:
+
+| case | files | logical | anchor | bytes counted |
+| --- | ---: | ---: | ---: | ---: |
+| `namespace-100-compact-v3` | 100 | 5 MB | 1 MB | 6 MB |
+| `namespace-1000-compact-v3` | 1,000 | 20 MB | 5 MB | 25 MB |
+| `namespace-10000` | 10,000 | 300 MB | 100 MB | 400 MB |
+| `namespace-100000` | 100,000 | 500 MB | 100 MB | 600 MB |
+
+Medians from every located `init_namespace` receipt
+(`benchmark-results/**/perf.jsonl`, 75 rows), converted with those byte counts:
+
+| case | arm | medians (ms) | implied rate |
+| --- | --- | --- | ---: |
+| 100 | `baseline` | 19.318 / 19.854 / 23.847 | 252–311 MB/s |
+| 100 | `candidate` | 9.352 / 9.771 / 10.105 / 11.409 / 19.663 / 19.792 / 20.300 / 22.689 / 28.704 / 31.667 | 190–642 MB/s |
+| 1,000 | `candidate` | 39.891 / 40.458 / 41.252 / 88.213 / 112.733 / 130.367 | 192–627 MB/s |
+| 10,000 | `candidate` | 402.721 / 407.598 / 578.245 / 928.022 / 1020.422 / 1100.711 | **363–993 MB/s** |
+| 100,000 | `baseline` (PASS) | 364.861 / 379.521 / 383.796 / 924.895 / 992.546 / 1036.158 | 579 MB/s–1.64 GB/s |
+| 100,000 | `candidate` (PASS) | 279.165 / 291.630 / 291.948 / 361.444 / 386.761 / 402.517 / 2289.462 / 2734.598 / 2787.320 / 2850.586 / 7073.456 / 8578.672 / 105945.138 | 5.7 MB/s–2.15 GB/s |
+| 100,000 | both (`*-cold-v2`) | 2734–4986, `TARGET_MISS` | 120–219 MB/s |
+
+So the owner's recollection is right in order of magnitude for the 10k and 100k
+tiers: `namespace-10000` at 578.245 ms is **691.8 MB/s**, and the best
+`namespace-100000` rows are 604–2149 MB/s. The 2.7 s cold Init target recorded in
+`AGENTS.md` §3.8 is 600 MB / 2.7 s ≈ 222 MB/s, which is what the `-cold-v2`
+`TARGET_MISS` rows sit against.
+
+**Why this matters more than the payload-create framing.** `init_namespace` is the
+**only** family permitted multi-worker construction (`AGENTS.md` §3.8: its
+initialization path "legitimately uses multiple workers/threads and keeps its 2.7 s
+cold Init target"). So the two comparable, reproducible facts are both *inside the
+current product*:
+
+- namespace init, multi-worker: **0.36–2.15 GB/s** on 400–600 MB of mixed
+  small-file + 100 MB anchor payload;
+- the ordinary single-producer save path: **~115–165 MiB/s** (this session's
+  attribution: construct 617 MiB/s against save 165 MiB/s).
+
+That is a **5–15x spread inside one product on the same Store and schema**, and it
+is measurable today without pair 1 or FUSE. **This is the gap the RCA should
+target first**, ahead of any v0.1.6 pairing.
+
+**Gaps that specifically undermine quoting the 700 MB/s figure:**
+
+1. All 75 `init_namespace` receipts carry `verification_status: NOT_RUN` **and**
+   `cache_contract: null` — no verification arm, cache state undeclared, so no row
+   here can support a cache-sensitive claim on its own.
+2. The candidate 100k rows span **279 ms to 105.9 s (≈380x)** with `TARGET_MISS`
+   rows in both arms. Any headline rate must name the row, the arm, the cache state
+   and the setup identity; a bare "700 MB/s" is a best-of.
+3. The `baseline` arm's **version is not established**: the example row lives under
+   `benchmark-results/host-store/issue118/20260912/infra-pair-1-baseline/` with a
+   different image and product identity from the candidate rows, and the images are
+   not pinned to a v0.1.6 seal. S1 must pin it (or say it cannot) before any
+   "v0.1.6 was faster" statement.
+4. The case mixes a **100 MB anchor file** with 10k/100k small files, so one MB/s
+   headline conflates a bandwidth workload with a cardinality workload. Any RCA must
+   split the two, including which phase each dominates.
+5. `namespace-100` is a **6 MB** case whose medians are 9–32 ms: at that size timer
+   resolution and the +1 MB anchor dominate, so it cannot carry a bandwidth claim
+   either way.
+
 ## 2. Already measured in this session — do not redo, cite instead
 
 | Finding | Evidence |
