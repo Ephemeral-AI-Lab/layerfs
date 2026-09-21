@@ -1,0 +1,135 @@
+{
+  "kind": "DIAGNOSTIC - destructive replay of the run's exact pack-write size sequence on a copy",
+  "bench_db": "/tmp/squadB/bench4.sqlite",
+  "wall_seconds_for_the_full_replay": 0.84,
+  "write_size_distribution": {
+    "writes": 16802,
+    "packs": 1250,
+    "bytes_written": 2292865337,
+    "final_bytes": 302023232,
+    "size_bytes": {
+      "min": 191,
+      "p10": 38407,
+      "p25": 75639,
+      "median": 137544,
+      "mean": 136463.83388882276,
+      "p75": 196713,
+      "p90": 234378,
+      "max": 262141
+    },
+    "writes_per_pack_mean": 13.4416,
+    "amplification_measured": 7.591685321081525
+  },
+  "per_lane": {
+    "Ordinary": {
+      "packs": 3,
+      "groups": 21,
+      "writes": 21,
+      "writes_per_pack": 7.0,
+      "bytes_written": 2318196,
+      "final_bytes": 625356,
+      "amplification": 3.71,
+      "mean_write_bytes": 110390
+    },
+    "PooledMetadata": {
+      "packs": 3,
+      "groups": 207,
+      "writes": 207,
+      "writes_per_pack": 69.0,
+      "bytes_written": 25584656,
+      "final_bytes": 726096,
+      "amplification": 35.24,
+      "mean_write_bytes": 123597
+    },
+    "WholeFile": {
+      "packs": 102,
+      "groups": 9444,
+      "writes": 9444,
+      "writes_per_pack": 92.59,
+      "bytes_written": 1260350294,
+      "final_bytes": 24613232,
+      "amplification": 51.21,
+      "mean_write_bytes": 133455
+    },
+    "Native": {
+      "packs": 1142,
+      "groups": 7130,
+      "writes": 7130,
+      "writes_per_pack": 6.24,
+      "bytes_written": 1004612191,
+      "final_bytes": 276058548,
+      "amplification": 3.64,
+      "mean_write_bytes": 140899
+    }
+  },
+  "update_object_packs_ns": {
+    "n": 16802,
+    "median": 26000.0,
+    "mean": 43069.10570170218,
+    "p10": 9917,
+    "p25": 14333,
+    "p75": 50917,
+    "p90": 104292,
+    "min": 1917,
+    "max": 17696166
+  },
+  "by_size_band_32KiB": [
+    {
+      "size_from": 0,
+      "size_to": 32767,
+      "n": 1119,
+      "median_ns": 6875,
+      "mean_ns": 14302.21000893655
+    },
+    {
+      "size_from": 32768,
+      "size_to": 65535,
+      "n": 2350,
+      "median_ns": 11041.5,
+      "mean_ns": 28821.267234042552
+    },
+    {
+      "size_from": 65536,
+      "size_to": 98303,
+      "n": 2266,
+      "median_ns": 12334.0,
+      "mean_ns": 15041.387025595763
+    },
+    {
+      "size_from": 98304,
+      "size_to": 131071,
+      "n": 2278,
+      "median_ns": 19208.5,
+      "mean_ns": 25297.480245829676
+    },
+    {
+      "size_from": 131072,
+      "size_to": 163839,
+      "n": 2268,
+      "median_ns": 24084.0,
+      "mean_ns": 34100.44841269841
+    },
+    {
+      "size_from": 163840,
+      "size_to": 196607,
+      "n": 2309,
+      "median_ns": 31708,
+      "mean_ns": 54816.73321784322
+    },
+    {
+      "size_from": 196608,
+      "size_to": 229375,
+      "n": 2168,
+      "median_ns": 49104.0,
+      "mean_ns": 79888.84778597786
+    },
+    {
+      "size_from": 229376,
+      "size_to": 262143,
+      "n": 2044,
+      "median_ns": 63854.5,
+      "mean_ns": 83703.93542074364
+    }
+  ],
+  "note": "every one of the 16,802 writes is replayed once, in pack order, with the size the pack actually had at that write; the median below is therefore the median of the run's own writes, not of a chosen blob"
+}

@@ -1,0 +1,108 @@
+# raw/04 — canonical-object closure against the v0.1.7 receipt
+
+Receipt: `core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/receipt.json`
+Path in receipt: `resources.space.canonical_objects` / `resources.space.canonical_bytes`
+
+The same `canonical_objects` breakdown appears identically in eight receipts of the
+campaign (`ns17-diag`, `ns17-final`, `ns17-ns10000-batched3`, `ns17-oracle-b2`,
+`ns17-oracle-batched`, `ns17-pinned`, `ns17-pinned2`, `ns17-prefix` — all
+`...-20260921T031259Z/pipeline-namespace-10000/receipt.json`), which is itself a
+determinism check on the content plan.
+
+## As published
+
+```json
+"canonical_objects": {
+  "chunk": 14466, "directory-leaf": 163, "extent-branch": 1, "extent-leaf": 496,
+  "file-state": 456, "filesystem-root": 3, "inode-branch": 8, "inode-leaf": 208,
+  "whole-file": 9444
+},
+"canonical_objects_total": 25245,
+"canonical_bytes": {
+  "chunk": 275868750, "directory-leaf": 181545, "extent-branch": 2012,
+  "extent-leaf": 600464, "file-state": 48336, "filesystem-root": 387,
+  "inode-branch": 18392, "inode-leaf": 858923, "whole-file": 24652248
+},
+"canonical_bytes_total": 302231057
+```
+
+Object-count check: 14466 + 9444 + 208 + 496 + 1 + 456 + 163 + 8 + 3 = **25245** ✓
+
+## Role 1 — whole-file
+
+```
+files with size <  131072 (exclusive cutoff)          = 9,444
+raw payload bytes of those files                      = 24,435,036
+per-object canonical overhead (WHOLE_FILE_CANONICAL_OVERHEAD, policy.rs:127) = 23 B
+9444 x 23                                             =    217,212
+                                                      ---------------
+canonical total                                       = 24,652,248
+receipt canonical_bytes["whole-file"]                 = 24,652,248   EXACT MATCH
+receipt canonical_objects["whole-file"]               =      9,444   EXACT MATCH
+```
+
+## Role 2 — chunk
+
+```
+chunked source bytes = 100,000,000 (anchor) + 175,564,964 (455 files) = 275,564,964
+per-object chunk canonical overhead (policy.rs:124-127 comment)      = 21 B
+receipt canonical_objects["chunk"]                                   = 14,466
+14466 x 21                                                           =    303,786
+                                                                     ---------------
+canonical total                                                      = 275,868,750
+receipt canonical_bytes["chunk"]                                     = 275,868,750  EXACT MATCH
+receipt canonical_objects["chunk"]                                   =      14,466  EXACT MATCH
+implied mean chunk payload = 275,564,964 / 14,466                    =   19,049.15 B
+```
+
+## Role 3 — file-state (independent cross-check)
+
+```
+chunked FILES = 455 non-anchor + 1 anchor                            = 456
+receipt canonical_objects["file-state"]                              = 456   EXACT MATCH
+```
+
+A `file-state` object is per chunked file, so this is a **third independent
+confirmation** of the chunked-file count — derived once from the cutoff partition and
+once from the chunk overhead closure.
+
+## Frozen CDC profile
+
+`core/crates/layerfs-content/src/file/cdc/gear.rs`:
+
+| Constant | Value | Line |
+|---|---|---|
+| `MINIMUM_CHUNK_BYTES` | 8,192 | 13 |
+| `TARGET_CHUNK_BYTES` | 16,384 | 15 |
+| `MAXIMUM_CHUNK_BYTES` | 32,768 | 17 |
+| `NORMALIZATION_SHIFT` | 2 | 19 |
+| `PROFILE_SEED` | 0 | 21 |
+| `SMALL_MASK` | `0x0000_d903_0353_7000` (popcount 16) | 23 |
+| `LARGE_MASK` | `0x0000_d901_0353_0000` (popcount 12) | 24 |
+
+Hazard rates: `p_small = 2^-16 = 1.526e-5`, `p_large = 2^-12 = 2.441e-4`.
+Analytic expected chunk length for incompressible input (mass function over
+`[MIN, TARGET)` at `p_small` then `[TARGET, MAX)` at `p_large`):
+
+```
+E[L] = 8192 + sum_{t=0}^{8191}(1-p_s)^t + (1-p_s)^8192 * sum_{t=0}^{8191}(1-p_l)^t
+     = 19,441.3 B
+predicted chunks over 275,564,964 B = 14,174      (continuous-stream model)
+observed chunks                     = 14,466     (+2.0% in mean, -2.0% in count)
+per-file renewal model (456 restarts) = 14,418    (-0.33% vs observed)
+implied mean from the receipt         = 19,049.15 B
+```
+
+The per-file model restarts the hash once per file (`Scanner::new`, `gear.rs:56-63`;
+`scan` at `gear.rs:75-95` owns one `Scanner` per streamed reader), so each of the 456
+chunked files contributes a truncated final chunk. That correction moves the model
+from 14,174 → 14,418, against a receipt of 14,466.
+
+**Confidence.** Two independent closures land **exactly** on the receipt's bytes
+(23 B and 21 B overheads) and the chunk count lands within 0.33 % of a model built
+only from the frozen masks. The size ladder, the cutoff and the chunk partition are
+therefore established, not inferred.
+
+**NOT_MEASURED.** The per-chunk length histogram itself. The receipt publishes chunk
+*count* and *canonical bytes*; no per-chunk length is recorded in any receipt of this
+campaign, and no instrumentation was run.

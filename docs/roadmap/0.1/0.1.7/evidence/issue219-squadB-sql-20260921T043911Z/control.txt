@@ -1,0 +1,13 @@
+a_COUNT_only (0 rows returned)     median=      5.8 us  mean=      6.5 us
+b_scan_no_order (rows returned)    median=   4207.9 us  mean=   4281.1 us
+c_scan_order_by_stamp              median=   5760.7 us  mean=   5780.9 us
+d_C3_full (join+scope+order)       median=   6245.7 us  mean=   6286.7 us
+e_P4_no_order                      median=    139.8 us  mean=    145.6 us
+f_P4_with_order                    median=    140.4 us  mean=    144.3 us
+g_empty_result_control             median=      4.7 us  mean=      4.8 us
+
+Python per-row materialisation+fetch, content_signatures (8192 rows): 513.0 ns/row
+Python per-row materialisation+fetch, metadata_value_groups (207 rows): 647.1 ns/row
+
+ORDER BY c.stamp cost (sorted-scan minus scan): 1552.8 us
+ORDER BY g.first_ordinal cost: 0.7 us

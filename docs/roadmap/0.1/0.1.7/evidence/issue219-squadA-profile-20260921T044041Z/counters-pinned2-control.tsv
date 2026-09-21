@@ -1,0 +1,15 @@
+pipeline.batches	3
+pipeline.bindings	10100
+pipeline.chain_objects	382
+pipeline.commits	17378
+pipeline.content_bytes	301171810
+pipeline.content_objects	24863
+pipeline.declared_content_bytes	300000000
+pipeline.declared_directories	100
+pipeline.declared_files	10000
+pipeline.inserted	25245
+pipeline.largest_batch_bindings	4096
+pipeline.metadata_objects	382
+pipeline.objects_emitted	67
+pipeline.reused	0
+timing_json_bytes	281

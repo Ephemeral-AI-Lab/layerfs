@@ -1,0 +1,44 @@
+{
+  "kind": "synthetic-replica-diagnostic",
+  "what": "Prices the fixed per-transaction cost of SQLite commit at the product's own pragma profile, holding bytes constant. It does NOT run the product and cannot attribute the product's commit_ns; it bounds what a cadence change could remove.",
+  "method": "Copy the row's base.sqlite; apply PRAGMA journal_mode=MEMORY, synchronous=OFF, temp_store=MEMORY, foreign_keys=ON (the product profile, sqlite/connection.rs:32-48); insert identical 32 KiB blobs into object_packs until 268,435,456 bytes have been written; vary only the number of BEGIN IMMEDIATE/COMMIT pairs. One sample per arm.",
+  "arms": [
+    {
+      "actual_txns": 8192,
+      "bytes_written": 268435456,
+      "wall_ns": 550620792,
+      "ns_per_txn": 67214
+    },
+    {
+      "actual_txns": 1366,
+      "bytes_written": 268435456,
+      "wall_ns": 454763917,
+      "ns_per_txn": 332916
+    },
+    {
+      "actual_txns": 74,
+      "bytes_written": 268435456,
+      "wall_ns": 444408875,
+      "ns_per_txn": 6005525
+    }
+  ],
+  "derived": {
+    "note": "Fixed per-transaction cost from the extremes: (550620792-444408875)/(8192-74) = 13084 ns. From the middle segment: (454763917-444408875)/(1366-74) = 7959 ns. The two disagree because the relationship is not linear over this range and each arm is one sample; both are reported.",
+    "fixed_ns_per_txn_range": [
+      7959,
+      13084
+    ],
+    "applied_to_17378_commits_ns": [
+      138293022,
+      227393512
+    ],
+    "applied_share_of_operation_3538935458": [
+      0.0391,
+      0.0643
+    ],
+    "byte_proportional_floor_ns_for_256MiB": 444408875,
+    "scaled_to_302MB_ns": 500359252
+  },
+  "conclusion": "A ~238x reduction in transaction count at constant bytes saves at most ~6.4% of this row's operation on this replica. The product's measured 77,762.7 ns per commit is ~5.9x the ~13.1 us fixed cost, so the majority of commit_ns is page-flush work proportional to the bytes written, which batching does not remove. Cadence is real but is NOT the 38.2% lever its share suggests.",
+  "caveat": "One sample per arm, synthetic replica, a single table, no secondary indexes, no foreign keys exercised on the written table, and only 8,192 rows. It bounds the cadence term; it does not decompose the product's commit_ns."
+}

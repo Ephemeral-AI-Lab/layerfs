@@ -1,0 +1,289 @@
+PASS R1.ns.commit_ns        claim=1351360518 raw=1351360518  [counters.tsv pipeline.profile_commit_ns]
+PASS R1.span.commit_ns      claim=38.2155% raw=38.2155%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.commit_ns        claim=38.1855% raw=38.1855%  [of operation_ns=3538935458]
+PASS R1.ns.sql_ns           claim=781237539 raw=781237539  [counters.tsv pipeline.profile_sql_ns]
+PASS R1.span.sql_ns         claim=22.0928% raw=22.0928%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.sql_ns           claim=22.0755% raw=22.0755%  [of operation_ns=3538935458]
+PASS R1.ns.full_ns          claim=245777362 raw=245777362  [counters.tsv pipeline.profile_full_ns]
+PASS R1.span.full_ns        claim=6.9504% raw=6.9504%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.full_ns          claim=6.9450% raw=6.9450%  [of operation_ns=3538935458]
+PASS R1.ns.place_ns         claim=79188910 raw=79188910  [counters.tsv pipeline.profile_place_ns]
+PASS R1.span.place_ns       claim=2.2394% raw=2.2394%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.place_ns         claim=2.2376% raw=2.2376%  [of operation_ns=3538935458]
+PASS R1.ns.group_ns         claim=18859112 raw=18859112  [counters.tsv pipeline.profile_group_ns]
+PASS R1.span.group_ns       claim=0.5333% raw=0.5333%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.group_ns         claim=0.5329% raw=0.5329%  [of operation_ns=3538935458]
+PASS R1.ns.resolve.pooled_ns claim=5858368 raw=5858368  [counters.tsv pipeline.profile_resolve_pooled_ns]
+PASS R1.span.resolve.pooled_ns claim=0.1657% raw=0.1657%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.resolve.pooled_ns claim=0.1655% raw=0.1655%  [of operation_ns=3538935458]
+PASS R1.ns.delta_ns         claim=82960 raw=82960  [counters.tsv pipeline.profile_delta_ns]
+PASS R1.span.delta_ns       claim=0.0023% raw=0.0023%  [of pipeline.accept_span_ns=3536155750]
+PASS R1.op.delta_ns         claim=0.0023% raw=0.0023%  [of operation_ns=3538935458]
+PASS R1.seven_sum           claim=2482364769 raw=2482364769  [sum of the seven]
+PASS R1.profile_total       claim=pipeline.profile_total_ns=2482364769 raw=2482364769  [instrument's own seven-bucket sum]
+PASS R1.seven_span          claim=70.1995% raw=70.1995%  [seven of accept span]
+PASS R1.seven_op            claim=70.1444% raw=70.1444%  [seven of operation]
+PASS R1.remainder_ns        claim=1053790981 raw=1053790981  [span - seven]
+PASS R1.remainder_span      claim=29.8005% raw=29.8005%  [remainder of accept span]
+PASS R1.remainder_op        claim=29.7771% raw=29.7771%  [remainder of operation]
+PASS R1.span_vs_operation   claim=span is 99.92% of operation raw=99.9215%  [span/operation]
+PASS R1.zero_sub_buckets    claim=eligible/acquire/cost/reuse = 0 raw=eligible=0 acquire=0 cost=0 reuse=0  [resolve is entirely pooled_ns]
+PASS R1.shares_tsv.commit_ns claim=1351360518 38.2155% 38.1855% raw=commit_ns	1351360518	38.2155%	38.1855%  [shares.tsv row recomputed from counters.tsv]
+PASS R1.shares_tsv.sql_ns   claim=781237539 22.0928% 22.0755% raw=sql_ns	781237539	22.0928%	22.0755%  [shares.tsv row recomputed from counters.tsv]
+PASS R1.shares_tsv.full_ns  claim=245777362 6.9504% 6.9450% raw=full_ns	245777362	6.9504%	6.9450%  [shares.tsv row recomputed from counters.tsv]
+PASS R1.shares_tsv.place_ns claim=79188910 2.2394% 2.2376% raw=place_ns	79188910	2.2394%	2.2376%  [shares.tsv row recomputed from counters.tsv]
+PASS R1.shares_tsv.group_ns claim=18859112 0.5333% 0.5329% raw=group_ns	18859112	0.5333%	0.5329%  [shares.tsv row recomputed from counters.tsv]
+PASS R1.shares_tsv.resolve.pooled_ns claim=5858368 0.1657% 0.1655% raw=resolve.pooled_ns	5858368	0.1657%	0.1655%  [shares.tsv row recomputed from counters.tsv]
+PASS R1.shares_tsv.delta_ns claim=82960 0.0023% 0.0023% raw=delta_ns	82960	0.0023%	0.0023%  [shares.tsv row recomputed from counters.tsv]
+PASS R2.db_term_ns          claim=2132598057 raw=2132598057  [sql_ns + commit_ns]
+PASS R2.db_span             claim=60.3084% raw=60.3084%  [of accept span]
+PASS R2.db_op               claim=60.2610% raw=60.2610%  [of operation]
+PASS R2.db_claim            claim=the database term is 60.3% of the operation raw=60.2610%  [report says 60.3%, exact 60.26% -- supported]
+PASS R2.decode_ns           claim=24800440 raw=24800440  [resolve + delta + group]
+PASS R2.decode_span         claim=0.7013% raw=0.7013%  [of accept span]
+PASS R2.decode_op           claim=0.7008% raw=0.7008%  [of operation]
+PASS R2.decode_claim        claim=decode is 0.70% raw=0.7008%  [report says 0.70% -- supported]
+PASS R2.ns_per_commit       claim=77762.7 ns/commit raw=77762.7  [commit_ns / commits]
+PASS R2.objects_per_commit  claim=1.4527 raw=1.4527  [inserted / commits]
+PASS R2.bytes_per_commit    claim=17330.6 raw=17330.6  [content_bytes / commits]
+FAIL R2.build_encode_ms     claim=349.9 ms (README section 3 matrix cell) raw=349.767 ms  [full+delta+group+resolve+place = 349.767 ms, report prints 349.9]
+PASS R3.shared              claim=15 counters published by both rows raw=15  [set intersection of the two receipts' counters]
+PASS R3.moved               claim=0 shared counters moved raw=0  [value-by-value comparison]
+PASS R3.only_diag           claim=15 counters only in the diagnostic raw=15  [all pipeline.profile_* plus pipeline.accept_span_ns]
+PASS R3.only_pinned         claim=0 counters only in the pinned row raw=0
+PASS R3.canonical_bytes     claim=canonical_bytes_total = 302231057 in both raw=302231057 / 302231057  [resources.space in both receipts]
+PASS R3.canonical_objects   claim=canonical_objects_total = 25245 in both raw=25245 / 25245
+PASS R3.role_map            claim=canonical_objects by role identical raw=identical  [per-role object map]
+PASS R3.gates               claim=13 gates each, all PASS, both rows status PASS raw=pinned gates=13 diag gates=13 statuses=['PASS']/['PASS']
+PASS R3.identity_diffs      claim=exactly four identity differences raw=harness_binary_sha256,source_commit,source_dirty_files,started_utc  [harness sha, source commit, started_utc, dirty-file list]
+PASS R3.harness_sha         claim=cb21593d... -> 71d7c40c... raw=cb21593d -> 71d7c40c
+PASS R3.same_product_lock   claim=same product lock hash on both v0.1.7 rows raw=6a3d5b4cccf24ffc
+PASS R3.work_identity_txt   claim=work-identity-check.txt reports 15 shared / 0 moved raw=shared counters that MOVED: 0  [raw output beside the report]
+NOTE R3.scope               R3 verifies the pinned-vs-diagnostic contrast (both v0.1.7 rows). It does NOT verify the report's 'same product seal, same image' sentence: neither v0.1.7 row records a product seal or an image (see R7.1b).
+PASS R4.ns_per_txn_arms     claim=67,214 / 332,916 / 6,005,525 ns per transaction raw=67214.5 / 332916.5 / 6005525.3  [wall_ns / actual_txns per arm]
+PASS R4.extremes            claim=13,084 ns from the extremes raw=13083.5079  [(550620792-444408875)/(8192-74) = 13083.5079 (rounds to 13084)]
+FAIL R4.middle              claim=7,959 ns from the middle segment raw=8014.7384  [(454763917-444408875)/(1366-74) = 8014.7384  <-- report and cadence-calibration.json both say 7959]
+PASS R4.json_range          claim=cadence-calibration.json fixed_ns_per_txn_range == [7959, 13084] raw=[7959, 13084]  [raw JSON's own derived block]
+FAIL R4.applied_low         claim=applied_to_17378_commits_ns[0] == 7959 x 17378 = 138311502 raw=138293022  [raw JSON says 138293022; 7959*17378 = 138311502 (implied 7957.94 ns/txn)]
+FAIL R4.applied_high        claim=applied_to_17378_commits_ns[1] == 13084 x 17378 = 227373752 raw=227393512  [raw JSON says 227393512; 13084*17378 = 227373752 (implied 13085.14 ns/txn)]
+PASS R4.band                claim=3.9-6.4% of the 3,538,935,458 ns operation raw=3.9078% - 6.4255%  [band holds with the JSON's own applied values]
+PASS R4.band_recomputed     claim=band still 3.9-6.4% with the recomputed middle value raw=3.9357% - 6.4255%  [8,014.74 ns/txn gives 3.936%, which still prints as 3.9%: the band survives the correction]
+PASS R4.bound_is_commit_only claim=the 3.9-6.4% bound prices only the fixed per-transaction cost raw=Copy the row's base.sqlite; apply PRAGMA journal_mode=MEMORY, synchronous=OFF, temp_store=MEMORY...  [each blob is inserted once: the replica never rewrites a pack body]
+PASS R4.correction_13_2     claim=section 13.2's correction (bound does not cover the pack-append amplification) is stated raw=13.2 present  [quoted from the README]
+NOTE R4.correction_honesty  Section 13.2 is explicit and self-limiting: it keeps the 3.9-6.4% number, says what it priced, and says it must not be quoted as the cadence lever. That is honest.
+PASS R5.counters            claim=pack_appends=15552 packs_created=1250 statements=16595 raw=appends=15552 packs=1250 statements=16595  [counters-packcounters.tsv]
+PASS R5.appends_per_pack    claim=15,552 / 1,250 = 12.4416 appends per pack raw=12.4416  [counters only]
+PASS R5.factor_lower        claim=6.72x = (k+1)/2 raw=6.7208  [equal-increment model, k = appends per pack]
+PASS R5.factor_upper        claim=7.22x = (k+2)/2 raw=7.2208  [equal-increment model, k = appends per pack]
+PASS R5.bytes_lower         claim=2,031,234,488 bytes rewritten raw=2031234488  [302,231,057 x 6.7208]
+PASS R5.bytes_upper         claim=2,182,350,016 bytes rewritten raw=2182350016  [302,231,057 x 7.2208]
+FAIL R5.section13_writes_per_pack claim=section 13.1: '14.44 writes per pack' raw=13.4416 (16,802/1,250)  [16,802/1,250 = 13.4416, not 14.44; 14.44 is in no raw file]
+FAIL R5.section13_factor    claim=section 13.1: 7.72x / ~2.34 GB raw=7.7208 (k+2)/2 at k=13.4416 and 2.333 GB  [7.72x counts the 1,250 creates as extra rewrites; the measured factor is 7.5917x]
+FAIL R5.section13_label     claim=section 13.1's rank-2 line labels 16,802 as UPDATE calls alone raw=ranked_table.tsv row 2 statement=UPDATE object_packs SET data = ?2 ... (sqlite/write.rs:82)  [ranked_table.tsv row 2 is UPDATE **+ INSERT**; 16,802 = 1,250 INSERT + 15,552 UPDATE]
+PASS R5.cross_check_calls   claim=Squad B's 16,802 == 1,250 + 15,552 raw=16802 vs 16802  [ranked_table.tsv row 2 vs the counters]
+PASS R5.cross_check_statements claim=Squad B's 16,595 == pipeline.statements raw=16595 vs 16595  [ranked_table.tsv row 5 vs the counters]
+FAIL R5.ranked_label        claim=ranked_table.tsv row 2 carries Squad B's corrected DERIVED-EXACT label raw=EXACT: 16,802 groups parsed out of sampl  [the archived table still says EXACT while Squad B's README section 13.1 re-labels the count; Squad C section 6.1 quotes the stale table]
+PASS R5.pack_provenance     claim=the re-parsed store is the pinned row's sample.sqlite raw=03918d61a9f004b2...  [sha256 recomputed and matched against manifest.json]
+PASS R5.sum_data            claim=SUM(length(data)) == receipt pack_bodies_bytes 302023232 raw=302023232  [SQL against the pinned store vs the receipt]
+PASS R5.pack_rows           claim=object_packs holds 1,250 rows (== packs_created) raw=1250
+PASS R5.pack_format_clean   claim=0 format violations over all 1,250 pack directories raw=0 violations  [directory continuity, directory start, trailing bytes and assembled==stored, all packs]
+PASS R5.measured_written    claim=2,292,865,337 bytes written raw=2292865337  [Sigma of the assembled length at each of the 16,802 writes]
+PASS R5.measured_final      claim=302,023,232 bytes persisted raw=302023232  [Sigma of every pack body length]
+PASS R5.measured_factor     claim=amplification 7.5917x raw=7.5917  [re-derived from the pinned row's own store]
+PASS R5.writes_16802        claim=16,802 writes == groups in the store raw=16802  [one write per group]
+PASS R5.max_pack            claim=largest pack 262,141 B raw=262141  [max body length over the store]
+PASS R5.lane.WholeFile      claim=102 packs / 9444 writes / 1260350294 written / 24613232 final / 51.21x raw=102 / 9444 / 1260350294 / 24613232 / 51.21x  [per-lane, re-derived]
+PASS R5.lane.PooledMetadata claim=3 packs / 207 writes / 25584656 written / 726096 final / 35.24x raw=3 / 207 / 25584656 / 726096 / 35.24x  [per-lane, re-derived]
+PASS R5.lane.Native         claim=1142 packs / 7130 writes / 1004612191 written / 276058548 final / 3.64x raw=1142 / 7130 / 1004612191 / 276058548 / 3.64x  [per-lane, re-derived]
+PASS R5.lane.Ordinary       claim=3 packs / 21 writes / 2318196 written / 625356 final / 3.71x raw=3 / 21 / 2318196 / 625356 / 3.71x  [per-lane, re-derived]
+PASS R5.skew_56             claim=WholeFile+PooledMetadata rewrite 56.1% of all rewritten bytes to persist 8.4% of final raw=56.1% / 8.4%  [section 16.2]
+FAIL R5.archived_parser     claim=the archived pack_parse.py reproduces the archived pack_stats.json raw=packs [5, 11, 26] -> recomputed [12313704, 16741428, 10223861] vs stored [253041, 255093, 252277]  [its WholeFile branch computes size = directory_start - 8; the directory stores absolute starts, so the script's own assert fires on the first WholeFile pack]
+PASS R5.dbstat_predecessor  claim=302,023,232 not 304,427,008 (dbstat reports page bytes) raw=receipt pack_bodies_bytes=302023232, SUM(length(data))=302023232  [the 304,427,008 figure appears nowhere in the corrected raw files]
+PASS R5.synthesis_corrected claim=pack-append-synthesis.json no longer carries 304,427,008 or a 243 KB average raw=supersedes=the first version of pack-append-synthesis.json, whose objec  [rewritten synthesis]
+PASS R6.layerstack_init_ns  claim=944,880,958 raw=944880958  [perf.jsonl line 2 records[0]]
+PASS R6.cpu                 claim=1,788,767,834 (user+system) raw=1788767834  [1,036,730,875 + 752,036,959]
+PASS R6.transactions        claim=73 initialize_admission_transactions raw=73
+PASS R6.canonical_objects   claim=25,158 store_canonical_objects raw=25158
+PASS R6.canonical_bytes     claim=302,182,831 store_canonical_bytes raw=302182831
+FAIL R6.cpu_per_wall        claim=1.8934 raw=1.8931  [1,788,767,834 / 944,880,958 = 1.8931, not 1.8934]
+PASS R6.max_transaction     claim=4,149,860 max transaction bytes raw=4149860  [handoff claim checked in section 2.1]
+PASS R6.txn_size_ratio      claim=~239x transaction-size ratio raw=239.45  [4,149,860 / 17,330.6]
+PASS R6.commit_ratio        claim=238.05x commit-count ratio raw=238.05
+PASS R6.wall_ratio          claim=3.745x operation wall ratio raw=3.7454  [diagnostic operation / v0.1.6 init]
+PASS R6.cpu_ratio           claim=1.837x CPU ratio raw=1.8371  [diagnostic CPU / v0.1.6 CPU]
+PASS R6.objects_ratio       claim=1.0035x canonical objects raw=1.00346
+PASS R6.bytes_ratio         claim=1.0002x canonical bytes raw=1.00016
+PASS R6.matrix_cells_v016   claim=v0.1.6 matrix cells: preparation 4,200.8 / setup 250.0 / teardown 249.1 / cleanup 319.1 / command 1,457.4 / wall 6,152.5 ms, scanned 300,000,000 / 10,000, disk read 729,088 raw=4200.8 / 250.0 / 249.1 / 319.1 / 1457.4 / 6152.5 / 300000000 / 10000 / 729088  [every v0.1.6 cell of the section 3 matrix]
+PASS R6.fixture_cells       claim=fixture generate 2,733,511,125 / plan+manifest 17.8 ms / worker_count 1 raw=2733511125 / 17.8 ms / 1
+PASS R7.1a.source_commit    claim=handoff: both arms b0260df3a dirty=false raw=v0.1.6 b0260df3a2ffc371773cd062feafd4b5e435bf1e dirty=false; v0.1.7 2a63aff0d0a24743deebb9129ab14e098d9e24ed dirty=True  [correction is right: the v0.1.7 row is a different, dirty commit]
+PASS R7.1b.dirty_files      claim=correction says five dirty files on the pinned row raw=5  [run.json identity.source_dirty_files]
+FAIL R7.1c.seal_and_image   claim=correction's last sentence: 'The product seal b3e3cb7453... and the image sha256:d152ced8... do match' raw=seal/image fields in either v0.1.7 row: none  [no v0.1.7 artifact records a product seal or an image; b3e3cb7453 occurs only in the v0.1.6 (root crates/) family and in prose -- this half of the correction is an assertion, not a raw field]
+PASS R7.2.content_bytes     claim=handoff's 301,171,810 is pipeline.content_bytes, not the canonical total raw=301171810  [counters.tsv]
+PASS R7.2.canonical_total   claim=the row's canonical total is 302,231,057 raw=302231057  [resources.space]
+PASS R7.2.delta             claim=48,226 bytes above v0.1.6, in the opposite direction raw=48226  [302,231,057 - 302,182,831]
+PASS R7.2.pct               claim=0.016% raw=0.0160%  [48,226 / 302,182,831]
+FAIL R7.2.sixteen_times     claim=correction says the true gap is 'sixteen times closer' than the handoff's 0.33% raw=20.96x (0.3346% vs 0.0160%)  [the ratio is 20.96x, not 16x; the 0.334% and 0.0160% figures themselves are right]
+PASS R7.3.v016_page_cache   claim=page-cache evidence is on the v0.1.6 row (543,040 / 34,604,032 / 33,554,432) raw=543040 / 34604032 / 33554432  [perf.jsonl records[0]]
+PASS R7.3.v017_absent       claim=the v0.1.7 receipts publish neither field raw=pinned has sqlite keys: False; diagnostic has: False  [both v0.1.7 receipts, whole-file JSON scan]
+PASS R7.4.profile_empty     claim=profile:'' is the registry fixture-profile column raw=pinned receipt profile=''; main.rs:504 = ("profile", case.profile.to_string()),  [src/main.rs:504 writes the registry row's profile into the trace header]
+PASS R7.4.registry_def      claim=the column is defined as the fixture-profile variant, empty when the row has none raw=/// Fixture-profile variant, empty when the row has none. | pub profile: &'static str,  [src/registry.rs:399-400]
+PASS R7.5.registry_self_check claim=pinned run.json records registry_self_check FAIL, exit_code 1, [...,2,4] vs [...,2,5] raw=status=FAIL exit=1 expected_tail=4, 4, 2, 4], actual_tail= 2, 5]  [the pinned row itself still passed (tally PASS 1)]
+PASS R7.5.row_passed_despite claim=the row itself PASSed raw=tally={'PASS': 1} gates=['PASS']
+PASS R7.6.handoff_arithmetic claim=handoff: 1,788.8/0.94 = ~1,903 ms raw=1902.98 ms  [the handoff's own target arithmetic reproduces]
+FAIL R7.6.diagnostic_divisor claim=correction: at the diagnostic row's 0.9286 the same arithmetic gives 1,926.5 ms raw=1926.34 ms  [1,788.8 / 0.9286 = 1926.34 ms, not 1,926.5; the correction's point (use the row's own ratio) stands]
+PASS R7.7.different_rows    claim=different harnesses, receipt schemas, cache contracts and timer sets raw=v0.1.6 schema=layerfs-perf-v1 identity=8a6d76dd; v0.1.7 schema=layerfs-core-receipt-v1 harness=fs-bench-pro-storage-content  [v0.1.6 root benchmark/fs-bench-pro, v0.1.7 core/.../fs-bench-pro-storage-content]
+PASS R8.weight_fn           claim=workload/main.rs:424-430 declares the triples inside a weight function raw=line 424: fn namespace_relative_weight(class: Name | 427: NamespaceClass::Tiny => (1_u64, 8_u64), | 428: NamespaceClass::Small => (32, 256), | 429: NamespaceClass::Medium => (1_024, 8_192),  [the triples are (lower, upper) bounds of a weight]
+PASS R8.weight_return       claim=the function returns lower + floor((2*role+1)*width/(2*count)) raw=lower | .checked_add(u64::try_from(numerator / denominator)?)  [main.rs:446-448]
+PASS R8.size_formula        claim=the byte size is a later Hamilton pass: size = 1 + floor(distributable*weight/weight_sum) raw=let product = u128::from(distributable) | file.size = 1_u64.checked_add(floor).ok_or("namespace file size")?;  [main.rs:358-363]
+PASS R8.weight_sum          claim=2,555,546 raw=2555546  [recomputed from the weight formula]
+PASS R8.distributable       claim=199,990,101 raw=199990101  [300,000,000 - 100,000,000 - 9,899]
+PASS R8.extra               claim=4,214 largest-remainder top-ups raw=4214
+PASS R8.bands               claim=tiny 79..627, small 2,505..20,035, medium 80,684..640,537 raw=[('tiny', 79, 627, 2789651), ('small', 2505, 20035, 16905060), ('medium', 80684, 640537, 180305289)]  [no file is 1-8 / 32-256 / 1,024-8,192 bytes; the bands are weights]
+PASS R8.chunk_partition     claim=456 chunked files, 9,444 whole-file, 275,564,964 chunked source bytes raw=456 / 9444 / 275564964  [exclusive 131,072-byte cutoff, anchor included]
+PASS R8.canonical_closure   claim=role canonical bytes close to the byte against the v0.1.7 receipt raw=chunk 275868750 vs 275868750, whole-file 24652248 vs 24652248, file-state 456 vs 456  [receipt ns17-final-20260921T031259Z (the row Squad D used)]
+PASS R8.v017_same_formula   claim=the v0.1.7 generator uses the same weight band triples raw=namespace_content.rs contains TINY/SMALL/MEDIUM triples: yes  [src/ops/namespace_content.rs constants]
+FAIL R9.scaled_floor        claim=section 12.1 floor 446,106,000 ns raw=446111419  [exact = 446111419; blob-calibration.json says 446,111,419]
+FAIL R9.synthetic_51279     claim=section 12.2's 'synthetic 51,279 ns/txn' is reproducible from a raw file raw=files in the four #219 squad directories containing 51279 or 51,279: ['issue219-squadA-profile-20260921T044041Z/README.md']  [the number that makes 'per-commit engine cost not anomalous' occurs only in Squad A's README prose; no raw artifact in the #219 corpus carries it]
+
+--- R9: arithmetic falsified, collected (report text -> recomputed) ---
+FAIL R9.01              A section 9 / cadence-calibration.json     | middle-segment fixed cost 7,959 ns | recomputed 8,014.74 ns from the file's own arms
+FAIL R9.02              cadence-calibration.json derived block     | applied_to_17378_commits_ns [138293022, 227393512] | its own 7,959/13,084 x 17,378 are 138,311,502 / 227,373,752
+FAIL R9.03              A section 3 matrix                         | build/encode 349.9 ms | sum of the five buckets is 349.767 ms
+FAIL R9.04              A section 4                                | v0.1.6 CPU/wall 1.8934 | 1,788,767,834 / 944,880,958 = 1.8931
+FAIL R9.05              A section 7.6                              | 1,788.8/0.9286 = 1,926.5 ms | = 1,926.34 ms
+FAIL R9.06              A section 7.2                              | sixteen times closer | 0.3345% / 0.0160% = 20.96x
+FAIL R9.07              A section 12.2                             | synthetic 51,279 ns/txn, 1.52x the product | 51,279 is in no raw file in the corpus
+FAIL R9.08              A section 12.1                             | scaled floor 446,106,000 ns | blob-calibration.json's own derived_floor_scaled_ns is 446,111,419
+FAIL R9.09              A section 13.1                             | 14.44 writes per pack | 16,802/1,250 = 13.4416
+FAIL R9.10              A section 13.1                             | 7.72x / ~2.34 GB | counts the 1,250 creates as rewrites; measured 7.5917x
+FAIL R9.11              A section 13.1                             | 16,802 UPDATE calls | ranked_table.tsv row 2 is UPDATE + INSERT
+FAIL R9.12              A section 14.3                             | amplification band 6.72-7.22x | the measured value 7.5917x lies outside the band
+FAIL R9.13              B section 12(e)(4)                         | 576 = 207 + 207 + 1 + 1 + 367 | that sum is 783; 576 = 367 + 207 + 1 + 1
+FAIL R9.14              B sections 4/13.1                          | operation_ns = 3,585.8 ms | pinned2 operation_ns = 3,575,832,667; 3,585.5 ms is ns17-final
+FAIL R9.15              B ranked_table                             | sum of the 11 exact rows 1,956.7 ms | the same 11 rows sum to 1,956.6 ms
+PASS R10.agree_calls        claim=section 14.2/16.5: Squad B's 16,802 and the product's 1,250+15,552 agree to the unit raw=ranked_table.tsv 16802; counters 1250+15552=16802  [both raw files]
+PASS R10.agree_statements   claim=section 14.2: Squad B's 16,595 and pipeline.statements agree to the unit raw=ranked_table.tsv 16595; counters 16595  [both raw files]
+FAIL R10.independence       claim=section 14.2's stronger claim: 'Two methods that share no input agree exactly' raw=ranked_table.tsv row 2 basis: EXACT: 16,802 groups parsed out of sample.sqlite; pack/place  [Squad B counts GROUPS in the pinned store and multiplies by the one-group-one-write invariant; the product counter counts WRITES in a different (work-identical) run. They validate the invariant, they do not share no input, and they are different runs]
+PASS R10.label              claim=Squad B's own label is preserved where it is quoted raw=README section 13.1: DERIVED-EXACT  [Squad A quotes the label correctly in section 16.5, but its section 13 table is copied from the stale ranked_table.txt]
+PASS R11.self_correction    claim=section 15.0 records the superseded first version and why it was wrong raw=15.0 present: yes  [the wrong 'sql only, not commit' reasoning is kept in the record]
+PASS R11.prior_art_admitted claim=section 16.3 admits the phenomenon is prior art and corrects section 13's framing raw=16.3 present: yes  [quotes stage-6-history-209-rca]
+PASS R11.prior_art_raw      claim=the prior-art claims reproduce from that round's own README raw=45,794 appends / 177,640 avg / 262,112 max / 58.0 us COMMIT  [stage-6-history-209-rca-20260920T191016Z/README.md]
+PASS R11.knob_absent        claim=LAYERFS_STORAGE_COMMIT_EVERY does not exist in core/ or crates/ at HEAD 9c46930b8 raw=occurrences under core/ + crates/ (target/ excluded): 0  [walked every .rs/.py/.sh/.toml/.sql under both trees]
+PASS R11.superseded_marking claim=every superseded artifact in the directory is marked as superseded raw=reconciliation.json sha c06780091c6c4a44, SUPERSEDED key present and retracting: True  [at 04:49Z this file was unmarked and contradicted section 15; it now carries an explicit SUPERSEDED marker that retracts the verdict and names the mechanism]
+FAIL R11.novelty_overclaim  claim=the report no longer overclaims novelty anywhere raw=section 13.4: 'the only candidate this campaign has found'; section 12.2 still names per-row metadata as 'the surviving candidate'  [sections 12.2, 13 and 13.4 are unchanged and still frame the amplification as this campaign's finding/next target; section 15.3 and 16.4 supersede them only in later text]
+FAIL R12.matrix_row_mix     claim=section 3 declares 'v0.1.7 = the diagnostic row above' and every v0.1.7 cell comes from it raw=acquisition 8.1 vs 5.2; preparation 913.2 vs 898.8; setup 3.6 vs 2.7; verification 338.7 vs 338.1; cleanup 459 vs 541; command 4,841.6 vs 4,791.6; run wall 5,045.4 vs 4,986.1; handoff 41.7 vs 44.3; timing children 11.2 vs 11.7  [those nine cells are pinned2 values (ns17-pinned2), not the declared diagnostic row; the README does not say the column is mixed]
+FAIL R12.matrix_children_mix claim=the cell 'product timing children 11.2 ms of 3,538.9 ms = 0.32%' is self-consistent raw=diagnostic children 11.7 ms; pinned2 children 11.2 ms; 11.2/3538.9 = 0.32%  [the numerator is pinned2's 11.23 ms and the denominator is the diagnostic's 3,538.9 ms]
+PASS R13.pre_registration   claim=the pre-registration names one difference, an identity, expected movement in the instrument units and refutations raw=pre-registration.md 11548 bytes
+PASS R13.not_run            claim=no benchmark ran after the pre-registration was written raw=newest receipt mtime 1789966101 vs pre-registration 1789966643  [no receipt exists in the squad directory and no row is newer than the registration]
+PASS R13.identity_block     claim=the identity block reproduces from the diagnostic receipt raw=operation 3538935458 span 3536155750 sql 781237539 commit 1351360518 total 2482364769 commits 17378 inserted 25245 CPU 3286170000  [matched field by field]
+PASS R13.decomposition      claim=1 + 16,595 + 207 + 207 + 367 + 1 = 17,378 commits raw=17378  [Squad B section 12(e)(4) prints the same terms as 207+207+1+1+367 = 783 against a 576 remainder; Squad C sums them correctly]
+PASS R13.group_histogram    claim=the single-record/two-record group counts sum to 16,595 raw=1-record 10081, 2-record 5662, groups 16595  [store-geometry.txt]
+PASS R13.geometry           claim=geometry: 1,250 packs / 302,023,232 pack bytes / 207 value groups / max stamp 9,444 raw=['packs_total|1250|302023232', 'value_groups_total|207', 'content_signatures|1253|9444|8192|8192']  [the same store whose SUM(length(data)) I re-derived is 302,023,232]
+PASS R13.split_sums         claim=fixed + pack-overflow + residual == commit_ns at both ends raw=1351360518 and 1351360518  [commit-decomposition.txt]
+PASS R13.per_commit         claim=77.76 us = 8.0-13.1 fixed + 51.0-55.4 rewritten + 9.3-18.8 not measured raw=77762.7 = 7959.0-13084.0 + 50992.8-55404.8 + 9273.9-18810.9  [per-commit division of the split]
+PASS R13.page_arithmetic    claim=537,062 / 559,782 / 73,736 pages at 4 KiB raw=537062 / 559782 / 73736  [pack-rewrite-estimate-2.txt vs pack_stats.json volumes]
+FAIL R13.readme_factor      claim=README section 3: per byte the pager is handed (DERIVED, 7.28x) it pays 0.589 ns raw=4.474/7.2843 = 0.6143 and 4.474/7.5917 = 0.5894  [0.589 ns is commit_ns / 2,292,865,337, i.e. Squad B 7.5917x, not this squad 7.284x; the raw commit-decomposition.txt labels it correctly as Squad B, the README sentence does not]
+FAIL R13.prc1_prediction    claim=PR-C1 upper bound of 2,800 commits follows from its stated mechanism raw=5 lane-tail steps/wave x 577 waves = 2,885 plus 783 fixed = 3,668 commits  [the registered 1,600-2,800 range is a prediction the stated mechanism does not bound; it is labelled a prediction, so this is a loose bound rather than a false measurement]
+PASS R13.band_vs_prc1       claim=PR-C1 refutation threshold 300 ms is under 15% of 2,132,598,057 raw=300 ms = 14.07% of 2,132,598,057  [section 5]
+PASS R13.state_alignment    claim=Squad C reads the 3.9-6.4% bound the same way Squad A section 13.2 does raw=replica wrote every blob exactly once and never issued an append_pack  [independent agreement on the same limitation]
+PASS R14.charge_sites       claim=Squad C section 2 / Squad A 17.2: BEGIN IMMEDIATE is charged nowhere; the two SaveProfile::charge calls sit on commit_ns at :170 and :257, after write::commit at :169 and :256 raw=charge in begin_write (129-139): 0; line 169 is write::commit: True; line 170 is charge: True; line 256 is write::commit: True; line 257 is charge: True  [read from core/crates/layerfs-storage/src/cas/lifecycle.rs; the only other charge is sql_ns at :247]
+PASS R14.diff_246           claim=section 17.2: profile_commit_ns minus Squad B COMMIT total = 246,460,518 raw=246460518  [1,351,360,518 - 1,104,900,000]
+FAIL R14.diff_attribution   claim=section 17.2 attributes that 246.5 ms to advance_pack_if_moved (1,250 statements) raw=1,250 x ~1 us = 1.25 ms can carry at most 0.5%% of the 246.5 ms  [Squad C states the same residual as NOT_MEASURED; Squad A s cell says both, which is a contradiction rather than a measurement]
+PASS R14.rate_range         claim=section 17.3: 1.18 GB/s over row 2 s term, 1.03-1.07 GB/s over the full row-1 term raw=1.1808 (row2, 1.18 GB/s) / 1.0315-1.0752 (row1)  [both are the same volume over different denominators; the correction to quote a range is right]
+PASS R14.prc1_table         claim=section 17.4 reproduces Squad C s PR-C1 predictions unchanged raw=commits 1,600-2,800 / pack writes 1,300-2,600 / bytes 0.30-0.50 GB / sql 330-470 / commit 250-560 / op 2.0-2.5 s  [pre-registration.md (written before any arm)]
+PASS R14.wf_share           claim=section 17.4: 102 packs (8%) carry 53% of the rewritten bytes raw=measured parse 55.0%, equal-growth estimate 53.2%  [53% is Squad C s equal-growth estimate (1,169,771,205 / 2,199,807,795); the measured pack parse puts the WholeFile share at 55.0%% of 2,292,865,337]
+PASS R14.provenance_git     claim=section 17.5 / Squad C section 4: #216 s 7075f338 does not carry the step-scoped commit raw=7075f338 touches lifecycle/placement/pool_lane: 0 files; parent already has the rule: yes; log -S finds: eb319aaa9  [git show / git show ^: / git log -S, all read-only]
+PASS R15.errata_exists      claim=section 18 records this review and declares itself to win on disagreement raw=section 18 present: yes  [written at 05:08:57Z, after this review directory appeared]
+PASS R15.errata_values      claim=every value section 18 corrects matches my own re-derivation raw=13.4416 (14.44 -> 13.4416), 15,552 (UPDATE 15,552 + INSERT 1,250), 7.5917x (7.72x -> 7.5917x), 8,014.74 (7,959 -> 8,014.74), 1.8931 (1.8934 -> 1.8931)  [13.4416 = 16,802/1,250; 15,552 = 16,802-1,250; 7.5917 = my pack re-parse; 8,014.74 = the cadence middle segment; 1.8931 = 1,788,767,834/944,880,958]
+PASS R15.nine_cells         claim=section 18.1 s nine-cell table matches the two rows cell by cell raw=diagnostic ['5.2', '898.8', '2.7', '338.1', '541', '4,791.6', '4,986.1', '44.3', '11.7'] ; pinned2 ['8.1', '913.2', '3.6', '338.7', '459', '4,841.6', '5,045.4', '41.7', '11.2']  [each printed value recomputed from the two run.json files; the mixed timing-children cell is listed as mixed]
+FAIL R15.item_count         claim=section 18 says row 9 FAILs with 18 arithmetic items raw=17 R9 items in this review FAIL  [the review has 17 R9 items (15 collected + 2 standalone, before this section is counted); Squad A repeated the reviewer s own miscount in its opening sentence]
+FAIL R15.row_count          claim=section 18 says the review covered fifteen rows raw=this review defines rows 1-14  [cosmetic: the brief listed nine required rows and this review added five]
+FAIL R15.seal_not_corrected claim=section 18 corrects the one claim this review could not verify (the 7.1 product seal / image sentence) raw=seal or image mentioned in section 18: no  [section 18.6 defers to this review instead of correcting section 7.1, so the assertion still stands in the body with no raw field behind it]
+FAIL R15.body_unchanged     claim=the corrected numbers were also fixed where they appear in the body raw=13.1 still reads 14.44/7.72x; 14.3 still bands 6.72-7.22x; 12.1 still prints 446,106,000; 12.2 still prints 51,279; 4 still prints 1.8934; 7.6 still prints 1,926.5; 2.2 still prints 349.9  [section 18 declares itself to win on disagreement, so this is a documentation-style choice rather than a live numeric error for a reader who reaches section 18]
+
+--- corpus digest (sha256 + mtime of every file this review read) ---
+  72803c1b46b506ea  2026-09-21T05:08:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/README.md
+  2afbf835d4bfdcb1  2026-09-21T04:42:20Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/counters.tsv
+  5c73c564ace6dd10  2026-09-21T04:42:20Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/shares.tsv
+  d9edc90c35bbdace  2026-09-21T04:42:20Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/diagnostic-receipt.json
+  4071811496045942  2026-09-21T04:42:20Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/diagnostic-run.json
+  90b4a4fe9379b461  2026-09-21T04:44:45Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/cadence-calibration.json
+  641738cda22bcd04  2026-09-21T04:45:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/journal-calibration.json
+  6f4ee1e2951e909e  2026-09-21T04:45:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/cache-calibration.json
+  dad1ee704ae8d24a  2026-09-21T04:46:39Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/blob-calibration.json
+  b9e0903bdbfad002  2026-09-21T04:51:26Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/pack-append-synthesis.json
+  c06780091c6c4a44  2026-09-21T05:08:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/reconciliation.json
+  c0231956fe91f30d  2026-09-21T04:48:33Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/counters-packcounters.tsv
+  d6543b61e007d66b  2026-09-21T04:48:33Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/packcounters-analysis.txt
+  c3937e3ff163f757  2026-09-21T04:50:20Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/README.md
+  a95683798c3e1493  2026-09-21T04:46:52Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/ranked_table.tsv
+  c9f31ada12b5cc7c  2026-09-21T04:46:52Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/ranked_table.txt
+  5519e84182e6310e  2026-09-21T04:42:13Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/pack_stats.json
+  8ad24e9c4a8cd07b  2026-09-21T04:49:17Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/row2_defence.json
+  5fb50f9067da74fc  2026-09-21T04:41:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/pack_parse.py
+  c7cbe138e4764adc  2026-09-21T04:57:42Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadC-cadence-20260921T044258Z/README.md
+  5e11ac9807e83cfa  2026-09-21T04:57:22Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadC-cadence-20260921T044258Z/pre-registration.md
+  71a8bd2ddaf57580  2026-09-21T04:53:37Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadC-cadence-20260921T044258Z/store-geometry.txt
+  bb245f6ecb20e51e  2026-09-21T04:55:25Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadC-cadence-20260921T044258Z/commit-decomposition.txt
+  0691d4b2ad7c0bd4  2026-09-21T04:53:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadC-cadence-20260921T044258Z/pack-rewrite-estimate-2.txt
+  c0fd904cc5647395  2026-09-21T04:45:01Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadD-chunk-20260921T044229Z/README.md
+  d0050cb41aa4bca1  2026-09-21T04:43:27Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadD-chunk-20260921T044229Z/raw/03-v017-ladder-output.txt
+  18ad2bd3ae5a698f  2026-09-21T04:43:57Z  docs/roadmap/0.1/0.1.7/evidence/issue219-squadD-chunk-20260921T044229Z/raw/08-verdict.txt
+  ca158f2c25138878  2026-09-21T04:26:39Z  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-pinned2-20260921T031259Z/pipeline-namespace-10000/receipt.json
+  c86f62e4ede2e9a3  2026-09-21T04:26:39Z  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-pinned2-20260921T031259Z/run.json
+  d9edc90c35bbdace  2026-09-21T04:40:48Z  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-squadA-profile-20260921T044041Z/pipeline-namespace-10000/receipt.json
+  4071811496045942  2026-09-21T04:40:48Z  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-squadA-profile-20260921T044041Z/run.json
+  e3418b2d56a00d8b  2026-09-21T04:48:21Z  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-squadA-packcounters-20260921T044814Z/pipeline-namespace-10000/receipt.json
+  550e1e27f5408e2b  2026-09-21T04:25:53Z  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/receipt.json
+  aa066437a3ed43f3  2026-09-21T03:14:20Z  benchmark-results/issue219/s1-ns10000-candidate-20260921T031259Z/perf.jsonl
+  14208100a9470e9c  2026-09-21T04:32:31Z  docs/roadmap/0.1/0.1.7/issue219-namespace-3x8-gap-rca-handoff.md
+  e29d728e3b295c06  2026-09-21T03:03:13Z  benchmark/fs-bench-pro/workload/main.rs
+  7c36549cccedfd75  2026-09-21T03:03:13Z  core/crates/layerfs-storage/src/pack/layout.rs
+  973ed67b076f888e  2026-09-21T03:03:20Z  docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-rca-20260920T191016Z/README.md
+  sample.sqlite sha256 03918d61a9f004b2 (pinned row, matches manifest.json)
+
+====================================================================================================
+checks: 157 PASS, 41 FAIL, 0 INCOMPLETE
+
+FAILING CHECKS
+  FAIL R2.build_encode_ms       claim=349.9 ms (README section 3 matrix cell) | raw=349.767 ms
+  FAIL R4.middle                claim=7,959 ns from the middle segment | raw=8014.7384
+  FAIL R4.applied_low           claim=applied_to_17378_commits_ns[0] == 7959 x 17378 = 138311502 | raw=138293022
+  FAIL R4.applied_high          claim=applied_to_17378_commits_ns[1] == 13084 x 17378 = 227373752 | raw=227393512
+  FAIL R5.section13_writes_per_pack claim=section 13.1: '14.44 writes per pack' | raw=13.4416 (16,802/1,250)
+  FAIL R5.section13_factor      claim=section 13.1: 7.72x / ~2.34 GB | raw=7.7208 (k+2)/2 at k=13.4416 and 2.333 GB
+  FAIL R5.section13_label       claim=section 13.1's rank-2 line labels 16,802 as UPDATE calls alone | raw=ranked_table.tsv row 2 statement=UPDATE object_packs SET data = ?2 ... (sqlite/write.rs:82)
+  FAIL R5.ranked_label          claim=ranked_table.tsv row 2 carries Squad B's corrected DERIVED-EXACT label | raw=EXACT: 16,802 groups parsed out of sampl
+  FAIL R5.archived_parser       claim=the archived pack_parse.py reproduces the archived pack_stats.json | raw=packs [5, 11, 26] -> recomputed [12313704, 16741428, 10223861] vs stored [253041, 255093, 252277]
+  FAIL R6.cpu_per_wall          claim=1.8934 | raw=1.8931
+  FAIL R7.1c.seal_and_image     claim=correction's last sentence: 'The product seal b3e3cb7453... and the image sha256:d152ced8... do match' | raw=seal/image fields in either v0.1.7 row: none
+  FAIL R7.2.sixteen_times       claim=correction says the true gap is 'sixteen times closer' than the handoff's 0.33% | raw=20.96x (0.3346% vs 0.0160%)
+  FAIL R7.6.diagnostic_divisor  claim=correction: at the diagnostic row's 0.9286 the same arithmetic gives 1,926.5 ms | raw=1926.34 ms
+  FAIL R9.scaled_floor          claim=section 12.1 floor 446,106,000 ns | raw=446111419
+  FAIL R9.synthetic_51279       claim=section 12.2's 'synthetic 51,279 ns/txn' is reproducible from a raw file | raw=files in the four #219 squad directories containing 51279 or 51,279: ['issue219-squadA-profile-20260921T044041Z/README.md']
+  FAIL R9.01                    claim=A section 9 / cadence-calibration.json: middle-segment fixed cost 7,959 ns | raw=recomputed 8,014.74 ns from the file's own arms
+  FAIL R9.02                    claim=cadence-calibration.json derived block: applied_to_17378_commits_ns [138293022, 227393512] | raw=its own 7,959/13,084 x 17,378 are 138,311,502 / 227,373,752
+  FAIL R9.03                    claim=A section 3 matrix: build/encode 349.9 ms | raw=sum of the five buckets is 349.767 ms
+  FAIL R9.04                    claim=A section 4: v0.1.6 CPU/wall 1.8934 | raw=1,788,767,834 / 944,880,958 = 1.8931
+  FAIL R9.05                    claim=A section 7.6: 1,788.8/0.9286 = 1,926.5 ms | raw== 1,926.34 ms
+  FAIL R9.06                    claim=A section 7.2: sixteen times closer | raw=0.3345% / 0.0160% = 20.96x
+  FAIL R9.07                    claim=A section 12.2: synthetic 51,279 ns/txn, 1.52x the product | raw=51,279 is in no raw file in the corpus
+  FAIL R9.08                    claim=A section 12.1: scaled floor 446,106,000 ns | raw=blob-calibration.json's own derived_floor_scaled_ns is 446,111,419
+  FAIL R9.09                    claim=A section 13.1: 14.44 writes per pack | raw=16,802/1,250 = 13.4416
+  FAIL R9.10                    claim=A section 13.1: 7.72x / ~2.34 GB | raw=counts the 1,250 creates as rewrites; measured 7.5917x
+  FAIL R9.11                    claim=A section 13.1: 16,802 UPDATE calls | raw=ranked_table.tsv row 2 is UPDATE + INSERT
+  FAIL R9.12                    claim=A section 14.3: amplification band 6.72-7.22x | raw=the measured value 7.5917x lies outside the band
+  FAIL R9.13                    claim=B section 12(e)(4): 576 = 207 + 207 + 1 + 1 + 367 | raw=that sum is 783; 576 = 367 + 207 + 1 + 1
+  FAIL R9.14                    claim=B sections 4/13.1: operation_ns = 3,585.8 ms | raw=pinned2 operation_ns = 3,575,832,667; 3,585.5 ms is ns17-final
+  FAIL R9.15                    claim=B ranked_table: sum of the 11 exact rows 1,956.7 ms | raw=the same 11 rows sum to 1,956.6 ms
+  FAIL R10.independence         claim=section 14.2's stronger claim: 'Two methods that share no input agree exactly' | raw=ranked_table.tsv row 2 basis: EXACT: 16,802 groups parsed out of sample.sqlite; pack/place
+  FAIL R11.novelty_overclaim    claim=the report no longer overclaims novelty anywhere | raw=section 13.4: 'the only candidate this campaign has found'; section 12.2 still names per-row metadata as 'the surviving candidate'
+  FAIL R12.matrix_row_mix       claim=section 3 declares 'v0.1.7 = the diagnostic row above' and every v0.1.7 cell comes from it | raw=acquisition 8.1 vs 5.2; preparation 913.2 vs 898.8; setup 3.6 vs 2.7; verification 338.7 vs 338.1; cleanup 459 vs 541; command 4,841.6 vs 4,791.6; run wall 5,045.4 vs 4,986.1; handoff 41.7 vs 44.3; timing children 11.2 vs 11.7
+  FAIL R12.matrix_children_mix  claim=the cell 'product timing children 11.2 ms of 3,538.9 ms = 0.32%' is self-consistent | raw=diagnostic children 11.7 ms; pinned2 children 11.2 ms; 11.2/3538.9 = 0.32%
+  FAIL R13.readme_factor        claim=README section 3: per byte the pager is handed (DERIVED, 7.28x) it pays 0.589 ns | raw=4.474/7.2843 = 0.6143 and 4.474/7.5917 = 0.5894
+  FAIL R13.prc1_prediction      claim=PR-C1 upper bound of 2,800 commits follows from its stated mechanism | raw=5 lane-tail steps/wave x 577 waves = 2,885 plus 783 fixed = 3,668 commits
+  FAIL R14.diff_attribution     claim=section 17.2 attributes that 246.5 ms to advance_pack_if_moved (1,250 statements) | raw=1,250 x ~1 us = 1.25 ms can carry at most 0.5%% of the 246.5 ms
+  FAIL R15.item_count           claim=section 18 says row 9 FAILs with 18 arithmetic items | raw=17 R9 items in this review FAIL
+  FAIL R15.row_count            claim=section 18 says the review covered fifteen rows | raw=this review defines rows 1-14
+  FAIL R15.seal_not_corrected   claim=section 18 corrects the one claim this review could not verify (the 7.1 product seal / image sentence) | raw=seal or image mentioned in section 18: no
+  FAIL R15.body_unchanged       claim=the corrected numbers were also fixed where they appear in the body | raw=13.1 still reads 14.44/7.72x; 14.3 still bands 6.72-7.22x; 12.1 still prints 446,106,000; 12.2 still prints 51,279; 4 still prints 1.8934; 7.6 still prints 1,926.5; 2.2 still prints 349.9

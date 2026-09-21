@@ -1,0 +1,68 @@
+{
+  "schema": "layerfs-preregistration-outcome-v1",
+  "id": "PR-A2",
+  "status": "REFUTED - the target cost does not exist at product level",
+  "one_difference": "validate_candidates returns early when no foreign published save holds a pack",
+  "guard_did_fire": "VERIFIED. base.sqlite for both the reference row and this row: saves = (1, publication 1, pack_ceiling 0), objects = 0, and the guard predicate returns 0. The 25,245 lookups were genuinely skipped.",
+  "measurement": {
+    "row": "benchmark-results/issue219/ns17-squadA-collisionguard-20260921T052953Z",
+    "reference": "benchmark-results/issue219/ns17-squadA-packcounters-20260921T044814Z",
+    "status": "PASS",
+    "sample_sqlite_sha256": "03918d61a9f004b292deafeadbea6992f870b8bdd96b3a631d4bc3309408db29",
+    "sample_sqlite_sha256_matches_pinned_row": true,
+    "unchanged_counters": [
+      "commits 17,378",
+      "inserted 25,245",
+      "packs_created 1,250",
+      "pack_appends 15,552",
+      "statements 16,595",
+      "presence_queries 398"
+    ],
+    "movement": {
+      "profile_sql_ns": {
+        "reference": 796535871,
+        "treated": 796523478,
+        "delta_ns": -12393,
+        "delta_share": -0.0016
+      },
+      "profile_commit_ns": {
+        "reference": 1145315268,
+        "treated": 1130779636,
+        "delta_ns": -14535632
+      },
+      "profile_total_ns": {
+        "reference": 2297160315,
+        "treated": 2285162117,
+        "delta_ns": -11998198
+      },
+      "accept_span_ns": {
+        "reference": 3347582625,
+        "treated": 3442816542,
+        "delta_ns": 95233917
+      },
+      "operation_ns": {
+        "reference": 3351043917,
+        "treated": 3446859125,
+        "delta_ns": 95815208
+      },
+      "cpu_ns": {
+        "reference": 3307937000,
+        "treated": 3268188000,
+        "delta_ns": -39749000
+      },
+      "remainder_ns": {
+        "reference": 1050422310,
+        "treated": 1157654425,
+        "delta_ns": 107232115
+      },
+      "remainder_share_of_span": {
+        "reference": 0.3138,
+        "treated": 0.3363
+      }
+    }
+  },
+  "why": "The expected saving was ~178.8 ms, taken from Squad B's ranked table row 3 (25,245 calls at 7,083 ns). The measured movement is 12,393 ns. Squad B's own section 6 warns that its Python harness inflates every multi-row statement and that its ns/call figures are diagnostic rather than receipt-grade; row 3 is exactly that case. A WITHIN ROWID primary-key probe on a 2 MB index whose pages are already resident is far cheaper in-process than the same query issued from Python.",
+  "instrument_gap_found": "validate_candidates is charged to NO SaveProfile bucket: cas/placement.rs runs it after the insert_objects charge closes. Whatever it costs therefore lands in the remainder, which the instrument declares unattributed. This is worth recording for anyone attacking the 30% remainder later.",
+  "also_settled": "This closes the handoff's section 3.1 lead - 'the locator/presence queries' - at PRODUCT level, not merely in a replica. Combined with presence_queries = 398 for 24,863 offered objects, the locator and presence paths are not a cost on this row.",
+  "disposition": "REVERTED. The change is provably a strict reduction in work and its output is byte-identical to the pinned row's store, but it buys nothing measurable, so it is not kept on hope. Tree restored; only the benchmark harness instrumentation remains modified."
+}

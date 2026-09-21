@@ -68,6 +68,23 @@ lane, and any durability run — the connection profile is unchanged, so this is
 change, not a durability change. The harness's `registry_self_check` reports the same pre-existing
 cardinality mismatch on every row here, including the campaign baseline.
 
+### Where this sits against this issue's acceptance bar — read this before quoting the number
+
+The bar in this issue's focus section names **`namespace-10000` in the `init_namespace` family**
+(`layerstack_init_ns`, ≤ 578.245 ms, paired against the v0.1.6 reference arm). This round optimized
+**`pipeline-namespace-10000`**, the v0.1.7 `pipeline.*` row that performs the same work (25,245
+objects, 301,171,810 canonical bytes) through the C1→C2 handoff. **They are different cases in
+different harnesses with different timers, so no number here is a claim about that bar.** The
+−21.22 % is on `pipeline-namespace-10000`'s own `operation_ns`, against a control measured in this
+same worktree with the same instrument.
+
+What transfers is the mechanism, and it is the reason this was worth doing: 60 % of the pipeline row
+was the Store's write path, and its 2,292,865,337 bytes of whole-pack rewrite are now 302,406,480
+bytes of real append. Whether the `init_namespace` case carries the same share is **a measurement
+this round did not take**, and the v0.1.6 pairing that bar requires has not been produced. The
+`init_namespace` route is also a different construction path (multi-worker init is explicitly out
+of scope here: every row in this round ran with one construction worker).
+
 ### Evidence
 
 `docs/roadmap/0.1/0.1.7/evidence/issue219-ns19-format-20260921T054430Z/` — pre-registration,

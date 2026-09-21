@@ -1,0 +1,34 @@
+accept_span_ns	3536155750
+operation_ns	3538935458
+commit_ns	1351360518	38.2155%	38.1855%
+sql_ns	781237539	22.0928%	22.0755%
+full_ns	245777362	6.9504%	6.9450%
+place_ns	79188910	2.2394%	2.2376%
+group_ns	18859112	0.5333%	0.5329%
+resolve.pooled_ns	5858368	0.1657%	0.1655%
+delta_ns	82960	0.0023%	0.0023%
+SEVEN_TOTAL	2482364769	70.1995%	70.1444%
+REMAINDER	1053790981	29.8005%	29.7771%
+DB_SQL_PLUS_COMMIT	2132598057	60.3084%	60.2610%
+DECODE_RESOLVE_DELTA_GROUP	24800440	0.7013%	0.7008%
+commits	17378
+ns_per_commit	77762.7
+object_rows	25245
+objects_per_commit	1.4527
+bytes_per_commit	17330.6
+cpu_total_ns	3286170000
+cpu_per_wall	0.9286
+--- pinned2 control ---
+pinned2_operation_ns	3575832667
+pinned2_cpu_ns	3354412000
+pinned2_commits	17378
+pinned2_inserted	25245
+pinned2_accept_span_missing	False
+--- v0.1.6 ---
+v016_wall_ns	944880958
+v016_cpu_ns	1788767834
+v016_commits	73
+v016_objects	25158
+v016_canonical_bytes	302182831
+v017_canonical_bytes_total	302231057
+byte_delta	48226

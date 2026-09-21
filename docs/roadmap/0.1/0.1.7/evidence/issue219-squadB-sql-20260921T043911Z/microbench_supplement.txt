@@ -1,0 +1,8 @@
+UPDATE store_policy SET next_pack_id (advance_pack, ownership.rs:169)    median=   1.000 us mean=   1.029 us
+UPDATE store_policy SET next_ordinal+window (reserve_ordinals, ownership.rs:189) median=   1.125 us mean=   1.139 us
+UPDATE store_policy SET publication_sequence (publish, ownership.rs:140) median=   1.166 us mean=   1.184 us
+UPDATE saves SET active_slot=NULL,publication (publish, ownership.rs:148) median=   0.833 us mean=   0.845 us
+INSERT INTO metadata_value_groups (sqlite/pool.rs:75)                    median=   2.000 us mean=   2.106 us
+INSERT OR REPLACE content_signatures (candidates.rs:363)                 median=   3.750 us mean=   3.902 us
+INSERT INTO saves (ownership.rs:131, incl. AUTOINCREMENT)                median=   1.916 us mean=   1.936 us
+UPDATE objects (nothing) - control                                       median=   1.084 us mean=   1.121 us

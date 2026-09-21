@@ -1,0 +1,39 @@
+{
+  "kind": "synthetic-replica-diagnostic",
+  "question": "Is SQLite page-cache size the cost inside the database term, and what cache does the product actually run?",
+  "product_fact": "The product NEVER sets cache_size. core/crates/layerfs-storage/src/sqlite/connection.rs:32-48 sets only journal_mode, synchronous, temp_store, foreign_keys and busy_timeout; cache_size appears in the crate only as Pragma::CacheSize, read for evidence (connection.rs:94,114) and published onto StoreFacts (cas/store.rs:182,524). The row therefore runs SQLite's DEFAULT page cache. The 33,554,432-byte connection-cache target seen in the v0.1.6 family is that harness's field and does not describe this product.",
+  "arms": [
+    {
+      "cache_size_kib": -2000,
+      "txn_shape": "dense",
+      "MBps": 482.6
+    },
+    {
+      "cache_size_kib": -8192,
+      "txn_shape": "dense",
+      "MBps": 482.5
+    },
+    {
+      "cache_size_kib": -32768,
+      "txn_shape": "dense",
+      "MBps": 473.4
+    },
+    {
+      "cache_size_kib": -131072,
+      "txn_shape": "dense",
+      "MBps": 476.7
+    },
+    {
+      "cache_size_kib": -2000,
+      "txn_shape": "batched-64",
+      "MBps": 485.9
+    },
+    {
+      "cache_size_kib": -32768,
+      "txn_shape": "batched-64",
+      "MBps": 598.7
+    }
+  ],
+  "verdict": "REFUTED for this shape. Throughput is FLAT from 2 MiB to 128 MiB of cache (482.6 / 482.5 / 473.4 / 476.7 MB/s) - a 64x cache increase buys nothing, and the largest cache is marginally the slowest. The handoff's §3.1 instruction to read the page-cache counters before any page-size treatment is discharged: on this workload there is no page-size treatment to make.",
+  "caveat": "One sample per arm, synthetic replica. The row's own cache_size/cache_spill/mmap_size are still NOT published by its receipt."
+}

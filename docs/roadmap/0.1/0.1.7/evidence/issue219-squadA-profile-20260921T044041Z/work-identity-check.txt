@@ -1,0 +1,17 @@
+counters only in pinned2: []
+counters only in diagnostic: ['pipeline.accept_span_ns', 'pipeline.profile_commit_ns', 'pipeline.profile_delta_ns', 'pipeline.profile_full_ns', 'pipeline.profile_group_ns', 'pipeline.profile_place_ns', 'pipeline.profile_resolve_acquire_ns', 'pipeline.profile_resolve_cost_ns', 'pipeline.profile_resolve_eligible_ns', 'pipeline.profile_resolve_ns', 'pipeline.profile_resolve_pooled_ns', 'pipeline.profile_resolve_reuse_ns', 'pipeline.profile_reuse_repeat', 'pipeline.profile_sql_ns', 'pipeline.profile_total_ns']
+shared counters compared: 15
+shared counters that MOVED: 0
+same_work_tree: True
+canonical_bytes_total 302231057 302231057
+canonical_objects_total 25245 25245
+canonical_objects_equal: True
+pinned2 statuses: ['PASS']
+diag statuses: ['PASS']
+diag gates: 13
+identity diffs:
+   harness_binary_sha256 | cb21593db53ba10921cea555b1aa1db38bead5795115596c64a4c2d8ce86372c -> 71d7c40ce1d35cd1997e20a87f8298c98357cb4e5179acbb2c49e5a3457d552c
+   source_commit | 2a63aff0d0a24743deebb9129ab14e098d9e24ed -> 9c46930b846600e5f3c6ca4a4c4cbcf44ecdc356
+   started_utc | 2026-09-21T04:26:32Z -> 2026-09-21T04:40:42Z
+pinned2 dirty files: ['M core/benchmark/fs-bench-pro-storage-content/src/families/pipeline.rs', ' M core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs', ' M core/benchmark/fs-bench-pro-storage-content/src/registry.rs', ' M core/benchmark/fs-bench-pro-storage-content/tests/golden/expected.tsv', ' M core/benchmark/fs-bench-pro-storage-content/tests/golden/registry.tsv']
+diag dirty files: ['M core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs']

@@ -1,0 +1,6 @@
+WholeFile|102|9444|24613232|1169771205|47.526
+Native|1142|7130|276058548|1001675136|3.628
+PooledMetadata|3|207|726096|25670723|35.354
+Ordinary|3|21|625356|2690731|4.303
+Parse error near line 36: no such table: per_pack
+Parse error near line 41: no such table: per_pack

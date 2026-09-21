@@ -1,0 +1,7 @@
+page width   1 ids: median=    6.875 us   per-id=  6.875 us
+page width   8 ids: median=   18.375 us   per-id=  2.297 us
+page width  16 ids: median=   30.105 us   per-id=  1.882 us
+page width  32 ids: median=   53.584 us   per-id=  1.675 us
+page width  43 ids: median=   69.709 us   per-id=  1.621 us
+page width  64 ids: median=   99.750 us   per-id=  1.559 us
+page width 128 ids: median=  193.875 us   per-id=  1.515 us

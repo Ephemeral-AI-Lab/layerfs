@@ -1,0 +1,61 @@
+{
+  "bench_db": "/tmp/squadB/bench3.sqlite",
+  "statements": {
+    "UPDATE store_policy SET next_pack_id (advance_pack, ownership.rs:169)": {
+      "n": 2000,
+      "median_ns": 1000.0,
+      "mean_ns": 1029.4305,
+      "p10_ns": 958,
+      "p90_ns": 1083
+    },
+    "UPDATE store_policy SET next_ordinal+window (reserve_ordinals, ownership.rs:189)": {
+      "n": 2000,
+      "median_ns": 1125.0,
+      "mean_ns": 1138.983,
+      "p10_ns": 1083,
+      "p90_ns": 1208
+    },
+    "UPDATE store_policy SET publication_sequence (publish, ownership.rs:140)": {
+      "n": 2000,
+      "median_ns": 1166.0,
+      "mean_ns": 1183.8265,
+      "p10_ns": 1084,
+      "p90_ns": 1250
+    },
+    "UPDATE saves SET active_slot=NULL,publication (publish, ownership.rs:148)": {
+      "n": 2000,
+      "median_ns": 833.0,
+      "mean_ns": 845.1885,
+      "p10_ns": 791,
+      "p90_ns": 916
+    },
+    "INSERT INTO metadata_value_groups (sqlite/pool.rs:75)": {
+      "n": 200,
+      "median_ns": 2000.0,
+      "mean_ns": 2105.735,
+      "p10_ns": 1916,
+      "p90_ns": 2333
+    },
+    "INSERT OR REPLACE content_signatures (candidates.rs:363)": {
+      "n": 2000,
+      "median_ns": 3750.0,
+      "mean_ns": 3901.5695,
+      "p10_ns": 3625,
+      "p90_ns": 3958
+    },
+    "INSERT INTO saves (ownership.rs:131, incl. AUTOINCREMENT)": {
+      "n": 200,
+      "median_ns": 1916.0,
+      "mean_ns": 1936.24,
+      "p10_ns": 1833,
+      "p90_ns": 2041
+    },
+    "UPDATE objects (nothing) - control": {
+      "n": 2000,
+      "median_ns": 1084.0,
+      "mean_ns": 1121.1715,
+      "p10_ns": 1042,
+      "p90_ns": 1167
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "kind": "coordinator reconciliation, derived from the row's own counters",
+  "question": "Does the pack-append amplification explain BOTH sql_ns and commit_ns?",
+  "sql_ns": {
+    "measured_row2": 796535871,
+    "rewritten_bytes_range": [
+      2031234488,
+      2182350016
+    ],
+    "implied_rate_GBps": [
+      2.55,
+      2.74
+    ],
+    "verdict": "CONSISTENT. 2.03-2.18 GB of whole-body rewriting in 796.5 ms is 2.55-2.74 GB/s, a plausible memory-bandwidth figure for blob construction plus page-cache insertion. The amplification is a sufficient explanation of the SQL term."
+  },
+  "commit_ns": {
+    "measured_row2": 1145315268,
+    "measured_row1": 1351360518,
+    "bytes_flushed_if_final_only": 302231057,
+    "implied_rate_MBps": [
+      264,
+      224
+    ],
+    "verdict": "NOT EXPLAINED BY THE AMPLIFICATION. Rewriting a pack row in place re-dirties the SAME pages; SQLite flushes only the pages dirty at COMMIT, so the bytes reaching the file are the pack's final size, not the sum of its rewrites. The amplification inflates sql_ns (memory work) and NOT commit_ns (flush work). Section 13.3 already flagged that the full 7.72x cannot be present; this records the mechanism of why."
+  },
+  "net_attribution": {
+    "sql_term": "well explained by the pack-append amplification - structural, in-thread, reachable without a cache, durability, worker-count or format change",
+    "commit_term": "a byte-proportional pager flush cost at this transaction geometry; NOT explained by the amplification and NOT by any of the four candidates sections 9-12 eliminated"
+  },
+  "largest_unattributed_term": "commit_ns at 34.2% of the accept span - an INCOMPLETE row, not a pass",
+  "SUPERSEDED": "Superseded in full by section 15.0 and section 18.2 of README.md. The verdict string below, claiming the amplification does NOT explain commit_ns, is RETRACTED: the rewrites are spread across 17,378 separate transactions and each transaction flushes its own ~132 KB of dirty pack pages at its own COMMIT. The 246,460,518 ns gap between profile_commit_ns and the COMMIT statement total is NOT_MEASURED and is NOT attributable to advance_pack_if_moved (1,250 statements cannot carry more than ~0.5% of it)."
+}

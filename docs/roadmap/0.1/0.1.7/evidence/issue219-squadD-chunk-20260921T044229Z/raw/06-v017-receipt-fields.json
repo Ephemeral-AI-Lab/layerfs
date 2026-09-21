@@ -1,0 +1,218 @@
+{
+ "_source": "core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/receipt.json",
+ "_note": "Verbatim extract. resources.space.canonical_objects and canonical_bytes as published.",
+ "schema": "layerfs-core-receipt-v1",
+ "case_id": "pipeline-namespace-10000",
+ "family": "pipeline.*",
+ "shape": "Pipeline(NamespaceScale)",
+ "status": "INCOMPLETE",
+ "tier_label": "binary",
+ "verification_mode": "full",
+ "wall_ns": 4846320250,
+ "declared_entries": 10000,
+ "declared_bytes": 0,
+ "profile": "",
+ "notes": [
+  "pipeline_op: NamespaceScale",
+  "declared_files: 10000",
+  "declared_directories: 100",
+  "declared_content_bytes: 300000000",
+  "measured_region: Store::open + build_filesystem + content accept + save + acknowledgement",
+  "content: constructed before the timer, accepted inside it (C2's supplied-object rule)",
+  "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter"
+ ],
+ "receipt_path": "benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/receipt.json",
+ "resources.space.canonical_objects": {
+  "chunk": 14466,
+  "directory-leaf": 163,
+  "extent-branch": 1,
+  "extent-leaf": 496,
+  "file-state": 456,
+  "filesystem-root": 3,
+  "inode-branch": 8,
+  "inode-leaf": 208,
+  "whole-file": 9444
+ },
+ "resources.space.canonical_bytes": {
+  "chunk": 275868750,
+  "directory-leaf": 181545,
+  "extent-branch": 2012,
+  "extent-leaf": 600464,
+  "file-state": 48336,
+  "filesystem-root": 387,
+  "inode-branch": 18392,
+  "inode-leaf": 858923,
+  "whole-file": 24652248
+ },
+ "resources.space.canonical_objects_total": 25245,
+ "resources.space.canonical_bytes_total": 302231057,
+ "resources.space.incomplete": [
+  "no reading was taken before the chain"
+ ],
+ "counters": {
+  "pipeline.batches": 3,
+  "pipeline.bindings": 10100,
+  "pipeline.chain_objects": 382,
+  "pipeline.commits": 17378,
+  "pipeline.content_bytes": 301171810,
+  "pipeline.content_objects": 24863,
+  "pipeline.declared_content_bytes": 300000000,
+  "pipeline.declared_directories": 100,
+  "pipeline.declared_files": 10000,
+  "pipeline.inserted": 25245,
+  "pipeline.largest_batch_bindings": 4096,
+  "pipeline.metadata_objects": 382,
+  "pipeline.objects_emitted": 67,
+  "pipeline.reused": 0,
+  "timing_json_bytes": 280
+ },
+ "gates": [
+  {
+   "class": "G4",
+   "id": "g4.residency",
+   "limit": "== 0",
+   "measured": "0 resident pages",
+   "status": "PASS"
+  },
+  {
+   "class": "G4",
+   "id": "g4.allocation-attribution",
+   "limit": "exclusive for any row gating allocated bytes",
+   "measured": "exclusive",
+   "status": "PASS"
+  },
+  {
+   "class": "G7",
+   "id": "g7.tree-complete",
+   "limit": "report.is_incomplete() == false",
+   "measured": "complete tree: 4 nodes, depth 2",
+   "status": "PASS"
+  },
+  {
+   "class": "G1",
+   "id": "g1.o1-replay-root",
+   "limit": "measured root 1d6fba29aba105aefbb668c34b026f8b89d20773fc36d548b991034dc3857847",
+   "measured": "replay root 1d6fba29aba105aefbb668c34b026f8b89d20773fc36d548b991034dc3857847",
+   "status": "PASS"
+  },
+  {
+   "class": "G1",
+   "id": "g1.o5-content-bytes",
+   "limit": "the content the row accepted is at least the bytes the case declares",
+   "measured": "301171810 canonical bytes inserted against 300000000 declared",
+   "status": "PASS"
+  },
+  {
+   "class": "G2",
+   "id": "g2.handoff",
+   "limit": "both streams reached the save operation and the save acknowledged them",
+   "measured": "382 metadata objects crossed the handoff; 24863 content objects were accepted; save acknowledged 25245 inserted + 0 reused",
+   "status": "PASS"
+  },
+  {
+   "class": "G1",
+   "id": "g1.o4-listing",
+   "limit": "every directory's bindings equal the fixture manifest",
+   "measured": "101 directories equal the manifest",
+   "status": "PASS"
+  },
+  {
+   "class": "G5",
+   "id": "g5.no-sidecars",
+   "limit": "no -wal, -shm or -journal sidecar",
+   "measured": "benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/sample.sqlite-wal: absent",
+   "status": "PASS"
+  },
+  {
+   "class": "G5",
+   "id": "g5.no-sidecars",
+   "limit": "no -wal, -shm or -journal sidecar",
+   "measured": "benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/sample.sqlite-shm: absent",
+   "status": "PASS"
+  },
+  {
+   "class": "G5",
+   "id": "g5.no-sidecars",
+   "limit": "no -wal, -shm or -journal sidecar",
+   "measured": "benchmark-results/issue219/ns17-final-20260921T031259Z/pipeline-namespace-10000/sample.sqlite-journal: absent",
+   "status": "PASS"
+  },
+  {
+   "class": "G4",
+   "id": "g4.swaps",
+   "limit": "== 0",
+   "measured": "0",
+   "status": "PASS"
+  },
+  {
+   "class": "G1",
+   "id": "g1.o3-pinned-counters",
+   "limit": "at least one O3 constant pinned for every admission case",
+   "measured": "no pinned counters for this case",
+   "status": "INCOMPLETE"
+  },
+  {
+   "class": "G1",
+   "id": "g1.o1-pinned-identity",
+   "limit": "a pinned expected identity for every row that claims O1",
+   "measured": "no pinned filesystem_root for pipeline-namespace-10000",
+   "status": "INCOMPLETE"
+  }
+ ],
+ "phases": {
+  "acquisition_wall_ns": 10159625,
+  "cleanup_wall_ns": 541,
+  "complete_command_ns": 4846320250,
+  "cpu_system_ns": 1313122000,
+  "cpu_user_ns": 2036018000,
+  "handoff_ns": 37771031,
+  "invocations": [
+   {
+    "acquisition_ns": 10159625,
+    "cleanup_ns": 541,
+    "cpu_system_ns": 1313122000,
+    "cpu_user_ns": 2036018000,
+    "declared_ns": 4833990709,
+    "handoff_ns": 37771031,
+    "invocation": "perf",
+    "invocation_ns": 4834403250,
+    "operation_ns": 3585470417,
+    "preparation_ns": 911085417,
+    "process_peak_rss_bytes": 525582336,
+    "reason": "declared 4833990709 ns inside a 4846320250 ns wall; 12329541 ns unaccounted, within 346926405 ns",
+    "reconciles": true,
+    "slack_ns": 12329541,
+    "timing_json_bytes": 280,
+    "tolerance_ns": 346926405,
+    "unaccounted_ns": 412541,
+    "verification_ns": 337434334,
+    "wall_ns": 4846320250
+   }
+  ],
+  "operation_ns": 3585470417,
+  "operation_root_elapsed_ns": 3585470417,
+  "operation_root_incomplete": false,
+  "operation_root_name": "pipeline",
+  "preparation_wall_ns": 911085417,
+  "process_peak_rss_bytes": 525582336,
+  "reconciliation": {
+   "problems": [],
+   "reason": "every declared phase reconciles with its wall",
+   "status": "PASS",
+   "tolerance_absolute_ns": 250000000,
+   "tolerance_fraction": "1/50 of the wall"
+  },
+  "reused_invocations": [],
+  "verification_invocation_ns": 0,
+  "verification_wall_ns": 337434334
+ },
+ "_saveprofile_absent": {
+  "explanation": "No key in this receipt matches \"save\", \"accept\" or \"remainder\"; the only key matching \"profile\" is the empty top-level profile:\"\" . The seven SaveProfile buckets are therefore NOT published and NOT_MEASURED.",
+  "keys_matching_save": [],
+  "keys_matching_accept": [],
+  "keys_matching_remainder": [],
+  "keys_matching_profile": [
+   "profile"
+  ]
+ }
+}

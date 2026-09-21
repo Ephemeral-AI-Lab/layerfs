@@ -1,0 +1,35 @@
+{
+  "schema": "layerfs-preregistration-v1",
+  "id": "PR-A2",
+  "registered_by": "coordinator, before the measurement below",
+  "status": "REGISTERED",
+  "one_difference": "cas/collision.rs::validate_candidates returns early when no foreign save holds a pack. Guard: SELECT EXISTS(SELECT 1 FROM saves WHERE save_id != ?1 AND publication IS NOT NULL AND pack_ceiling > 0). Nothing else changes.",
+  "rationale": "Squad B row 3 is SELECT ... WHERE o.object_id IN (?) AND o.pack_id <= ?2 at 25,245 calls, 7,083 ns/call, 178.8 ms - the third-largest statement on the row. It runs once per row inside validate_candidates, and its own next line discards every candidate that belongs to this save. On a store whose only prior content is this operation's own, every one of those lookups is therefore spent to prove nothing. The guard replaces 25,245 lookups with one two-row EXISTS per seal (16,595 of them).",
+  "why_it_is_exact_and_not_a_cache": "The guard reads only published foreign saves, which is exactly the set the per-row lookup could return as a foreign candidate - the read scope is save_id = ours OR publication <= ours. It runs after begin_write, so this operation holds the store's write transaction and no foreign save can publish underneath it. A foreign save still preparing has publication IS NULL and is outside the read scope, so excluding it is correct rather than optimistic. pack_ceiling > 0 is equivalent to holding at least one object, because write_pack raises it on every pack a save creates.",
+  "not_changed": [
+    "no capacity, policy constant or PRAGMA",
+    "no commit cadence",
+    "no arbitration lock hold change",
+    "no worker or lane",
+    "no durability",
+    "no Store format",
+    "no workload",
+    "no schema"
+  ],
+  "compared_against": "benchmark-results/issue219/ns17-squadA-packcounters-20260921T044814Z/pipeline-namespace-10000/receipt.json",
+  "expected_movement": {
+    "pipeline.profile_sql_ns": "796,535,871 -> ~620-700 ms (Squad B's 178.8 ms for that statement, less ~17 ms of guard queries)",
+    "operation_ns": "3,351,043,917 -> ~3,180-3,230 ms",
+    "pipeline.commits": "UNCHANGED 17,378",
+    "pipeline.inserted": "UNCHANGED 25,245",
+    "all 14 pinned counters and digest:filesystem_root": "UNCHANGED",
+    "store file hash": "UNCHANGED is expected here and is the strongest available check, because this treatment removes queries and stores nothing differently"
+  },
+  "refuted_if": [
+    "sql_ns does not fall by at least 80 ms",
+    "operation_ns does not fall by at least 1%",
+    "any pinned counter, the filesystem root, a gate or the row's PASS status moves",
+    "the sample.sqlite sha256 differs from the reference row's",
+    "any storage test goes red"
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "kind": "synthetic-replica-diagnostic",
+  "question": "Does pack/blob size explain the database term? The product's 1,250 packs average 243 KB (object_packs.data total 304,427,008 / 1,250).",
+  "method": "Same replica and preamble; 268,435,456 bytes written in every arm; transaction count held at 1,024 where the row count allows; only the blob size varies.",
+  "arms": [
+    {
+      "blob_bytes": 4096,
+      "rows": 65536,
+      "txns": 1024,
+      "insert_ns": 167406197,
+      "commit_ns": 427690472,
+      "total_ns": 595096669,
+      "MBps": 451.1,
+      "commit_share": 0.7187
+    },
+    {
+      "blob_bytes": 32768,
+      "rows": 8192,
+      "txns": 1024,
+      "insert_ns": 71359606,
+      "commit_ns": 386769747,
+      "total_ns": 458129353,
+      "MBps": 585.9,
+      "commit_share": 0.8442
+    },
+    {
+      "blob_bytes": 262144,
+      "rows": 1024,
+      "txns": 1024,
+      "insert_ns": 39529091,
+      "commit_ns": 356697966,
+      "total_ns": 396227057,
+      "MBps": 677.5,
+      "commit_share": 0.9002
+    },
+    {
+      "blob_bytes": 1048576,
+      "rows": 256,
+      "txns": 256,
+      "insert_ns": 34454666,
+      "commit_ns": 356822231,
+      "total_ns": 391276897,
+      "MBps": 686,
+      "commit_share": 0.9119
+    },
+    {
+      "blob_bytes": 4194304,
+      "rows": 64,
+      "txns": 64,
+      "insert_ns": 246311538,
+      "commit_ns": 147970501,
+      "total_ns": 394282039,
+      "MBps": 680.8,
+      "commit_share": 0.3753
+    }
+  ],
+  "verdict": "REFUTED, and in the opposite direction. Throughput RISES with blob size (451 -> 686 MB/s); larger blobs are cheaper per byte, not dearer. At the product's own average pack size of 243 KB the floor is 677.5 MB/s. The product's sql_ns + commit_ns = 2,132,598,057 ns for 302,231,057 bytes is 141.7 MB/s - 4.78x below that floor. Pack size is not the explanation, and shrinking packs would make it worse.",
+  "derived_floor_scaled_ns": 446111419,
+  "residual_ns": 1686486638,
+  "residual_factor": 4.78,
+  "caveat": "One sample per arm, synthetic replica, one table, no secondary indexes and no foreign keys exercised on the written table. It bounds the database term; it does not decompose it."
+}

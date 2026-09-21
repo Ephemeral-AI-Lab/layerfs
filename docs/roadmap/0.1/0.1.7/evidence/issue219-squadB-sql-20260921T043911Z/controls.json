@@ -1,0 +1,41 @@
+{
+  "queries": {
+    "a_COUNT_only (0 rows returned)": {
+      "n": 400,
+      "median_ns": 5792.0,
+      "mean_ns": 6486.9625
+    },
+    "b_scan_no_order (rows returned)": {
+      "n": 400,
+      "median_ns": 4207896.0,
+      "mean_ns": 4281107.275
+    },
+    "c_scan_order_by_stamp": {
+      "n": 400,
+      "median_ns": 5760708.0,
+      "mean_ns": 5780870.11
+    },
+    "d_C3_full (join+scope+order)": {
+      "n": 400,
+      "median_ns": 6245708.5,
+      "mean_ns": 6286661.35
+    },
+    "e_P4_no_order": {
+      "n": 400,
+      "median_ns": 139750.0,
+      "mean_ns": 145629.755
+    },
+    "f_P4_with_order": {
+      "n": 400,
+      "median_ns": 140417.0,
+      "mean_ns": 144313.7875
+    },
+    "g_empty_result_control": {
+      "n": 400,
+      "median_ns": 4708.0,
+      "mean_ns": 4843.4175
+    }
+  },
+  "python_per_row_ns_content_signatures": 512.9521484375,
+  "python_per_row_ns_metadata_value_groups": 647.1400966183575
+}

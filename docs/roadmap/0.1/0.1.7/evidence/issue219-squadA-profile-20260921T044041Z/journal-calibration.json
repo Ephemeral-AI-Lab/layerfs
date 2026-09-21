@@ -1,0 +1,27 @@
+{
+  "kind": "synthetic-replica-diagnostic",
+  "question": "Is the MEMORY rollback journal (connection.rs:1-48) the cost inside the 60.3% database term?",
+  "method": "Same synthetic replica and preamble as cadence-calibration.json; 8,192 transactions of one 32 KiB row each, 268,435,456 bytes in every arm; only PRAGMA journal_mode varies. synchronous stays OFF.",
+  "arms": [
+    {
+      "journal_requested": "MEMORY",
+      "journal_actual": "memory",
+      "wall_ns": 554603625,
+      "MBps": 484
+    },
+    {
+      "journal_requested": "OFF",
+      "journal_actual": "off",
+      "wall_ns": 598162833,
+      "MBps": 448.8
+    },
+    {
+      "journal_requested": "DELETE",
+      "journal_actual": "delete",
+      "wall_ns": 2226541709,
+      "MBps": 120.6
+    }
+  ],
+  "verdict": "REFUTED. MEMORY is 0.927x OFF - i.e. measured slightly FASTER than no journal at all, so the in-memory rollback journal costs nothing at this shape. DELETE (a real on-disk rollback journal) is 4.01x slower, which is a statement about disk journaling, not about this product: the product does not use DELETE and must not be moved to OFF, which would remove the runtime rollback atomicity connection.rs:3-7 retains.",
+  "caveat": "One sample per arm, synthetic replica, one table."
+}

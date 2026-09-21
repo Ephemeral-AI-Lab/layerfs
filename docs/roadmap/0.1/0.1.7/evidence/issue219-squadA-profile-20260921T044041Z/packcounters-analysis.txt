@@ -1,0 +1,17 @@
+shared: 15 moved: 0 []
+only-in-packcounters: ['pipeline.accept_span_ns', 'pipeline.full_records', 'pipeline.pack_appends', 'pipeline.packs_created', 'pipeline.prefix_records', 'pipeline.presence_queries', 'pipeline.profile_commit_ns', 'pipeline.profile_delta_ns', 'pipeline.profile_full_ns', 'pipeline.profile_group_ns', 'pipeline.profile_place_ns', 'pipeline.profile_resolve_acquire_ns', 'pipeline.profile_resolve_cost_ns', 'pipeline.profile_resolve_eligible_ns', 'pipeline.profile_resolve_ns', 'pipeline.profile_resolve_pooled_ns', 'pipeline.profile_resolve_reuse_ns', 'pipeline.profile_reuse_repeat', 'pipeline.profile_sql_ns', 'pipeline.profile_total_ns', 'pipeline.statements']
+packs_created 1250 pack_appends 15552 writes_total 16802
+appends_per_pack 12.4416
+amplification (k+2)/2 = 7.2208
+amplification (k+1)/2 = 6.7208
+canonical_bytes_total 302231057
+rewritten_bytes_lower 2031234488
+rewritten_bytes_upper 2182350016
+ATTR: statements 16595 presence_queries 398 full_records 25241 prefix_records 4
+squadB_measured pack UPDATE+INSERT calls = 16802 ; product packs_created+pack_appends = 16802
+squadB_measured INSERT INTO objects calls = 16595 ; product statements = 16595
+phases operation_ns 3351043917 cpu 3307937000
+accept_span 3347582625 profile_total 2297160315
+commit_share_of_span 0.3421
+sql_share_of_span 0.2379
+remainder 1050422310

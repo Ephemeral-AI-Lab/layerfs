@@ -2544,3 +2544,33 @@ Checks as run on the change before it was reverted: `fmt --all --check` exit 0, 
 
 Production LOC: **25403 → 25403 (delta 0)**; core 25403, reference 65417, combined 90820. The change was reverted before commit, so the product total is unchanged by construction rather than by coincidence. Method `tools/production_loc.py`, first parent `1bfb0c5dc` against the final staged tree.
 
+
+## L63 — #219 the reserved directory shipped on `pipeline-namespace-10000`: `operation_ns` −21.22 %, amplification 7.5917x → 1.0013x (2026-09-21)
+
+Status: **Shipped** in `a5c54df16` on `codex/219-ns10000` from `9c46930b8`. This is L62's design on a different lane and a different case: L62 implemented it, measured it and was reverted to close #209; the #219 handoff grants the format change explicitly ("L1 — the pack format… You have the authority to change it"), so it lands here. [Report and pre-registration](../../0.1.7/evidence/issue219-ns19-format-20260921T054430Z/README.md), [pre-registration](../../0.1.7/evidence/issue219-ns19-format-20260921T054430Z/pre-registration.md), [raw receipts](../../0.1.7/evidence/issue219-ns19-format-20260921T054430Z/receipts/), [`attribute.py`](../../0.1.7/evidence/issue219-ns19-format-20260921T054430Z/attribute.py) (re-derives every number from those receipts).
+
+**The treatment.** The group directory moves into a region **reserved at the lane's own width** and a pack **declares its own assembled length** in its control area, so a body's offset no longer depends on how many groups precede it and an append writes only the bytes it adds, through incremental BLOB I/O (`zeroblob` at creation, `sqlite3_blob_write` for the new bodies, the new entries and the control area). `SCHEMA_VERSION` 8 → 9; framing versions 1/2/4/6/7 → 9/10/11/12/13, with the old framings refused by the existing unsupported-framing path and a schema-8 Store refused at open before any pack is read. Two findings decided the design, both measured: a companion `used` column **cannot** serve (any `UPDATE` of a row holding a 256 KiB BLOB rewrites that BLOB — **72.5 µs against 11.1 µs** for a four-byte in-place write), and BLOB I/O alone changes nothing because with a front directory appending group *k* shifts bodies `0..k`.
+
+**Measured, one sample per arm, fresh `--out`, single thread**, the control being A1 — this worktree's unmodified tree plus the round's diagnostic charge sites, so both arms carry the same instrument:
+
+| | A1 | T1c | movement |
+| --- | ---: | ---: | ---: |
+| `operation_ns` | 3524.0 ms | **2776.3 ms** | **−747.8 ms, −21.22 %** |
+| CPU (user+system) | 3274.3 ms | 2533.8 ms | −740.5 ms, −22.62 % |
+| `complete_command_ns` | 4783.7 ms | 4051.4 ms | −15.31 % |
+| `profile_commit_ns` | 1133.6 ms | 682.5 ms | 0.602x |
+| `profile_sql_ns` | 780.6 ms | 498.7 ms | 0.639x |
+| `profile_place_ns` | 78.6 ms | 19.0 ms | 0.242x |
+| pack bytes written | — | **302,406,480 B** | vs **2,292,865,337 B** = **7.582x** |
+
+**The amplification the campaign measured at 7.5917x is 1.0013x**; the 0.13 % above 1.0 is one 24-byte control area per pack write plus one directory entry per group. Row **PASS, 13/13 gates**, **14/14 pinned counters reproduced**, `digest:filesystem_root` `1d6fba29…` unchanged. **A0 — this worktree's unmodified tree — reproduces the campaign baseline's store byte for byte** (`03918d61…`), which is what makes the comparison an identity rather than an analogy.
+
+**Declared before the run, measured after.** The store is **not** byte-identical: 336,400,384 B against 307,879,936 B (**+9.26 %**), `d8cd2384…` against `03918d61…`, because a non-singleton pack row allocates its lane's whole 256 KiB limit — L62's `max(32 KiB, pack_limit/8)` step schedule spends ~3.8x the bytes this one submits to save that 9.26 %, and the trade is stated in the report. `packs_created` 1250 → 1268 (+1.44 %, red flag declared at 5 %), `verification_wall_ns` +6.8 ms (+2.0 %) because the read path materialises the padded capacity before truncating.
+
+**The 31 % remainder, attributed (the round's second deliverable, a labelled diagnostic).** `SaveProfile` gained a `diag: DiagProfile` of **region totals** — nothing enters `total_ns()`, `SaveOutcome`'s equality ignores it as it ignores `profile` — costing **+33.7 ms (+0.97 %)** on the control. Against A1's 1257.6 ms remainder: **365.0 ms** is the driver's own C1 construction inside the timer (caller work, charged to nothing); **202.8 ms** is `BEGIN IMMEDIATE` plus the pack-watermark read, 17,378 times, which `SaveProfile`'s own documentation claims is charged to `commit_ns` and which is charged **nowhere** — matching the campaign's independent 3.9–6.4 % cadence bound; **120.0 ms** is `validate_candidates`, 75.7 ms of it one `SELECT` per row; **107.6 ms** is the per-wave locator query and presence seed; **207.7 ms** is `offer` outside its charged buckets; **257.0 ms** is the finish-span drain. After the treatment the same remainder is 1294.7 ms of a 2772.5 ms span: it did not grow, its *share* did.
+
+**Checks as run on the shipped tree.** `cargo test -p layerfs-storage` **33 binaries, 0 failed**; the whole core workspace `cargo test --locked --manifest-path core/Cargo.toml` **108 `test result: ok`, 0 failed, exit 0**; `clippy --all-targets` clean; `fmt --check` clean; `core/tools/check_product_boundary.py` **PASS over 194 files**. `cas_reuse` (pack sharing) and `delta_payload` (intra-save delta candidacy) — the two invariants the handoff names as the wall — are green, because this changes **what** is written, never **when**. **Not run, not claimed:** the reference `crates/` workspace's tests, any other harness case or lane, and any durability run — the connection profile is unchanged (`journal_mode=MEMORY`, `synchronous=OFF`, no fsync), so this is a format and cost change and not a durability change. The harness's `registry_self_check` reports the same pre-existing cardinality mismatch on every row of this round, including the campaign baseline.
+
+**Next action.** The write path is fixed; the remainder is now the row. The two named levers are both outside it: `BEGIN IMMEDIATE` (202.8 ms, and it is the multi-writer cadence contract, so it is not free to remove) and `validate_candidates` (120.0 ms, one query per row where one paged query per seal would do). Nothing is closed on this handoff.
+
+Production LOC: **30963 → 31247 (delta +284)**; core 31247, reference 65417, combined 96664. Method `tools/production_loc.py --root <tree>`, first parent `9c46930b8` (a detached worktree) against the committed tree; tests, examples, benches, fixtures, harnesses, tools and docs excluded.

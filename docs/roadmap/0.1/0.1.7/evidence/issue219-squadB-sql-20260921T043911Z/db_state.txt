@@ -1,0 +1,96 @@
+# Database state of the two COPIES, 2026-09-21T04:47:49Z
+# Originals: /Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/
+#            benchmark-results/issue219/ns17-pinned2-20260921T031259Z/pipeline-namespace-10000/
+#   base.sqlite   sha256 135af7c8a4581ae47525152043c36d8e1599897c1352a4c5bfe78252eea9e390
+#   sample.sqlite sha256 03918d61a9f004b292deafeadbea6992f870b8bdd96b3a631d4bc3309408db29
+
+########## DB=base ##########
+--- page accounting ---
+page_count=16 page_size=4096 freelist=0 application_id=1279677261 user_version=8
+--- sqlite_master ---
+index | objects_save | tbl=objects
+index | packs_save | tbl=object_packs
+index | signatures_save | tbl=content_signatures
+index | sqlite_autoindex_metadata_value_groups_1 | tbl=metadata_value_groups
+index | sqlite_autoindex_saves_1 | tbl=saves
+index | sqlite_autoindex_saves_2 | tbl=saves
+table | content_signatures | tbl=content_signatures
+table | metadata_value_groups | tbl=metadata_value_groups
+table | object_packs | tbl=object_packs
+table | objects | tbl=objects
+table | saves | tbl=saves
+table | sqlite_sequence | tbl=sqlite_sequence
+table | store_policy | tbl=store_policy
+--- sqlite_stat1 present? (0 = ANALYZE never ran) ---
+0
+--- sqlite_sequence (AUTOINCREMENT bookkeeping) ---
+sqlite_sequence rows=1 : saves -> 1
+--- row counts ---
+objects=0 saves=1 object_packs=0 metadata_value_groups=0 content_signatures=0 store_policy=1
+--- store_policy ---
+id|format_profile|small_file_threshold_bytes|whole_file_delta_max_depth|chunk_delta_max_depth|metadata_delta_max_depth|max_concurrent_writes|publication_sequence|retained_pack_ceiling|next_pack_id|next_ordinal|metadata_window_start|metadata_window_values
+1|1|131072|8|4|8|2|1|0|1|1|1|0
+--- saves ---
+save_id|active_slot|publication|pack_ceiling
+1||1|0
+--- objects: groups and rows-per-group histogram ---
+0 distinct (pack_id,group_number) groups
+--- pack body sizes ---
+packs=0 min=0 max=0 sum=0
+
+########## DB=sample ##########
+--- page accounting ---
+page_count=75166 page_size=4096 freelist=27 application_id=1279677261 user_version=8
+--- sqlite_master ---
+index | objects_save | tbl=objects
+index | packs_save | tbl=object_packs
+index | signatures_save | tbl=content_signatures
+index | sqlite_autoindex_metadata_value_groups_1 | tbl=metadata_value_groups
+index | sqlite_autoindex_saves_1 | tbl=saves
+index | sqlite_autoindex_saves_2 | tbl=saves
+table | content_signatures | tbl=content_signatures
+table | metadata_value_groups | tbl=metadata_value_groups
+table | object_packs | tbl=object_packs
+table | objects | tbl=objects
+table | saves | tbl=saves
+table | sqlite_sequence | tbl=sqlite_sequence
+table | store_policy | tbl=store_policy
+--- sqlite_stat1 present? (0 = ANALYZE never ran) ---
+0
+--- sqlite_sequence (AUTOINCREMENT bookkeeping) ---
+sqlite_sequence rows=1 : saves -> 2
+--- row counts ---
+objects=25245 saves=2 object_packs=1250 metadata_value_groups=207 content_signatures=8192 store_policy=1
+--- store_policy ---
+id|format_profile|small_file_threshold_bytes|whole_file_delta_max_depth|chunk_delta_max_depth|metadata_delta_max_depth|max_concurrent_writes|publication_sequence|retained_pack_ceiling|next_pack_id|next_ordinal|metadata_window_start|metadata_window_values
+1|1|131072|8|4|8|2|2|1250|1251|10164|1|10163
+--- saves ---
+save_id|active_slot|publication|pack_ceiling
+1||1|0
+2||2|1250
+--- objects: groups and rows-per-group histogram ---
+16595 distinct (pack_id,group_number) groups
+1 rows x 10081 groups
+2 rows x 5662 groups
+3 rows x 819 groups
+4 rows x 12 groups
+9 rows x 3 groups
+13 rows x 1 groups
+28 rows x 2 groups
+41 rows x 1 groups
+50 rows x 1 groups
+56 rows x 1 groups
+59 rows x 1 groups
+63 rows x 1 groups
+68 rows x 1 groups
+92 rows x 1 groups
+94 rows x 1 groups
+96 rows x 1 groups
+98 rows x 1 groups
+99 rows x 1 groups
+102 rows x 1 groups
+104 rows x 1 groups
+108 rows x 1 groups
+109 rows x 1 groups
+--- pack body sizes ---
+packs=1250 min=133154 max=262141 sum=302023232

@@ -1,0 +1,84 @@
+{
+  "write_size_distribution": {
+    "writes": 16802,
+    "packs": 1250,
+    "bytes_written": 2292865337,
+    "final_bytes": 302023232,
+    "size_bytes": {
+      "min": 191,
+      "p10": 38407,
+      "p25": 75639,
+      "median": 137544,
+      "mean": 136463.83388882276,
+      "p75": 196713,
+      "p90": 234378,
+      "max": 262141
+    },
+    "writes_per_pack_mean": 13.4416,
+    "amplification_measured": 7.591685321081525
+  },
+  "per_lane": {
+    "Ordinary": {
+      "packs": 3,
+      "groups": 21,
+      "writes": 21,
+      "writes_per_pack": 7.0,
+      "bytes_written": 2318196,
+      "final_bytes": 625356,
+      "amplification": 3.71,
+      "mean_write_bytes": 110390
+    },
+    "PooledMetadata": {
+      "packs": 3,
+      "groups": 207,
+      "writes": 207,
+      "writes_per_pack": 69.0,
+      "bytes_written": 25584656,
+      "final_bytes": 726096,
+      "amplification": 35.24,
+      "mean_write_bytes": 123597
+    },
+    "WholeFile": {
+      "packs": 102,
+      "groups": 9444,
+      "writes": 9444,
+      "writes_per_pack": 92.59,
+      "bytes_written": 1260350294,
+      "final_bytes": 24613232,
+      "amplification": 51.21,
+      "mean_write_bytes": 133455
+    },
+    "Native": {
+      "packs": 1142,
+      "groups": 7130,
+      "writes": 7130,
+      "writes_per_pack": 6.24,
+      "bytes_written": 1004612191,
+      "final_bytes": 276058548,
+      "amplification": 3.64,
+      "mean_write_bytes": 140899
+    }
+  },
+  "update_object_packs_ns": {
+    "n": 16802,
+    "median": 26000.0,
+    "mean": 43069.10570170218,
+    "p10": 9917,
+    "p25": 14333,
+    "p75": 50917,
+    "p90": 104292,
+    "min": 1917,
+    "max": 17696166
+  },
+  "wall_seconds_for_the_full_replay": 0.84
+}
+
+by size band:
+        0-  32767 B  n= 1119  median=    6.875 us  mean=   14.302 us
+    32768-  65535 B  n= 2350  median=   11.041 us  mean=   28.821 us
+    65536-  98303 B  n= 2266  median=   12.334 us  mean=   15.041 us
+    98304- 131071 B  n= 2278  median=   19.209 us  mean=   25.297 us
+   131072- 163839 B  n= 2268  median=   24.084 us  mean=   34.100 us
+   163840- 196607 B  n= 2309  median=   31.708 us  mean=   54.817 us
+   196608- 229375 B  n= 2168  median=   49.104 us  mean=   79.889 us
+   229376- 262143 B  n= 2044  median=   63.855 us  mean=   83.704 us

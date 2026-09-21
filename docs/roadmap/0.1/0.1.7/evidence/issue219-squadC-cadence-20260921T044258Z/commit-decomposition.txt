@@ -1,0 +1,130 @@
+Squad C (#219) — commit decomposition and per-commit arithmetic
+Worktree: /Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000  branch codex/219-ns10000
+Receipt:  core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-squadA-profile-20260921T044041Z/pipeline-namespace-10000/receipt.json
+Store:    same directory, sample.sqlite, read through a byte COPY at /tmp/layerfs-squadC-cadence-20260921T044258Z
+
+Inputs (each MEASURED here or cited):
+  pipeline.commits                        17,378   (receipt; SaveOutcome.commits)
+  pipeline.profile_commit_ns              1,351,360,518
+  pipeline.profile_sql_ns                 781,237,539
+  pipeline.profile_total_ns               2,482,364,769
+  pipeline.accept_span_ns                 3,536,155,750
+  operation_ns                            3,538,935,458
+  objects (sqlite, save 2)                25,245
+  distinct (pack_id, group_number)        16,595
+  metadata_value_groups (sqlite)          207
+  object_packs (sqlite)                   1,250
+  sum(length(data)) (sqlite)              302,023,232
+  pack bytes rewritten, Squad B parse     2,292,865,337   (pack_stats.json, DERIVED there)
+  pack bytes rewritten, this evidence     2,199,807,795   (pack-rewrite-estimate-2.txt, equal-growth estimate)
+
+================================================================================
+1. WHERE THE 17,378 COMMITS COME FROM
+================================================================================
+
+     1  slot acquisition            ownership::acquire, one BEGIN IMMEDIATE + COMMIT
+                                    (sqlite/ownership.rs:104,133); pre-counted by
+                                    cas/lifecycle.rs:95-99 (commits: 1) and pinned by
+                                    tests/cas_reuse.rs:51-54 as one of the two commits
+                                    an empty save reports.
+16,595  object-group seals          cas/placement.rs:199, one per (pack_id, group_number)
+                                    holding object rows: 16,595 distinct pairs, every one
+                                    with dense record numbers 0..n-1 (store-geometry.txt:
+                                    dup_pack_group_record 0, groups_nondense_record_numbers 0).
+   207  pooled value-group writes   cas/pool_lane.rs:355, one per inode leaf with fresh
+                                    values. A leaf's fresh set is at most
+                                    POOLED_LEAF_ROWS_LIMIT = 100 (policy.rs:139) and a group
+                                    chunks at VALUES_PER_GROUP = 165 (policy.rs:135), so each
+                                    fresh leaf writes exactly one group: leaves = groups = 207.
+   207  ordinal reservations        cas/pool_lane.rs:122, one per leaf with fresh values —
+                                    the same 207 leaves.
+   367  candidate-signature flushes  cas/lifecycle.rs:201, by subtraction:
+                                    17,378 - 2 - 16,595 - 207 - 207 = 367.
+     1  publication                 cas/lifecycle.rs:256-258 (finish_inner's COMMIT).
+  ----
+17,378  total = pipeline.commits.
+
+Cross-checks independent of this arithmetic:
+  * 16,595 + 207 = 16,802 pack writes = the groups Squad B parsed out of the packs
+    (pack_stats.json: Ordinary 21 + PooledMetadata 207 + WholeFile 9,444 + Native 7,130
+    = 16,802; the SQL in this evidence agrees exactly, store-geometry.txt).
+  * 17,377 = 16,802 + 207 + 367 + 1 = the number of begin_write calls, and Squad B's
+    statement table counts "SELECT next_pack_id FROM store_policy" 17,377 times — begin_write
+    is the only reader of that row (cas/lifecycle.rs:133).
+  * 207 = Squad B's call counts for the ordinal read/update, the metadata_window_start read
+    and the metadata_value_groups insert (ranked_table.txt rows 12, 13, 14).
+  * max(content_signatures.stamp) = 9,444 (store-geometry.txt) = the role-1 WholeFile object
+    count, and encoding/delta/select.rs:297-303, 332-337, 358-360, 393-398 insert into the
+    ring only for lane == WholeFile: one ring insertion per whole-file FULL winner.
+
+Consistency condition on the 367 (DERIVED; the one place a re-measurement should look):
+  flush_candidates runs once per preparation wave (cas/save.rs:112, from cas/store.rs:531-539)
+  and each call either commits or rolls back (cas/lifecycle.rs:196-200). The wave bound is
+  512 objects or 512 KiB of canonical bytes (policy.rs:105,107; cas/batch.rs:51-52), so the
+  302,231,057 accepted canonical bytes force at least ceil(302,231,057 / 524,288) = 577 waves.
+  367 of them committed, so at least 210 waves rolled back — they inserted nothing into the ring.
+  What accounts for most of that: the single anchor file (ops/namespace_content.rs:49,
+  ANCHOR_BYTES = 100,000,000) emits its chunks contiguously, and only a whole-file record
+  inserts. 100,000,000 / 524,288 = 190.7 waves of that file alone carry no whole-file record.
+  That covers ~191 of the ~210; the remainder is NOT MEASURED — the accept order is not
+  recorded anywhere in the row.
+
+================================================================================
+2. PER-COMMIT ARITHMETIC — measured, derived, NOT_MEASURED
+================================================================================
+
+MEASURED (divisions of two measured quantities):
+  commit_ns / commits                           77762.7 ns per commit (the row's own average)
+  final pack bytes / commits                    17379.6 bytes of final pack body per commit
+  content bytes accepted / commits              17330.6 bytes per commit
+  objects / commits                             1.4527 object rows per commit
+  pack-placing commits (derived count) / commits 96.7% have a pack write; 80428.6 ns per pack-placing commit
+  commit_ns / final pack bytes                  4.474 ns per final pack byte
+  commit_ns / rewritten pack bytes (Squad B)    0.589 ns per rewritten byte
+
+DERIVED — fixed per-transaction part. Input: cadence-calibration.json (Squad A, synthetic,
+the product's own pragma profile, bytes constant): 7,959 ns/txn (middle segment) and
+13,084 ns/txn (extremes).
+  17,378 x 7,959  = 138,311,502 ns = 138.3 ms = 10.2% of commit_ns = 3.91% of operation_ns
+  17,378 x 13,084 = 227,373,752 ns = 227.4 ms = 16.8% of commit_ns = 6.42% of operation_ns
+  (Squad A published [138,293,022, 227,393,512] for the same product; the products above
+  differ from those by <=0.01%, their own rounding. This input is synthetic and does not run
+  the product: it prices the COMMIT boundary, not this row.)
+
+DERIVED — per-byte part. sqlite/write.rs:80-89 binds the WHOLE open pack on every append, so
+the volume handed to the pager is sum over packs of L*(k+1)/2 under equal increments:
+  2,199,807,795 bytes (this evidence: 7.284x, pack-rewrite-estimate-2.txt)
+  2,292,865,337 bytes (Squad B's parse of the same packs: 7.59x, pack_stats.json) — 4.1% apart.
+At the pwrite price measured on a different row (1.65-1.72 us per 4 KiB page,
+issue-commit-time-rca-handoff.md:51-58):
+  537,062 pages x 1.65..1.72 us = 886.2 .. 923.7 ms   (65.6..68.4% of commit_ns)
+  559,782 pages x 1.65..1.72 us = 923.6 .. 962.8 ms   (68.3..71.2% of commit_ns)
+  the final 302 MB alone would be 73,736 pages = 121.7..126.8 ms: the 7.28x rewrite is the difference.
+  Both inputs are cross-row; the page price is not this row's.
+
+NOT_MEASURED — residual: commit_ns minus the two terms above.
+  low  end = 1,351,360,518 - (962824311 + 227373752) = 161162455 ns  (11.9% of commit_ns)
+  high end = 1,351,360,518 - (886153042 + 138311502) = 326895974 ns  (24.2% of commit_ns)
+  Candidate contents, none separated by any counter in this row: object b-tree pages, the
+  three secondary indexes (objects_save, signatures_save, packs_save), freelist and
+  page-pointer pages, and the per-statement VM work that is charged to sql_ns rather than here.
+  Also NOT_MEASURED for this row: the product connection's cache_size / cache_spill /
+  mmap_size — cas/store.rs:518-528 reads them and the receipt publishes none of them.
+
+Share of commit_ns (DERIVED):
+  fixed transaction price  10.2..16.8%
+  pack overflow pages      65.6..71.2%
+  NOT_MEASURED residual    11.9..24.2%
+
+================================================================================
+3. WHAT commit_ns CHARGES (see README section 2 for the citation list)
+================================================================================
+  charged:   write::commit (sqlite/write.rs:50-56), at cas/lifecycle.rs:169 (step path) and
+             cas/lifecycle.rs:256 (publication path); plus, in the step path ONLY,
+             advance_pack_if_moved (cas/lifecycle.rs:168) -> sqlite/ownership.rs:167-176.
+  not charged anywhere: BEGIN IMMEDIATE (cas/lifecycle.rs:130) and ROLLBACK
+             (cas/lifecycle.rs:197, :283). Squad B's statement table prices BEGIN IMMEDIATE
+             at 17,378 calls x 5,375 ns = 93.4 ms, none of it inside commit_ns.
+  consequence: the region is a page-flush region, not a statement region; sql_ns holds the
+             statement work of the same pages. Squad B's own exact-count rows sum to
+             1,956.7 ms of sql_ns + commit_ns against the measured 2,132.6 ms.

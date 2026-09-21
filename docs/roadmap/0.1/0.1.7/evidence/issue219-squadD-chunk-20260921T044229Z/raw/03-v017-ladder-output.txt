@@ -1,0 +1,70 @@
+# raw/03 — verbatim output of raw/02-v017-ladder.py
+
+Reproduce with:  `cd <this directory> && python3 raw/02-v017-ladder.py`
+
+Tree: `9c46930b846600e5f3c6ca4a4c4cbcf44ecdc356` · UTC `20260921T044229Z`
+Pure arithmetic: the script transcribes the two source functions literally and runs
+no product code, no build and no benchmark.
+
+```
+weight_sum          = 2555546
+positive (non-anchor, non-empty) files = 9899
+distributable       = 300000000 - 100000000 - 9899 = 199990101
+scaling ratio       = 78.257289
+
+band count= 7899 declared weight band (1,8): realized weights 1..8 sum=35546
+band count= 1500 declared weight band (32,256): realized weights 32..256 sum=216000
+band count=  500 declared weight band (1024,8192): realized weights 1031..8185 sum=2304000
+
+largest-remainder top-ups (extra) = 4214
+sum of positive sizes             = 200000000
+  + 100 empty + 100,000,000 anchor = 300000000
+
+band count= 7899 -> byte sizes      79 .. 627     total 2789651
+band count= 1500 -> byte sizes    2505 .. 20035   total 16905060
+band count=  500 -> byte sizes   80684 .. 640537  total 180305289
+overall positive sizes 79 .. 640537
+
+files with size == 131072 exactly      : 0
+non-anchor chunked (>= 131072)         : 455
+  + anchor                         : 1
+chunked FILES total                : 456
+whole-file objects                 : 9444   (expected 9444)
+
+whole-file raw bytes               : 24435036
+  9444 objects x 23 B overhead      : 217212
+  canonical total                  : 24652248   (receipt 24652248)
+chunk raw bytes                    : 275564964
+  14466 chunks x 21 B overhead        : 303786
+  canonical total                  : 275868750   (receipt 275868750)
+implied mean chunk payload         : 19049.15 B  (target 16384, max 32768)
+file-state objects (chunked files) : 456   (receipt 456)
+
+NOTE: docstring at namespace_content.rs:26 cites weight sum 102,555,546;
+      the formula at namespace_content.rs:113-129 yields 2555546.
+```
+
+## Reading
+
+1. **`weight_sum = 2,555,546`**, not the `102,555,546` printed in the
+   `namespace_content.rs:26` docstring. The docstring's *qualitative* point (bands are
+   weights, so a "tiny" file exceeds 8 bytes) is correct; its number is wrong by ~40x.
+   Documentation defect only — no arithmetic in either arm uses that value.
+2. **`distributable = 199,990,101`** and **`ratio = 78.257`** in both arms, because
+   `weight_sum` depends only on the weight *multiset*, which is permutation-invariant.
+   This is *why* the two arms build the same size population.
+3. **The band ranges are not the declared bands.** Tiny files are 79–627 bytes, not
+   1–8. Small files are 2,505–20,035, not 32–256. Medium files are 80,684–640,537,
+   not 1,024–8,192.
+4. **Whole-file = 9,444** falls out of the 131,072-byte exclusive cutoff
+   (`layerfs-content/src/policy.rs:13-14`) with no free parameter: 9,899 non-anchor
+   positive files, 455 of them at or above the cutoff, plus the anchor chunked, so
+   9,900 − 456 = 9,444. The receipt agrees exactly.
+5. **No file sits exactly on the cutoff**, so the exclusive-vs-inclusive boundary is
+   not what decides the count — the population does.
+6. **Both canonical-byte roles close to the byte** using the product's own 23 B
+   (`layerfs-storage/src/policy.rs:127`) and 21 B (same comment, lines 124–127)
+   per-object overheads. This is an independent confirmation that the ladder, the
+   cutoff and the chunk partition are all correct, not merely plausible.
+7. **`file-state = 456`** is a third, independent confirmation of the chunked-file
+   count derived twice above.

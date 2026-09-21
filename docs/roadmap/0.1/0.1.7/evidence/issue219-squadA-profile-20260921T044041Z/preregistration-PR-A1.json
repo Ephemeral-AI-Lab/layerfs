@@ -1,0 +1,64 @@
+{
+  "schema": "layerfs-preregistration-v1",
+  "id": "PR-A1",
+  "registered_by": "coordinator, before implementation and before any measurement of it",
+  "status": "REGISTERED, NOT YET RUN",
+  "why_not_prc1": "PR-C1 (Squad C) moves the step boundary to the lane tail. Reading the code to implement it shows it is not safely completable as a patch: it requires the commit to move off the seal, which in turn requires availability.inserted and sealed_rows to move to queue time (the duplicate-offer hazard those exist to prevent), a flush before every owner read (multi_writer.rs reads its own private objects mid-save), and a flush in finish_inner - and it needs a batch bound, where the only existing candidates (capacities.transaction_rows = 8191, batch_objects = 512) hold the arbitration lock 340x longer than today and would reproduce the #209 second-writer failure. PR-C1 is not refuted; it is larger than a patch and under-specified in its bound.",
+  "root_cause_refinement": {
+    "statement": "The amplification is a FORMAT property, not a cadence one. pack/layout.rs directory_is_starts_only() is true for PackLane::WholeFile alone, and the WholeFile lane is the lane with 51.21x amplification. Its directory grows with every append, so every body moves, so append_pack must rebind the entire pack (cas/placement.rs:203-205 states this). Fixing that at the root - a directory-last layout, or reserved directory space - is a Store-format change and needs an explicit owner ruling. This campaign does not propose one."
+  },
+  "treatment": {
+    "one_difference": "A lane that seals after every record stops retaining an open pack: after placing a group, the lane closes its pack instead of keeping it open for a later append. The predicate is exactly the set selection.rs:57-58 and :97-102 already uses to seal per member - WholeFile | PooledMetadata | Singleton. Nothing else changes: same groups, same records, same group grammar, same commit cadence (one commit per seal, unchanged), same pragmas, same capacities, same worker count, same durability, same rack limits.",
+    "rationale": "A retained open pack only pays for itself if a later group appends to it. For a lane that seals one group per record, every later group appends exactly once and each append rewrites the whole pack, so the retained tail is a pure loss on that lane: it converts one insert of the new group into a rewrite of up to PACK_LIMIT. Closing the pack turns each write into insert_pack of that group alone.",
+    "not_changed": [
+      "no capacity, policy constant or PRAGMA",
+      "no commit cadence - commits stay per seal",
+      "no arbitration lock hold change - one lock per seal as today",
+      "no worker, thread or lane",
+      "no durability",
+      "no Store format: a single-group pack is already well-formed and PackLane::Singleton emits exactly that shape",
+      "no workload"
+    ]
+  },
+  "compared_against": {
+    "identity": "core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns17-squadA-packcounters-20260921T044814Z/pipeline-namespace-10000/receipt.json",
+    "why": "it is the most recent diagnostic row carrying the pack counters this treatment moves (packs_created, pack_appends) as well as the profile buckets, on the same product source and the same harness instrumentation"
+  },
+  "expected_movement": {
+    "pipeline.pack_appends": "15,552 -> 0 (or near 0)",
+    "pipeline.packs_created": "1,250 -> ~15,500-16,800",
+    "rewritten pack bytes": "2,292,865,337 -> ~302,023,232 (amplification 7.5917x -> ~1.0x)",
+    "pipeline.profile_sql_ns": "796,535,871 -> ~300-450 ms",
+    "pipeline.profile_commit_ns": "1,145,315,268 -> ~350-700 ms (fewer bytes to flush; the per-commit fixed cost is unchanged)",
+    "operation_ns": "3,351,043,917 -> ~2.2-2.9 s",
+    "CPU": "3,307,937,000 -> ~2.2-2.9 s",
+    "must_not_move": [
+      "pipeline.commits (17,378, pinned)",
+      "pipeline.inserted (25,245, pinned)",
+      "pipeline.content_bytes (301,171,810, pinned)",
+      "all 14 pinned counters",
+      "digest:filesystem_root",
+      "the row's PASS status and all 13 gates"
+    ],
+    "may_move_and_must_be_reported": [
+      "the store file hash - pack boundaries change page and freelist layout",
+      "resources.space.page_count / freelist_count / allocated_bytes",
+      "pipeline.packs_created",
+      "process peak RSS"
+    ]
+  },
+  "refuted_if": [
+    "pack_appends does not fall below 1,000",
+    "rewritten bytes do not fall below 1.0 GB",
+    "sql_ns + commit_ns fall by less than 300 ms while the counters move as predicted (the page-flush model is then refuted for this row)",
+    "operation_ns falls by less than 10%",
+    "any pinned counter or the filesystem root moves",
+    "the row fails any gate, or the harness registry self-check regresses",
+    "any of pack_locator, pack_watermark, visibility, cas_reuse, persistence_failure, multi_writer goes red",
+    "the complete command exceeds the 15 s budget (the reference row is 4.79 s)"
+  ],
+  "known_risks": [
+    "pack rows rise ~13x, so object_packs goes from 1,250 to ~16,800 rows and packs_save grows with it; each write that creates a pack also runs UPDATE saves SET pack_ceiling and, because next_pack_id moves every step, advance_pack_if_moved writes store_policy. Both are hot single-row pages, so this treatment ADDS up to two dirty hot pages per commit (~142 MB of extra flush over 17,378 commits) while removing ~1.99 GB of pack rewriting. The trade is expected to be strongly positive but the added statements are real and are reported.",
+    "the read path loses the benefit of a warm 256 KiB pack holding many whole-file objects; the pack cache is dropped per write either way (cas/placement.rs:217)."
+  ]
+}

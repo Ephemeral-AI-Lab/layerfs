@@ -1,0 +1,30 @@
+{
+  "kind": "synthetic-replica-diagnostic",
+  "archived_late": "This calibration was run during the campaign session but was NOT written to the evidence directory at the time; only its printed output existed. Squad E's review flagged that the 51,279 ns/txn figure in README section 12.2 appeared in no raw artifact of this corpus. It is persisted here, after the fact, from that run's output. The process failure is recorded rather than hidden: a number used in a verdict should have been archived when it was produced.",
+  "question": "Split the synthetic replica's write cost into the INSERT statement and the COMMIT, at the product's own pragma profile, so the product's own sql_ns/commit_ns split can be compared against it.",
+  "method": "Copy the row's base.sqlite; PRAGMA journal_mode=MEMORY, synchronous=OFF, temp_store=MEMORY, foreign_keys=ON; 8,192 transactions, one 32 KiB blob each, 268,435,456 bytes total; time the INSERT and the COMMIT separately with time.perf_counter_ns, excluding BEGIN IMMEDIATE from both.",
+  "arm": {
+    "rows": 8192,
+    "bytes": 268435456,
+    "insert_ns": 81441882,
+    "commit_ns": 420081254,
+    "total_ns": 501523136,
+    "insert_share": 0.1624,
+    "commit_share": 0.8376,
+    "insert_ns_per_row": 9941,
+    "commit_ns_per_txn": 51279,
+    "MBps_total": 535.2
+  },
+  "product_for_comparison": {
+    "source": "the diagnostic row's own counters, not this replica",
+    "sql_ns": 781237539,
+    "commit_ns": 1351360518,
+    "inserted": 25245,
+    "commits": 17378,
+    "insert_ns_per_object": 30946,
+    "commit_ns_per_txn": 77763,
+    "commit_share": 0.6337
+  },
+  "reading": "The synthetic's 51,279 ns per commit against the product's 77,763 ns is 1.52x, and the product's commit also runs advance_pack_if_moved and touches more tables, so the per-commit engine cost is NOT anomalous. That verdict stands. It is the per-BYTE cost that is anomalous, which is what sections 13-16 then measured as the 7.5917x pack-append amplification.",
+  "caveat": "One sample, synthetic replica, one table, no secondary indexes, no foreign key exercised on the written table. It bounds the per-commit engine cost; it does not decompose the product's commit_ns."
+}

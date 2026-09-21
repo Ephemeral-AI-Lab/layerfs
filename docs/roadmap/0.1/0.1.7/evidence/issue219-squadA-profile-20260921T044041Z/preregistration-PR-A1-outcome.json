@@ -1,0 +1,28 @@
+{
+  "schema": "layerfs-preregistration-outcome-v1",
+  "id": "PR-A1",
+  "status": "REFUTED - by a declared product invariant, before any measurement",
+  "registered": "preregistration-PR-A1.json (written before implementation)",
+  "implemented": "34 insertions across 2 product files: PackLane::seals_every_record() in pack/layout.rs, and in pack/placement.rs::select_many a lane that seals per record stops consulting append_fits and closes its pack after placing.",
+  "refuting_evidence": {
+    "test": "core/crates/layerfs-storage/tests/cas_reuse.rs::one_operation_can_save_two_files_into_shared_packs (lines 232-261)",
+    "assertion": "assert_eq!(outcome.packs_created, 1, \"both objects share one pack\") and assert_eq!(counters.packs_read, 1)",
+    "observed": "packs_created = 2, packs_read would be 2 - the two 60,000-byte whole-file objects each got their own pack",
+    "command": "cargo +1.85.1 test --locked --manifest-path core/Cargo.toml -p layerfs-storage  (12 passed, 1 FAILED)",
+    "full_suite_state": "only cas_reuse::one_operation_can_save_two_files_into_shared_packs failed; the other 12 cas_reuse cases and every earlier-compiled target passed"
+  },
+  "why_this_is_a_refutation_and_not_an_obstacle": "The test does not measure a preference; it declares a product property: two whole-file objects saved in one operation SHARE a pack, and reading both reads ONE pack. Pack sharing is the read-amplification contract - a pack is a read unit, so objects are deliberately co-located. PR-A1 traded that declared read property for write bytes, which is a change of contract, not an optimisation. The test was not modified and the change was reverted in full (git checkout); cas_reuse is 13/13 green on the reverted tree.",
+  "consequence": {
+    "statement": "Pack sharing is load-bearing, so the WholeFile and PooledMetadata lanes MUST append to a shared pack. Appending is what rewrites the whole body, because the directory grows and moves every body behind it (cas/placement.rs:203-205), which pack/layout.rs::directory_is_starts_only() makes true for WholeFile alone.",
+    "therefore": "The 7.5917x amplification is INHERENT TO THE CURRENT PACK FORMAT. It cannot be removed by any placement or lifetime rule without either breaking a declared read property (PR-A1, refuted here) or changing the format."
+  },
+  "routes_that_remain": [
+    "PR-C1 (Squad C): batch placements so fewer writes happen while packs stay shared. Format-neutral. NOT refuted. Costs a step-boundary change whose code-level blockers are recorded in preregistration-PR-A1.json: availability.inserted and sealed_rows must move to queue time or the duplicate-offer hazard they exist to prevent returns; every owner read must flush first (multi_writer.rs:31 reads its own private objects mid-save); finish_inner must flush first; and a batch bound is required, where the only existing candidates (capacities.transaction_rows = 8191, batch_objects = 512) hold the arbitration lock far longer than today's one group.",
+    "Owner ruling on a Store-format change: a directory-last pack layout, or reserved directory space, would make an append write only the new bytes and remove the amplification at its root. This campaign does not propose a format and did not implement one."
+  ],
+  "what_was_NOT_run": "No harness benchmark row was produced for PR-A1. The treatment was refuted at the test gate, which the pre-registration listed as a refutation criterion; measuring a treatment known to break a declared invariant would have been waste, and the reference row is unchanged. This is recorded as NOT_RUN with that reason rather than as a missing measurement.",
+  "production_loc": {
+    "note": "the change was reverted in full, so there is no production LOC delta to report; the working tree's only modified file is the benchmark harness driver, which is not production source",
+    "before_after": "unchanged"
+  }
+}

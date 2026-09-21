@@ -1,0 +1,91 @@
+raw/08 — VERDICT (standalone)
+
+==============================================================================
+PART 1 VERDICT:  CHUNKING IS CLEARED AS THE DIFFERENTIATOR.
+==============================================================================
+
+Basis:
+
+(1) THE TWO ARMS CONSTRUCT THE SAME FILE-SIZE POPULATION.
+    The v0.1.6 "bands" (1-8 / 32-256 / 1024-8192) are RELATIVE WEIGHTS, not byte
+    sizes:
+      benchmark/fs-bench-pro/workload/main.rs:424-430
+      core/benchmark/fs-bench-pro-storage-content/src/ops/namespace_content.rs:38-42
+    Byte size is a separate largest-remainder pass:
+      workload/main.rs:332-386  ==  namespace_content.rs:205-258
+      size = 1 + floor(distributable * weight / weight_sum), then +1 to the
+      largest remainders.
+    Both arms use the identical weight formula:
+      workload/main.rs:434-448  ==  namespace_content.rs:113-129
+    with the identical (lower, upper, count) triples, so the weight MULTISET is
+    identical, so:
+      weight_sum    = 2,555,546        (both arms)
+      distributable = 199,990,101      (both arms)
+      extra         = 4,214            (both arms)
+    => IDENTICAL multiset of file sizes. Only the permutation onto paths differs,
+    and that difference is DECLARED at namespace_content.rs:16-23.
+
+    Realized ladder (both arms):
+      empty   100 files  0 B
+      tiny  7,899 files  79 .. 627 B
+      small 1,500 files  2,505 .. 20,035 B
+      medium  500 files  80,684 .. 640,537 B
+      anchor    1 file   100,000,000 B
+      total  10,000 files  300,000,000 B
+
+(2) THE v0.1.7 OBJECT POPULATION IS FULLY EXPLAINED BY THAT SHARED LADDER.
+    Frozen exclusive cutoff = 131,072 B (layerfs-content/src/policy.rs:13-14):
+      9,900 positive files; 455 non-anchor at/above cutoff; +1 anchor
+      => 456 chunked files
+      => 9,900 - 456 = 9,444 whole-file objects      RECEIPT: 9444   EXACT
+    No file sits exactly on the cutoff, so the boundary is not load-bearing.
+
+(3) THE CHUNK POPULATION CLOSES INDEPENDENTLY.
+      chunked source bytes = 275,564,964
+      implied mean chunk   =  19,049.15 B  (frozen TARGET 16,384 / MAX 32,768)
+      analytic model from the frozen masks (popcounts 16 and 12): 19,441.3 B
+      per-file renewal model: 14,418 chunks vs receipt 14,466  (-0.33%)
+      byte-exact closures:
+        whole-file: 24,435,036 + 9,444  x 23 B = 24,652,248  RECEIPT: 24652248
+        chunk:     275,564,964 + 14,466 x 21 B = 275,868,750 RECEIPT: 275868750
+      file-state = 456  RECEIPT: 456  (third independent confirmation)
+
+(4) THE OBJECT TOTALS ARE NEARLY IDENTICAL BETWEEN ARMS.
+      v0.1.6 store_canonical_objects = 25,158
+      v0.1.7 canonical_objects_total = 25,245
+      difference = 87 objects = 0.35%.
+    A chunking regime that could explain a v0.1.6 -> v0.1.7 performance gap would
+    have to produce a materially different object population. It does not.
+
+==============================================================================
+CAVEAT THAT MUST TRAVEL WITH THE VERDICT
+==============================================================================
+This verdict is about WORKLOAD SHAPE, not about TIMED WORK. The two arms do not
+time the same thing:
+
+  v0.1.6 layerstack_init_ns INCLUDES  scan + source read + representation
+                                      decision + CDC scan + object construction +
+                                      accept + commit.
+  v0.1.7 measure("pipeline") INCLUDES accept of pre-finalized objects + metadata
+                                      build + save + acknowledgement only.
+
+The FastCDC scan of all 300 MB is INSIDE the v0.1.6 timer and OUTSIDE the v0.1.7
+timer. That is a TIMER-BOUNDARY difference, not a chunking difference, and it
+remains the live explanation. Chunking is cleared as the DIFFERENTIATOR; the timer
+boundary is not.
+
+==============================================================================
+PART 2 FINDINGS (summary - see README.md sections 2.1-2.3)
+==============================================================================
+* The v0.1.6 timer pays for its own scan; the v0.1.7 timer does not, by the C2
+  supplied-object rule (c2.rs:13-16).
+* scanned_bytes = 300,000,000 vs initialization_disk_read_bytes = 729,088
+  => 0.243%. The v0.1.6 scan did NOT pay a storage read. Cache state was
+  UNDECLARED and UNCONTROLLED:
+      record[0].fixture_cache_profile = "reused-first-sample-uncontrolled"
+      header.cache_contract            = null
+      sample.sampled_paths_or_ranges   = []
+  Under AGENTS.md section 1 this row is INCOMPLETE/INELIGIBLE as a cold scan
+  measurement - never PASS.
+* SaveProfile: seven buckets defined at cas/owner.rs:30-175; NOT published in the
+  v0.1.7 receipt; ALL VALUES NOT_MEASURED.
