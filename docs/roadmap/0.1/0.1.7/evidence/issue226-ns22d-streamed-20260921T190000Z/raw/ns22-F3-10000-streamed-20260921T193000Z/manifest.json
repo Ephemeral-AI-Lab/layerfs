@@ -1,0 +1,41 @@
+{
+  "count": 7,
+  "files": [
+    {
+      "bytes": 61440,
+      "path": "pipeline-namespace-10000/base.sqlite",
+      "sha256": "a626e3ff99f83a815adb666cd0ff38141ca064e2b7bd9da34969eeeb148e5263"
+    },
+    {
+      "bytes": 376,
+      "path": "pipeline-namespace-10000/phases-perf.json",
+      "sha256": "b73907b42369d909c1215988a11dfd0138567e887d017ade0432109559aed20e"
+    },
+    {
+      "bytes": 14307,
+      "path": "pipeline-namespace-10000/receipt.json",
+      "sha256": "6a1b4a9de8bfca47c70eb15df751e44a33e53b8df0dc748ad0ef779299117541"
+    },
+    {
+      "bytes": 335818752,
+      "path": "pipeline-namespace-10000/sample.sqlite",
+      "sha256": "39dc463c0eb15869bf7bdba9218e9e6f92953d4d821d828a835962c513e66f21"
+    },
+    {
+      "bytes": 1785,
+      "path": "pipeline-namespace-10000/timing.json",
+      "sha256": "c3b19b2e10f3f598ddf09fb3a21d4d0981306390ed7325f81b6230d15c314267"
+    },
+    {
+      "bytes": 31461,
+      "path": "pipeline-namespace-10000/trace.jsonl",
+      "sha256": "ede3502b4f3af81fe62ee941749dc52336584eb52b98b6ec822e20b3b2f5991b"
+    },
+    {
+      "bytes": 3029,
+      "path": "run.json",
+      "sha256": "173dc142bf1c8adb5804e3777d5eabb5126450caf49b96dd9f7b54ea2fd5e2ee"
+    }
+  ],
+  "schema": "layerfs-core-manifest-v1"
+}

@@ -3646,3 +3646,52 @@ positioned reads and 9.8 % for streaming, because a cold mapping pays a page fau
 Production LOC: **97100 → 97100 (delta 0)** across every commit of this step; scope
 `core/crates/*/src + sql` and `crates/*/src + sql`, method `tools/production_loc.py --root .`
 (core 31683 in 194 files, reference 65417 in 193 files).
+
+## L86 — #226 S1: the fixture streamed inside the timer, 5.54× off the peak (2026-09-21)
+
+Status: **harness change on an owner ruling, measured, pins intact.** No product line changed;
+`core/crates/**` is byte-identical to `5be4b7ae0`. Report:
+[`issue226-ns22d-streamed-20260921T190000Z/report.md`](../../0.1.7/evidence/issue226-ns22d-streamed-20260921T190000Z/report.md).
+
+**The change.** `LAYERFS_PIPELINE_STREAM_FIXTURE=1` builds each fixture file from a windowed
+`NoiseReader` (`workload/stream.rs`) through **`construct_stream<R: Read>`**
+(`core/crates/layerfs-content/src/file/content.rs:279`) instead of materialising
+`fixture::noise(file.size, …)` and handing `construct_bytes` a slice. `construct_stream` buffers at most
+`small_file_threshold_bytes` = **131,072 B** for its probe, so a 100,000,000-byte anchor costs a window
+rather than the file. The test `a_streamed_file_is_byte_identical_to_a_materialised_one` holds the reader
+to `fixture::noise` at the row's own sizes, windows from 1 byte to 1 MiB.
+
+**Measured, three cases, one lock window, clean tree, binary `9b6dca6e4340`, commit `7feee8d90`:**
+
+| | `ns22-E2` | **`ns22-F2`** | change |
+| --- | ---: | ---: | ---: |
+| **lifetime peak RSS** | 882,180,096 | **159,236,096** | **−81.95 % (5.54× lower)** |
+| measured-region baseline | 847,052,800 | 103,088,128 | −87.83 % |
+| `heap.peak_incremental_bytes` | 36,307,857 | 29,833,774 | −17.83 % |
+| measured-region increment | 36,929,536 | 56,147,968 | +52.04 % |
+| `operation_work_ns` | 3,662,759,417 | 4,707,842,708 | +28.53 % |
+| complete command | — | 6.459 s | ≤ 15 s |
+| pins | 15/15 | **15/15** | both roots |
+
+**Against the reference product, which is what the change was for:** v0.1.6's `namespace-100000` peaked at
+**83,148,800 B**. The row was **10.61×** that before this change and is **1.92×** it after. The
+10,000-entry row moves the same way: 528,007,168 → 65,601,536 (−87.6 %), fifteen pins intact.
+
+**The boundary moved, by ruling, and that is the whole licence.** The declared figure now includes
+content construction — which is the **reference product's own boundary**: v0.1.6 read 887,242,752 bytes
+off disk inside `layerstack_init_ns`. The +28.53 % on `operation_work_ns` *is* that construction. **Rows
+taken under this switch are not comparable with rows taken without it**, and the row's notes must say
+which produced them.
+
+**Two corrections the implementation forced**, recorded because each was a gate failure first:
+`content_bytes` must be charged per object on the offer path (logical 500,000,000 against the pinned
+canonical 502,914,928 — the envelope is the difference), and `content_objects` is objects *produced*
+(98,998 whole-file members plus 10,330 anchor chunks = 109,414), not non-empty files (99,000).
+
+**Still open.** 1.92× off v0.1.6 remains: the row still holds the prepared tree and plan (~55 MB), and the
+platforms differ (Linux/arm64 in a 2 GiB container there, macOS/arm64 here). The switch is an environment
+variable, not a registry row — a registered variant with its own identity, pins and boundary declaration
+is the right long-term shape and would move the frozen cardinality, the golden table and the pins.
+
+Production LOC: **97100 → 97100 (delta 0)**; scope `core/crates/*/src + sql` and `crates/*/src + sql`,
+method `tools/production_loc.py --root .` (core 31683 in 194 files, reference 65417 in 193 files).
