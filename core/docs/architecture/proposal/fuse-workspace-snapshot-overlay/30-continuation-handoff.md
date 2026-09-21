@@ -12,8 +12,10 @@ traceable planning context. [Workspace Commit37](37-control-commit.md) now verif
 dirty-shutdown custody prerequisites. [Shared prepared directories38](38-prepared-directories.md)
 now verifies new directories and existing-directory portable patches through the
 existing Service save owner. [Native mkdir39](39-native-mkdir.md) now verifies the
-maintained namespace index and Commit integration. Mounted mkdir/entry coherence
-are next; file/symlink creation and the full prepared upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
+maintained namespace index and Commit integration. [Mounted mkdir40](40-mounted-mkdir.md)
+now verifies kernel/SDK creation and checked entry coherence. Shared fresh-file
+construction is the next prerequisite; file/symlink creation and the full prepared
+upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 
 ## Continuation recorded after this checkpoint

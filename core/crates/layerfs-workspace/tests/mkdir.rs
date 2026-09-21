@@ -1,4 +1,4 @@
-//! Native Workspace namespace mutations; mounted mkdir remains explicitly refused.
+//! Native Workspace namespace mutations and unbound projection refusal.
 #[cfg(target_os = "linux")]
 #[path = "support/native_workspace.rs"]
 mod support;
@@ -541,7 +541,7 @@ mod linux {
     }
 
     #[test]
-    #[ignore = "requires real mounted refusal and native Service"]
+    #[ignore = "requires unbound projection refusal and native Service"]
     fn mkdir_refusals() {
         let f = Fixture::new(Gate::None);
         let parent = f.workspace.root().serial;
@@ -592,13 +592,13 @@ mod linux {
             Err(WorkspaceError::ReadOnly)
         );
         ro.close_clean().unwrap();
-        let mut mount = layerfs_fuse::mount(&f.workspace, deadline()).unwrap();
+        let mut mount = f.workspace.reserve_mount().unwrap();
         assert!(f.workspace.status().unwrap().mounted);
         assert!(matches!(
             f.workspace.mkdir(parent, b"mounted", 0o755, 0, deadline()),
-            Err(WorkspaceError::Unsupported)
+            Err(WorkspaceError::Busy)
         ));
-        mount.unmount(deadline()).unwrap();
+        mount.finish().unwrap();
         assert_eq!(state(&f.workspace), initial);
         assert_eq!(reservations(&f), before);
         let mut options = Fixture::options("owner", 33, WorkspaceAccess::LocalEdit);
@@ -651,7 +651,7 @@ mod linux {
             owner.forget(a.serial, 1, ReferenceScope::Local);
         }
         owner.close_clean().unwrap();
-        check("invalid-readonly-access-deadline-and-mounted-refuse-before-Reserve");
+        check("invalid-readonly-access-deadline-and-unbound-projection-refuse-before-Reserve");
         close(&f, &[file.serial]);
     }
 

@@ -288,7 +288,7 @@ mod linux {
     impl CompletionGate {
         fn delivery(self: &Arc<Self>) -> ProjectionInvalidation {
             let gate = self.clone();
-            Arc::new(move |_, _| {
+            Arc::new(move |_, _, _| {
                 let mut s = gate.state.lock().unwrap();
                 s.0 = true;
                 gate.changed.notify_all();

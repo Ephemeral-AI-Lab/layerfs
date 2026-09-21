@@ -19,10 +19,19 @@ CASES = {
     'semantics': 'nested-mode-umask-forget-listing-and-two-explicit-generations',
     'successor': 'captured-new-parent-retains-D1-through-CommitStaged-and-next-Commit',
     'capacity': 'fixed-long-name-envelope-tree-pages-and-mixed-file-Commit',
-    'refusals': 'invalid-readonly-access-deadline-and-mounted-refuse-before-Reserve',
+    'refusals': 'invalid-readonly-access-deadline-and-unbound-projection-refuse-before-Reserve',
     'reserve_denied': 'denied-Reserve-consumed-none-no-replay-or-namespace-publication',
     'reserve_unknown': 'unknown-Reserve-consumed-once-no-replay-or-namespace-publication',
 }
+
+
+ENTRY_SOURCE = Path(__file__)
+TEST_SOURCE = Path(__file__).with_name('mkdir.rs')
+TEST_PREFIX = 'mkdir_'
+TEST_MARKER = 'MKDIR_CHECK'
+MODE = 'functional-native-workspace-mkdir'
+NOT_RUN = ['successful mounted/kernel mkdir', 'create/unlink/rename/symlink',
+           'prepared npm workload', 'R6', 'hard RSS/cgroup memory bound', 'crash/restart recovery']
 
 
 def sha(path):
@@ -137,7 +146,7 @@ def execute(args, report, started):
         if args.case == 'reserve_unknown':
             proxy = shared.lost_result_proxy(port)
             invocation += ['-e', f'LAYERFS_RESERVE_ENDPOINT=host.docker.internal:{proxy[0]}']
-        selection = f'linux::mkdir_{args.case}'
+        selection = f'linux::{TEST_PREFIX}{args.case}'
         invocation += [name, '/runner/' + args.test_binary.name, '--ignored', '--nocapture', '--test-threads=1', selection, '--exact']
         report['test_selection'] = selection
         report['invocation'] = invocation
@@ -147,7 +156,7 @@ def execute(args, report, started):
         report['test_exit'] = child.returncode
         text = (args.output / 'test.stdout').read_text(errors='replace')
         for row in report['checks']:
-            if f'MKDIR_CHECK {row["id"]} PASS' in text:
+            if f'{TEST_MARKER} {row["id"]} PASS' in text:
                 row['status'] = 'PASS'
         report['observations'] = [line for line in text.splitlines()
             if any(marker in line for marker in ('MKDIR_CAPACITY ', 'MKDIR_RESERVE ', 'MKDIR_RESOURCE '))]
@@ -220,12 +229,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     shared.route.BIN = args.binaries
     os.environ['LAYERFS_CONSTRUCTION_WORKERS'] = '1'
-    report = {'status': 'FAIL', 'mode': 'functional-native-workspace-mkdir', 'case': args.case,
+    report = {'status': 'FAIL', 'mode': MODE, 'case': args.case,
         'checks': [{'id': name, 'status': 'NOT_RUN'} for name in (CASES[args.case], 'native-clean-close')],
         'hard_budget_seconds': 60, 'callback_deadline_seconds': 10, 'construction_workers': 1,
         'performance_claim': False, 'cache_claim': None,
-        'not_run': ['successful mounted/kernel mkdir', 'create/unlink/rename/symlink',
-                    'prepared npm workload', 'R6', 'hard RSS/cgroup memory bound', 'crash/restart recovery']}
+        'not_run': NOT_RUN}
     started = time.monotonic()
     def expired(_signal, _frame):
         raise TimeoutError('complete mkdir selection exceeded 60 seconds')
@@ -235,8 +243,8 @@ def main():
         for path in (args.fixture, args.binaries, args.test_binary, args.output):
             space.assert_owned(path, 'native mkdir input/output')
         report.update(source=shared.mounted.checked(['git', 'rev-parse', 'HEAD'], text=True).stdout.strip(),
-            product_inputs_sha256=shared.mounted.product_inputs(), driver_sha256=sha(Path(__file__)),
-            test_source_sha256=sha(Path(__file__).with_name('mkdir.rs')), test_binary_sha256=sha(args.test_binary),
+            product_inputs_sha256=shared.mounted.product_inputs(), driver_sha256=sha(ENTRY_SOURCE),
+            test_source_sha256=sha(TEST_SOURCE), test_binary_sha256=sha(args.test_binary),
             helper_source_sha256=sha(Path(__file__).parent / 'support/native_workspace.rs'),
             binaries={name: sha(args.binaries / name) for name in ('layerfs-service', 'layerfs-daemon', 'examples/public_key')},
             resource_isolation=space.as_fields(),

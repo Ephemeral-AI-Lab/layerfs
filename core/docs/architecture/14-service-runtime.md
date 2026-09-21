@@ -625,5 +625,16 @@ parent metadata and generation accounting. Capture/lowering/reconciliation use
 the existing prepared Service operation and retain D1 entry roots. Files and
 directories share complete-request admission; namespace scratch remains charged
 while remote admission is released between RPCs. [Round39](proposal/fuse-workspace-snapshot-overlay/39-native-mkdir.md)
-records checked bounds and native proofs. Native mkdir still refuses mounted
-mutation; kernel entry notification and the FUSE mkdir callback remain next.
+records checked bounds and native proofs. That checkpoint refused mounted mutation.
+
+The mounted mkdir extension after source commit
+`e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca` adds a single-use projection mkdir permit
+and a FUSE callback delegating to the same native publication. SDK creation shares
+checked mutation completion with a borrowed parent/name notification target;
+the adapter invalidates parent attributes then the entry outside Workspace locks.
+Projected creation sends no reverse notification while the kernel parent lock is
+held, relying on its normal entry reply. Notification failure retains the applied
+namespace and receipt, releases the withheld Local return reference and refuses
+further mutation until checked unmount/remount. No retained name queue or new
+persistent layout is added. [Round40](proposal/fuse-workspace-snapshot-overlay/40-mounted-mkdir.md)
+records real mounted proofs and the two corrected caller failures.

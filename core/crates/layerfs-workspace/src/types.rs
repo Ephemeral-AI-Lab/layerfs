@@ -31,8 +31,10 @@ pub type OperationDelivery = Arc<
 >;
 /// One bounded projection notification, invoked after local publication without
 /// Workspace state or backing locks. The caller retains its original deadline.
-pub type ProjectionInvalidation =
-    Arc<dyn Fn(MutationReceipt, Instant) -> std::io::Result<()> + Send + Sync>;
+/// A directory creation supplies its parent and borrowed name for entry invalidation.
+pub type ProjectionInvalidation = Arc<
+    dyn Fn(MutationReceipt, Option<(u64, &[u8])>, Instant) -> std::io::Result<()> + Send + Sync,
+>;
 
 #[derive(Clone, Debug)]
 pub struct WorkspaceConfig {

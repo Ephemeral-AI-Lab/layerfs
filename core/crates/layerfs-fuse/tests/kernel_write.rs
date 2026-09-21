@@ -589,7 +589,7 @@ mod linux {
         let notifications = Arc::new(AtomicUsize::new(0));
         let counts = notifications.clone();
         lease
-            .bind_invalidation(Arc::new(move |_, _| {
+            .bind_invalidation(Arc::new(move |_, _, _| {
                 counts.fetch_add(1, Ordering::SeqCst);
                 Ok(())
             }))
@@ -686,7 +686,7 @@ mod linux {
         let input = f.own(b"known");
         let mut lease = f.workspace.reserve_mount().unwrap();
         lease
-            .bind_invalidation(Arc::new(|_, _| {
+            .bind_invalidation(Arc::new(|_, _, _| {
                 Err(std::io::Error::from_raw_os_error(libc::EIO))
             }))
             .unwrap();

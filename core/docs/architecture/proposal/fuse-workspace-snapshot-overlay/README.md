@@ -7,14 +7,15 @@
 > in [08](08-readable-implementation.md). That R1 checkpoint does not qualify writable behavior;
 > later scoped functional proofs are linked below. Performance and durability remain unqualified.
 
-**Native namespace continuation:** [native mkdir](39-native-mkdir.md) is implemented
-and verified with maintained directory state, stable directory handles, exact
-saveability admission and G/D1 reconciliation. Mounted mkdir and entry coherence
-are the next step; full prepared upload and R6 remain open.
+**Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
+kernel creation, coherent SDK creation, stable directory handles and checked entry
+notification failure/recovery. It uses [native mkdir](39-native-mkdir.md)'s maintained
+directory state, exact saveability admission and G/D1 reconciliation. File/symlink
+creation, full prepared upload and R6 remain open.
 
 **Shared directory prerequisite:** [prepared directory construction and metadata](38-prepared-directories.md)
 is implemented and functionally verified under the existing Service save path.
-Native directory creation now uses this primitive. Mounted mkdir, file/symlink
+Native and mounted directory creation now use this primitive. File/symlink
 creation and the complete prepared upload remain open.
 
 **Current continuation:** [authenticated Commit](37-control-commit.md) and its writable

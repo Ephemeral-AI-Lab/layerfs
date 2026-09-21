@@ -548,8 +548,48 @@ impl Filesystem for Adapter {
     ) {
         reply.error(self.readonly(req));
     }
-    fn mkdir(&self, req: &Request, _: INodeNo, _: &OsStr, _: u32, _: u32, reply: ReplyEntry) {
-        reply.error(self.readonly(req));
+    fn mkdir(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        mode: u32,
+        _umask: u32,
+        reply: ReplyEntry,
+    ) {
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            // INIT does not enable DONT_MASK: Linux sends final permission/sticky
+            // bits after applying umask. Native SDK callers supply their own mask.
+            let value = permit
+                .mkdir(
+                    serial(parent, self.root()),
+                    name.as_bytes(),
+                    mode,
+                    0,
+                    deadline,
+                )
+                .map_err(errno)?;
+            attributes(value, self.root()).inspect_err(|_| {
+                self.workspace
+                    .forget(value.serial, 1, ReferenceScope::Projection);
+            })
+        });
+        // The kernel owns entry installation and parent invalidation. A reverse
+        // entry notification here would wait on the parent lock held by mkdir.
+        // Keep the permit through the reply attempt; delivery is not observable.
+        match result {
+            Ok(value) => reply.entry(&TTL, &value, Generation(0)),
+            Err(error) => reply.error(error),
+        }
     }
     fn unlink(&self, req: &Request, _: INodeNo, _: &OsStr, reply: ReplyEmpty) {
         reply.error(self.readonly(req));

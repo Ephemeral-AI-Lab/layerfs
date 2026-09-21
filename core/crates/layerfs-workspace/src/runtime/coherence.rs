@@ -10,6 +10,7 @@ pub(crate) enum MutationOrigin {
     Local,
     ProjectionWrite { append: bool },
     ProjectionSize,
+    ProjectionMkdir,
 }
 impl MutationOrigin {
     pub fn projected(self) -> bool {
@@ -19,7 +20,7 @@ impl MutationOrigin {
         match self {
             Self::Local => stored,
             Self::ProjectionWrite { append } => append,
-            Self::ProjectionSize => false,
+            Self::ProjectionSize | Self::ProjectionMkdir => false,
         }
     }
 }
@@ -117,6 +118,30 @@ impl ProjectionMutationPermit {
         self.used = true;
         self.workspace
             .set_len_projected(serial, length, handle, deadline.min(self.deadline))
+    }
+    /// Publishes one directory and returns one Projection lookup reference. The
+    /// kernel owns entry installation and parent invalidation after the reply;
+    /// this operation sends no notification while its parent lock is held.
+    pub fn mkdir(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        mode: u32,
+        umask: u32,
+        deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.mkdir_from(
+            parent,
+            name,
+            mode,
+            umask,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionMkdir,
+        )
     }
 }
 impl Drop for ProjectionMutationPermit {
@@ -228,6 +253,19 @@ impl Workspace {
         })
     }
 
+    pub(crate) fn check_mutation_coherence(
+        &self,
+        state: &State,
+        origin: MutationOrigin,
+        publication: bool,
+    ) -> Result<(), WorkspaceError> {
+        if origin.projected() {
+            self.check_projected_mutation(state, publication)
+        } else {
+            self.check_projection_mutation(state)
+        }
+    }
+
     pub(crate) fn check_projection_mutation(&self, state: &State) -> Result<(), WorkspaceError> {
         if !state.mounted {
             return Ok(());
@@ -268,13 +306,14 @@ impl Workspace {
         &self,
         delivery: ProjectionInvalidation,
         receipt: MutationReceipt,
+        entry: Option<(u64, &[u8])>,
         published_handle: Option<HandleId>,
         deadline: Instant,
     ) -> Result<(), WorkspaceError> {
         let result = if Instant::now() >= deadline {
             Err(io::ErrorKind::TimedOut.into())
         } else {
-            delivery(receipt, deadline)
+            delivery(receipt, entry, deadline)
         };
         let notifier_returned_ok = result.is_ok();
         let cause = result

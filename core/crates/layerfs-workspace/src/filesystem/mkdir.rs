@@ -1,4 +1,4 @@
-//! Native directory creation: one allocation, then one checked local publication.
+//! Directory creation: one allocation, checked publication, and projection completion.
 use super::{
     namespace::{check_access, child_path},
     namespace_view::View,
@@ -12,7 +12,10 @@ use crate::{
         directories::{self, Directory, Origin},
         pieces::CapturedBase,
     },
-    runtime::state::{Node, NODE_LIMIT},
+    runtime::{
+        coherence::MutationOrigin,
+        state::{Node, NODE_LIMIT},
+    },
     *,
 };
 use layerfs_bridge::contract::{
@@ -24,7 +27,7 @@ use std::{
 };
 impl Workspace {
     /// Creates one native directory and returns one Local lookup reference.
-    /// Mounted namespace mutation waits for entry-cache coherence support.
+    /// When mounted, success includes parent-attribute and entry invalidation.
     pub fn mkdir(
         &self,
         parent: u64,
@@ -32,6 +35,17 @@ impl Workspace {
         mode: u32,
         umask: u32,
         deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        self.mkdir_from(parent, name, mode, umask, deadline, MutationOrigin::Local)
+    }
+    pub(crate) fn mkdir_from(
+        &self,
+        parent: u64,
+        name: &[u8],
+        mode: u32,
+        umask: u32,
+        deadline: Instant,
+        origin: MutationOrigin,
     ) -> Result<NodeAttributes, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
@@ -45,9 +59,7 @@ impl Workspace {
         let (view, path, attr, baseline, revision, generation, frozen, scope) = {
             let state = self.state()?;
             self.available(&state)?;
-            if state.mounted {
-                return Err(WorkspaceError::Unsupported);
-            }
+            self.check_mutation_coherence(&state, origin, false)?;
             if state.nodes.len() == NODE_LIMIT || state.nodes.len() == state.nodes.capacity() {
                 return Err(WorkspaceError::Capacity);
             }
@@ -90,6 +102,7 @@ impl Workspace {
         {
             let state = self.state()?;
             self.check_mkdir_stamp(&state, baseline, revision, generation, &view)?;
+            self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 state.dirty_inodes + new_dirty,
                 state.dirty_directories + new_dirty,
@@ -131,6 +144,7 @@ impl Workspace {
         let needs_completion = {
             let state = self.state()?;
             self.check_mkdir_stamp(&state, baseline, revision, generation, &view)?;
+            self.check_mutation_coherence(&state, origin, false)?;
             if state.nodes.iter().any(|node| node.attr.serial == serial) {
                 return Err(WorkspaceError::Service(Code::Unknown.into()));
             }
@@ -245,10 +259,16 @@ impl Workspace {
         });
         let mut node = Node::new(child_attr, [0; 32], [0; 32], &child_path, parent);
         node.baseline = 0;
-        node.lookups = 1;
+        let reference = if origin.projected() {
+            ReferenceScope::Projection
+        } else {
+            ReferenceScope::Local
+        };
+        *node.references(reference) = 1;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
         self.check_mkdir_stamp(&state, baseline, revision, generation, &view)?;
+        self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
@@ -267,6 +287,24 @@ impl Workspace {
             state.directory_names + 1,
             state.directory_bytes + name_bytes,
         )?;
+        let receipt = MutationReceipt {
+            incarnation: self.inner.incarnation,
+            generation,
+            inode: serial,
+            revision: next,
+            accepted_bytes: 0,
+        };
+        // The kernel's mkdir request holds the parent lock until its reply.
+        // Only native callers notify; projected callers let that reply install
+        // the entry and invalidate the parent without waiting on themselves.
+        let delivery = if origin.projected() {
+            None
+        } else {
+            state
+                .projection
+                .as_ref()
+                .and_then(|projection| projection.delivery.clone())
+        };
         if needs_completion {
             state.completion = candidate.take_completion(generation)?;
             if state.completion.is_none() {
@@ -281,8 +319,30 @@ impl Workspace {
         state.dirty_directories += new_dirty;
         state.directory_names += 1;
         state.directory_bytes += name_bytes;
+        if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
+            projection.status = CoherenceStatus::Pending {
+                receipt,
+                published_handle: None,
+            };
+        }
         drop(state);
         drop(retired);
+        drop(lease);
+        drop(_writer);
+        if let Some(delivery) = delivery {
+            if let Err(error) = self.complete_projection_mutation(
+                delivery,
+                receipt,
+                Some((parent, name)),
+                None,
+                deadline,
+            ) {
+                // The name remains published. An error returns no attributes,
+                // so release only this attempt's otherwise unreturned reference.
+                self.forget(serial, 1, ReferenceScope::Local);
+                return Err(error);
+            }
+        }
         Ok(child_attr)
     }
     fn check_mkdir_stamp(
@@ -294,9 +354,6 @@ impl Workspace {
         view: &View,
     ) -> Result<(), WorkspaceError> {
         self.available(state)?;
-        if state.mounted {
-            return Err(WorkspaceError::Unsupported);
-        }
         if state.nodes.len() == NODE_LIMIT || state.nodes.len() == state.nodes.capacity() {
             return Err(WorkspaceError::Capacity);
         }

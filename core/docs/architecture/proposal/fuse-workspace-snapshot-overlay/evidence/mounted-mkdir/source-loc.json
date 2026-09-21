@@ -1,0 +1,3909 @@
+{
+  "files": [
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 1,
+      "physical_lines": 1
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/client.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 481,
+      "physical_lines": 497
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/connection.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 416,
+      "physical_lines": 471
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 7,
+      "physical_lines": 7
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/payload.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 146,
+      "physical_lines": 148
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/pipe.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 112,
+      "physical_lines": 132
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/control.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 166,
+      "physical_lines": 168
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/frame.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 89,
+      "physical_lines": 96
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/history_failure.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 163,
+      "physical_lines": 169
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/metadata.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 861,
+      "physical_lines": 900
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 12,
+      "physical_lines": 12
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 758,
+      "physical_lines": 776
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/state.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 55,
+      "physical_lines": 56
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/workspace_commit.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 216,
+      "physical_lines": 218
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/server.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 94,
+      "physical_lines": 99
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/caller.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 13,
+      "physical_lines": 19
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/control.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 135,
+      "physical_lines": 151
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/history.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 338,
+      "physical_lines": 571
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/metadata.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 20,
+      "physical_lines": 23
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 16,
+      "physical_lines": 16
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/outcome.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 164,
+      "physical_lines": 185
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/request.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 781,
+      "physical_lines": 833
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/source.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 29,
+      "physical_lines": 34
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/workspace_commit.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 207,
+      "physical_lines": 213
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-bridge",
+      "production_loc": 4,
+      "physical_lines": 5
+    },
+    {
+      "path": "core/crates/layerfs-content/src/error.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 161,
+      "physical_lines": 255
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/cdc/gear.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 494,
+      "physical_lines": 538
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/cdc/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 5,
+      "physical_lines": 10
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/content.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 259,
+      "physical_lines": 353
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/apply.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 420,
+      "physical_lines": 506
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/compare.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 94,
+      "physical_lines": 121
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/concat.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 19,
+      "physical_lines": 29
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/finish.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 38,
+      "physical_lines": 54
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/input.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 286,
+      "physical_lines": 390
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 15,
+      "physical_lines": 20
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/split.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 23,
+      "physical_lines": 32
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 750,
+      "physical_lines": 978
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/build.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 328,
+      "physical_lines": 422
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/codec.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 304,
+      "physical_lines": 345
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 22,
+      "physical_lines": 27
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/predecessor.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 171,
+      "physical_lines": 220
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/read.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 422,
+      "physical_lines": 573
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/types.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 190,
+      "physical_lines": 266
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 18,
+      "physical_lines": 24
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/read.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 111,
+      "physical_lines": 127
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/view.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 87,
+      "physical_lines": 117
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/build.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 386,
+      "physical_lines": 435
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/codec.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 322,
+      "physical_lines": 375
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/keys.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 77,
+      "physical_lines": 107
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 16,
+      "physical_lines": 19
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/patch.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 173,
+      "physical_lines": 218
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/portable.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 70,
+      "physical_lines": 95
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/read.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 171,
+      "physical_lines": 201
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/value.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 73,
+      "physical_lines": 91
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/codec.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 156,
+      "physical_lines": 190
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 6,
+      "physical_lines": 9
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/read.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 272,
+      "physical_lines": 315
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/update.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 39,
+      "physical_lines": 52
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/identity.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 32,
+      "physical_lines": 63
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/codec.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 145,
+      "physical_lines": 178
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 6,
+      "physical_lines": 9
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/read.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 186,
+      "physical_lines": 211
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/update.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 72,
+      "physical_lines": 97
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/input.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 158,
+      "physical_lines": 233
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/limits.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 24,
+      "physical_lines": 113
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 28,
+      "physical_lines": 33
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/objects.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 101,
+      "physical_lines": 166
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/path.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 147,
+      "physical_lines": 197
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/read.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 212,
+      "physical_lines": 296
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/backing.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 246,
+      "physical_lines": 360
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/merge.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 173,
+      "physical_lines": 260
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 15,
+      "physical_lines": 18
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/record.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 120,
+      "physical_lines": 166
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/reduce.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 472,
+      "physical_lines": 594
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/release.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 167,
+      "physical_lines": 205
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/runs.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 394,
+      "physical_lines": 595
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/root.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 119,
+      "physical_lines": 160
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/budget.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 83,
+      "physical_lines": 111
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/finish.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 156,
+      "physical_lines": 180
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/format.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 592,
+      "physical_lines": 744
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/merge.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 278,
+      "physical_lines": 312
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 9,
+      "physical_lines": 12
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/page.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 481,
+      "physical_lines": 614
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/symlink.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 70,
+      "physical_lines": 94
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 454,
+      "physical_lines": 550
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 653,
+      "physical_lines": 824
+    },
+    {
+      "path": "core/crates/layerfs-content/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 32,
+      "physical_lines": 49
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/access.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 44,
+      "physical_lines": 86
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/codec.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 107,
+      "physical_lines": 139
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/id.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 70,
+      "physical_lines": 96
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/inode_leaf.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 345,
+      "physical_lines": 467
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 23,
+      "physical_lines": 29
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/output.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 156,
+      "physical_lines": 242
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/predecessor.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 64,
+      "physical_lines": 102
+    },
+    {
+      "path": "core/crates/layerfs-content/src/policy.rs",
+      "scope": "core",
+      "crate": "layerfs-content",
+      "production_loc": 137,
+      "physical_lines": 237
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/config.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 251,
+      "physical_lines": 266
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/control.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 311,
+      "physical_lines": 332
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/control_commit.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 174,
+      "physical_lines": 187
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/headless.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 133,
+      "physical_lines": 134
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 8,
+      "physical_lines": 10
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/lifecycle.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 243,
+      "physical_lines": 266
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/main.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 10,
+      "physical_lines": 10
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/run.rs",
+      "scope": "core",
+      "crate": "layerfs-daemon",
+      "production_loc": 234,
+      "physical_lines": 253
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/adapter.rs",
+      "scope": "core",
+      "crate": "layerfs-fuse",
+      "production_loc": 603,
+      "physical_lines": 645
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-fuse",
+      "production_loc": 7,
+      "physical_lines": 10
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/mount.rs",
+      "scope": "core",
+      "crate": "layerfs-fuse",
+      "production_loc": 403,
+      "physical_lines": 448
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/replies.rs",
+      "scope": "core",
+      "crate": "layerfs-fuse",
+      "production_loc": 98,
+      "physical_lines": 106
+    },
+    {
+      "path": "core/crates/layerfs-history/sql/schema-v1.sql",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 155,
+      "physical_lines": 167
+    },
+    {
+      "path": "core/crates/layerfs-history/src/catalog.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 71,
+      "physical_lines": 142
+    },
+    {
+      "path": "core/crates/layerfs-history/src/error.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 115,
+      "physical_lines": 185
+    },
+    {
+      "path": "core/crates/layerfs-history/src/identity.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 237,
+      "physical_lines": 343
+    },
+    {
+      "path": "core/crates/layerfs-history/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 21,
+      "physical_lines": 44
+    },
+    {
+      "path": "core/crates/layerfs-history/src/records.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 329,
+      "physical_lines": 558
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/allocation.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 65,
+      "physical_lines": 85
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/branch.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 168,
+      "physical_lines": 189
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/commit.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 263,
+      "physical_lines": 293
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/layerstack.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 348,
+      "physical_lines": 390
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 9,
+      "physical_lines": 18
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/open.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 357,
+      "physical_lines": 421
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/query.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 135,
+      "physical_lines": 195
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/rows.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 232,
+      "physical_lines": 301
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/staging.rs",
+      "scope": "core",
+      "crate": "layerfs-history",
+      "production_loc": 217,
+      "physical_lines": 247
+    },
+    {
+      "path": "core/crates/layerfs-service/src/input/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 2,
+      "physical_lines": 2
+    },
+    {
+      "path": "core/crates/layerfs-service/src/input/sequential.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 31,
+      "physical_lines": 33
+    },
+    {
+      "path": "core/crates/layerfs-service/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 6,
+      "physical_lines": 7
+    },
+    {
+      "path": "core/crates/layerfs-service/src/main.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 9,
+      "physical_lines": 9
+    },
+    {
+      "path": "core/crates/layerfs-service/src/native/config.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 124,
+      "physical_lines": 142
+    },
+    {
+      "path": "core/crates/layerfs-service/src/native/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 3,
+      "physical_lines": 3
+    },
+    {
+      "path": "core/crates/layerfs-service/src/native/startup.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 175,
+      "physical_lines": 183
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/dispatch.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 58,
+      "physical_lines": 67
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/failure.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 45,
+      "physical_lines": 46
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/filesystem.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 182,
+      "physical_lines": 201
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/history.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 618,
+      "physical_lines": 660
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/history_bootstrap.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 278,
+      "physical_lines": 322
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/metadata.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 128,
+      "physical_lines": 137
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 9,
+      "physical_lines": 9
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/read.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 136,
+      "physical_lines": 137
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/write.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 185,
+      "physical_lines": 187
+    },
+    {
+      "path": "core/crates/layerfs-service/src/owner.rs",
+      "scope": "core",
+      "crate": "layerfs-service",
+      "production_loc": 150,
+      "physical_lines": 186
+    },
+    {
+      "path": "core/crates/layerfs-storage/sql/schema.sql",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 63,
+      "physical_lines": 81
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/batch.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 58,
+      "physical_lines": 87
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/collision.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 72,
+      "physical_lines": 77
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/dependencies.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 81,
+      "physical_lines": 119
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/finish.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 16,
+      "physical_lines": 25
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/lifecycle.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 239,
+      "physical_lines": 300
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/membership.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 46,
+      "physical_lines": 76
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 19,
+      "physical_lines": 24
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/owner.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 194,
+      "physical_lines": 410
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/placement.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 175,
+      "physical_lines": 246
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/pool_lane.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 339,
+      "physical_lines": 441
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/provider.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 120,
+      "physical_lines": 188
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/read.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 172,
+      "physical_lines": 273
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/save.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 74,
+      "physical_lines": 113
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/selection.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 131,
+      "physical_lines": 164
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/store.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 526,
+      "physical_lines": 798
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/codec.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 516,
+      "physical_lines": 676
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/decode.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 207,
+      "physical_lines": 258
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/candidates.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 271,
+      "physical_lines": 417
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 4,
+      "physical_lines": 8
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 379,
+      "physical_lines": 545
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/record.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 215,
+      "physical_lines": 270
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/select.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 344,
+      "physical_lines": 486
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/full.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 185,
+      "physical_lines": 225
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 12,
+      "physical_lines": 25
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/counters.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 71,
+      "physical_lines": 94
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/delta.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 261,
+      "physical_lines": 287
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/index.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 158,
+      "physical_lines": 211
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/leaf.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 103,
+      "physical_lines": 145
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 11,
+      "physical_lines": 16
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/read.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 404,
+      "physical_lines": 499
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/value_group.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 77,
+      "physical_lines": 103
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/error.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 109,
+      "physical_lines": 159
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 12,
+      "physical_lines": 39
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/assemble.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 261,
+      "physical_lines": 319
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/layout.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 398,
+      "physical_lines": 494
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 14,
+      "physical_lines": 19
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/placement.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 125,
+      "physical_lines": 188
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/policy.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 196,
+      "physical_lines": 402
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/cleanup.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 69,
+      "physical_lines": 79
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/connection.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 97,
+      "physical_lines": 145
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/lookup.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 139,
+      "physical_lines": 178
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 11,
+      "physical_lines": 16
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/ownership.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 164,
+      "physical_lines": 196
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/pool.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 130,
+      "physical_lines": 187
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/schema.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 284,
+      "physical_lines": 355
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/write.rs",
+      "scope": "core",
+      "crate": "layerfs-storage",
+      "production_loc": 124,
+      "physical_lines": 190
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/health.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 30,
+      "physical_lines": 31
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 13,
+      "physical_lines": 27
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/observation.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 88,
+      "physical_lines": 124
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/operation.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 157,
+      "physical_lines": 184
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/collector.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 72,
+      "physical_lines": 81
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/encode.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 105,
+      "physical_lines": 113
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 7,
+      "physical_lines": 8
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/queue.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 309,
+      "physical_lines": 340
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/retention.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 160,
+      "physical_lines": 161
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/platform/linux.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 46,
+      "physical_lines": 47
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/platform/macos.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 32,
+      "physical_lines": 35
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/platform/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 10,
+      "physical_lines": 10
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/runtime/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 4,
+      "physical_lines": 5
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/runtime/monitor.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 233,
+      "physical_lines": 247
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/runtime/session.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 118,
+      "physical_lines": 132
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/bounded_json.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 53,
+      "physical_lines": 58
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/format.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 71,
+      "physical_lines": 84
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/json.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 115,
+      "physical_lines": 136
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/limits.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 43,
+      "physical_lines": 59
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 11,
+      "physical_lines": 29
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/recording.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 226,
+      "physical_lines": 288
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/report.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 209,
+      "physical_lines": 326
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/scope.rs",
+      "scope": "core",
+      "crate": "layerfs-telemetry",
+      "production_loc": 145,
+      "physical_lines": 218
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/budget.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 54,
+      "physical_lines": 56
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/directory.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 206,
+      "physical_lines": 208
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 806,
+      "physical_lines": 807
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_build.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 76,
+      "physical_lines": 77
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_index.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 505,
+      "physical_lines": 507
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_pages.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 205,
+      "physical_lines": 207
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 505,
+      "physical_lines": 511
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 12,
+      "physical_lines": 13
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/ownership.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 822,
+      "physical_lines": 827
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/payload.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 618,
+      "physical_lines": 620
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/reader.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 132,
+      "physical_lines": 134
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/reclaim.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 224,
+      "physical_lines": 229
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/segments.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 323,
+      "physical_lines": 355
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/completion.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 340,
+      "physical_lines": 343
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/directories.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 106,
+      "physical_lines": 107
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/lower.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 293,
+      "physical_lines": 295
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 7,
+      "physical_lines": 9
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/operation.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 55,
+      "physical_lines": 56
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/reconcile.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 326,
+      "physical_lines": 332
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/save.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 251,
+      "physical_lines": 252
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/source.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 155,
+      "physical_lines": 156
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit_types.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 73,
+      "physical_lines": 75
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/directory.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 152,
+      "physical_lines": 153
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/mkdir.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 365,
+      "physical_lines": 374
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 7,
+      "physical_lines": 7
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/namespace.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 200,
+      "physical_lines": 203
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/namespace_view.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 275,
+      "physical_lines": 277
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/open.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 190,
+      "physical_lines": 196
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/read.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 284,
+      "physical_lines": 288
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/write.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 809,
+      "physical_lines": 820
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/lib.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 17,
+      "physical_lines": 20
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/directories.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 167,
+      "physical_lines": 169
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 3,
+      "physical_lines": 3
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/pieces.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 304,
+      "physical_lines": 305
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/snapshot.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 361,
+      "physical_lines": 362
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/attachment.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 256,
+      "physical_lines": 266
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/coherence.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 327,
+      "physical_lines": 357
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/host.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 497,
+      "physical_lines": 504
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/lifecycle.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 161,
+      "physical_lines": 168
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/mod.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 5,
+      "physical_lines": 5
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/state.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 350,
+      "physical_lines": 359
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/types.rs",
+      "scope": "core",
+      "crate": "layerfs-workspace",
+      "production_loc": 413,
+      "physical_lines": 433
+    },
+    {
+      "path": "crates/layerfs-cli/src/bin/layerfs.rs",
+      "scope": "reference",
+      "crate": "layerfs-cli",
+      "production_loc": 43,
+      "physical_lines": 43
+    },
+    {
+      "path": "crates/layerfs-cli/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-cli",
+      "production_loc": 791,
+      "physical_lines": 834
+    },
+    {
+      "path": "crates/layerfs-cli/src/runtime.rs",
+      "scope": "reference",
+      "crate": "layerfs-cli",
+      "production_loc": 308,
+      "physical_lines": 342
+    },
+    {
+      "path": "crates/layerfs-content/src/error.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 160,
+      "physical_lines": 165
+    },
+    {
+      "path": "crates/layerfs-content/src/file/cdc/gear.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 494,
+      "physical_lines": 519
+    },
+    {
+      "path": "crates/layerfs-content/src/file/cdc/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 5,
+      "physical_lines": 133
+    },
+    {
+      "path": "crates/layerfs-content/src/file/content.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 277,
+      "physical_lines": 300
+    },
+    {
+      "path": "crates/layerfs-content/src/file/extent.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 153,
+      "physical_lines": 161
+    },
+    {
+      "path": "crates/layerfs-content/src/file/extent_codec.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 235,
+      "physical_lines": 267
+    },
+    {
+      "path": "crates/layerfs-content/src/file/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 5,
+      "physical_lines": 5
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/build.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 300,
+      "physical_lines": 367
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/diff.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 386,
+      "physical_lines": 403
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/edit.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 749,
+      "physical_lines": 904
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 15,
+      "physical_lines": 16
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/read.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 493,
+      "physical_lines": 515
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/state.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 225,
+      "physical_lines": 245
+    },
+    {
+      "path": "crates/layerfs-content/src/file/rope/validate.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 127,
+      "physical_lines": 132
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/apply.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 870,
+      "physical_lines": 1411
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/change.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 409,
+      "physical_lines": 571
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/diff.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 433,
+      "physical_lines": 452
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 27,
+      "physical_lines": 28
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/read.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 121,
+      "physical_lines": 129
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/reconcile.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 911,
+      "physical_lines": 962
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/resolve.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 82,
+      "physical_lines": 88
+    },
+    {
+      "path": "crates/layerfs-content/src/filesystem/root.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 46,
+      "physical_lines": 47
+    },
+    {
+      "path": "crates/layerfs-content/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 17,
+      "physical_lines": 22
+    },
+    {
+      "path": "crates/layerfs-content/src/limits.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 8,
+      "physical_lines": 8
+    },
+    {
+      "path": "crates/layerfs-content/src/object/access.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 139,
+      "physical_lines": 167
+    },
+    {
+      "path": "crates/layerfs-content/src/object/canonical.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 81,
+      "physical_lines": 97
+    },
+    {
+      "path": "crates/layerfs-content/src/object/codec.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 428,
+      "physical_lines": 779
+    },
+    {
+      "path": "crates/layerfs-content/src/object/digest.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 87,
+      "physical_lines": 162
+    },
+    {
+      "path": "crates/layerfs-content/src/object/id.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 66,
+      "physical_lines": 106
+    },
+    {
+      "path": "crates/layerfs-content/src/object/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 17,
+      "physical_lines": 19
+    },
+    {
+      "path": "crates/layerfs-content/src/object/references.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 93,
+      "physical_lines": 173
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/batch.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 1387,
+      "physical_lines": 2863
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/compact.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 477,
+      "physical_lines": 612
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/codec.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 495,
+      "physical_lines": 519
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/diff.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 345,
+      "physical_lines": 358
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/edit.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 759,
+      "physical_lines": 791
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 19,
+      "physical_lines": 22
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/node.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 47,
+      "physical_lines": 55
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/read.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 771,
+      "physical_lines": 891
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/directory/validate.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 211,
+      "physical_lines": 343
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/inode/codec.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 121,
+      "physical_lines": 126
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/inode/cursor.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 310,
+      "physical_lines": 325
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/inode/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 6,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/inode/record.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 87,
+      "physical_lines": 102
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/inode/table.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 1886,
+      "physical_lines": 2015
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/metadata/apple_acl.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 83,
+      "physical_lines": 88
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/metadata/codec.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 158,
+      "physical_lines": 162
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/metadata/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 8,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/metadata/portable.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 77,
+      "physical_lines": 85
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/metadata/tree.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 788,
+      "physical_lines": 822
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/mod.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 9,
+      "physical_lines": 10
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/path.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 189,
+      "physical_lines": 314
+    },
+    {
+      "path": "crates/layerfs-content/src/tree/root.rs",
+      "scope": "reference",
+      "crate": "layerfs-content",
+      "production_loc": 9,
+      "physical_lines": 11
+    },
+    {
+      "path": "crates/layerfs-daemon/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-daemon",
+      "production_loc": 597,
+      "physical_lines": 799
+    },
+    {
+      "path": "crates/layerfs-daemon/src/main.rs",
+      "scope": "reference",
+      "crate": "layerfs-daemon",
+      "production_loc": 1809,
+      "physical_lines": 2253
+    },
+    {
+      "path": "crates/layerfs-daemon/src/protocol.rs",
+      "scope": "reference",
+      "crate": "layerfs-daemon",
+      "production_loc": 827,
+      "physical_lines": 1127
+    },
+    {
+      "path": "crates/layerfs-fuse/src/adapter.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 148,
+      "physical_lines": 162
+    },
+    {
+      "path": "crates/layerfs-fuse/src/bin/layerfs-fuse.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 161,
+      "physical_lines": 174
+    },
+    {
+      "path": "crates/layerfs-fuse/src/filesystem.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 1366,
+      "physical_lines": 1438
+    },
+    {
+      "path": "crates/layerfs-fuse/src/handles.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 37,
+      "physical_lines": 43
+    },
+    {
+      "path": "crates/layerfs-fuse/src/host_mount.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 103,
+      "physical_lines": 112
+    },
+    {
+      "path": "crates/layerfs-fuse/src/immutable_read_cache.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 194,
+      "physical_lines": 322
+    },
+    {
+      "path": "crates/layerfs-fuse/src/inode_table.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 15,
+      "physical_lines": 18
+    },
+    {
+      "path": "crates/layerfs-fuse/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 47,
+      "physical_lines": 58
+    },
+    {
+      "path": "crates/layerfs-fuse/src/live_owner.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 2939,
+      "physical_lines": 4279
+    },
+    {
+      "path": "crates/layerfs-fuse/src/live_runtime.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 316,
+      "physical_lines": 529
+    },
+    {
+      "path": "crates/layerfs-fuse/src/live_transport.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 672,
+      "physical_lines": 870
+    },
+    {
+      "path": "crates/layerfs-fuse/src/live_wire.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 653,
+      "physical_lines": 896
+    },
+    {
+      "path": "crates/layerfs-fuse/src/local_spool.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 268,
+      "physical_lines": 509
+    },
+    {
+      "path": "crates/layerfs-fuse/src/port.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 455,
+      "physical_lines": 482
+    },
+    {
+      "path": "crates/layerfs-fuse/src/protocol.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 986,
+      "physical_lines": 1357
+    },
+    {
+      "path": "crates/layerfs-fuse/src/proxy_client.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 1457,
+      "physical_lines": 2118
+    },
+    {
+      "path": "crates/layerfs-fuse/src/proxy_host.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 403,
+      "physical_lines": 433
+    },
+    {
+      "path": "crates/layerfs-fuse/src/write_metrics.rs",
+      "scope": "reference",
+      "crate": "layerfs-fuse",
+      "production_loc": 766,
+      "physical_lines": 869
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/contains_commit.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 10,
+      "physical_lines": 14
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/get.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/get_by_name.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/get_commit.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/history_page.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 11,
+      "physical_lines": 15
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/insert.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 2,
+      "physical_lines": 6
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/list.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 9,
+      "physical_lines": 13
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/branch/list_commits.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 5,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/advance_head.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/current_head.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1,
+      "physical_lines": 5
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/find_layer_by_source.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/get.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/get_by_name.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/get_layer.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/history_page.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 11,
+      "physical_lines": 15
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/insert.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 2,
+      "physical_lines": 6
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/insert_layer.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 2,
+      "physical_lines": 6
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/list.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 5,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/list_layers.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 9,
+      "physical_lines": 13
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/layerstack/load_add_snapshot.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 9,
+      "physical_lines": 13
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/objects/get.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1,
+      "physical_lines": 5
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/objects/get_many_128.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 13,
+      "physical_lines": 17
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/objects/insert.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 2,
+      "physical_lines": 6
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/objects/membership_128.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 13,
+      "physical_lines": 17
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/objects/page.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 5,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/query/branch_roots_page.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 7,
+      "physical_lines": 11
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/query/canonical_storage.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1,
+      "physical_lines": 5
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/query/commit_roots_page.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 5,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/query/layer_roots_page.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 5,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/query/store_counts.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 6,
+      "physical_lines": 10
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/foreign_key_check.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 2,
+      "physical_lines": 6
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/migrate_to_v9.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1,
+      "physical_lines": 1
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/migrate_v4_to_v5.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 8,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/migrate_v7_to_v8.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1,
+      "physical_lines": 1
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/reserve_inode_serials.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 4,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/schema_objects.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 4,
+      "physical_lines": 8
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/table_columns.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v10.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 151,
+      "physical_lines": 167
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v4.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 124,
+      "physical_lines": 136
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v5.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 131,
+      "physical_lines": 144
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v6.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 138,
+      "physical_lines": 152
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v7.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 138,
+      "physical_lines": 152
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v8.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 138,
+      "physical_lines": 152
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/v9.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 138,
+      "physical_lines": 152
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/advance_branch.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 5,
+      "physical_lines": 9
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/current_branch.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/delete_stage.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 4,
+      "physical_lines": 8
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/get_stage.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/insert_commit.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/insert_stage.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3,
+      "physical_lines": 7
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/workspace/load_snapshot.sql",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 8,
+      "physical_lines": 12
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/branch.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 97,
+      "physical_lines": 100
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/error.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 84,
+      "physical_lines": 93
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/ids.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 182,
+      "physical_lines": 225
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/layerstack.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 2059,
+      "physical_lines": 4284
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 60,
+      "physical_lines": 65
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/admission/metadata_values.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 131,
+      "physical_lines": 143
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/admission.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1742,
+      "physical_lines": 1940
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/delta.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 110,
+      "physical_lines": 116
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/diagnostic.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 311,
+      "physical_lines": 662
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/metadata.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 374,
+      "physical_lines": 548
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/pack.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1399,
+      "physical_lines": 1953
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/read.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 1958,
+      "physical_lines": 2078
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/small_candidates.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 112,
+      "physical_lines": 125
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/spill.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 783,
+      "physical_lines": 935
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects/whole.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 338,
+      "physical_lines": 424
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/objects.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 3819,
+      "physical_lines": 7099
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/query.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 477,
+      "physical_lines": 506
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/records.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 383,
+      "physical_lines": 422
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/schema.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 685,
+      "physical_lines": 1021
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/staging.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 79,
+      "physical_lines": 84
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/statements.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 126,
+      "physical_lines": 384
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/store.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 55,
+      "physical_lines": 67
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/telemetry.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 906,
+      "physical_lines": 1049
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/workspace.rs",
+      "scope": "reference",
+      "crate": "layerfs-layerstack-store",
+      "production_loc": 938,
+      "physical_lines": 1206
+    },
+    {
+      "path": "crates/layerfs-materialization/src/capture.rs",
+      "scope": "reference",
+      "crate": "layerfs-materialization",
+      "production_loc": 84,
+      "physical_lines": 87
+    },
+    {
+      "path": "crates/layerfs-materialization/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-materialization",
+      "production_loc": 9,
+      "physical_lines": 11
+    },
+    {
+      "path": "crates/layerfs-materialization/src/materialize.rs",
+      "scope": "reference",
+      "crate": "layerfs-materialization",
+      "production_loc": 186,
+      "physical_lines": 197
+    },
+    {
+      "path": "crates/layerfs-materialization/src/port.rs",
+      "scope": "reference",
+      "crate": "layerfs-materialization",
+      "production_loc": 79,
+      "physical_lines": 91
+    },
+    {
+      "path": "crates/layerfs-monitor/src/collector.rs",
+      "scope": "reference",
+      "crate": "layerfs-monitor",
+      "production_loc": 75,
+      "physical_lines": 81
+    },
+    {
+      "path": "crates/layerfs-monitor/src/dedup.rs",
+      "scope": "reference",
+      "crate": "layerfs-monitor",
+      "production_loc": 116,
+      "physical_lines": 120
+    },
+    {
+      "path": "crates/layerfs-monitor/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-monitor",
+      "production_loc": 13,
+      "physical_lines": 15
+    },
+    {
+      "path": "crates/layerfs-monitor/src/operation.rs",
+      "scope": "reference",
+      "crate": "layerfs-monitor",
+      "production_loc": 164,
+      "physical_lines": 179
+    },
+    {
+      "path": "crates/layerfs-monitor/src/snapshot.rs",
+      "scope": "reference",
+      "crate": "layerfs-monitor",
+      "production_loc": 46,
+      "physical_lines": 55
+    },
+    {
+      "path": "crates/layerfs-sdk/src/client.rs",
+      "scope": "reference",
+      "crate": "layerfs-sdk",
+      "production_loc": 565,
+      "physical_lines": 617
+    },
+    {
+      "path": "crates/layerfs-sdk/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-sdk",
+      "production_loc": 37,
+      "physical_lines": 40
+    },
+    {
+      "path": "crates/layerfs-sdk/src/query.rs",
+      "scope": "reference",
+      "crate": "layerfs-sdk",
+      "production_loc": 75,
+      "physical_lines": 89
+    },
+    {
+      "path": "crates/layerfs-sdk/src/request.rs",
+      "scope": "reference",
+      "crate": "layerfs-sdk",
+      "production_loc": 268,
+      "physical_lines": 287
+    },
+    {
+      "path": "crates/layerfs-sdk/src/result.rs",
+      "scope": "reference",
+      "crate": "layerfs-sdk",
+      "production_loc": 34,
+      "physical_lines": 41
+    },
+    {
+      "path": "crates/layerfs-workspace/src/capture.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 202,
+      "physical_lines": 214
+    },
+    {
+      "path": "crates/layerfs-workspace/src/changes.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 3002,
+      "physical_lines": 5890
+    },
+    {
+      "path": "crates/layerfs-workspace/src/container.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 354,
+      "physical_lines": 410
+    },
+    {
+      "path": "crates/layerfs-workspace/src/cow_tree.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 558,
+      "physical_lines": 1027
+    },
+    {
+      "path": "crates/layerfs-workspace/src/daemon.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 236,
+      "physical_lines": 294
+    },
+    {
+      "path": "crates/layerfs-workspace/src/docker.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 594,
+      "physical_lines": 624
+    },
+    {
+      "path": "crates/layerfs-workspace/src/docker_engine.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 280,
+      "physical_lines": 300
+    },
+    {
+      "path": "crates/layerfs-workspace/src/execution.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 812,
+      "physical_lines": 877
+    },
+    {
+      "path": "crates/layerfs-workspace/src/file_io.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 712,
+      "physical_lines": 1859
+    },
+    {
+      "path": "crates/layerfs-workspace/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 75,
+      "physical_lines": 82
+    },
+    {
+      "path": "crates/layerfs-workspace/src/lifecycle.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 1273,
+      "physical_lines": 1980
+    },
+    {
+      "path": "crates/layerfs-workspace/src/live_backing.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 509,
+      "physical_lines": 1225
+    },
+    {
+      "path": "crates/layerfs-workspace/src/output.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 221,
+      "physical_lines": 271
+    },
+    {
+      "path": "crates/layerfs-workspace/src/projection.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 965,
+      "physical_lines": 1149
+    },
+    {
+      "path": "crates/layerfs-workspace/src/reconcile.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 381,
+      "physical_lines": 443
+    },
+    {
+      "path": "crates/layerfs-workspace/src/registry.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 295,
+      "physical_lines": 368
+    },
+    {
+      "path": "crates/layerfs-workspace/src/remote_commit.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 472,
+      "physical_lines": 730
+    },
+    {
+      "path": "crates/layerfs-workspace/src/session.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 357,
+      "physical_lines": 406
+    },
+    {
+      "path": "crates/layerfs-workspace/src/snapshot_input.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 320,
+      "physical_lines": 395
+    },
+    {
+      "path": "crates/layerfs-workspace/src/worker.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace",
+      "production_loc": 158,
+      "physical_lines": 218
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/backing.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 41,
+      "physical_lines": 113
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/checkpoint.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 97,
+      "physical_lines": 102
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/file_edit.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 1210,
+      "physical_lines": 1810
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/frozen.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 173,
+      "physical_lines": 462
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/lib.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 271,
+      "physical_lines": 538
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/limits.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 30,
+      "physical_lines": 52
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/namespace.rs",
+      "scope": "reference",
+      "crate": "layerfs-workspace-core",
+      "production_loc": 630,
+      "physical_lines": 809
+    }
+  ],
+  "folders": [
+    {
+      "scope": "core",
+      "path": "core/crates",
+      "production_loc": 46339,
+      "physical_lines": 55573,
+      "files": 251
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-bridge",
+      "production_loc": 5284,
+      "physical_lines": 5800,
+      "files": 25
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-bridge/src",
+      "production_loc": 5284,
+      "physical_lines": 5800,
+      "files": 25
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-bridge/src/adapters",
+      "production_loc": 3577,
+      "physical_lines": 3750,
+      "files": 15
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-bridge/src/adapters/native",
+      "production_loc": 3576,
+      "physical_lines": 3749,
+      "files": 14
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol",
+      "production_loc": 2320,
+      "physical_lines": 2395,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-bridge/src/contract",
+      "production_loc": 1703,
+      "physical_lines": 2045,
+      "files": 9
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content",
+      "production_loc": 12549,
+      "physical_lines": 16356,
+      "files": 70
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src",
+      "production_loc": 12549,
+      "physical_lines": 16356,
+      "files": 70
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/file",
+      "production_loc": 4056,
+      "physical_lines": 5152,
+      "files": 20
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/file/cdc",
+      "production_loc": 499,
+      "physical_lines": 548,
+      "files": 2
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/file/edit",
+      "production_loc": 1645,
+      "physical_lines": 2130,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/file/mapping",
+      "production_loc": 1437,
+      "physical_lines": 1853,
+      "files": 6
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/filesystem",
+      "production_loc": 7354,
+      "physical_lines": 9502,
+      "files": 40
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/filesystem/attributes",
+      "production_loc": 1288,
+      "physical_lines": 1541,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/filesystem/directory",
+      "production_loc": 473,
+      "physical_lines": 566,
+      "files": 4
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/filesystem/inode",
+      "production_loc": 409,
+      "physical_lines": 495,
+      "files": 4
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/filesystem/references",
+      "production_loc": 1587,
+      "physical_lines": 2198,
+      "files": 7
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/filesystem/sorted",
+      "production_loc": 1599,
+      "physical_lines": 1973,
+      "files": 6
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-content/src/object",
+      "production_loc": 809,
+      "physical_lines": 1161,
+      "files": 7
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-daemon",
+      "production_loc": 1364,
+      "physical_lines": 1458,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-daemon/src",
+      "production_loc": 1364,
+      "physical_lines": 1458,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-fuse",
+      "production_loc": 1111,
+      "physical_lines": 1209,
+      "files": 4
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-fuse/src",
+      "production_loc": 1111,
+      "physical_lines": 1209,
+      "files": 4
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-history",
+      "production_loc": 2722,
+      "physical_lines": 3578,
+      "files": 15
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-history/sql",
+      "production_loc": 155,
+      "physical_lines": 167,
+      "files": 1
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-history/src",
+      "production_loc": 2567,
+      "physical_lines": 3411,
+      "files": 14
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-history/src/sqlite",
+      "production_loc": 1794,
+      "physical_lines": 2139,
+      "files": 9
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-service",
+      "production_loc": 2139,
+      "physical_lines": 2331,
+      "files": 17
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-service/src",
+      "production_loc": 2139,
+      "physical_lines": 2331,
+      "files": 17
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-service/src/input",
+      "production_loc": 33,
+      "physical_lines": 35,
+      "files": 2
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-service/src/native",
+      "production_loc": 302,
+      "physical_lines": 328,
+      "files": 3
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-service/src/operation",
+      "production_loc": 1639,
+      "physical_lines": 1766,
+      "files": 9
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage",
+      "production_loc": 7676,
+      "physical_lines": 10653,
+      "files": 47
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/sql",
+      "production_loc": 63,
+      "physical_lines": 81,
+      "files": 1
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src",
+      "production_loc": 7613,
+      "physical_lines": 10572,
+      "files": 46
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src/cas",
+      "production_loc": 2262,
+      "physical_lines": 3341,
+      "files": 15
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src/encoding",
+      "production_loc": 3218,
+      "physical_lines": 4265,
+      "files": 16
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src/encoding/delta",
+      "production_loc": 1213,
+      "physical_lines": 1726,
+      "files": 5
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src/encoding/pool",
+      "production_loc": 1085,
+      "physical_lines": 1355,
+      "files": 7
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src/pack",
+      "production_loc": 798,
+      "physical_lines": 1020,
+      "files": 4
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-storage/src/sqlite",
+      "production_loc": 1018,
+      "physical_lines": 1346,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-telemetry",
+      "production_loc": 2257,
+      "physical_lines": 2743,
+      "files": 23
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-telemetry/src",
+      "production_loc": 2257,
+      "physical_lines": 2743,
+      "files": 23
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-telemetry/src/output",
+      "production_loc": 653,
+      "physical_lines": 703,
+      "files": 5
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-telemetry/src/platform",
+      "production_loc": 88,
+      "physical_lines": 92,
+      "files": 3
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-telemetry/src/runtime",
+      "production_loc": 355,
+      "physical_lines": 384,
+      "files": 3
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-telemetry/src/timer",
+      "production_loc": 873,
+      "physical_lines": 1198,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace",
+      "production_loc": 11237,
+      "physical_lines": 11445,
+      "files": 42
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace/src",
+      "production_loc": 11237,
+      "physical_lines": 11445,
+      "files": 42
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace/src/backing",
+      "production_loc": 4488,
+      "physical_lines": 4551,
+      "files": 13
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace/src/commit",
+      "production_loc": 1533,
+      "physical_lines": 1550,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace/src/filesystem",
+      "production_loc": 2282,
+      "physical_lines": 2318,
+      "files": 8
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace/src/overlay",
+      "production_loc": 835,
+      "physical_lines": 839,
+      "files": 4
+    },
+    {
+      "scope": "core",
+      "path": "core/crates/layerfs-workspace/src/runtime",
+      "production_loc": 1596,
+      "physical_lines": 1659,
+      "files": 6
+    },
+    {
+      "scope": "reference",
+      "path": "crates",
+      "production_loc": 65417,
+      "physical_lines": 91466,
+      "files": 193
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-cli",
+      "production_loc": 1142,
+      "physical_lines": 1219,
+      "files": 3
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-cli/src",
+      "production_loc": 1142,
+      "physical_lines": 1219,
+      "files": 3
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-cli/src/bin",
+      "production_loc": 43,
+      "physical_lines": 43,
+      "files": 1
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content",
+      "production_loc": 15701,
+      "physical_lines": 19883,
+      "files": 53
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src",
+      "production_loc": 15701,
+      "physical_lines": 19883,
+      "files": 53
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/file",
+      "production_loc": 3464,
+      "physical_lines": 3967,
+      "files": 13
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/file/cdc",
+      "production_loc": 499,
+      "physical_lines": 652,
+      "files": 2
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/file/rope",
+      "production_loc": 2295,
+      "physical_lines": 2582,
+      "files": 7
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/filesystem",
+      "production_loc": 2899,
+      "physical_lines": 3688,
+      "files": 8
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/object",
+      "production_loc": 911,
+      "physical_lines": 1503,
+      "files": 7
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/tree",
+      "production_loc": 8242,
+      "physical_lines": 10530,
+      "files": 22
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/tree/directory",
+      "production_loc": 2647,
+      "physical_lines": 2979,
+      "files": 7
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/tree/inode",
+      "production_loc": 2410,
+      "physical_lines": 2575,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-content/src/tree/metadata",
+      "production_loc": 1114,
+      "physical_lines": 1166,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-daemon",
+      "production_loc": 3233,
+      "physical_lines": 4179,
+      "files": 3
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-daemon/src",
+      "production_loc": 3233,
+      "physical_lines": 4179,
+      "files": 3
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-fuse",
+      "production_loc": 10986,
+      "physical_lines": 14669,
+      "files": 18
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-fuse/src",
+      "production_loc": 10986,
+      "physical_lines": 14669,
+      "files": 18
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-fuse/src/bin",
+      "production_loc": 161,
+      "physical_lines": 174,
+      "files": 1
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store",
+      "production_loc": 18376,
+      "physical_lines": 26958,
+      "files": 75
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql",
+      "production_loc": 1168,
+      "physical_lines": 1429,
+      "files": 51
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql/branch",
+      "production_loc": 46,
+      "physical_lines": 78,
+      "files": 8
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql/layerstack",
+      "production_loc": 54,
+      "physical_lines": 102,
+      "files": 12
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql/objects",
+      "production_loc": 34,
+      "physical_lines": 54,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql/query",
+      "production_loc": 24,
+      "physical_lines": 44,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql/schema",
+      "production_loc": 981,
+      "physical_lines": 1094,
+      "files": 14
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/sql/workspace",
+      "production_loc": 29,
+      "physical_lines": 57,
+      "files": 7
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/src",
+      "production_loc": 17208,
+      "physical_lines": 25529,
+      "files": 24
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/src/objects",
+      "production_loc": 7258,
+      "physical_lines": 8924,
+      "files": 10
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-layerstack-store/src/objects/admission",
+      "production_loc": 131,
+      "physical_lines": 143,
+      "files": 1
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-materialization",
+      "production_loc": 358,
+      "physical_lines": 386,
+      "files": 4
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-materialization/src",
+      "production_loc": 358,
+      "physical_lines": 386,
+      "files": 4
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-monitor",
+      "production_loc": 414,
+      "physical_lines": 450,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-monitor/src",
+      "production_loc": 414,
+      "physical_lines": 450,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-sdk",
+      "production_loc": 979,
+      "physical_lines": 1074,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-sdk/src",
+      "production_loc": 979,
+      "physical_lines": 1074,
+      "files": 5
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-workspace",
+      "production_loc": 11776,
+      "physical_lines": 18762,
+      "files": 20
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-workspace-core",
+      "production_loc": 2452,
+      "physical_lines": 3886,
+      "files": 7
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-workspace-core/src",
+      "production_loc": 2452,
+      "physical_lines": 3886,
+      "files": 7
+    },
+    {
+      "scope": "reference",
+      "path": "crates/layerfs-workspace/src",
+      "production_loc": 11776,
+      "physical_lines": 18762,
+      "files": 20
+    }
+  ],
+  "scopes": {
+    "core": {
+      "production_loc": 46339,
+      "physical_lines": 55573,
+      "files": 251,
+      "crates": {
+        "layerfs-bridge": {
+          "production_loc": 5284,
+          "physical_lines": 5800,
+          "files": 25
+        },
+        "layerfs-content": {
+          "production_loc": 12549,
+          "physical_lines": 16356,
+          "files": 70
+        },
+        "layerfs-daemon": {
+          "production_loc": 1364,
+          "physical_lines": 1458,
+          "files": 8
+        },
+        "layerfs-fuse": {
+          "production_loc": 1111,
+          "physical_lines": 1209,
+          "files": 4
+        },
+        "layerfs-history": {
+          "production_loc": 2722,
+          "physical_lines": 3578,
+          "files": 15
+        },
+        "layerfs-service": {
+          "production_loc": 2139,
+          "physical_lines": 2331,
+          "files": 17
+        },
+        "layerfs-storage": {
+          "production_loc": 7676,
+          "physical_lines": 10653,
+          "files": 47
+        },
+        "layerfs-telemetry": {
+          "production_loc": 2257,
+          "physical_lines": 2743,
+          "files": 23
+        },
+        "layerfs-workspace": {
+          "production_loc": 11237,
+          "physical_lines": 11445,
+          "files": 42
+        }
+      }
+    },
+    "reference": {
+      "production_loc": 65417,
+      "physical_lines": 91466,
+      "files": 193,
+      "crates": {
+        "layerfs-cli": {
+          "production_loc": 1142,
+          "physical_lines": 1219,
+          "files": 3
+        },
+        "layerfs-content": {
+          "production_loc": 15701,
+          "physical_lines": 19883,
+          "files": 53
+        },
+        "layerfs-daemon": {
+          "production_loc": 3233,
+          "physical_lines": 4179,
+          "files": 3
+        },
+        "layerfs-fuse": {
+          "production_loc": 10986,
+          "physical_lines": 14669,
+          "files": 18
+        },
+        "layerfs-layerstack-store": {
+          "production_loc": 18376,
+          "physical_lines": 26958,
+          "files": 75
+        },
+        "layerfs-materialization": {
+          "production_loc": 358,
+          "physical_lines": 386,
+          "files": 4
+        },
+        "layerfs-monitor": {
+          "production_loc": 414,
+          "physical_lines": 450,
+          "files": 5
+        },
+        "layerfs-sdk": {
+          "production_loc": 979,
+          "physical_lines": 1074,
+          "files": 5
+        },
+        "layerfs-workspace": {
+          "production_loc": 11776,
+          "physical_lines": 18762,
+          "files": 20
+        },
+        "layerfs-workspace-core": {
+          "production_loc": 2452,
+          "physical_lines": 3886,
+          "files": 7
+        }
+      }
+    }
+  },
+  "combined": {
+    "production_loc": 111756,
+    "physical_lines": 147039,
+    "files": 444
+  },
+  "source_commit": null,
+  "implementation_parent": "e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca",
+  "product_input_seal": "01706a3acbaf1381755aa0ff602d08b92fa8521f168199951c3dc56573074cbd",
+  "reference_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb",
+  "source_state": "Frozen working-tree production source after the implementation parent; commit pending. This is not a count of the unchanged parent commit. The core product_input_seal includes all core production inputs; unchanged reference source is pinned by reference_tree.",
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "Unchanged tools/production_loc.py per_file() and scan() on the frozen source named by product_input_seal and reference_tree. CLI equivalents: python3 tools/production_loc.py --root <source-snapshot> --files and --json. After committing, archive that exact commit's crates and core/crates paths. Nonblank/noncomment production Rust/runtime SQL; exclude tests including inline cfg(test), fixtures, examples, docs, tooling, manifests and generated output. Physical lines and recursive folder totals are separate."
+}

@@ -477,7 +477,7 @@ mod linux {
         let notifications = Arc::new(AtomicUsize::new(0));
         let count = notifications.clone();
         lease
-            .bind_invalidation(Arc::new(move |_, _| {
+            .bind_invalidation(Arc::new(move |_, _, _| {
                 count.fetch_add(1, Ordering::SeqCst);
                 Err(std::io::Error::from_raw_os_error(libc::EIO))
             }))

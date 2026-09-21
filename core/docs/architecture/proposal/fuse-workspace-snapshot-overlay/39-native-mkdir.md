@@ -2,6 +2,7 @@
 
 > **Status: implemented and verified in the declared native scope; target v0.1.7, not released.**
 > Implementation parent: `85582e1ac2fb75761897115ec9679c59439b1efe`.
+> Implementation commit: `e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca`; [exact staged-tree confirmation](evidence/native-mkdir/commit-confirmed.json).
 > Frozen product input seal: `827e336a7493faed1a9f9121374cd5f7097711dec5d2800bcfaf8ed2d18bde6d`.
 
 The public operation is `Workspace::mkdir(parent, name, mode, umask, deadline)`.

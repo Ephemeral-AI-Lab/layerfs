@@ -10,7 +10,9 @@ use {
         CoherenceStatus, MountLease, MutationReceipt, WorkspaceAccess, MAX_READ_BYTES,
     },
     std::{
+        ffi::OsStr,
         io::Read,
+        os::unix::ffi::OsStrExt,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex,
@@ -241,9 +243,20 @@ fn mount_profile(
             return Err(failure.with_owner(MountPhase::Deadline, MountError::Deadline, handle));
         }
         let root = workspace.root().serial;
-        let invalidation = Arc::new(move |receipt: MutationReceipt, _: Instant| {
-            notifier.inval_inode(crate::replies::inode(receipt.inode, root), 0, 0)
-        });
+        let invalidation = Arc::new(
+            move |receipt: MutationReceipt, entry: Option<(u64, &[u8])>, deadline: Instant| {
+                if let Some((parent, name)) = entry {
+                    let parent = crate::replies::inode(parent, root);
+                    notifier.inval_inode(parent, -1, 0)?;
+                    if Instant::now() >= deadline {
+                        return Err(io::ErrorKind::TimedOut.into());
+                    }
+                    notifier.inval_entry(parent, OsStr::from_bytes(name))
+                } else {
+                    notifier.inval_inode(crate::replies::inode(receipt.inode, root), 0, 0)
+                }
+            },
+        );
         if let Err(error) = handle.lease.bind_invalidation(invalidation) {
             return Err(failure.with_owner(MountPhase::Binding, error.into(), handle));
         }

@@ -74,9 +74,9 @@ impl Workspace {
         }
         let scope = match origin {
             MutationOrigin::Local => ReferenceScope::Local,
-            MutationOrigin::ProjectionWrite { .. } | MutationOrigin::ProjectionSize => {
-                ReferenceScope::Projection
-            }
+            MutationOrigin::ProjectionWrite { .. }
+            | MutationOrigin::ProjectionSize
+            | MutationOrigin::ProjectionMkdir => ReferenceScope::Projection,
         };
         if handle.scope != scope {
             return Err(WorkspaceError::Unsupported);
@@ -111,19 +111,6 @@ impl Workspace {
             return Ok(origin.append(handle.options.append));
         }
         Ok(false)
-    }
-    fn check_mutation_coherence(
-        &self,
-        state: &State,
-        mutation: FileMutation<'_>,
-        publication: bool,
-    ) -> Result<(), WorkspaceError> {
-        match mutation.origin() {
-            MutationOrigin::Local => self.check_projection_mutation(state),
-            MutationOrigin::ProjectionWrite { .. } | MutationOrigin::ProjectionSize => {
-                self.check_projected_mutation(state, publication)
-            }
-        }
     }
     /// Atomically overwrites through a writable local handle, filling any gap
     /// with zeros. Append handles select live EOF and ignore the supplied offset.
@@ -473,6 +460,7 @@ impl Workspace {
             self.complete_projection_mutation(
                 delivery,
                 published.receipt,
+                None,
                 published.published_handle,
                 deadline,
             )?;
@@ -504,7 +492,7 @@ impl Workspace {
             let state = self.state()?;
             self.available(&state)?;
             self.mutation_handle(&state, mutation, original.serial)?;
-            self.check_mutation_coherence(&state, mutation, false)?;
+            self.check_mutation_coherence(&state, mutation.origin(), false)?;
             if state.baseline != baseline {
                 return Err(WorkspaceError::Busy);
             }
@@ -518,7 +506,7 @@ impl Workspace {
             let s = self.state()?;
             self.available(&s)?;
             let append = self.mutation_handle(&s, mutation, original.serial)?;
-            self.check_mutation_coherence(&s, mutation, false)?;
+            self.check_mutation_coherence(&s, mutation.origin(), false)?;
             if s.baseline != baseline {
                 return Err(WorkspaceError::Busy);
             }
@@ -756,7 +744,7 @@ impl Workspace {
         let mut state = self.state()?;
         self.available(&state)?;
         self.mutation_handle(&state, mutation, original.serial)?;
-        self.check_mutation_coherence(&state, mutation, true)?;
+        self.check_mutation_coherence(&state, mutation.origin(), true)?;
         let same_root = match (&state.overlay, &old_root) {
             (None, None) => true,
             (Some(current), Some(expected)) => Arc::ptr_eq(current, expected),
