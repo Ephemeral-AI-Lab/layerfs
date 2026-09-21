@@ -1,0 +1,70 @@
+{
+  "kind": "read-only diagnostic, not acceptance or performance",
+  "failed_selection": "write-frontier-01",
+  "filesystem_root": "ed0ac43c4a454dbcb42c209faf76a4c36936df9b3350256d85906f88d9ba3b41",
+  "source_store_sha256": "b115d5772d8a33747f3fc23ab3645991d44ef40d9101d014905b09b2f965fe07",
+  "binaries": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "b1656e7bcfdcbeba4094a9f726c313628d817d415aefbe3b25f7d1898c506f16",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "product_inputs_sha256": "3428c8b2f0cb6a5c0547362d9c62cd06dcf634f2bd4272041603a1616d055bc8",
+  "rows": [
+    {
+      "length": 257,
+      "response_budget": 257,
+      "data_frames": 257,
+      "received_bytes": 257,
+      "terminal_kind": 6,
+      "terminal_hex": "010000000000000101",
+      "received_prefix_matches": true
+    },
+    {
+      "length": 258,
+      "response_budget": 258,
+      "data_frames": 257,
+      "received_bytes": 257,
+      "terminal_kind": 7,
+      "terminal_hex": "0a0000",
+      "received_prefix_matches": true
+    },
+    {
+      "length": 514,
+      "response_budget": 67108864,
+      "data_frames": 512,
+      "received_bytes": 514,
+      "terminal_kind": 6,
+      "terminal_hex": "010000000000000202",
+      "received_prefix_matches": true
+    }
+  ],
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "922ace202173",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/benchmark-results/fs-bench-pro-storage-content/prepared",
+    "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "concurrent_work": [
+      {
+        "pid": 33229,
+        "kind": "measurement",
+        "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+      },
+      {
+        "pid": 33232,
+        "kind": "measurement",
+        "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+      }
+    ],
+    "observation": "a `ps` snapshot taken immediately before the timed child started; an empty list means no competing work was observed, never that the host was quiet"
+  },
+  "content_root": "7a0c2bc09cba683d63313506c495e59b988e8e8040597e745228e8f934fed6f3",
+  "status": "DIAGNOSTIC_CONFIRMED"
+}

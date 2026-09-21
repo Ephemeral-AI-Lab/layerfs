@@ -1,0 +1,29 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.41s
+     Running tests/stream_fragmentation.rs (core/target/debug/deps/stream_fragmentation-70a4d84a00bda7ca)
+
+running 2 tests
+test short_logical_writes_form_bounded_result_frames ... FAILED
+test short_source_reads_form_bounded_body_frames ... FAILED
+
+failures:
+
+---- short_logical_writes_form_bounded_result_frames stdout ----
+
+thread 'short_logical_writes_form_bounded_result_frames' panicked at crates/layerfs-bridge/tests/stream_fragmentation.rs:96:9:
+fragmented logical stream failed: Err(Failure { code: Io, unknown: false, cleanup: None, history: None })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- short_source_reads_form_bounded_body_frames stdout ----
+
+thread 'short_source_reads_form_bounded_body_frames' panicked at crates/layerfs-bridge/tests/stream_fragmentation.rs:96:9:
+fragmented logical stream failed: Err(Failure { code: Unknown, unknown: true, cleanup: None, history: None })
+
+
+failures:
+    short_logical_writes_form_bounded_result_frames
+    short_source_reads_form_bounded_body_frames
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test stream_fragmentation`

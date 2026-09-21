@@ -1,5 +1,5 @@
 //! One operation at a time; bounded concurrent upload and response consumption.
-use super::{connection::Connection, protocol::*};
+use super::{connection::Connection, payload::COALESCE_BYTES, protocol::*};
 use crate::contract::*;
 use std::{
     io::Write,
@@ -94,30 +94,47 @@ impl Client {
                         let mut buffer = [0u8; FRAME_BYTES];
                         let mut bytes = 0u64;
                         let mut frames = 0u64;
+                        let mut filled = 0;
                         loop {
-                            let n = source.read(&mut buffer, deadline, &cancel)?;
-                            if n > buffer.len() {
+                            if cancel.load(Ordering::Acquire) {
+                                return Err(Code::Io.into());
+                            }
+                            if Instant::now() >= deadline {
+                                return Err(Code::Deadline.into());
+                            }
+                            let n = source.read(&mut buffer[filled..], deadline, &cancel)?;
+                            if n > buffer.len() - filled {
                                 return Err(Code::InvalidInput.into());
                             }
-                            if n == 0 {
-                                if bytes != expected {
-                                    return Err(Code::InvalidInput.into());
-                                }
-                                break;
+                            if cancel.load(Ordering::Acquire) {
+                                return Err(Code::Io.into());
+                            }
+                            if Instant::now() >= deadline {
+                                return Err(Code::Deadline.into());
                             }
                             bytes = bytes
                                 .checked_add(n as u64)
                                 .filter(|v| *v <= expected)
                                 .ok_or(Code::InvalidInput)?;
-                            frames += 1;
-                            if frames >= frame_budget(expected) {
-                                return Err(Code::Capacity.into());
+                            if n == 0 && bytes != expected {
+                                return Err(Code::InvalidInput.into());
                             }
-                            send.write(&Frame {
-                                kind: Kind::Body,
-                                id: r.id,
-                                bytes: buffer[..n].to_vec(),
-                            })?;
+                            filled += n;
+                            if filled >= COALESCE_BYTES || (n == 0 && filled > 0) {
+                                frames += 1;
+                                if frames >= frame_budget(expected) {
+                                    return Err(Code::Capacity.into());
+                                }
+                                send.write(&Frame {
+                                    kind: Kind::Body,
+                                    id: r.id,
+                                    bytes: buffer[..filled].to_vec(),
+                                })?;
+                                filled = 0;
+                            }
+                            if n == 0 {
+                                break;
+                            }
                         }
                         send.write(&Frame {
                             kind: Kind::EndInput,

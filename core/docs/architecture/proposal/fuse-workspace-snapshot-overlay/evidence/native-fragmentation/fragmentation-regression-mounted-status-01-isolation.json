@@ -1,0 +1,31 @@
+{
+  "scope": "per-worktree",
+  "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+  "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+  "label": "922ace202173",
+  "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+  "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/benchmark-results/fs-bench-pro-storage-content/prepared",
+  "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/target",
+  "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+  "shared_read_only": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data"
+  ],
+  "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+  "output": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/fragmentation-regression-mounted-status-01",
+  "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584",
+  "no_same_worktree_build_overlap": true,
+  "performance_claim": false,
+  "concurrent_work": [
+    {
+      "pid": 33229,
+      "kind": "measurement",
+      "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+    },
+    {
+      "pid": 33232,
+      "kind": "measurement",
+      "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+    }
+  ],
+  "complete_outer_wall_seconds": 25.12333929198212
+}

@@ -53,18 +53,26 @@ pub fn serve(
             request.id,
             request.operation.input_length()?,
         );
-        let mut output = Output::new(&mut connection.send, request.id, request.response_bytes);
-        let result = handler(
-            &connection.peer,
-            &request,
-            &mut input,
-            &mut output,
-            deadline,
-        );
-        let result = match result {
-            Ok(r) if input.complete() => Ok(r),
-            Ok(_) => Err(Code::InvalidInput.into()),
-            Err(e) => Err(e),
+        let result = {
+            let mut output = Output::new(
+                &mut connection.send,
+                request.id,
+                request.response_bytes,
+                deadline,
+            );
+            let result = handler(
+                &connection.peer,
+                &request,
+                &mut input,
+                &mut output,
+                deadline,
+            );
+            // No Drop flush: a failed handler discards its unsent logical tail.
+            match result {
+                Ok(r) if input.complete() => output.flush().map(|()| r).map_err(Failure::from),
+                Ok(_) => Err(Code::InvalidInput.into()),
+                Err(e) => Err(e),
+            }
         };
         match result {
             Ok(response) => connection.send.write(&Frame {

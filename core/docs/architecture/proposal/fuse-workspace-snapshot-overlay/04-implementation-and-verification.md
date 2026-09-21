@@ -1280,3 +1280,12 @@ admission retire healthy registry-only roots, then eligible payloads, within
 existing consumer/deadline/writer/window bounds. Failed/partial cleanup remains
 explicit; no ordinary post-install Commit sweep retries it. Acceptance is limited
 to B-01/B-20/B-26/S-15 SDK subsets with actual native proofs recorded in 21.
+
+
+[23 — Native stream fragmentation](23-native-stream-fragmentation.md) is a shared
+prerequisite discovered while verifying the pending handle-write operation.
+Legal C1 extent writes and Source reads are coalesced by native bridge owners so
+they fit the unchanged wire-frame budget. The strict 514-byte saved-root read and
+authenticated socket tests qualify this correction; the original write-frontier
+failure remains FAIL and the write round resumes afterward. No R4 mounted or R6
+acceptance is inferred from the shared transport correction.

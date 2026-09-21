@@ -432,3 +432,14 @@ keeps its deliberate repair semantics. The former post-install Commit sweep and
 proposal CommitPhase::Cleanup are removed; the next pre-capture pass handles
 healthy retirement between repeated Commits. No public operation, dependency,
 kernel callback, worker or service opcode is added.
+
+From exact parent `c4f965357381870b3784e3423e75783496c0b7c7`, the focused
+[native stream-fragmentation correction](proposal/fuse-workspace-snapshot-overlay/23-native-stream-fragmentation.md)
+coalesces short local Source/Write fragments at the existing 1,024-byte frame
+budget quantum. Output owns a fixed 1 KiB pending tail and the original absolute
+deadline; successful completion flushes before Success, while failure discards
+unsent bytes and latches refusal without Drop flushing or replay. Upload uses its
+existing 16 KiB array. Large-frame batching, wire bounds, receiver anti-abuse
+checks and service algorithms remain unchanged. Output's selected fixed layout
+grows 40 to 1,096 bytes; upload adds an eight-byte cursor. The source-pinned failure,
+read-only discriminator and exact verification scope are recorded in 23.
