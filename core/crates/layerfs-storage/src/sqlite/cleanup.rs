@@ -47,7 +47,7 @@ pub fn abandon(
                     rusqlite::params![save_id,CLEANUP_PAGE_ROWS as i64],
                 )?,
                 // One pack per transaction bounds blob journal ownership even for
-                // the existing singleton format; ordinary packs are <=256 KiB.
+                // the widest lane; every pack is bounded by its lane's own limit.
                 _ => connection.execute(
                     "DELETE FROM object_packs WHERE pack_id=(SELECT pack_id FROM object_packs WHERE save_id=?1 ORDER BY pack_id LIMIT 1)", [save_id],
                 )?,

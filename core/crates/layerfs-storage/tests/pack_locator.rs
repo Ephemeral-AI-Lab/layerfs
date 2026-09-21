@@ -498,20 +498,28 @@ fn a_pack_never_assembles_past_its_lane_limit() {
 
     let lane = PackLane::Ordinary;
     let region = body_area_offset(lane);
-    // Three bodies fill the pack up to one byte short and the fourth cannot join
-    // them: `region + 3 * body <= pack_limit < region + 4 * body`.
-    let body_len = (lane.pack_limit() - region) / 4 + 1;
+    // Bodies of the widest group the lane accepts, repeated until the pack is
+    // full: `fits` of them fit and the next cannot join them, so
+    // `region + fits * body <= pack_limit < region + (fits + 1) * body`. The count
+    // is derived from both bounds rather than written down, because the pack limit
+    // and the lane's body limit move independently and the body has to stay one
+    // the lane accepts: a body of `pack_limit / 4` is 256 KiB against the ordinary
+    // lane's 64 KiB ceiling and is refused before the fit arithmetic is reached.
+    let body_len = lane.body_limit();
+    let fits = (lane.pack_limit() - region) / body_len;
+    assert!(fits >= 1, "the pack holds at least one body");
     assert!(
-        body_len <= lane.body_limit(),
-        "the probe group body must be one the lane accepts"
+        fits <= lane.group_count_limit(),
+        "the probe pack holds at most the lane's group count: {fits}"
     );
     assert!(
-        region + 3 * body_len <= lane.pack_limit(),
-        "three bodies fit"
+        region + fits * body_len <= lane.pack_limit(),
+        "{fits} bodies fit"
     );
     assert!(
-        region + 4 * body_len > lane.pack_limit(),
-        "the fourth body cannot fit"
+        region + (fits + 1) * body_len > lane.pack_limit(),
+        "body {} cannot fit",
+        fits + 1
     );
     // One record, framed: the group body is a 4-byte count and one 4-byte end
     // offset around the record, so the record is `body_len - 8` bytes -- one tag
@@ -534,14 +542,12 @@ fn a_pack_never_assembles_past_its_lane_limit() {
         codec: GroupCodec::Raw,
     };
 
+    let mut probe = vec![group.clone(); fits];
+    probe.push(group);
     let mut placement = LanePlacement::new();
     let mut next_pack_id = 1_i64;
     let writes = placement
-        .select_many(
-            lane,
-            vec![group.clone(), group.clone(), group.clone(), group],
-            &mut next_pack_id,
-        )
+        .select_many(lane, probe, &mut next_pack_id)
         .expect("placement must not assemble a pack it will refuse");
     assert!(!writes.is_empty());
     for write in &writes {
@@ -563,7 +569,7 @@ fn a_pack_never_assembles_past_its_lane_limit() {
         );
     }
     // The boundary is a real one: the groups fill the lane's pack limit, so the
-    // fourth cannot join the first three.
+    // next one cannot join them.
     assert_eq!(writes.len(), 2, "the pack boundary is crossed");
-    assert_eq!(writes[0].placed.len(), 3);
+    assert_eq!(writes[0].placed.len(), fits);
 }

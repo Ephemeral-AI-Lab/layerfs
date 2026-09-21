@@ -54,8 +54,15 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// constraint and no stored byte changes, so no row is rewritten and no pack is
 /// migrated; a version-9 Store is refused at open by the check below, exactly as
 /// every earlier version is.
+/// Version 11 raises the ordinary, native, whole-file and pooled pack limit from
+/// 256 KiB to 1 MiB (#219), so a Store written by this build may carry a pack four
+/// times longer than the previous limit. The reader refuses a pack longer than its
+/// lane's limit (`pack/layout.rs`), so a version-10 Store is refused at open by the
+/// check below rather than failing late on the first long pack it meets, exactly as
+/// every earlier version is. No column, no constraint and no stored byte changes,
+/// so no row is rewritten and no pack is migrated.
 /// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 /// Largest writer budget one Store may be configured with.
 ///
@@ -106,8 +113,22 @@ pub const GROUP_LIMIT: usize = 65_536;
 /// per-record framed lengths, which would count the shared count and end offsets
 /// once per record.
 pub const GROUP_TARGET: usize = 48 * 1024;
-/// Largest assembled pack BLOB for the ordinary and native lanes.
-pub const PACK_LIMIT: usize = 256 * 1024;
+/// Largest assembled pack BLOB for the ordinary, native, whole-file and pooled
+/// lanes.
+///
+/// Every one of those lanes **allocates this much when the pack row is created**
+/// and writes into it in place ([`crate::pack::layout::pack_capacity`]): a BLOB's
+/// size cannot be changed in place, and growing it would be an `UPDATE` that
+/// rewrites the whole row. The limit is therefore also the reserved capacity, and
+/// the bytes a pack reserves but never fills are its *tail*, about half a group
+/// per pack. Raising the limit is how that tail is paid for once instead of once
+/// per pack: four times the pack holds four times the groups, so the same content
+/// needs about a quarter of the packs and about a quarter of the dead tail. This
+/// value is the first increment measured for that reason (#219 round 20,
+/// 256 KiB -> 1 MiB, with `GROUP_LIMIT`, `GROUP_TARGET` and every framing byte
+/// unchanged); it is not the largest pack the format admits, which is
+/// [`GROUP_COUNT_LIMIT`] groups of [`GROUP_TARGET`] bytes.
+pub const PACK_LIMIT: usize = 1024 * 1024;
 /// Largest group count in one pack.
 pub const GROUP_COUNT_LIMIT: usize = 256;
 /// Largest record count in one group.

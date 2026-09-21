@@ -150,12 +150,12 @@ fn declared_pack_and_group_bounds_are_enforced_on_the_bytes() {
 #[test]
 fn the_lane_table_names_one_limit_per_lane() {
     assert_eq!(PackLane::Singleton.pack_limit(), 16 * 1024 * 1024 + 4_096);
-    assert_eq!(PackLane::Ordinary.pack_limit(), 256 * 1024);
+    assert_eq!(PackLane::Ordinary.pack_limit(), 1024 * 1024);
     assert_eq!(PackLane::Singleton.group_count_limit(), 1);
     assert_eq!(PackLane::PooledMetadata.body_limit(), 16 * 1024);
     for lane in PackLane::ALL {
         if lane != PackLane::Singleton {
-            assert_eq!(lane.pack_limit(), 256 * 1024, "{lane:?}");
+            assert_eq!(lane.pack_limit(), 1024 * 1024, "{lane:?}");
         }
         assert!(lane.body_limit() <= lane.pack_limit(), "{lane:?}");
     }

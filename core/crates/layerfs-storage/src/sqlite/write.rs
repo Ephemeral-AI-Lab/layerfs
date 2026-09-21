@@ -11,11 +11,11 @@
 //! own control area (`pack::layout`), so an append adds bytes without moving any
 //! byte already written. The alternative - binding the reassembled pack to
 //! `UPDATE object_packs SET data = ?2` - rewrites the row's whole BLOB for every
-//! append, and a small companion column would not help: any `UPDATE` of a row
-//! holding a 256 KiB BLOB rebuilds and rewrites that BLOB, measured at ~72 us per
-//! statement on a 256 KiB row against ~11 us for a four-byte in-place BLOB write
-//! (`#219`). The declaration therefore rides in the BLOB, and the row is only
-//! ever *read* after it is created.
+//! append, and a small companion column would not help: any `UPDATE` of a pack row
+//! rebuilds and rewrites that row's whole BLOB, measured at ~72 us per statement on
+//! the 256 KiB row this format replaced against ~11 us for a four-byte in-place
+//! BLOB write (`#219`). The declaration therefore rides in the BLOB, and the row
+//! is only ever *read* after it is created.
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};

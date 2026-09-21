@@ -221,7 +221,13 @@ fn a_payload_larger_than_a_compact_pack_is_stored_in_the_singleton_lane() {
     // policy has to match, because the cutoff decides the representation.
     let policy = StoragePolicy::new(1, 1_048_576, 8, 4);
     let construction = ConstructionPolicy::new(1_048_576, 8, 4);
-    let raw = noise(400_000);
+    // The largest payload the whole-file lane accepts at this cutoff, which is also
+    // one a compact pack cannot hold: `encoding/full.rs:273-278` admits a compact
+    // record only while the control area, the lane's whole reserved directory region
+    // and the group body fit the pack, and at a 1 MiB cutoff the construction's own
+    // ceiling is the pack limit itself. A payload that merely beat the older 256 KiB
+    // limit no longer states this case.
+    let raw = noise(construction.capacities().whole_file_raw_limit);
     let mut collected = Collected::new();
     let constructed = disabled(|scope| {
         layerfs_content::construct_bytes(
