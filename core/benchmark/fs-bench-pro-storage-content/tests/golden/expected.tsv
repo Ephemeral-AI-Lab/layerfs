@@ -1330,6 +1330,17 @@ pipeline-filesystem-build	counter:pipeline.objects_emitted	33
 pipeline-filesystem-build	counter:pipeline.reused	0
 pipeline-filesystem-build	digest:filesystem_root	02b5b52b67547c2ea2fe98ac53bbf52a3d5df58946672a9643789319c54eab03
 # Bootstrapped 2026-09-21 at b0260df3a: the new row pipeline-namespace-10000.
+# Re-baselined 2026-09-21 at 5c2858b40: pipeline-namespace-10000
+# counter:pipeline.commits 800 -> 284. The product change is 5c2858b40, "bound a
+# preparation wave by the transaction it runs in": a wave carries the
+# transaction's declared 4 MiB instead of an independent 512 KiB, so the row's
+# 302,406,480 canonical bytes come out as 73 waves instead of ~596. Declared in
+# the round's pre-registration before the run
+# (docs/roadmap/0.1/0.1.7/evidence/issue219-ns19h-wavebound-20260921T074957Z).
+# No other pin moved: batches, bindings, chain_objects, content_bytes,
+# content_objects, declared_*, inserted, largest_batch_bindings,
+# metadata_objects, objects_emitted, reused and digest:filesystem_root are
+# unchanged.
 # A row with no pins cannot be PASS, and pin_expected refuses a receipt that is not
 # PASS, so the first pins of a new row can only come from a bootstrap run - the same
 # route the header above records for the round-5 identity digests. These values were
@@ -1348,7 +1359,7 @@ pipeline-namespace-10000	counter:pipeline.chain_objects	382
 # statements 16595, packs_created, pack_appends, presence_queries 398,
 # full_records 25241, prefix_records 4, content_bytes - and the filesystem root
 # all reproduce exactly, which is what says the work did not change.
-pipeline-namespace-10000	counter:pipeline.commits	800
+pipeline-namespace-10000	counter:pipeline.commits	284
 pipeline-namespace-10000	counter:pipeline.content_bytes	301171810
 pipeline-namespace-10000	counter:pipeline.content_objects	24863
 pipeline-namespace-10000	counter:pipeline.declared_content_bytes	300000000
