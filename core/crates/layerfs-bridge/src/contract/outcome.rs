@@ -112,7 +112,9 @@ pub enum Response {
     History(Box<HistoryResult>),
     WorkspaceStatus(Box<super::WorkspaceStatusWire>),
     /// Inspect the outcome: a retained entered attempt is not a successful detach.
-    WorkspaceUnmount(Box<super::WorkspaceUnmountWire>),
+    WorkspaceUnmount(Box<super::WorkspaceLifecycleWire>),
+    /// Inspect the outcome: a retained entered attempt is not a clean close.
+    WorkspaceCloseClean(Box<super::WorkspaceLifecycleWire>),
     MetadataSaved {
         base: Root,
         kind: u8,

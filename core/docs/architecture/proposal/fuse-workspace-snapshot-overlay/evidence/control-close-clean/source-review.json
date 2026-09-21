@@ -1,0 +1,13 @@
+{
+  "source_parent": "dab1751312adecdc57d073145582a9a702449744",
+  "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304",
+  "independent_review": "epoch_read_review",
+  "scope": [
+    "Bridge request/result exact operation/identity correlation and uncertainty",
+    "daemon authority, complete input, expiry/deadline/stopping checks under lifecycle owner",
+    "service pre-admission refusal",
+    "already-closed and retained cleanup; signal/control exclusion"
+  ],
+  "findings": [],
+  "limits": "source review only; actual routes recorded separately"
+}

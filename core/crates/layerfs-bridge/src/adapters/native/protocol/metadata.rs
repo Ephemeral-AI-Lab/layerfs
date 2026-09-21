@@ -127,6 +127,9 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
     let mut e = match r.operation {
         Operation::WorkspaceStatus { .. } => Encoder::bounded(WORKSPACE_STATUS_REQUEST_BYTES),
         Operation::WorkspaceUnmount { .. } => Encoder::bounded(WORKSPACE_UNMOUNT_REQUEST_BYTES),
+        Operation::WorkspaceCloseClean { .. } => {
+            Encoder::bounded(WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES)
+        }
         Operation::UpdatePortableMetadata { .. } => {
             Encoder::bounded(PORTABLE_METADATA_REQUEST_BYTES)
         }
@@ -209,6 +212,10 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             incarnation,
         }
         | Operation::WorkspaceUnmount {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceCloseClean {
             workspace,
             incarnation,
         } => {
@@ -683,6 +690,9 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     if opcode == WORKSPACE_UNMOUNT_OPCODE && b.len() > WORKSPACE_UNMOUNT_REQUEST_BYTES {
         return Err(Code::Capacity.into());
     }
+    if opcode == WORKSPACE_CLOSE_CLEAN_OPCODE && b.len() > WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
     if opcode == UPDATE_PORTABLE_METADATA_OPCODE && b.len() > PORTABLE_METADATA_REQUEST_BYTES {
         return Err(Code::Capacity.into());
     }
@@ -755,6 +765,10 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             incarnation: d.root()?,
         },
         WORKSPACE_UNMOUNT_OPCODE => Operation::WorkspaceUnmount {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_CLOSE_CLEAN_OPCODE => Operation::WorkspaceCloseClean {
             workspace: d.blob(WORKSPACE_ID_BYTES)?,
             incarnation: d.root()?,
         },

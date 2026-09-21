@@ -11,26 +11,31 @@ pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
 pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_UNMOUNT_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_UNMOUNT_RESULT_BYTES: usize = 100;
+pub const WORKSPACE_CLOSE_CLEAN_OPCODE: u8 = 11;
+pub const WORKSPACE_CLOSE_CLEAN_MAX_MS: u32 = 5_000;
+pub const WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES: usize = 124;
+pub const WORKSPACE_CLOSE_CLEAN_RESULT_BYTES: usize = 100;
 
-/// An entered native attempt. Retained preserves its owner and is not unmount
-/// success; refusal before native admission uses the ordinary Failure terminal.
+/// Result of the requested daemon lifecycle operation. Completed means that
+/// operation finished; Retained means an entered native attempt preserved its
+/// owner rather than completing. Pre-admission refusals use ordinary Failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WorkspaceUnmountOutcome {
-    Unmounted,
+pub enum WorkspaceLifecycleOutcome {
+    Completed,
     Retained(Code),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WorkspaceUnmountWire {
+pub struct WorkspaceLifecycleWire {
     pub workspace: Vec<u8>,
     pub incarnation: Root,
-    pub outcome: WorkspaceUnmountOutcome,
+    pub outcome: WorkspaceLifecycleOutcome,
 }
-impl WorkspaceUnmountWire {
+impl WorkspaceLifecycleWire {
     pub fn validate(&self) -> Result<(), Failure> {
         check_workspace_identity(&self.workspace, &self.incarnation)?;
         match self.outcome {
-            WorkspaceUnmountOutcome::Unmounted
-            | WorkspaceUnmountOutcome::Retained(
+            WorkspaceLifecycleOutcome::Completed
+            | WorkspaceLifecycleOutcome::Retained(
                 Code::Deadline | Code::Io | Code::Busy | Code::Unsupported,
             ) => Ok(()),
             _ => Err(Code::InvalidInput.into()),

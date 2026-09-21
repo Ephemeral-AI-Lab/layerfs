@@ -3,8 +3,8 @@ use crate::config::{ControlConfig, ControlGrant};
 use layerfs_bridge::{
     adapters::native::{connection::accept, server::serve},
     contract::{
-        Code, Failure, Operation, Request, Response, VerifiedPeer, WorkspaceStatusWire,
-        WorkspaceUnmountOutcome, WorkspaceUnmountWire,
+        Code, Failure, Operation, Request, Response, VerifiedPeer, WorkspaceLifecycleOutcome,
+        WorkspaceLifecycleWire, WorkspaceStatusWire,
     },
 };
 use layerfs_fuse::{MountError, MountHandle};
@@ -182,6 +182,10 @@ fn dispatch(
             workspace,
             incarnation,
         } => (workspace, incarnation, 2),
+        Operation::WorkspaceCloseClean {
+            workspace,
+            incarnation,
+        } => (workspace, incarnation, 4),
         _ => return Err(Code::Unsupported.into()),
     };
     authorized(grants, peer, operation)?;
@@ -201,16 +205,16 @@ fn dispatch(
     if target.stopping.load(Ordering::Acquire) {
         return Err(Code::Busy.into());
     }
-    if operation == 2 {
+    if operation != 1 {
         // Reserve terminal delivery time from the original request budget. This
         // is an observation bound; it cannot preempt a native kernel syscall.
         let native_deadline = deadline
             .checked_sub(Duration::from_millis(100))
             .ok_or(Code::Deadline)?;
-        let mut result = Box::new(WorkspaceUnmountWire {
+        let mut result = Box::new(WorkspaceLifecycleWire {
             workspace: requested_workspace.clone(),
             incarnation: target.incarnation,
-            outcome: WorkspaceUnmountOutcome::Unmounted,
+            outcome: WorkspaceLifecycleOutcome::Completed,
         });
         result.validate()?;
         if Instant::now() >= native_deadline {
@@ -220,6 +224,7 @@ fn dispatch(
             TryLockError::WouldBlock => Code::Busy,
             TryLockError::Poisoned(_) => Code::Io,
         })?;
+        let closed = operation == 4 && target.workspace.status().map_err(|_| Code::Io)?.closed;
         authorized(grants, peer, operation)?;
         if Instant::now() >= native_deadline {
             return Err(Code::Deadline.into());
@@ -227,20 +232,47 @@ fn dispatch(
         if target.stopping.load(Ordering::Acquire) {
             return Err(Code::Busy.into());
         }
-        let outcome = mount.unmount(native_deadline);
+        let outcome = if operation == 2 {
+            mount.unmount(native_deadline)
+        } else if closed {
+            Ok(())
+        } else {
+            match target.workspace.close_clean_until(native_deadline) {
+                Ok(()) | Err(WorkspaceError::Closed) => Ok(()),
+                Err(error) => Err(MountError::Workspace(error)),
+            }
+        };
         drop(mount);
         if let Err(error) = outcome {
-            result.outcome = WorkspaceUnmountOutcome::Retained(match &error {
-                MountError::Deadline => Code::Deadline,
-                MountError::Unsupported => Code::Unsupported,
+            result.outcome = WorkspaceLifecycleOutcome::Retained(match &error {
+                MountError::Deadline | MountError::Workspace(WorkspaceError::Deadline) => {
+                    Code::Deadline
+                }
+                MountError::Workspace(WorkspaceError::Backing(failure))
+                    if failure.kind == io::ErrorKind::TimedOut =>
+                {
+                    Code::Deadline
+                }
+                MountError::Unsupported | MountError::Workspace(WorkspaceError::Unsupported) => {
+                    Code::Unsupported
+                }
                 MountError::Workspace(WorkspaceError::Busy) => Code::Busy,
                 _ => Code::Io,
             });
+            let operation = if operation == 2 {
+                "unmount"
+            } else {
+                "close clean"
+            };
             layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
-                "control unmount retained: {error}\n"
+                "control {operation} retained: {error}\n"
             ));
         }
-        return Ok(Response::WorkspaceUnmount(result));
+        return Ok(if operation == 2 {
+            Response::WorkspaceUnmount(result)
+        } else {
+            Response::WorkspaceCloseClean(result)
+        });
     }
     let local = target.workspace.status().map_err(|_| Code::Io)?;
     let result = WorkspaceStatusWire {

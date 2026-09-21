@@ -129,7 +129,9 @@ impl Service {
             // Daemon control has no Store permission bit or service admission.
             if matches!(
                 r.operation,
-                Operation::WorkspaceStatus { .. } | Operation::WorkspaceUnmount { .. }
+                Operation::WorkspaceStatus { .. }
+                    | Operation::WorkspaceUnmount { .. }
+                    | Operation::WorkspaceCloseClean { .. }
             ) {
                 return Err(Code::Unsupported.into());
             }

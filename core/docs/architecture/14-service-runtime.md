@@ -518,3 +518,16 @@ protocol or Workspace algorithm changes. Signal cleanup joins control first;
 incomplete cleanup retains the process/owners until another explicit signal.
 The startup profile stays read-only; wider Attach/Close/edit/Commit controls are
 not implemented by this extension. Actual results and qualifications are in27.
+
+The next R1-C operation is based on parent
+`dab1751312adecdc57d073145582a9a702449744`:
+[CloseClean](proposal/fuse-workspace-snapshot-overlay/28-control-close-clean.md).
+Bridge adds opcode11/tag13 with the same124/100-byte request/result bounds and
+renames the proposal DTO to WorkspaceLifecycleWire/Outcome. Unmount opcode10/tag12
+bytes are unchanged; operation-specific Response variants prevent cross-operation
+completion. Daemon adds grant bit4 (valid mask0..7), calls existing native clean
+closure under the same lifecycle try_lock and100ms completion headroom, and retains
+checked failures. Service refuses all three controls before Store admission. The
+closed target remains observable and a later signal skips an already-completed
+close. No Workspace/FUSE algorithm, resource limit or dependency changes. Actual
+verification status and remaining writable control prerequisites are in28.

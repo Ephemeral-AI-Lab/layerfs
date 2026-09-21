@@ -7,6 +7,11 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Next daemon lifecycle operation:** [authenticated CloseClean](28-control-close-clean.md)
+adds separate authority for existing native clean closure and preserves inspection
+of the exact closed target. Five new actual daemon/Linux cases and eight affected Unmount regressions pass.
+Wider control/writable work remains open.
+
 **Daemon lifecycle control:** [authenticated Unmount](27-control-unmount.md)
 adds operation-specific authority and exact target/incarnation matching through
 the existing native protocol. Its checked entered-attempt result distinguishes

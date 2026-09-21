@@ -166,7 +166,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             })?;
             owner.unmount(deadline)?;
             drop(owner);
-            workspace.close_clean_until(deadline)?;
+            if !workspace.status()?.closed {
+                workspace.close_clean_until(deadline)?;
+            }
             Ok(())
         })();
         match cleanup {

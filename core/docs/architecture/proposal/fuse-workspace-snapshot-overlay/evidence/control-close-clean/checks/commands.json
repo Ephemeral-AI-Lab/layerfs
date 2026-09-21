@@ -1,0 +1,71 @@
+{
+  "working_directory": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+  "rows": [
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked --offline",
+      "log": "host-test.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "docker run --rm --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e LAYERFS_CONSTRUCTION_WORKERS=1 layerfs-pair1-rust-tools:c331f3815ef3cfb5c760 cargo test --manifest-path core/Cargo.toml --locked --offline -p layerfs-bridge -p layerfs-daemon -p layerfs-service",
+      "log": "linux-test.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "host-clippy.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "docker run --rm --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e LAYERFS_CONSTRUCTION_WORKERS=1 layerfs-pair1-rust-tools:c331f3815ef3cfb5c760 cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "linux-clippy.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "host-build.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "docker run --rm --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e LAYERFS_CONSTRUCTION_WORKERS=1 layerfs-pair1-rust-tools:c331f3815ef3cfb5c760 cargo build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "linux-build.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+      "log": "fmt.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "python3 core/tools/check_product_boundary.py",
+      "log": "boundary.log",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "log": "boundary-self-tests.log",
+      "exit_code": 0,
+      "status": "PASS"
+    }
+  ],
+  "host_tests": {
+    "passed": 659,
+    "failed": 0,
+    "ignored": 3
+  },
+  "linux_tests": {
+    "passed": 86,
+    "failed": 0,
+    "ignored": 0
+  },
+  "production_files_scanned": 241,
+  "guard_self_tests": 6
+}

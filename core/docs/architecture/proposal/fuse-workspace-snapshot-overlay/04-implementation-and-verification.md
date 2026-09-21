@@ -1348,3 +1348,14 @@ wire deadline includes100ms reserved terminal headroom, without syscall preempti
 or automatic replay. Eight new actual daemon control cases and the Status regression pass, with
 proof/check/LOC records in27; no writable management or full Pair1 qualification
 is inferred.
+
+### R1-C authenticated CloseClean
+
+[28 — Daemon CloseClean](28-control-close-clean.md), implementation parent
+`dab1751312adecdc57d073145582a9a702449744`, adds only the next lifecycle operation.
+It uses independent grant bit4, the existing native clean-close algorithm and the
+same lifecycle owner/deadline. The concrete shared lifecycle result preserves
+Unmount bytes and exact operation-specific terminal matching. Already-closed Status
+and subsequent signal cleanup retain identity and checked completion. Five new
+actual Linux cases and eight affected Unmount regressions pass; exact checks and
+LOC are in28. Writable startup and its shutdown/control ordering remain prerequisites.

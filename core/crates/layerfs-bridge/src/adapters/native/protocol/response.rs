@@ -7,6 +7,7 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         Response::History(_) => Encoder::bounded(HISTORY_RESULT_BYTES),
         Response::WorkspaceStatus(_) => Encoder::bounded(WORKSPACE_STATUS_RESULT_BYTES),
         Response::WorkspaceUnmount(_) => Encoder::bounded(WORKSPACE_UNMOUNT_RESULT_BYTES),
+        Response::WorkspaceCloseClean(_) => Encoder::bounded(WORKSPACE_CLOSE_CLEAN_RESULT_BYTES),
         Response::MetadataSaved { .. } => Encoder::bounded(PORTABLE_METADATA_RESULT_BYTES),
         _ => Encoder::default(),
     };
@@ -125,14 +126,18 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u64(status.cookies)?;
             e.u64(status.consumer_accounted_bytes)?;
         }
-        Response::WorkspaceUnmount(result) => {
+        Response::WorkspaceUnmount(result) | Response::WorkspaceCloseClean(result) => {
             result.validate()?;
-            e.u8(12)?;
+            e.u8(if matches!(r, Response::WorkspaceUnmount(_)) {
+                12
+            } else {
+                13
+            })?;
             e.blob(&result.workspace)?;
             e.put(&result.incarnation)?;
             match result.outcome {
-                WorkspaceUnmountOutcome::Unmounted => e.u8(0)?,
-                WorkspaceUnmountOutcome::Retained(code) => {
+                WorkspaceLifecycleOutcome::Completed => e.u8(0)?,
+                WorkspaceLifecycleOutcome::Retained(code) => {
                     e.u8(1)?;
                     e.u8(code as u8)?;
                 }
@@ -541,6 +546,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     if b.first() == Some(&12) && b.len() > WORKSPACE_UNMOUNT_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
+    if b.first() == Some(&13) && b.len() > WORKSPACE_CLOSE_CLEAN_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let mut d = Decoder::new(b)?;
     let r = match d.u8()? {
         1 => Response::Read { length: d.u64()? },
@@ -627,21 +635,25 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             inserted: d.u64()?,
             reused: d.u64()?,
         },
-        12 => {
+        tag @ (12 | 13) => {
             let workspace = d.blob(WORKSPACE_ID_BYTES)?;
             let incarnation = d.root()?;
             let outcome = match d.u8()? {
-                0 => WorkspaceUnmountOutcome::Unmounted,
-                1 => WorkspaceUnmountOutcome::Retained(code(d.u8()?)?),
+                0 => WorkspaceLifecycleOutcome::Completed,
+                1 => WorkspaceLifecycleOutcome::Retained(code(d.u8()?)?),
                 _ => return Err(Code::InvalidInput.into()),
             };
-            let result = WorkspaceUnmountWire {
+            let result = WorkspaceLifecycleWire {
                 workspace,
                 incarnation,
                 outcome,
             };
             result.validate()?;
-            Response::WorkspaceUnmount(Box::new(result))
+            if tag == 12 {
+                Response::WorkspaceUnmount(Box::new(result))
+            } else {
+                Response::WorkspaceCloseClean(Box::new(result))
+            }
         }
         _ => return Err(Code::Unsupported.into()),
     };
