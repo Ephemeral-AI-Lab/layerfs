@@ -72,7 +72,7 @@ inputs named.
 | | |
 | --- | --- |
 | **what changes** | the content store moves from heap to a scratch directory before the timer; inside it, a bounded reader streams the objects back |
-| **memory** | becomes **O(window)**, not O(content): the ~728 MB row of §1 leaves the process. Peak is expected to land near the ~120 MB the tree, the plan, the store's own page cache and the measured region cost together `[arithmetic, from §1's components]` |
+| **memory** | becomes **O(window)**, not O(content): the ~728 MB row of §1 leaves the process. Peak is expected to land near **~160 MB** `[arithmetic: 885,325,824 measured today, less the ~728,465,408 B content store of §1]`, plus a 1 MiB read window. The floor under any spill design is the ~55 MB tree and plan plus the ~37 MB measured region, which is why **10x is not reachable by this option** and ~5.6x is |
 | **time** | the row gains a **disk read of 502,914,928 canonical bytes `[measured: pipeline.content_bytes`]** inside the declared figure, plus a second read for the oracle replay (which is untimed). The oracle already re-reads every object today, so A does not add a third pass — it changes where the two passes read from |
 | **new work** | a **bounded** reader. `TreeStore::write_to_dir` and `load_from_dir` exist (`providers.rs:124`, `:143`) but `load_from_dir` loads the whole store, so it is a producer/serializer, not the reader this needs. The reader is new |
 | **cache contract** | **required, and it is the condition that makes or breaks A.** See §4 |
@@ -92,16 +92,43 @@ inputs named.
 
 ### C. Build the tree twice — once untimed into a Store that already holds the content, once timed
 
+**The option as the handoff states it is underspecified in the one place that decides whether it works,
+and this page corrects it.** "Build the tree twice" describes where the cost moves; it does not say
+whether the content is *streamed* into the Store or built into a `TreeStore` and then saved. Those are
+different options and only one of them bounds anything:
+
+| | C1 — build the content store, then save it | C2 — stream each constructed object into the Store |
+| --- | --- | --- |
+| **how** | `content` is built as today (`ops/pipeline.rs:737`) and handed to `create_and_save_untimed` (`c2.rs:103`) instead of an empty store (`ops/pipeline.rs:800`) | the construction loop accepts each object into the save operation as it is constructed; no `TreeStore` ever holds the fixture |
+| **peak** | **~728,465,408 B, unchanged** — and that is the whole point: *the fixture is held either way; only its position relative to the timer moves.* A lifetime peak is a high-water mark, so moving 503 MB out of the timer does **not** lower it | **O(1)**: one object plus the Store's own cache at a time. The ~728 MB row of §1 leaves the process |
+| **new work** | one argument changed | a streaming accept path: the construction loop's consumer becomes the operation rather than a `TreeStore` |
+
+**C1 is not a fix and must not be recommended as one.** It is recorded here because it is what a
+mechanical reading of the handoff's wording produces, and because a round that built it would report a
+lower *measured-region* figure while the process still peaked at 885 MB.
+
+**And C2's price is a cold read, not the absence of one.** The page's first draft claimed C "needs no new
+contract because the store's page-cache state is already declared and already gated". **That claim is
+false as written and is retracted here.** `prepare_sample` makes an independent byte copy of the base and
+de-warms **the whole copy** (`c2.rs:132-146`, `instruments::de_warm` at `support/instruments.rs:674`),
+and `dirty`'s `g4.residency` gate reads 0 resident pages on the sample. So a timed pass that reads its
+content out of that sample reads it **cold** — the same physical work as A, at the same
+502,914,928 canonical bytes plus the Store's own framing. What C2 avoids is not the read; it is the
+**spill file and its contract**.
+
+**Where the two genuinely differ**, then:
+
+| | A (spill + bounded reader) | C2 (stream into the Store) |
+| --- | --- | --- |
+| the input the timed phase reads | a harness scratch file, **new** | the sample Store, which every C2 row already declares, copies, de-warms and gates |
+| contract surface | a new declaration plus `g4.device-attestation` against the spilled bytes | the row's existing `PreparedDewarmed` / `OpenedFromCopy` and `g4.residency`, already published |
+| new mechanism | a bounded reader (**new**), a scratch-directory lifecycle in the row's output | none: an existing writer and an existing reader |
+| what the row's declared content is drawn from | the 502,914,928 canonical bytes, exactly | the Store's contents, which carry packs, indexes and framing beyond the canonical bytes |
+| fidelity to the reference harness | high — the reference streams its own scenario through a 1 MiB window | lower — the reference reads a prepared Store for its other cases but streams for this one |
+
 | | |
 | --- | --- |
-| **what changes** | the untimed pass saves the content into the prepared Store; the timed pass reads it back from there, so the harness never holds it |
-| **memory** | **O(1)** for the fixture. The content lives in the Store, which is what a Store is for |
-| **time** | the preparation doubles: the row's `construct_ns` + `construct_noise_ns` are 459,429,478 + 135,016,097 = **594,445,575 ns `[measured: ns22-D2`]**, and the C1 tree build is a further **1,137,483,625 ns `[measured: pipeline.span_build_ns`]**. C pays the C1 half twice, ~1.14 s more preparation. Both are **untimed** and the complete command is 6.477 s against a 15 s ceiling, so it fits |
-| **cache contract** | the timed pass reads the content out of the **Store**, which is the thing the row already opens from a de-warmed copy: `PreparedDewarmed` / `OpenedFromCopy`, `g4.residency == 0`. The store's page-cache state is therefore already declared and already gated, and no new contract is needed |
-| **new work** | a second tree build and a Save of the content in preparation. The registry row is `prepared = -` (`Preparation::InProcess`), so this happens inside the row's own invocation, twice — and the *first* pass's Store must be the sample the timer opens, which means the row's `c2::create_and_save_untimed` / `prepare_sample` sequence moves to after the first build |
-| **what it buys** | the same bounded fixture as A, without a read the row has to declare |
-| **price** | ~1.14 s of extra untimed work and the C1 tree build performed twice, to avoid a read A would have to declare anyway |
-| **ruling** | **no** — but note that it is the cheapest *legal* option, and §5 recommends A over it for a stated reason rather than for a measured one |
+| **ruling** | **no** for either — but C2 is a bigger change than "no ruling" suggests, see §5 |
 
 ### D. Construct inside the timer and declare the boundary change
 
@@ -160,8 +187,8 @@ measured memory is bounded and is not this page's subject.**
 
 ## 5. Recommendation
 
-**Recommend A, on the condition that §4's five points are met — with C named as the fallback if they are
-not.**
+**Recommend A, on the condition that §4's five points are met — with C2, and not C1, named as the
+fallback if they are not.**
 
 The reason is not that A is cheaper; it is not. A costs a new bounded reader, a serializer round trip,
 and the second declared input this page is asking the owner to accept. C costs none of that and none of
@@ -174,7 +201,7 @@ harness's fixture cost structurally bounded rather than moved.**
 
 Two things this recommendation does **not** claim, because they were not measured:
 
-* that A's peak lands near ~120 MB. The component arithmetic in §3A is `[arithmetic]`, and the row it
+* that A's peak lands near ~160 MB. The component arithmetic in §3A is `[arithmetic]`, and the row it
   predicts has never been run. The pre-registration for the round that builds it registers the bound
   before its first locked run, as this round's did;
 * that A's read costs less in wall time than a session's own spread. §5.1 of round 21 measured a
@@ -183,7 +210,20 @@ Two things this recommendation does **not** claim, because they were not measure
 
 **B is recommended as a follow-up, not as an alternative.** It is legal, it is small, and it makes the
 measured region's largest harness term disappear; it bounds nothing. If the owner declines A and
-declines C, B is what is left and the page should say plainly that the row then keeps a 500 MB fixture.
+declines C2, B is what is left and the page should say plainly that the row then keeps a 500 MB fixture.
+
+**The honest cost of the recommendation, stated because it is a design decision and not a free one.**
+A is the option that bounds the fixture *and* the option that adds the most mechanism: a bounded reader,
+a serializer round trip, a new cache declaration, a new gate, a new published term, and a scratch
+directory that becomes part of the row's output and its cleanup. **It makes the harness more complex, not
+less.** Two things keep that price honest rather than dismissed:
+
+* the row's fixture is **harness** memory, 96 % of it held outside the timer (§1). Nothing about the
+  product becomes simpler or more complex under A; what changes is how much the harness holds.
+* the option that strictly *simplifies* is **B** — it removes a copy and adds nothing — and it bounds
+  nothing. **There is no option on this page that both lowers the peak and lowers the harness's
+  complexity**, and a reader should not expect one. A's complexity is the price of bounding an in-process
+  fixture; a row that does not pay it keeps 885 MB, correctly attributed, which is what today's row does.
 
 ## 6. What is not claimed
 
@@ -217,12 +257,15 @@ contract of §4, publishing `pipeline.spill_read_ns` beside `pipeline.operation_
 read with `g4.residency == 0` and `g4.device-attestation >= 0.9 × requested`. The timer's boundary does
 not move; **what the declared figure contains does.**
 
-**Question 2 — if question 1 is declined, is option C acceptable?**
-C bounds the fixture without a read the row must declare, at the price of building the tree twice untimed
-(~1.14 s, inside the 15 s complete-command budget) and of a row whose content is supplied by a Store the
-harness filled in a previous pass. **If both are declined, this page recommends B as the only remaining
-legal step and records that the row keeps a ~500 MB in-process fixture** — which is a legitimate
-outcome, and one a reader should then read the row's 885 MB peak with.
+**Question 2 — if question 1 is declined, is option C2 acceptable?**
+C2 streams each constructed object into the Store untimed and reads them back cold inside the timer. It
+bounds the fixture at the price of a bigger untimed write and of a row whose 502,914,928 declared
+canonical bytes are drawn from a Store that also carries packs, indexes and framing. It needs no new
+contract — `prepare_sample` already copies and de-warms, and `g4.residency` already gates — but it is a
+larger change than the handoff's one-line description suggests, because "build the tree twice" as written
+(C1) bounds nothing at all (§3C). **If both are declined, this page recommends B as the only remaining
+legal step and records that the row keeps a ~500 MB in-process fixture** — which is a legitimate outcome,
+and one a reader should then read the row's 885 MB peak with.
 
 **Question 3 — the cache contract's wording, if question 1 is granted.**
 The contract is a new declaration for this family. The name below is a **proposal**, not a decision:

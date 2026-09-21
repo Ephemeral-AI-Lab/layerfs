@@ -241,17 +241,40 @@ the split, which is what the design page's §4.5 asks for.
 the handoff names, recommends **A** (spill the constructed objects and stream them back through a bounded
 window inside the timer) with **C** as the fallback, and **stops at a recommendation**:
 
-* **A and D need an owner ruling; B and C do not.** The ruling request is written as three questions in
-  the page's §7, not decided there. A is preferred over C because A is what the reference harness does
-  (`benchmark/fs-bench-pro/workload/main.rs:120`, `:936-948`) and because C pays the C1 tree build twice
-  to avoid a read the row would have to declare anyway.
+* **A and D need an owner ruling; B and C2 do not.** The ruling request is written as three questions in
+  the page's §7, not decided there. A is preferred over C2 because A is what the reference harness does
+  (`benchmark/fs-bench-pro/workload/main.rs:120`, `:936-948`) and because A leaves the row's declared
+  content drawn from exactly its 502,914,928 canonical bytes, where C2 draws them from a Store that also
+  carries packs, indexes and framing.
 * **The contract that decides it** is the page's §4: declaration, enforcement through
   `shared/residency.py:154`'s `msync(MS_INVALIDATE)` plus `mincore`, device attestation through
   `gates::device_attestation` (`gates.rs:382-405`) and `process_usage().disk_read_bytes`
   (`support/instruments.rs:346`), equal treatment of both arms, and the publication of a
   `spill_read_ns` split beside `operation_work_ns`.
 * **No product change is proposed and none was made.** The page's prices are surfaces and measured
-  inputs; its ~120 MB peak for A is labelled arithmetic, not measurement.
+  inputs; its ~160 MB peak for A is labelled arithmetic, not measurement.
+
+**Two corrections to the design page, made after it was first written and recorded here rather than
+silently folded in.** Both were found by asking the page a question it had not been asked — *what does
+C actually cost, and does it bound anything?*
+
+1. **"Option C" was underspecified in the one place that decides whether it works.** The handoff's
+   "build the tree twice" does not say whether the content is *streamed* into the Store or built into a
+   `TreeStore` and then saved. The first is a fix; the second holds the fixture exactly as today and
+   merely moves it outside the timer, and a **lifetime** peak is unaffected by that move. The page now
+   prices them as C1 and C2 and states that **C1 bounds nothing**.
+2. **The page's claim that C "needs no new contract because the store's page-cache state is already
+   declared" was false, and is retracted in the page.** `prepare_sample` byte-copies the base and
+   de-warms the **whole copy** (`c2.rs:132-146`), and the row gates `g4.residency == 0` on the sample —
+   so a timed pass reading its content out of that sample reads it **cold**. C2 pays the same cold read
+   A pays; what it avoids is the spill file and its contract, not the read.
+
+The recommendation between A and C2 is unchanged, but its reason is narrower than the page's first draft
+gave it, and the page §5 now states the cost plainly: **A is the option that bounds the fixture and the
+option that adds the most mechanism — a bounded reader, a serializer round trip, a new cache
+declaration, a new gate, a new published term and a scratch directory the row must clean up. No option
+on the page lowers both the peak and the harness's complexity, and B — the option that strictly
+simplifies — bounds nothing.**
 
 ## 10. Production LOC
 
