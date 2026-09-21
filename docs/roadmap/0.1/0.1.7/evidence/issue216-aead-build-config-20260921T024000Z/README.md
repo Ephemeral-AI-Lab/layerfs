@@ -96,8 +96,11 @@ protocol as the owner-requested pair):
 | 64 x 8 MiB | 7.3473 s, 68.4-70.8 MiB/s | **5.550 / 5.617 s, 92.3 / 91.2 MiB/s** |
 | ratio | +9.0% | **+9.1%** |
 
-The *relative* penalty of the 64 x 8 MiB batch is unchanged (+9%), so that finding
-stands; the absolute rates were depressed ~30% by the slow suite, and effective
+The *relative* penalty of the 64 x 8 MiB batch measured +9% in the two sequences
+available then, but a third sequence under the enforced profile measured **-6.7%**,
+so the penalty is **not resolvable** at this sample count and that earlier claim is
+superseded by [the re-check](../issue216-recheck-enforced-profile-20260921T031500Z/README.md) section 3; the absolute rates were depressed
+about 30% by the slow suite, and effective
 cores fall from 1.29-1.33 to 0.94-1.07 because AES runs on the crypto unit instead
 of several cores of NEON ChaCha. The route is now close to the store-only rate
 (115 MiB/s), which is what a fast transport should leave as the bottleneck.

@@ -32,3 +32,13 @@ Consequences for the claims made here:
 
 Root cause, the committed-manifest provenance and the proposed guards:
 [the AEAD build-config record](../issue216-aead-build-config-20260921T024000Z/README.md).
+
+## Second correction: the +9% penalty is not resolvable
+
+A third sequence, under the enforced build profile, measured the batch **-6.7%**
+against the single operation (4.859 s against 5.210 s). Three sequences now give
++9.0%, +9.1% and -6.7%; pooled over the two configured-profile sequences the
+difference is +3.8% with a range of -6.7% to +9.1%. The batch is therefore within
+this host's noise of one big operation, and only the few milliseconds of
+per-operation fixed cost (5.45 ms of which is this harness spawning a process per
+operation) are established. See [the re-check](../issue216-recheck-enforced-profile-20260921T031500Z/README.md) section 3.

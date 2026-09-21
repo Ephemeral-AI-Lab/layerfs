@@ -1,0 +1,17 @@
+{
+ "commit": "2f900ada5392017252d9cfc280f9d4036ca619bd",
+ "tree": "06ff22c7e634efeeba5ddffb95e6c5f31633071d",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "build": {
+  "examples/measure_admission": "f605a2d695fae46e949edc47e67f3f5a04556491f76e105e4ec5a833981240c0",
+  "examples/transport_probe": "e6ba6ec98b96e966466197e23a2332332ec0495a24aabcb98df71d33734e1eda",
+  "examples/prepare_store": "8a94e65e1e471e979c5888607b8dcf985eb256b96500098d500b6d49e41fae54",
+  "examples/public_key": "9101ccfe51958b28859746a913c34d822a24e94ec936724b22a7e0f250128634",
+  "layerfs-service": "cec03630613505346151f6d605edaf5cae8394ef9d8b44c961472d8bfa027368",
+  "layerfs-daemon": "141659a0a7d3ca7a3f08a1d3aae0296af0d222ac566132564d9a80cb89fc1f4b"
+ },
+ "build_profile": "the repository-root .cargo/config.toml supplies --cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon -C target-feature=+aes,+sha2; the bridge refuses to compile for aarch64 without it",
+ "tools": "core/target/release/examples/measure_admission, layerfs-service, layerfs-daemon, examples/prepare_store (fixture), examples/public_key",
+ "cache_state": "payloads built in-process before the timed phase for groups A/B; fresh Store copy from the closed prepared master per route arm for group C; no invalidation for one arm only; no cold-cache claim",
+ "interference": "host load average ~6-7 of 14 logical cores; all arms share it"
+}
