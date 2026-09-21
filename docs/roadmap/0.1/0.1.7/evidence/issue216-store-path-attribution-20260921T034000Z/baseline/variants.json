@@ -1,0 +1,62 @@
+[
+ {
+  "arm": "seq-250k-page4k",
+  "blob_kib": 250,
+  "page_size": 4096,
+  "appends_per_blob": 0,
+  "commit_each": true,
+  "seconds": 2.447,
+  "stored_mib": 512.2,
+  "mib_per_s": 209.3,
+  "file_mib": 516.3,
+  "rows": 2098
+ },
+ {
+  "arm": "seq-1024k-page4k",
+  "blob_kib": 1024,
+  "page_size": 4096,
+  "appends_per_blob": 0,
+  "commit_each": true,
+  "seconds": 2.113,
+  "stored_mib": 512.0,
+  "mib_per_s": 242.3,
+  "file_mib": 512.7,
+  "rows": 512
+ },
+ {
+  "arm": "seq-250k-page16k",
+  "blob_kib": 250,
+  "page_size": 16384,
+  "appends_per_blob": 0,
+  "commit_each": true,
+  "seconds": 1.877,
+  "stored_mib": 512.2,
+  "mib_per_s": 272.9,
+  "file_mib": 524.6,
+  "rows": 2098
+ },
+ {
+  "arm": "append-250k-page16k",
+  "blob_kib": 250,
+  "page_size": 16384,
+  "appends_per_blob": 1,
+  "commit_each": true,
+  "seconds": 3.408,
+  "stored_mib": 512.1,
+  "mib_per_s": 150.3,
+  "file_mib": 520.0,
+  "rows": 1798
+ },
+ {
+  "arm": "append-250k-page64k",
+  "blob_kib": 250,
+  "page_size": 65536,
+  "appends_per_blob": 1,
+  "commit_each": true,
+  "seconds": 3.274,
+  "stored_mib": 512.1,
+  "mib_per_s": 156.4,
+  "file_mib": 562.2,
+  "rows": 1798
+ }
+]
