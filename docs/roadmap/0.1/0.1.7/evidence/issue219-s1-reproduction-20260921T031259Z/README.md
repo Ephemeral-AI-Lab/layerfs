@@ -228,3 +228,40 @@ The two are separate workspaces — `cargo --manifest-path core/Cargo.toml` does
 `benchmark/fs-bench-pro` — so **the S1 timings are unaffected**. What is affected is any
 future claim that the reference product's behaviour is unchanged since the closure run:
 its `core/` sibling has moved, and the 217 lane has not been re-run to say by how much.
+
+### Instrument note: `instruments_selfcheck`'s heap-window test is a broken test, not a broken instrument
+
+`tests/instruments_selfcheck.rs::the_heap_window_attributes_a_known_allocation_pattern`
+fails on the current tree:
+
+```text
+thread 'the_heap_window_attributes_a_known_allocation_pattern' panicked at tests/instruments_selfcheck.rs:103:5:
+a live 4194304-byte buffer produced a peak of 0 bytes
+```
+
+**Pre-existing and unrelated to #219.** It fails identically with this session's changes
+stashed. It is also not a harness self-check failure: `runner.py self-check` reports
+`PASS`, because that verb runs the Python self-checks, the registry self-check, the
+golden comparison and lock parity — it does not run this Rust integration test.
+
+**Cause.** `#[global_allocator]` is declared in the **library**
+(`src/support/instruments.rs:89`). An integration test under `tests/` is a **separate
+crate** that links the library; a `#[global_allocator]` declared inside a dependency does
+not become the test binary's allocator. So the counters `heap_begin`/`heap_end` read are
+never incremented in that binary and the peak is exactly zero. The test's own
+re-exec-into-a-clean-process design is sound; the allocator simply is not installed in
+the process it re-executes.
+
+**Why it does not affect measurement.** The instrument is used where it is installed: in
+the harness **binary**, whose crate root includes `src/support/instruments.rs` as its own
+module. Receipts confirm it measures — the pipeline row in this session reports
+`heap.peak_incremental_bytes: 18,988,411` and the C2 rows report their own non-zero
+values. So `g4.heap-window` gates on a working instrument; only this self-test is
+inert.
+
+**Not fixed here, deliberately.** Making the test real means giving the test crate its
+own counting `GlobalAlloc` (a `#[global_allocator]` in `tests/instruments_selfcheck.rs`),
+which duplicates the allocator that must stay in the library for the binary's sake. That
+is a harness change outside #219's scope, and doing it silently while implementing a
+parity row would be exactly the kind of unrecorded edit this repository's rules forbid.
+It is recorded here instead, for a separate ruling.
