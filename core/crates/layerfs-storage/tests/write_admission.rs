@@ -280,6 +280,87 @@ fn an_unsupported_budget_is_refused_without_changing_the_store() {
     drop(held);
 }
 
+/// Every supported setting, one fresh Store each: the whole ladder in one case.
+///
+/// The matrix is deliberately end-to-end per setting - admission, slot layout,
+/// duplicate ownership, publication, read-back, reuse and a later lowering - so a
+/// setting that only works in isolation cannot pass by skipping a step.
+#[test]
+fn every_supported_setting_admits_its_budget_and_publishes_correctly() {
+    let bytes = noise(8_192);
+    let (objects, root, _) = construct_file(&bytes);
+    for writers in [1usize, 2, 3, 5, 8, 16, 64] {
+        let temp = TempDir::new("admission-matrix");
+        let path = temp.store_path("shared");
+        let store = create_store(&path);
+        assert_eq!(configure(&store, writers as u8), writers as u8);
+        let mut saves: Vec<_> = (0..writers)
+            .map(|index| {
+                disabled(|s| store.begin_save(s.child("writer")))
+                    .unwrap_or_else(|error| panic!("budget {writers}: writer {index}: {error}"))
+            })
+            .collect();
+        assert_eq!(
+            live_slots(&path),
+            (1..=writers as i64).collect::<Vec<i64>>(),
+            "budget {writers} uses exactly its own slot space"
+        );
+        assert!(
+            matches!(
+                disabled(|s| store.begin_save(s.child("over"))),
+                Err(StorageError::OwnershipUnavailable)
+            ),
+            "budget {writers} refuses the next writer"
+        );
+        // Every writer holds its own private copy of the same identity, then
+        // publishes; publication releases every slot and leaves the copies.
+        for save in &mut saves {
+            for object in objects.finalized() {
+                save.accept(object).unwrap();
+            }
+        }
+        for save in saves {
+            disabled(|s| save.finish(s.child("finish"))).unwrap();
+        }
+        assert_eq!(
+            live_owners(&path),
+            0,
+            "budget {writers} released every slot"
+        );
+        let duplicated: i64 = rows(&path)
+            .query_row(
+                "SELECT COUNT(*) FROM objects WHERE object_id=?1",
+                [root.as_bytes()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            duplicated, writers as i64,
+            "budget {writers} kept one locator per simultaneous owner"
+        );
+        assert_eq!(
+            read_logical(&store, root),
+            bytes,
+            "budget {writers} reads back"
+        );
+        let outcome = save_all(&store, &objects).unwrap();
+        assert_eq!(
+            outcome.inserted, 0,
+            "budget {writers} reuses after publication"
+        );
+        assert!(outcome.reused > 0);
+        // Lowering to one is an admission change: retained rows stay readable.
+        assert_eq!(configure(&store, 1), 1);
+        let only = disabled(|s| store.begin_save(s.child("only"))).unwrap();
+        assert!(matches!(
+            disabled(|s| store.begin_save(s.child("second"))),
+            Err(StorageError::OwnershipUnavailable)
+        ));
+        drop(only);
+        assert_eq!(read_logical(&store, root), bytes);
+    }
+}
+
 #[test]
 fn a_schema_seven_store_is_refused_without_promotion() {
     let temp = TempDir::new("admission-schema7");

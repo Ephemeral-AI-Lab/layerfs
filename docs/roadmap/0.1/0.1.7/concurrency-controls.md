@@ -89,6 +89,21 @@ ownership of the transport and the Store scales with the budget (the W=2 instanc
 No resource qualification exists for a raised budget, and the default stays 2 for
 exactly that reason.
 
+Measured on one host at 16 concurrent 4 MiB writes, resident size after the work
+phase grew from 125 MiB at a budget of 1 to 253 MiB at a budget of 8, about
++18 MiB per additional writer.
+
+**The budget is not a throughput knob.** At the same total work through the real
+service route, a budget of 2 bought 1.13x (16 writes) and 1.25x (64 writes) over
+a budget of 1; a budget of 4 bought 1.11x/1.19x and a budget of 8 bought
+0.96x/1.00x, against a 1.4% spread for a repeated budget-1 arm. The measured
+reason is the work mix: about 18% of one logical write is the construction half
+that can overlap, and about 82% is the C2 save half, which serializes on the
+Store's short write transactions. See the
+[writer-budget diagnostic](evidence/issue216-writer-budget-20260921T004651Z/README.md),
+which reports the plateau, the variability control, the interference on a host
+that was not idle, and the gaps.
+
 **Schema compatibility.** Schema 8 replaces the fixed two-slot model. A schema-7
 Store is **rejected, not migrated**, exactly as versions 2–7 were, and no row is
 rewritten: `saves.active_slot` now spans `1..=64` while the budget decides
@@ -143,6 +158,7 @@ illustrative and is not an approved default.
 | `core/crates/layerfs-bridge/src/contract/request.rs` | `MAX_OPERATIONS`/`MAX_SESSIONS` replaced by `MAX_READ_OPERATIONS` and `session_capacity`/`connection_capacity` |
 | `core/crates/layerfs-service/src/owner.rs` | per-Store write admission; reads take no writer permit |
 | `core/crates/layerfs-service/src/native/startup.rs` | session capacity derives from the Store's budget |
+| `core/crates/layerfs-service/examples/measure_admission.rs` | the diagnostic vehicle: one logical write set at a configured budget through `Service::handle`, separated phases, byte-identical read-back |
 
 ## 6. Verification
 
@@ -160,20 +176,35 @@ New cases: `core/crates/layerfs-storage/tests/write_admission.rs` (default budge
 budget 8 admission and refusal, eight concurrent duplicate owners publishing and
 reading back, retained owners under a lowered budget, a retained owner in a slot
 above the budget, content written high and read low, unsupported values, schema-7
-refusal, schema constraint on the persisted value) and
+refusal, schema constraint on the persisted value, and the whole ladder over
+settings 1, 2, 3, 5, 8, 16 and 64 - admission, slot layout, simultaneous duplicate
+ownership, publication, read-back, reuse and a later lowering at each setting) and
 `core/crates/layerfs-service/tests/admission.rs` (four writers admitted through
 the real service route then refused, reads admitted while all four writers are
 busy, two sandboxes sharing one Store budget, a second Store with its own budget,
-a saturated read bound that neither blocks writers nor exceeds itself).
+a saturated read bound that neither blocks writers nor exceeds itself, and the
+same ladder over settings 1, 2, 3 and 8).
 
-**Gaps, stated plainly.** An unknown `COMMIT` outcome cannot be induced in this
+Settings were also measured, not only tested: the
+[writer-budget diagnostic](evidence/issue216-writer-budget-20260921T004651Z/README.md)
+runs the real service route at budgets 1, 2, 4 and 8 with
+`core/crates/layerfs-service/examples/measure_admission.rs`, reports one sample
+per arm with a variability control, and states that the setting above 2 buys no
+throughput on that host while admission, refusal and byte-identical read-back
+stay correct at every setting.
+
+**Gaps, stated plainly.** The measured settings cover budgets 1-8 in time and
+1-64 functionally; the host was not idle and no per-arm CPU accounting was taken,
+so the throughput plateau's cause is measured for the work mix and only declared
+for host contention. An unknown `COMMIT` outcome cannot be induced in this
 slice (no fault injection in product source), so the retained-ownership cases
 above seed the persisted state a lost acknowledgement or a failed cleanup leaves
 rather than inducing one; that induction gap is pre-existing and unchanged. The
 Docker daemon/host routes
 (`core/crates/layerfs-daemon/tests/*.py`, `core/crates/layerfs-service/tests/*.py`)
-were **not run** here; they need a Linux Docker host. No performance measurement
-was taken at any budget: raising the budget is not a throughput claim, and the
+were **not run** here; they need a Linux Docker host. The one measurement taken
+is the diagnostic above: it is not a gate, it is not release admission, and a
+larger budget is not a throughput claim - on that host it bought none. The
 H04/H06/H08/H14 gaps in [#210](https://github.com/Ephemeral-AI-Lab/layerfs/issues/210)
 remain open. Historical W2 arms and receipts stay tied to W2 and were not
 retuned or re-labelled.

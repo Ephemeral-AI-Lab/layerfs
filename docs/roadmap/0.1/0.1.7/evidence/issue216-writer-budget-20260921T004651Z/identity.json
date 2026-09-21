@@ -1,0 +1,15 @@
+{
+ "commit": "69aa3cee686bae895961830267407a8513f15ae1",
+ "tree": "9fd5688198cf58f9e7dc83a2af774ee0f9e06523",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "measure_admission_sha256": "472517d429638545670deb15accb229843cf52af412d3067500295e5e20e058b",
+ "measure_ingest_sha256": "6b90ea423f49ddc009f3de22ee2df849478b00caac4da11ff52428069fb732c4",
+ "host": "Darwin 25.4.0 arm64",
+ "macos": "26.4.1",
+ "logical_cores": 14,
+ "memory_bytes": 38654705664,
+ "profile": "release",
+ "construction_workers_env": "LAYERFS_CONSTRUCTION_WORKERS=1 (each operation has one construction producer; the arms add concurrent operations, never a second producer)",
+ "cache_state": "declared identical per arm: payloads built in-process before the timed phase, fresh Store per arm inside the arm's output, no invalidation applied to one arm only, no cold-cache claim",
+ "interference": "the host was not idle: load average 6.79-7.05 (1 min) during the long case and 3.93-5.69 during the short case, on 14 logical cores, with desktop processes (WindowServer 53%, Chrome 48%, Codex 30%, WeChat 26%) using CPU throughout; every arm ran under the same declared interference and none was given a quieter window or repeated for a better number"
+}

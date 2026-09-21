@@ -224,6 +224,36 @@ fn four_writers_are_admitted_then_refused_and_reads_never_queue_behind_them() {
     assert!(matches!(saved, Response::Saved { .. }));
 }
 
+/// The whole supported ladder, one fresh Store per setting, on the real route.
+#[test]
+fn every_supported_budget_admits_its_writers_and_refuses_the_next() {
+    for writers in [1usize, 2, 3, 8] {
+        let temp = directory("ladder");
+        let service = service(vec![(1, store_at(&temp.0, writers as u8))]);
+        let (first_read, blocked) = block_writers(&service, 1, writers);
+        await_admitted(&first_read, writers);
+        match write_once(&service, 1, 50) {
+            Err(failure) => assert_eq!(failure.code, Code::Capacity, "budget {writers}: {failure}"),
+            Ok(response) => panic!("budget {writers} admitted a writer over budget: {response:?}"),
+        }
+        match read_once(&service, 1, 51) {
+            Err(failure) => assert_eq!(
+                failure.code,
+                Code::MissingObject,
+                "budget {writers}: {failure}"
+            ),
+            Ok(response) => {
+                panic!("budget {writers}: an unknown root cannot be read: {response:?}")
+            }
+        }
+        release(blocked);
+        let saved = write_once(&service, 1, 52).unwrap_or_else(|error| {
+            panic!("budget {writers} did not release its permits: {error}")
+        });
+        assert!(matches!(saved, Response::Saved { .. }));
+    }
+}
+
 #[test]
 fn two_sandboxes_over_one_store_share_its_budget() {
     let temp = directory("shared");
