@@ -31,6 +31,7 @@ pub enum Base {
 }
 #[derive(Clone, Debug)]
 pub struct AttachOptions {
+    pub access: WorkspaceAccess,
     pub id: String,
     pub incarnation: Root,
     pub store: u32,
@@ -149,6 +150,9 @@ impl std::error::Error for WorkspaceError {}
 
 #[derive(Clone, Copy, Debug)]
 pub struct WorkspaceStatus {
+    pub generation: u64,
+    pub revision: u64,
+    pub dirty_inodes: usize,
     pub mounted: bool,
     pub stopping: bool,
     pub closed: bool,
@@ -185,4 +189,74 @@ impl DirectoryPage {
     pub fn entries(&self) -> &[DirectoryEntry] {
         &self.entries
     }
+}
+
+/// Explicit local edit capability. Linux projection writes follow a later round.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceAccess {
+    ReadOnly,
+    LocalEdit,
+}
+#[derive(Clone, Debug)]
+pub struct WorkspacePath(Vec<u8>);
+impl WorkspacePath {
+    pub fn new(bytes: &[u8]) -> Result<Self, WorkspaceError> {
+        if bytes.is_empty() || bytes.len() > 4096 || bytes.split(|b| *b == b'/').count() > 256 {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        for part in bytes.split(|b| *b == b'/') {
+            if part.is_empty()
+                || part.len() > 255
+                || part == b"."
+                || part == b".."
+                || part.iter().any(|b| matches!(b, 0 | b'\\'))
+                || std::str::from_utf8(part).is_err()
+            {
+                return Err(WorkspaceError::InvalidInput);
+            }
+        }
+        let mut owned = Vec::new();
+        owned
+            .try_reserve_exact(bytes.len())
+            .map_err(|_| WorkspaceError::Capacity)?;
+        owned.extend_from_slice(bytes);
+        Ok(Self(owned))
+    }
+}
+impl AsRef<[u8]> for WorkspacePath {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+pub struct RangeEdit {
+    pub start: u64,
+    pub end: u64,
+    pub replacement: crate::OwnedPayload,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct MutationReceipt {
+    pub incarnation: [u8; 32],
+    pub generation: u64,
+    pub inode: u64,
+    pub revision: u64,
+    pub accepted_bytes: u64,
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetadataCleanupReport {
+    pub roots_released: usize,
+    pub pages_reclaimed: usize,
+    pub payload_custodies_released: usize,
+    pub remaining_roots: usize,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct MetadataStatus {
+    pub allocated_pages: usize,
+    pub reusable_pages: usize,
+    pub roots: usize,
+    pub external_roots: usize,
+    pub allocated_bytes: u64,
+    pub reserved_bytes: u64,
+    pub working_bytes: usize,
+    pub accounting_complete: bool,
+    pub admission_stopped: bool,
 }

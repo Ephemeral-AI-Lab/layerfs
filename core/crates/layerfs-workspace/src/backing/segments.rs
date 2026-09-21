@@ -210,11 +210,25 @@ mod linux {
     }
 
     pub(crate) fn open(directory: &File, filename: &str) -> io::Result<File> {
+        open_mode(directory, filename, false)
+    }
+
+    pub(crate) fn open_update(directory: &File, filename: &str) -> io::Result<File> {
+        open_mode(directory, filename, true)
+    }
+
+    fn open_mode(directory: &File, filename: &str, update: bool) -> io::Result<File> {
         name(filename)?;
         let file = openat(
             directory,
             filename,
-            OFlag::O_RDONLY | OFlag::O_DIRECT | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+            (if update {
+                OFlag::O_RDWR
+            } else {
+                OFlag::O_RDONLY
+            }) | OFlag::O_DIRECT
+                | OFlag::O_NOFOLLOW
+                | OFlag::O_CLOEXEC,
             Mode::empty(),
         )
         .map(File::from)
@@ -298,7 +312,9 @@ mod linux {
 }
 
 #[cfg(target_os = "linux")]
-pub(crate) use linux::{allocate, allocated, create, open, open_directory, read, unlink, write};
+pub(crate) use linux::{
+    allocate, allocated, create, open, open_directory, open_update, read, unlink, write,
+};
 
 #[cfg(not(target_os = "linux"))]
 pub(crate) fn open_directory(_: &Path) -> io::Result<File> {
@@ -330,5 +346,10 @@ pub(crate) fn write(_: &File, _: &Window, _: u64, _: usize) -> io::Result<()> {
 }
 #[cfg(not(target_os = "linux"))]
 pub(crate) fn unlink(_: &File, _: &str) -> io::Result<()> {
+    Err(unsupported())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn open_update(_: &File, _: &str) -> io::Result<File> {
     Err(unsupported())
 }

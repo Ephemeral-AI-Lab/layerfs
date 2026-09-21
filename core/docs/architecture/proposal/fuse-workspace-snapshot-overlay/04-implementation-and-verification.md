@@ -1207,3 +1207,10 @@ product seal. This closes the metadata-save prerequisite, not mounted writes.
 checked Linux failure ownership. R3b must provide the
 maintained disk metadata/piece index before any local file mutation is published.
 Remaining control lifecycle/edit/Commit, R3b–R5b and R6 rows stay open.
+
+The [R3b operation record](15-local-range-edit.md) records the implemented local
+RangeEdit, maintained disk index, 104-inode public route and failure/resource
+proofs. Its wider NOT_RUN rows remain explicit. The next real operation is
+Workspace::stage: private R3c capture and the minimum R3d lowering must overlap
+as prerequisites of that one public operation, with their acceptance rows kept
+separate. A raw public freeze hook or unused capture scaffold is not selected.

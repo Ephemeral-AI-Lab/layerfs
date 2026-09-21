@@ -7,7 +7,12 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+sha2 = "=0.10.9"
 layerfs-bridge = { path = "../layerfs-bridge", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user"] }
+
+[dev-dependencies]
+layerfs-bridge = { path = "../layerfs-bridge", features = ["native"] }
+layerfs-fuse = { path = "../layerfs-fuse" }

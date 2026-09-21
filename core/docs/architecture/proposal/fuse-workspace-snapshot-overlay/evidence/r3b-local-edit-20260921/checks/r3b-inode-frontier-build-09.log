@@ -1,0 +1,9 @@
+   Compiling nix v0.31.3
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking fuser v0.18.0
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.77s
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.63s
+  Executable tests/local_edit.rs (core/target-linux/debug/deps/local_edit-08e9964648118ea0)

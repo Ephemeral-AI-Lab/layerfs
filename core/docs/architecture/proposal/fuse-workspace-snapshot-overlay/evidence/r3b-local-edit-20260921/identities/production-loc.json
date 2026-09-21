@@ -1,0 +1,17 @@
+{
+  "parent": "4629b8d62de1e0df8a7bd9808b59a86d7c6669f3",
+  "staged_tree": "0e2f45915b218b690c4fd1be0855b7780fad735e",
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive exact first-parent/staged snapshots; tools/production_loc.py --root <archive> --json; Rust/runtime SQL, excluding comments/blanks/legacy inline tests/external tests/docs/tools/manifests/generated output",
+  "before": {
+    "combined": 101202,
+    "reference": 65417,
+    "core": 35785
+  },
+  "after": {
+    "combined": 104202,
+    "reference": 65417,
+    "core": 38785
+  },
+  "product_inputs_sha256": "fdb03e06c68fa9058339e3c73bc9ef80b67233338311d0fab4427968b51b7b87"
+}

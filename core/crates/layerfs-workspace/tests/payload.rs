@@ -90,6 +90,7 @@ mod linux {
         let metadata = fs::metadata(path).unwrap();
         AttachOptions {
             id: id.into(),
+            access: WorkspaceAccess::ReadOnly,
             incarnation: [incarnation; 32],
             store: 1,
             base: Base::Root([1; 32]),

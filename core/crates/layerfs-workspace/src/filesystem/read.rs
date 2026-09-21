@@ -17,12 +17,12 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let deadline = Self::callback_deadline(deadline);
-        let (attr, content) = {
+        let (attr, content, root) = {
             let state = self.state()?;
             self.available(&state)?;
             let handle = state.handle(handle, false)?;
             let node = state.node(handle.serial)?;
-            (node.attr, node.content)
+            (node.attr, node.content, state.overlay.clone())
         };
         let length = if offset >= attr.size {
             0
@@ -37,24 +37,34 @@ impl Workspace {
             .map_err(|_| WorkspaceError::Capacity)?;
         bytes.resize(length, 0);
         if length > 0 {
-            let mut output = Cursor::new(bytes.as_mut_slice());
-            let response = self.call(
-                Operation::ReadFile {
-                    root: content,
-                    start: offset,
-                    end: offset + length as u64,
-                },
-                length as u64,
-                &mut output,
-                deadline,
-            )?;
-            if response
-                != (Response::Read {
-                    length: length as u64,
-                })
-                || output.position() != length as u64
-            {
-                return Err(WorkspaceError::InvalidInput);
+            if let Some(inode) = self.overlay_inode(attr.serial, root.as_ref(), deadline)? {
+                self.read_overlay(
+                    root.as_ref().ok_or(WorkspaceError::Io)?,
+                    inode,
+                    offset,
+                    &mut bytes,
+                    deadline,
+                )?;
+            } else {
+                let mut output = Cursor::new(bytes.as_mut_slice());
+                let response = self.call(
+                    Operation::ReadFile {
+                        root: content,
+                        start: offset,
+                        end: offset + length as u64,
+                    },
+                    length as u64,
+                    &mut output,
+                    deadline,
+                )?;
+                if response
+                    != (Response::Read {
+                        length: length as u64,
+                    })
+                    || output.position() != length as u64
+                {
+                    return Err(WorkspaceError::InvalidInput);
+                }
             }
         }
         Ok(ReadReply {
@@ -102,5 +112,84 @@ impl Workspace {
     }
     pub fn release(&self, handle: HandleId) -> Result<(), WorkspaceError> {
         self.release_handle(handle, false)
+    }
+}
+
+impl Workspace {
+    fn read_overlay(
+        &self,
+        root: &std::sync::Arc<crate::backing::metadata::RootOwner>,
+        inode: crate::overlay::pieces::Inode,
+        offset: u64,
+        bytes: &mut [u8],
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
+        use layerfs_bridge::contract::Source;
+        let host = self
+            .host
+            .payloads
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let mut completed = 0;
+        while completed < bytes.len() {
+            let position = offset + completed as u64;
+            let piece = {
+                let _view = self
+                    .host
+                    .metadata
+                    .as_ref()
+                    .ok_or(WorkspaceError::Unsupported)?
+                    .writer()?;
+                let mut lease = host.window(1, 3)?;
+                root.arena.piece_at(
+                    inode.pieces,
+                    position,
+                    lease.window.as_mut().ok_or(WorkspaceError::Io)?,
+                    deadline,
+                )?
+            };
+            let skip = position - piece.start;
+            let count = (piece.length - skip).min((bytes.len() - completed) as u64) as usize;
+            if piece.payload == 0 {
+                let mut output = Cursor::new(&mut bytes[completed..completed + count]);
+                let response = self.call(
+                    Operation::ReadFile {
+                        root: inode.base,
+                        start: piece.offset + skip,
+                        end: piece.offset + skip + count as u64,
+                    },
+                    count as u64,
+                    &mut output,
+                    deadline,
+                )?;
+                if response
+                    != (Response::Read {
+                        length: count as u64,
+                    })
+                    || output.position() != count as u64
+                {
+                    return Err(WorkspaceError::InvalidInput);
+                }
+            } else {
+                let payload = root.arena.payload(piece.payload, piece.custody)?;
+                let mut reader =
+                    payload.reader(piece.offset + skip..piece.offset + skip + count as u64)?;
+                let mut received = 0;
+                while received < count {
+                    let n = Source::read(
+                        &mut reader,
+                        &mut bytes[completed + received..completed + count],
+                        deadline,
+                        &self.inner.stopping,
+                    )?;
+                    if n == 0 {
+                        return Err(WorkspaceError::Io);
+                    }
+                    received += n;
+                }
+            }
+            completed += count;
+        }
+        Ok(())
     }
 }

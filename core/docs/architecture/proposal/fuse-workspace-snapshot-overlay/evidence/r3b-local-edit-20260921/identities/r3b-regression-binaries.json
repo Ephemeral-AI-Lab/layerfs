@@ -1,0 +1,4 @@
+{
+  "payload-test": "core/target/pair1-evidence/binary-archive/7e9d7a234ddf4d3e1f5d1fdc28cc442668f0401f6cb3da49d737b96c40436260/payload-test",
+  "layerfs-daemon": "core/target/pair1-evidence/binary-archive/aa03b0105f442ee6500bffc2689a447b16d9e85cb83dc629e31200b271fc400a/layerfs-daemon"
+}

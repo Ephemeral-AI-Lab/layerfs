@@ -1,0 +1,7 @@
+{
+  "base_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "base_digest": "rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "dockerfile_sha256": "c331f3815ef3cfb5c760fffe24043de08408fc85031ee31aef49804406f5835c",
+  "tag": "layerfs-pair1-rust-tools:c331f3815ef3cfb5c760",
+  "image": "sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408"
+}

@@ -13,6 +13,9 @@ pub struct MountLease {
 }
 impl Workspace {
     pub fn reserve_mount(&self) -> Result<MountLease, WorkspaceError> {
+        if self.inner.access == crate::WorkspaceAccess::LocalEdit {
+            return Err(WorkspaceError::Unsupported);
+        }
         let mut state = self.state()?;
         self.available(&state)?;
         if state.mounted || state.active > 0 {
@@ -27,6 +30,9 @@ impl Workspace {
     pub fn status(&self) -> Result<WorkspaceStatus, WorkspaceError> {
         let state = self.state()?;
         Ok(WorkspaceStatus {
+            generation: state.generation,
+            revision: state.revision,
+            dirty_inodes: state.dirty_inodes,
             mounted: state.mounted,
             stopping: self.inner.stopping.load(Ordering::Acquire),
             closed: state.closed,
@@ -52,7 +58,8 @@ impl Workspace {
             if state.closed {
                 return Err(WorkspaceError::Closed);
             }
-            if state.mounted
+            if state.dirty_inodes > 0
+                || state.mounted
                 || state.active > 0
                 || !state.handles.is_empty()
                 || state
@@ -68,6 +75,9 @@ impl Workspace {
                 }
             }
             self.inner.stopping.store(true, Ordering::Release);
+        }
+        if let (Some(host), Some(arena)) = (&self.host.metadata, &self.inner.arena) {
+            host.close(arena, deadline)?;
         }
         if let Some(host) = &self.host.payloads {
             host.reclaim(self.inner.incarnation, deadline)?;

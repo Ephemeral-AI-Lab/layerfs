@@ -27,6 +27,9 @@ pub(crate) struct Inner {
     pub incarnation: Root,
     pub store: u32,
     pub base: Root,
+    pub access: WorkspaceAccess,
+    pub _branch: Option<layerfs_bridge::contract::BranchSnapshotWire>,
+    pub arena: Option<Arc<crate::backing::metadata::Arena>>,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
     pub directory: Option<Arc<crate::backing::directory::Directory>>,
@@ -36,6 +39,10 @@ pub(crate) struct Inner {
 }
 pub(crate) struct State {
     pub nodes: Vec<Node>,
+    pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
+    pub generation: u64,
+    pub revision: u64,
+    pub dirty_inodes: usize,
     pub handles: Vec<Handle>,
     pub cookies: Vec<Cookie>,
     pub next_handle: u64,
@@ -47,6 +54,8 @@ pub(crate) struct State {
 }
 pub(crate) struct Node {
     pub attr: NodeAttributes,
+    pub original: NodeAttributes,
+    pub metadata: Root,
     pub content: Root,
     pub path: [u8; PATH_BYTES],
     pub path_len: usize,
@@ -76,11 +85,19 @@ pub(crate) struct OperationGuard {
 }
 
 impl Node {
-    pub fn new(attr: NodeAttributes, content: Root, path: &[u8], parent: u64) -> Self {
+    pub fn new(
+        attr: NodeAttributes,
+        content: Root,
+        metadata: Root,
+        path: &[u8],
+        parent: u64,
+    ) -> Self {
         let mut stored = [0; PATH_BYTES];
         stored[..path.len()].copy_from_slice(path);
         Self {
             attr,
+            original: attr,
+            metadata,
             content,
             path: stored,
             path_len: path.len(),

@@ -10,13 +10,14 @@ pub(crate) fn attributes(
     root: bool,
     uid: u32,
     gid: u32,
-) -> Result<(NodeAttributes, Root), WorkspaceError> {
+) -> Result<(NodeAttributes, Root, Root), WorkspaceError> {
     response.validate_attributes(Some(root))?;
     let Response::Attributes {
         serial,
         kind,
         references,
         content,
+        metadata,
         mode,
         mtime,
         nanoseconds,
@@ -45,6 +46,7 @@ pub(crate) fn attributes(
             gid,
         },
         content,
+        metadata,
     ))
 }
 pub(crate) fn child_path(parent: &[u8], name: &[u8]) -> Result<Vec<u8>, WorkspaceError> {
@@ -82,9 +84,7 @@ pub(crate) fn check_access(attr: NodeAttributes, uid: u32, mask: u8) -> Result<(
     if uid != attr.uid {
         return Err(WorkspaceError::Denied);
     }
-    if mask & 2 != 0 {
-        return Err(WorkspaceError::ReadOnly);
-    }
+
     if uid == 0 {
         if attr.kind == NodeKind::File && mask & 1 != 0 && attr.mode & 0o111 == 0 {
             return Err(WorkspaceError::Denied);
@@ -125,15 +125,23 @@ impl Workspace {
             &mut std::io::sink(),
             deadline,
         )?;
-        let (attr, content) =
+        let (original, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
+        let (revision, root) = {
+            let state = self.state()?;
+            (state.revision, state.overlay.clone())
+        };
+        let attr = self.overlay_attributes(original, root.as_ref(), deadline)?;
         let mut state = self.state()?;
+        if state.revision != revision {
+            return Err(WorkspaceError::Busy);
+        }
         if let Some(node) = state
             .nodes
             .iter_mut()
             .find(|node| node.attr.serial == attr.serial)
         {
-            if node.attr != attr || node.content != content {
+            if node.original != original || node.content != content || node.metadata != metadata {
                 return Err(WorkspaceError::InvalidInput);
             }
             let references = node.references(scope);
@@ -142,7 +150,8 @@ impl Workspace {
             if state.nodes.len() == NODE_LIMIT {
                 return Err(WorkspaceError::Capacity);
             }
-            let mut node = Node::new(attr, content, &path, parent);
+            let mut node = Node::new(original, content, metadata, &path, parent);
+            node.attr = attr;
             *node.references(scope) = 1;
             state.nodes.push(node);
         }
@@ -164,6 +173,16 @@ impl Workspace {
     }
     /// Owner-only presentation plus portable mode checks; Store grants remain independent.
     pub fn access(&self, serial: u64, uid: u32, _gid: u32, mask: u8) -> Result<(), WorkspaceError> {
-        check_access(self.getattr(serial)?, uid, mask)
+        let attr = self.getattr(serial)?;
+        if mask & !7 != 0 {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        if uid != attr.uid {
+            return Err(WorkspaceError::Denied);
+        }
+        if mask & 2 != 0 && self.inner.access == WorkspaceAccess::ReadOnly {
+            return Err(WorkspaceError::ReadOnly);
+        }
+        check_access(attr, uid, mask)
     }
 }

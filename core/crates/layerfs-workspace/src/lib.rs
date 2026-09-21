@@ -1,8 +1,10 @@
-//! Bounded immutable Workspace reads with Unix ownership checks.
+//! Bounded Workspace reads and unmounted Branch-backed local range edits.
+//! Unix ownership checks and explicit private payload/metadata resource ownership.
 //! Transport and the Linux FUSE projection are assembled by their own libraries.
 #![forbid(unsafe_code)]
 mod backing;
 mod filesystem;
+mod overlay;
 mod runtime;
 mod types;
 pub use backing::payload::OwnedPayload;

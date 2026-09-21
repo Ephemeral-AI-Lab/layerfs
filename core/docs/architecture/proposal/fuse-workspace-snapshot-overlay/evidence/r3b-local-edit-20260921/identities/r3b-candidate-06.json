@@ -1,0 +1,6 @@
+{
+  "test_binary": "core/target/pair1-evidence/binary-archive/dfd2606b65d6af0a2809608622bff1e6eae62442032389c2a2526ff947f432ac/local-edit-test",
+  "test_binary_sha256": "dfd2606b65d6af0a2809608622bff1e6eae62442032389c2a2526ff947f432ac",
+  "product_inputs_sha256": "083b66fa094c0e5e5cb9480fbef2971e669ad452e7cb5d77d8a5945da9af19ab",
+  "test_source_sha256": "e51b89aca1ade82df8acf08caddddfceb0b943b8ffbb815aac70c4b8365ca2c6"
+}

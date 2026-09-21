@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::local_range_edit_aggregate ... LOCAL_EDIT_CHECK shared-consumer-quota-and-memory-account PASS
+LOCAL_EDIT_RESOURCE aggregate-end workspace=WorkspaceStatus { generation: 1, revision: 1, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 3407026 } backing=BackingStatus { quota_bytes: 12582912, allocated_bytes: 6348800, reserved_bytes: 1122304, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } metadata=MetadataStatus { allocated_pages: 4, reusable_pages: 0, roots: 2, external_roots: 2, allocated_bytes: 24576, reserved_bytes: 1122304, working_bytes: 4552, accounting_complete: true, admission_stopped: false } native_file_allocated=6348800 process_fds_at_boundary=7 fd_scope=includes_proc_enumeration_not_peak
+LOCAL_EDIT_CHECK independent-local-roots-share-budget PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.06s
+

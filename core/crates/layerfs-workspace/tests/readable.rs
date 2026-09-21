@@ -156,6 +156,7 @@ impl Fixture {
         let owner_uid = 1000;
         AttachOptions {
             id: id.into(),
+            access: WorkspaceAccess::ReadOnly,
             incarnation: [value; 32],
             store: 1,
             base: Base::Root([1; 32]),

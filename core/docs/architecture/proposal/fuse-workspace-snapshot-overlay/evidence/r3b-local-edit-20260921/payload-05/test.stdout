@@ -1,0 +1,24 @@
+
+running 1 test
+test linux::linux_owned_payload_contract ... PAYLOAD_CHECK unaligned-segment-ranges PASS
+PAYLOAD_CHECK reader-pins-and-admission PASS
+PAYLOAD_CHECK empty-deadline-and-quota PASS
+PAYLOAD_CHECK failed-input-retention PASS
+PAYLOAD_SHORT_WRITE BackingFailure { phase: Write, payload: 6, declared_bytes: 1048576, completed_bytes: 0, created_segments: 1, allocated_bytes: 1052672, reserved_bytes: 0, cleanup_failed: false, accounting_complete: true, kind: WriteZero } observed_written_prefix=65536
+PAYLOAD_CHECK native-short-write-retention PASS
+PAYLOAD_CHECK corruption-and-explicit-cleanup PASS
+PAYLOAD_CHECK local-progress-and-window-headroom PASS
+PAYLOAD_RESIDENCY {"files": 64, "pages": 16448, "resident_pages": 0, "allocated_bytes": 67371008, "page_size": 4096, "phase": "after-acquire", "scope": "private payload inodes; not cgroup/RSS/global filesystem metadata"}
+PAYLOAD_RESIDENCY {"files": 64, "pages": 16448, "resident_pages": 0, "allocated_bytes": 67371008, "page_size": 4096, "phase": "after-read", "scope": "private payload inodes; not cgroup/RSS/global filesystem metadata"}
+PAYLOAD_RESOURCE input_bytes=67108864 accounted_peak=1984165 open_fds_peak=7 baseline_fds=6
+PAYLOAD_CHECK large-stream-and-residency PASS
+PAYLOAD_CHECK clean-close PASS
+PAYLOAD_CHECK exact-block-quota-reuse PASS
+PAYLOAD_CHECK unowned-collider-retention PASS
+PAYLOAD_CHECK stale-path-and-filesystem-refusal PASS
+PAYLOAD_ENOSPC BackingFailure { phase: Allocate, payload: 1, declared_bytes: 67108864, completed_bytes: 40894464, created_segments: 40, allocated_bytes: 41906176, reserved_bytes: 0, cleanup_failed: false, accounting_complete: true, kind: StorageFull }
+PAYLOAD_CHECK native-enospc-retention PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+

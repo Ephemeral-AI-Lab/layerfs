@@ -317,10 +317,12 @@ Service keeps native Store paths, `rusqlite::Error`, connection/session lifetime
 SQLite transaction/ownership, codecs, packs and mutable caches local. A managed
 provider would replace C2's connection and grouped read/write execution and qualify
 lifetime/transaction/resource semantics. It would preserve logical requests,
-canonical identities, input finality and outcome distinctions. No provider registry,
-cloud adapter, filesystem mount, Workspace, history or allocator is implemented.
-API compatibility, canonical compatibility and schema-7 persisted compatibility
-are separate checks. Independent algorithm substitution remains #172.
+canonical identities, input finality and outcome distinctions. No managed-provider registry or cloud adapter is implemented. Pair 1 now has
+separate Workspace/FUSE owners and the existing C5 history owner; their operation
+and verification scopes are recorded in the linked round records. API and
+canonical compatibility remain separate from persisted-schema compatibility.
+The schema-7 checkpoint above retains its historical scope; the integrated tree
+uses the [configured-concurrency/schema-8 contract](../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md). Independent algorithm substitution remains #172.
 
 The acceptance record must distinguish deterministic tests, real macOS/Linux
 processes, OS faults, optional local/both output and unrun platform/resource cases.
@@ -342,3 +344,13 @@ or daemon input control. Read-only daemon startup keeps disk backing disabled;
 its shutdown and failed-control cleanup now pass the existing absolute deadline
 through `close_clean_until`. FUSE preserves typed local backing error causes in
 its errno mapping, without adding a writable callback.
+
+R3b, implemented from `4629b8d62de1e0df8a7bd9808b59a86d7c6669f3`, adds one
+explicit unmounted `LocalEdit` capability to Branch-backed Workspaces. The
+[local range-edit record](proposal/fuse-workspace-snapshot-overlay/15-local-range-edit.md)
+describes the maintained private page index, ownership ledger, generation
+completion reserve and exact public operation. It retains the same logical
+delivery boundary and makes no service mutation during a local edit. Daemon
+read-only launch selects `ReadOnly` explicitly; the existing authenticated Status
+wire remains its readable scope. LocalEdit projection reservation is refused
+until the writable kernel coherence binding exists.

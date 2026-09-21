@@ -55,7 +55,9 @@ open; Status does not qualify those routes.
 
 **R2 update:** [portable metadata save](13-portable-metadata.md) is implemented and verified through the real authenticated daemon/service route. It preserves content and generic attributes; mounted mutation, snapshots and Commit still depend on R3/R4. The full-core check also prompted the focused [early-refusal correction](12-early-refusal.md).
 
-**R3a update:** [immutable owned payload input](14-owned-payload.md) now uses bounded private direct I/O and explicit retention/reclamation. Its real Linux functional proof includes short writes and ENOSPC. The next operation is R3b local RangeEdit with a maintained disk index; visible edits and Commit are not implemented by the input primitive.
+**R3a update:** committed in `4629b8d62de1e0df8a7bd9808b59a86d7c6669f3`, [immutable owned payload input](14-owned-payload.md) now uses bounded private direct I/O and explicit retention/reclamation. Its real Linux functional proof includes short writes and ENOSPC. The next operation is R3b local RangeEdit with a maintained disk index; visible edits and Commit are not implemented by the input primitive.
+
+**R3b update:** [local RangeEdit and the maintained metadata index](15-local-range-edit.md) are implemented and verified through the real native service/Linux backing route, including all 104 available regular inodes and actual failure ownership. Writable mounting, capture and Commit remain open; the next public operation is stage with its required private capture/lowering.
 
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk

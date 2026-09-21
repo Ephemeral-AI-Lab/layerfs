@@ -47,6 +47,10 @@ impl PayloadHost {
                     .find(|record| {
                         record.directory.incarnation == incarnation
                             && Arc::strong_count(record) == 1
+                            && record
+                                .state
+                                .lock()
+                                .is_ok_and(|state| state.custody.is_none())
                     })
                     .cloned()
             };

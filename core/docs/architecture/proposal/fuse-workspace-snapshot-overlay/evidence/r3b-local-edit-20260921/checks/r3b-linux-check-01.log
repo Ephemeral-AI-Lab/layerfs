@@ -1,0 +1,28 @@
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking crypto-common v0.1.7
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+   --> crates/layerfs-workspace/src/filesystem/read.rs:175:42
+    |
+175 |                 let mut reader = payload.reader(
+    |                                          ^^^^^^
+176 |                     piece.offset + skip..piece.offset + skip + count as u64,
+177 |                     deadline,
+    |                     -------- unexpected argument #2 of type `Instant`
+    |
+note: method defined here
+   --> crates/layerfs-workspace/src/backing/payload.rs:595:12
+    |
+595 |     pub fn reader(&self, range: Range<u64>) -> Result<PayloadReader, WorkspaceError> {
+    |            ^^^^^^        -----------------
+help: remove the extra argument
+    |
+176 -                     piece.offset + skip..piece.offset + skip + count as u64,
+177 -                     deadline,
+176 +                     piece.offset + skip..piece.offset + skip + count as u64,
+    |
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error

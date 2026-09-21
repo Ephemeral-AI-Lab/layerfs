@@ -37,6 +37,10 @@ pub(crate) struct State {
     pub reserved: u64,
     pub stopped: bool,
     pub complete: bool,
+    pub metadata_allocated: u64,
+    pub metadata_reserved: u64,
+    pub metadata_stopped: bool,
+    pub metadata_complete: bool,
 }
 pub(crate) struct Record {
     pub id: u64,
@@ -56,6 +60,7 @@ pub(crate) struct RecordState {
     pub failure: Option<BackingFailure>,
     pub complete: bool,
     pub admission_blocked: bool,
+    pub custody: Option<(u64, super::metadata_pages::PageRef)>,
 }
 #[derive(Clone, Copy)]
 pub(crate) struct Partial {
@@ -153,6 +158,10 @@ impl PayloadHost {
                 reserved: 0,
                 stopped: false,
                 complete: true,
+                metadata_allocated: 0,
+                metadata_reserved: 0,
+                metadata_stopped: false,
+                metadata_complete: true,
             }),
             windows: Mutex::new(windows),
             _windows_charge: windows_charge,
@@ -188,16 +197,11 @@ impl PayloadHost {
     pub fn status(&self) -> Result<BackingStatus, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let mut failed = 0;
+        let mut retained = 0;
         for record in &state.records {
-            if record
-                .state
-                .lock()
-                .map_err(|_| WorkspaceError::Io)?
-                .failure
-                .is_some()
-            {
-                failed += 1;
-            }
+            let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
+            failed += usize::from(owner.failure.is_some());
+            retained += usize::from(Arc::strong_count(record) > 1 || owner.custody.is_some());
         }
         let slots = self.windows.lock().map_err(|_| WorkspaceError::Io)?;
         Ok(BackingStatus {
@@ -205,11 +209,7 @@ impl PayloadHost {
             allocated_bytes: state.allocated,
             reserved_bytes: state.reserved,
             payloads: state.records.len(),
-            retained_payloads: state
-                .records
-                .iter()
-                .filter(|record| Arc::strong_count(record) > 1)
-                .count(),
+            retained_payloads: retained,
             failed_payloads: failed,
             readers: slots[1..3].iter().filter(|slot| slot.is_none()).count(),
             acquiring: slots[0].is_none(),
@@ -237,11 +237,12 @@ impl PayloadHost {
         }
     }
     pub fn refresh(&self, state: &mut State) -> Result<(), WorkspaceError> {
-        let mut complete = true;
-        let mut stopped = state
-            .allocated
-            .checked_add(state.reserved)
-            .is_none_or(|used| used > self.quota);
+        let mut complete = state.metadata_complete;
+        let mut stopped = state.metadata_stopped
+            || state
+                .allocated
+                .checked_add(state.reserved)
+                .is_none_or(|used| used > self.quota);
         for record in &state.records {
             let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
             complete &= owner.complete;
@@ -342,6 +343,7 @@ impl PayloadHost {
                 failure: None,
                 complete: true,
                 admission_blocked: false,
+                custody: None,
             }),
             _charge: charge,
         });

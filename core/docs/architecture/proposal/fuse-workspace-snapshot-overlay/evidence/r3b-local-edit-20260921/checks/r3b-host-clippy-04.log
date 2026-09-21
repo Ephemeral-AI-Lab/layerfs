@@ -1,0 +1,12 @@
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace)
+error: length comparison to zero
+   --> crates/layerfs-workspace/src/filesystem/write.rs:241:12
+    |
+241 |         if edit.replacement.len() > 0 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: using `!is_empty` is clearer and more explicit: `!edit.replacement.is_empty()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#len_zero
+    = note: `-D clippy::len-zero` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::len_zero)]`
+
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error

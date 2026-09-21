@@ -113,7 +113,7 @@ impl Workspace {
                     &mut std::io::sink(),
                     deadline,
                 )?;
-                let (attr, _) =
+                let (attr, _, _) =
                     attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
                 if attr.serial != expected_serial {
                     return Err(WorkspaceError::InvalidInput);

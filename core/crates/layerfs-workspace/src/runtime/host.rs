@@ -35,6 +35,7 @@ pub(crate) struct Host {
     pub request_id: AtomicU64,
     pub registry: Mutex<Registry>,
     pub payloads: Option<Arc<PayloadHost>>,
+    pub metadata: Option<Arc<crate::backing::metadata::MetadataHost>>,
     pub _charge: Charge,
 }
 pub(crate) struct Entry {
@@ -141,6 +142,10 @@ impl WorkspaceHost {
             .disk_budget_bytes
             .map(|quota| PayloadHost::new(config.root.join("private-backing"), quota, &budget))
             .transpose()?;
+        let metadata = payloads
+            .as_ref()
+            .map(|p| crate::backing::metadata::MetadataHost::new(p.clone()))
+            .transpose()?;
         let registry = Registry {
             entries: Vec::new(),
             capacity_charge: budget.reserve(0)?,
@@ -156,6 +161,7 @@ impl WorkspaceHost {
                 request_id: AtomicU64::new(1),
                 registry: Mutex::new(registry),
                 payloads,
+                metadata,
                 _charge: charge,
             }),
         })
@@ -167,6 +173,11 @@ impl WorkspaceHost {
         deadline: Instant,
     ) -> Result<Workspace, WorkspaceError> {
         validate_id(&options.id)?;
+        if options.access == WorkspaceAccess::LocalEdit
+            && (!matches!(options.base, Base::Branch(_)) || self.inner.metadata.is_none())
+        {
+            return Err(WorkspaceError::Unsupported);
+        }
         if options.incarnation == [0; 32] {
             return Err(WorkspaceError::InvalidInput);
         }
@@ -234,8 +245,8 @@ impl WorkspaceHost {
                 .map_err(|_| WorkspaceError::Busy)?;
             let _remote = Remote(&self.inner.remote);
             let deadline = Workspace::callback_deadline(deadline);
-            let (base, expected_serial) = match &options.base {
-                Base::Root(root) => (*root, None),
+            let (base, expected_serial, branch_snapshot) = match &options.base {
+                Base::Root(root) => (*root, None, None),
                 Base::Branch(branch) => {
                     let result = self.inner.call(
                         options.store,
@@ -255,7 +266,11 @@ impl WorkspaceHost {
                     {
                         return Err(WorkspaceError::InvalidInput);
                     }
-                    (snapshot.effective_root, snapshot.root_serial)
+                    (
+                        snapshot.effective_root,
+                        snapshot.root_serial,
+                        Some(snapshot),
+                    )
                 }
             };
             let result = self.inner.call(
@@ -268,7 +283,8 @@ impl WorkspaceHost {
                 &mut std::io::sink(),
                 deadline,
             )?;
-            let (attr, content) = attributes(result, true, options.owner_uid, options.owner_gid)?;
+            let (attr, content, metadata) =
+                attributes(result, true, options.owner_uid, options.owner_gid)?;
             if expected_serial.is_some_and(|serial| serial != attr.serial) {
                 return Err(WorkspaceError::InvalidInput);
             }
@@ -290,18 +306,32 @@ impl WorkspaceHost {
             cookies
                 .try_reserve_exact(COOKIE_LIMIT)
                 .map_err(|_| WorkspaceError::Capacity)?;
-            nodes.push(Node::new(attr, content, &[], attr.serial));
+            nodes.push(Node::new(attr, content, metadata, &[], attr.serial));
             if let (Some(host), Some(directory)) = (&self.inner.payloads, &directory) {
                 host.initialize(directory)
                     .map_err(|error| bare_failure(BackingPhase::Acquire, error.kind()))?;
             }
             create_owned_directory(&path)?;
             owned_directory = true;
+            let arena = if options.access == WorkspaceAccess::LocalEdit {
+                Some(
+                    self.inner
+                        .metadata
+                        .as_ref()
+                        .ok_or(WorkspaceError::Unsupported)?
+                        .arena(directory.clone().ok_or(WorkspaceError::Unsupported)?)?,
+                )
+            } else {
+                None
+            };
             let inner = Arc::new(Inner {
                 id: options.id.clone(),
                 incarnation: options.incarnation,
                 store: options.store,
                 base,
+                access: options.access,
+                _branch: branch_snapshot,
+                arena,
                 root: attr,
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
                 directory: directory.clone(),
@@ -309,6 +339,10 @@ impl WorkspaceHost {
                 _charge: charge,
                 state: Mutex::new(State {
                     nodes,
+                    overlay: None,
+                    generation: 1,
+                    revision: 0,
+                    dirty_inodes: 0,
                     handles,
                     cookies,
                     next_handle: 1,

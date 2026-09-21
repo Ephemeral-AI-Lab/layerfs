@@ -236,6 +236,7 @@ pub(crate) fn workspace(
             disk_budget_bytes: None,
         },
         attach: AttachOptions {
+            access: layerfs_workspace::WorkspaceAccess::ReadOnly,
             id: args[1].clone(),
             incarnation: key(&args[2])?,
             store: number(&args[3])?,
