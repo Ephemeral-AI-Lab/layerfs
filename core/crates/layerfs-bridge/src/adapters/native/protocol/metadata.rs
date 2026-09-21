@@ -124,10 +124,12 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
     if remaining_ms == 0 || remaining_ms > r.deadline_ms {
         return Err(Code::InvalidInput.into());
     }
-    let mut e = if matches!(r.operation, Operation::WorkspaceStatus { .. }) {
-        Encoder::bounded(WORKSPACE_STATUS_REQUEST_BYTES)
-    } else {
-        Encoder::default()
+    let mut e = match r.operation {
+        Operation::WorkspaceStatus { .. } => Encoder::bounded(WORKSPACE_STATUS_REQUEST_BYTES),
+        Operation::UpdatePortableMetadata { .. } => {
+            Encoder::bounded(PORTABLE_METADATA_REQUEST_BYTES)
+        }
+        _ => Encoder::default(),
     };
     e.u64(r.generation)?;
     e.u32(r.store)?;
@@ -207,6 +209,19 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         } => {
             e.blob(workspace)?;
             e.put(incarnation)?;
+        }
+        Operation::UpdatePortableMetadata {
+            base,
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => {
+            e.put(base)?;
+            e.u8(*kind)?;
+            e.u32(*mode)?;
+            e.u64(*mtime_seconds as u64)?;
+            e.u32(*mtime_nanoseconds)?;
         }
     }
     Ok(e.finish())
@@ -660,6 +675,9 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     if opcode == WORKSPACE_STATUS_OPCODE && b.len() > WORKSPACE_STATUS_REQUEST_BYTES {
         return Err(Code::Capacity.into());
     }
+    if opcode == UPDATE_PORTABLE_METADATA_OPCODE && b.len() > PORTABLE_METADATA_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let operation = match opcode {
         1 => Operation::ReadFile {
             root: d.root()?,
@@ -727,6 +745,13 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         WORKSPACE_STATUS_OPCODE => Operation::WorkspaceStatus {
             workspace: d.blob(WORKSPACE_ID_BYTES)?,
             incarnation: d.root()?,
+        },
+        UPDATE_PORTABLE_METADATA_OPCODE => Operation::UpdatePortableMetadata {
+            base: d.root()?,
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
         },
         _ => return Err(Code::Unsupported.into()),
     };

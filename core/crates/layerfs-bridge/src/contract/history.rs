@@ -56,6 +56,7 @@ pub const fn permission_bit(opcode: u8) -> Option<u8> {
         5 => Some(1 << 4),
         QUERY_OPCODE => Some(1 << 5),
         COMMAND_OPCODE => Some(1 << 6),
+        super::UPDATE_PORTABLE_METADATA_OPCODE => Some(1 << 7),
         _ => None,
     }
 }

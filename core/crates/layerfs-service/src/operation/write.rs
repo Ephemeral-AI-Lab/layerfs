@@ -2,7 +2,7 @@
 use super::{
     dispatch::end_input,
     failure::{content, storage},
-    filesystem,
+    filesystem, metadata,
     read::id,
 };
 use crate::input::Exact;
@@ -29,7 +29,10 @@ pub fn mutate(
         }
         end_input(input)?;
     }
-    if let Operation::UpdatePreparedFilesystem { .. } = &r.operation {
+    if matches!(
+        r.operation,
+        Operation::UpdatePreparedFilesystem { .. } | Operation::UpdatePortableMetadata { .. }
+    ) {
         end_input(input)?;
     }
     if Instant::now() >= deadline {
@@ -43,6 +46,9 @@ pub fn mutate(
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let built = match &r.operation {
+        Operation::UpdatePortableMetadata { .. } => scope
+            .child("service.metadata")
+            .run(|_| metadata::update(&provider, r, &mut handoff, deadline)),
         Operation::ConstructFile { length } => {
             let mut source = Exact::new(input, *length, deadline);
             construct_stream(
@@ -129,6 +135,25 @@ pub fn mutate(
             let outcome = save
                 .finish(scope.child("service.finish"))
                 .map_err(storage)?;
+            if let Operation::UpdatePortableMetadata {
+                base,
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } = r.operation
+            {
+                return Ok(Response::MetadataSaved {
+                    base,
+                    kind,
+                    mode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    metadata: root,
+                    inserted: outcome.inserted,
+                    reused: outcome.reused,
+                });
+            }
             if matches!(r.operation, Operation::UpdatePreparedFilesystem { .. }) {
                 return Ok(Response::FilesystemSaved {
                     root,

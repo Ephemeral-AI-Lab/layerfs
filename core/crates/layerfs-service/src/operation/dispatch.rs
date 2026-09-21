@@ -42,6 +42,7 @@ pub(crate) fn dispatch(
         // A known successful C2 finish is never changed into a claimed abort.
         Operation::ConstructFile { .. }
         | Operation::EditFile { .. }
+        | Operation::UpdatePortableMetadata { .. }
         | Operation::UpdatePreparedFilesystem { .. } => {
             write::mutate(store, r, input, deadline, scope)
         }

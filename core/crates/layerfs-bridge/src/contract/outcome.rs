@@ -111,9 +111,31 @@ pub enum Response {
     /// not pay for the widest history record it can never carry.
     History(Box<HistoryResult>),
     WorkspaceStatus(Box<super::WorkspaceStatusWire>),
+    MetadataSaved {
+        base: Root,
+        kind: u8,
+        mode: u32,
+        mtime_seconds: i64,
+        mtime_nanoseconds: u32,
+        metadata: Root,
+        inserted: u64,
+        reused: u64,
+    },
 }
 
 impl Response {
+    pub fn validate_metadata_saved(&self) -> Result<(), Failure> {
+        let Self::MetadataSaved {
+            kind,
+            mode,
+            mtime_nanoseconds,
+            ..
+        } = self
+        else {
+            return Err(Code::InvalidInput.into());
+        };
+        super::metadata::check_portable_metadata(*kind, *mode, *mtime_nanoseconds)
+    }
     /// Checks the complete-attribute shape, including root versus descendant
     /// identity when a request path is available. Other result shapes are refused.
     pub fn validate_attributes(&self, is_root: Option<bool>) -> Result<(), Failure> {
@@ -129,10 +151,11 @@ impl Response {
         else {
             return Err(Code::InvalidInput.into());
         };
+        super::metadata::check_portable_metadata(*kind, *mode, *nanoseconds)?;
         let valid_kind = match kind {
-            1 => *references >= 1 && *size <= super::MAX_FILE && mode & !0o777 == 0,
-            2 => *references <= 1 && *size == 0 && mode & !0o1777 == 0,
-            3 => *references == 1 && *size <= 4096 && *mode == 0o777,
+            1 => *references >= 1 && *size <= super::MAX_FILE,
+            2 => *references <= 1 && *size == 0,
+            3 => *references == 1 && *size <= 4096,
             _ => false,
         };
         let valid_position = match is_root {
@@ -140,12 +163,7 @@ impl Response {
             Some(false) => *references >= 1,
             None => true,
         };
-        if *serial == 0
-            || *serial > i64::MAX as u64
-            || *nanoseconds >= 1_000_000_000
-            || !valid_kind
-            || !valid_position
-        {
+        if *serial == 0 || *serial > i64::MAX as u64 || !valid_kind || !valid_position {
             return Err(Code::InvalidInput.into());
         }
         Ok(())

@@ -6,6 +6,7 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
     let mut e = match r {
         Response::History(_) => Encoder::bounded(HISTORY_RESULT_BYTES),
         Response::WorkspaceStatus(_) => Encoder::bounded(WORKSPACE_STATUS_RESULT_BYTES),
+        Response::MetadataSaved { .. } => Encoder::bounded(PORTABLE_METADATA_RESULT_BYTES),
         _ => Encoder::default(),
     };
     match r {
@@ -122,6 +123,27 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u64(status.handles)?;
             e.u64(status.cookies)?;
             e.u64(status.consumer_accounted_bytes)?;
+        }
+        Response::MetadataSaved {
+            base,
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+            metadata,
+            inserted,
+            reused,
+        } => {
+            r.validate_metadata_saved()?;
+            e.u8(11)?;
+            e.put(base)?;
+            e.u8(*kind)?;
+            e.u32(*mode)?;
+            e.u64(*mtime_seconds as u64)?;
+            e.u32(*mtime_nanoseconds)?;
+            e.put(metadata)?;
+            e.u64(*inserted)?;
+            e.u64(*reused)?;
         }
     }
     Ok(e.finish())
@@ -499,6 +521,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     if b.first() == Some(&10) && b.len() > WORKSPACE_STATUS_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
+    if b.first() == Some(&11) && b.len() > PORTABLE_METADATA_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let mut d = Decoder::new(b)?;
     let r = match d.u8()? {
         1 => Response::Read { length: d.u64()? },
@@ -575,6 +600,16 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             status.validate()?;
             Response::WorkspaceStatus(Box::new(status))
         }
+        11 => Response::MetadataSaved {
+            base: d.root()?,
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+            metadata: d.root()?,
+            inserted: d.u64()?,
+            reused: d.u64()?,
+        },
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
@@ -583,6 +618,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     }
     if matches!(r, Response::Attributes { .. }) {
         r.validate_attributes(None)?;
+    }
+    if matches!(r, Response::MetadataSaved { .. }) {
+        r.validate_metadata_saved()?;
     }
     Ok(r)
 }

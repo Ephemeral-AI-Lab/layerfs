@@ -1193,3 +1193,16 @@ test, mount, build, measurement or issue-state change is part of the task.
 
 [request-contract]: https://github.com/Ephemeral-AI-Lab/layerfs/blob/152b9c3a2e8ec2536a1d63601b681e1f7ef34455/core/crates/layerfs-bridge/src/contract/request.rs
 [prepared-handler]: https://github.com/Ephemeral-AI-Lab/layerfs/blob/152b9c3a2e8ec2536a1d63601b681e1f7ef34455/core/crates/layerfs-service/src/operation/filesystem.rs
+
+## Current execution checkpoints, 2026-09-21
+
+R0-R/R1 and the first R1-C Status operation are recorded in [08](08-readable-implementation.md)
+and [09](09-daemon-status.md). Subsequent [attribute hierarchy](10-attribute-hierarchy.md),
+[registry admission](11-registry-admission.md) and [early-refusal](12-early-refusal.md)
+corrections retain their own identities and failures. [R2](13-portable-metadata.md)
+now supplies one typed portable metadata save through the shared service. Its
+actual native route and refreshed mounted Status pass at the exact recorded
+product seal. This closes the metadata-save prerequisite, not mounted writes.
+R0-W/R3a next acquire immutable bounded disk inputs; R3b must then provide the
+maintained disk metadata/piece index before any local file mutation is published.
+Remaining control lifecycle/edit/Commit, R3b–R5b and R6 rows stay open.

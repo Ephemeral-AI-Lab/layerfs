@@ -53,6 +53,8 @@ open; Status does not qualify those routes.
 
 **R2 prerequisite:** [the attribute hierarchy correction](10-attribute-hierarchy.md) fixes shared wide-tree construction and validates bounded descent before the portable metadata operation. Existing historical roots and receipts keep their original identities.
 
+**R2 update:** [portable metadata save](13-portable-metadata.md) is implemented and verified through the real authenticated daemon/service route. It preserves content and generic attributes; mounted mutation, snapshots and Commit still depend on R3/R4. The full-core check also prompted the focused [early-refusal correction](12-early-refusal.md).
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

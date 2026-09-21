@@ -2378,3 +2378,337 @@ fn workspace_status_is_refused_by_service_even_with_every_store_grant() {
         server.join().unwrap();
     });
 }
+
+fn metadata_with_generic_keys(store: &Store) -> (Root, Root) {
+    use layerfs_content::filesystem::attributes::{
+        build::build_attribute_tree, value::emit_value, AttributeEntry, AttributeKey,
+    };
+    use layerfs_content::FilesystemObjects;
+    use layerfs_storage::{SaveHandoff, StoreProvider};
+    Timing::disabled("seed-metadata", |scope| {
+        let mut save = store.begin_save(scope.child("begin")).unwrap();
+        let provider = StoreProvider::new(store);
+        let mut handoff = SaveHandoff::new(&mut save);
+        let mut objects = FilesystemObjects::new(&provider, &mut handoff);
+        let mode = emit_value(&mut objects, &0o777u32.to_be_bytes()).unwrap();
+        let mut timestamp = 3i64.to_be_bytes().to_vec();
+        timestamp.extend_from_slice(&4u32.to_be_bytes());
+        let mtime = emit_value(&mut objects, &timestamp).unwrap();
+        let opaque = emit_value(&mut objects, b"retained generic value").unwrap();
+        let mut entries = vec![
+            AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                value_root: mode,
+            },
+            AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                value_root: mtime,
+            },
+        ];
+        for index in 0..300 {
+            entries.push(AttributeEntry {
+                key: AttributeKey::new("user".into(), format!("k{index:04}").into_bytes()).unwrap(),
+                value_root: opaque,
+            });
+        }
+        let (root, _) = build_attribute_tree(&mut objects, entries.into_iter().map(Ok)).unwrap();
+        assert!(handoff.take_failure().is_none());
+        drop(handoff);
+        save.finish(scope.child("finish")).unwrap();
+        Ok::<_, layerfs_content::ContentError>((*root.as_bytes(), *opaque.as_bytes()))
+    })
+    .0
+    .unwrap()
+}
+
+#[test]
+fn portable_metadata_update_saves_one_tree_and_preserves_all_generic_roots() {
+    use layerfs_content::filesystem::attributes::{
+        patch::visit_keys,
+        read::{read_portable, AttributeReadWork},
+    };
+    use layerfs_content::{object::inode_leaf::InodeKind, ObjectId};
+    use layerfs_storage::StoreProvider;
+    let fixture = fixture("portable-metadata", u8::MAX);
+    let store = Timing::disabled("open", |s| {
+        Store::open(&fixture.store_path, s.child("open"))
+    })
+    .0
+    .unwrap();
+    let (base, opaque) = metadata_with_generic_keys(&store);
+    let mut first = None;
+    for (index, (kind, mode)) in [(1, 0o640), (2, 0o1777), (3, 0o777)]
+        .into_iter()
+        .enumerate()
+    {
+        let operation = Operation::UpdatePortableMetadata {
+            base,
+            kind,
+            mode,
+            mtime_seconds: -2,
+            mtime_nanoseconds: 750_000_000,
+        };
+        let request = Request {
+            id: index as u64 + 1,
+            generation: 1,
+            store: 1,
+            profile: 1,
+            deadline_ms: 10_000,
+            response_bytes: 0,
+            operation,
+        };
+        let response = fixture
+            .service
+            .handle(
+                &fixture.peer,
+                &request,
+                &mut std::io::empty(),
+                &mut std::io::sink(),
+            )
+            .0
+            .unwrap();
+        let Response::MetadataSaved {
+            base: echoed,
+            kind: actual_kind,
+            mode: actual_mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+            metadata,
+            inserted,
+            reused,
+        } = response
+        else {
+            panic!("metadata result")
+        };
+        assert_eq!(
+            (
+                echoed,
+                actual_kind,
+                actual_mode,
+                mtime_seconds,
+                mtime_nanoseconds
+            ),
+            (base, kind, mode, -2, 750_000_000)
+        );
+        assert!(inserted + reused > 0);
+        let reader = StoreProvider::new(&store);
+        let parsed = read_portable(
+            &reader,
+            ObjectId::from_bytes(&metadata).unwrap(),
+            InodeKind::from_code(kind).unwrap(),
+            &mut AttributeReadWork::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            (parsed.mode, parsed.mtime_seconds, parsed.mtime_nanoseconds),
+            (mode, -2, 750_000_000)
+        );
+        let old = read_portable(
+            &reader,
+            ObjectId::from_bytes(&base).unwrap(),
+            InodeKind::from_code(kind).unwrap(),
+            &mut AttributeReadWork::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            (old.mode, old.mtime_seconds, old.mtime_nanoseconds),
+            (0o777, 3, 4)
+        );
+        let mut generic = 0;
+        visit_keys(
+            &reader,
+            ObjectId::from_bytes(&metadata).unwrap(),
+            |key, value| {
+                if key.domain() == "user" {
+                    generic += 1;
+                    assert_eq!(value.as_bytes(), &opaque);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(generic, 300);
+        if index == 0 {
+            first = Some(metadata);
+        }
+    }
+    let request = Request {
+        id: 9,
+        generation: 1,
+        store: 1,
+        profile: 1,
+        deadline_ms: 10_000,
+        response_bytes: 0,
+        operation: Operation::UpdatePortableMetadata {
+            base,
+            kind: 1,
+            mode: 0o640,
+            mtime_seconds: -2,
+            mtime_nanoseconds: 750_000_000,
+        },
+    };
+    let repeat = fixture
+        .service
+        .handle(
+            &fixture.peer,
+            &request,
+            &mut std::io::empty(),
+            &mut std::io::sink(),
+        )
+        .0
+        .unwrap();
+    assert!(
+        matches!(repeat, Response::MetadataSaved { metadata, inserted: 0, reused, .. } if Some(metadata) == first && reused > 0)
+    );
+}
+
+#[test]
+fn metadata_refusals_preserve_admission_and_never_use_legacy_grants() {
+    use layerfs_storage::StoreProvider;
+    let legacy = fixture("metadata-legacy", 127);
+    let fixture = fixture("metadata-refusals", 255);
+    let store = Timing::disabled("open", |s| {
+        Store::open(&fixture.store_path, s.child("open"))
+    })
+    .0
+    .unwrap();
+    let (base, _) = metadata_with_generic_keys(&store);
+    let mut request = Request {
+        id: 1,
+        generation: 1,
+        store: 1,
+        profile: 1,
+        deadline_ms: 10_000,
+        response_bytes: 0,
+        operation: Operation::UpdatePortableMetadata {
+            base,
+            kind: 1,
+            mode: 0o644,
+            mtime_seconds: 0,
+            mtime_nanoseconds: 0,
+        },
+    };
+    assert_eq!(
+        legacy
+            .service
+            .handle(
+                &legacy.peer,
+                &request,
+                &mut std::io::empty(),
+                &mut std::io::sink()
+            )
+            .0
+            .unwrap_err()
+            .code,
+        Code::Denied
+    );
+    assert_eq!(
+        fixture
+            .service
+            .handle(
+                &fixture.peer,
+                &request,
+                &mut Cursor::new([1]),
+                &mut std::io::sink()
+            )
+            .0
+            .unwrap_err()
+            .code,
+        Code::InvalidInput
+    );
+    let wrong_role = construct(&fixture.service, &fixture.peer, 2, b"not a metadata tree");
+    for (bad_base, code) in [
+        (wrong_role, Code::InvalidInput),
+        ([0x95; 32], Code::MissingObject),
+    ] {
+        let mut bad = request.clone();
+        if let Operation::UpdatePortableMetadata { base, .. } = &mut bad.operation {
+            *base = bad_base;
+        }
+        let failure = fixture
+            .service
+            .handle(
+                &fixture.peer,
+                &bad,
+                &mut std::io::empty(),
+                &mut std::io::sink(),
+            )
+            .0
+            .unwrap_err();
+        assert_eq!(failure.code, code);
+        assert!(!failure.unknown);
+        assert_eq!(failure.cleanup, None);
+    }
+    struct Unread;
+    impl std::io::Read for Unread {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            panic!("expired request read input")
+        }
+    }
+    assert_eq!(
+        fixture
+            .service
+            .handle_until(
+                &fixture.peer,
+                &request,
+                &mut Unread,
+                &mut std::io::sink(),
+                std::time::Instant::now()
+            )
+            .0
+            .unwrap_err()
+            .code,
+        Code::Deadline
+    );
+    Timing::disabled("writer-limit", |scope| {
+        store.set_max_concurrent_writes(1, scope.child("configure"))
+    })
+    .0
+    .unwrap();
+    let held = Timing::disabled("hold", |s| store.begin_save(s.child("begin")))
+        .0
+        .unwrap();
+    assert_eq!(
+        fixture
+            .service
+            .handle(
+                &fixture.peer,
+                &request,
+                &mut std::io::empty(),
+                &mut std::io::sink()
+            )
+            .0
+            .unwrap_err()
+            .code,
+        Code::Ownership
+    );
+    Timing::disabled("abort", |s| held.abort(s.child("abort")))
+        .0
+        .unwrap();
+    request.id = 3;
+    let response = fixture
+        .service
+        .handle(
+            &fixture.peer,
+            &request,
+            &mut std::io::empty(),
+            &mut std::io::sink(),
+        )
+        .0
+        .unwrap();
+    let Response::MetadataSaved { metadata, .. } = response else {
+        panic!("metadata saved")
+    };
+    let reader = StoreProvider::new(&store);
+    assert_eq!(
+        layerfs_content::filesystem::attributes::read::read_portable(
+            &reader,
+            layerfs_content::ObjectId::from_bytes(&metadata).unwrap(),
+            layerfs_content::object::inode_leaf::InodeKind::RegularFile,
+            &mut Default::default()
+        )
+        .unwrap()
+        .mode,
+        0o644
+    );
+}

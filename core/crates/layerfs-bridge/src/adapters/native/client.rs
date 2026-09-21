@@ -305,6 +305,31 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
     }
     match (&r.operation, response) {
         (
+            Operation::UpdatePortableMetadata {
+                base,
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            },
+            Response::MetadataSaved {
+                base: actual_base,
+                kind: actual_kind,
+                mode: actual_mode,
+                mtime_seconds: actual_seconds,
+                mtime_nanoseconds: actual_nanoseconds,
+                ..
+            },
+        ) => {
+            base == actual_base
+                && kind == actual_kind
+                && mode == actual_mode
+                && mtime_seconds == actual_seconds
+                && mtime_nanoseconds == actual_nanoseconds
+                && response.validate_metadata_saved().is_ok()
+                && bytes == 0
+        }
+        (
             Operation::WorkspaceStatus {
                 workspace,
                 incarnation,

@@ -3,7 +3,8 @@ use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CURSOR_BYTES, HISTORY_PROFILE, LAYER_BYTES,
     MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE,
-    STACK_BYTES, WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE,
+    STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE,
+    WORKSPACE_STATUS_PROFILE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -84,6 +85,14 @@ pub enum Operation {
         workspace: Vec<u8>,
         incarnation: Root,
     },
+    /// Saves an updated attribute tree; does not attach it to an inode or Branch.
+    UpdatePortableMetadata {
+        base: Root,
+        kind: u8,
+        mode: u32,
+        mtime_seconds: i64,
+        mtime_nanoseconds: u32,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Inspect {
@@ -134,6 +143,7 @@ impl Operation {
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
             Self::WorkspaceStatus { .. } => WORKSPACE_STATUS_OPCODE,
+            Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
         }
     }
     pub const fn label(&self) -> &'static str {
@@ -146,6 +156,7 @@ impl Operation {
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
             Self::WorkspaceStatus { .. } => "WorkspaceStatus",
+            Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
         }
     }
     /// True for an operation that changes no persistent state.
@@ -158,6 +169,7 @@ impl Operation {
             Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
+            | Self::UpdatePortableMetadata { .. }
             | Self::HistoryCommand(_) => false,
         }
     }
@@ -168,6 +180,7 @@ impl Operation {
             Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
+            | Self::UpdatePortableMetadata { .. }
             | Self::HistoryCommand(
                 HistoryCommand::InitLayerStack { .. }
                 | HistoryCommand::StageChanges(_)
@@ -206,6 +219,7 @@ impl Operation {
             | Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
+            | Self::UpdatePortableMetadata { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::InitLayerStack { .. }
@@ -247,6 +261,17 @@ impl Request {
             return Err(Code::Capacity.into());
         }
         match &self.operation {
+            Operation::UpdatePortableMetadata {
+                kind,
+                mode,
+                mtime_nanoseconds,
+                ..
+            } => {
+                super::metadata::check_portable_metadata(*kind, *mode, *mtime_nanoseconds)?;
+                if self.response_bytes != 0 {
+                    return Err(invalid());
+                }
+            }
             Operation::WorkspaceStatus {
                 workspace,
                 incarnation,

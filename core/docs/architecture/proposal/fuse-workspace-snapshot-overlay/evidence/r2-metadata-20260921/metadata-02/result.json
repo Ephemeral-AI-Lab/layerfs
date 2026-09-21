@@ -1,0 +1,155 @@
+{
+  "status": "PASS",
+  "mode": "functional-metadata-route",
+  "performance_claim": false,
+  "checks": [
+    {
+      "id": "metadata-save",
+      "status": "PASS",
+      "result": {
+        "base": "c5f3c30251127d7b11fb9e768dc71044022d582168e87fba5dd4231c8d5b5c85",
+        "kind": 1,
+        "mode": 384,
+        "mtime": -2,
+        "nanoseconds": 987654321,
+        "metadata": "bc871940330a9efdcf69dd9c0f02e9ff3e221f4cb5da18c08ede8b3c84f4adf1",
+        "inserted": 7,
+        "reused": 0
+      },
+      "original_inode": {
+        "serial": 3,
+        "kind": 1,
+        "references": 2,
+        "content": "2d846bce830e1790a17fd17ab00afb19ffb032bcf357eb8c70cd135e226a54fa",
+        "metadata": "c5f3c30251127d7b11fb9e768dc71044022d582168e87fba5dd4231c8d5b5c85",
+        "mode": 420,
+        "mtime": -1,
+        "nanoseconds": 123456789,
+        "size": 577551
+      },
+      "boundary": "metadata saved; original filesystem and Branch remain unchanged"
+    },
+    {
+      "id": "separate-filesystem-save",
+      "status": "PASS",
+      "candidate": "61b1b3415279f96f954b55774e55b6bd79e8fc6c26a7540c684e81e96a58c05b",
+      "changed_inode": {
+        "serial": 3,
+        "kind": 1,
+        "references": 2,
+        "content": "2d846bce830e1790a17fd17ab00afb19ffb032bcf357eb8c70cd135e226a54fa",
+        "metadata": "bc871940330a9efdcf69dd9c0f02e9ff3e221f4cb5da18c08ede8b3c84f4adf1",
+        "mode": 384,
+        "mtime": -2,
+        "nanoseconds": 987654321,
+        "size": 577551
+      },
+      "inserted": 3,
+      "reused": 0,
+      "payload_bytes": 577551,
+      "payload_sha256": "27c107fd4f53113eefe69f6c610c1a51a03ec8a243ebdab32caeaeb0a158a548"
+    },
+    {
+      "id": "unchanged-branch",
+      "status": "PASS",
+      "branch": "1161616161616161616161616161616161",
+      "effective_root": "ff064b7094183de6f63feb6d8c1737cf7f0ab06ede7c2438b1dbc716a4d353c9",
+      "boundary": "exact Branch descriptor unchanged after separate C2 saves; no C5 command submitted"
+    },
+    {
+      "id": "metadata-noop",
+      "status": "PASS",
+      "result": {
+        "base": "bc871940330a9efdcf69dd9c0f02e9ff3e221f4cb5da18c08ede8b3c84f4adf1",
+        "kind": 1,
+        "mode": 384,
+        "mtime": -2,
+        "nanoseconds": 987654321,
+        "metadata": "bc871940330a9efdcf69dd9c0f02e9ff3e221f4cb5da18c08ede8b3c84f4adf1",
+        "inserted": 0,
+        "reused": 7
+      }
+    },
+    {
+      "id": "wrong-grant",
+      "status": "PASS",
+      "route": "authenticated service terminal refusal",
+      "failure_code": 3,
+      "unknown": false,
+      "cleanup": null,
+      "stderr": "Error: Denied unknown=false cleanup=None history=None\n"
+    },
+    {
+      "id": "missing-metadata",
+      "status": "PASS",
+      "route": "authenticated service terminal refusal",
+      "failure_code": 6,
+      "unknown": false,
+      "cleanup": null,
+      "stderr": "Error: MissingObject unknown=false cleanup=None history=None\n"
+    },
+    {
+      "id": "wrong-root-role",
+      "status": "PASS",
+      "route": "authenticated service terminal refusal",
+      "failure_code": 1,
+      "unknown": false,
+      "cleanup": null,
+      "stderr": "Error: InvalidInput unknown=false cleanup=None history=None\n"
+    },
+    {
+      "id": "invalid-kind",
+      "status": "PASS",
+      "route": "production daemon shared request validation",
+      "stderr": "Error: InvalidInput unknown=false cleanup=None history=None\n",
+      "remote_result": "NOT_SUBMITTED"
+    },
+    {
+      "id": "invalid-mode",
+      "status": "PASS",
+      "route": "production daemon shared request validation",
+      "stderr": "Error: InvalidInput unknown=false cleanup=None history=None\n",
+      "remote_result": "NOT_SUBMITTED"
+    },
+    {
+      "id": "invalid-nanoseconds",
+      "status": "PASS",
+      "route": "production daemon shared request validation",
+      "stderr": "Error: InvalidInput unknown=false cleanup=None history=None\n",
+      "remote_result": "NOT_SUBMITTED"
+    },
+    {
+      "id": "cleanup",
+      "status": "PASS",
+      "service_exit": 0,
+      "fixture_master_unchanged": true,
+      "history_clone_unchanged": true
+    }
+  ],
+  "not_run": [
+    "mounted metadata mutation",
+    "writable Workspace backing/snapshot/Commit",
+    "R6 matched performance",
+    "generic-attribute public transport inspection"
+  ],
+  "source": "f566015b1ed2905f987f3fa9c10c99ecf959aea3",
+  "product_inputs_sha256": "fef867b4753d1a2d199efc9ea529f7bb95464c28090d24c48ffc8331ed17e380",
+  "driver_sha256": "4f7d7b921c38d309e69c43b409b4d09e1ee2d04b8332b0d5b2d05241c4257ae8",
+  "binary_sha256": {
+    "layerfs-daemon": "4bc97320e69284accb3c10be30baabd8c13ed1ae3083cb39ae70e548e3d77029",
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636"
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/mounted-07/result.json",
+    "receipt_sha256": "70f5b40df419506a650bc546ccbfa3e0a8b8f2d1fc1f5d39293e5699369d2fb4",
+    "clone_method": "independent-byte-copy",
+    "closed_master_sha256": {
+      "store.sqlite": "903a50b09be126cad1ffba7738b3833d513f8ecab2b6eb3a326dd08e7ab259bc",
+      "history.sqlite": "167aac87e7b629790a0b06e97f686c8ecad55890b1f9f05548fadcae7b2f64fb"
+    },
+    "cache_claim": null
+  },
+  "success_daemon_stderr": "",
+  "command_wall_seconds": 3.356219292007154,
+  "hard_budget_seconds": 60
+}

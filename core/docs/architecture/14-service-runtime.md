@@ -36,6 +36,11 @@ The R1-C Status extension is based on the R1 commit
 define one authenticated daemon-targeted local observation. They do not add
 network attach, edit, mount management or Commit controls.
 
+The R2 portable metadata extension is based on
+`4d6f5cd0fa4d21afe51fb1dda01db0d4a0095c88`, including the attribute hierarchy
+prerequisite `d3d767393`. It adds one typed C1/C2 metadata save, with no Workspace
+mutation, automatic inode attachment or Branch publication.
+
 ## Boundaries and public calls
 
 `layerfs-bridge::contract` owns the closed content/history operation union and typed results.
@@ -121,6 +126,42 @@ current local state, never an earlier edit/Commit receipt or recovery protocol.
 The existing non-history three-byte failure representation applies; transport
 loss is Io with no unknown-mutation claim. Existing framing, authentication,
 server input completion and failure/session-closure algorithms are unchanged.
+
+`UpdatePortableMetadata` uses content profile 1/opcode 9 and explicit Store grant
+bit `0x80`. Legacy grants 31/127 do not confer it; opcode 8 remains reserved to
+daemon control with no Store grant. The request is exactly 76 bytes, including
+the common envelope and existing attribute-tree base root, inode kind, mode,
+signed mtime seconds and nanoseconds. Input and ResultData budgets are zero.
+Mode/kind/nanosecond checks reuse the complete-attributes validator's portable
+rules: regular `0777`, directory `01777`, symlink exactly `0777`, and nanoseconds
+less than one billion. The kind is the caller's typed construction context; an
+attribute root does not by itself prove membership in a particular inode.
+
+The existing mutation owner validates empty input, takes one writer permit and
+opens one C2 save. `operation/metadata.rs` reads the existing typed fields through
+C1, applies the two sorted portable patches and preserves every generic value
+root through the existing streaming patch builder. No full attribute map, object
+RPC, new storage implementation or arbitrary generic mutation operation is added.
+The grouped read and patch cursor enforce the corrected hierarchy described in
+[12](12-attributes.md). Metadata-only attachment later retains the original
+content root and uses the separate prepared filesystem operation.
+
+An operation-local provider/consumer delegation checks the absolute deadline
+before and after each bounded read wave/object handoff. C1 has no deadline error,
+so a typed local expiration flag distinguishes this cause without parsing text.
+An in-progress storage call is not preempted. The existing save owner gives a
+retained C2 failure precedence, aborts definite pre-finish failure once, and
+checks the deadline before finish. A successfully acknowledged finish remains
+success even if time expires immediately afterward; lost mutation delivery is
+unknown and never automatically replayed.
+
+Result tag 11 is exactly 98 bytes: base root, kind, mode, signed seconds,
+nanoseconds, saved metadata root, inserted and reused counts. Native matching
+requires every echoed input field and zero ResultData. This result means one
+metadata tree has been saved, not that an inode, filesystem, stage, Commit or
+Branch was updated. A no-op preserves the metadata root and still reports the
+actual save result. The operation inherits current Store/C1 limits and introduces
+no larger prepared-update or EditFile input envelope.
 
 ## Native protocol and ownership
 
