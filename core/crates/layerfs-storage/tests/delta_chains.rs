@@ -34,9 +34,17 @@ fn store_with(path: &std::path::Path, whole_depth: u8, chunk_depth: u8) -> Store
     disabled(|scope| Store::create(path, policy, scope.child("store"))).expect("store")
 }
 
-/// Builds a chain of `edges` prefix links and returns every id in order.
+/// Builds a chain of `edges` prefix links over `noise` and returns every id.
 fn build_chain(store: &Store, edges: u8, size: usize) -> Vec<ObjectId> {
-    let raw = noise(size);
+    build_chain_of(store, edges, noise(size))
+}
+
+/// Builds a chain of `edges` prefix links over `raw` and returns every id in order.
+///
+/// The content is a parameter because a payload the codec cannot shrink is stored
+/// verbatim rather than framed, and a case about what a damaged *frame* does has to
+/// put one in the pack: see `stored_payloads.rs` for the stored form's own refusal.
+fn build_chain_of(store: &Store, edges: u8, raw: Vec<u8>) -> Vec<ObjectId> {
     let mut ids = Vec::new();
     let mut current = raw.clone();
     for step in 0..=edges {
@@ -255,7 +263,12 @@ fn a_corrupt_intermediate_is_rejected_during_reconstruction() {
     let dir = TempDir::new("chain-corrupt");
     let path = dir.store_path("chain");
     let store = create_store(&path);
-    let ids = build_chain(&store, 3, 50_000);
+    // Compressible content on purpose: this case is about a damaged **frame**, so
+    // the records have to be frames. `noise` here would be stored verbatim by the
+    // stored-payload rule, and damage to a stored record is refused by the
+    // dependency identity instead of by a checksum - a refusal
+    // `stored_payloads.rs` covers in its own case.
+    let ids = build_chain_of(&store, 3, patterned(50_000));
     drop(store);
     support::corrupt_first_pack(&path);
     let reopened = open_store(&path);

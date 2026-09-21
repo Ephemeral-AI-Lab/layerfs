@@ -1291,6 +1291,12 @@ fn namespace_scale(
         ("pipeline.diag_release_candidates_ns", outcome.profile.diag.release_candidates_ns),
         ("pipeline.diag_release_pool_index_ns", outcome.profile.diag.release_pool_index_ns),
         ("pipeline.diag_release_tails_ns", outcome.profile.diag.release_tails_ns),
+        // A region **inside** `pipeline.profile_full_ns`, published beside it: the
+        // bounded-prefix probe that decides whether a payload is compressed at all.
+        // Reported separately because the treatment trades a whole-payload codec
+        // call for a bounded one, and a saving read from the bucket alone cannot
+        // say whether the probe or the escape carried it.
+        ("pipeline.diag_probe_ns", outcome.profile.diag.probe_ns),
     ] {
         context.trace.write_number(
             Kind::Counter,
@@ -1309,6 +1315,18 @@ fn namespace_scale(
         outcome.profile.reuse_repeat as i128,
         "objects",
         "repeats of an exact-reuse verification this operation had already performed",
+    )?;
+    // A count read from each stored record's own tag: the records a reader will
+    // take the stored-payload path for. Published in its own unit for the same
+    // reason as the line above - "the probe stopped compressing" and "the store
+    // stopped writing frames" are different claims, and only the second one is the
+    // treatment. Nothing here is pinned.
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.stored_records",
+        outcome.profile.stored_records as i128,
+        "records",
+        "payload records stored verbatim, read from the record tag the reader dispatches on",
     )?;
     // The save's own statement and pack counters. `SaveOutcome` carries every one
     // of them on every row (`cas/store.rs:55-90`); this driver published none of

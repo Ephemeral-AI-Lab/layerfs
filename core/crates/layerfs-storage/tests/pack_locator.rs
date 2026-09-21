@@ -277,10 +277,19 @@ fn a_whole_file_record_is_stored_in_its_own_compact_pack() {
         .unwrap();
     let version = support::read_pack_row(&connection, pack_id);
     assert_eq!(&version[..8], b"LFPACK\0\0");
+    // The lane, not a literal: the compact framing is what this case is about and
+    // the version that names it moves when the lane's record grammar gains a form.
+    // `physical_formats.rs` is where the versions themselves are enumerated.
+    assert_eq!(
+        layerfs_storage::pack::layout::parse_header(&version)
+            .expect("pack header")
+            .lane,
+        layerfs_storage::pack::PackLane::WholeFile,
+        "whole-file records use the compact framing"
+    );
     assert_eq!(
         u32::from_le_bytes(version[8..12].try_into().unwrap()),
-        layerfs_storage::pack::VERSION_WHOLE_FILE,
-        "whole-file records use the compact framing"
+        layerfs_storage::pack::PackLane::WholeFile.version(),
     );
     // The declared length, not the row's capacity: the row is allocated at the
     // lane's pack limit and the pack declares how much of it is a pack.

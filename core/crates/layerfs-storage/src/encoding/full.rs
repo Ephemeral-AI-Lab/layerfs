@@ -11,6 +11,7 @@
 use layerfs_content::file::mapping::{decode_chunk_payload, CHUNK_MAGIC};
 use layerfs_content::{whole_file_payload, ObjectId, ObjectRole};
 
+use crate::cas::SaveProfile;
 use crate::encoding::codec::{CodecProfile, CompressionWorkspace};
 use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
@@ -39,6 +40,22 @@ impl EncodedRecord {
     /// Stored width of this record in its lane's grammar.
     pub fn width(&self) -> usize {
         self.record.len()
+    }
+
+    /// True when this record carries its payload verbatim.
+    ///
+    /// Read from the record's own tag rather than from a field beside it: the tag
+    /// is what a reader dispatches on, so a count taken here is a count of records
+    /// a reader will take the stored path for. The ordinary and pooled lanes frame
+    /// no payload, and their records carry no payload tag.
+    pub fn is_stored(&self) -> bool {
+        matches!(
+            self.lane,
+            PackLane::WholeFile | PackLane::Native | PackLane::Singleton
+        ) && self
+            .record
+            .first()
+            .is_some_and(|tag| record::is_stored(*tag))
     }
 }
 
@@ -79,8 +96,9 @@ pub fn encode_full(
     role: ObjectRole,
     capacities: &StorageCapacities,
     workspace: &mut CompressionWorkspace,
+    profile: &mut SaveProfile,
 ) -> StorageResult<EncodedRecord> {
-    encode_representation(canonical, role, capacities, workspace, None)
+    encode_representation(canonical, role, capacities, workspace, None, profile)
 }
 
 /// Encodes a PREFIX record against one direct base payload.
@@ -91,6 +109,7 @@ pub fn encode_prefix(
     base_raw: &[u8],
     capacities: &StorageCapacities,
     workspace: &mut CompressionWorkspace,
+    profile: &mut SaveProfile,
 ) -> StorageResult<EncodedRecord> {
     encode_representation(
         canonical,
@@ -98,6 +117,7 @@ pub fn encode_prefix(
         capacities,
         workspace,
         Some((base_id, base_raw)),
+        profile,
     )
 }
 
@@ -107,6 +127,7 @@ fn encode_representation(
     capacities: &StorageCapacities,
     workspace: &mut CompressionWorkspace,
     prefix: Option<(ObjectId, &[u8])>,
+    profile_state: &mut SaveProfile,
 ) -> StorageResult<EncodedRecord> {
     if canonical.is_empty() || canonical.len() > CANONICAL_LIMIT {
         return Err(StorageError::CapacityExceeded {
@@ -152,12 +173,53 @@ fn encode_representation(
                     actual: raw.len() as u64,
                 });
             }
-            let frame = match prefix {
-                Some((_, base_raw)) => workspace.compress_prefix(profile, raw, base_raw)?,
-                None => workspace.compress(profile, raw)?,
-            };
             let base = prefix.map(|(id, _)| id);
-            let (lane, record) = plan_lane(role, raw.len(), base, &frame, capacities)?;
+            let frame = match prefix {
+                // A PREFIX payload is never probed. Its frame is measured against
+                // the base, not against the payload alone, and the selector that
+                // asked for it already compares the two candidate records by width
+                // - so the probe could only replace a decision that is made.
+                Some((_, base_raw)) => workspace.compress_prefix(profile, raw, base_raw)?,
+                None => {
+                    let started = std::time::Instant::now();
+                    let incompressible = workspace.payload_is_incompressible(profile, raw)?;
+                    SaveProfile::charge(&mut profile_state.diag.probe_ns, started);
+                    if incompressible {
+                        // The codec found nothing in a bounded prefix of this
+                        // payload, so the whole-payload scan would buy nothing.
+                        // The payload is stored as it stands: the record carries
+                        // the bytes themselves, so a wrong guess costs width and
+                        // never correctness.
+                        let (lane, record) =
+                            plan_lane(role, raw.len(), None, raw, capacities, true)?;
+                        return Ok(EncodedRecord {
+                            lane,
+                            record,
+                            canonical_length: canonical.len(),
+                            raw_length: raw.len(),
+                            base: None,
+                        });
+                    }
+                    let frame = workspace.compress(profile, raw)?;
+                    if frame.len() >= raw.len() {
+                        // The codec ran and shrank nothing. The frame is released
+                        // and the payload is stored at its own width: this costs
+                        // no codec call at all and removes the case where a frame
+                        // is stored larger than the bytes it describes.
+                        let (lane, record) =
+                            plan_lane(role, raw.len(), None, raw, capacities, true)?;
+                        return Ok(EncodedRecord {
+                            lane,
+                            record,
+                            canonical_length: canonical.len(),
+                            raw_length: raw.len(),
+                            base: None,
+                        });
+                    }
+                    frame
+                }
+            };
+            let (lane, record) = plan_lane(role, raw.len(), base, &frame, capacities, false)?;
             Ok(EncodedRecord {
                 lane,
                 record,
@@ -182,12 +244,23 @@ fn plan_lane(
     base: Option<ObjectId>,
     frame: &[u8],
     capacities: &StorageCapacities,
+    stored: bool,
 ) -> StorageResult<(PackLane, Vec<u8>)> {
+    // `stored` selects the record grammar and nothing else: a stored record is
+    // FULL by construction (`encode_stored` refuses a base) and `base` is `None`
+    // on every call that sets it.
+    let build = |lane: PackLane| -> StorageResult<Vec<u8>> {
+        if stored {
+            record::encode_stored(lane, raw_length, frame)
+        } else {
+            record::encode(lane, raw_length, base, frame)
+        }
+    };
     let lane = PackLane::for_role(role);
     if lane != PackLane::WholeFile {
-        return Ok((lane, record::encode(lane, raw_length, base, frame)?));
+        return Ok((lane, build(lane)?));
     }
-    let compact = record::encode(PackLane::WholeFile, raw_length, base, frame)?;
+    let compact = build(PackLane::WholeFile)?;
     let body = compact
         .len()
         .checked_sub(WHOLE_FILE_COMPACT_DROP)
@@ -206,7 +279,7 @@ fn plan_lane(
     // accepted record that overlap would be two ~16 MiB allocations for one
     // object, and only one of them is written.
     drop(compact);
-    let record = record::encode(PackLane::Singleton, raw_length, base, frame)?;
+    let record = build(PackLane::Singleton)?;
     let contribution = HEADER_LEN + DIRECTORY_ENTRY_LEN + record.len() + 8;
     if contribution > capacities.singleton_pack_limit {
         return Err(StorageError::CapacityExceeded {

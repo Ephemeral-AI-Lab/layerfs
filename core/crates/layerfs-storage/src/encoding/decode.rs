@@ -136,8 +136,8 @@ pub fn decode_canonical(
             let parsed = record::parse_native(bytes)?;
             let raw = decode_payload(
                 PackLane::Native,
+                parsed.tag,
                 parsed.raw_length,
-                parsed.base.is_some(),
                 parsed.frame,
                 base,
                 capacities,
@@ -156,8 +156,8 @@ pub fn decode_canonical(
             let parsed = record::parse(PackLane::WholeFile, selected, canonical_length)?;
             let raw = decode_payload(
                 PackLane::WholeFile,
+                parsed.tag,
                 parsed.raw_length,
-                parsed.base.is_some(),
                 parsed.frame,
                 base,
                 capacities,
@@ -177,8 +177,8 @@ pub fn decode_canonical(
             let parsed = record::parse(PackLane::Singleton, bytes, canonical_length)?;
             let raw = decode_payload(
                 PackLane::Singleton,
+                parsed.tag,
                 parsed.raw_length,
-                parsed.base.is_some(),
                 parsed.frame,
                 base,
                 capacities,
@@ -202,18 +202,31 @@ pub fn decode_canonical(
 
 fn decode_payload(
     lane: PackLane,
+    tag: u8,
     raw_length: usize,
-    has_base: bool,
     frame: &[u8],
     base: Option<&[u8]>,
     capacities: &StorageCapacities,
     workspace: &mut DecompressionWorkspace,
 ) -> StorageResult<Vec<u8>> {
+    if record::is_stored(tag) {
+        // A stored record is the payload: its bytes are returned as they stand,
+        // and the declared raw length is checked against them rather than trusted.
+        // No codec call is made and no base is consulted - a stored record that
+        // carries one is a framing this reader refuses instead of guessing at.
+        if base.is_some() {
+            return Err(StorageError::Integrity("stored record with base bytes"));
+        }
+        if frame.len() != raw_length || raw_length == 0 {
+            return Err(StorageError::Integrity("stored record length"));
+        }
+        return Ok(frame.to_vec());
+    }
     let profile = match lane {
         PackLane::Native => CodecProfile::native(),
         _ => CodecProfile::whole_file(capacities),
     };
-    match (has_base, base) {
+    match (tag == record::PREFIX_TAG, base) {
         (true, Some(base)) => workspace.decompress_prefix(profile, frame, raw_length, base),
         (false, None) => workspace.decompress(profile, frame, raw_length),
         (true, None) => Err(StorageError::Integrity("prefix record without base bytes")),

@@ -1,0 +1,5 @@
+whole_file  records   9444  frame-payload: min    13  median    14  max     16  frame >= payload:   9444
+            tags {0: 9444}
+native      records  14466  frame-payload: min    13  median    14  max     14  frame >= payload:  14466
+            tags {0: 14466}
+records the post-hoc rule stores verbatim (frame >= payload): 23910

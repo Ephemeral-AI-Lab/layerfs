@@ -59,13 +59,32 @@ pub const WHOLE_FILE_COMPACT_DROP: usize = 8;
 /// Ordinary framing version: canonical objects in multi-record groups.
 pub const VERSION_ORDINARY: u32 = 9;
 /// Native framing version: one chunk record per group entry.
+///
+/// Still read, and no longer written: a native pack may carry a payload record
+/// stored verbatim, which this version predates. See [`VERSION_NATIVE_STORED`].
 pub const VERSION_NATIVE: u32 = 10;
 /// Compact whole-file framing version.
+///
+/// Still read, and no longer written, for the same reason as [`VERSION_NATIVE`].
 pub const VERSION_WHOLE_FILE: u32 = 11;
 /// Pooled physical-metadata framing version.
 pub const VERSION_POOLED_METADATA: u32 = 12;
 /// Singleton framing version: one oversized record in one pack.
+///
+/// Still read, and no longer written, for the same reason as [`VERSION_NATIVE`].
 pub const VERSION_SINGLETON: u32 = 13;
+/// Native framing that may carry a payload stored verbatim.
+///
+/// The three payload lanes moved because a record's grammar gained a tag value:
+/// a reader that predates it must refuse the pack by version rather than meet an
+/// unknown tag in the middle of a decode, and a reader that has it reads both
+/// versions of every payload lane. The ordinary and pooled lanes carry no payload
+/// frame, so their grammar is unchanged and their versions stay where they were.
+pub const VERSION_NATIVE_STORED: u32 = 15;
+/// Compact whole-file framing that may carry a payload stored verbatim.
+pub const VERSION_WHOLE_FILE_STORED: u32 = 14;
+/// Singleton framing that may carry a payload stored verbatim.
+pub const VERSION_SINGLETON_STORED: u32 = 16;
 
 /// One physical framing lane.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -93,13 +112,17 @@ impl PackLane {
     ];
 
     /// Framing version written into the pack header.
+    ///
+    /// The payload lanes write the version whose grammar they now use. The
+    /// versions they no longer write are read by [`parse_header`] all the same,
+    /// which is what keeps every pack this Store has already written readable.
     pub const fn version(self) -> u32 {
         match self {
             Self::Ordinary => VERSION_ORDINARY,
-            Self::Native => VERSION_NATIVE,
-            Self::WholeFile => VERSION_WHOLE_FILE,
+            Self::Native => VERSION_NATIVE_STORED,
+            Self::WholeFile => VERSION_WHOLE_FILE_STORED,
             Self::PooledMetadata => VERSION_POOLED_METADATA,
-            Self::Singleton => VERSION_SINGLETON,
+            Self::Singleton => VERSION_SINGLETON_STORED,
         }
     }
 
@@ -344,10 +367,10 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     );
     let lane = match version {
         VERSION_ORDINARY => PackLane::Ordinary,
-        VERSION_NATIVE => PackLane::Native,
-        VERSION_WHOLE_FILE => PackLane::WholeFile,
+        VERSION_NATIVE | VERSION_NATIVE_STORED => PackLane::Native,
+        VERSION_WHOLE_FILE | VERSION_WHOLE_FILE_STORED => PackLane::WholeFile,
         VERSION_POOLED_METADATA => PackLane::PooledMetadata,
-        VERSION_SINGLETON => PackLane::Singleton,
+        VERSION_SINGLETON | VERSION_SINGLETON_STORED => PackLane::Singleton,
         _ => {
             return Err(StorageError::UnsupportedPolicy {
                 field: "pack framing version",
@@ -378,7 +401,7 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if lane == PackLane::Singleton && group_count != 1 {
         return Err(StorageError::Integrity("singleton pack group count"));
     }
-    if lane == PackLane::Native && version != VERSION_NATIVE {
+    if lane == PackLane::Native && !matches!(version, VERSION_NATIVE | VERSION_NATIVE_STORED) {
         return Err(StorageError::Integrity("native framing version"));
     }
     Ok(PackHeader {

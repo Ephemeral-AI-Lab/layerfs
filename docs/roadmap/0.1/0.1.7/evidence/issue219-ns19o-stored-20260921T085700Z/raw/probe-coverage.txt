@@ -1,0 +1,9 @@
+frames decoded with the pinned CLI as a parsing self-check: 200 checked, 0 refused
+native/payload_le_1024             34
+native/probe_says_store            14432
+native/records                     14466
+whole_file/payload_le_1024         7899
+whole_file/probe_says_store        1545
+whole_file/records                 9444
+probe output sizes on noise (payload > 1024): {('whole_file', 1033): 1545, ('native', 1033): 14432}
+predicted stored records: 23910

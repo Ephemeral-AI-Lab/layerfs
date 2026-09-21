@@ -19,6 +19,19 @@ use crate::pack::layout::{PackLane, WHOLE_FILE_COMPACT_DROP};
 pub const FULL_TAG: u8 = 0;
 /// Record tag of a representation against one direct base.
 pub const PREFIX_TAG: u8 = 1;
+/// Record tag of a payload stored verbatim, with no base and no codec frame.
+///
+/// The tag is the whole cost of the form: the byte is already there for
+/// [`FULL_TAG`] and [`PREFIX_TAG`], and a stored payload needs no length field the
+/// lane did not already carry. A stored record is always FULL - storing a payload
+/// verbatim says nothing about any base, and a record that carries one would
+/// claim a dependency edge its bytes do not use.
+pub const STORED_TAG: u8 = 2;
+
+/// True when `tag` names a payload stored verbatim rather than as a codec frame.
+pub const fn is_stored(tag: u8) -> bool {
+    tag == STORED_TAG
+}
 
 /// Bytes of the compact whole-file framing that the lane drops at assembly.
 const COMPACT_DROP: usize = WHOLE_FILE_COMPACT_DROP;
@@ -56,14 +69,46 @@ pub fn encode(
     base: Option<ObjectId>,
     frame: &[u8],
 ) -> StorageResult<Vec<u8>> {
+    let tag = match base {
+        Some(_) => PREFIX_TAG,
+        None => FULL_TAG,
+    };
+    encode_tagged(lane, tag, raw_length, base, frame)
+}
+
+/// Encodes one payload record whose bytes are the payload itself.
+///
+/// The stored form carries no base: the payload is stored as it stands, so there
+/// is no frame to decode against one.
+pub fn encode_stored(lane: PackLane, raw_length: usize, payload: &[u8]) -> StorageResult<Vec<u8>> {
+    if payload.len() != raw_length {
+        return Err(StorageError::Integrity("stored record width"));
+    }
+    encode_tagged(lane, STORED_TAG, raw_length, None, payload)
+}
+
+/// Encodes one whole-file or native lane record under an explicit tag.
+pub fn encode_tagged(
+    lane: PackLane,
+    tag: u8,
+    raw_length: usize,
+    base: Option<ObjectId>,
+    frame: &[u8],
+) -> StorageResult<Vec<u8>> {
     if frame.is_empty() || raw_length == 0 {
         return Err(StorageError::Integrity("record framing"));
     }
+    if is_stored(tag) {
+        if base.is_some() || frame.len() != raw_length {
+            return Err(StorageError::Integrity("stored record framing"));
+        }
+    } else if tag != FULL_TAG && tag != PREFIX_TAG {
+        return Err(StorageError::Integrity("record tag"));
+    } else if (tag == PREFIX_TAG) != base.is_some() {
+        return Err(StorageError::Integrity("record base tag"));
+    }
     let mut record = Vec::with_capacity(record_width(lane, base, frame.len()));
-    record.push(match base {
-        Some(_) => PREFIX_TAG,
-        None => FULL_TAG,
-    });
+    record.push(tag);
     match lane {
         PackLane::WholeFile
         | PackLane::Ordinary
@@ -136,7 +181,7 @@ fn parse_compact(record: &[u8], canonical_length: usize) -> StorageResult<Parsed
         .first()
         .ok_or(StorageError::Integrity("compact record width"))?;
     let (base, start) = match tag {
-        FULL_TAG => (None, 1),
+        FULL_TAG | STORED_TAG => (None, 1),
         PREFIX_TAG => (
             Some(ObjectId::from_bytes(
                 record
@@ -172,7 +217,7 @@ pub fn parse_native(record: &[u8]) -> StorageResult<ParsedRecord<'_>> {
             .map_err(|_| StorageError::Integrity("native raw length"))?,
     ) as usize;
     let (base, start) = match record[0] {
-        FULL_TAG => (None, 5),
+        FULL_TAG | STORED_TAG => (None, 5),
         PREFIX_TAG => (
             Some(ObjectId::from_bytes(
                 record
@@ -213,7 +258,7 @@ fn parse_framed(record: &[u8]) -> StorageResult<ParsedRecord<'_>> {
             .map_err(|_| StorageError::Integrity("framed frame length"))?,
     ) as usize;
     let (base, start) = match record[0] {
-        FULL_TAG => (None, 9),
+        FULL_TAG | STORED_TAG => (None, 9),
         PREFIX_TAG => (
             Some(ObjectId::from_bytes(
                 record

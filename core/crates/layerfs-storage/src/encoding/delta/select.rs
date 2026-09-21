@@ -284,9 +284,11 @@ pub fn select(
         // unchanged subtree carries stays a physical placement hint, not a
         // representation this route may act on.
         let started = Instant::now();
-        let record = encode_full(canonical, role, input.capacities, encode);
+        let record = encode_full(canonical, role, input.capacities, encode, input.profile);
         SaveProfile::charge(&mut input.profile.full_ns, started);
-        return record;
+        let record = record?;
+        note_stored(input.profile, &record);
+        return Ok(record);
     }
     if role == ObjectRole::InodeLeaf {
         // A pooled leaf has its own grammar, its own lane and its own reader; the
@@ -295,9 +297,10 @@ pub fn select(
         return Err(StorageError::Integrity("pooled metadata leaf selection"));
     }
     let started = Instant::now();
-    let full = encode_full(canonical, role, input.capacities, encode);
+    let full = encode_full(canonical, role, input.capacities, encode, input.profile);
     SaveProfile::charge(&mut input.profile.full_ns, started);
     let full = full?;
+    note_stored(input.profile, &full);
     input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
     let lane = full.lane;
     let depth_cap = input.capacities.delta_depth_for_role(role);
@@ -370,7 +373,15 @@ pub fn select(
     let base_raw = raw_payload(&base, role)?;
     input.counters.trials = input.counters.trials.saturating_add(1);
     let started = Instant::now();
-    let prefix = encode_prefix(canonical, role, base_id, base_raw, input.capacities, encode);
+    let prefix = encode_prefix(
+        canonical,
+        role,
+        base_id,
+        base_raw,
+        input.capacities,
+        encode,
+        input.profile,
+    );
     SaveProfile::charge(&mut input.profile.delta_ns, started);
     let prefix = prefix?;
     if prefix.record.len() < full.record.len() {
@@ -404,6 +415,19 @@ pub fn select(
             input.candidates.insert(id, signature(raw));
         }
         Ok(full)
+    }
+}
+
+/// Counts one record the encoder stored verbatim, read from its own tag.
+///
+/// The count is taken where the record is made rather than inside the encoder, so
+/// the encoder needs no counter: the tag is part of the record, and a reader
+/// dispatches on exactly this byte. Every record reaches here exactly once - the
+/// tree-role branch, the FULL branch, and the PREFIX branch, where a stored record
+/// is impossible by construction.
+fn note_stored(profile: &mut SaveProfile, record: &EncodedRecord) {
+    if record.is_stored() {
+        profile.stored_records = profile.stored_records.saturating_add(1);
     }
 }
 

@@ -9,7 +9,8 @@ mod support;
 
 use layerfs_storage::pack::layout::{
     body_area_offset, parse_header, PackLane, PACK_MAGIC, USED_OFFSET, VERSION_NATIVE,
-    VERSION_ORDINARY, VERSION_POOLED_METADATA, VERSION_SINGLETON, VERSION_WHOLE_FILE,
+    VERSION_NATIVE_STORED, VERSION_ORDINARY, VERSION_POOLED_METADATA, VERSION_SINGLETON,
+    VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_STORED,
 };
 use layerfs_storage::StorageError;
 
@@ -39,12 +40,20 @@ fn pack_of(lane: PackLane, version: u32, groups: u32, body: usize) -> Vec<u8> {
 
 #[test]
 fn every_implemented_framing_is_recognized_by_its_own_version() {
+    // The three payload lanes each have two implemented versions: the one they
+    // write, whose record grammar carries a stored tag, and the one they no longer
+    // write but still read, which is every pack this Store wrote before the stored
+    // tag existed. A version a reader does not implement is refused by name below
+    // rather than trial-decoded, which is what makes the pair meaningful.
     for (version, lane) in [
         (VERSION_ORDINARY, PackLane::Ordinary),
         (VERSION_NATIVE, PackLane::Native),
+        (VERSION_NATIVE_STORED, PackLane::Native),
         (VERSION_WHOLE_FILE, PackLane::WholeFile),
+        (VERSION_WHOLE_FILE_STORED, PackLane::WholeFile),
         (VERSION_POOLED_METADATA, PackLane::PooledMetadata),
         (VERSION_SINGLETON, PackLane::Singleton),
+        (VERSION_SINGLETON_STORED, PackLane::Singleton),
     ] {
         let bytes = pack_of(lane, version, 1, 32);
         let parsed = parse_header(&bytes).unwrap_or_else(|error| panic!("{lane:?}: {error}"));

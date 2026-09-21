@@ -85,6 +85,16 @@ pub struct SaveProfile {
     /// ordinary save is unaffected; `SaveOutcome`'s equality already excludes this
     /// whole struct, so enabling it cannot make a determinism comparison fail.
     pub reuse_repeat: u64,
+    /// Payload records this save stored verbatim rather than as a codec frame.
+    ///
+    /// A **count**, like [`reuse_repeat`](Self::reuse_repeat) and deliberately not
+    /// an eighth time bucket: [`total_ns`](Self::total_ns) still sums the seven
+    /// durations, so the split published beside this figure is unchanged by it. It
+    /// exists because "the probe stopped compressing" and "the store stopped
+    /// writing frames" are different claims, and only the second one is the
+    /// treatment: a count taken from each record's own tag says which records a
+    /// reader will take the stored path for.
+    pub stored_records: u64,
 }
 
 /// Diagnostic span totals of the accept path's uncharged regions.
@@ -160,6 +170,19 @@ pub struct DiagProfile {
     pub release_pool_index_ns: u64,
     /// Releasing the retained open pack tails of every lane.
     pub release_tails_ns: u64,
+    /// The stored-frame probe: the bounded-prefix compression that decides whether
+    /// a payload is worth compressing at all.
+    ///
+    /// A region **inside** [`SaveProfile::full_ns`](crate::cas::owner::SaveProfile),
+    /// like every other total here: the probe runs inside the FULL encode the
+    /// caller charges, so `full_ns` contains this charge and the difference is the
+    /// work the probe did not do. It exists because the treatment it belongs to
+    /// trades a whole-payload codec call for a bounded one, and the *count* of
+    /// those calls is worth nothing without the width of what each one compresses:
+    /// the sample is `STORED_PROBE_BYTES` wide and the payload it stands for is
+    /// not, so a saving predicted from the sample alone would be the round-8
+    /// mistake with the sign reversed.
+    pub probe_ns: u64,
 }
 
 impl DiagProfile {
@@ -197,6 +220,7 @@ impl DiagProfile {
             release_candidates_ns,
             release_pool_index_ns,
             release_tails_ns,
+            probe_ns,
         );
     }
 }
@@ -262,6 +286,7 @@ impl SaveProfile {
         self.diag.accumulate(&other.diag);
         self.resolve.accumulate(&other.resolve);
         self.reuse_repeat = self.reuse_repeat.saturating_add(other.reuse_repeat);
+        self.stored_records = self.stored_records.saturating_add(other.stored_records);
         self.full_ns = self.full_ns.saturating_add(other.full_ns);
         self.delta_ns = self.delta_ns.saturating_add(other.delta_ns);
         self.group_ns = self.group_ns.saturating_add(other.group_ns);

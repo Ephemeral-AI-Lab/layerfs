@@ -71,6 +71,26 @@ const GROUP_LEVEL: i32 = 1;
 /// Largest window log of the ordinary group body codec.
 const GROUP_WINDOW_LOG_MAX: u32 = 16;
 
+/// Bytes of a payload the stored-frame probe compresses.
+///
+/// A payload at or below this width is not probed: the sample would be the whole
+/// payload, so the probe would pay for the codec call twice to learn nothing the
+/// frame itself does not already say. `encode_representation` compresses such a
+/// payload once and compares the frame with the payload.
+pub const STORED_PROBE_BYTES: usize = 1024;
+/// Saving a probe must find, as a fraction of the sample, before the payload is
+/// compressed for real.
+///
+/// `STORED_PROBE_SAVING_NUM / STORED_PROBE_SAVING_DEN` is `1/32`, and the
+/// threshold is deliberately *below* the codec's own frame overhead: a frame
+/// carries a four-byte magic, a header and a checksum, which on a 1024-byte
+/// sample is already about 1.3 %. A sample the pinned profile cannot shrink by
+/// 3 % is one the profile cannot shrink, and storing it verbatim costs at most
+/// the 3 % the probe did not find.
+pub const STORED_PROBE_SAVING_NUM: usize = 1;
+/// Denominator of [`STORED_PROBE_SAVING_NUM`].
+pub const STORED_PROBE_SAVING_DEN: usize = 32;
+
 /// Pinned payload codec profile: raw bound, frame bound and window log.
 ///
 /// The chunk profile is fixed by the frozen CDC grammar. The whole-file profile
@@ -260,6 +280,41 @@ impl CompressionWorkspace {
             ))?;
             Ok(frame)
         }
+    }
+
+    /// Reports whether a bounded prefix of `raw` is one this profile cannot shrink.
+    ///
+    /// The sample is the payload's own first [`STORED_PROBE_BYTES`] bytes,
+    /// compressed under the *same* profile the payload would be, so the answer is
+    /// the codec's own and not a proxy statistic's: a sampled prefix that does not
+    /// shrink by [`STORED_PROBE_SAVING_NUM`]/[`STORED_PROBE_SAVING_DEN`] is a
+    /// prefix this profile cannot compress, and the caller stores the payload
+    /// verbatim instead of paying for the whole scan.
+    ///
+    /// A payload at or below the probe width answers `false`: the caller compresses
+    /// it once and compares the frame with the payload, which is the same decision
+    /// for one codec call instead of two.
+    ///
+    /// The answer is an estimate by construction. A prefix is not the payload, and
+    /// a payload whose first [`STORED_PROBE_BYTES`] bytes are unrepresentative is
+    /// stored at its full width. That is a size consequence only: the stored form
+    /// carries the payload itself, so no decision this makes can make a read wrong.
+    pub fn payload_is_incompressible(
+        &mut self,
+        profile: CodecProfile,
+        raw: &[u8],
+    ) -> StorageResult<bool> {
+        if raw.len() <= STORED_PROBE_BYTES {
+            return Ok(false);
+        }
+        let sample = raw
+            .get(..STORED_PROBE_BYTES)
+            .ok_or(StorageError::Integrity("stored-frame probe sample"))?;
+        let frame = self.compress(profile, sample)?;
+        Ok(frame.len().saturating_mul(STORED_PROBE_SAVING_DEN)
+            >= sample
+                .len()
+                .saturating_mul(STORED_PROBE_SAVING_DEN - STORED_PROBE_SAVING_NUM))
     }
 
     /// Compresses `raw` under `profile` against a caller-supplied raw prefix.
