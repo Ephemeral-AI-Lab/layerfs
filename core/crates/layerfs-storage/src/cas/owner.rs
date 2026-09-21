@@ -523,6 +523,20 @@ pub struct MutationOwner {
     pub(super) pending_values: BTreeMap<[u8; 73], u32>,
     /// Next ordinal this save may assign.
     pub(super) next_ordinal: Option<u64>,
+    /// First ordinal this save does **not** hold.
+    ///
+    /// A reservation takes a block rather than exactly what one leaf needs, so
+    /// the cursor above is only usable while it stays below this. A leaf whose
+    /// fresh values do not fit the remainder reserves a new block; the remainder
+    /// is abandoned, which is the declared cost of the block
+    /// (`policy::ORDINAL_RESERVE_BLOCK`).
+    pub(super) ordinal_block_end: Option<u64>,
+    /// Reservations this save has made, exact and blocked alike.
+    ///
+    /// The first [`crate::policy::ORDINAL_RESERVE_AFTER`] are exact, because the
+    /// ordinals themselves are part of what a pooled leaf body contains; a save
+    /// that reserves this often is one whose blocks pay for that.
+    pub(super) ordinal_reservations: usize,
     /// True once the index was synchronized inside this save.
     pub(super) pool_synced: bool,
     /// Pooled representation outcomes of this save.

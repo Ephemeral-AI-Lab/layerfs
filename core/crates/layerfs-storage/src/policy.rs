@@ -228,6 +228,42 @@ pub const INODE_LEAF_LIMIT: usize = 8_192;
 /// separate byte ceiling. A 32 MiB constant with no reader used to sit beside it
 /// and overstated the real bound by an order of magnitude.
 pub const METADATA_INDEX_VALUES: usize = 131_072;
+/// Smallest block of pooled ordinals one reservation takes.
+///
+/// A reservation is a step: it is acknowledged before any value uses it, so an
+/// aborted save never hands the same ordinal out again (`cas::pool_lane`). That
+/// guarantee is about *when* the statement is acknowledged, not about how many
+/// ordinals it covers, so this is the granularity of the step and not its
+/// existence. One reservation per leaf closes the wave's transaction once per
+/// leaf - measured at **~207 reservations and ~210 of #219's 285 COMMITs** - and
+/// every closed transaction rewrites the pages dirtied in it again, because the
+/// connection's journal is in memory and a committed page stays in the pager
+/// cache. The block is the *smallest* number of ordinals a reservation takes, so
+/// a leaf that needs more still gets exactly what it needs; the cost is that up
+/// to `ORDINAL_RESERVE_BLOCK - 1` ordinals are burnt when a save aborts, out of a
+/// 32-bit space, and that the retained window's value count over-claims by the
+/// same bound.
+pub const ORDINAL_RESERVE_BLOCK: usize = 1024;
+/// Leaves one blocked reservation covers, as a multiple of the demand observed.
+///
+/// The block is `fresh_values_of_this_leaf * ORDINAL_BLOCK_LEAVES`, not a fixed
+/// count: a workload whose leaves carry a steady number of fresh values consumes
+/// its block exactly, so the ordinals the catalogue hands out stay as dense as
+/// they were, and one whose leaves vary wastes at most `ORDINAL_BLOCK_LEAVES - 1`
+/// leaves' worth per block. A fixed block was measured instead and rejected: on a
+/// 1,312-leaf fixture with 100 values per leaf it handed out 134,645 ordinals for
+/// 131,200 values and pulled the retained window past its bound three leaves
+/// early - both of which the block's own size caused and this one does not.
+pub const ORDINAL_BLOCK_LEAVES: usize = 16;
+/// Exact reservations a save makes before it starts taking blocks.
+///
+/// The ordinals are part of a pooled leaf body, so a save's *first* reservations
+/// are exact and the ordinal sequence a small workload sees is unchanged. A save
+/// that has reserved this many times is one that will reserve many more, which is
+/// where the block pays: `cas::pool_lane` measured a one-value leaf's delta
+/// program at 50 bytes with contiguous ordinals and 57 - a tie with its FULL
+/// alternative, and a tie stores FULL - with the next block's first ordinal.
+pub const ORDINAL_RESERVE_AFTER: usize = 4;
 /// Persisted storage policy: one profile plus the configurable construction values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StoragePolicy {

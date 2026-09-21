@@ -203,11 +203,64 @@ pub(crate) fn reserve_ordinals(connection: &Connection, count: usize) -> Storage
         .filter(|end| *end <= u32::MAX as i64 + 1)
         .ok_or(StorageError::Integrity("metadata ordinal maximum"))?;
     connection.execute(
-        "UPDATE store_policy SET next_ordinal = ?1,
-         metadata_window_start = CASE WHEN metadata_window_values + ?2 > 131072 THEN ?3 ELSE metadata_window_start END,
-         metadata_window_values = CASE WHEN metadata_window_values + ?2 > 131072 THEN ?2 ELSE metadata_window_values + ?2 END
-         WHERE id = 1",
-        [end, count as i64, first],
+        "UPDATE store_policy SET next_ordinal = ?1 WHERE id = 1",
+        [end],
     )?;
     u32::try_from(first).map_err(|_| StorageError::Integrity("metadata ordinal maximum"))
+}
+
+/// Releases a reservation's unused tail, if nothing has reserved since.
+///
+/// A reservation is committed before the values that use it, so an ordinal it
+/// handed out is never handed out again. Ordinals it did **not** hand out are a
+/// different matter: the block exists so one acknowledgement covers many leaves,
+/// and a save that ends with the block only partly consumed would otherwise leave
+/// a hole in the ordinal space for ever - measured at 600 ordinals on a
+/// 1,312-leaf fixture, which moved the retained window's crossing three leaves
+/// earlier than the values in it warranted.
+///
+/// The release is a compare-and-swap on the reservation the save itself made: it
+/// applies only while `next_ordinal` still holds the end of that block. A second
+/// writer that reserved in between leaves the value alone, so the tail is simply
+/// not reclaimed - a wasted tail, never an ordinal handed out twice.
+pub(crate) fn release_ordinals(
+    connection: &Connection,
+    used_end: u64,
+    reserved_end: u64,
+) -> StorageResult<()> {
+    if used_end >= reserved_end {
+        return Ok(());
+    }
+    let used_end =
+        i64::try_from(used_end).map_err(|_| StorageError::Integrity("metadata ordinal maximum"))?;
+    let reserved_end = i64::try_from(reserved_end)
+        .map_err(|_| StorageError::Integrity("metadata ordinal maximum"))?;
+    connection.execute(
+        "UPDATE store_policy SET next_ordinal = ?1 WHERE id = 1 AND next_ordinal = ?2",
+        [used_end, reserved_end],
+    )?;
+    Ok(())
+}
+
+/// Counts `used` handed-out ordinals into the retained window, from `first`.
+///
+/// The window is a **value** count, not a reservation count, and it is charged
+/// where the values are: a reservation may cover more ordinals than a leaf uses
+/// (`cas::pool_lane` takes a block once a save has shown it reserves often), and a
+/// window that counted the block would release its candidates earlier than the
+/// values in it warrant - the index would miss values it still holds and store
+/// them a second time. The statement is the one `reserve_ordinals` used to carry,
+/// moved to the site that knows how many ordinals were actually handed out.
+pub(crate) fn note_window(connection: &Connection, used: usize, first: u32) -> StorageResult<()> {
+    if used == 0 {
+        return Ok(());
+    }
+    connection.execute(
+        "UPDATE store_policy SET
+         metadata_window_start = CASE WHEN metadata_window_values + ?1 > 131072 THEN ?2 ELSE metadata_window_start END,
+         metadata_window_values = CASE WHEN metadata_window_values + ?1 > 131072 THEN ?1 ELSE metadata_window_values + ?1 END
+         WHERE id = 1",
+        rusqlite::params![used as i64, i64::from(first)],
+    )?;
+    Ok(())
 }

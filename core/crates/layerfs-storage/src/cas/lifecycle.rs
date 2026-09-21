@@ -113,6 +113,8 @@ impl MutationOwner {
             wave_rows: Vec::new(),
             pending_values: BTreeMap::new(),
             next_ordinal: None,
+            ordinal_block_end: None,
+            ordinal_reservations: 0,
             pool_synced: false,
             pool: PoolCounters::default(),
         })
@@ -263,6 +265,12 @@ impl MutationOwner {
         let started = Instant::now();
         ownership::publish(&self.connection, self.save_id)?;
         SaveProfile::charge(&mut self.profile.diag.publish_ns, started);
+        // The ordinal block this save still holds went with the save: what it did
+        // not hand out is returned to the catalogue, in the transaction that
+        // publishes the values that were handed out (`ownership::release_ordinals`).
+        if let (Some(used_end), Some(reserved_end)) = (self.next_ordinal, self.ordinal_block_end) {
+            ownership::release_ordinals(&self.connection, used_end, reserved_end)?;
+        }
         self.advance_pack_if_moved()?;
         let started = Instant::now();
         write::commit(&self.connection)?;

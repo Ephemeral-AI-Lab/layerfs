@@ -1,0 +1,7 @@
+next_ordinal           10164  (values handed out: 10163)
+window                 start 1, values 10163
+value groups           207  (ordinals 1 .. 10113)
+values per reservation 49.1
+reservations today     207
+reservations as registered: 17 exact-then-block
+ordinals handed out today: 10163, as registered: 10163 (tail released)

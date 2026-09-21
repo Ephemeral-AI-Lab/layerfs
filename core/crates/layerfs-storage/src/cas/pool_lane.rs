@@ -116,21 +116,58 @@ impl MutationOwner {
             if !self.transaction_open {
                 self.begin_write()?;
             }
-            self.next_ordinal = Some(u64::from(crate::sqlite::ownership::reserve_ordinals(
-                &self.connection,
-                fresh_count,
-            )?));
-            // **The reservation is its own step.** An aborted save's ordinal
-            // reservations are never reused - a value the catalogue handed out is
-            // not handed out again, whatever happened to the save that asked for it
-            // - so this statement is acknowledged here rather than with the wave
-            // that happens to contain it. A wave's transaction is closed at this
-            // point and reopened by the next write, which is exactly the boundary
-            // every seal used to draw.
-            self.commit_reservation()?;
+            // **The reservation is still its own step, and now it is a block.**
+            // An aborted save's ordinal reservations are never reused - a value the
+            // catalogue handed out is not handed out again, whatever happened to the
+            // save that asked for it - so this statement is acknowledged here rather
+            // than with the wave that happens to contain it. What changed is how
+            // much one acknowledgement covers: a reservation takes at least
+            // `ORDINAL_RESERVE_BLOCK` ordinals, so a leaf whose fresh values fit the
+            // remainder of the block this save already holds reserves nothing and
+            // commits nothing. One reservation per leaf closed the wave's
+            // transaction once per leaf, and a closed transaction rewrites the pages
+            // dirtied in it again the next time they are dirty.
+            let cursor = self.next_ordinal.unwrap_or(0);
+            let remaining = self.ordinal_block_end.unwrap_or(0).saturating_sub(cursor);
+            if u64::try_from(fresh_count).unwrap_or(u64::MAX) > remaining {
+                // **The first reservations are exact, and that is not a
+                // formality.** The ordinals a save hands out are part of the
+                // bytes a pooled leaf body is made of, and the delta program that
+                // compares a leaf with its predecessor is a byte-level
+                // COPY/INSERT diff with a 41-byte preamble - so a *discontinuity*
+                // in the ordinals makes a small leaf's body differ from its base
+                // in a way the program pays for. Measured on a one-value leaf: a
+                // contiguous ordinal gives a 50-byte program against a 57-byte
+                // FULL, and an ordinal 1,024 further on gives a 57-byte program
+                // against the same 57 - a tie, and a tie stores FULL. A save that
+                // has already reserved exactly this many times has shown it will
+                // reserve many more, and from there a block is what keeps the
+                // wave's transaction from being closed once per leaf.
+                let block = if self.ordinal_reservations < crate::policy::ORDINAL_RESERVE_AFTER {
+                    fresh_count
+                } else {
+                    fresh_count.saturating_mul(crate::policy::ORDINAL_BLOCK_LEAVES)
+                };
+                let first = u64::from(crate::sqlite::ownership::reserve_ordinals(
+                    &self.connection,
+                    block,
+                )?);
+                self.next_ordinal = Some(first);
+                self.ordinal_block_end = Some(
+                    first
+                        .checked_add(block as u64)
+                        .ok_or(StorageError::Integrity("metadata ordinal maximum"))?,
+                );
+                self.ordinal_reservations = self.ordinal_reservations.saturating_add(1);
+                self.commit_reservation()?;
+            }
         }
         let mut ordinals = Vec::with_capacity(leaf.rows.len());
         let mut fresh: Vec<[u8; INODE_VALUE_BYTES]> = Vec::new();
+        // The first ordinal this leaf's own values take, which is where the
+        // retained window restarts when this leaf is the one that crosses its
+        // bound.
+        let mut first_fresh: Option<u32> = None;
         for row in &leaf.rows {
             let ordinal = match self.pending_values.get(&row.value) {
                 Some(ordinal) => {
@@ -148,6 +185,9 @@ impl MutationOwner {
                             return Err(StorageError::Integrity("metadata pending values"));
                         }
                         self.pending_values.insert(row.value, ordinal);
+                        if first_fresh.is_none() {
+                            first_fresh = Some(ordinal);
+                        }
                         fresh.push(row.value);
                         self.pool.new_values += 1;
                         ordinal
@@ -155,6 +195,19 @@ impl MutationOwner {
                 },
             };
             ordinals.push(ordinal);
+        }
+        // The window counts the values this leaf handed out, not the block a
+        // reservation may have taken for them, and it is charged before the groups
+        // are written so the index the write synchronizes already sees the slide.
+        if fresh_count != 0 {
+            if !self.transaction_open {
+                self.begin_write()?;
+            }
+            crate::sqlite::ownership::note_window(
+                &self.connection,
+                fresh_count,
+                first_fresh.ok_or(StorageError::Integrity("metadata window ordinal"))?,
+            )?;
         }
         self.write_value_groups(&fresh)?;
         // The leaf's value groups are catalogue rows in this save's own open
