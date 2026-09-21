@@ -411,5 +411,7 @@
   "earlier_single_pair_percent": 6.75
  },
  "topology": "host-to-host loopback, one daemon process per operation; not the frozen --cpus=1 container topology",
- "harness_note": "the runner's summary step crashed twice on its own list filters after all six arms had completed; the arms are intact on disk and this summary is recomputed from their receipts"
+ "harness_note": "the runner's summary step crashed twice on its own list filters after all six arms had completed; the arms are intact on disk and this summary is recomputed from their receipts",
+ "payload_sha256": "af242f0567a27ad29d7dac2170b0bd96f73facb33ec3754c4feb6c71b469d864",
+ "arms_sha256": "e2516700b35fa40336b8a8bda02f8ea6391989013dcdf6b5ee5194e7d2e8d55b"
 }
