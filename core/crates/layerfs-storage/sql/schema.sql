@@ -1,4 +1,4 @@
--- Candidate schema 11: save-owned physical data, atomic per-save publication, the
+-- Candidate schema 10: save-owned physical data, atomic per-save publication, the
 -- configured per-Store writer budget and the reserved-directory pack framing.
 -- Canonical profile 1 and the pack framing are unchanged from schema 9: a pack's
 -- directory still sits in a region reserved at the lane's own width, the pack
@@ -14,17 +14,10 @@
 -- no stored byte changes, so the table shapes below are identical to schema 9 and
 -- no row is rewritten: the version moves because a schema-9 Store carries an index
 -- this build no longer requires, and it is refused rather than read.
--- Schema 11 raises the ordinary, native, whole-file and pooled pack limit from
--- 256 KiB to 1 MiB (#219): `policy.rs`'s PACK_LIMIT is not persisted, but the
--- reader refuses a pack longer than its lane's limit, so a schema-10 Store - whose
--- packs are all at most 256 KiB and are still readable - is refused at open rather
--- than left as a Store this build may write into and a previous build may not
--- read back. No column, no constraint and no stored byte changes, so the table
--- shapes below are identical to schema 10 and no row is rewritten.
 -- Older schemas are rejected, never migrated. Duplicate locators and bytes are
 -- permitted.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 11;
+PRAGMA user_version = 10;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),

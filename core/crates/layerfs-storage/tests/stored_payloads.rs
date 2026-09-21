@@ -224,9 +224,10 @@ fn a_payload_larger_than_a_compact_pack_is_stored_in_the_singleton_lane() {
     // The largest payload the whole-file lane accepts at this cutoff, which is also
     // one a compact pack cannot hold: `encoding/full.rs:273-278` admits a compact
     // record only while the control area, the lane's whole reserved directory region
-    // and the group body fit the pack, and at a 1 MiB cutoff the construction's own
-    // ceiling is the pack limit itself. A payload that merely beat the older 256 KiB
-    // limit no longer states this case.
+    // and the group body fit the pack, which for a stored payload is
+    // `raw + 1,065 <= pack_limit`. This cutoff's ceiling is 1,048,575 B, over that
+    // bound at the 256 KiB limit and at the 1 MiB one, so the case is stated by the
+    // two bounds rather than by a payload that merely beat one of them.
     let raw = noise(construction.capacities().whole_file_raw_limit);
     let mut collected = Collected::new();
     let constructed = disabled(|scope| {

@@ -19,8 +19,8 @@
 //! pack row may be allocated with spare capacity and still declare exactly how
 //! many of its bytes are a pack. That is what lets the write path use incremental
 //! BLOB I/O: a small column elsewhere on the row would be cheaper to update, but
-//! any `UPDATE` of a pack row rewrites that row's whole BLOB, which is the cost
-//! this format exists to remove.
+//! any `UPDATE` of a row holding a 256 KiB BLOB rewrites the whole BLOB, which is
+//! the cost this format exists to remove.
 //!
 //! Versions 1, 2, 4, 6 and 7 are the **pre-v9 framings**: a directory that grows
 //! at the front and no declared length. They belong to the schema-8 Store, which
