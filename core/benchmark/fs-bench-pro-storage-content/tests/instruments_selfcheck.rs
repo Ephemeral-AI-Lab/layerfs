@@ -98,6 +98,16 @@ fn the_heap_window_attributes_a_known_allocation_pattern() {
     for index in (0..PATTERN).step_by(4096) {
         buffer[index] = (index % 251) as u8;
     }
+    // **`black_box` is load-bearing, and its absence was a silent release-mode
+    // failure.** Nothing below reads the buffer, so with optimisations on the
+    // allocator, the loop and the buffer are all dead code and the window reads 0
+    // for a 4 MiB pattern - the test then fails in `--release` and passes in debug,
+    // which is how it went unnoticed: the assertion below the test in this file
+    // (`an_allocating_window_charges_more_than_a_quiet_one`) already pins its buffer
+    // this way and this one did not. Measured on 2026-09-21: without this line,
+    // release fails with "a live 4194304-byte buffer produced a peak of 0 bytes" at
+    // this tree and at its parent; with it, release passes.
+    std::hint::black_box(&mut buffer);
     let window = heap_end();
 
     assert!(
