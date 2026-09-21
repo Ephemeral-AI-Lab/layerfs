@@ -43,7 +43,22 @@ impl MutationOwner {
             })?
         };
         self.counters.presence_queries = self.counters.presence_queries.saturating_add(queries);
-        let record = self.select_record(object, advisory)?;
+        // **Only a placed row can be a delta base.** The whole-file lane's groups
+        // are no longer sealed per record, so a member this operation has already
+        // admitted is still waiting in an open group when a later offer asks
+        // whether it can be a base. It has no row, and a selection that asks
+        // storage would find nothing and silently lose the edge the winner cache
+        // proposes. The group is therefore placed *before* selection is asked for
+        // a representation for an object that could name one of its members: the
+        // caller's advisory list first, then whatever the cache proposes for this
+        // exact payload.
+        //
+        // The signature is computed here rather than there because this is the
+        // only place that can act on the answer; it is handed to the selection, so
+        // it is still computed exactly once per object, as it was when only the
+        // selection computed it.
+        let prehashed = self.pending_base_for(object, advisory, availability)?;
+        let record = self.select_record(object, advisory, prehashed)?;
         let lane = record.lane;
         let index = lane.index();
         let body = crate::pack::assemble::framed_length(std::slice::from_ref(&record.record))?;
@@ -57,8 +72,12 @@ impl MutationOwner {
         }
         let occupied = !self.groups[index].records.is_empty();
         let must_seal = match lane {
-            PackLane::WholeFile | PackLane::PooledMetadata | PackLane::Singleton => occupied,
-            PackLane::Ordinary | PackLane::Native => {
+            // The whole-file lane seals on the framed length it would write, like
+            // the ordinary and native lanes: its groups carry many records now, so
+            // a group is a framing unit rather than a single record. The pooled and
+            // singleton lanes still hold exactly one record by grammar.
+            PackLane::PooledMetadata | PackLane::Singleton => occupied,
+            PackLane::Ordinary | PackLane::Native | PackLane::WholeFile => {
                 // The seal decision is the framed length the group *would* have,
                 // projected through the same identity that frames it: the count,
                 // its end offsets and the payload, not a per-record framed length
@@ -96,20 +115,52 @@ impl MutationOwner {
             base_object_id: record.base,
         });
         availability.inserted(object.id());
-        if matches!(
-            lane,
-            PackLane::WholeFile | PackLane::PooledMetadata | PackLane::Singleton
-        ) {
+        if matches!(lane, PackLane::PooledMetadata | PackLane::Singleton) {
             self.seal_group(lane, availability)?;
         }
         crate::cas::owner::SaveProfile::charge(&mut self.profile.diag.offer_total_ns, whole);
         Ok(())
     }
 
+    /// Places the open whole-file group when a later offer could name a member.
+    ///
+    /// Returns the offered payload's own signature when it had to be computed -
+    /// the whole-file lane is the only lane whose records enter the winner cache -
+    /// and `None` otherwise, so a selection that does not need it pays nothing.
+    fn pending_base_for(
+        &mut self,
+        object: &FinalizedObject,
+        advisory: &[ObjectId],
+        availability: &mut Availability,
+    ) -> StorageResult<Option<[u64; 8]>> {
+        if PackLane::for_role(object.role()) != PackLane::WholeFile {
+            return Ok(None);
+        }
+        // A listed predecessor is a base candidate this caller has already named,
+        // and the cache can propose another. Both are questions only a placed row
+        // can answer, so both are asked before selection runs.
+        let listed = advisory.iter().any(|id| self.pending_member(*id));
+        let raw = crate::encoding::raw_payload(object.canonical(), object.role())?;
+        let signature = crate::encoding::delta::candidates::signature(raw);
+        let proposed = {
+            let candidates = self
+                .candidates
+                .lock()
+                .map_err(|_| StorageError::Integrity("candidate index lock"))?;
+            candidates.find(object.id(), &signature)
+        };
+        let proposed_pending = proposed.is_some_and(|id| self.pending_member(id));
+        if listed || proposed_pending {
+            self.seal_group(PackLane::WholeFile, availability)?;
+        }
+        Ok(Some(signature))
+    }
+
     fn select_record(
         &mut self,
         object: &FinalizedObject,
         advisory: &[ObjectId],
+        signature: Option<[u64; 8]>,
     ) -> StorageResult<crate::encoding::EncodedRecord> {
         if object.role() == ObjectRole::InodeLeaf {
             return self.select_pooled(object, advisory);
@@ -133,6 +184,7 @@ impl MutationOwner {
             decode: &mut self.decompression,
             chain: &mut self.chain,
             chain_total: &mut self.chain_total,
+            signature,
             counters: &mut self.delta,
             profile: &mut self.profile,
         };

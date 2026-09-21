@@ -14,7 +14,7 @@ use layerfs_content::{ConstructionPolicy, FinalizedObject, ObjectRole};
 use layerfs_storage::encoding::delta::record::{parse, FULL_TAG, PREFIX_TAG, STORED_TAG};
 use layerfs_storage::pack::layout::{
     group_view, parse_header, PackLane, VERSION_NATIVE, VERSION_NATIVE_STORED, VERSION_SINGLETON,
-    VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_STORED,
+    VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_GROUPED,
 };
 use layerfs_storage::{StoragePolicy, Store};
 use support::{
@@ -43,6 +43,20 @@ fn pack_of_object(path: &std::path::Path, root: layerfs_content::ObjectId) -> Ve
 
 fn version(pack: &[u8]) -> u32 {
     u32::from_le_bytes(pack[8..12].try_into().expect("pack version"))
+}
+
+/// One record of a compact whole-file pack, as the lane stores it.
+///
+/// The lane's directory is starts-only, so the group's own body carries the record
+/// boundaries: one count and one end offset per record, then the compact records
+/// with their two length fields dropped.
+fn whole_file_record(pack: &[u8], group: usize, record: usize) -> Vec<u8> {
+    let header = parse_header(pack).expect("pack header");
+    assert_eq!(header.lane, PackLane::WholeFile);
+    let view = group_view(pack, header, group).expect("group view");
+    layerfs_storage::encoding::framed_record(&pack[view.start..view.end], record)
+        .expect("group record")
+        .to_vec()
 }
 
 #[test]
@@ -80,14 +94,13 @@ fn a_payload_the_codec_cannot_shrink_is_stored_verbatim_and_reads_back() {
     );
     assert_eq!(
         version(&pack),
-        VERSION_WHOLE_FILE_STORED,
-        "a pack written now declares the version whose grammar carries a stored tag"
+        VERSION_WHOLE_FILE_GROUPED,
+        "a pack written now declares the version whose group grammar carries the record boundaries"
     );
-    // The compact lane holds one record per group and drops the record's two
-    // length fields at assembly, so the group body is the tag and the payload.
-    let header = parse_header(&pack).expect("header");
-    let view = group_view(&pack, header, 0).expect("group view");
-    let record = &pack[view.start..view.end];
+    // The compact lane drops each record's two length fields at assembly and the
+    // group's own end offsets carry the boundaries, so a record that is stored
+    // verbatim is its tag and its payload and nothing else.
+    let record = whole_file_record(&pack, 0, 0);
     assert_eq!(record[0], STORED_TAG);
     assert_eq!(
         record.len(),
@@ -117,9 +130,7 @@ fn a_payload_the_codec_can_shrink_keeps_its_frame_and_its_own_tag() {
     assert_eq!(values[0], canonical);
 
     let pack = pack_of_object(&path, root);
-    let header = parse_header(&pack).expect("header");
-    let view = group_view(&pack, header, 0).expect("group view");
-    let record = &pack[view.start..view.end];
+    let record = whole_file_record(&pack, 0, 0);
     assert_eq!(record[0], FULL_TAG);
     assert!(
         record.len() < raw.len() + 1,
@@ -292,10 +303,9 @@ fn a_payload_below_the_probe_width_is_decided_by_its_own_frame() {
     drop(store);
 
     let pack = pack_of_object(&path, root);
-    let header = parse_header(&pack).expect("header");
-    let view = group_view(&pack, header, 0).expect("group view");
-    assert_eq!(pack[view.start], STORED_TAG);
-    assert_eq!(view.end - view.start, raw.len() + 1);
+    let record = whole_file_record(&pack, 0, 0);
+    assert_eq!(record[0], STORED_TAG);
+    assert_eq!(record.len(), raw.len() + 1);
 
     let reopened = open_store(&path);
     let (values, _) = read_objects(&reopened, &[root]).expect("read succeeds");
@@ -327,16 +337,14 @@ fn a_store_of_compressible_content_still_writes_only_the_versions_it_writes() {
         parse_header(&pack).expect("header").lane,
         PackLane::WholeFile
     );
-    assert_eq!(version(&pack), VERSION_WHOLE_FILE_STORED);
-    // The versions this lane no longer writes are still recognized, which is what
-    // keeps every pack an earlier build wrote readable.
-    assert!(VERSION_WHOLE_FILE < VERSION_WHOLE_FILE_STORED);
-    assert!(VERSION_NATIVE < VERSION_NATIVE_STORED);
-    assert!(VERSION_SINGLETON < VERSION_SINGLETON_STORED);
-    assert!(matches!(
-        FinalizedObject::new(ObjectRole::WholeFile, Vec::new()),
-        Err(_)
-    ));
+    assert_eq!(version(&pack), VERSION_WHOLE_FILE_GROUPED);
+    // That every version this crate has ever written - including the ones no lane
+    // writes any more - is still recognized and mapped to its lane is asserted
+    // against synthetic headers in `physical_formats.rs`, where the framings are
+    // enumerated; the two constants are named here so a reader of this file can
+    // see which version this lane writes now.
+    let _ = (VERSION_WHOLE_FILE, VERSION_NATIVE, VERSION_SINGLETON);
+    assert!(FinalizedObject::new(ObjectRole::WholeFile, Vec::new()).is_err());
 }
 
 #[test]

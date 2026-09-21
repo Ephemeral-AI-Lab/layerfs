@@ -16,9 +16,7 @@ use crate::encoding::codec::{CodecProfile, CompressionWorkspace};
 use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::FULL_TAG;
-use crate::pack::layout::{
-    directory_capacity, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, WHOLE_FILE_COMPACT_DROP,
-};
+use crate::pack::layout::{directory_capacity, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN};
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
 
 /// One framed record ready to join a group.
@@ -261,15 +259,17 @@ fn plan_lane(
         return Ok((lane, build(lane)?));
     }
     let compact = build(PackLane::WholeFile)?;
+    // A whole-file record lands in the compact lane only if a pack can hold a
+    // group of it whole: the control area, the lane's **whole** reserved
+    // directory region - which the format allocates whether or not the pack fills
+    // it - and the group body, which is the compact record plus the record count
+    // and one end offset. Sizing this against one directory entry instead would
+    // admit a record that placement then refuses with
+    // `CapacityExceeded { pack.assembled_length }`.
     let body = compact
         .len()
-        .checked_sub(WHOLE_FILE_COMPACT_DROP)
-        .ok_or(StorageError::Integrity("compact record width"))?;
-    // A whole-file record lands in the compact lane only if a pack can hold it
-    // whole: the control area, the lane's **whole** reserved directory region -
-    // which the format allocates whether or not the pack fills it - and the body.
-    // Sizing this against one directory entry instead would admit a record that
-    // placement then refuses with `CapacityExceeded { pack.assembled_length }`.
+        .checked_add(8)
+        .ok_or(StorageError::Integrity("compact group width"))?;
     let contribution = HEADER_LEN + directory_capacity(PackLane::WholeFile) + body;
     if contribution <= capacities.pack_limit {
         return Ok((PackLane::WholeFile, compact));

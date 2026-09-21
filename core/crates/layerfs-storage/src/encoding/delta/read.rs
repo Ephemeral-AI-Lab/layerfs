@@ -435,12 +435,10 @@ pub fn stored_base(
             )
         }
         PackLane::WholeFile => {
-            if location.record_number != 0 {
-                return Err(StorageError::Integrity("compact record ordinal"));
-            }
+            let record = crate::encoding::decode::framed_record(selected, location.record_number)?;
             crate::encoding::delta::record::stored_base(
                 PackLane::WholeFile,
-                selected,
+                record,
                 location.canonical_length,
                 location.role,
             )

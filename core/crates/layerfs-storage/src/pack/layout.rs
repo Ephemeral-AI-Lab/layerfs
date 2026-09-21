@@ -82,7 +82,18 @@ pub const VERSION_SINGLETON: u32 = 13;
 /// frame, so their grammar is unchanged and their versions stay where they were.
 pub const VERSION_NATIVE_STORED: u32 = 15;
 /// Compact whole-file framing that may carry a payload stored verbatim.
+///
+/// Still read, and no longer written: this version's whole-file groups hold
+/// exactly one record, which is the shape [`VERSION_WHOLE_FILE_GROUPED`] removes.
 pub const VERSION_WHOLE_FILE_STORED: u32 = 14;
+/// Compact whole-file framing whose groups carry many records.
+///
+/// The group body gains the one thing the single-record form derived from the
+/// group's own extent: the record boundaries. They are the same four-byte end
+/// offsets the native lane's groups already carry, so the compact record form
+/// itself - the tag, an optional base identity and the frame - is unchanged, and
+/// so is this lane's starts-only directory.
+pub const VERSION_WHOLE_FILE_GROUPED: u32 = 17;
 /// Singleton framing that may carry a payload stored verbatim.
 pub const VERSION_SINGLETON_STORED: u32 = 16;
 
@@ -120,7 +131,7 @@ impl PackLane {
         match self {
             Self::Ordinary => VERSION_ORDINARY,
             Self::Native => VERSION_NATIVE_STORED,
-            Self::WholeFile => VERSION_WHOLE_FILE_STORED,
+            Self::WholeFile => VERSION_WHOLE_FILE_GROUPED,
             Self::PooledMetadata => VERSION_POOLED_METADATA,
             Self::Singleton => VERSION_SINGLETON_STORED,
         }
@@ -170,11 +181,17 @@ impl PackLane {
     }
 
     /// Largest decoded group body of this lane.
+    ///
+    /// The whole-file lane's groups are bounded by the pack they have to fit, not
+    /// by the group codec's ceiling: its bodies are stored raw and a whole-file
+    /// payload may be a whole construction cutoff wide, so a group of one can
+    /// legitimately exceed [`GROUP_LIMIT`].
     pub const fn body_limit(self) -> usize {
         match self {
             Self::PooledMetadata => METADATA_GROUP_LIMIT,
             Self::Singleton => SINGLETON_PACK_LIMIT,
-            Self::Ordinary | Self::Native | Self::WholeFile => GROUP_LIMIT,
+            Self::WholeFile => PACK_LIMIT,
+            Self::Ordinary | Self::Native => GROUP_LIMIT,
         }
     }
 
@@ -217,18 +234,13 @@ impl EncodedGroup {
     ///
     /// The per-group directory entry is charged by [`assembled_length`] and is
     /// deliberately not part of this value.
-    pub fn body_size(&self, lane: PackLane) -> StorageResult<usize> {
-        match lane {
-            PackLane::WholeFile => self
-                .bytes
-                .len()
-                .checked_sub(WHOLE_FILE_COMPACT_DROP)
-                .ok_or(StorageError::Integrity("compact record width")),
-            PackLane::Ordinary
-            | PackLane::Native
-            | PackLane::PooledMetadata
-            | PackLane::Singleton => Ok(self.bytes.len()),
-        }
+    pub fn body_size(&self, _lane: PackLane) -> StorageResult<usize> {
+        // Every lane stores its body as assembled. The compact whole-file lane
+        // used to be the exception, dropping two length fields per record here;
+        // those are dropped where the group's own end offsets are built instead
+        // (`pack::assemble::frame_compact_group`), so a single-record group's body
+        // is no longer narrower than the group that describes it.
+        Ok(self.bytes.len())
     }
 }
 
@@ -368,7 +380,9 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     let lane = match version {
         VERSION_ORDINARY => PackLane::Ordinary,
         VERSION_NATIVE | VERSION_NATIVE_STORED => PackLane::Native,
-        VERSION_WHOLE_FILE | VERSION_WHOLE_FILE_STORED => PackLane::WholeFile,
+        VERSION_WHOLE_FILE | VERSION_WHOLE_FILE_STORED | VERSION_WHOLE_FILE_GROUPED => {
+            PackLane::WholeFile
+        }
         VERSION_POOLED_METADATA => PackLane::PooledMetadata,
         VERSION_SINGLETON | VERSION_SINGLETON_STORED => PackLane::Singleton,
         _ => {

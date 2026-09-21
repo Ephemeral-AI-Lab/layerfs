@@ -446,17 +446,15 @@ pub fn forge_stored_base(path: &std::path::Path, object: ObjectId, base: ObjectI
                     .expect("group body")
             }
         };
-        // The compact lane stores its record bare: the group body is the record,
-        // with no count or end-offset directory in front of it.
-        let mut records: Vec<Vec<u8>> = if header.lane == PackLane::WholeFile {
-            vec![body]
-        } else {
-            layerfs_storage::encoding::group_records(&body)
-                .expect("group records")
-                .into_iter()
-                .map(<[u8]>::to_vec)
-                .collect()
-        };
+        // Every lane's group body is a count, one end offset per record and the
+        // records, including the compact whole-file lane: its records have no
+        // length fields of their own, which is exactly what the group's own end
+        // offsets supply.
+        let mut records: Vec<Vec<u8>> = layerfs_storage::encoding::group_records(&body)
+            .expect("group records")
+            .into_iter()
+            .map(<[u8]>::to_vec)
+            .collect();
         if group == group_number as usize {
             let record = &mut records[record_number as usize];
             assert_eq!(record[0], 1, "the forged record must be a PREFIX record");
@@ -464,7 +462,17 @@ pub fn forge_stored_base(path: &std::path::Path, object: ObjectId, base: ObjectI
         }
         groups.push(records);
     }
+    // The rebuild path frames the records it read back, so it is only sound for a
+    // lane whose stored record form is the one `build_group` takes. That is every
+    // lane but the compact whole-file one, whose records are stored with their two
+    // length fields dropped and re-framed from them; that lane's bodies are always
+    // stored raw, so it never reaches this path.
     let bytes = if compressed {
+        assert_ne!(
+            header.lane,
+            PackLane::WholeFile,
+            "a compact whole-file group is never compressed"
+        );
         let mut encode = layerfs_storage::encoding::CompressionWorkspace::new().expect("encode");
         let mut encoded = Vec::new();
         for records in &groups {
@@ -474,11 +482,7 @@ pub fn forge_stored_base(path: &std::path::Path, object: ObjectId, base: ObjectI
     } else {
         let mut bytes = pack;
         let view = group_view(&bytes, header, group_number as usize).expect("group view");
-        let mut offset = if header.lane == PackLane::WholeFile {
-            0
-        } else {
-            4 + 4 * groups[group_number as usize].len()
-        };
+        let mut offset = 4 + 4 * groups[group_number as usize].len();
         for record in &groups[group_number as usize][..record_number as usize] {
             offset += record.len();
         }

@@ -1,0 +1,7 @@
+native     records  14466 groups   7125
+ordinary   records   1335 groups     21
+whole      records   9444 groups   9444
+TOTAL                          16590
+whole-file groups if grouped at 49152 B: 519 (from 9444)
+object groups after: 7665 (from 16590), seals removed: 8925
+group framing added: 37776 bytes

@@ -6,7 +6,29 @@ use std::collections::BTreeMap;
 
 use layerfs_content::{construct_bytes, ConstructionPolicy, ObjectId};
 use layerfs_storage::{StorageError, Store};
-use support::{construct_file, create_store, disabled, noise, open_store, read_objects, TempDir};
+use support::{
+    assembled_small_object, construct_file, create_store, disabled, noise, open_store,
+    read_objects, TempDir,
+};
+
+/// Incompressible payloads that do not resemble one another.
+///
+/// `support::noise` is one fixed stream with no seed, so two of its prefixes share
+/// a long common prefix and the winner cache proposes one whole-file record for the
+/// other - a delta edge, not a grouping failure, but not what this case is about.
+/// These are seeded per index instead.
+fn distinct_noise(index: u8, len: usize) -> Vec<u8> {
+    let mut state =
+        0x9e37_79b9_7f4a_7c15_u64 ^ u64::from(index).wrapping_mul(0x2545_f491_4f6c_dd1d);
+    (0..len)
+        .map(|_| {
+            state ^= state.wrapping_shl(7);
+            state ^= state.wrapping_shr(9);
+            state ^= state.wrapping_shl(8);
+            state as u8
+        })
+        .collect()
+}
 
 fn whole_file(raw: &[u8]) -> layerfs_content::FinalizedObject {
     let policy = ConstructionPolicy::frozen_default();
@@ -99,12 +121,89 @@ fn a_full_lane_starts_a_new_pack_and_keeps_existing_locators() {
 }
 
 #[test]
+fn whole_file_records_share_a_group_and_keep_their_own_locators() {
+    // The compact lane's groups hold many records, and its directory is still
+    // starts-only, so the record boundaries live in the group body. Every record
+    // must still resolve to its own bytes through its own ordinal, and the save
+    // must spend one statement and one pack write per *group* rather than one per
+    // record - which is the whole point of the treatment.
+    let dir = TempDir::new("compact-group");
+    let path = dir.store_path("compact-group");
+    let store = create_store(&path);
+    let payloads: Vec<Vec<u8>> = (0..8u8).map(|index| distinct_noise(index, 1_500)).collect();
+    let objects: Vec<_> = payloads.iter().map(|raw| whole_file(raw)).collect();
+    let ids: Vec<_> = objects.iter().map(|object| object.id()).collect();
+
+    let outcome = save_objects(&store, objects);
+    assert_eq!(outcome.inserted, 8);
+    assert_eq!(
+        outcome.packs_created + outcome.pack_appends,
+        1,
+        "eight records of 1.5 KiB share one group and one write"
+    );
+    assert!(
+        outcome.statements < 8,
+        "one statement carries the group's rows: {}",
+        outcome.statements
+    );
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let groups: Vec<i64> = ids
+        .iter()
+        .map(|id| {
+            connection
+                .query_row(
+                    "SELECT group_number FROM objects WHERE object_id = ?1",
+                    [id.to_bytes().to_vec()],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        })
+        .collect();
+    assert!(
+        groups.iter().all(|group| *group == 0),
+        "every record is in the same group: {groups:?}"
+    );
+    let ordinals: Vec<i64> = ids
+        .iter()
+        .map(|id| {
+            connection
+                .query_row(
+                    "SELECT record_number FROM objects WHERE object_id = ?1",
+                    [id.to_bytes().to_vec()],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(
+        ordinals,
+        (0..8).collect::<Vec<i64>>(),
+        "ordinals are the plan's"
+    );
+    drop(connection);
+
+    let reopened = open_store(&path);
+    let (values, _) =
+        disabled(|scope| reopened.read_batch(&ids, scope.child("storage.read"))).unwrap();
+    for (index, raw) in payloads.iter().enumerate() {
+        assert_eq!(
+            values[index],
+            assembled_small_object(raw),
+            "record {index} resolves to its own payload"
+        );
+    }
+}
+
+#[test]
 fn append_reuses_a_pack_without_changing_record_ordinals() {
     let dir = TempDir::new("append");
     let path = dir.store_path("append");
     let store = create_store(&path);
-    let first = whole_file(&noise(1_000));
-    let second = whole_file(&noise(1_100));
+    // Two payloads large enough that each takes its own group: the seal decision
+    // is the framed length the next record would produce against the group target.
+    let first = whole_file(&noise(40_000));
+    let second = whole_file(&noise(41_000));
     let first_id = first.id();
     let second_id = second.id();
 

@@ -236,6 +236,14 @@ pub struct SelectInput<'a> {
     /// as each acquisition completes; `chain` keeps the value of the chain just
     /// resolved, which is what the budget check below compares against.
     pub chain_total: &'a mut ChainCounters,
+    /// The offered payload's own min-hash signature, when the caller computed it.
+    ///
+    /// The signature is a scan of the whole payload, so an operation that has to
+    /// ask the winner cache a question *before* selection runs would otherwise pay
+    /// for it twice. A caller that passes it here has already used it for exactly
+    /// the same question; `None` means the selection computes it itself, which is
+    /// what every caller that does not ask does.
+    pub signature: Option<[u64; 8]>,
     /// Selection outcomes.
     pub counters: &'a mut DeltaCounters,
     /// Nanosecond cost split of the operation this selection belongs to.
@@ -296,6 +304,10 @@ pub fn select(
         // Reaching here is a caller error, not a representation to choose.
         return Err(StorageError::Integrity("pooled metadata leaf selection"));
     }
+    // The payload's own signature, computed at most once for this object: the
+    // caller may have computed it to ask the winner cache a question before this
+    // selection ran, and the cache is exactly what consumes it here.
+    let prehashed = input.signature;
     let started = Instant::now();
     let full = encode_full(canonical, role, input.capacities, encode, input.profile);
     SaveProfile::charge(&mut input.profile.full_ns, started);
@@ -306,9 +318,9 @@ pub fn select(
     let depth_cap = input.capacities.delta_depth_for_role(role);
     if depth_cap == 0 {
         if lane == PackLane::WholeFile {
-            input
-                .candidates
-                .insert(id, signature(raw_payload(canonical, role)?));
+            let raw = raw_payload(canonical, role)?;
+            let sig = prehashed.unwrap_or_else(|| signature(raw));
+            input.candidates.insert(id, sig);
         }
         return Ok(full);
     }
@@ -328,7 +340,8 @@ pub fn select(
         _ => match acquisition(input, role, advisory, depth_cap)? {
             Some(id) => Some(id),
             None => {
-                let found = input.candidates.find(id, &signature(raw));
+                let sig = prehashed.unwrap_or_else(|| signature(raw));
+                let found = input.candidates.find(id, &sig);
                 match found {
                     Some(id) => match probe(input, id, role, depth_cap)? {
                         true => Some(id),
@@ -342,7 +355,8 @@ pub fn select(
     let Some(base_id) = candidate else {
         input.counters.no_candidate = input.counters.no_candidate.saturating_add(1);
         if lane == PackLane::WholeFile {
-            input.candidates.insert(id, signature(raw));
+            let sig = prehashed.unwrap_or_else(|| signature(raw));
+            input.candidates.insert(id, sig);
         }
         return Ok(full);
     };
@@ -366,7 +380,8 @@ pub fn select(
     {
         input.counters.work_exceeded = input.counters.work_exceeded.saturating_add(1);
         if lane == PackLane::WholeFile {
-            input.candidates.insert(id, signature(raw));
+            let sig = prehashed.unwrap_or_else(|| signature(raw));
+            input.candidates.insert(id, sig);
         }
         return Ok(full);
     }

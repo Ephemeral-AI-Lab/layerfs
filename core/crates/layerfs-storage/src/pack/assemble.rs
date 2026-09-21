@@ -75,6 +75,73 @@ pub fn frame_group_bounded(records: &[Vec<u8>], limit: usize) -> StorageResult<V
     Ok(bytes)
 }
 
+/// Largest compact whole-file group body a pack of this lane can hold.
+///
+/// The pack's control area and its whole reserved directory region are allocated
+/// whether or not the pack fills them, so both are charged here - the same
+/// arithmetic `plan_lane` uses to decide that a single record still fits a normal
+/// pack at all.
+pub const WHOLE_FILE_GROUP_BODY_LIMIT: usize =
+    crate::policy::PACK_LIMIT - HEADER_LEN - 4 * crate::policy::GROUP_COUNT_LIMIT;
+
+/// Frames `records` into one compact whole-file group body.
+///
+/// The grammar is the native lane's - one record count, one end offset per record,
+/// then the records - and the records inside it are the compact ones: each
+/// contributes its tag, its optional base identity and its frame, with the two
+/// little-endian length fields dropped, because the group's own end offsets say
+/// exactly what they said. The raw length is re-derived from the canonical length
+/// the locator carries, as it was in the single-record form.
+fn frame_compact_group(records: &[Vec<u8>], limit: usize) -> StorageResult<Vec<u8>> {
+    if records.is_empty() || records.len() > RECORD_COUNT_LIMIT {
+        return Err(StorageError::Integrity("compact group record count"));
+    }
+    let count = u32::try_from(records.len())
+        .map_err(|_| StorageError::Integrity("compact group record count"))?;
+    let framing = 4_usize
+        .checked_add(4 * records.len())
+        .ok_or(StorageError::Integrity("compact group framing"))?;
+    let mut length = framing;
+    for record in records {
+        let body = record
+            .len()
+            .checked_sub(WHOLE_FILE_COMPACT_DROP)
+            .ok_or(StorageError::Integrity("compact record width"))?;
+        if body < 2 {
+            return Err(StorageError::Integrity("compact record width"));
+        }
+        length = length
+            .checked_add(body)
+            .ok_or(StorageError::Integrity("compact group length"))?;
+    }
+    if length > limit {
+        return Err(StorageError::CapacityExceeded {
+            what: "pack.compact_group_body",
+            limit: limit as u64,
+            actual: length as u64,
+        });
+    }
+    let mut bytes = Vec::with_capacity(length);
+    bytes.extend_from_slice(&count.to_le_bytes());
+    let mut end = 0_usize;
+    for record in records {
+        end += record.len() - WHOLE_FILE_COMPACT_DROP;
+        bytes.extend_from_slice(
+            &u32::try_from(end)
+                .map_err(|_| StorageError::Integrity("compact record end"))?
+                .to_le_bytes(),
+        );
+    }
+    for record in records {
+        bytes.push(record[0]);
+        bytes.extend_from_slice(&record[1 + WHOLE_FILE_COMPACT_DROP..]);
+    }
+    if bytes.len() != length {
+        return Err(StorageError::Integrity("compact group assembly"));
+    }
+    Ok(bytes)
+}
+
 /// Framed length of one group body holding `records` records of `payload` bytes.
 ///
 /// A group body is one 4-byte record count, one 4-byte end offset per record and
@@ -116,17 +183,11 @@ pub fn build_group(
 ) -> StorageResult<EncodedGroup> {
     match lane {
         PackLane::WholeFile => {
-            if records.len() != 1 {
-                return Err(StorageError::Integrity("compact group record count"));
-            }
-            let bytes = records[0].clone();
-            if bytes.len() <= WHOLE_FILE_COMPACT_DROP {
-                return Err(StorageError::Integrity("compact record width"));
-            }
+            let bytes = frame_compact_group(records, WHOLE_FILE_GROUP_BODY_LIMIT)?;
             Ok(EncodedGroup {
                 decoded_length: bytes.len(),
                 bytes,
-                records: 1,
+                records: records.len(),
                 codec: GroupCodec::Raw,
             })
         }
@@ -276,7 +337,7 @@ pub fn directory_entries(
                         .to_le_bytes(),
                 );
                 offset = offset
-                    .checked_add(group.bytes.len() - WHOLE_FILE_COMPACT_DROP)
+                    .checked_add(group.bytes.len())
                     .ok_or(StorageError::Integrity("pack size"))?;
             }
             PackLane::Ordinary
@@ -350,19 +411,12 @@ fn checked_pack_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult
     Ok(length)
 }
 
-fn append_body(lane: PackLane, group: &EncodedGroup, bytes: &mut Vec<u8>) -> StorageResult<()> {
-    match lane {
-        PackLane::WholeFile => {
-            // The compact lane stores the record tag and the frame; the two
-            // little-endian length fields are dropped and re-derived from the
-            // canonical length recorded with the locator.
-            bytes.push(group.bytes[0]);
-            bytes.extend_from_slice(&group.bytes[1 + WHOLE_FILE_COMPACT_DROP..]);
-        }
-        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
-            bytes.extend_from_slice(&group.bytes);
-        }
-    }
+fn append_body(_lane: PackLane, group: &EncodedGroup, bytes: &mut Vec<u8>) -> StorageResult<()> {
+    // A group body is written exactly as the group assembled it, for every lane.
+    // The compact whole-file lane's own framing - the dropped length fields -
+    // happens in `frame_compact_group`, where the group's end offsets are built
+    // beside them, so nothing is dropped here any more.
+    bytes.extend_from_slice(&group.bytes);
     Ok(())
 }
 

@@ -150,10 +150,15 @@ pub fn decode_canonical(
             Ok(canonical)
         }
         PackLane::WholeFile => {
-            if location.record_number != 0 {
-                return Err(StorageError::Integrity("compact record ordinal"));
+            if view.codec != GroupCodec::Raw {
+                return Err(StorageError::Integrity("compact group codec"));
             }
-            let parsed = record::parse(PackLane::WholeFile, selected, canonical_length)?;
+            // The group's own directory carries the record boundaries, so the
+            // record is extracted exactly as a native group's is. The compact
+            // record inside has no length fields of its own; `parse` re-derives
+            // the raw length from the canonical length the locator records.
+            let bytes = framed_record(selected, location.record_number)?;
+            let parsed = record::parse(PackLane::WholeFile, bytes, canonical_length)?;
             let raw = decode_payload(
                 PackLane::WholeFile,
                 parsed.tag,
