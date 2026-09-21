@@ -42,6 +42,42 @@ Both cases are also **not size-matched** (6 MB against 100 MB) and are **not
 mix-matched** (100 small files plus a 1 MB anchor against one 100 MB blob). Any
 comparison must say which of the two it is making.
 
+## 1c. Acceptance bar - proposed, owner confirmation pending
+
+The repository declares **no rate target** for either case. Its declared targets are
+times, and both cases already sit far inside them: `PRODUCT_TARGET_NS = 15 s`
+(`shared/runner.py:39`, reporting-only, `PASS` iff `elapsed <= 15 s`), the
+`payload_create_read` ordinary development target of 1-5 s
+(`docs/roadmap/0.1/0.1.3/payload-create-read.md:96`), the strict tier-100
+`pure_call_sum_ns < 1 s` assessment (#47), and the waived 2.7 s cold Init target that
+applies to `namespace-100000`, not to `namespace-10000`. So "gap" is currently
+undefined and must be fixed by the owner before the squads measure. This is the
+proposed bar; do not treat it as approved until the issue says so.
+
+1. **Reproducibility first, for `namespace-10000`.** The candidate must reproduce
+   **<= 578.245 ms (>= 691.8 MB/s)** on a run with a **declared cache contract** and a
+   **passing verification**. Today that row has `cache_contract: null` and
+   `verification_status: NOT_RUN`, the six candidate medians span 402.721-1100.711 ms
+   (median 753.13 ms, ~531 MB/s), and two rows are `INCOMPLETE` - so the 691.8 MB/s
+   figure is a single unverified, cache-undeclared row, not reproducible evidence.
+   This step is therefore a *reproducibility and verification* bar, not a speedup.
+2. **Then the pair.** The same case on the v0.1.6 reference arm - same seed, setup
+   (`fresh-output`), topology, harness and image identity, and the same declared cache
+   state - with the candidate median **<= the reference median**, both reported with
+   their spread. `namespace-10000` has no baseline arm today (8 candidate / 0
+   baseline), so producing it is part of meeting the bar, and `namespace-100000`
+   (15 baseline rows, same 100 MB anchor) is the substitute if pairing from existing
+   receipts is preferred.
+3. **No best-of.** The bar is met by one declared sample per arm at the declared cache
+   state, never by selecting the fastest of several runs. Every non-passing and
+   `INCOMPLETE` row stays in the report.
+
+For `payload-create-100m` the same shape applies with its own numbers: the candidate's
+24 rows span 0.4389-0.7236 s (138-228 MiB/s) with no baseline arm, and the r26-era
+`Previous (ms)` cell of 682.771 ms (~146 MiB/s) is the only reference-era figure, so
+its bar is (2) plus a verification and cache declaration - not a number borrowed from
+a different era.
+
 ## 2. What the harness already supports, and the first thing to establish
 
 - `shared/runner.py --source-arm {baseline,candidate}` (default `candidate`) passes
@@ -84,8 +120,8 @@ comparison must say which of the two it is making.
 
 ## 4. Questions this handoff must answer
 
-1. **Pair both cases.** Does a gap exist at all, per case, on matched arms with
-   declared cache state? Report both arms' identities, the harness/image identity and
+1. **Pair both cases against the section 1c bar.** Does a gap exist at all, per case,
+   on matched arms with declared cache state? Report both arms' identities, the harness/image identity and
    the exact commands. If case 2's baseline arm cannot be produced, say why and mark
    the row `INCOMPLETE` instead of substituting a different era.
 2. **Attribute each case by phase.** Per case: preparation / exec / sdk / commit /
