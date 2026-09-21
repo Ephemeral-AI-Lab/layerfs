@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::mount_failure_worker ... MOUNT_IDENTITY 82 145 0:64 / /stage/workspace/stage ro,nosuid,nodev,noatime - fuse layerfs ro,user_id=0,group_id=0,default_permissions,max_read=131072
+MOUNT_FAILURE_RETAINED phase=Worker cause=Io(Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" }) cleanup=PASS
+MOUNT_FAILURE_CHECK native-worker-spawn-failure-retains-initialized-session PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+

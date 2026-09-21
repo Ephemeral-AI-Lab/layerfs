@@ -531,3 +531,15 @@ checked failures. Service refuses all three controls before Store admission. The
 closed target remains observable and a later signal skips an already-completed
 close. No Workspace/FUSE algorithm, resource limit or dependency changes. Actual
 verification status and remaining writable control prerequisites are in28.
+
+Native Mount failure ownership is corrected against parent
+`3c227266b6740cb9c50f63f0ba27a38d1b8b9a00` in
+[the retained-mount prerequisite](proposal/fuse-workspace-snapshot-overlay/29-mount-failure-ownership.md).
+FUSE mount functions return boxed MountFailure with exact phase/cause and a retained
+MountHandle after every lease reservation failure. One temporary Session transfer
+cell prevents failed worker creation from dropping the only owner. No LayerFS
+constructor cleanup or renewed deadline occurs; explicit unmount owns cleanup.
+Daemon startup keeps the original mount deadline, closes its unserved listener on
+mount failure, and retains incomplete cleanup until a new explicit signal. Checked
+cleanup preserves the original startup error exit. This does not add remote Mount,
+Attach or writable management; exact route evidence and limits belong to29.

@@ -1,0 +1,1816 @@
+core/target-linux/debug/layerfs-daemon:	file format elf64-littleaarch64
+
+0x000024f4: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00003bc7: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000040a0: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000050d4: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0000806b: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000080aa: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00008a2e: DW_TAG_pointer_type
+              DW_AT_type	(0x000080aa "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0000ac84: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0000f17c: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00011175: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x00012895: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00016a5c: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00016a9b: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0001851a: DW_TAG_pointer_type
+              DW_AT_type	(0x00016a9b "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0001c254: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0001d00c: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0001d4ed: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0001ef2e: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0001ef6d: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0001fe54: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00023395: DW_TAG_pointer_type
+              DW_AT_type	(0x0001ef6d "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0002b8f1: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0002c109: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0002c5b4: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0002d57a: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00032edc: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00032f1b: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00033eef: DW_TAG_pointer_type
+              DW_AT_type	(0x00032f1b "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0003a573: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0003b03c: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0003b57d: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0003c7b9: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00041209: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00041248: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00041f57: DW_TAG_pointer_type
+              DW_AT_type	(0x00041248 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0004598c: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0004733d: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0004737c: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00048793: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00048bb4: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0004a1b0: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0004b4dc: DW_TAG_pointer_type
+              DW_AT_type	(0x0004737c "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000579b3: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00059aa5: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0005ad82: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0005b2ab: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0005d8e4: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0005d923: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0005e53f: DW_TAG_pointer_type
+              DW_AT_type	(0x0005d923 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000619cc: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006307d: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000633de: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0006482e: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00065d22: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00065d61: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00066800: DW_TAG_pointer_type
+              DW_AT_type	(0x00065d61 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00069401: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006a787: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006a7c6: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0006bb12: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006bf03: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0006d44f: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006fe6a: DW_TAG_pointer_type
+              DW_AT_type	(0x0006a7c6 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00078828: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0007ae4c: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0007b1dd: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0007c68e: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0007dce5: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0007dd24: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0007e6ab: DW_TAG_pointer_type
+              DW_AT_type	(0x0007dd24 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00082293: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000849f0: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00085488: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00085c3c: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000888e4: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00088923: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0008d147: DW_TAG_pointer_type
+              DW_AT_type	(0x00088923 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00093c4b: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00095c7c: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000961f5: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x00097801: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0009926d: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000992ac: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0009acd9: DW_TAG_pointer_type
+              DW_AT_type	(0x000992ac "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0009e7f5: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0009f2d2: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0009f637: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000a00c3: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000a10b6: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000a10f5: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000a2a1d: DW_TAG_pointer_type
+              DW_AT_type	(0x000a10f5 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000abb91: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000ad24e: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000ae15b: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000af6e8: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000b179e: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000b17dd: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000b203f: DW_TAG_pointer_type
+              DW_AT_type	(0x000b17dd "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000b9aa6: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000baa77: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000bae92: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000bc3a8: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000be42d: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000be46c: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000bec82: DW_TAG_pointer_type
+              DW_AT_type	(0x000be46c "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000c7ead: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000ca83d: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000cae08: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000cb27d: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000cd227: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000cd266: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000cda8c: DW_TAG_pointer_type
+              DW_AT_type	(0x000cd266 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000e1422: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000e37df: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000e3cd5: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000e4499: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000e53dc: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000e541b: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000e5fcf: DW_TAG_pointer_type
+              DW_AT_type	(0x000e541b "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x000f667c: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000f813c: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000f817b: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000f8aa3: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000f8e04: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x000fa254: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000fb120: DW_TAG_pointer_type
+              DW_AT_type	(0x000f817b "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00109304: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0010b443: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0010baa0: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0010c3ae: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0010d5c6: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0010d605: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0010ea3f: DW_TAG_pointer_type
+              DW_AT_type	(0x0010d605 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00115e7f: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00120f3b: DW_TAG_pointer_type
+              DW_AT_type	(0x00115e7f "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("&std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x001247de: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00124f6d: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0012531c: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x001267f1: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00129efa: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00129f39: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0012af72: DW_TAG_pointer_type
+              DW_AT_type	(0x00129f39 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0013337c: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00135568: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001358b1: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x00138c2d: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00138c6c: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x001395be: DW_TAG_pointer_type
+              DW_AT_type	(0x0013337c "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("&std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0013966f: DW_TAG_pointer_type
+              DW_AT_type	(0x00138c6c "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00147958: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00149b0d: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00149b2a: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_name	("as_ref<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/non_null.rs")
+              DW_AT_decl_line	(385)
+              DW_AT_type	(0x0015177d "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_declaration	(true)
+
+0x00149b49: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ptr17he4db7cbd902ed4b5E")
+              DW_AT_name	("as_ptr<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/non_null.rs")
+              DW_AT_decl_line	(346)
+              DW_AT_type	(0x00151d29 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_declaration	(true)
+
+0x0014a1a4: DW_TAG_subprogram
+              DW_AT_low_pc	(0x0000000000061d5c)
+              DW_AT_high_pc	(0x0000000000061d7c)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3ptr149drop_in_place$LT$std..sync..poison..mutex..Mutex$LT$core..option..Option$LT$fuser..session..Session$LT$layerfs_fuse..adapter..Adapter$GT$$GT$$GT$$GT$17h04ecbe64a21b1804E")
+              DW_AT_name	("drop_in_place<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(523)
+
+0x0014a31c: DW_TAG_subprogram
+              DW_AT_low_pc	(0x0000000000061f48)
+              DW_AT_high_pc	(0x0000000000061f68)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3ptr173drop_in_place$LT$alloc..sync..Arc$LT$std..sync..poison..mutex..Mutex$LT$core..option..Option$LT$fuser..session..Session$LT$layerfs_fuse..adapter..Adapter$GT$$GT$$GT$$GT$$GT$17h2ffdd79525565886E")
+              DW_AT_name	("drop_in_place<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(523)
+
+0x0014a3d8: DW_TAG_subprogram
+              DW_AT_low_pc	(0x0000000000062000)
+              DW_AT_high_pc	(0x0000000000062020)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3ptr178drop_in_place$LT$alloc..sync..ArcInner$LT$std..sync..poison..mutex..Mutex$LT$core..option..Option$LT$fuser..session..Session$LT$layerfs_fuse..adapter..Adapter$GT$$GT$$GT$$GT$$GT$17heec9cb4bcef74ef1E")
+              DW_AT_name	("drop_in_place<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(523)
+
+0x0014a465: DW_TAG_subprogram
+              DW_AT_low_pc	(0x0000000000062060)
+              DW_AT_high_pc	(0x0000000000062080)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3ptr201drop_in_place$LT$alloc..sync..Weak$LT$std..sync..poison..mutex..Mutex$LT$core..option..Option$LT$fuser..session..Session$LT$layerfs_fuse..adapter..Adapter$GT$$GT$$GT$$C$$RF$alloc..alloc..Global$GT$$GT$17h532d5e37a6dfebf7E")
+              DW_AT_name	("drop_in_place<alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(523)
+
+0x0014a494: DW_TAG_subprogram
+              DW_AT_low_pc	(0x0000000000062080)
+              DW_AT_high_pc	(0x00000000000620c0)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3ptr201drop_in_place$LT$core..option..Option$LT$alloc..sync..Arc$LT$std..sync..poison..mutex..Mutex$LT$core..option..Option$LT$fuser..session..Session$LT$layerfs_fuse..adapter..Adapter$GT$$GT$$GT$$GT$$GT$$GT$17h973ab28a9e2eff4fE")
+              DW_AT_name	("drop_in_place<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(523)
+
+0x0014b386: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3mem15size_of_val_raw17h3dca8ebf833e7d10E")
+              DW_AT_name	("size_of_val_raw<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_decl_line	(393)
+              DW_AT_type	(0x00150ceb "usize")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x0014b3ad: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3mem16align_of_val_raw17h075b6ef7be4d4c10E")
+              DW_AT_name	("align_of_val_raw<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_decl_line	(536)
+              DW_AT_type	(0x00150ceb "usize")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x0014b76a: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x0014cf5e: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0014db82: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core5alloc6layout6Layout13for_value_raw17h0ad9274cb4cb038eE")
+              DW_AT_name	("for_value_raw<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/alloc/layout.rs")
+              DW_AT_decl_line	(219)
+              DW_AT_type	(0x0014daee "core::alloc::layout::Layout")
+              DW_AT_declaration	(true)
+
+0x0014e76f: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0014e7ad: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_name	("inner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(1883)
+              DW_AT_type	(0x0015177d "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_declaration	(true)
+
+0x0014e873: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0014ea0d: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006301c)
+              DW_AT_high_pc	(0x00000000000630b8)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN71_$LT$alloc..sync..Arc$LT$T$C$A$GT$$u20$as$u20$core..ops..drop..Drop$GT$4drop17h0eead5fb2c288b72E")
+              DW_AT_name	("drop<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(2545)
+
+0x0014eaf4: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x001517b4 "_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_low_pc	(0x000000000006306c)
+              DW_AT_high_pc	(0x0000000000063070)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(2549)
+              DW_AT_call_column	(0x11)
+
+0x0014eb11: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00151797 "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_low_pc	(0x000000000006306c)
+              DW_AT_high_pc	(0x0000000000063070)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(1889)
+              DW_AT_call_column	(0x1b)
+
+0x0014ef5f: DW_TAG_structure_type
+              DW_AT_name	("Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_byte_size	(0x10)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0014ef91: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc4sync17Weak$LT$T$C$A$GT$5inner17h9e0dd2ba0a651495E")
+              DW_AT_name	("inner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(3073)
+              DW_AT_type	(0x0014cfbf "core::option::Option<alloc::sync::WeakInner>")
+              DW_AT_declaration	(true)
+
+0x0014efe0: DW_TAG_subprogram
+              DW_AT_low_pc	(0x00000000000634a4)
+              DW_AT_high_pc	(0x00000000000635f0)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN72_$LT$alloc..sync..Weak$LT$T$C$A$GT$$u20$as$u20$core..ops..drop..Drop$GT$4drop17h7d0f286c9b61b169E")
+              DW_AT_name	("drop<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(3213)
+
+0x0014f0ec: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00151d6e "_ZN4core5alloc6layout6Layout13for_value_raw17h0ad9274cb4cb038eE")
+              DW_AT_ranges	(0x00014130
+                 [0x0000000000063588, 0x00000000000635b4)
+                 [0x00000000000635c0, 0x00000000000635c8))
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(3236)
+              DW_AT_call_column	(0x38)
+
+0x0014f102: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x0014b386 "_ZN4core3mem15size_of_val_raw17h3dca8ebf833e7d10E")
+              DW_AT_low_pc	(0x0000000000063588)
+              DW_AT_high_pc	(0x000000000006359c)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/alloc/layout.rs")
+              DW_AT_call_line	(221)
+              DW_AT_call_column	(0x27)
+
+0x0014f120: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x0014b3ad "_ZN4core3mem16align_of_val_raw17h075b6ef7be4d4c10E")
+              DW_AT_low_pc	(0x000000000006359c)
+              DW_AT_high_pc	(0x00000000000635b0)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/alloc/layout.rs")
+              DW_AT_call_line	(221)
+              DW_AT_call_column	(0x40)
+
+0x0014f19c: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00151ce8 "_ZN5alloc4sync17Weak$LT$T$C$A$GT$5inner17h9e0dd2ba0a651495E")
+              DW_AT_low_pc	(0x00000000000634f4)
+              DW_AT_high_pc	(0x0000000000063528)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(3222)
+              DW_AT_call_column	(0x2f)
+
+0x0014f1ba: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00151d36 "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ptr17he4db7cbd902ed4b5E")
+              DW_AT_low_pc	(0x0000000000063500)
+              DW_AT_high_pc	(0x0000000000063504)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(3074)
+              DW_AT_call_column	(0x1c)
+
+0x001510e5: DW_TAG_pointer_type
+              DW_AT_type	(0x0014e873 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0015177d: DW_TAG_pointer_type
+              DW_AT_type	(0x0014e873 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("&alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0015178a: DW_TAG_pointer_type
+              DW_AT_type	(0x00149b0d "core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_name	("&core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00151797: DW_TAG_subprogram
+              DW_AT_specification	(0x00149b2a "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x001517a7: DW_TAG_pointer_type
+              DW_AT_type	(0x0014e76f "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_name	("&alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x001517b4: DW_TAG_subprogram
+              DW_AT_specification	(0x0014e7ad "_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x001517d9: DW_TAG_pointer_type
+              DW_AT_type	(0x0014e76f "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_name	("&mut alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x00151cdb: DW_TAG_pointer_type
+              DW_AT_type	(0x0014ef5f "alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_name	("&alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x00151ce8: DW_TAG_subprogram
+              DW_AT_specification	(0x0014ef91 "_ZN5alloc4sync17Weak$LT$T$C$A$GT$5inner17h9e0dd2ba0a651495E")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00151d1c: DW_TAG_pointer_type
+              DW_AT_type	(0x0014ef5f "alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_name	("&mut alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x00151d29: DW_TAG_pointer_type
+              DW_AT_type	(0x0014e873 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*mut alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00151d36: DW_TAG_subprogram
+              DW_AT_specification	(0x00149b49 "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ptr17he4db7cbd902ed4b5E")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00151d6e: DW_TAG_subprogram
+              DW_AT_specification	(0x0014db82 "_ZN4core5alloc6layout6Layout13for_value_raw17h0ad9274cb4cb038eE")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00152259: DW_TAG_pointer_type
+              DW_AT_type	(0x00147958 "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("&std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x001524df: DW_TAG_pointer_type
+              DW_AT_type	(0x00147958 "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("*mut std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00152547: DW_TAG_pointer_type
+              DW_AT_type	(0x0014e76f "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_name	("*mut alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x00152595: DW_TAG_pointer_type
+              DW_AT_type	(0x0014ef5f "alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_name	("*mut alloc::sync::Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x001525a2: DW_TAG_pointer_type
+              DW_AT_type	(0x0014cf5e "core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_name	("*mut core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00162a04: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00166c6d: DW_TAG_pointer_type
+              DW_AT_type	(0x00162a04 "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("&std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00171e38: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00174806: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00174d4d: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x00176c2b: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00176cdf: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00179bda: DW_TAG_pointer_type
+              DW_AT_type	(0x00176cdf "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0018514e: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001872d0: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00187330: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core6option15Option$LT$T$GT$4take17h0c6d2b840d0c76a0E")
+              DW_AT_name	("take<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs")
+              DW_AT_decl_line	(1726)
+              DW_AT_type	(0x001872d0 "core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_declaration	(true)
+
+0x00187e9e: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00187f61: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3ptr4read17hfe365be06f471b67E")
+              DW_AT_name	("read<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(1346)
+              DW_AT_type	(0x001872d0 "core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00187f88: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3ptr5write17hdb471de861760535E")
+              DW_AT_name	("write<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/mod.rs")
+              DW_AT_decl_line	(1564)
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00188383: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x001889b9: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3mem7replace17h8531a4304ee910faE")
+              DW_AT_name	("replace<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_decl_line	(860)
+              DW_AT_type	(0x001872d0 "core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00189b4d: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00189b8c: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0018a84e: DW_TAG_pointer_type
+              DW_AT_type	(0x00189b8c "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0018a85b: DW_TAG_pointer_type
+              DW_AT_type	(0x001872d0 "core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_name	("&mut core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_address_class	(0x00000000)
+
+0x0018a868: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006e778)
+              DW_AT_high_pc	(0x000000000006e7a0)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_specification	(0x00187330 "_ZN4core6option15Option$LT$T$GT$4take17h0c6d2b840d0c76a0E")
+
+0x0018a88a: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x001889b9 "_ZN4core3mem7replace17h8531a4304ee910faE")
+              DW_AT_low_pc	(0x000000000006e78c)
+              DW_AT_high_pc	(0x000000000006e798)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/option.rs")
+              DW_AT_call_line	(1728)
+              DW_AT_call_column	(0x09)
+
+0x0018a8a7: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00187f61 "_ZN4core3ptr4read17hfe365be06f471b67E")
+              DW_AT_low_pc	(0x000000000006e78c)
+              DW_AT_high_pc	(0x000000000006e790)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_call_line	(869)
+              DW_AT_call_column	(0x16)
+
+0x0018a8c5: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00187f88 "_ZN4core3ptr5write17hdb471de861760535E")
+              DW_AT_low_pc	(0x000000000006e790)
+              DW_AT_high_pc	(0x000000000006e798)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_call_line	(870)
+              DW_AT_call_column	(0x09)
+
+0x0018caa2: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0018d586: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006ed70)
+              DW_AT_high_pc	(0x000000000006ed94)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3mem4drop17h847814b1131c3c36E")
+              DW_AT_name	("drop<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_decl_line	(940)
+
+0x0018d5b9: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006ed94)
+              DW_AT_high_pc	(0x000000000006edb8)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN4core3mem4drop17hc63512abd4f0e900E")
+              DW_AT_name	("drop<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/mem/mod.rs")
+              DW_AT_decl_line	(940)
+
+0x0018eab3: DW_TAG_structure_type
+              DW_AT_name	("Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0018ee1f: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0018f126: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x00190035: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00190074: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x001909d8: DW_TAG_pointer_type
+              DW_AT_type	(0x00190074 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00192cf1: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0019587e: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0019589b: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3ptr8non_null16NonNull$LT$T$GT$8from_mut17h6319b7e8de640e23E")
+              DW_AT_name	("from_mut<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/non_null.rs")
+              DW_AT_decl_line	(249)
+              DW_AT_type	(0x0019587e "core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_declaration	(true)
+
+0x001958b9: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_name	("as_ref<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/non_null.rs")
+              DW_AT_decl_line	(385)
+              DW_AT_type	(0x00198bbc "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_declaration	(true)
+
+0x001958de: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN98_$LT$core..ptr..non_null..NonNull$LT$T$GT$$u20$as$u20$core..convert..From$LT$$RF$mut$u20$T$GT$$GT$4from17h655b16075e2afac3E")
+              DW_AT_name	("from<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/non_null.rs")
+              DW_AT_decl_line	(1628)
+              DW_AT_type	(0x0019587e "core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00195cfb: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x00195eee: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN50_$LT$T$u20$as$u20$core..convert..Into$LT$U$GT$$GT$4into17h075e358bf9bec7aeE")
+              DW_AT_name	("into<&mut alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/convert/mod.rs")
+              DW_AT_decl_line	(760)
+              DW_AT_type	(0x0019587e "core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00196089: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc5boxed12Box$LT$T$GT$3new17h55c97302d6866455E")
+              DW_AT_name	("new<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs")
+              DW_AT_decl_line	(252)
+              DW_AT_type	(0x00197f7a "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00196123: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc5boxed16Box$LT$T$C$A$GT$23into_raw_with_allocator17h760c78b753b15ebcE")
+              DW_AT_name	("into_raw_with_allocator<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs")
+              DW_AT_decl_line	(1413)
+              DW_AT_type	(0x00197f87 "(*mut alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, alloc::alloc::Global)")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00196154: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc5boxed16Box$LT$T$C$A$GT$8into_raw17hf694befa7e641d67E")
+              DW_AT_name	("into_raw<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs")
+              DW_AT_decl_line	(1299)
+              DW_AT_type	(0x00197fa5 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00196185: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc5boxed16Box$LT$T$C$A$GT$4leak17hed52e43536286d5bE")
+              DW_AT_name	("leak<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs")
+              DW_AT_decl_line	(1640)
+              DW_AT_type	(0x00197fb2 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00196376: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00196ed5: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00196f13: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc4sync12Arc$LT$T$GT$3new17h018dca254915cc2bE")
+              DW_AT_name	("new<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(385)
+              DW_AT_type	(0x00196ed5 "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_declaration	(true)
+
+0x00196f32: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc4sync16Arc$LT$T$C$A$GT$9drop_slow17h0b95083fafe1251aE")
+              DW_AT_name	("drop_slow<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(1894)
+              DW_AT_declaration	(true)
+
+0x00196f56: DW_TAG_subprogram
+              DW_AT_linkage_name	("_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_name	("inner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(1883)
+              DW_AT_type	(0x00198bbc "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>> *")
+              DW_AT_declaration	(true)
+
+0x00197170: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006f684)
+              DW_AT_high_pc	(0x000000000006f710)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN68_$LT$alloc..sync..Arc$LT$T$C$A$GT$$u20$as$u20$core..clone..Clone$GT$5clone17h022c715abca2f40dE")
+              DW_AT_name	("clone<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(2158)
+              DW_AT_type	(0x00196ed5 "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+
+0x0019720a: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00198bf3 "_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_low_pc	(0x000000000006f6b4)
+              DW_AT_high_pc	(0x000000000006f6b8)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(2170)
+              DW_AT_call_column	(0x1d)
+
+0x00197227: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00198bd6 "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_low_pc	(0x000000000006f6b4)
+              DW_AT_high_pc	(0x000000000006f6b8)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(1889)
+              DW_AT_call_column	(0x1b)
+
+0x001974ce: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006f844)
+              DW_AT_high_pc	(0x000000000006f860)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_linkage_name	("_ZN73_$LT$alloc..sync..Arc$LT$T$C$A$GT$$u20$as$u20$core..ops..deref..Deref$GT$5deref17h77c162699bfa5c6bE")
+              DW_AT_name	("deref<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_decl_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_decl_line	(2200)
+              DW_AT_type	(0x00198dcc "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>> *")
+
+0x001974fb: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00198d9a "_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_low_pc	(0x000000000006f850)
+              DW_AT_high_pc	(0x000000000006f854)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(2201)
+              DW_AT_call_column	(0x0f)
+
+0x00197518: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00198d8a "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_low_pc	(0x000000000006f850)
+              DW_AT_high_pc	(0x000000000006f854)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(1889)
+              DW_AT_call_column	(0x1b)
+
+0x00197575: DW_TAG_structure_type
+              DW_AT_name	("Weak<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, &alloc::alloc::Global>")
+              DW_AT_byte_size	(0x10)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00197f7a: DW_TAG_pointer_type
+              DW_AT_type	(0x00196376 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("alloc::boxed::Box<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x00197f87: DW_TAG_structure_type
+              DW_AT_name	("(*mut alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>, alloc::alloc::Global)")
+              DW_AT_byte_size	(0x08)
+              DW_AT_alignment	(8)
+
+0x00197fa5: DW_TAG_pointer_type
+              DW_AT_type	(0x00196376 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*mut alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00197fb2: DW_TAG_pointer_type
+              DW_AT_type	(0x00196376 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("&mut alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00197fbf: DW_TAG_pointer_type
+              DW_AT_type	(0x00196376 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00197fcc: DW_TAG_subprogram
+              DW_AT_specification	(0x0019589b "_ZN4core3ptr8non_null16NonNull$LT$T$GT$8from_mut17h6319b7e8de640e23E")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00197fe7: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006f0d8)
+              DW_AT_high_pc	(0x000000000006f19c)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_specification	(0x00196f13 "_ZN5alloc4sync12Arc$LT$T$GT$3new17h018dca254915cc2bE")
+
+0x00198040: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00196089 "_ZN5alloc5boxed12Box$LT$T$GT$3new17h55c97302d6866455E")
+              DW_AT_low_pc	(0x000000000006f118)
+              DW_AT_high_pc	(0x000000000006f170)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(388)
+              DW_AT_call_column	(0x19)
+
+0x0019807c: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00196185 "_ZN5alloc5boxed16Box$LT$T$C$A$GT$4leak17hed52e43536286d5bE")
+              DW_AT_low_pc	(0x000000000006f180)
+              DW_AT_high_pc	(0x000000000006f188)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(393)
+              DW_AT_call_column	(0x23)
+
+0x0019809a: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00196154 "_ZN5alloc5boxed16Box$LT$T$C$A$GT$8into_raw17hf694befa7e641d67E")
+              DW_AT_low_pc	(0x000000000006f180)
+              DW_AT_high_pc	(0x000000000006f188)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs")
+              DW_AT_call_line	(1644)
+              DW_AT_call_column	(0x18)
+
+0x001980b8: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00196123 "_ZN5alloc5boxed16Box$LT$T$C$A$GT$23into_raw_with_allocator17h760c78b753b15ebcE")
+              DW_AT_low_pc	(0x000000000006f180)
+              DW_AT_high_pc	(0x000000000006f188)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/boxed.rs")
+              DW_AT_call_line	(1301)
+              DW_AT_call_column	(0x22)
+
+0x001980d9: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00195eee "_ZN50_$LT$T$u20$as$u20$core..convert..Into$LT$U$GT$$GT$4into17h075e358bf9bec7aeE")
+              DW_AT_low_pc	(0x000000000006f188)
+              DW_AT_high_pc	(0x000000000006f190)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/alloc/src/sync.rs")
+              DW_AT_call_line	(393)
+              DW_AT_call_column	(0x30)
+
+0x001980f7: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x001958de "_ZN98_$LT$core..ptr..non_null..NonNull$LT$T$GT$$u20$as$u20$core..convert..From$LT$$RF$mut$u20$T$GT$$GT$4from17h655b16075e2afac3E")
+              DW_AT_low_pc	(0x000000000006f188)
+              DW_AT_high_pc	(0x000000000006f190)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/convert/mod.rs")
+              DW_AT_call_line	(761)
+              DW_AT_call_column	(0x09)
+
+0x00198115: DW_TAG_inlined_subroutine
+              DW_AT_abstract_origin	(0x00197fcc "_ZN4core3ptr8non_null16NonNull$LT$T$GT$8from_mut17h6319b7e8de640e23E")
+              DW_AT_low_pc	(0x000000000006f188)
+              DW_AT_high_pc	(0x000000000006f190)
+              DW_AT_call_file	("/rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/core/src/ptr/non_null.rs")
+              DW_AT_call_line	(1629)
+              DW_AT_call_column	(0x09)
+
+0x001987a9: DW_TAG_pointer_type
+              DW_AT_type	(0x00196ed5 "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_name	("&mut alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x001987b6: DW_TAG_subprogram
+              DW_AT_low_pc	(0x000000000006f494)
+              DW_AT_high_pc	(0x000000000006f504)
+              DW_AT_frame_base	(DW_OP_reg31 WSP)
+              DW_AT_specification	(0x00196f32 "_ZN5alloc4sync16Arc$LT$T$C$A$GT$9drop_slow17h0b95083fafe1251aE")
+
+0x00198bbc: DW_TAG_pointer_type
+              DW_AT_type	(0x00196376 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("&alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00198bc9: DW_TAG_pointer_type
+              DW_AT_type	(0x0019587e "core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_name	("&core::ptr::non_null::NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x00198bd6: DW_TAG_subprogram
+              DW_AT_specification	(0x001958b9 "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00198be6: DW_TAG_pointer_type
+              DW_AT_type	(0x00196ed5 "alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_name	("&alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_address_class	(0x00000000)
+
+0x00198bf3: DW_TAG_subprogram
+              DW_AT_specification	(0x00196f56 "_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00198d8a: DW_TAG_subprogram
+              DW_AT_specification	(0x001958b9 "_ZN4core3ptr8non_null16NonNull$LT$T$GT$6as_ref17h3cf5dbc3d0b5261bE")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00198d9a: DW_TAG_subprogram
+              DW_AT_specification	(0x00196f56 "_ZN5alloc4sync16Arc$LT$T$C$A$GT$5inner17h25f133e6e82708b5E")
+              DW_AT_inline	(DW_INL_inlined)
+
+0x00198dcc: DW_TAG_pointer_type
+              DW_AT_type	(0x00192cf1 "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("&std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x001b2f03: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001b6ec2: DW_TAG_pointer_type
+              DW_AT_type	(0x001b2f03 "std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_name	("&std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x001b88e5: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001bc444: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001bc7a5: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x001bce86: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001bd983: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x001be445: DW_TAG_pointer_type
+              DW_AT_type	(0x001bd983 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x001bfdbc: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001c1395: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001c2ef0: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x001c3299: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001c3d96: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x001c48be: DW_TAG_pointer_type
+              DW_AT_type	(0x001c3d96 "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)
+
+0x001c89b8: DW_TAG_structure_type
+              DW_AT_name	("Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001cae1d: DW_TAG_structure_type
+              DW_AT_name	("NonNull<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001cb19c: DW_TAG_structure_type
+              DW_AT_name	("PhantomData<alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>>")
+              DW_AT_byte_size	(0x00)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(1)
+
+0x001cd6b9: DW_TAG_structure_type
+              DW_AT_name	("Arc<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>, alloc::alloc::Global>")
+              DW_AT_byte_size	(0x08)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001cd76d: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_byte_size	(0x90)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x001ce208: DW_TAG_pointer_type
+              DW_AT_type	(0x001cd76d "alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_name	("*const alloc::sync::ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<fuser::session::Session<layerfs_fuse::adapter::Adapter>>>>")
+              DW_AT_address_class	(0x00000000)

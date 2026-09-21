@@ -1,0 +1,9 @@
+[
+  "core/crates/layerfs-daemon/src/run.rs",
+  "core/crates/layerfs-daemon/tests/mount_startup.py",
+  "core/crates/layerfs-fuse/src/lib.rs",
+  "core/crates/layerfs-fuse/src/mount.rs",
+  "core/crates/layerfs-fuse/tests/mount_failure.rs",
+  "core/crates/layerfs-fuse/tests/mount_failure_route.py",
+  "core/crates/layerfs-workspace/tests/stage_route.py"
+]

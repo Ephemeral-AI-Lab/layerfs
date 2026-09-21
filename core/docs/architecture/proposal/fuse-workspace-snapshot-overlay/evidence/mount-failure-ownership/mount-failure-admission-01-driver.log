@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-fuse/tests/mount_failure_route.py", line 32, in <module>
+    if __name__ == '__main__': driver.main()
+                               ~~~~~~~~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace/tests/stage_route.py", line 353, in main
+    execute(args, report, started)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace/tests/stage_route.py", line 289, in execute
+    assert child.returncode == 0 and all(check['status'] == 'PASS' for check in report['checks'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

@@ -1,0 +1,169 @@
+core/target-linux/debug/layerfs-daemon:	file format elf64-littleaarch64
+
+0x000047ff: DW_TAG_structure_type
+              DW_AT_name	("MountFailure")
+              DW_AT_byte_size	(0xd0)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000048c9: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000182b0: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00020b03: DW_TAG_structure_type
+              DW_AT_name	("MountFailure")
+              DW_AT_byte_size	(0xd0)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00020bf7: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00033a34: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00041996: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0004b26c: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0005e0e3: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006505d: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0006fbec: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00077f4c: DW_TAG_structure_type
+              DW_AT_name	("MountFailure")
+              DW_AT_byte_size	(0xd0)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00078016: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0008cbb7: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0009a76c: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000a1fcf: DW_TAG_structure_type
+              DW_AT_name	("MountFailure")
+              DW_AT_byte_size	(0xd0)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000a1ffc: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000b1e4b: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000be9f7: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000cd801: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000e5a69: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x000f7477: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0010e7ce: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x0012397f: DW_TAG_structure_type
+              DW_AT_name	("MountFailure")
+              DW_AT_byte_size	(0xd0)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x001239d0: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00148c7f: DW_TAG_structure_type
+              DW_AT_name	("MountFailure")
+              DW_AT_byte_size	(0xd0)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00148d49: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)
+
+0x00188f46: DW_TAG_structure_type
+              DW_AT_name	("MountHandle")
+              DW_AT_byte_size	(0x68)
+              DW_AT_accessibility	(DW_ACCESS_public)
+              DW_AT_alignment	(8)

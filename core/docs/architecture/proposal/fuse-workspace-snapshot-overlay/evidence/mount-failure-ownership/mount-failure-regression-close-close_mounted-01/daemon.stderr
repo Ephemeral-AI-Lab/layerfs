@@ -1,0 +1,4 @@
+workspace control ready 0.0.0.0:23456
+workspace ready /layerfs/workspace/read
+control close clean retained: Workspace(Busy)
+workspace closed

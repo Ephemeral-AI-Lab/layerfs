@@ -1,0 +1,5 @@
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.86s
+  Executable tests/mount_failure.rs (core/target-linux/debug/deps/mount_failure-6898e738ebcbd17b)

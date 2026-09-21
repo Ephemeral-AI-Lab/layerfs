@@ -7,6 +7,12 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Mount failure prerequisite:** [retained native ownership](29-mount-failure-ownership.md)
+corrects partial startup failure and deadline handling before remote Mount is
+exposed. The native failure/daemon startup routes and selected regressions pass;
+the original admission-oracle failure remains recorded. Remote Mount is still a
+separate operation.
+
 **Next daemon lifecycle operation:** [authenticated CloseClean](28-control-close-clean.md)
 adds separate authority for existing native clean closure and preserves inspection
 of the exact closed target. Five new actual daemon/Linux cases and eight affected Unmount regressions pass.

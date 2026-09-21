@@ -1359,3 +1359,14 @@ Unmount bytes and exact operation-specific terminal matching. Already-closed Sta
 and subsequent signal cleanup retain identity and checked completion. Five new
 actual Linux cases and eight affected Unmount regressions pass; exact checks and
 LOC are in28. Writable startup and its shutdown/control ordering remain prerequisites.
+
+### Native prerequisite before R1-C Mount
+
+[29 — Retained Mount failure ownership](29-mount-failure-ownership.md), parent
+`3c227266b6740cb9c50f63f0ba27a38d1b8b9a00`, moves the existing partial-failure
+owner and deadline correction ahead of remote Mount. It preserves the admitted
+lease/Session/worker in a typed failure and leaves checked cleanup to the caller.
+Daemon startup retains incomplete cleanup across the original deadline and only
+renews it on an explicit signal. Native/daemon fault routes and the selected
+regressions pass, with the original admission-oracle failure retained; exact checks,
+resources and LOC are in29. Remote Mount and Attach remain separate operations.

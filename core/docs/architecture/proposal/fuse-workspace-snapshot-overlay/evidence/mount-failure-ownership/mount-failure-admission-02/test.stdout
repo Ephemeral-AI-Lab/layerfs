@@ -1,0 +1,7 @@
+
+running 1 test
+test linux::mount_failure_admission ... MOUNT_FAILURE_CHECK pre-admission-deadline-and-authority-refusals-retain-no-owner PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+

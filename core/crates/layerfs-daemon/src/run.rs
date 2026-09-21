@@ -93,15 +93,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let incarnation = launch.attach.incarnation;
     let host = WorkspaceHost::new(launch.config, delivery)?;
     let workspace = host.attach(launch.attach, Instant::now() + Duration::from_secs(10))?;
-    let mount = match layerfs_fuse::mount(&workspace, Instant::now() + Duration::from_secs(10)) {
+    let mount_deadline = Instant::now() + Duration::from_secs(10);
+    let mount = match layerfs_fuse::mount(&workspace, mount_deadline) {
         Ok(mount) => mount,
-        Err(error) => {
-            // A failed mount may still own resources. close_clean refuses that
-            // state; report both observations without guessing that it detached.
-            if let Err(cleanup) = workspace.close_clean() {
-                pipe::diagnostic(&format!("mount cleanup retained: {cleanup}\n"));
-            }
-            return Err(error.into());
+        Err(mut failure) => {
+            drop(control_listener);
+            pipe::diagnostic(&format!("workspace mount startup failed: {failure}\n"));
+            let owner = failure
+                .retained
+                .take()
+                .map(|owner| Arc::new(Mutex::new(owner)));
+            return cleanup_failed_startup(&workspace, owner, failure, &signals, mount_deadline);
         }
     };
     let mount = Arc::new(Mutex::new(mount));
@@ -120,24 +122,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Some(control)
                 }
                 Err(error) => {
-                    let deadline = Instant::now() + Duration::from_secs(10);
-                    match mount.try_lock() {
-                        Ok(mut mount) => {
-                            if let Err(cleanup) = mount.unmount(deadline) {
-                                pipe::diagnostic(&format!(
-                                    "control startup mount cleanup retained: {cleanup}\n"
-                                ));
-                            } else if let Err(cleanup) = workspace.close_clean_until(deadline) {
-                                pipe::diagnostic(&format!(
-                                    "control startup Workspace cleanup retained: {cleanup}\n"
-                                ));
-                            }
-                        }
-                        Err(cleanup) => pipe::diagnostic(&format!(
-                            "control startup mount owner retained: {cleanup}\n"
-                        )),
-                    }
-                    return Err(error.into());
+                    return cleanup_failed_startup(
+                        &workspace,
+                        Some(mount),
+                        error.into(),
+                        &signals,
+                        mount_deadline,
+                    );
                 }
             }
         }
@@ -178,5 +169,47 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(error) => pipe::diagnostic(&format!("workspace shutdown retained: {error}\n")),
         }
+    }
+}
+
+// Startup failure never abandons an entered mount or attached Workspace. The
+// original attempt keeps its deadline; only an explicit signal admits new cleanup.
+fn cleanup_failed_startup(
+    workspace: &layerfs_workspace::Workspace,
+    mount: Option<Arc<Mutex<layerfs_fuse::MountHandle>>>,
+    failure: Box<dyn std::error::Error>,
+    signals: &nix::sys::signal::SigSet,
+    mut deadline: Instant,
+) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        let cleanup = (|| -> Result<(), Box<dyn std::error::Error>> {
+            if let Some(mount) = &mount {
+                let mut owner = mount.try_lock().map_err(|error| match error {
+                    TryLockError::WouldBlock => Failure::from(Code::Busy),
+                    TryLockError::Poisoned(_) => Failure::from(Code::Io),
+                })?;
+                owner.unmount(deadline)?;
+            }
+            if !workspace.status()?.closed {
+                workspace.close_clean_until(deadline)?;
+            }
+            Ok(())
+        })();
+        match cleanup {
+            Ok(()) => {
+                pipe::diagnostic("workspace failed startup cleaned\n");
+                return Err(failure);
+            }
+            Err(error) => {
+                pipe::diagnostic(&format!("workspace startup cleanup retained: {error}\n"))
+            }
+        }
+        loop {
+            match signals.wait() {
+                Ok(_) => break,
+                Err(error) => pipe::diagnostic(&format!("signal wait retained: {error}\n")),
+            }
+        }
+        deadline = Instant::now() + Duration::from_secs(10);
     }
 }

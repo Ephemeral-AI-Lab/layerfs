@@ -4,7 +4,7 @@ use std::{fmt, io, time::Instant};
 
 #[cfg(target_os = "linux")]
 use {
-    crate::adapter::{Adapter, CALLBACK_BUDGET},
+    crate::adapter::Adapter,
     fuser::{Config, MountOption, Session, SessionACL, SessionUnmounter},
     layerfs_workspace::{
         CoherenceStatus, MountLease, MutationReceipt, WorkspaceAccess, MAX_READ_BYTES,
@@ -13,7 +13,7 @@ use {
         io::Read,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc,
+            Arc, Mutex,
         },
         thread::{self, JoinHandle},
         time::Duration,
@@ -46,6 +46,61 @@ impl From<layerfs_workspace::WorkspaceError> for MountError {
     }
 }
 
+/// The boundary at which a mount attempt failed. Cleanup is a separate operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MountPhase {
+    Admission,
+    Session,
+    Binding,
+    Worker,
+    Deadline,
+}
+
+/// Preserves the original mount error and every admitted attempt's owner.
+/// No mount failure automatically attempts cleanup. The caller must retain the
+/// returned handle and explicitly unmount it before claiming resource release.
+pub struct MountFailure {
+    pub phase: MountPhase,
+    pub cause: MountError,
+    pub retained: Option<MountHandle>,
+}
+
+impl fmt::Debug for MountFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MountFailure")
+            .field("phase", &self.phase)
+            .field("cause", &self.cause)
+            .field("retained", &self.retained.is_some())
+            .finish()
+    }
+}
+impl fmt::Display for MountFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "mount {:?}: {}", self.phase, self.cause)
+    }
+}
+impl std::error::Error for MountFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.cause)
+    }
+}
+impl MountFailure {
+    #[cfg(target_os = "linux")]
+    fn with_owner(
+        mut self: Box<Self>,
+        phase: MountPhase,
+        cause: MountError,
+        mut owner: MountHandle,
+    ) -> Box<Self> {
+        owner.stop_admission();
+        self.phase = phase;
+        self.cause = cause;
+        self.retained = Some(owner);
+        self
+    }
+}
+
 /// Owns the mount until explicit successful unmount. A caller must retain this
 /// value across failure. Dropping it does not clear Workspace mount admission;
 /// a still-running session retains its Workspace and remains charged.
@@ -61,6 +116,8 @@ pub struct MountHandle {
     #[cfg(target_os = "linux")]
     worker: Option<JoinHandle<io::Result<()>>>,
     #[cfg(target_os = "linux")]
+    pending: Option<Arc<Mutex<Option<Session<Adapter>>>>>,
+    #[cfg(target_os = "linux")]
     cleanup_failed: bool,
     #[cfg(target_os = "linux")]
     finished: bool,
@@ -68,7 +125,7 @@ pub struct MountHandle {
 
 /// Mounts the cached, read-only Linux projection. Local SDK edits complete
 /// through the bound checked invalidator. No userspace content cache is added.
-pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, MountError> {
+pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, Box<MountFailure>> {
     mount_profile(workspace, deadline, false)
 }
 
@@ -76,7 +133,10 @@ pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, Mo
 /// direct I/O; shared writable mappings, writeback and sync are unsupported.
 /// Size-only SETATTR supplies truncate/extend after kernel OPEN. Kernel syscalls
 /// have deadline observation points, not preemption.
-pub fn mount_writable(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, MountError> {
+pub fn mount_writable(
+    workspace: &Workspace,
+    deadline: Instant,
+) -> Result<MountHandle, Box<MountFailure>> {
     mount_profile(workspace, deadline, true)
 }
 
@@ -84,30 +144,62 @@ fn mount_profile(
     workspace: &Workspace,
     deadline: Instant,
     writable: bool,
-) -> Result<MountHandle, MountError> {
+) -> Result<MountHandle, Box<MountFailure>> {
+    // Reserve failure storage before native entry; an entered failure only moves
+    // the existing owner into this box, never allocates a second result.
+    let failure = Box::new(MountFailure {
+        phase: MountPhase::Admission,
+        cause: MountError::Unsupported,
+        retained: None,
+    });
     #[cfg(not(target_os = "linux"))]
     {
         let _ = (workspace, deadline, writable);
-        Err(MountError::Unsupported)
+        Err(failure)
     }
     #[cfg(target_os = "linux")]
     {
-        if Instant::now() >= deadline {
-            return Err(MountError::Deadline);
-        }
-        if writable && workspace.access_mode() != WorkspaceAccess::LocalEdit {
-            return Err(MountError::Workspace(
-                layerfs_workspace::WorkspaceError::ReadOnly,
-            ));
-        }
-        privileged_owner(workspace)?;
-        crate::replies::attributes(workspace.root(), workspace.root().serial)
-            .map_err(|error| MountError::Io(io::Error::from_raw_os_error(error.code())))?;
-        let mut lease = workspace.reserve_mount()?;
-        let stopping = Arc::new(AtomicBool::new(false));
+        let mut failure = failure;
+        let admission = (|| -> Result<MountLease, MountError> {
+            if Instant::now() >= deadline {
+                return Err(MountError::Deadline);
+            }
+            if writable && workspace.access_mode() != WorkspaceAccess::LocalEdit {
+                return Err(MountError::Workspace(
+                    layerfs_workspace::WorkspaceError::ReadOnly,
+                ));
+            }
+            privileged_owner(workspace)?;
+            crate::replies::attributes(workspace.root(), workspace.root().serial)
+                .map_err(|error| MountError::Io(io::Error::from_raw_os_error(error.code())))?;
+            if Instant::now() >= deadline {
+                return Err(MountError::Deadline);
+            }
+            Ok(workspace.reserve_mount()?)
+        })();
+        let lease = match admission {
+            Ok(lease) => lease,
+            Err(cause) => {
+                failure.cause = cause;
+                return Err(failure);
+            }
+        };
+        // Only this cell crosses the outer thread spawn. If spawn fails, dropping
+        // its closure cannot drop the Session still owned by the parent's Arc.
+        let pending = Arc::new(Mutex::new(None));
+        let mut handle = MountHandle {
+            workspace: workspace.clone(),
+            lease,
+            stopping: Arc::new(AtomicBool::new(false)),
+            unmounter: None,
+            worker: None,
+            pending: Some(Arc::clone(&pending)),
+            cleanup_failed: false,
+            finished: false,
+        };
         let adapter = Adapter {
             workspace: workspace.clone(),
-            stopping: Arc::clone(&stopping),
+            stopping: Arc::clone(&handle.stopping),
             writable,
         };
         let mut config = Config::default();
@@ -129,62 +221,68 @@ fn mount_profile(
             MountOption::Subtype("layerfs".into()),
             MountOption::CUSTOM(format!("max_read={MAX_READ_BYTES}")),
         ];
+        if Instant::now() >= deadline {
+            return Err(failure.with_owner(MountPhase::Deadline, MountError::Deadline, handle));
+        }
         let mut session = match Session::new(adapter, workspace.mount_path(), &config) {
             Ok(session) => session,
             Err(error) => {
-                // fuser attempted its normal cleanup. Only a checked absence can
-                // release our lease; an uncertain/failed cleanup remains counted.
-                if !mounted(workspace.mount_path())? {
-                    lease.finish()?;
-                }
-                return Err(MountError::Io(error));
+                // The provider may have attempted cleanup internally. Keep our
+                // lease until a later explicit unmount establishes absence.
+                return Err(failure.with_owner(MountPhase::Session, error.into(), handle));
             }
         };
+        handle.unmounter = Some(session.unmount_callable());
         let notifier = session.notifier();
+        // This mutex protects only ownership transfer, never filesystem state.
+        // Recover its value on poison so the native owner cannot be discarded.
+        *pending.lock().unwrap_or_else(|error| error.into_inner()) = Some(session);
+        if Instant::now() >= deadline {
+            return Err(failure.with_owner(MountPhase::Deadline, MountError::Deadline, handle));
+        }
         let root = workspace.root().serial;
         let invalidation = Arc::new(move |receipt: MutationReceipt, _: Instant| {
             notifier.inval_inode(crate::replies::inode(receipt.inode, root), 0, 0)
         });
-        if let Err(error) = lease.bind_invalidation(invalidation) {
-            drop(session);
-            if !mounted(workspace.mount_path())? {
-                lease.finish()?;
-            }
-            return Err(MountError::Workspace(error));
+        if let Err(error) = handle.lease.bind_invalidation(invalidation) {
+            return Err(failure.with_owner(MountPhase::Binding, error.into(), handle));
         }
-        let unmounter = session.unmount_callable();
+        if Instant::now() >= deadline {
+            return Err(failure.with_owner(MountPhase::Deadline, MountError::Deadline, handle));
+        }
         let worker = match thread::Builder::new()
             .name("layerfs-mount".into())
-            .spawn(move || session.run())
-        {
+            .spawn(move || {
+                let session = pending
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .take();
+                drop(pending);
+                session
+                    .ok_or_else(|| io::Error::other("missing mount session"))?
+                    .run()
+            }) {
             Ok(worker) => worker,
             Err(error) => {
-                if !mounted(workspace.mount_path())? {
-                    lease.finish()?;
-                }
-                return Err(MountError::Io(error));
+                return Err(failure.with_owner(MountPhase::Worker, error.into(), handle));
             }
         };
-        let mut handle = MountHandle {
-            workspace: workspace.clone(),
-            lease,
-            stopping,
-            unmounter: Some(unmounter),
-            worker: Some(worker),
-            cleanup_failed: false,
-            finished: false,
-        };
+        handle.worker = Some(worker);
+        drop(handle.pending.take());
         if Instant::now() >= deadline {
-            // No caller receives a successful mount after its attach deadline.
-            // Cleanup has its declared callback-drain allowance, not a new mount.
-            handle.unmount(Instant::now() + CALLBACK_BUDGET)?;
-            return Err(MountError::Deadline);
+            return Err(failure.with_owner(MountPhase::Deadline, MountError::Deadline, handle));
         }
         Ok(handle)
     }
 }
 
 impl MountHandle {
+    #[cfg(target_os = "linux")]
+    fn stop_admission(&mut self) {
+        self.stopping.store(true, Ordering::Release);
+        self.lease.stop_admission();
+    }
+
     /// Stop admission, drain accepted operations and projection handles, detach once,
     /// then join. Local semantic handles may remain owned across unmount. A
     /// timeout keeps the worker/lease in this handle; failed detach is terminal
@@ -206,8 +304,7 @@ impl MountHandle {
             if Instant::now() >= deadline {
                 return Err(MountError::Deadline);
             }
-            self.stopping.store(true, Ordering::Release);
-            self.lease.stop_admission();
+            self.stop_admission();
             loop {
                 let status = self.workspace.status()?;
                 if status.active_operations == 0
@@ -231,6 +328,16 @@ impl MountHandle {
                     return Err(MountError::Io(error));
                 }
             }
+            if let Some(pending) = self.pending.take() {
+                let session = pending
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .take();
+                // The actual unmounter has consumed the provider mount. Release
+                // the unstarted Session and its FD outside the transfer mutex.
+                drop(session);
+                drop(pending);
+            }
             if let Some(worker) = &self.worker {
                 while !worker.is_finished() {
                     pause(deadline)?;
@@ -249,9 +356,15 @@ impl MountHandle {
                     }
                 }
             }
+            if Instant::now() >= deadline {
+                return Err(MountError::Deadline);
+            }
             if mounted(self.workspace.mount_path())? {
                 self.cleanup_failed = true;
                 return Err(MountError::CleanupFailed);
+            }
+            if Instant::now() >= deadline {
+                return Err(MountError::Deadline);
             }
             self.lease.finish()?;
             self.finished = true;

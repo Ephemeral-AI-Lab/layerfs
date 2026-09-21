@@ -7,4 +7,4 @@ mod mount;
 #[cfg(target_os = "linux")]
 mod replies;
 
-pub use mount::{mount, mount_writable, MountError, MountHandle};
+pub use mount::{mount, mount_writable, MountError, MountFailure, MountHandle, MountPhase};
