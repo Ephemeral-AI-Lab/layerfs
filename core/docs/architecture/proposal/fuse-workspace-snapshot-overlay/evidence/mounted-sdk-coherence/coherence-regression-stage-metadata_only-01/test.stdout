@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_metadata_only ... STAGE_CHECK metadata-only-stage-preserves-root-without-file-save PASS
+STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 1, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 0, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([101, 122, 66, 152, 99, 68, 24, 50, 86, 47, 191, 61, 8, 145, 94, 100, 119, 240, 30, 1, 168, 55, 218, 23, 32, 47, 40, 94, 128, 108, 102, 169]), failure: None, failure_phase: None, commit: None }), generation: 2, revision: 2, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 2030250 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 16384, reserved_bytes: 847872, payloads: 0, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 0, reserved_slots: 0, roots: 3, external_roots: 3, allocated_bytes: 16384, reserved_bytes: 847872, working_bytes: 44216, accounting_complete: true, admission_stopped: false }
+STAGE_CHECK exact-stage-and-retained-submission PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.07s
+

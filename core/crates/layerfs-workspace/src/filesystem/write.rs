@@ -333,6 +333,27 @@ impl Workspace {
         deadline: Instant,
         open: Option<&mut super::open::OpenReservation>,
     ) -> Result<MutationReceipt, WorkspaceError> {
+        let (receipt, delivery, published_handle) =
+            self.publish_file_mutation(original, mutation, deadline, open)?;
+        if let Some(delivery) = delivery {
+            self.complete_projection_mutation(delivery, receipt, published_handle, deadline)?;
+        }
+        Ok(receipt)
+    }
+    fn publish_file_mutation(
+        &self,
+        original: Original,
+        mutation: FileMutation<'_>,
+        deadline: Instant,
+        open: Option<&mut super::open::OpenReservation>,
+    ) -> Result<
+        (
+            MutationReceipt,
+            Option<ProjectionInvalidation>,
+            Option<HandleId>,
+        ),
+        WorkspaceError,
+    > {
         let (original, content, metadata, baseline) = original;
         let host = self
             .host
@@ -351,6 +372,7 @@ impl Workspace {
             let state = self.state()?;
             self.available(&state)?;
             self.mutation_handle(&state, mutation, original.serial)?;
+            self.check_projection_mutation(&state)?;
             if state.baseline != baseline {
                 return Err(WorkspaceError::Busy);
             }
@@ -364,6 +386,7 @@ impl Workspace {
             let s = self.state()?;
             self.available(&s)?;
             let append = self.mutation_handle(&s, mutation, original.serial)?;
+            self.check_projection_mutation(&s)?;
             if s.baseline != baseline {
                 return Err(WorkspaceError::Busy);
             }
@@ -570,6 +593,7 @@ impl Workspace {
         let mut state = self.state()?;
         self.available(&state)?;
         self.mutation_handle(&state, mutation, original.serial)?;
+        self.check_projection_mutation(&state)?;
         let same_root = match (&state.overlay, &old_root) {
             (None, None) => true,
             (Some(current), Some(expected)) => Arc::ptr_eq(current, expected),
@@ -589,6 +613,18 @@ impl Workspace {
             .as_ref()
             .map(|reserved| reserved.validate(&state, original.serial))
             .transpose()?;
+        let receipt = MutationReceipt {
+            incarnation: self.inner.incarnation,
+            generation,
+            inode: original.serial,
+            revision,
+            accepted_bytes,
+        };
+        let published_handle = open.as_ref().map(|reserved| reserved.id);
+        let delivery = state
+            .projection
+            .as_ref()
+            .and_then(|projection| projection.delivery.clone());
         if needs_completion {
             state.completion = candidate.take_completion(generation)?;
             if state.completion.is_none() {
@@ -605,15 +641,17 @@ impl Workspace {
                 node.attr = inode.attributes(node.original);
             }
         }
+        if let Some(projection) = &mut state.projection {
+            projection.status = CoherenceStatus::Pending {
+                receipt,
+                published_handle,
+            };
+        }
         if let (Some(reserved), Some(index)) = (open, ready_index) {
             reserved.publish(&mut state, index);
         }
-        Ok(MutationReceipt {
-            incarnation: self.inner.incarnation,
-            generation,
-            inode: original.serial,
-            revision,
-            accepted_bytes,
-        })
+        // Returning ends temporary piece vectors, state/window guards and finally
+        // the writer's working reservation before the outer notification call.
+        Ok((receipt, delivery, published_handle))
     }
 }

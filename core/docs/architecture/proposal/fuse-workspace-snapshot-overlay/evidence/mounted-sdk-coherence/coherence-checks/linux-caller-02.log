@@ -1,0 +1,3 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.58s
+  Executable tests/coherence.rs (core/target-linux/debug/deps/coherence-ad51c5dcde149c46)

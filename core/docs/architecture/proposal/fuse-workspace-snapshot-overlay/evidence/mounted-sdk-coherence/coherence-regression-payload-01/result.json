@@ -1,0 +1,90 @@
+{
+  "status": "PASS",
+  "mode": "functional-owned-payload",
+  "checks": [
+    {
+      "id": "unaligned-segment-ranges",
+      "status": "PASS"
+    },
+    {
+      "id": "reader-pins-and-admission",
+      "status": "PASS"
+    },
+    {
+      "id": "empty-deadline-and-quota",
+      "status": "PASS"
+    },
+    {
+      "id": "failed-input-retention",
+      "status": "PASS"
+    },
+    {
+      "id": "native-short-write-retention",
+      "status": "PASS"
+    },
+    {
+      "id": "corruption-and-explicit-cleanup",
+      "status": "PASS"
+    },
+    {
+      "id": "local-progress-and-window-headroom",
+      "status": "PASS"
+    },
+    {
+      "id": "large-stream-and-residency",
+      "status": "PASS"
+    },
+    {
+      "id": "clean-close",
+      "status": "PASS"
+    },
+    {
+      "id": "exact-block-quota-reuse",
+      "status": "PASS"
+    },
+    {
+      "id": "unowned-collider-retention",
+      "status": "PASS"
+    },
+    {
+      "id": "stale-path-and-filesystem-refusal",
+      "status": "PASS"
+    },
+    {
+      "id": "native-enospc-retention",
+      "status": "PASS"
+    }
+  ],
+  "performance_claim": false,
+  "cache_claim": "only observed private-inode residency",
+  "not_run": [
+    "mounted writes",
+    "metadata index",
+    "snapshot G/live successor",
+    "Commit/lowering",
+    "npm",
+    "R6",
+    "RSS/cgroup hard bound"
+  ],
+  "source": "cb9d5a8249602e77a454672de290f6358e04c23b",
+  "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48",
+  "test_binary_sha256": "42abaed400c7be0bb3035ad9b7aec606b8acad07f481e823c36d78f879378ae5",
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "driver_sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+  "oracle_sha256": "1171cbf10ab556a45278556884e389fffc21a802ecdc5cc590001f268a109274",
+  "test_source_sha256": "90618db4c03dc1674b7ef4736fb4540fa8b33df6d7beec00ed707d374d029962",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "setup": "ext4   /payload\next4   /enospc\n4096 9622\n",
+  "invocation": "docker exec -e LAYERFS_PAYLOAD_TEST_ROOT=/payload -e LAYERFS_PAYLOAD_ENOSPC_ROOT=/enospc -e LAYERFS_PAYLOAD_RESIDENCY_ORACLE=/work/core/crates/layerfs-workspace/tests/payload_residency.py -e LAYERFS_CONSTRUCTION_WORKERS=1 layerfs-payload-44cf94153e1f4d64 /work/core/target/pair1-evidence/binary-archive/42abaed400c7be0bb3035ad9b7aec606b8acad07f481e823c36d78f879378ae5/payload-test --ignored --nocapture --test-threads=1",
+  "test_exit": 0,
+  "observations": [
+    "PAYLOAD_SHORT_WRITE BackingFailure { phase: Write, payload: 6, declared_bytes: 1048576, completed_bytes: 0, created_segments: 1, allocated_bytes: 1052672, reserved_bytes: 0, cleanup_failed: false, accounting_complete: true, kind: WriteZero } observed_written_prefix=65536",
+    "PAYLOAD_RESIDENCY {\"files\": 64, \"pages\": 16448, \"resident_pages\": 0, \"allocated_bytes\": 67371008, \"page_size\": 4096, \"phase\": \"after-acquire\", \"scope\": \"private payload inodes; not cgroup/RSS/global filesystem metadata\"}",
+    "PAYLOAD_RESIDENCY {\"files\": 64, \"pages\": 16448, \"resident_pages\": 0, \"allocated_bytes\": 67371008, \"page_size\": 4096, \"phase\": \"after-read\", \"scope\": \"private payload inodes; not cgroup/RSS/global filesystem metadata\"}",
+    "PAYLOAD_RESOURCE input_bytes=67108864 accounted_peak=1986221 open_fds_peak=7 baseline_fds=6",
+    "PAYLOAD_ENOSPC BackingFailure { phase: Allocate, payload: 1, declared_bytes: 67108864, completed_bytes: 40894464, created_segments: 40, allocated_bytes: 41906176, reserved_bytes: 0, cleanup_failed: false, accounting_complete: true, kind: StorageFull }"
+  ],
+  "cleanup": "PASS",
+  "command_wall_seconds": 1.037283582991222,
+  "hard_budget_seconds": 60
+}

@@ -1,0 +1,570 @@
+{
+  "parent": "cb9d5a8249602e77a454672de290f6358e04c23b",
+  "performance_claim": false,
+  "selections": [
+    {
+      "receipt": "coherence-completion-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7996414589870255,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0287114170205314,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-exec-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8457105419947766,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6686247499892488,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-notify_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8307162920245901,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-read_race-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8403285419917665,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-consumed_stage-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8240315000002738,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-cycles-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7731266659975518,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8224204160214867,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 16.11414083300042,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8121108339983039,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.81663508299971,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.826896124985069,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8174690840241965,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-remote_admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8007326670049224,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0424934159964323,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-selectors-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8282915409945417,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-commit_staged-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9349716250144411,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-clean-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.871985957986908,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-clean_successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8296557920111809,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8256659170147032,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 11.137629125005333,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7593794589920435,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9120860420225654,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7911160840012599,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.687311415997101,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8019676659896504,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8371619590034243,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-remote_admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7782621659862343,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0121974590001628,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9391089999990072,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-composite-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3103471669892315,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-aggregate-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7097383749787696,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-corruption-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.704455249971943,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 28.8853438749793,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-inode_frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.915706625004532,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-large_base-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7427845420024823,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-ledger_collider-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.6984191660012584,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-ledger_write_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.6946164580003824,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8070705000136513,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-metadata_quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8001753329881467,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-native_shape-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.810379708011169,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9938232080021407,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-edit-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.5483275419974234,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-maintenance-cross_workspace-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8301797499880195,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-maintenance-frozen-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.102730916987639,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-maintenance-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7881923749810085,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-maintenance-mutation_churn-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.353008416976081,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-maintenance-payload_churn-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3582651669858024,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-maintenance-payload_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7246105409867596,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-mounted-status-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 24.702849916997366,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-capacity-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8569372500060126,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.02145116700558,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-forget-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8683122500078753,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-last_slot-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8167062500142492,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7713002079981379,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-modes-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7882593340182211,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-permissions-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8157356250158045,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-open-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9003500420076307,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-payload-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.037283582991222,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.751772334013367,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 6.846514584001852,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7523313330020756,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8207130419905297,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6960813749756198,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-overwritten_zero-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8601241660071537,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.740948208986083,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9163630830007605,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-resize-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9377949170011561,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-completion_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.77813975000754,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 9.52971533400705,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7999811250192579,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.823119750013575,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-lowering-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8473618330026511,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-metadata_denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7852825419977307,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7685328329971526,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.561353707977105,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9507090830011293,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-stage-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3064100840128958,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-append-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8431021249853075,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.028441542002838,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.2349346249829978,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 26.84546783400583,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7420405840093736,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7110597919963766,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-pending-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8660585410252679,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-positional-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9411262499925215,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7559835409920197,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-released-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8046374999976251,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8912868750048801,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-regression-write-zero_rights-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.789407417003531,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-truncate_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8076252500177361,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-visibility-01/result.json",
+      "status": "FAIL",
+      "wall_seconds": 3.477539417013759,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    },
+    {
+      "receipt": "coherence-visibility-02/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.990084792021662,
+      "product_inputs_sha256": "f0b6f5bf3e7fd0a84a85f5a4ad1446c0ae1bf17d6994c21114e57abb5c7f4d48"
+    }
+  ]
+}

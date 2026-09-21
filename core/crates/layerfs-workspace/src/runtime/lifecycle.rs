@@ -8,20 +8,26 @@ use std::{
 
 /// One projection binding. Dropping it never claims that kernel detach succeeded.
 pub struct MountLease {
-    workspace: Workspace,
-    finished: bool,
+    pub(super) workspace: Workspace,
+    pub(super) finished: bool,
 }
 impl Workspace {
     pub fn reserve_mount(&self) -> Result<MountLease, WorkspaceError> {
-        if self.inner.access == crate::WorkspaceAccess::LocalEdit {
-            return Err(WorkspaceError::Unsupported);
+        {
+            let state = self.state()?;
+            self.available(&state)?;
+            if state.mounted || state.active > 0 {
+                return Err(WorkspaceError::Busy);
+            }
         }
+        let projection = super::coherence::ProjectionState::reserve(self)?;
         let mut state = self.state()?;
         self.available(&state)?;
         if state.mounted || state.active > 0 {
             return Err(WorkspaceError::Busy);
         }
         state.mounted = true;
+        state.projection = Some(projection);
         Ok(MountLease {
             workspace: self.clone(),
             finished: false,
@@ -50,6 +56,8 @@ impl Workspace {
                 .iter()
                 .filter(|handle| handle.scope == ReferenceScope::Projection)
                 .count(),
+            projection_replies: state.projection.as_ref().map_or(0, |p| p.replies),
+            coherence: state.projection.as_ref().map(|p| p.status),
             cookies: state.cookies.len(),
             accounted_bytes: self.host.budget.used(),
         })
@@ -130,6 +138,10 @@ impl MountLease {
         let mut state = self.workspace.state()?;
         if state.active > 0
             || state
+                .projection
+                .as_ref()
+                .is_some_and(|p| p.replies > 0 || p.in_flight())
+            || state
                 .handles
                 .iter()
                 .any(|handle| handle.scope == ReferenceScope::Projection)
@@ -137,6 +149,7 @@ impl MountLease {
             return Err(WorkspaceError::Busy);
         }
         state.mounted = false;
+        let projection = state.projection.take();
         for node in &mut state.nodes {
             node.projection_lookups = 0;
         }
@@ -146,6 +159,10 @@ impl MountLease {
             .stopping
             .store(false, Ordering::Release);
         self.finished = true;
+        drop(state);
+        // A checked detach retires even a failed binding; its applied mutation
+        // stays in the live overlay and its returned failure retains the receipt.
+        drop(projection);
         Ok(())
     }
 }

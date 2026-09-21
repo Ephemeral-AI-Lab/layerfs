@@ -40,7 +40,7 @@ CASES = {
     'metadata_failure': ['native-metadata-failure-preserves-visible-base-and-quarantine',
                          'explicit-metadata-cleanup-releases-known-partial-allocation'],
     'aggregate': ['shared-consumer-quota-and-memory-account', 'independent-local-roots-share-budget'],
-    'semantics': ['explicit-unmounted-access', 'atomic-bytes-attributes-and-hardlinks',
+    'semantics': ['explicit-local-access-and-unbound-projection-refusal', 'atomic-bytes-attributes-and-hardlinks',
                   'current-coordinate-overlap-insert-delete',
                   'node-forget-retains-dirty-index-and-branch', 'dirty-close-preserves-owned-state'],
     'refusals': ['range-deadline-kind-failure-atomicity', 'read-only-and-foreign-payload-refusal',

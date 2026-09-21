@@ -29,6 +29,10 @@ pub type OperationDelivery = Arc<
         + Send
         + Sync,
 >;
+/// One bounded projection notification, invoked after local publication without
+/// Workspace state or backing locks. The caller retains its original deadline.
+pub type ProjectionInvalidation =
+    Arc<dyn Fn(MutationReceipt, Instant) -> std::io::Result<()> + Send + Sync>;
 
 #[derive(Clone, Debug)]
 pub struct WorkspaceConfig {
@@ -90,6 +94,7 @@ pub enum WorkspaceError {
     Backing(BackingFailure),
     Stage(Arc<StageFailure>),
     Commit(Arc<CommitFailure>),
+    Coherence(CoherenceFailure),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,6 +182,8 @@ pub struct WorkspaceStatus {
     /// Allocated handle slots, including pending opens.
     pub handles: usize,
     pub projection_handles: usize,
+    pub projection_replies: usize,
+    pub coherence: Option<CoherenceStatus>,
     pub cookies: usize,
     pub accounted_bytes: usize,
 }
@@ -208,7 +215,7 @@ impl DirectoryPage {
     }
 }
 
-/// Explicit local edit capability. Linux projection writes follow a later round.
+/// Explicit SDK edit capability. Linux projection writes follow a later round.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkspaceAccess {
     ReadOnly,
@@ -250,13 +257,33 @@ pub struct RangeEdit {
     pub end: u64,
     pub replacement: crate::OwnedPayload,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MutationReceipt {
     pub incarnation: [u8; 32],
     pub generation: u64,
     pub inode: u64,
     pub revision: u64,
     pub accepted_bytes: u64,
+}
+/// A mutation was published, but its projection completion did not succeed.
+/// A published truncating-open handle remains valid until explicitly released.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CoherenceFailure {
+    pub receipt: MutationReceipt,
+    pub published_handle: Option<HandleId>,
+    pub kind: std::io::ErrorKind,
+    pub raw_os_error: Option<i32>,
+    pub notifier_returned_ok: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CoherenceStatus {
+    Unbound,
+    Ready,
+    Pending {
+        receipt: MutationReceipt,
+        published_handle: Option<HandleId>,
+    },
+    Failed(CoherenceFailure),
 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MetadataCleanupReport {

@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::local_range_edit_large_base ... LOCAL_EDIT_CHECK large-base-edit-keeps-inherited-bytes-as-references PASS
+LOCAL_EDIT_RESOURCE large-base-end workspace=WorkspaceStatus { submission: None, generation: 1, revision: 1, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 1988833 } backing=BackingStatus { quota_bytes: 134217728, allocated_bytes: 20480, reserved_bytes: 851968, payloads: 1, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } metadata=MetadataStatus { allocated_pages: 2, reusable_pages: 0, reserved_slots: 0, roots: 1, external_roots: 1, allocated_bytes: 12288, reserved_bytes: 851968, working_bytes: 2520, accounting_complete: true, admission_stopped: false } native_file_allocated=20480 process_fds_at_boundary=6 fd_scope=includes_proc_enumeration_not_peak
+LOCAL_EDIT_LARGE_BASE logical_bytes=67108864 accepted_bytes=16 oracle=edited-and-distant-windows full_workspace_readback=NOT_RUN
+LOCAL_EDIT_CHECK large-base-edited-and-distant-window-oracles PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.05s
+

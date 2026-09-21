@@ -6,7 +6,7 @@ use std::{fmt, io, time::Instant};
 use {
     crate::adapter::{Adapter, CALLBACK_BUDGET},
     fuser::{Config, MountOption, Session, SessionACL, SessionUnmounter},
-    layerfs_workspace::{MountLease, MAX_READ_BYTES},
+    layerfs_workspace::{CoherenceStatus, MountLease, MutationReceipt, MAX_READ_BYTES},
     std::{
         io::Read,
         sync::{
@@ -64,8 +64,9 @@ pub struct MountHandle {
     finished: bool,
 }
 
-/// Mounts the immutable R profile on Linux through the direct privileged mount
-/// path. No helper, allow_other, writeback or writable capability is selected.
+/// Mounts a read-only kernel projection on Linux through the direct privileged
+/// path. Local SDK edits require the bound checked inode invalidator. No helper,
+/// allow_other, writeback or writable kernel capability is selected.
 /// Synchronous kernel mount/unmount calls have deadline observation points;
 /// they are not advertised as preemptible syscalls.
 pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, MountError> {
@@ -114,6 +115,18 @@ pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, Mo
                 return Err(MountError::Io(error));
             }
         };
+        let notifier = session.notifier();
+        let root = workspace.root().serial;
+        let invalidation = Arc::new(move |receipt: MutationReceipt, _: Instant| {
+            notifier.inval_inode(crate::replies::inode(receipt.inode, root), 0, 0)
+        });
+        if let Err(error) = lease.bind_invalidation(invalidation) {
+            drop(session);
+            if !mounted(workspace.mount_path())? {
+                lease.finish()?;
+            }
+            return Err(MountError::Workspace(error));
+        }
         let unmounter = session.unmount_callable();
         let worker = match thread::Builder::new()
             .name("layerfs-mount".into())
@@ -172,7 +185,11 @@ impl MountHandle {
             self.lease.stop_admission();
             loop {
                 let status = self.workspace.status()?;
-                if status.active_operations == 0 && status.projection_handles == 0 {
+                if status.active_operations == 0
+                    && status.projection_handles == 0
+                    && status.projection_replies == 0
+                    && !matches!(status.coherence, Some(CoherenceStatus::Pending { .. }))
+                {
                     break;
                 }
                 // A completed backend read does not close its caller's FD.

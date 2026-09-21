@@ -455,3 +455,17 @@ conservative 596,616-byte working allowance below 640 KiB. The FUSE adapter stay
 read-only; kernel append positioning and reply/invalidation coherence are separate
 required projection work. The original frontier failure and shared transport
 prerequisite retain their source identities in 23.
+
+From parent `cb9d5a8249602e77a454672de290f6358e04c23b`, the
+[mounted SDK-coherence binding](proposal/fuse-workspace-snapshot-overlay/24-mounted-sdk-coherence.md)
+admits at most two projection observations through their reply attempts and
+excludes SDK publication while an older observation exists. One charged callback
+and pending receipt carry checked inode invalidation outside all state/backing
+locks. Applied failures retain the receipt and any READY truncating-open handle;
+fresh observations and cleanup remain available. Mount finish drops completed
+failed bindings only after checked detach/join. LocalEdit can use the existing RO
+kernel projection, with WRITE/SETATTR and write access still explicitly refused.
+Workspace has no fuser dependency. Six real mounted cases and two native completion
+API subsets are recorded separately in 24; writable kernel and remote SDK controls
+remain open. The internal per-Workspace control account grows 8,192 to 8,200 bytes;
+mount control, both permit slots and the concrete callback Arc are separately charged.

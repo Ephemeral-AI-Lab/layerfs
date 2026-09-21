@@ -82,6 +82,8 @@ fn mask(access: FileAccess) -> u8 {
 impl Workspace {
     /// Opens an existing cached regular inode. Truncation and handle publication
     /// form one operation; append intent is retained for the handle's lifetime.
+    /// A later projection failure returns Coherence with the published handle;
+    /// the caller can inspect or release it without replaying the truncation.
     pub fn open_file(
         &self,
         serial: u64,

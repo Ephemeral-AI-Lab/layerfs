@@ -51,6 +51,7 @@ pub(crate) struct State {
     pub next_handle: u64,
     pub next_cookie: u64,
     pub mounted: bool,
+    pub projection: Option<Box<super::coherence::ProjectionState>>,
     pub closed: bool,
     pub active: usize,
     pub tables: Option<Charge>,

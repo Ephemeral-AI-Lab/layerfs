@@ -23,7 +23,15 @@ the handle-write operation is verified separately afterward.
 share the bounded mutation and Commit pipeline. Twelve actual native cases pass,
 including the complete 256-edit frontier after the separate transport correction
 and live writes during actual service save. Mounted SDK coherence and kernel
-write/append/truncate callbacks are the next required projection work.
+write/append/truncate callbacks remain required projection work.
+
+**Mounted SDK-coherence update:** [the bounded reply/invalidation binding](24-mounted-sdk-coherence.md)
+now permits SDK mutations with checked visibility through a real RO Linux kernel
+projection. Old replies exclude publication, one pending notification excludes
+the next mutation, and known publication failures retain their exact receipt and
+any READY truncating-open handle. Six real mounted cases and two API completion
+subsets pass. Kernel writes/append positioning/SETATTR, remote SDK controls, npm
+and R6 remain open.
 
 This is the current detailed Pair 1 document packet. It consolidates the earlier
 Workspace/FUSE discussions, platform ruling, file plan, POSIX decisions and

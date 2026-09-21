@@ -1298,3 +1298,15 @@ Zero gaps in one splice. Twelve native cases pass, including all 256 edits and
 actual C2-save progress. Original frontier/readback failure remains recorded.
 This supplies the semantic write operation needed by R4; mounted reply coherence,
 kernel append fd-position handling and writable callbacks remain distinct work.
+
+
+[24 — Mounted SDK coherence](24-mounted-sdk-coherence.md), from parent
+`cb9d5a8249602e77a454672de290f6358e04c23b`, implements the required bounded
+projection binding before kernel writes. At most two observation permits exclude
+publication until reply attempts finish; checked invalidation occurs after all
+state/backing locks and temporary vectors end. Applied errors retain the exact
+receipt and any READY truncating-open handle. Six actual mounted SDK-edit/read
+cases cover visibility, old replies, executable reads, real-save continuation and
+native notification-send failures. Two separate completion/deadline API subsets
+are not mounted proofs. The kernel projection remains RO; this does not complete
+R4's writable callbacks or qualify host-SDK/container management.

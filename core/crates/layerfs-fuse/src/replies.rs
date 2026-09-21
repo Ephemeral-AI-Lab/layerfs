@@ -36,7 +36,10 @@ pub(crate) fn errno(error: WorkspaceError) -> Errno {
             ServiceCode::Deadline => Errno::ETIMEDOUT,
             _ => Errno::EIO,
         },
-        WorkspaceError::Io | WorkspaceError::Stage(_) | WorkspaceError::Commit(_) => Errno::EIO,
+        WorkspaceError::Io
+        | WorkspaceError::Stage(_)
+        | WorkspaceError::Commit(_)
+        | WorkspaceError::Coherence(_) => Errno::EIO,
     }
 }
 

@@ -1,0 +1,29 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+error: non-binding let on a synchronization lock
+   --> crates/layerfs-workspace/tests/coherence.rs:294:22
+    |
+294 |                 let (_, timed) = gate
+    |                      ^ this lock is not assigned to a binding and is immediately dropped
+    |
+    = help: consider immediately dropping the value using `drop(..)` after the `let` statement
+    = note: `#[deny(let_underscore_lock)]` on by default
+help: consider binding to an unused variable to avoid immediately dropping the value
+    |
+294 |                 let (_unused, timed) = gate
+    |                      ~~~~~~~
+
+error: non-binding let on a synchronization lock
+   --> crates/layerfs-workspace/tests/coherence.rs:304:18
+    |
+304 |             let (_, timed) = self
+    |                  ^ this lock is not assigned to a binding and is immediately dropped
+    |
+    = help: consider immediately dropping the value using `drop(..)` after the `let` statement
+help: consider binding to an unused variable to avoid immediately dropping the value
+    |
+304 |             let (_unused, timed) = self
+    |                  ~~~~~~~
+
+error: could not compile `layerfs-workspace` (test "coherence") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

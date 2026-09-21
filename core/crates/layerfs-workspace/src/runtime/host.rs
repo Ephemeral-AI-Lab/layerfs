@@ -22,6 +22,8 @@ use std::{
     },
     time::Instant,
 };
+const WORKSPACE_STATE_BYTES: usize =
+    8192 + size_of::<Option<Box<super::coherence::ProjectionState>>>();
 
 #[derive(Clone)]
 pub struct WorkspaceHost {
@@ -120,7 +122,7 @@ impl WorkspaceHost {
             .checked_add(
                 size_of::<Entry>()
                     + 63
-                    + 8192
+                    + WORKSPACE_STATE_BYTES
                     + CALL_SCRATCH
                     + MAX_READ_BYTES
                     + NODE_LIMIT * size_of::<Node>()
@@ -290,7 +292,7 @@ impl WorkspaceHost {
             if expected_serial.is_some_and(|serial| serial != attr.serial) {
                 return Err(WorkspaceError::InvalidInput);
             }
-            let charge = self.inner.budget.reserve(8192)?;
+            let charge = self.inner.budget.reserve(WORKSPACE_STATE_BYTES)?;
             let tables = self.inner.budget.reserve(
                 NODE_LIMIT * size_of::<Node>()
                     + HANDLE_LIMIT * size_of::<Handle>()
@@ -361,6 +363,7 @@ impl WorkspaceHost {
                     next_handle: 1,
                     next_cookie: 1,
                     mounted: false,
+                    projection: None,
                     closed: false,
                     active: 0,
                     tables: Some(tables),

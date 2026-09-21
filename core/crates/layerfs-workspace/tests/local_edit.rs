@@ -255,13 +255,22 @@ mod linux {
             .workspace
             .open(alias.serial, ReferenceScope::Local)
             .unwrap();
+        let mut lease = f.workspace.reserve_mount().unwrap();
+        assert_eq!(
+            f.workspace.status().unwrap().coherence,
+            Some(CoherenceStatus::Unbound)
+        );
         assert!(matches!(
-            f.workspace.reserve_mount(),
-            Err(WorkspaceError::Unsupported)
+            f.workspace.set_len(file.serial, file.size, deadline()),
+            Err(WorkspaceError::Busy)
         ));
-        assert!(layerfs_fuse::mount(&f.workspace, deadline()).is_err());
+        assert!(matches!(
+            f.workspace.begin_projection_reply(deadline()),
+            Err(WorkspaceError::Busy)
+        ));
+        lease.finish().unwrap();
         assert!(!f.workspace.status().unwrap().mounted);
-        check("explicit-unmounted-access");
+        check("explicit-local-access-and-unbound-projection-refusal");
         let before_read = f.native.read_bytes.load(Ordering::Relaxed);
         let receipt = f.edit(b"data.bin", 4093, 4101, b"replacement");
         assert_eq!(

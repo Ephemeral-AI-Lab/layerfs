@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::coherence_exec ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 2, revision: 6, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 1994426 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 24576, reserved_bytes: 0, payloads: 1, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 2, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 16384, reserved_bytes: 0, working_bytes: 8104, accounting_complete: true, admission_stopped: false }
+COHERENCE_CHECK mounted-ELF-and-replacement-script-execute-after-checked-SDK-invalidation PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.11s
+

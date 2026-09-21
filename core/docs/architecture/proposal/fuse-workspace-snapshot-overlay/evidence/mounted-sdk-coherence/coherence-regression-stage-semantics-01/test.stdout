@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_semantics ... STAGE_CHECK capture-live-successor-and-consumer-admission PASS
+STAGE_CHECK frozen-bytes-attributes-aliases-and-one-tree-save PASS
+STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 2, dirty_inodes: 2, phase: Staged, inode: None, saved_files: 2, saved_metadata: 2, stage_token: Some(2), candidate_root: Some([219, 46, 249, 43, 246, 237, 112, 89, 147, 247, 167, 27, 159, 49, 63, 215, 8, 115, 117, 140, 142, 138, 144, 204, 202, 202, 229, 16, 225, 81, 235, 108]), failure: None, failure_phase: None, commit: None }), generation: 2, revision: 5, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 3, handles: 1, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 3481506 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 81920, reserved_bytes: 2551808, payloads: 5, retained_payloads: 5, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 8, reusable_pages: 2, reserved_slots: 0, roots: 5, external_roots: 5, allocated_bytes: 40960, reserved_bytes: 2551808, working_bytes: 48256, accounting_complete: true, admission_stopped: false }
+STAGE_CHECK exact-stage-and-retained-submission PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.21s
+

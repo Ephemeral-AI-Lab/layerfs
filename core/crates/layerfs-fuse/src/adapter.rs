@@ -1,7 +1,9 @@
 //! Kernel argument checks and single-use replies; no filesystem algorithms.
 use crate::replies::{attributes, errno, inode, kind, serial};
 use fuser::*;
-use layerfs_workspace::{ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES};
+use layerfs_workspace::{
+    ProjectionReplyPermit, ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
+};
 use std::{
     ffi::OsStr,
     io,
@@ -53,6 +55,13 @@ impl Adapter {
         }
         Ok(())
     }
+    fn observe(&self, req: &Request) -> Result<ProjectionReplyPermit, Errno> {
+        // Callbacks retain this guard in their outer scope through reply emission.
+        self.guard(req)?;
+        self.workspace
+            .begin_projection_reply(Instant::now() + CALLBACK_BUDGET)
+            .map_err(errno)
+    }
     fn readonly(&self, req: &Request) -> Errno {
         self.guard(req).err().unwrap_or(Errno::EROFS)
     }
@@ -100,7 +109,8 @@ impl Filesystem for Adapter {
     }
 
     fn lookup(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
-        let result = self.guard(req).and_then(|()| {
+        let permit = self.observe(req);
+        let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             self.workspace
                 .lookup(
                     serial(parent, self.root()),
@@ -128,7 +138,8 @@ impl Filesystem for Adapter {
     }
 
     fn getattr(&self, req: &Request, ino: INodeNo, fh: Option<FileHandle>, reply: ReplyAttr) {
-        let result = self.guard(req).and_then(|()| {
+        let permit = self.observe(req);
+        let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             let value = match fh {
                 Some(handle) => {
                     self.handle(ino, handle)?;
@@ -147,7 +158,11 @@ impl Filesystem for Adapter {
     }
 
     fn access(&self, req: &Request, ino: INodeNo, mask: AccessFlags, reply: ReplyEmpty) {
-        let result = self.guard(req).and_then(|()| {
+        let permit = self.observe(req);
+        let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
+            if mask.bits() & 2 != 0 {
+                return Err(Errno::EROFS);
+            }
             self.workspace
                 .access(
                     serial(ino, self.root()),
@@ -164,9 +179,11 @@ impl Filesystem for Adapter {
     }
 
     fn open(&self, req: &Request, ino: INodeNo, requested: OpenFlags, reply: ReplyOpen) {
-        let result = self
-            .guard(req)
-            .and_then(|()| flags(requested, false))
+        let permit = self.observe(req);
+        let result = permit
+            .as_ref()
+            .map_err(|error| *error)
+            .and_then(|_| flags(requested, false))
             .and_then(|()| {
                 if requested.0 & KERNEL_FMODE_EXEC != 0 {
                     self.workspace
@@ -197,9 +214,11 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyData,
     ) {
-        let result = self
-            .guard(req)
-            .and_then(|()| flags(requested, false))
+        let permit = self.observe(req);
+        let result = permit
+            .as_ref()
+            .map_err(|error| *error)
+            .and_then(|_| flags(requested, false))
             .and_then(|()| self.handle(ino, fh))
             .and_then(|()| {
                 self.workspace
@@ -218,7 +237,8 @@ impl Filesystem for Adapter {
     }
 
     fn readlink(&self, req: &Request, ino: INodeNo, reply: ReplyData) {
-        let result = self.guard(req).and_then(|()| {
+        let permit = self.observe(req);
+        let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             self.workspace
                 .readlink(serial(ino, self.root()), Instant::now() + CALLBACK_BUDGET)
                 .map_err(errno)
@@ -259,9 +279,11 @@ impl Filesystem for Adapter {
     }
 
     fn opendir(&self, req: &Request, ino: INodeNo, requested: OpenFlags, reply: ReplyOpen) {
-        let result = self
-            .guard(req)
-            .and_then(|()| flags(requested, true))
+        let permit = self.observe(req);
+        let result = permit
+            .as_ref()
+            .map_err(|error| *error)
+            .and_then(|_| flags(requested, true))
             .and_then(|()| {
                 self.workspace
                     .opendir(serial(ino, self.root()), ReferenceScope::Projection)
@@ -281,9 +303,11 @@ impl Filesystem for Adapter {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
-        let result = self
-            .guard(req)
-            .and_then(|()| self.handle(ino, fh))
+        let permit = self.observe(req);
+        let result = permit
+            .as_ref()
+            .map_err(|error| *error)
+            .and_then(|_| self.handle(ino, fh))
             .and_then(|()| {
                 self.workspace
                     .readdir(
