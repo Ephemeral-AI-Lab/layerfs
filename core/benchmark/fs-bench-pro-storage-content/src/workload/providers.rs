@@ -10,7 +10,7 @@
 //! measured cost rather than the operation under test.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -236,6 +236,148 @@ impl Coverage {
     }
 }
 
+/// One batch's prefix of a chain: **which** identities it may serve, not a copy.
+///
+/// A batch in a chain must be served the chain *as it stood before that batch*, and
+/// a standalone probe measured that handing it the complete chain instead returns
+/// `cycle check work limit` (`tests/namespace_batch_probe.rs`). That requirement is
+/// about the object **set** a reader may serve, so the set is what is kept.
+///
+/// The alternative — a `TreeStore` snapshot per batch, which is what the driver held
+/// until round 22 — retains the sum over batches of the chain so far, because
+/// [`TreeStore::absorb`] **copies**: 25 snapshots holding 66,824 objects and
+/// 164,347,158 bytes to serve a chain whose final state is 4,221 objects and
+/// 12,452,785 bytes, one snapshot per batch where 24 of the 25 are strict subsets of
+/// the next (`report.md` section 11.4 of round 21). The identities cost 4.5 MB where
+/// the copies cost 164 MB, and serve the identical set.
+#[derive(Clone, Default)]
+pub struct PrefixKeys {
+    allowed: HashSet<ObjectId>,
+}
+
+impl PrefixKeys {
+    /// Empty: a reader over this serves nothing, which is batch 0's prefix.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Admits every identity in `ids`.
+    pub fn extend(&mut self, ids: &[ObjectId]) {
+        self.allowed.extend(ids.iter().copied());
+    }
+
+    /// Identities admitted.
+    pub fn len(&self) -> usize {
+        self.allowed.len()
+    }
+
+    /// Whether `id` may be served.
+    pub fn admits(&self, id: ObjectId) -> bool {
+        self.allowed.contains(&id)
+    }
+}
+
+/// A reader over a complete chain, restricted to one batch's prefix.
+///
+/// **Why this is a reader and not a copy.** The driver that builds a namespace in
+/// batches needs, for batch `index`, the objects the *previous* batches produced.
+/// Building that set costs what the chain costs, and the batch loop's chain grows to
+/// the whole namespace; so a snapshot per batch retains the sum over batches of the
+/// chain so far. Holding the complete chain **once** and admitting only the
+/// identities a batch's prefix contained serves exactly the same objects, and fails
+/// identically: an identity outside the prefix is [`ContentError::MissingObject`],
+/// which is the error a reader over a snapshot that lacks the object also returns.
+///
+/// The set-membership test can only *refuse*. Everything served still goes through
+/// [`TreeStore`]'s own re-identification, so a filtered reader is not a weaker one.
+pub struct PrefixProvider<'a> {
+    /// The complete chain, built before the timer.
+    pub chain: &'a TreeStore,
+    /// Identities the batch this reader serves may see.
+    pub allowed: &'a PrefixKeys,
+    demanded: RefCell<Vec<ObjectId>>,
+    served: std::cell::Cell<u64>,
+    refused: std::cell::Cell<u64>,
+    /// Live copies of every identity this reader has ever served.
+    ///
+    /// Kept because the coverage check counts *distinct* identities, and a filter
+    /// that admitted one object before denying another is a defect a served count
+    /// alone cannot see.
+    served_ids: RefCell<HashSet<ObjectId>>,
+}
+
+impl<'a> PrefixProvider<'a> {
+    /// Wraps a complete chain and one batch's prefix.
+    pub fn new(chain: &'a TreeStore, allowed: &'a PrefixKeys) -> Self {
+        Self {
+            chain,
+            allowed,
+            demanded: RefCell::new(Vec::new()),
+            served: std::cell::Cell::new(0),
+            refused: std::cell::Cell::new(0),
+            served_ids: RefCell::new(HashSet::new()),
+        }
+    }
+
+    /// Every identity demanded, in demand order, with repeats.
+    pub fn demanded(&self) -> Vec<ObjectId> {
+        self.demanded.borrow().clone()
+    }
+
+    /// Objects served, and objects refused as outside the prefix.
+    pub fn served(&self) -> (u64, u64) {
+        (self.served.get(), self.refused.get())
+    }
+
+    /// Distinct identities served.
+    pub fn distinct_served(&self) -> usize {
+        self.served_ids.borrow().len()
+    }
+}
+
+impl AuthenticatedObjects for PrefixProvider<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        self.demanded.borrow_mut().extend_from_slice(ids);
+        let mut values = Vec::with_capacity(ids.len());
+        for id in ids {
+            // The prefix decides *whether* this reader may see the object at all;
+            // holding the complete chain is what makes the answer cheap. A refusal
+            // is the same error a snapshot lacking the object returns, because that
+            // is what the batch is owed: the chain as it stood before it.
+            let found = if self.allowed.admits(*id) {
+                self.chain.object(*id)
+            } else {
+                self.refused.set(self.refused.get() + 1);
+                None
+            };
+            match found {
+                Some(object) if ObjectId::for_bytes(object.canonical()) == *id => {
+                    self.served.set(self.served.get() + 1);
+                    self.served_ids.borrow_mut().insert(*id);
+                    values.push(object.canonical().to_vec());
+                }
+                // A stored object that does not re-identify is a hard failure, not
+                // a miss: the provider contract distinguishes them, and collapsing
+                // them would hide corruption behind an absence.
+                Some(_) => return Err(ContentError::IdentityMismatch),
+                None => {
+                    eprintln!(
+                        "PROBE missing {id} admitted={} chain={} allowed={} served={} refused={} demanded={}",
+                        self.allowed.admits(*id),
+                        self.chain.len(),
+                        self.allowed.len(),
+                        self.served.get(),
+                        self.refused.get(),
+                        self.demanded.borrow().len()
+                    );
+                    return Err(ContentError::MissingObject);
+                }
+            }
+        }
+        Ok(values)
+    }
+}
+
 /// A provider over two stores: the result first, then the base it was built from.
 ///
 /// An edit emits only what it changed; everything it kept is still addressed by
@@ -429,5 +571,116 @@ impl AuthenticatedObjects for SharedReader<'_> {
             .borrow()
             .read_canonical_batch(ids)
             .or_else(|_| self.base.read_canonical_batch(ids))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layerfs_content::ObjectRole;
+
+    /// One canonical bytes-role object over `value`.
+    ///
+    /// Built by hand rather than through `codec::encode_bytes_object`, which is
+    /// `pub(crate)` to the product: `FinalizedObject::new` decodes what it is given,
+    /// so a test that fed it arbitrary bytes would fail on framing instead of on the
+    /// behaviour under test. The header is `magic + kind + payload_len + value_len`,
+    /// big-endian, and `payload_len` counts the length field with the value.
+    fn object_of(value: &[u8]) -> FinalizedObject {
+        let mut canonical = Vec::new();
+        canonical.extend_from_slice(b"LFSO");
+        canonical.push(1);
+        canonical.extend_from_slice(&((value.len() + 4) as u32).to_be_bytes());
+        canonical.extend_from_slice(&(value.len() as u32).to_be_bytes());
+        canonical.extend_from_slice(value);
+        FinalizedObject::new(ObjectRole::Chunk, canonical).expect("canonical object")
+    }
+
+    /// A store of `count` distinct objects, deterministic in `tag`.
+    fn store_of(count: u8, tag: u8) -> TreeStore {
+        let mut store = TreeStore::new();
+        for index in 0..count {
+            store.insert_object(object_of(&[tag, index, 0x5a, 0xa5]));
+        }
+        store
+    }
+
+    /// The identity a snapshot of `ids` would serve, built the way the driver used
+    /// to build one: a `TreeStore` holding copies.
+    fn snapshot_of(chain: &TreeStore, ids: &[ObjectId]) -> TreeStore {
+        let mut snapshot = TreeStore::new();
+        for id in ids {
+            snapshot.insert_object(chain.object(*id).expect("held").clone());
+        }
+        snapshot
+    }
+
+    #[test]
+    fn prefix_keys_admit_the_snapshot_and_nothing_else() {
+        let chain = store_of(6, 1);
+        let all: Vec<ObjectId> = chain.insertion_order().to_vec();
+        // A prefix of the first four, as a batch's base would be.
+        let mut keys = PrefixKeys::new();
+        keys.extend(&all[..4]);
+        let reader = PrefixProvider::new(&chain, &keys);
+
+        for id in &all[..4] {
+            let served = reader.read_canonical_batch(&[*id]).expect("served");
+            assert_eq!(served[0], chain.canonical(*id).expect("held").to_vec());
+        }
+        // The two the prefix does not admit are refused, and refused the same way a
+        // snapshot that never held them refuses: an absence, not a corruption.
+        for id in &all[4..] {
+            assert!(matches!(
+                reader.read_canonical_batch(&[*id]),
+                Err(ContentError::MissingObject)
+            ));
+        }
+        assert_eq!(reader.served(), (4, 2));
+        assert_eq!(reader.distinct_served(), 4);
+    }
+
+    #[test]
+    fn a_batch_demanding_a_later_object_gets_the_snapshot_error() {
+        // The defect this guards: the provider holds the complete chain, so it
+        // *could* answer a demand the batch is not owed. Both readers must refuse.
+        let chain = store_of(6, 2);
+        let all: Vec<ObjectId> = chain.insertion_order().to_vec();
+        let mut keys = PrefixKeys::new();
+        keys.extend(&all[..3]);
+        let snapshot = snapshot_of(&chain, &all[..3]);
+        let filtered = PrefixProvider::new(&chain, &keys);
+        let demanded = [all[0], all[5]];
+
+        let from_snapshot = snapshot.read_canonical_batch(&demanded);
+        let from_filtered = filtered.read_canonical_batch(&demanded);
+        assert!(matches!(
+            from_snapshot,
+            Err(ContentError::MissingObject)
+        ));
+        assert!(matches!(
+            from_filtered,
+            Err(ContentError::MissingObject)
+        ));
+    }
+
+    #[test]
+    fn a_cumulative_prefix_serves_bytes_and_demand_order_identically() {
+        // What the driver relies on: the key set for batch `index` is the snapshot's
+        // object set, so the same demands return the same bytes in the same order.
+        let chain = store_of(8, 3);
+        let all: Vec<ObjectId> = chain.insertion_order().to_vec();
+        let snapshot = snapshot_of(&chain, &all[..5]);
+        let mut keys = PrefixKeys::new();
+        keys.extend(&all[..5]);
+        let filtered = PrefixProvider::new(&chain, &keys);
+
+        let wave = [all[4], all[1], all[3], all[1]];
+        let expected = snapshot.read_canonical_batch(&wave).expect("snapshot serves");
+        let observed = filtered.read_canonical_batch(&wave).expect("filtered serves");
+        assert_eq!(expected, observed);
+        assert_eq!(snapshot.demanded(), filtered.demanded());
+        assert_eq!(filtered.served(), (4, 0));
+        assert_eq!(filtered.distinct_served(), 3);
     }
 }

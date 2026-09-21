@@ -44,7 +44,9 @@ use crate::registry::{Case, PipelineOp};
 use crate::support::instruments;
 use crate::support::trace::Kind;
 use crate::workload::oracle::Expectation;
-use crate::workload::providers::{CountingConsumer, PairProvider, TreeStore};
+use crate::workload::providers::{
+    CountingConsumer, PairProvider, PrefixKeys, PrefixProvider, TreeStore,
+};
 
 /// The build phases this row reads back, in the order the product records them.
 const BUILD_PHASES: [&str; 6] = [
@@ -819,6 +821,16 @@ fn namespace_scale(
     // same route, where `measure_batch`'s reader is a pre-computed chain and never
     // the live Store. Reader and consumer are different objects, so the accumulating
     // store can be borrowed for reading while a fresh one takes the batch's output.
+    //
+    // **One chain, and one identity set per batch** — not one chain copy per batch.
+    // This loop used to keep a `TreeStore` snapshot of the chain at each step, and
+    // because `TreeStore::absorb` copies, the driver retained the sum over batches of
+    // the chain so far: at 100,000 entries, 25 snapshots holding 66,824 objects and
+    // 164,347,158 bytes to serve a chain whose final state is 4,221 objects and
+    // 12,452,785 bytes (round 21 `report.md` section 11.4). What a batch is owed is
+    // the chain *as it stood before it*, which is a statement about the objects a
+    // reader may serve rather than about holding a second copy of them, so this loop
+    // keeps the identities and `PrefixProvider` serves the batch through them.
     let empty = TreeStore::new();
     // One ordering backing per batch per phase, created before the timer: a batch's
     // bindings outgrow the in-memory ordering map, and `FileBacking::new` scans its
@@ -837,13 +849,19 @@ fn namespace_scale(
         Err(error) => return Ok(c1::unmeasured(&error, gates)),
     };
     let mut chain = TreeStore::new();
-    // One reader per batch index: the chain **as it stood before that batch**, not the
-    // complete chain. Measured, not assumed: a standalone probe passes every batch at
-    // budgets 4096, 2048 and 1024 when the reader is the chain-so-far, while the
-    // driver's timed pass returned `cycle check work limit` when it served every batch
-    // from the complete chain. A batch's base is what the *previous* batches produced,
-    // so handing it the whole chain is both wrong and more expensive.
-    let mut prefixes: Vec<TreeStore> = vec![TreeStore::new()];
+    // One **key set** per batch index, and no copy: the chain as it stood before that
+    // batch, expressed as the identities that batch may be served. Measured, not
+    // assumed: a standalone probe passes every batch at budgets 4096, 2048 and 1024
+    // when the reader is the chain-so-far, while the driver's timed pass returned
+    // `cycle check work limit` when it served every batch from the complete chain. A
+    // batch's base is what the *previous* batches produced, so handing it the whole
+    // chain is both wrong and more expensive; `PrefixProvider` hands it the same set
+    // the snapshot did, at 3.8 MB instead of 164 MB.
+    //
+    // `prefixes[0]` is the empty set — batch 0 has no base — and `prefixes[index]` is
+    // captured *after* batch `index - 1` was absorbed, so the vector is indexed by
+    // batch exactly as the snapshots were.
+    let mut prefixes: Vec<PrefixKeys> = vec![PrefixKeys::new()];
     let mut planned_root: Option<FilesystemRootId> = None;
     for (index, batch) in batches.iter().enumerate() {
         let input = FilesystemInput {
@@ -880,12 +898,53 @@ fn namespace_scale(
                 ))
             }
         }
+        // What this batch produced is chained (so the *next* batch can read it) and
+        // recorded as that batch's own prefix. `emitted` is fresh per batch and a
+        // batch emits only what it changed, so the length delta is exactly the
+        // objects to admit; an operation that emitted something it had already
+        // emitted would be a defect here rather than a silently counted duplicate.
+        let before = chain.len();
         chain.absorb(&emitted);
-        let mut snapshot = TreeStore::new();
-        snapshot.absorb(&chain);
-        prefixes.push(snapshot);
+        if chain.len() != before + emitted.len() {
+            return Ok(c1::unmeasured(
+                &OpError::Io(format!(
+                    "untimed chain batch {index} emitted {} objects over a chain of \
+                     {before} but advanced it by {}",
+                    emitted.len(),
+                    chain.len() - before
+                )),
+                gates,
+            ));
+        }
+        // The prefix a batch is owed is **cumulative** - everything every earlier
+        // batch produced - and a chain's objects are never evicted once chained, so
+        // each key set is the previous one plus this batch's emissions. The copies
+        // are 3,786,440 bytes of identity set at 100,000 entries; the `TreeStore`
+        // this replaces were 164,347,158 bytes.
+        let mut keys = prefixes[index].clone();
+        keys.extend(emitted.insertion_order());
+        if keys.len() != chain.len() {
+            return Ok(c1::unmeasured(
+                &OpError::Io(format!(
+                    "untimed chain batch {index}: key set {} does not describe the chain {}",
+                    keys.len(),
+                    chain.len()
+                )),
+                gates,
+            ));
+        }
+        prefixes.push(keys);
     }
     let chain_objects = chain.len() as u64;
+    // What the identity sets retained, published beside `chain_objects` so the row's
+    // fixture cost is readable from its own counters rather than re-derived: the
+    // chain, plus one key set per batch whose size is that batch's prefix. A batch
+    // that is served its whole prefix is the rule, so the check below is not a
+    // formality - it is the difference between "the keys stand in for the snapshots"
+    // and "the batch stopped reading what it emitted", which the tree's own pinned
+    // digest cannot see while the read count falls.
+    let prefix_keys_total: usize = prefixes.iter().map(PrefixKeys::len).sum();
+    let prefix_keys_largest = prefixes.iter().map(PrefixKeys::len).max().unwrap_or(0);
 
     let mut metadata_emitted = 0_u64;
     let mut content_bytes = 0_u64;
@@ -902,6 +961,14 @@ fn namespace_scale(
     // instrument does not name. A harness `Instant` pair, not a product timing
     // node - the shipped `timing.json` carries no span for this region.
     let mut accept_span_ns = 0_u64;
+    // What the per-batch prefix keys actually served, accumulated over the timed
+    // pass. This is the reading that keeps the identity sets honest: with one chain
+    // and one key set per batch, `prefixes[index]` exists for exactly one reason -
+    // to admit the objects a batch's base needs - and a batch whose reader admitted
+    // nothing did not read what it emitted, so the chain was not load-bearing.
+    let mut prefix_served = 0_u64;
+    let mut prefix_refused = 0_u64;
+    let mut prefix_batches_served = 0_u64;
     // The accept span, split by its own driver into the three regions that share
     // it: the C1 construction of the metadata stream (the caller builds the whole
     // 10,101-binding filesystem inside the timed closure), the content stream's
@@ -981,7 +1048,10 @@ fn namespace_scale(
                     new_inodes: &batch.new_inodes,
                     resources: FilesystemResources::default(),
                 };
-                let reader = PairProvider::new(&prefixes[index], &empty);
+                // The chain as it stood before this batch, out of the one complete
+                // chain: `prefixes[index]` is the identity set, not a copy. Every
+                // object this reader serves is still re-identified by the store.
+                let reader = PrefixProvider::new(&chain, &prefixes[index]);
                 // The build's own phases. `FilesystemPhases` has had no call site
                 // outside its definition until here, so this is the first run that
                 // can say where the span goes: `validate`, `directories`,
@@ -1016,6 +1086,12 @@ fn namespace_scale(
                 build_work.sites.reachability += sites.reachability;
                 build_work.objects_read += built.counters.objects.objects_read;
                 build_work.base_records_read += built.counters.base_records_read;
+                let (served, refused) = reader.served();
+                prefix_served += served;
+                prefix_refused += refused;
+                if served > 0 {
+                    prefix_batches_served += 1;
+                }
                 last = Some(built);
                 batch_roots += 1;
             }
@@ -1097,7 +1173,7 @@ fn namespace_scale(
             new_inodes: &batch.new_inodes,
             resources: FilesystemResources::default(),
         };
-        let reader = PairProvider::new(&prefixes[index], &empty);
+        let reader = PrefixProvider::new(&chain, &prefixes[index]);
         let built = {
             let mut objects = FilesystemObjects::new(&reader, &mut store);
             let ordering: Option<&mut dyn OrderingBacking> =
@@ -1278,6 +1354,34 @@ fn namespace_scale(
         "objects",
         "the pre-timer reader chain",
     )?;
+    // The chain's per-batch keys, in identities retained rather than bytes: this is
+    // the row's fixture cost on the axis the redundant snapshots used to occupy.
+    // Published as counts because a key set has no canonical byte figure, and a
+    // reader who wants bytes has the heap window beside it.
+    for (key, value, note) in [
+        (
+            "pipeline.prefix_keys_total",
+            prefix_keys_total as i128,
+            "identities retained across every batch's prefix keys, the one chain counted once",
+        ),
+        (
+            "pipeline.prefix_keys_largest",
+            prefix_keys_largest as i128,
+            "the largest single batch's prefix, in identities",
+        ),
+        (
+            "pipeline.prefix_objects_served",
+            prefix_served as i128,
+            "objects the timed pass read out of the chain through a batch's own prefix",
+        ),
+        (
+            "pipeline.prefix_objects_refused",
+            prefix_refused as i128,
+            "demands refused as outside the batch's prefix, which is how the keys bite",
+        ),
+    ] {
+        context.trace.write_number(Kind::Counter, key, value, "objects", note)?;
+    }
     context.trace.write_number(
         Kind::Counter,
         "pipeline.content_objects",
@@ -1527,6 +1631,23 @@ fn namespace_scale(
             plan.total_bytes
         ),
         "the content the row accepted is at least the bytes the case declares",
+    ));
+    // The chain's reader is one complete chain plus one identity set per batch, so
+    // the check that the substitution is faithful is that every batch but the first
+    // was served objects **from its own prefix**. Batch 0 has no base and is served
+    // nothing by construction; a later batch served nothing read no object it did not
+    // emit, which would make `chain_objects` a statement about a chain nothing read.
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g6.prefix-keys",
+        prefix_batches_served == batches.len().saturating_sub(1) as u64,
+        &format!(
+            "{prefix_batches_served} of {} batches served from their own prefix; \
+             {prefix_served} objects served, {prefix_refused} refused as outside it",
+            batches.len().saturating_sub(1)
+        ),
+        "every batch after the first reads its base out of the chain through its own \
+         prefix keys",
     ));
     gates.push(gates::require(
         GateClass::Mechanism,
