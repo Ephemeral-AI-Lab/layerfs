@@ -202,3 +202,29 @@ from storage while scanning 300 MB, both carrying a passing identity-matched
 verification, on a clean sealed build. Neither is at or under 578.245 ms, and §3a
 records why that figure is not a reachable target for this build. No re-run was
 made to seek a passing number.
+
+## 9. Addendum — the tree this row was measured on carries the writer-budget refactor
+
+Found while specifying a v0.1.7 parity row
+([`core/docs/benchmark/fs-bench-pro-storage-content/namespace-10000-parity-spec.md`](../../../../../../core/docs/benchmark/fs-bench-pro-storage-content/namespace-10000-parity-spec.md)).
+It does not change the S1 numbers — it dates them.
+
+`b0260df3a` (this row's source commit) **contains**
+`7075f338db36b209b59031e3e55ae11cf87eed57`, *"feat(core): replace the fixed two-save
+model with a configured per-Store writer budget (#216)"* (2026-09-21 08:28:48 +0800),
+which is **not** an ancestor of the tree the last full 217-row lane ran on
+(`66bce8378`). `git diff --stat 66bce8378..HEAD -- core/crates/layerfs-storage/src/`
+is **31 files, +2,451 / −623**.
+
+That refactor changes what a save's commit count *means*: `cas/lifecycle.rs:166-175`
+records "every step commits before that lock is released" and increments
+`self.counters.commits` per step, where the retired model acknowledged once. It is why
+`pipeline-filesystem-build` now reports `pipeline.commits 43` against a golden pin of
+`1` and FAILs, having PASSed in `run-20260920T-fix1` … `run-20260920T-fix5`.
+
+**Relevance to S1, stated plainly:** the 944.881 ms / 708.991 ms rows were produced by
+the reference product (`crates/`) at a commit that also carries this `core/` change.
+The two are separate workspaces — `cargo --manifest-path core/Cargo.toml` does not build
+`benchmark/fs-bench-pro` — so **the S1 timings are unaffected**. What is affected is any
+future claim that the reference product's behaviour is unchanged since the closure run:
+its `core/` sibling has moved, and the 217 lane has not been re-run to say by how much.
