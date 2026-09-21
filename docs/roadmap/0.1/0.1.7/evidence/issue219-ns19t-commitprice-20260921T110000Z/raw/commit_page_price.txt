@@ -1,0 +1,26 @@
+# The single invocation of the registered diagnostic, and its whole stdout.
+#
+# Command:
+#   cargo +1.85.1 test --release --locked \
+#     --manifest-path core/benchmark/fs-bench-pro-storage-content/Cargo.toml \
+#     --test commit_page_price -- --nocapture --test-threads=1
+#
+# Build mode: release, the mode the harness measures in (runner.py:81,257-261).
+# One sample per arm. No re-run, no best-of, no selection.
+#
+# NOTE ON THE `ns_per_cache_write` FIELD. It divides commit_ns by cache_write, and on the three
+# pack arms that is misleading: `cache_spill` shows 61,440 pages were flushed DURING the
+# transaction, before the COMMIT, so commit_ns is only the remainder of the flush. The honest
+# per-page price is the whole transaction over cache_write, and the report computes it there. The
+# field is left exactly as the diagnostic printed it rather than retuned.
+
+DIAGNOSTIC, not a gate: Q1 25245 locator rows in three shapes with the COMMIT timed apart; Q2 1270 packs at PACK_LIMIT 262144 written three ways; page size read and asserted
+{"arm":"reference","statements":198,"payload_bytes":0,"insert_ns":25401125,"inplace_ns":0,"commit_ns":1302042,"pages_before":27,"pages_after":347,"pages_written":320,"freelist_after":0,"cache_write":322,"cache_spill":0,"cache_used_before":137216,"cache_used_after":1529856,"pagecache_used":0,"pagecache_overflow":40768,"ns_per_cache_write":4044,"ns_per_payload_byte":null,"file_bytes":1421312,"allocated_bytes":1421312}
+{"arm":"store-unindexed","statements":198,"payload_bytes":0,"insert_ns":33204958,"inplace_ns":0,"commit_ns":2819583,"pages_before":33,"pages_after":370,"pages_written":337,"freelist_after":0,"cache_write":339,"cache_spill":0,"cache_used_before":163328,"cache_used_after":1629952,"pagecache_used":0,"pagecache_overflow":42240,"ns_per_cache_write":8317,"ns_per_payload_byte":null,"file_bytes":1515520,"allocated_bytes":1515520}
+{"arm":"store-indexed","statements":198,"payload_bytes":0,"insert_ns":56079000,"inplace_ns":0,"commit_ns":5298417,"pages_before":34,"pages_after":635,"pages_written":601,"freelist_after":0,"cache_write":604,"cache_spill":0,"cache_used_before":167680,"cache_used_after":2783232,"pagecache_used":0,"pagecache_overflow":59200,"ns_per_cache_write":8772,"ns_per_payload_byte":null,"file_bytes":2600960,"allocated_bytes":2600960}
+{"arm":"packs-zeroblob","statements":1270,"payload_bytes":0,"insert_ns":397585916,"inplace_ns":42,"commit_ns":92483792,"pages_before":2,"pages_after":81441,"pages_written":81439,"freelist_after":0,"cache_write":81441,"cache_spill":61440,"cache_used_before":14336,"cache_used_after":8753152,"pagecache_used":0,"pagecache_overflow":137856,"ns_per_cache_write":1136,"ns_per_payload_byte":null,"file_bytes":333582336,"allocated_bytes":333582336}
+{"arm":"packs-partial","statements":1270,"payload_bytes":301865030,"insert_ns":318974667,"inplace_ns":254617250,"commit_ns":43861291,"pages_before":2,"pages_after":81441,"pages_written":81439,"freelist_after":0,"cache_write":155260,"cache_spill":135259,"cache_used_before":14336,"cache_used_after":8753152,"pagecache_used":0,"pagecache_overflow":137856,"ns_per_cache_write":283,"ns_per_payload_byte":0.145,"file_bytes":333582336,"allocated_bytes":333582336}
+{"arm":"packs-full","statements":1270,"payload_bytes":332922880,"insert_ns":397037250,"inplace_ns":125,"commit_ns":96580625,"pages_before":2,"pages_after":81441,"pages_written":81439,"freelist_after":0,"cache_write":81441,"cache_spill":61440,"cache_used_before":14336,"cache_used_after":8753152,"pagecache_used":0,"pagecache_overflow":137856,"ns_per_cache_write":1186,"ns_per_payload_byte":0.290,"file_bytes":333582336,"allocated_bytes":333582336}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.88s

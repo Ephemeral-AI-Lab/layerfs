@@ -3143,3 +3143,71 @@ own wider suite beyond this case.
 Production LOC: **31684 → 31683 (delta −1)** — the removed `CREATE INDEX` line; the three comment blocks
 added or corrected contribute nothing. Method `tools/production_loc.py --root <tree>`, first parent
 against the committed tree.
+
+## L78 — #219 round 19: the commit term is a page-write term, and the pack capacity is flushed — 40.2–45.6 ms of the row is capacity holding nothing (2026-09-21)
+
+Status: **Instrument.** No product line changed, no arm registered as shippable, no gate claimed. One
+labelled diagnostic ran once. Report and pre-registration:
+[`issue219-ns19t-commitprice-20260921T110000Z`](../../0.1.7/evidence/issue219-ns19t-commitprice-20260921T110000Z/),
+whole stdout under `raw/`. **Owner ruling honoured: the page size is 4 KiB** — read and asserted on all
+six arms, never set; no pragma, no product source and no product manifest touched. The instrument is
+squad C's **arm D**, registered two campaigns ago and never built
+(`issue219-squadC-cadence-20260921T044258Z/pre-registration.md`): `sqlite3_db_status(CACHE_WRITE /
+CACHE_SPILL / CACHE_USED)`, `sqlite3_status(PAGECACHE_*)`, `page_count`/`freelist_count`, `st_size`/
+`st_blocks`.
+
+**Q1 — the commit is a page-write term, and round 18's 17× puzzle is resolved.** `cache_write` tracks
+`page_count` growth to within three pages on every arm (322/320, 339/337, 604/601), so the counter is
+the flush. The three locator shapes: `reference` 1,302,042 ns of commit for 322 pages = **4,044 ns per
+page-write**; `store-unindexed` 2,819,583 / 339 = **8,317**; `store-indexed` 5,298,417 / 604 = **8,772**.
+**Refutation 1 fires at 2.06×** — the price is not one constant — so no law is claimed; the pair that
+decides the index question (the two Store shapes, identical but for one index) agrees to **5.5 %**. The
+index adds **265 page-writes** and **+2,478,834 ns** of commit = **9,354 ns per index page-write**, so
+round 18's 27.02 ms of product commit movement is **2,889 page-writes for 265 pages — each index page
+written about 10.9 times across the row's 95 transactions.** The index was never expensive per byte; a
+B-tree page is rewritten many times where an append-only pack page is written once. "Byte-bound" and
+"page-bound" coincide for the pack and diverge for the index, and that is the whole discrepancy.
+
+**Q2 — refutation 3 fired: the declared capacity IS flushed.** Round 17's 31,057,876 B = 7,582 pages of
+`zeroblob` capacity is written to disk. `packs-zeroblob` (payload **0 B**) writes **81,441 pages** and
+commits in 92,483,792 ns; `packs-full` (payload 332,922,880 B) writes the same 81,441 pages and commits
+in 96,580,625 ns — **0.7 % apart for 31 MB more payload**. The mechanism is exact: **a `zeroblob`'s
+overflow chain still requires every page's next-page pointer to be written**, so every reserved page is
+dirtied though its payload is zeros, and content is then written into pages the reservation already
+paid for.
+
+**A method finding that changes how the term must be read.** `cache_spill` is **61,440 pages** on the
+zero-content and full arms and **135,259** on the partial one, so most of the flush happens *during* the
+transaction and `commit_ns` alone undercounts it — which is why the raw `ns_per_cache_write` field
+reads 1,136 ns for `packs-zeroblob` against 8,772 for `store-indexed`. The honest price is the whole
+transaction over `cache_write`: **6,017 ns** and **6,061 ns**, agreeing to 0.7 %. The field is filed as
+printed rather than retuned.
+
+**What it means for the row.** `diag_commit_total_ns` 431,236,291 ns over the Store's **81,280 pack
+pages** (`pack_bodies_bytes` 332,922,880 ÷ 4096, confirmed by `page_count` 81,987 = 81,280 + 707
+non-pack) is **5,306 ns per page-write** — the same price the pack arms measured independently, and
+431,236,291 ÷ 5,306 = 81,280 exactly. **7,582 of those pages, 9.33 %, hold no content: 40.2 ms at the
+row's own price, 45.6 ms at the pack arms' 6,017 ns.** Round 17's space finding is a **time** lever
+after all — **32–36 % of the remaining 126.73 ms gap to 1 s**, measured on the engine's counters at both
+ends.
+
+**The direction this opens, not registered here.** The tail is `PACK_LIMIT mod group size`; round 17
+measured it at 24,455 B per pack, about half a ~50 KiB group, so **the waste is proportional to the pack
+count** and there are 1,270 packs because `PACK_LIMIT` is 256 KiB. `PACK_LIMIT` 1 MiB with `GROUP_LIMIT`
+and the framing unchanged predicts ~295 packs, a 7.4 MB tail against today's 31.1 MB — **~23.7 MB,
+5,781 pages, ≈ 30.7 ms** — a policy constant, no format change, and a second and *measured* reason
+beside L73/L74's statement-and-seal one. It is the next round's to register with its own prediction and
+refutation. **Not claimed:** no product change, no arm, no gate; the diagnostic measures the engine on a
+replica, and the 5,306 ns transfer is an arithmetic agreement between two instruments, not a paired
+measurement; the three locator arms are single samples with 1.3–5.3 ms commits, so Q1's 2.06× spread may
+carry timing noise and no law is claimed from it.
+
+Checks as run: the diagnostic `--release --locked -- --nocapture --test-threads=1` — **1 passed, 0
+failed**, 1.88 s; lock parity after adding `libsqlite3-sys = "=0.38.2"` (the version and checksum the
+lock already carried through `rusqlite`) — **PASS, 46 shared entries, 0 mismatches**, the lock gaining
+exactly one line with `--locked` still holding. **Not run:** the product's suites and
+`check_product_boundary.py` — no product source or product manifest was touched, and the harness is not
+product source; the harness's wider suite beyond this diagnostic and the parity check.
+
+Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`; this round
+adds a harness test and two harness manifest lines, both outside the counted scope.
