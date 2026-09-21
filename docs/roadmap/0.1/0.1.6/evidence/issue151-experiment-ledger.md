@@ -3502,3 +3502,69 @@ which makes `runner.py self-check` fail today — and asks for it to be fixed in
 the count anyway.
 
 Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`.
+
+## L84 — #226 round 22, step 1: the 100,000-entry row's redundant fixture is removed, and the 500 MB that remains is priced (2026-09-21)
+
+Status: **harness treatment, measured, plus a design page and no ruling taken.** No product line
+changed; `core/crates/**` and `core/*/sql/**` are byte-identical to `5be4b7ae0`. Report:
+[`issue226-ns22-boundedfixture-20260921T163314Z/report.md`](../../0.1.7/evidence/issue226-ns22-boundedfixture-20260921T163314Z/report.md);
+design page: [`issue226-bounded-fixture-design.md`](../../0.1.7/issue226-bounded-fixture-design.md).
+
+**The change.** `ops/pipeline.rs`'s `namespace_scale` kept one `TreeStore` snapshot of the reader chain
+per batch, and `TreeStore::absorb` **copies** (`workload/providers.rs:103`), so the driver retained the
+sum over batches of the chain so far: **25 snapshots holding 66,824 objects and 164,347,158 bytes** to
+serve a chain whose final state is **4,221 objects and 12,452,785 bytes**. A batch is owed the chain *as
+it stood before it* — which object **set** a reader may serve, not a second copy of it. `PrefixProvider`
+(`providers.rs:299`) now holds the one complete chain and admits only the identities that batch's prefix
+contained (`PrefixKeys`, `providers.rs:254`); an identity outside it returns the same
+`ContentError::MissingObject` a snapshot lacking the object returns. The identities cost **3,786,440 B**.
+
+**Measured, three cases, one lock window, one binary, `--verify full`, one sample each, clean tree.**
+Anchor + both `pipeline.*` rows, binary `d6c1d363c9f8471f…`, commit `47cf17049`:
+
+| | round 21 `ns21-E1` | `ns22-D2` | change |
+| --- | ---: | ---: | ---: |
+| **lifetime** peak RSS | 1,050,738,688 | **885,325,824** | **−165,412,864 (−15.7 %)** |
+| measured-region baseline | 1,013,219,328 | 848,396,288 | −164,823,040 |
+| measured-region increment | 37,519,360 | **36,929,536** | −1.6 % |
+| `pipeline.operation_work_ns` | 3,549,393,833 | 3,640,415,749 | +2.56 % (registered ±10 %) |
+| complete command | 6,446,615,375 | 6,476,722,917 | +0.5 % |
+| session anchor `namespace-10000` | 68,951,625 | 77,814,875 | +13.57 % vs the 68,514,625 reference, inside ±20 % |
+| pins | — | **15/15 on both rows** | including `2412681d…fd954` and `1d6fba29…7847` |
+
+**The one registered prediction that missed its band, reported as plainly as the ones that fired.**
+Prediction 1 registered a 159–164 MB fall; the measurement is **165.4 MB**, 1.4 MB past the top. The band
+was `164,347,158 − 3,786,440 = 160,560,718` widened to 159–164 MB, and the overshoot is bigger than the
+4 MB margin it carried. The key-set cost is measured; round 21's snapshot cost is a measurement of the
+*old shape on the old binary*, carried as an exact constant. **The prediction understated the saving by
+1.4 MB because its band was registered as a constant rather than as a measurement with an error bar**;
+none of the six refutation conditions fired.
+
+**Two findings the round did not go looking for.**
+
+1. **A comment-only edit changes the harness binary's hash.** `e386225e9371a374…` and
+   `d6c1d363c9f8471f…` are the same code, six doc-comment lines apart. The B runs and the acceptance
+   runs are the same source in effect and different identities, which is why the round re-ran its
+   acceptance set instead of reusing B. `AGENTS.md` §3.3's rule, with a case where the source did not
+   change at all.
+2. **The save's connection close swings 8.77× inside one session.** `teardown_ns` 60,190,625 →
+   528,019,917 between two runs of the same binary in one lock window, while `operation_work_ns` moved
+   1.2 % because it is `accept_span_ns − teardown_ns` and both terms moved together.
+   `span_finish_ns − teardown_ns` is stable to 8.4 % across three runs, which is evidence that the close
+   is nested inside the finish span. This is the strongest support the design page's rejection of
+   "measure the fixture read in the accept span without publishing the split" has.
+
+**The design page recommends A and asks for a ruling rather than taking one.** A — spill the constructed
+objects, stream them back through a bounded window inside the timer — is what the reference harness does
+(`benchmark/fs-bench-pro/workload/main.rs:120`, `:936-948`), and it is the only option that leaves the
+fixture cost structurally bounded rather than moved. Its contract is the page's §4: declared cache state,
+enforcement through `shared/residency.py:154`'s `msync(MS_INVALIDATE)` + `mincore`, device attestation
+through `gates::device_attestation` (`gates.rs:382-405`) and `process_usage().disk_read_bytes`
+(`support/instruments.rs:346`), equal treatment of both arms, and a published `spill_read_ns` split
+beside `operation_work_ns`. **Options A and D need an owner ruling; B and C do not**, and the page's §7
+asks three questions instead of deciding them. C is named as the fallback; if both are declined the page
+recommends B and records that the row keeps a ~500 MB in-process fixture.
+
+Production LOC: **97100 → 97100 (delta 0)** across all five commits of the round; scope
+`core/crates/*/src + sql` and `crates/*/src + sql`, method `tools/production_loc.py --root .`
+(core 31683 in 194 files, reference 65417 in 193 files). Harness, tests, evidence and docs only.
