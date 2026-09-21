@@ -7,6 +7,11 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Continuation task handoff:** [30](30-continuation-handoff.md) records the exact
+current checkpoint, remaining operation sequence and loose coupling boundaries.
+[31](31-source-map-and-loc.md) gives actual per-file/folder/crate production LOC
+and physical lines; its counts replace no historical planning or evidence pins.
+
 **Mount failure prerequisite:** [retained native ownership](29-mount-failure-ownership.md)
 corrects partial startup failure and deadline handling before remote Mount is
 exposed. The native failure/daemon startup routes and selected regressions pass;

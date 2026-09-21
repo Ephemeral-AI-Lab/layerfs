@@ -1,0 +1,8 @@
+{
+  "scope": "documentation-only handoff; no product changes",
+  "local_markdown_links": "PASS in30/31/README",
+  "inventory_totals": "241 core files=43276 production LOC;193 reference files=65417; combined108693",
+  "method": "same production counter on exact archive; per-file sums reconciled with committed totals",
+  "rust_checks": "not rerun for documentation-only change; source-equivalent production checks remain pinned to29",
+  "working_tree_product_diff": "none"
+}
