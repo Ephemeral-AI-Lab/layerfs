@@ -505,7 +505,14 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     };
     let empty = TreeStore::new();
     let mut emitted = 0_u64;
-    instruments::heap_begin();
+    // **The row's own memory window.** `phases::measured` publishes
+    // `rss.process_peak_bytes`, which is `getrusage(RUSAGE_SELF).ru_maxrss` - a
+    // **lifetime** high-water, and `memory_cpu_space_support.md` section 3.2 is
+    // explicit that a lifetime figure is never an incremental one. So the row had no
+    // phase peak at all: it could not say how much of its 1.05 GB belonged to the
+    // measured region and how much to the fixture the driver holds before the timer.
+    // This samples the measured region at the declared 10 ms interval and publishes
+    // the bundle, so the two questions are separable. Diagnostic: never pinned.
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         let store = Store::open(&sample, timing.child("store.open"))?;
         let mut operation = store.begin_save(timing.child("storage.begin"))?;
@@ -924,6 +931,15 @@ fn namespace_scale(
         sites: layerfs_content::filesystem::validate::ValidationReadSites,
     }
     let mut build_work = BuildWork::default();
+    // **The row's own memory window.** `phases::measured` publishes
+    // `rss.process_peak_bytes`, which is `getrusage(RUSAGE_SELF).ru_maxrss` - a
+    // **lifetime** high-water, and `memory_cpu_space_support.md` section 3.2 is
+    // explicit that a lifetime figure is never an incremental one. So the row had no
+    // phase peak at all: it could not say how much of its 1.05 GB belonged to the
+    // measured region and how much to the fixture the driver holds before the timer.
+    // This samples the measured region at the declared 10 ms interval and publishes
+    // the bundle, so the two questions are separable. Diagnostic: never pinned.
+    let rss_sampler = instruments::RssSampler::start();
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         // **The row's formula excludes the connection.** The measured closure
@@ -1049,6 +1065,7 @@ fn namespace_scale(
         Ok::<_, PipelineFailure>((result, outcome))
     });
     let heap = instruments::heap_end();
+    let measured_rss = rss_sampler.stop();
     let timing_bytes = crate::support::phases::timing_json_bytes();
     let (result, outcome) = match measured {
         Ok(value) => value,
@@ -1201,6 +1218,52 @@ fn namespace_scale(
             "FilesystemUpdateCounters, accumulated over the row's batches",
         )?;
     }
+    // The measured region's own RSS, in the four fields the receipt bundle declares
+    // (`memory_cpu_space_support.md` section 3.2). Read beside
+    // `resources.rss.process_peak_bytes`: the first is the region, the second is the
+    // process lifetime, and the difference is the fixture the driver holds outside
+    // the timer. Nothing here is pinned.
+    for (key, value) in [
+        ("pipeline.rss_phase_peak_bytes", measured_rss.phase_peak_bytes),
+        ("pipeline.rss_phase_baseline_bytes", measured_rss.baseline_bytes),
+        (
+            "pipeline.rss_phase_incremental_bytes",
+            measured_rss.incremental_peak_bytes,
+        ),
+        ("pipeline.rss_phase_final_bytes", measured_rss.final_bytes),
+        ("pipeline.rss_samples", measured_rss.sample_count),
+        (
+            "pipeline.rss_maximum_gap_ns",
+            measured_rss.maximum_sample_gap_ns,
+        ),
+        (
+            "pipeline.rss_sampling_interval_ns",
+            measured_rss.sampling_interval_ns,
+        ),
+        (
+            "pipeline.rss_unavailable_samples",
+            measured_rss.unavailable_samples,
+        ),
+    ] {
+        context.trace.write_number(
+            Kind::Counter,
+            key,
+            value as i128,
+            "bytes",
+            "RssSampler over the measured closure, 10 ms nominal interval",
+        )?;
+    }
+    // The bundle's own fail-closed rule, published rather than left for a reader to
+    // re-derive: `unavailable_samples == 0`, more than one sample, and no gap over
+    // twice the declared interval. A bundle that fails it is an unusable phase peak
+    // and this row says so instead of publishing the number alone.
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.rss_phase_peak_usable",
+        i128::from(measured_rss.peak_is_usable()),
+        "bool",
+        "RssBundle::peak_is_usable, the fail-closed rule over the bundle above",
+    )?;
     context.trace.write_number(
         Kind::Counter,
         "pipeline.largest_batch_bindings",
