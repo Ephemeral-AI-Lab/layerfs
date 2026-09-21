@@ -229,6 +229,27 @@ off the last batch only, which is why it reads 89 and is 47× below the count th
 The row publishes both; a reader who took `objects_emitted` for the metadata population would be wrong
 by a factor of 47, and the row's own `g2.handoff` gate is the one that compares the right number.
 
+### 6.3 The two declarations put the bytes in different places, and the Store's own reading says so
+
+The row's `resources.space` block is the Store's own accounting, and it shows the two scenarios are not
+one shape at two sizes **even in how the content is represented**:
+
+| canonical objects | 10,000 | 100,000 |
+| --- | ---: | ---: |
+| `whole-file` | 9,444 (24,652,248 B) | **98,998 (302,276,954 B)** |
+| `chunk` | 14,466 (275,868,750 B) | **10,330 (200,216,930 B)** |
+| `inode-leaf` | 208 (858,923 B) | 2,088 (8,677,224 B) |
+| total | 25,245 (302,231,057 B) | 113,635 (513,684,532 B) |
+| `page_count` / apparent bytes | 81,987 / 335,818,752 | 141,574 / 579,887,104 |
+
+**Chunked bytes fall while whole-file bytes rise.** The 100,000-entry declaration's larger files are
+still under the whole-file cutoff while its tiny band is ten times wider, so 87 % of its objects are
+whole-file against 37 % at 10,000 - and 200,000,000 of its declared bytes are the two anchors, which are
+neither. A row that changed the *band mix* changes the *content representation*, and a reader comparing
+these two rows on time alone is comparing two different distributions of work. That is a consequence of
+porting the reference's declaration (section 2) rather than of the entry count, and it is recorded here
+because it bounds every comparison section 1 makes.
+
 ## 7. What was registered, and what fired
 
 | registered (§3 of the pre-registration) | outcome |
