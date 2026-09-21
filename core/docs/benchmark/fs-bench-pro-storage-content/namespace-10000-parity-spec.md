@@ -396,6 +396,64 @@ RSS for 500 MiB, and the host has 38 GB. The 25 s declared exception in §6 is t
 about the *save*, not about memory, and should be re-measured rather than assumed when
 the row first runs.
 
+## 8d. Why the pin cannot be regenerated from a passing run today
+
+`shared/pin_expected.py`'s own contract, quoted from its docstring:
+
+> **counters** come from a named baseline run — the round-4c full lane at
+> `90bbb617d`, the last tree on which all 217 admission rows passed with 0 `FAIL`.
+> Pinning *that* run's numbers is what turns "every counter identical to round 4c"
+> from a comparison a reader performs into a gate the row must pass.
+
+and, in the code:
+
+```python
+if document.get("status") != "PASS":
+    # A row that did not pass has no baseline number to pin: pinning a
+```
+
+So a pin has exactly two legitimate sources: **the named baseline run**, or a run
+whose row **passed**. Neither is available for `pipeline.commits`:
+
+- the named baseline is round 4c at `90bbb617d`, whose value for that counter is the
+  `1` already in the table — regenerating from it reproduces `1`, not `43`;
+- the current tree's `pipeline-filesystem-build` **FAILs** (`1 -> 43`, §3), and a
+  FAILing row has no baseline number to pin.
+
+Regenerating the pin from the current tree would therefore not be "regenerating from
+a passing run" — it would be **re-baselining a moved counter**, which is the specific
+act the Stage 6 re-check rules out until the movement is settled:
+
+> `tests/golden/expected.tsv` is pinned to round 4c; a moved counter is a FAIL, not a
+> new baseline, so the pin can only be regenerated after the delta is explained.
+
+**The delta is explained (§3) but not settled.** Explaining it establishes *why*
+`pipeline.commits` moved — `7075f338d` replaced the fixed two-save model with a
+configured per-Store writer budget and made every step commit before releasing the
+arbitration lock. It does **not** establish that 43 is the value the row should
+henceforth pin. That is a question about whether a step-per-commit cadence is wanted
+for a single-writer save, which is a product decision, not a measurement.
+
+### The structural finding, which is not specific to this row
+
+The three rules compose into a deadlock for **any** new admission row:
+
+1. `pinned_expectations::every_admission_case_pins_at_least_one_counter` requires
+   every admission case to pin at least one counter;
+2. a pin may only come from the named baseline or from a passing row;
+3. a new row cannot pass until it is registered and run, and cannot be registered
+   without breaking (1).
+
+The escape is the one §8c names — run the row unregistered, pin it from that passing
+run, then register — and it is **not open here**, because the new row's own
+`pipeline.commits` cannot be pinned while the *existing* pipeline row's value is
+unsettled: the two rows share the counter's meaning, so pinning the new one would
+freeze a definition that is under review.
+
+This is recorded because it will recur: adding a row to this lane is not a
+harness-only change while any counter's meaning is in dispute. It needs the counter
+settled first, which is an owner ruling.
+
 ## 9. Not claimed
 
 - No implementation is authorized here; no harness, product or golden file was changed.
