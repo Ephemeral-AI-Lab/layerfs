@@ -37,3 +37,9 @@ path = "src/main.rs"
 layerfs-content = { path = "../../crates/layerfs-content" }
 layerfs-storage = { path = "../../crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../crates/layerfs-telemetry" }
+# The locator-shape diagnostic (`tests/locator_btree_shape.rs`) drives the engine
+# directly. The pin and the feature set are the product's own
+# (`core/crates/layerfs-storage/Cargo.toml:13`), so the harness links the same
+# `rusqlite` 0.40.2 / `libsqlite3-sys` 0.38.2 the product seal names and
+# `shared/test_lock_parity.py` keeps its one-directional rule.
+rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }
