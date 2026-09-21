@@ -14,8 +14,18 @@ past it.
 
 | | case | family | route | timer | size | path to the Store |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `namespace-100-compact-v3` | `init_namespace` | `namespace` | `layerstack_init_ns` | 100 files / 5 MB + 1 MB anchor = **6 MB** | direct, host-side |
+| 1 | `namespace-10000` | `init_namespace` | `namespace` | `layerstack_init_ns` | 10,000 files / 300 MB + **100 MB anchor** = **400 MB** | direct, host-side |
 | 2 | `payload-create-100m` | `payload_create_read` | `workspace` | `pure_call_sum_ns` | **100 MB** payload | container FUSE + daemon -> host service |
+
+**Case naming, because it is easy to misread.** In `init_namespace` the number in the
+case id is a **file count, not megabytes**: the eight registered cases are
+`namespace-{100,1000,10000,100000}` in a `-compact-v3` and a `-text-v1` variant, with
+100 files / 5 MB (+1 MB anchor), 1,000 / 20 MB (+5 MB), 10,000 / 300 MB (+**100 MB**)
+and 100,000 / 500 MB (+**100 MB**). There is **no `namespace-100mb` case**; "100 MB"
+is the **anchor file** (`NAMESPACE_ANCHOR_BYTES = 100_000_000`), which only the two
+largest tiers carry. The owner's "100 MB namespace case" is therefore
+`namespace-10000` - the 10,000-file tier with the 100 MB anchor - and
+`namespace-100000` is its larger sibling with the same anchor.
 
 Case 1 writes the namespace into the host-owned Store directly: the runner stages it
 under `payload/`, and `namespace` / `store-footprint` are the routes that take no
@@ -35,12 +45,16 @@ comparison must say which of the two it is making.
 ## 2. What the harness already supports, and the first thing to establish
 
 - `shared/runner.py --source-arm {baseline,candidate}` (default `candidate`) passes
-  `LAYERFS_BENCH_SOURCE_ARM` into the workload. **Baseline rows exist for
-  `init_namespace` and do not exist for `payload_create_read`**: across
-  `~/Ephemeral-AI-Lab/layerfs/benchmark-results/` the tally is 1,614 `candidate` and
-  75 `baseline`, and baseline covers only `init_namespace`, `dedup_branch_history`,
-  `tiny_file_churn`, `edit_length_preserving`. So case 1 can be paired from existing
-  receipts and case 2 must be paired by producing the missing arm.
+  `LAYERFS_BENCH_SOURCE_ARM` into the workload. Baseline arms exist unevenly, and
+  **neither focus case has one**: per `init_namespace` case the receipt tally is
+  `namespace-100-compact-v3` 11 candidate / 3 baseline, `namespace-1000-compact-v3`
+  6 / 0, **`namespace-10000` 8 / 0**, `namespace-100000` 32 / 15; and
+  `payload_create_read` has **no baseline rows at all** (across the whole tree:
+  1,614 `candidate`, 75 `baseline`, covering only `init_namespace`,
+  `dedup_branch_history`, `tiny_file_churn`, `edit_length_preserving`). So **both
+  focus cases must produce their reference arm.** If a case with an existing pair is
+  preferred, `namespace-100000` carries the same 100 MB anchor and has 15 baseline
+  rows - state the substitution explicitly if it is made.
 - **Establish what `baseline` actually selects** before quoting any pair: read
   `benchmark/fs-bench-pro/workload/` and the image build, and compare the baseline and
   candidate receipts' `product_identity` and `image` (they differ - the example
@@ -66,7 +80,7 @@ comparison must say which of the two it is making.
 | Writer budget is not a throughput knob: 125.29 / 142.68 / 140.99 / 132.76 MiB/s at budgets 1/2/4/8 | `evidence/issue216-recheck-enforced-profile-20260921T031500Z/` |
 | Window-to-window machine variation is large: 16.7-26.0 s for one history case, and nothing in preflight predicts a fast window | `evidence/stage-6-history-209-format-20260920T222118Z/README.md` |
 | [#209](https://github.com/Ephemeral-AI-Lab/layerfs/issues/209): commit once per pack append (42x more commits) cost stride10 2.06x; the remaining commit cost is page writes proportional to pack body; page-cache hypothesis refuted | `docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-*/` |
-| `init_namespace` receipt medians, converted with the case sizes: 100 at 9.35-31.67 ms (candidate) and 19.32-23.85 ms (baseline); 10,000 at 402.7-1100.7 ms | [#219 comment](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219) |
+| `init_namespace` receipt medians, converted with the case sizes: `namespace-10000` (400 MB) at 402.721 / 407.598 / **578.245** / 928.022 / 1020.422 / 1100.711 ms = **363-993 MB/s** (578.245 ms = 691.8 MB/s), candidate only; `namespace-100-compact-v3` (6 MB) at 9.35-31.67 ms candidate against 19.32-23.85 ms baseline | [#219 comment](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219) |
 
 ## 4. Questions this handoff must answer
 
@@ -84,8 +98,9 @@ comparison must say which of the two it is making.
    the **measured share** of any gap the worker count can explain. The owner's
    direction is that it is not the explanation; if the measurement agrees, the RCA
    must name what is.
-4. **Separate cardinality from bandwidth.** Case 1 is 100 small files plus a 1 MB
-   anchor; case 2 is one 100 MB blob. Cross the axes: the same bytes as 1 file versus
+4. **Separate cardinality from bandwidth.** Case 1 is 10,000 small files plus a
+   **100 MB anchor**; case 2 is one 100 MB blob. The anchor is what makes case 1
+   bandwidth-bearing at all, so report it separately from the small-file count. Cross the axes: the same bytes as 1 file versus
    many files, and the same file count with different bytes. Price per-file overhead
    separately from per-byte cost.
 5. **Price the hop.** On case 2, compare the container -> daemon -> host-service path
