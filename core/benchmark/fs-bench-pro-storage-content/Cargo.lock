@@ -104,6 +104,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-storage",
  "layerfs-telemetry",
+ "libsqlite3-sys",
  "rusqlite",
 ]
 

@@ -43,3 +43,7 @@ layerfs-telemetry = { path = "../../crates/layerfs-telemetry" }
 # `rusqlite` 0.40.2 / `libsqlite3-sys` 0.38.2 the product seal names and
 # `shared/test_lock_parity.py` keeps its one-directional rule.
 rusqlite = { version = "=0.40.2", features = ["cache", "hooks", "trace", "limits", "blob"] }
+# The commit-price diagnostic (`tests/commit_page_price.rs`) reads the engine's own page
+# counters through the raw handle. Same version and checksum the lock already carries
+# through rusqlite, so lock parity is preserved.
+libsqlite3-sys = "=0.38.2"
