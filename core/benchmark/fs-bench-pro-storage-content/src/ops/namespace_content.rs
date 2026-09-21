@@ -367,3 +367,4 @@ mod tests {
         assert!(plan(999, DIRECTORIES, 1, TOTAL).is_err());
     }
 }
+

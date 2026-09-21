@@ -25,7 +25,8 @@ pub fn cases() -> Vec<Case> {
         (
             PipelineOp::FilesystemBuild,
             "pipeline-filesystem-build",
-        ),    ]
+        ),
+    ]
     .iter()
     .map(|(op, id)| {
         let _ = leak(String::new());

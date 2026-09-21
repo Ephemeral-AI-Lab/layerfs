@@ -22,7 +22,8 @@
 
 use layerfs_content::filesystem::references::backing::OrderingBacking;
 use layerfs_content::filesystem::{
-    build_filesystem, scope_for_seed, FilesystemInput, FilesystemObjects, FilesystemResources,
+    build_filesystem, scope_for_seed, update_filesystem, FilesystemInput, FilesystemObjects,
+    FilesystemResources, FilesystemRootId,
 };
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditStream, ObjectId,
@@ -681,21 +682,80 @@ fn namespace_scale(
         gates::attribution_gate(gates::Attribution::Exclusive),
     ];
 
-    let input = FilesystemInput {
-        base: None,
-        scope,
-        root_serial: ROOT_SERIAL,
-        directories: &prepared.directories,
-        inodes: &prepared.inodes,
-        new_inodes: &prepared.new_inodes,
-        resources: FilesystemResources::default(),
+    // A 10,000-file / 100-directory tree states 10,101 bindings, and the product
+    // refuses more than `MAXIMUM_WALK_ENTRIES` (4,096) in one operation: the cycle
+    // check returns `InvalidRecord("cycle check work limit")`. `limits.rs` says such
+    // a tree "is reached by several operations that each stay under the ceiling", and
+    // `PreparedTree::batches` is that route. `c1.fs.build-scale`'s own
+    // namespace-10000 row does the same thing and reports `fs_build.operations: 3`.
+    let batches = match prepared.batches(fs::WALK_CEILING) {
+        Ok(batches) => batches,
+        Err(defect) => return Ok(c1::unmeasured(&OpError::Io(defect), gates)),
     };
+
+    // The reader chain: every object any batch will name, built **before** the
+    // timer. Inside the measured region a batch's base has already been handed to
+    // the save operation, so no batch can read it back from there; `fs.rs` takes the
+    // same route, where `measure_batch`'s reader is a pre-computed chain and never
+    // the live Store. Reader and consumer are different objects, so the accumulating
+    // store can be borrowed for reading while a fresh one takes the batch's output.
     let empty = TreeStore::new();
-    // A 10,000-binding tree outgrows the in-memory ordering map, so the cycle
-    // check needs a file backing; without it the product refuses the build with
-    // `cycle check work limit`. This is the same rule `fs.rs` applies.
-    let mut backing = fs::backing_for(&prepared, context);
+    // One ordering backing per batch per phase, created before the timer: a batch's
+    // bindings outgrow the in-memory ordering map, and `FileBacking::new` scans its
+    // directory for the highest run token it owns, which is harness work rather than
+    // product work. This is the rule `fs.rs` applies to its own batched rows.
+    let mut plan_backings = match fs::batch_backings(context, "plan", batches.len()) {
+        Ok(backings) => backings,
+        Err(error) => return Ok(c1::unmeasured(&error, gates)),
+    };
+    let mut perf_backings = match fs::batch_backings(context, "perf", batches.len()) {
+        Ok(backings) => backings,
+        Err(error) => return Ok(c1::unmeasured(&error, gates)),
+    };
+    let mut chain = TreeStore::new();
+    let mut planned_root: Option<FilesystemRootId> = None;
+    for (index, batch) in batches.iter().enumerate() {
+        let input = FilesystemInput {
+            base: planned_root,
+            scope,
+            root_serial: ROOT_SERIAL,
+            directories: &batch.directories,
+            inodes: &batch.inodes,
+            new_inodes: &batch.new_inodes,
+            resources: FilesystemResources::default(),
+        };
+        let mut emitted = TreeStore::new();
+        let reader = PairProvider::new(&chain, &empty);
+        let built = {
+            let mut objects = FilesystemObjects::new(&reader, &mut emitted);
+            let ordering: Option<&mut dyn OrderingBacking> =
+                Some(&mut plan_backings[index] as &mut dyn OrderingBacking);
+            if planned_root.is_none() {
+                build_filesystem(&mut objects, &input, ordering)
+            } else {
+                update_filesystem(&mut objects, &input, ordering)
+            }
+        };
+        match built {
+            Ok(built) => planned_root = Some(built.root),
+            Err(error) => {
+                return Ok(c1::unmeasured(
+                    &OpError::Product(format!(
+                        "untimed chain batch {index}/{} of {}: {error:?}",
+                        batches.len(),
+                        batches.len()
+                    )),
+                    gates,
+                ))
+            }
+        }
+        chain.absorb(&emitted);
+    }
+    let chain_objects = chain.len() as u64;
+
     let mut metadata_emitted = 0_u64;
+    let mut batch_roots = 0_u64;
+    let mut largest_batch = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         let store = Store::open(&sample, timing.child("store.open"))?;
@@ -703,14 +763,44 @@ fn namespace_scale(
         let result = {
             let mut handoff = SaveHandoff::new(&mut operation);
             let mut counting = CountingConsumer::new(&mut handoff);
-            let reader = PairProvider::new(&empty, &empty);
-            let mut objects = FilesystemObjects::new(&reader, &mut counting);
-            let ordering: Option<&mut dyn OrderingBacking> = backing
-                .as_mut()
-                .map(|value| value as &mut dyn OrderingBacking);
-            let result = build_filesystem(&mut objects, &input, ordering)?;
+            let mut last: Option<layerfs_content::FilesystemResult> = None;
+            for (index, batch) in batches.iter().enumerate() {
+                largest_batch = largest_batch.max(batch.bindings() as u64);
+                let base = last.as_ref().map(|result| result.root);
+                let input = FilesystemInput {
+                    base,
+                    scope,
+                    root_serial: ROOT_SERIAL,
+                    directories: &batch.directories,
+                    inodes: &batch.inodes,
+                    new_inodes: &batch.new_inodes,
+                    resources: FilesystemResources::default(),
+                };
+                let reader = PairProvider::new(&chain, &empty);
+                let mut objects = FilesystemObjects::new(&reader, &mut counting);
+                let ordering: Option<&mut dyn OrderingBacking> =
+                    Some(&mut perf_backings[index] as &mut dyn OrderingBacking);
+                let built = if base.is_none() {
+                    build_filesystem(&mut objects, &input, ordering)?
+                } else {
+                    update_filesystem(&mut objects, &input, ordering)?
+                };
+                last = Some(built);
+                batch_roots += 1;
+            }
+            // `batches` is non-empty for any prepared tree that has files; a tree
+            // with none is refused before the timer, so this is unreachable in the
+            // normal path and is an explicit integrity error rather than a panic.
+            let built = match last {
+                Some(built) => built,
+                None => {
+                    return Err(PipelineFailure::Storage(
+                        layerfs_storage::StorageError::Integrity("no batch produced a root"),
+                    ))
+                }
+            };
             metadata_emitted = counting.accepted();
-            result
+            built
         };
         // The content stream, on the same operation. `SaveHandoff` is dropped above
         // so the operation is free; the identities are the constructed ones.
@@ -766,6 +856,27 @@ fn namespace_scale(
         plan.total_bytes as i128,
         "bytes",
         "namespace_content::plan, the declared 300,000,000-byte shape",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.batches",
+        batches.len() as i128,
+        "operations",
+        "PreparedTree::batches under MAXIMUM_WALK_ENTRIES",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.largest_batch_bindings",
+        largest_batch as i128,
+        "bindings",
+        "the largest single operation's binding count",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.chain_objects",
+        chain_objects as i128,
+        "objects",
+        "the pre-timer reader chain",
     )?;
     context.trace.write_number(
         Kind::Counter,

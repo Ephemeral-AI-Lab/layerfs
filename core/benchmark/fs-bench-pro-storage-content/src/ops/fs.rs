@@ -662,7 +662,7 @@ fn batch_directory(context: &OpContext<'_>, phase: &str, index: usize) -> PathBu
 
 /// Creates the scratch directories a batched row needs and returns one backing
 /// per batch, in batch order.
-fn batch_backings(
+pub(super) fn batch_backings(
     context: &OpContext<'_>,
     phase: &str,
     batches: usize,

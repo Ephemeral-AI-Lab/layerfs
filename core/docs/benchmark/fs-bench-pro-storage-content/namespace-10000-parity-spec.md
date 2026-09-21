@@ -522,6 +522,44 @@ eight pinned keys (`pipeline.bindings` 1010, `declared_files` 1000,
 
 The 217-row lane has **not** been re-run; no other row's pins were touched.
 
+## 8g. The batched driver: what landed, and the one wall it hit
+
+The batched driver was implemented per §8e and got materially further, but did **not**
+reach a passing run, so it is **not registered** and the tree is unchanged for the lane.
+
+What works, established by running it:
+
+- `PreparedTree::batches(4096)` splits the tree into **3 batches of 4096 / 4096 / 1908
+  bindings** over 101 / 42 / 20 directory updates. Deterministic, verified by a probe.
+- The **untimed reader chain builds cleanly**: all three batches succeed when the chain
+  is accumulated batch by batch (each batch's `PairProvider` is the chain so far).
+- Per-batch ordering backings are required and were wired
+  (`fs::batch_backings(context, phase, batches)`, one directory per batch per phase,
+  created before the timer) — without them the product refuses with
+  `ResourceUnavailable { what: "ordering backing" }`.
+- The content stream (300,000,000 bytes, `namespace_content::plan`) constructs and is
+  accepted on the same `SaveOperation`.
+
+What fails: the **timed** pass returns
+`InvalidRecord("cycle check work limit")` — the same `MAXIMUM_WALK_ENTRIES = 4_096`
+ceiling, now reached inside a batch rather than by the whole tree. The untimed loop
+runs the identical calls with identical inputs and succeeds, so the difference is not
+the batching, the backings or the inputs; it is unresolved.
+
+Best available reading, to be tested rather than assumed: the cycle check charges
+`visited` per *entry examined*, not per binding stated. A batch that restates bindings
+in `D` directories of `F` files each charges about `D × F`. Batch 1 touches 42
+directories × ~100 files ≈ 4,200, which is over 4,096, and would explain why a
+4096-*binding* budget is not a 4096-*visit* budget. `fs.rs`'s own batched row uses the
+same budget and reports `batch_bindings_max: 4096`, so either that reading is wrong or
+its tree shape differs in a way that keeps `D × F` small. **The next step is to
+instrument which batch and which `visited` count trips the ceiling, then choose a
+budget that bounds visits rather than bindings** — a harness parameter, not a product
+change.
+
+`ADMISSION_CASES` and `tests/golden/registry.tsv` were both touched during the attempt
+and **reverted**; the frozen cardinality is 217 and the golden table is untouched.
+
 ## 9. Not claimed
 
 - No implementation is authorized here; no harness, product or golden file was changed.
