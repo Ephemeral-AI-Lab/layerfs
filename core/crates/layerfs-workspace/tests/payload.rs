@@ -451,7 +451,7 @@ mod linux {
             .unwrap();
         let first = old.reader(0..17).unwrap();
         let second = old.reader(0..17).unwrap();
-        drop(
+        let deferred = Some(
             f.workspace
                 .own_payload(0, &mut &[][..], deadline())
                 .unwrap(),
@@ -460,6 +460,7 @@ mod linux {
             workspace: Workspace,
             first: PayloadReader,
             second: PayloadReader,
+            deferred: Option<OwnedPayload>,
             checked: bool,
         }
         impl Source for Progress {
@@ -475,6 +476,7 @@ mod linux {
                 assert!(self.workspace.status().unwrap().active_operations > 0);
                 verify(&mut self.first, 0, 17);
                 verify(&mut self.second, 0, 17);
+                drop(self.deferred.take());
                 assert_eq!(
                     self.workspace
                         .reclaim_payloads(deadline())
@@ -490,6 +492,7 @@ mod linux {
             workspace: f.workspace.clone(),
             first,
             second,
+            deferred,
             checked: false,
         };
         let new = f.workspace.own_payload(1, &mut source, deadline()).unwrap();

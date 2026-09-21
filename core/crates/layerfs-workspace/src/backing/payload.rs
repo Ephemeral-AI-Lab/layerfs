@@ -605,6 +605,9 @@ impl Workspace {
             .directory
             .clone()
             .ok_or(WorkspaceError::Unsupported)?;
+        segments::planned(length)
+            .map_err(|error| bare_failure(BackingPhase::Acquire, error.kind()))?;
+        self.maintain_backing(deadline)?;
         host.acquire(directory, length, source, deadline, &self.inner.stopping)
     }
     pub fn backing_status(&self) -> Result<BackingStatus, WorkspaceError> {

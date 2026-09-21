@@ -7,6 +7,11 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Current write prerequisite:** [routine healthy-owner reclamation](21-routine-reclamation.md)
+adds synchronous consumer-wide retirement before input, mutation and submission
+admission. Failed/partial owners remain charged until explicit cleanup. The next
+public operation is handle-based write; actual writable FUSE and R6 remain open.
+
 This is the current detailed Pair 1 document packet. It consolidates the earlier
 Workspace/FUSE discussions, platform ruling, file plan, POSIX decisions and
 merged Pair 2 integration. Earlier dated research and measurements remain

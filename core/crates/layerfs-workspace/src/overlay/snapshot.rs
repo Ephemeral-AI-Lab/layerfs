@@ -243,6 +243,7 @@ impl Workspace {
             }
             (state.dirty_inodes == 0).then_some(state.generation)
         };
+        self.maintain_backing(deadline)?;
         let host = self
             .host
             .metadata

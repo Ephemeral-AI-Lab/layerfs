@@ -1271,3 +1271,12 @@ and READY entries; pending IDs are unusable, pin their node, and become READY in
 the same publication as truncate-to-zero. Eight native cases pass with original
 owner-fixture/lookup-cleanup failures retained. Append is intent only until the
 next write operation; no writable kernel callback or mapping/coherence claim follows.
+
+
+[21 — Routine healthy-owner reclamation](21-routine-reclamation.md), from parent
+`1f9cceb73ba0ede11c86120b73b2015f900d1dd8`, closes the synchronous retirement
+prerequisite before handle-based write. Input, shared mutation and submission
+admission retire healthy registry-only roots, then eligible payloads, within
+existing consumer/deadline/writer/window bounds. Failed/partial cleanup remains
+explicit; no ordinary post-install Commit sweep retries it. Acceptance is limited
+to B-01/B-20/B-26/S-15 SDK subsets with actual native proofs recorded in 21.

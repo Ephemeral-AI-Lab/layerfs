@@ -1,14 +1,18 @@
 //! Explicit metadata reclamation with retained progress across known failures.
 use super::{
     directory::identity,
-    metadata::RootOwner,
+    metadata::{Arena, MetadataHost, RootOwner},
     metadata_pages::{PageRef, PAGE},
     ownership::{page_name, CleanupFrame},
     payload::clock,
     segments::{self, Window},
 };
 use crate::*;
-use std::{fs, io, sync::atomic::Ordering, time::Instant};
+use std::{
+    fs, io,
+    sync::{atomic::Ordering, Arc},
+    time::Instant,
+};
 impl RootOwner {
     fn cleanup_step(
         &self,
@@ -153,6 +157,20 @@ impl RootOwner {
         Ok(())
     }
     pub fn reclaim(
+        &self,
+        window: &mut Window,
+        deadline: Instant,
+        report: &mut MetadataCleanupReport,
+    ) -> Result<(), WorkspaceError> {
+        let result = self.reclaim_owned(window, deadline, report);
+        match self.state.lock() {
+            Ok(mut state) => state.cleanup_failed = result.is_err(),
+            Err(_) if result.is_ok() => return Err(WorkspaceError::Io),
+            Err(_) => {}
+        }
+        result
+    }
+    fn reclaim_owned(
         &self,
         window: &mut Window,
         deadline: Instant,
@@ -338,6 +356,156 @@ impl RootOwner {
             reserve
         };
         self.release_bytes(0, reserve)?;
+        Ok(())
+    }
+}
+
+impl RootOwner {
+    fn routine_eligible(&self) -> Result<bool, WorkspaceError> {
+        {
+            let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            if state.cleanup_failed
+                || state.pending.is_some()
+                || state.slot_pending.is_some()
+                || state.edge_progress.is_some()
+                || !state.temporary.is_empty()
+                || !state.custodies.is_empty()
+                || !state.cleanup.is_empty()
+            {
+                return Ok(false);
+            }
+        }
+        let arena = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(arena.complete && !arena.blocked && !arena.unrecoverable)
+    }
+}
+impl MetadataHost {
+    pub fn maintain(self: &Arc<Self>, deadline: Instant) -> Result<(), WorkspaceError> {
+        self.reclaim_registered(None, deadline).map(|_| ())
+    }
+    pub fn reclaim(
+        self: &Arc<Self>,
+        incarnation: [u8; 32],
+        deadline: Instant,
+    ) -> Result<MetadataCleanupReport, WorkspaceError> {
+        self.reclaim_registered(Some(incarnation), deadline)
+    }
+    fn select_root(
+        &self,
+        incarnation: Option<[u8; 32]>,
+    ) -> Result<Option<Arc<RootOwner>>, WorkspaceError> {
+        let roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+        for root in roots.iter() {
+            if Arc::strong_count(root) != 1
+                || incarnation.is_some_and(|id| root.arena.directory.incarnation != id)
+            {
+                continue;
+            }
+            if incarnation.is_none() && !root.routine_eligible()? {
+                continue;
+            }
+            return Ok(Some(root.clone()));
+        }
+        Ok(None)
+    }
+    // None selects healthy consumer-wide maintenance; Some is deliberate scoped cleanup.
+    fn reclaim_registered(
+        self: &Arc<Self>,
+        incarnation: Option<[u8; 32]>,
+        deadline: Instant,
+    ) -> Result<MetadataCleanupReport, WorkspaceError> {
+        clock(deadline)
+            .map_err(|error| super::payload::bare_failure(BackingPhase::Cleanup, error.kind()))?;
+        let routine = incarnation.is_none();
+        let mut selected = if routine {
+            self.select_root(None)?
+        } else {
+            None
+        };
+        if routine && selected.is_none() {
+            return Ok(MetadataCleanupReport {
+                remaining_roots: self.roots.lock().map_err(|_| WorkspaceError::Io)?.len(),
+                ..MetadataCleanupReport::default()
+            });
+        }
+        let _writer = self.writer()?;
+        let mut lease = self.payloads.window(3, 4)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        let mut report = MetadataCleanupReport::default();
+        loop {
+            let root = match selected.take() {
+                Some(root) => Some(root),
+                None => self.select_root(incarnation)?,
+            };
+            let Some(root) = root else {
+                break;
+            };
+            if routine && !root.routine_eligible()? {
+                continue;
+            }
+            root.reclaim(window, deadline, &mut report)?;
+            self.roots
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .retain(|r| !Arc::ptr_eq(r, &root));
+            report.roots_released += 1;
+            // Routine work cannot clear quarantine or reinterpret incomplete ownership.
+            if !routine {
+                self.refresh()?;
+            }
+        }
+        report.remaining_roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?.len();
+        Ok(report)
+    }
+    fn refresh(&self) -> Result<(), WorkspaceError> {
+        let roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+        let arenas = self.arenas.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut complete = true;
+        let mut stopped = false;
+        for arena in arenas.iter() {
+            let mut pending = false;
+            let mut known = true;
+            for root in roots.iter().filter(|r| Arc::ptr_eq(&r.arena, arena)) {
+                let r = root.state.lock().map_err(|_| WorkspaceError::Io)?;
+                if let Some(p) = &r.pending {
+                    pending = true;
+                    known &= p.identity.is_some() && p.allocated.is_some();
+                }
+            }
+            let mut a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+            a.blocked = a.unrecoverable || pending;
+            a.complete = known && (a.complete || !a.unrecoverable);
+            complete &= a.complete;
+            stopped |= a.blocked;
+        }
+        let mut state = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
+        state.metadata_complete = complete;
+        state.metadata_stopped = stopped;
+        self.payloads.refresh(&mut state)
+    }
+    pub fn close(
+        self: &Arc<Self>,
+        arena: &Arc<Arena>,
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
+        self.reclaim(arena.directory.incarnation, deadline)?;
+        let _writer = self.writer()?;
+        if self
+            .roots
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .iter()
+            .any(|r| Arc::ptr_eq(&r.arena, arena))
+        {
+            return Err(WorkspaceError::Busy);
+        }
+        let mut lease = self.payloads.window(3, 4)?;
+        arena.close(lease.window.as_mut().ok_or(WorkspaceError::Io)?, deadline)?;
+        self.arenas
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .retain(|a| !Arc::ptr_eq(a, arena));
+        self.refresh()?;
         Ok(())
     }
 }

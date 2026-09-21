@@ -288,12 +288,6 @@ impl Workspace {
         // mixed successor/fund descendants must return to ordinary quota.
         submission.fund.finish()?;
         let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
-        attempt.phase(submission, CommitPhase::Cleanup)?;
-        self.host
-            .metadata
-            .as_ref()
-            .ok_or(WorkspaceError::Unsupported)?
-            .reclaim(self.inner.incarnation, deadline)?;
         attempt.phase(submission, CommitPhase::Complete)?;
         let retained = {
             let mut state = self.state()?;

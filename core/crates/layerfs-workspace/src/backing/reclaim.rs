@@ -28,31 +28,80 @@ impl PayloadHost {
             .filter(|record| record.directory.incarnation == incarnation)
             .count())
     }
+    pub fn maintain(self: &Arc<Self>, deadline: Instant) -> Result<(), WorkspaceError> {
+        self.reclaim_registered(None, deadline).map(|_| ())
+    }
     pub fn reclaim(
         self: &Arc<Self>,
         incarnation: [u8; 32],
         deadline: Instant,
     ) -> Result<CleanupReport, WorkspaceError> {
+        self.reclaim_registered(Some(incarnation), deadline)
+    }
+    fn select_record(
+        &self,
+        incarnation: Option<[u8; 32]>,
+    ) -> Result<Option<Arc<Record>>, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        for record in &state.records {
+            if Arc::strong_count(record) != 1
+                || incarnation.is_some_and(|id| record.directory.incarnation != id)
+            {
+                continue;
+            }
+            let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
+            if owner.custody.is_some() {
+                continue;
+            }
+            if incarnation.is_none()
+                && (!owner.ready
+                    || !owner.complete
+                    || owner.admission_blocked
+                    || owner.failure.is_some()
+                    || owner.partial.is_some()
+                    || owner.next_cleanup != 0
+                    || owner.reserved != 0
+                    || owner.completed != record.length
+                    || owner.created != segments::segment_count(record.length))
+            {
+                continue;
+            }
+            return Ok(Some(record.clone()));
+        }
+        Ok(None)
+    }
+    // None selects healthy consumer-wide maintenance; Some is deliberate scoped cleanup.
+    fn reclaim_registered(
+        self: &Arc<Self>,
+        incarnation: Option<[u8; 32]>,
+        deadline: Instant,
+    ) -> Result<CleanupReport, WorkspaceError> {
         clock(deadline)
             .map_err(|error| super::payload::bare_failure(BackingPhase::Cleanup, error.kind()))?;
+        let routine = incarnation.is_none();
+        let mut selected = if routine {
+            self.select_record(None)?
+        } else {
+            None
+        };
+        if routine && selected.is_none() {
+            return Ok(CleanupReport {
+                remaining_payloads: self
+                    .state
+                    .lock()
+                    .map_err(|_| WorkspaceError::Io)?
+                    .records
+                    .len(),
+                ..CleanupReport::default()
+            });
+        }
         let mut lease = self.window(3, 4)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut report = CleanupReport::default();
         loop {
-            let record = {
-                let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                state
-                    .records
-                    .iter()
-                    .find(|record| {
-                        record.directory.incarnation == incarnation
-                            && Arc::strong_count(record) == 1
-                            && record
-                                .state
-                                .lock()
-                                .is_ok_and(|state| state.custody.is_none())
-                    })
-                    .cloned()
+            let record = match selected.take() {
+                Some(record) => Some(record),
+                None => self.select_record(incarnation)?,
             };
             let Some(record) = record else {
                 break;
@@ -62,6 +111,7 @@ impl PayloadHost {
             }
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             state.records.retain(|current| current.id != record.id);
+            // Excluded failed owners and metadata quarantine remain in this account.
             self.refresh(&mut state)?;
             report.payloads_released += 1;
         }
@@ -157,6 +207,16 @@ impl PayloadHost {
     }
 }
 impl Workspace {
+    pub(crate) fn maintain_backing(&self, deadline: Instant) -> Result<(), WorkspaceError> {
+        clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        if let Some(host) = &self.host.metadata {
+            host.maintain(deadline)?;
+        }
+        if let Some(host) = &self.host.payloads {
+            host.maintain(deadline)?;
+        }
+        Ok(())
+    }
     /// Explicitly reclaims unreferenced inputs owned by this Workspace incarnation.
     pub fn reclaim_payloads(&self, deadline: Instant) -> Result<CleanupReport, WorkspaceError> {
         let _operation = self.begin(false, deadline)?;

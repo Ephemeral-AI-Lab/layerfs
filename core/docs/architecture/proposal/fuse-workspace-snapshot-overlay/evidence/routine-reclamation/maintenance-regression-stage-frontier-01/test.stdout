@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_frontier ... STAGE_CHECK all-104-inode-completions-persist-and-stage PASS
+STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 104, dirty_inodes: 104, phase: Staged, inode: None, saved_files: 104, saved_metadata: 104, stage_token: Some(2), candidate_root: Some([19, 178, 148, 226, 101, 179, 54, 196, 6, 71, 117, 199, 34, 243, 183, 65, 25, 240, 219, 70, 179, 138, 52, 109, 231, 206, 108, 210, 133, 34, 254, 195]), failure: None, failure_phase: None, commit: None }), generation: 2, revision: 105, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 105, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2060434 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 1355776, reserved_bytes: 831488, payloads: 104, retained_payloads: 104, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 119, reusable_pages: 2, reserved_slots: 0, roots: 3, external_roots: 3, allocated_bytes: 503808, reserved_bytes: 831488, working_bytes: 44272, accounting_complete: true, admission_stopped: false }
+STAGE_CHECK exact-stage-and-retained-submission PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 8.79s
+

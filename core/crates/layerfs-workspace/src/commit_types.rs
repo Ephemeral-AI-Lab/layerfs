@@ -15,7 +15,6 @@ pub enum CommitPhase {
     CommitStaged,
     CompositeCommit,
     Reconcile,
-    Cleanup,
     Complete,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

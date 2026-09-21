@@ -74,6 +74,7 @@ pub struct RootState {
     pub pending: Option<Pending>,
     pub custodies: Vec<PageRef>,
     pub cleanup: Vec<super::ownership::CleanupFrame>,
+    pub cleanup_failed: bool,
 }
 pub struct LedgerTable {
     pub identities: Vec<(u64, u64)>,
@@ -288,6 +289,7 @@ impl MetadataHost {
                 pending: None,
                 custodies,
                 cleanup,
+                cleanup_failed: false,
             }),
             _charge: charge,
         });
@@ -318,6 +320,7 @@ impl MetadataHost {
                 pending: None,
                 custodies: super::metadata_index::vector(1)?,
                 cleanup: super::metadata_index::vector(12)?,
+                cleanup_failed: false,
             }),
             _charge: charge,
         }))
@@ -509,88 +512,6 @@ impl MetadataHost {
             s.metadata_complete &= accounting_complete;
             s.complete &= accounting_complete;
         }
-    }
-    pub fn reclaim(
-        self: &Arc<Self>,
-        incarnation: [u8; 32],
-        deadline: Instant,
-    ) -> Result<MetadataCleanupReport, WorkspaceError> {
-        let _writer = self.writer()?;
-        let mut lease = self.payloads.window(3, 4)?;
-        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-        let mut report = MetadataCleanupReport::default();
-        loop {
-            let root = {
-                let roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
-                roots
-                    .iter()
-                    .find(|r| {
-                        r.arena.directory.incarnation == incarnation && Arc::strong_count(r) == 1
-                    })
-                    .cloned()
-            };
-            let Some(root) = root else { break };
-            root.reclaim(window, deadline, &mut report)?;
-            self.roots
-                .lock()
-                .map_err(|_| WorkspaceError::Io)?
-                .retain(|r| !Arc::ptr_eq(r, &root));
-            report.roots_released += 1;
-            self.refresh()?;
-        }
-        report.remaining_roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?.len();
-        Ok(report)
-    }
-    fn refresh(&self) -> Result<(), WorkspaceError> {
-        let roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
-        let arenas = self.arenas.lock().map_err(|_| WorkspaceError::Io)?;
-        let mut complete = true;
-        let mut stopped = false;
-        for arena in arenas.iter() {
-            let mut pending = false;
-            let mut known = true;
-            for root in roots.iter().filter(|r| Arc::ptr_eq(&r.arena, arena)) {
-                let r = root.state.lock().map_err(|_| WorkspaceError::Io)?;
-                if let Some(p) = &r.pending {
-                    pending = true;
-                    known &= p.identity.is_some() && p.allocated.is_some();
-                }
-            }
-            let mut a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
-            a.blocked = a.unrecoverable || pending;
-            a.complete = known && (a.complete || !a.unrecoverable);
-            complete &= a.complete;
-            stopped |= a.blocked;
-        }
-        let mut state = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-        state.metadata_complete = complete;
-        state.metadata_stopped = stopped;
-        self.payloads.refresh(&mut state)
-    }
-    pub fn close(
-        self: &Arc<Self>,
-        arena: &Arc<Arena>,
-        deadline: Instant,
-    ) -> Result<(), WorkspaceError> {
-        self.reclaim(arena.directory.incarnation, deadline)?;
-        let _writer = self.writer()?;
-        if self
-            .roots
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .iter()
-            .any(|r| Arc::ptr_eq(&r.arena, arena))
-        {
-            return Err(WorkspaceError::Busy);
-        }
-        let mut lease = self.payloads.window(3, 4)?;
-        arena.close(lease.window.as_mut().ok_or(WorkspaceError::Io)?, deadline)?;
-        self.arenas
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .retain(|a| !Arc::ptr_eq(a, arena));
-        self.refresh()?;
-        Ok(())
     }
 }
 pub fn resize_memory(charge: &mut MetadataCharge, bytes: usize) -> Result<(), WorkspaceError> {

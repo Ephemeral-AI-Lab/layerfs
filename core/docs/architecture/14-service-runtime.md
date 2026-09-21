@@ -420,3 +420,15 @@ reject pending IDs, and WriteOnly handles reject read even at EOF. The128-slot
 24-byte table remains3,072 bytes, with56 bytes of pending control charged per
 truncating open. No write API, FUSE option, daemon opcode or dependency is added;
 actual native results and narrower compatibility claims are recorded in20.
+
+From parent `1f9cceb73ba0ede11c86120b73b2015f900d1dd8`,
+[routine healthy-owner reclamation](proposal/fuse-workspace-snapshot-overlay/21-routine-reclamation.md)
+runs before input, mutation and submission admission. It retires registry-only
+healthy metadata roots, then payloads released from their last custody, across
+the same consumer. Existing writer/window/deadline bounds apply, without state
+locks across I/O. Earlier failed/partial owners remain charged and are excluded;
+a root marker preserves cleanup failure even before DFS starts. Explicit cleanup
+keeps its deliberate repair semantics. The former post-install Commit sweep and
+proposal CommitPhase::Cleanup are removed; the next pre-capture pass handles
+healthy retirement between repeated Commits. No public operation, dependency,
+kernel callback, worker or service opcode is added.

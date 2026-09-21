@@ -213,6 +213,9 @@ impl Workspace {
         {
             return Err(WorkspaceError::InvalidInput);
         }
+        if edit.start > edit.end {
+            return Err(WorkspaceError::InvalidInput);
+        }
         if edit.replacement.len() > 8 * 1024 * 1024 {
             return Err(WorkspaceError::Capacity);
         }
@@ -241,7 +244,7 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let _writer = host.writer()?;
+        crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         if original.kind == NodeKind::Directory {
             return Err(WorkspaceError::IsDirectory);
         }
@@ -249,6 +252,18 @@ impl Workspace {
             return Err(WorkspaceError::WrongKind);
         }
         super::namespace::check_access(original, self.inner.root.uid, 2)?;
+        {
+            let state = self.state()?;
+            self.available(&state)?;
+            if state.baseline != baseline {
+                return Err(WorkspaceError::Busy);
+            }
+            if let Some(reserved) = open.as_ref() {
+                reserved.validate(&state, original.serial)?;
+            }
+        }
+        self.maintain_backing(deadline)?;
+        let _writer = host.writer()?;
         let (expected_revision, generation, dirty, old_root, needs_completion, frozen) = {
             let s = self.state()?;
             self.available(&s)?;
