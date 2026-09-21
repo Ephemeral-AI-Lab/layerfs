@@ -177,7 +177,7 @@ PROPOSED registry: prepared = <artifact>  →  files on disk  →  bounded reade
 | --- | --- | --- | --- |
 | option A (spill after construction, built and refuted) | **+11.2 % of the declared figure** | new declaration + device attestation | **−14.7 % only** — the fixture was already resident when the spill happened |
 | option B (drain instead of copy) | **−2.35 %** — landed | none | none |
-| **4b: stream from a prepared artifact** | fixture preparation moves to an untimed prepared artifact (`AGENTS.md` §2: "fixtures: use `--setup clone` … prepared inputs are acquired once and reused"); the timer then reads files the way v0.1.6 did | **none** — the artifact is an input, not a cache claim, and the read is inside the timer the same way the Store read already is | **bounded by the window — plus one file's slice, until part (b) above exists** |
+| **4b: stream from a prepared artifact, or from a seeded reader** | fixture preparation moves to an untimed artifact (`AGENTS.md` §2: "fixtures: use `--setup clone` … prepared inputs are acquired once and reused"), **or** the generator is read incrementally and needs no artifact at all | **none** — the artifact is an input, not a cache claim | **bounded at ~92 MB + 128 KiB**, because `construct_stream` bounds the probe and the chunker reads incrementally (`content.rs:279`) |
 
 **What is not claimed about 4b, and the second part it needs.** It has not been built or measured. Two
 things bound it, and honest pricing needs both:
@@ -193,17 +193,56 @@ things bound it, and honest pricing needs both:
    before it is cut, and that single file's slice is a floor on the whole approach unless the
    construction path also streams its input.
 
-**So the floor is not 92 MB.** It is *one file's slice plus one object*, i.e. ~205 MB if that file is an
-anchor and the construction path stays whole-file; the object *sizes* are not the problem, the **input
-slice** is. **The path has two parts: (a) the fixture becomes a prepared input the harness streams, and
-(b) the construction path stops requiring the whole file at once.** Part (a) is the harness change this
-page can evidence; part (b) is product work that step 5 of the #226 handoff forbids in that round and
-that would need its own commission.
+**So the floor is not 92 MB** *if* the construction path insists on a whole-file slice — which is why
+the next paragraph matters, and why this page was corrected the same day it was written.
 
-What *is* claimed is narrower and firmer: **the 728 MB is a shape the harness chose; v0.1.6 is the
-measured proof the shape is avoidable for the same workload; and the replacement is missing one
-capability — an ingest that reads its input in bounded pieces — rather than an optimisation inside its
-engine.**
+#### 4b-i. Correction: the replacement **already streams**. The harness does not use it.
+
+This page's first version said part (b) — "a construction path that stops requiring the whole file" —
+was product work needing its own commission. **That is wrong, and the correction makes the path much
+cheaper than the page first priced it.**
+
+```text
+core/crates/layerfs-content/src/file/content.rs
+  :207  pub fn construct_bytes(policy, capacities, bytes: &[u8], consumer, scope)   ← what the row calls
+  :279  pub fn construct_stream<R: Read>(policy, capacities, source: R, consumer, scope)
+              │
+              ├─ buffers at most `small_file_threshold_bytes` = 131,072 B  (policy.rs:14)
+              │     "The frozen cutoff bounds the threshold probe: at most `cutoff` bytes are buffered
+              │      before the scanner takes over."
+              └─ then hands `prefix.chain(source)` to the chunker, which reads incrementally
+```
+
+**So the capability is present, exported (`layerfs-content/src/lib.rs:27`) and bounded at 128 KiB.** The
+v0.1.7 row does not use it: `ops/pipeline.rs` calls `construct_bytes` with a slice the harness
+materialised from `fixture::noise(file.size, …)`. **The v0.1.6 product streamed its ingest**
+(`File::open` → `CountedSourceReader` → `build_checked_file(objects, &mut source, len)` —
+`layerstack.rs:2392-2405`), and so does v0.1.7's own `construct_bytes`, which is
+`construct_stream(Cursor::new(bytes))` internally. **Both products stream; only this harness feeds the
+whole-slice entry point.**
+
+**And there is a variant that needs no prepared artifact at all**, because the fixture is a *recipe*
+rather than an input: a seeded reader that yields the same `fixture::noise` bytes incrementally, feeding
+`construct_stream` file by file. Nothing 500 MB ever exists — not in the heap, not on disk.
+
+| | peak, arithmetic | prepared artifact needed |
+| --- | --- | --- |
+| today | ~885 MB measured | no |
+| stream from a **prepared 500 MB artifact** on disk | ~92 MB + 128 KiB probe | yes (untimed preparation, `AGENTS.md` §2's own rule) |
+| stream from a **seeded generator** (no artifact) | ~92 MB + 128 KiB probe + the generator's window | **no** |
+
+**Part (b) is therefore not product work.** It is one call site changing from `construct_bytes(slice)`
+to `construct_stream(reader)`. What remains genuinely open, and is *not* claimed here: the timing
+consequence. Construction is untimed today (591,127,444 ns measured); streaming it means either that
+cost moves inside the timer — which is the boundary change option D needs an owner ruling for — or the
+streamed objects are spilled to a pack before the timer, which is what the refuted option A did. **The
+memory fix is cheap; where the construction sits relative to the clock is the real question, and it is
+the owner's.**
+
+What *is* claimed is narrower and firmer, and it is the answer to the owner's question: **the 728 MB is
+a shape the harness chose. v0.1.6 is the measured proof the shape is avoidable for the same workload,
+and the replacement does not lack the capability — it ships `construct_stream`, bounded at 128 KiB, and
+the row simply calls the whole-slice entry point instead.**
 
 ### 4c. What must not be redone
 
