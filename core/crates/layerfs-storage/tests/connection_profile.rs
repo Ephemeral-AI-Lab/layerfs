@@ -108,14 +108,8 @@ fn a_save_reports_the_cache_profile_of_its_own_connection() {
     })
     .expect("save with a profile reading");
 
-    // The page size is the database's own, and the engine reports it: the value
-    // a Store is *created* with is the product's declaration, not a literal, and
-    // the profile reads it back from this connection (`tests/page_size.rs`).
-    assert_eq!(
-        profile.page_size,
-        layerfs_storage::STORE_PAGE_SIZE_BYTES as i64,
-        "the store's page size"
-    );
+    // The page size is the database's own, and the engine reports it.
+    assert_eq!(profile.page_size, 4_096, "the store's page size");
     // The cache setting is the engine's own answer, whichever profile is
     // declared: it is never zero, and SQLite's signed form is negative or a
     // positive page count.

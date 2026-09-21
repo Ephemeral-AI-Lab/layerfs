@@ -100,7 +100,6 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
     if existing_object_count(connection)? != 0 {
         return Err(StorageError::Integrity("Store is not empty"));
     }
-    set_page_size(connection)?;
     connection.execute_batch(SCHEMA_SQL)?;
     connection.execute(
         "INSERT INTO store_policy \
@@ -120,35 +119,6 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
         ],
     )?;
     validate(connection, Some(policy))
-}
-
-/// Applies the declared page size to a Store that has no schema yet.
-///
-/// `PRAGMA page_size` is read by the engine **before the first table exists** and
-/// never again except on `VACUUM`, so this call has to precede [`SCHEMA_SQL`], and
-/// the value is read back rather than assumed: a pragma the engine silently
-/// ignored would leave the Store at the previous default with nothing to say so.
-///
-/// The value is *not* recorded in the schema and *not* re-asserted on open. It is
-/// the file's own property, so a reader takes it from the file: a Store created at
-/// another page size opens, validates and reads exactly as it did before this
-/// call existed ([`crate::policy::STORE_PAGE_SIZE_BYTES`] is the declaration and
-/// the reasoning).
-fn set_page_size(connection: &Connection) -> StorageResult<()> {
-    connection.execute_batch(&format!(
-        "PRAGMA page_size = {}",
-        crate::policy::STORE_PAGE_SIZE_BYTES
-    ))?;
-    let applied = pragma_i64(connection, Pragma::PageSize)?;
-    if applied != crate::policy::STORE_PAGE_SIZE_BYTES as i64 {
-        return Err(StorageError::Integrity("Store page size"));
-    }
-    // The profile's page cache is a page count derived from this file's page
-    // size, and the connection was configured before the page size existed, so
-    // the derivation is re-run here; the cache the file's width calls for is the
-    // one the profile declares (`connection::apply_cache_size`).
-    crate::sqlite::connection::apply_cache_size(connection)?;
-    Ok(())
 }
 
 /// Validates the schema, indexes and policy row; rejects a conflicting override.
