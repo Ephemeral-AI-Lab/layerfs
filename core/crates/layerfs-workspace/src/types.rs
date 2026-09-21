@@ -215,7 +215,7 @@ impl DirectoryPage {
     }
 }
 
-/// Explicit SDK edit capability. Linux projection writes follow a later round.
+/// Explicit semantic edit capability; projection writes require a bound permit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkspaceAccess {
     ReadOnly,

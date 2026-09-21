@@ -6,7 +6,10 @@ use crate::{
         metadata_pages::{self, Cell, PageRef},
     },
     overlay::pieces::{self, CapturedBase, Inode, Piece, PieceKind},
-    runtime::state::{Handle, State},
+    runtime::{
+        coherence::MutationOrigin,
+        state::{Handle, State},
+    },
     *,
 };
 use layerfs_bridge::contract::{Inspect, Operation, Root, MAX_FILE};
@@ -23,7 +26,16 @@ enum FileMutation<'a> {
         handle: HandleId,
         offset: u64,
         replacement: &'a OwnedPayload,
+        origin: MutationOrigin,
     },
+}
+impl FileMutation<'_> {
+    fn origin(self) -> MutationOrigin {
+        match self {
+            Self::Write { origin, .. } => origin,
+            _ => MutationOrigin::Local,
+        }
+    }
 }
 impl Workspace {
     fn check_payload_owner(&self, replacement: &OwnedPayload) -> Result<(), WorkspaceError> {
@@ -40,12 +52,21 @@ impl Workspace {
         }
         Ok(())
     }
-    fn write_handle(&self, state: &State, id: HandleId) -> Result<Handle, WorkspaceError> {
+    fn write_handle(
+        &self,
+        state: &State,
+        id: HandleId,
+        origin: MutationOrigin,
+    ) -> Result<Handle, WorkspaceError> {
         let handle = state.handle(id, false)?;
         if handle.options.access == FileAccess::ReadOnly {
             return Err(WorkspaceError::BadHandle);
         }
-        if handle.scope != ReferenceScope::Local {
+        let scope = match origin {
+            MutationOrigin::Local => ReferenceScope::Local,
+            MutationOrigin::Projection { .. } => ReferenceScope::Projection,
+        };
+        if handle.scope != scope {
             return Err(WorkspaceError::Unsupported);
         }
         let node = state.node(handle.serial)?;
@@ -61,14 +82,28 @@ impl Workspace {
         mutation: FileMutation<'_>,
         serial: u64,
     ) -> Result<bool, WorkspaceError> {
-        if let FileMutation::Write { handle, .. } = mutation {
-            let handle = self.write_handle(state, handle)?;
+        if let FileMutation::Write { handle, origin, .. } = mutation {
+            if origin.projected() {
+                self.check_projected_write(state, false)?;
+            }
+            let handle = self.write_handle(state, handle, origin)?;
             if handle.serial != serial {
                 return Err(WorkspaceError::BadHandle);
             }
-            return Ok(handle.options.append);
+            return Ok(origin.append(handle.options.append));
         }
         Ok(false)
+    }
+    fn check_mutation_coherence(
+        &self,
+        state: &State,
+        mutation: FileMutation<'_>,
+        publication: bool,
+    ) -> Result<(), WorkspaceError> {
+        match mutation.origin() {
+            MutationOrigin::Local => self.check_projection_mutation(state),
+            MutationOrigin::Projection { .. } => self.check_projected_write(state, publication),
+        }
     }
     /// Atomically overwrites through a writable local handle, filling any gap
     /// with zeros. Append handles select live EOF and ignore the supplied offset.
@@ -79,6 +114,16 @@ impl Workspace {
         offset: u64,
         replacement: &OwnedPayload,
         deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        self.write_file_from(handle, offset, replacement, deadline, MutationOrigin::Local)
+    }
+    pub(crate) fn write_file_from(
+        &self,
+        handle: HandleId,
+        offset: u64,
+        replacement: &OwnedPayload,
+        deadline: Instant,
+        origin: MutationOrigin,
     ) -> Result<MutationReceipt, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
@@ -92,8 +137,12 @@ impl Workspace {
         let serial = {
             let state = self.state()?;
             self.available(&state)?;
-            let selected = self.write_handle(&state, handle)?;
-            if !selected.options.append
+            let selected = self.write_handle(&state, handle, origin)?;
+            if origin.projected() {
+                self.check_projected_write(&state, false)?;
+            }
+            let append = origin.append(selected.options.append);
+            if !append
                 && offset
                     .checked_add(replacement.len())
                     .is_none_or(|end| end > MAX_FILE)
@@ -101,7 +150,7 @@ impl Workspace {
                 return Err(WorkspaceError::Capacity);
             }
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-            if replacement.is_empty() {
+            if replacement.is_empty() && !(origin.projected() && append) {
                 return Ok(MutationReceipt {
                     incarnation: self.inner.incarnation,
                     generation: state.generation,
@@ -116,6 +165,7 @@ impl Workspace {
             handle,
             offset,
             replacement,
+            origin,
         };
         let original = self.serial_original(serial, deadline);
         {
@@ -372,7 +422,7 @@ impl Workspace {
             let state = self.state()?;
             self.available(&state)?;
             self.mutation_handle(&state, mutation, original.serial)?;
-            self.check_projection_mutation(&state)?;
+            self.check_mutation_coherence(&state, mutation, false)?;
             if state.baseline != baseline {
                 return Err(WorkspaceError::Busy);
             }
@@ -386,7 +436,7 @@ impl Workspace {
             let s = self.state()?;
             self.available(&s)?;
             let append = self.mutation_handle(&s, mutation, original.serial)?;
-            self.check_projection_mutation(&s)?;
+            self.check_mutation_coherence(&s, mutation, false)?;
             if s.baseline != baseline {
                 return Err(WorkspaceError::Busy);
             }
@@ -447,8 +497,12 @@ impl Workspace {
             FileMutation::Write {
                 offset,
                 replacement: payload,
+                origin,
                 ..
             } => {
+                if append && origin.projected() && offset != inode.length {
+                    return Err(WorkspaceError::InvalidInput);
+                }
                 let offset = if append { inode.length } else { offset };
                 let end = offset
                     .checked_add(payload.len())
@@ -462,6 +516,23 @@ impl Workspace {
                 )
             }
         };
+        if matches!(mutation, FileMutation::Write { .. }) && accepted_bytes == 0 {
+            let state = self.state()?;
+            self.available(&state)?;
+            self.mutation_handle(&state, mutation, original.serial)?;
+            crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+            return Ok((
+                MutationReceipt {
+                    incarnation: self.inner.incarnation,
+                    generation: state.generation,
+                    inode: original.serial,
+                    revision: state.revision,
+                    accepted_bytes: 0,
+                },
+                None,
+                None,
+            ));
+        }
         if let Some(payload) = payload {
             let held = payload
                 .record
@@ -593,7 +664,7 @@ impl Workspace {
         let mut state = self.state()?;
         self.available(&state)?;
         self.mutation_handle(&state, mutation, original.serial)?;
-        self.check_projection_mutation(&state)?;
+        self.check_mutation_coherence(&state, mutation, true)?;
         let same_root = match (&state.overlay, &old_root) {
             (None, None) => true,
             (Some(current), Some(expected)) => Arc::ptr_eq(current, expected),

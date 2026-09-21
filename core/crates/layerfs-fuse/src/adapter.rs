@@ -2,7 +2,8 @@
 use crate::replies::{attributes, errno, inode, kind, serial};
 use fuser::*;
 use layerfs_workspace::{
-    ProjectionReplyPermit, ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
+    FileAccess, FileOpenOptions, ProjectionReplyPermit, ReferenceScope, Workspace,
+    MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
 };
 use std::{
     ffi::OsStr,
@@ -33,6 +34,7 @@ const KERNEL_O_LARGEFILE: i32 = 0;
 pub(crate) struct Adapter {
     pub(crate) workspace: Workspace,
     pub(crate) stopping: Arc<AtomicBool>,
+    pub(crate) writable: bool,
 }
 
 impl Adapter {
@@ -63,12 +65,17 @@ impl Adapter {
             .map_err(errno)
     }
     fn readonly(&self, req: &Request) -> Errno {
-        self.guard(req).err().unwrap_or(Errno::EROFS)
+        self.guard(req).err().unwrap_or(if self.writable {
+            Errno::EOPNOTSUPP
+        } else {
+            Errno::EROFS
+        })
     }
 }
 
-fn flags(value: OpenFlags, directory: bool) -> Result<(), Errno> {
-    if value.0 & (libc::O_ACCMODE | libc::O_TRUNC | libc::O_APPEND | libc::O_CREAT) != 0 {
+fn flags(value: OpenFlags, directory: bool, writable: bool) -> Result<FileOpenOptions, Errno> {
+    let mutations = libc::O_ACCMODE | libc::O_TRUNC | libc::O_APPEND | libc::O_CREAT;
+    if (!writable || directory) && value.0 & mutations != 0 {
         return Err(Errno::EROFS);
     }
     let allowed = libc::O_CLOEXEC
@@ -78,11 +85,26 @@ fn flags(value: OpenFlags, directory: bool) -> Result<(), Errno> {
         | libc::O_NOCTTY
         | libc::O_NONBLOCK
         | libc::O_NOATIME
-        | if directory { 0 } else { KERNEL_FMODE_EXEC };
+        | if directory { 0 } else { KERNEL_FMODE_EXEC }
+        | if writable && !directory {
+            libc::O_ACCMODE | libc::O_APPEND
+        } else {
+            0
+        };
     if value.0 & !allowed != 0 {
         return Err(Errno::EOPNOTSUPP);
     }
-    Ok(())
+    let access = match value.0 & libc::O_ACCMODE {
+        libc::O_RDONLY => FileAccess::ReadOnly,
+        libc::O_WRONLY => FileAccess::WriteOnly,
+        libc::O_RDWR => FileAccess::ReadWrite,
+        _ => return Err(Errno::EINVAL),
+    };
+    Ok(FileOpenOptions {
+        access,
+        append: value.0 & libc::O_APPEND != 0,
+        truncate: false,
+    })
 }
 
 impl Filesystem for Adapter {
@@ -160,7 +182,7 @@ impl Filesystem for Adapter {
     fn access(&self, req: &Request, ino: INodeNo, mask: AccessFlags, reply: ReplyEmpty) {
         let permit = self.observe(req);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
-            if mask.bits() & 2 != 0 {
+            if !self.writable && mask.bits() & 2 != 0 {
                 return Err(Errno::EROFS);
             }
             self.workspace
@@ -183,22 +205,31 @@ impl Filesystem for Adapter {
         let result = permit
             .as_ref()
             .map_err(|error| *error)
-            .and_then(|_| flags(requested, false))
-            .and_then(|()| {
+            .and_then(|_| flags(requested, false, self.writable))
+            .and_then(|options| {
                 if requested.0 & KERNEL_FMODE_EXEC != 0 {
                     self.workspace
                         .access(serial(ino, self.root()), req.uid(), req.gid(), 1)
                         .map_err(errno)?;
                 }
-                Ok(())
-            })
-            .and_then(|()| {
                 self.workspace
-                    .open(serial(ino, self.root()), ReferenceScope::Projection)
+                    .open_file(
+                        serial(ino, self.root()),
+                        options,
+                        ReferenceScope::Projection,
+                        Instant::now() + CALLBACK_BUDGET,
+                    )
                     .map_err(errno)
             });
         match result {
-            Ok(handle) => reply.opened(FileHandle(handle), FopenFlags::empty()),
+            Ok(handle) => reply.opened(
+                FileHandle(handle),
+                if self.writable {
+                    FopenFlags::FOPEN_DIRECT_IO
+                } else {
+                    FopenFlags::empty()
+                },
+            ),
             Err(error) => reply.error(error),
         }
     }
@@ -218,7 +249,7 @@ impl Filesystem for Adapter {
         let result = permit
             .as_ref()
             .map_err(|error| *error)
-            .and_then(|_| flags(requested, false))
+            .and_then(|_| flags(requested, false, self.writable).map(|_| ()))
             .and_then(|()| self.handle(ino, fh))
             .and_then(|()| {
                 self.workspace
@@ -283,7 +314,7 @@ impl Filesystem for Adapter {
         let result = permit
             .as_ref()
             .map_err(|error| *error)
-            .and_then(|_| flags(requested, true))
+            .and_then(|_| flags(requested, true, self.writable).map(|_| ()))
             .and_then(|()| {
                 self.workspace
                     .opendir(serial(ino, self.root()), ReferenceScope::Projection)
@@ -406,17 +437,58 @@ impl Filesystem for Adapter {
     fn write(
         &self,
         req: &Request,
-        _: INodeNo,
-        _: FileHandle,
-        _: u64,
-        _: &[u8],
-        _: WriteFlags,
-        _: OpenFlags,
+        ino: INodeNo,
+        fh: FileHandle,
+        offset: u64,
+        data: &[u8],
+        write_flags: WriteFlags,
+        requested: OpenFlags,
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
-        reply.error(self.readonly(req));
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            if data.len() > MAX_READ_BYTES {
+                return Err(Errno::E2BIG);
+            }
+            if write_flags.intersects(WriteFlags::FUSE_WRITE_CACHE)
+                || write_flags.bits()
+                    & !(WriteFlags::FUSE_WRITE_LOCKOWNER | WriteFlags::FUSE_WRITE_KILL_SUIDGID)
+                        .bits()
+                    != 0
+            {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            let options = flags(requested, false, true)?;
+            self.handle(ino, fh)?;
+            self.workspace
+                .begin_projection_write(deadline)
+                .map(|permit| (permit, options.append))
+                .map_err(errno)
+        });
+        let result = permit
+            .as_mut()
+            .map_err(|error| *error)
+            .and_then(|(permit, append)| {
+                let payload = self
+                    .workspace
+                    .own_payload(data.len() as u64, &mut &data[..], deadline)
+                    .map_err(errno)?;
+                permit
+                    .write_file(fh.0, offset, &payload, *append, deadline)
+                    .map_err(errno)
+            });
+        // The origin permit stays alive through the send attempt. fuser does not
+        // expose checked reply delivery or a later kernel-completion acknowledgement.
+        match result {
+            Ok(receipt) => reply.written(receipt.accepted_bytes as u32),
+            Err(error) => reply.error(error),
+        }
     }
+
     fn mknod(
         &self,
         req: &Request,

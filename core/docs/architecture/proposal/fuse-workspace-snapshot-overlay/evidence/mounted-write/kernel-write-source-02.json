@@ -1,0 +1,9 @@
+{
+  "parent": "d770f5d10bf160b57a90b212102e7960148dba18",
+  "product_inputs_sha256": "c6fd9f87480c1429114167ff706ce1288872823fd027c86a75b87d8a06af8a83",
+  "method": "mounted_read.product_inputs: SHA256 of sorted relative path + NUL + raw SHA256(file), for root .cargo/config.toml, core Cargo.toml/lock, crate Cargo.toml and src/sql files",
+  "enumerated_inputs_sha256": "77acc23f4f543f44d8659e30c3f458923a8d4ecfbc112ff440806af81cb45152",
+  "enumerated_inputs_receipt": "kernel-write-source-01.json",
+  "source_archive_sha256": "c7570a9b36d5faa3fd32302dea80f5d4a1221277c1fb72ced1f81902c9bb793b",
+  "note": "Same unchanged production files; explicit correspondence of existing route seal and the separately defined compact-JSON manifest seal. Original source-01 retained unchanged."
+}

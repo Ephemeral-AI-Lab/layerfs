@@ -159,6 +159,10 @@ impl Workspace {
     pub fn id(&self) -> &str {
         &self.inner.id
     }
+    /// The immutable semantic capability selected at attach.
+    pub fn access_mode(&self) -> WorkspaceAccess {
+        self.inner.access
+    }
     pub fn root(&self) -> NodeAttributes {
         self.inner.root
     }

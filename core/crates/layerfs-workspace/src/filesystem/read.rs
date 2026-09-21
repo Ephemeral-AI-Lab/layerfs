@@ -162,8 +162,17 @@ impl Workspace {
             _operation: operation,
         })
     }
+    /// Reports a retained notification failure for this inode, without saving
+    /// or releasing any ownership. Handle release remains a separate operation.
     pub fn flush(&self, handle: HandleId) -> Result<(), WorkspaceError> {
-        self.state()?.handle(handle, false)?;
+        let state = self.state()?;
+        let handle = state.handle(handle, false)?;
+        if let Some(CoherenceStatus::Failed(failure)) = state.projection.as_ref().map(|p| p.status)
+        {
+            if failure.receipt.inode == handle.serial {
+                return Err(WorkspaceError::Coherence(failure));
+            }
+        }
         Ok(())
     }
     pub fn release(&self, handle: HandleId) -> Result<(), WorkspaceError> {

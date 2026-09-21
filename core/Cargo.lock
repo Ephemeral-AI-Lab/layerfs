@@ -513,6 +513,7 @@ name = "layerfs-fuse"
 version = "0.1.6"
 dependencies = [
  "fuser",
+ "layerfs-bridge",
  "layerfs-workspace",
  "libc",
 ]

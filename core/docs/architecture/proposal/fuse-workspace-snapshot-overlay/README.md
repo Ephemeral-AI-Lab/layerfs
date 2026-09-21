@@ -7,6 +7,13 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Mounted WRITE round:** [existing-file kernel writes](25-mounted-write.md) add
+an explicit direct-I/O writable projection and a bounded origin/reply permit,
+using the existing private backing and incremental Commit path. Size SETATTR,
+truncating open and daemon writable controls remain separate dependencies.
+The record explicitly retains unqualified RWF append variants and concurrent
+SDK-size mapping/splice routes; this is not full R4 or Pair 1 qualification.
+
 **Write prerequisite:** [routine healthy-owner reclamation](21-routine-reclamation.md)
 adds synchronous consumer-wide retirement before input, mutation and submission
 admission. Failed/partial owners remain charged until explicit cleanup. The next

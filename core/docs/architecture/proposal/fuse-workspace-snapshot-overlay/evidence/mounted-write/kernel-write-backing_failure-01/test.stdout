@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::kernel_write_backing_failure ... EXPECTED_BACKING_FAILURE Os { code: 5, kind: Uncategorized, message: "Input/output error" } BackingStatus { quota_bytes: 67108864, allocated_bytes: 20480, reserved_bytes: 851968, payloads: 2, retained_payloads: 1, failed_payloads: 1, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true }
+WRITE_RESOURCE WorkspaceStatus { submission: None, generation: 1, revision: 1, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 1989122 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 20480, reserved_bytes: 851968, payloads: 2, retained_payloads: 1, failed_payloads: 1, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 2, reusable_pages: 0, reserved_slots: 0, roots: 1, external_roots: 1, allocated_bytes: 12288, reserved_bytes: 851968, working_bytes: 2520, accounting_complete: true, admission_stopped: false }
+KERNEL_WRITE_CHECK mounted-backing-failure-retains-accepted-prefix-and-accounted-failed-owner PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.03s
+

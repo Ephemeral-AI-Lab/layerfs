@@ -1,0 +1,241 @@
+{
+  "parent": "d770f5d10bf160b57a90b212102e7960148dba18",
+  "product_inputs_sha256": "c6fd9f87480c1429114167ff706ce1288872823fd027c86a75b87d8a06af8a83",
+  "pass_count": 32,
+  "failure_count": 0,
+  "receipts": [
+    {
+      "receipt": "kernel-write-append-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8535263749945443,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-backing_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7695115829992574,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-completion_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8305404580023605,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-exec-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8742640840064269,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-ingress-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.880905415979214,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-mappings-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8727983749995474,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-mounted-status-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 24.906925165996654,
+      "scope": "functional-control-status"
+    },
+    {
+      "receipt": "kernel-write-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.067468249995727,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-origin-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8201120419835206,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-positional-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 5.236311624990776,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7570667919935659,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-read_race-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8313182910205796,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-completion-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8107208750152495,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.052498208009638,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-exec-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.851823124976363,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7131247909856029,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-notify_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8313053750025574,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-read_race-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8233393749978859,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-truncate_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8328839160094503,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-coherence-visibility-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0320910000009462,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-write-regression-write-append-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8451862499932759,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9924392079992685,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.2018827499996405,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 27.017444958008127,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7652224169869442,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7078519579954445,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-pending-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9119064580008853,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-positional-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0110522079921793,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7560106669843663,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-released-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7861795409990009,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9964682910067495,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    },
+    {
+      "receipt": "kernel-write-regression-write-zero_rights-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7466810000187252,
+      "scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification"
+    }
+  ],
+  "not_run": [
+    {
+      "id": "RWF-APPEND",
+      "status": "NOT_RUN",
+      "qualification": "UNQUALIFIED",
+      "reason": "Selected Linux FUSE WRITE flags do not expose RWF_APPEND/RWF_NOAPPEND kiocb intent; no enforceable refusal claim."
+    },
+    {
+      "id": "SDK-SIZE-CACHED-READ",
+      "status": "NOT_RUN",
+      "qualification": "UNQUALIFIED",
+      "reason": "Concurrent SDK size changes can precede GETATTR in private faults/splice; notifier does not install new kernel i_size."
+    },
+    {
+      "id": "PRIVATE-FAULT-REFILL-RACE",
+      "status": "NOT_RUN",
+      "qualification": "SOURCE_ARGUMENT_ONLY",
+      "reason": "Fixed-length private mappings/sendfile and cross-inode outstanding READ are mounted proofs; no deterministic real private-fault refill held across WRITE publication in this round."
+    },
+    {
+      "id": "R4-SETATTR",
+      "status": "NOT_RUN",
+      "reason": "Next independent operation: size SETATTR and truncating open."
+    },
+    {
+      "id": "R1C-WRITABLE-CONTROL",
+      "status": "NOT_RUN",
+      "reason": "Current daemon control remains authenticated read Status; no writable startup/edit/Commit route."
+    },
+    {
+      "id": "R5-NPM",
+      "status": "NOT_RUN",
+      "reason": "Namespace/new-inode/larger-input operations and declared target remain prerequisites."
+    },
+    {
+      "id": "R6",
+      "status": "NOT_RUN",
+      "reason": "No matched mounted performance campaign or RSS/cgroup qualification."
+    }
+  ],
+  "performance_claim": false
+}

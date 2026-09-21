@@ -1310,3 +1310,16 @@ cases cover visibility, old replies, executable reads, real-save continuation an
 native notification-send failures. Two separate completion/deadline API subsets
 are not mounted proofs. The kernel projection remains RO; this does not complete
 R4's writable callbacks or qualify host-SDK/container management.
+
+### R4 existing-file WRITE operation
+
+[25 — Mounted WRITE](25-mounted-write.md), implementation parent
+`d770f5d10bf160b57a90b212102e7960148dba18`, selects the explicit direct-I/O
+projection and one bounded projection-write permit through checked invalidation
+and reply attempt. It shares native ownership/splice/Commit algorithms, preserves
+current kernel O_APPEND intent across fcntl changes, and checks append offset
+against live EOF before publication. Size SETATTR/truncating open follows as its
+own operation. Ordinary mounted syscall results are recorded separately from
+native permit/error subsets and from the unqualified RWF append and concurrent
+SDK-size cached-mapping/splice cases. No full R4/R6 or daemon management claim
+follows from this operation.

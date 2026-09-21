@@ -140,7 +140,7 @@ impl MountLease {
             || state
                 .projection
                 .as_ref()
-                .is_some_and(|p| p.replies > 0 || p.in_flight())
+                .is_some_and(|p| p.replies > 0 || p.write_held || p.in_flight())
             || state
                 .handles
                 .iter()

@@ -1,0 +1,30 @@
+{
+  "parent": "d770f5d10bf160b57a90b212102e7960148dba18",
+  "product_inputs_sha256": "c6fd9f87480c1429114167ff706ce1288872823fd027c86a75b87d8a06af8a83",
+  "source_archive_sha256": "c7570a9b36d5faa3fd32302dea80f5d4a1221277c1fb72ced1f81902c9bb793b",
+  "method": "mounted_read.product_inputs: SHA256 of sorted relative path + NUL + raw SHA256(file), for root .cargo/config.toml, core Cargo.toml/lock, crate Cargo.toml and src/sql files",
+  "kernel_write_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/2e82b93f41fc13cd4974919d0f0a50d49916b9df8b929d001d46006329ff0502/kernel_write-test",
+  "kernel_write_sha256": "2e82b93f41fc13cd4974919d0f0a50d49916b9df8b929d001d46006329ff0502",
+  "coherence_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/552c8d9752feb96c858f31b8c3478ae1909de3ebf6846be2ffde474fcadbe788/coherence-test",
+  "coherence_sha256": "552c8d9752feb96c858f31b8c3478ae1909de3ebf6846be2ffde474fcadbe788",
+  "write_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/5ee30e5e7d83274a03a854b1294e60d0f3429366b20d2893291d267557a976ab/write-test",
+  "write_sha256": "5ee30e5e7d83274a03a854b1294e60d0f3429366b20d2893291d267557a976ab",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/24e7e2ebe3f108fabf6f8c739f5bb817cf149e369219d286b81200f6d23a8189/layerfs-daemon",
+  "linux_daemon_sha256": "24e7e2ebe3f108fabf6f8c739f5bb817cf149e369219d286b81200f6d23a8189",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/b0c75838bae7294317b3bd64806b2e727f8d963689f2e158da019f4c01d55a23/host",
+  "host_binary_sha256": {
+    "layerfs-service": "72e7af38e695c9646b212ac3de6165ac9c77fd5d7c0bdf928889ffa571ee6805",
+    "layerfs-daemon": "8b2d9d4fff52dbecb6e3fda41a141b764be5d59b97e59257d2cea22e15a49fff",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "core/crates/layerfs-fuse/tests/kernel_write.rs_sha256": "f3f7c10545cb93db65e1f4b3306bfb7b6fb67e33bb95ad567a590e115333e596",
+  "core/crates/layerfs-fuse/tests/kernel_write_route.py_sha256": "c41b88aa3d270e0a9c481eb85089167b9eec9588e468322b2cf14a43257f364c",
+  "core/crates/layerfs-workspace/tests/stage_route.py_sha256": "e8bcdc25fde3c4197c8c089f787d0f2071b4511390183220b07b0fd697730ff1",
+  "core/crates/layerfs-workspace/tests/support/native_workspace.rs_sha256": "8503ce5c94e6af65c19fef42037f0810dabb33ec466b876b9266c9cbbb47464c",
+  "caller_revision": "Ingress allocation oracle includes actual kernel request split/header/padding; no prior native run, product unchanged",
+  "enumerated_inputs_sha256": "77acc23f4f543f44d8659e30c3f458923a8d4ecfbc112ff440806af81cb45152",
+  "source_receipt": "kernel-write-source-02.json"
+}

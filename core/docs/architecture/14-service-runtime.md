@@ -469,3 +469,21 @@ Workspace has no fuser dependency. Six real mounted cases and two native complet
 API subsets are recorded separately in 24; writable kernel and remote SDK controls
 remain open. The internal per-Workspace control account grows 8,192 to 8,200 bytes;
 mount control, both permit slots and the concrete callback Arc are separately charged.
+
+The next operation is documented against parent
+`d770f5d10bf160b57a90b212102e7960148dba18` in
+[existing-file mounted WRITE](proposal/fuse-workspace-snapshot-overlay/25-mounted-write.md).
+The public `mount_writable` explicitly chooses a LocalEdit direct-I/O projection;
+`mount` and daemon `--mount-readonly` retain the cached RO profile. One
+ProjectionWritePermit owns one of the existing two reply slots and excludes SDK
+publication through WRITE's send attempt. It makes one write attempt using the
+current kernel append flag and original deadline ceiling, shares the native
+payload/splice pipeline, validates append at live EOF, and invalidates after
+publication outside state/metadata locks. A second observation can progress during
+notification; publication refuses outstanding old replies. Matching-inode flush
+reports the existing retained coherence failure; release stays available. The
+on-demand reservation now funds one 40-byte write permit plus one 16-byte observer
+and the actual boxed-state layout, without another worker/window/FD/queue.
+Kernel SETATTR/truncate and daemon writable controls remain open. The operation
+record retains exact RWF append observability and concurrent SDK-size cached-read
+limits; no universal writable or performance qualification is asserted.

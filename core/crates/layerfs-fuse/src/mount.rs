@@ -6,7 +6,9 @@ use std::{fmt, io, time::Instant};
 use {
     crate::adapter::{Adapter, CALLBACK_BUDGET},
     fuser::{Config, MountOption, Session, SessionACL, SessionUnmounter},
-    layerfs_workspace::{CoherenceStatus, MountLease, MutationReceipt, MAX_READ_BYTES},
+    layerfs_workspace::{
+        CoherenceStatus, MountLease, MutationReceipt, WorkspaceAccess, MAX_READ_BYTES,
+    },
     std::{
         io::Read,
         sync::{
@@ -64,21 +66,38 @@ pub struct MountHandle {
     finished: bool,
 }
 
-/// Mounts a read-only kernel projection on Linux through the direct privileged
-/// path. Local SDK edits require the bound checked inode invalidator. No helper,
-/// allow_other, writeback or writable kernel capability is selected.
-/// Synchronous kernel mount/unmount calls have deadline observation points;
-/// they are not advertised as preemptible syscalls.
+/// Mounts the cached, read-only Linux projection. Local SDK edits complete
+/// through the bound checked invalidator. No userspace content cache is added.
 pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, MountError> {
+    mount_profile(workspace, deadline, false)
+}
+
+/// Mounts existing-file writes on a LocalEdit Workspace. Every regular open uses
+/// direct I/O; shared writable mappings, writeback, sync and size SETATTR are
+/// unsupported. Kernel syscalls have deadline observation points, not preemption.
+pub fn mount_writable(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, MountError> {
+    mount_profile(workspace, deadline, true)
+}
+
+fn mount_profile(
+    workspace: &Workspace,
+    deadline: Instant,
+    writable: bool,
+) -> Result<MountHandle, MountError> {
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (workspace, deadline);
+        let _ = (workspace, deadline, writable);
         Err(MountError::Unsupported)
     }
     #[cfg(target_os = "linux")]
     {
         if Instant::now() >= deadline {
             return Err(MountError::Deadline);
+        }
+        if writable && workspace.access_mode() != WorkspaceAccess::LocalEdit {
+            return Err(MountError::Workspace(
+                layerfs_workspace::WorkspaceError::ReadOnly,
+            ));
         }
         privileged_owner(workspace)?;
         crate::replies::attributes(workspace.root(), workspace.root().serial)
@@ -88,13 +107,18 @@ pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, Mo
         let adapter = Adapter {
             workspace: workspace.clone(),
             stopping: Arc::clone(&stopping),
+            writable,
         };
         let mut config = Config::default();
         config.acl = SessionACL::Owner;
         config.n_threads = Some(2);
         config.clone_fd = false;
         config.mount_options = vec![
-            MountOption::RO,
+            if writable {
+                MountOption::RW
+            } else {
+                MountOption::RO
+            },
             MountOption::NoSuid,
             MountOption::NoDev,
             MountOption::DefaultPermissions,
