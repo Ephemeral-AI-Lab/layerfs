@@ -1,0 +1,6 @@
+sqlite 3.51.2
+  page_size=4096 cache_size=-2000        pages   77420  file   317.1 MB  commit   482.48 ms (  6.23 us/page)  blob-open+write    50.26 ms (  2.99 us/append)  close  292.21 ms
+  page_size=16384 cache_size=-2000       pages   19470  file   319.0 MB  commit   167.31 ms (  8.59 us/page)  blob-open+write    35.55 ms (  2.12 us/append)  close  269.78 ms
+  page_size=65536 cache_size=-2000       pages    5008  file   328.2 MB  commit   122.05 ms ( 24.37 us/page)  blob-open+write    34.69 ms (  2.07 us/append)  close  379.66 ms
+  page_size=65536 cache_size=-8000 (diagnostic) pages    5008  file   328.2 MB  commit   115.13 ms ( 22.99 us/page)  blob-open+write    34.38 ms (  2.05 us/append)  close  294.01 ms
+  page_size=65536 cache_size=-32768 (diagnostic) pages    5008  file   328.2 MB  commit   116.25 ms ( 23.21 us/page)  blob-open+write    34.75 ms (  2.07 us/append)  close   37.85 ms

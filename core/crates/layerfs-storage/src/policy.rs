@@ -50,6 +50,34 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// Older Stores are rejected rather than migrated.
 pub const SCHEMA_VERSION: i64 = 9;
 
+/// Page size of a Store this build creates.
+///
+/// **The engine's page is the unit a write is charged in.** With the MEMORY
+/// journal, rollback atomicity costs one image copy per modified page, and the
+/// commit hands every dirty page to the operating system one `pwrite` at a time,
+/// so a Store's write cost is bounded below by the pages it dirties rather than
+/// by the bytes it stores. The row that motivated this constant wrote
+/// 302,406,480 bytes of pack bodies and left 82,129 dirty pages behind at the
+/// engine's 4096-byte default; the same bytes at 65536 are about 5,200 pages.
+///
+/// Measured with no product code at all on the row's own write shape (800
+/// transactions, 16,800 blob appends of 18,000 bytes through `blobopen`, 24,800
+/// `WITHOUT ROWID` row inserts, the product's pragma profile), same bytes at four
+/// page sizes — pages, then the summed `COMMIT`, then microseconds per page:
+/// 4096 gives 77,420 pages, 482.48 ms, 6.23 us; 16384 gives 19,470 pages,
+/// 167.31 ms, 8.59 us; 65536 gives 5,008 pages, 122.05 ms, 24.37 us. 65536 is
+/// chosen because the cost stops being per-page there: 24.37 us for 64 KiB is
+/// `memcpy` speed, the floor, while the two narrower widths pay 3.95x and 2.88x
+/// more for the same bytes.
+///
+/// **This is a Store-creation decision and it is not a format version.** The
+/// value lives in the database file's own header, so a reader takes it from the
+/// file it opened: a Store created at any other page size — including every Store
+/// created before this constant existed — opens, validates, writes and reads
+/// unchanged, and no product path compares an opened Store's page size to this
+/// number. See `crate::sqlite::schema::create`, the only writer of the pragma.
+pub const STORE_PAGE_SIZE_BYTES: usize = 65_536;
+
 /// Largest writer budget one Store may be configured with.
 ///
 /// It is the width of the private save-slot space: `saves.active_slot` is
