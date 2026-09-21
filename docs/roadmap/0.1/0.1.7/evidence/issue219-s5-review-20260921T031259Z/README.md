@@ -8,12 +8,13 @@
 python3 docs/roadmap/0.1/0.1.7/evidence/issue219-s5-review-20260921T031259Z/rederive.py
 ```
 
-Result on `4bc826e4d`: **ALL CHECKS PASS** (34 checks).
+Result on `49ac6f883`: **ALL CHECKS PASS** (44 checks).
 
 What it re-derives: both S1 medians and their 400 MB rates; both verification
 statuses, cleanup statuses, `verification_ns` and scanned counts; the full identity
 match between each performance row and its verification receipt (source, input,
-product, image, harness, source commit); the S2 mechanism (identical 73-transaction
+product, image, harness identities plus the source commit, product, compilation and
+dependency seals and the workload hash); the S2 mechanism (identical 73-transaction
 geometry, 36.2× store-growth ratio, +370.5 ms system CPU / −113.6 ms user CPU,
 24.1× anchor-to-transaction ratio, 0.786 ms/MB marginal, 0.73 MB disk read,
 12.0 ms container CPU, 1.89× CPU/wall); and the cache declaration on both rows.

@@ -62,15 +62,12 @@ for path, vpath in ((PR, PRV), (TX, TXV)):
                        ("input_identity", "input_identity"),
                        ("product_identity", "product_identity"),
                        ("image_identity", "image"),
-                       ("harness_identity", "harness_identity"),
-                       ("source commit", "LAYERFS_SOURCE_COMMIT")):
-        want = ids[ident] if ident.startswith("LAYERFS") else ids[ident]
-        if ident.startswith("LAYERFS"):
-            want = ids["host_executor"][ident]
-            got = d["host_executor"][ident]
-        else:
-            got = d[key]
-        chk(f"  {key}", got, want)
+                       ("harness_identity", "harness_identity")):
+        chk(f"  {key}", d[key], ids[ident])
+    for ident in ("LAYERFS_SOURCE_COMMIT", "LAYERFS_PRODUCT_SEAL",
+                  "LAYERFS_COMPILATION_SEAL", "LAYERFS_DEPENDENCY_SEAL",
+                  "WORKLOAD_SOURCE_SHA256"):
+        chk(f"  {ident}", d["host_executor"][ident], ids["host_executor"][ident])
 
 print("== S2 mechanism ==")
 a, b = rows["pseudorandom"][1], rows["text-v1"][1]
