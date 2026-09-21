@@ -42,7 +42,11 @@ Both cases are also **not size-matched** (6 MB against 100 MB) and are **not
 mix-matched** (100 small files plus a 1 MB anchor against one 100 MB blob). Any
 comparison must say which of the two it is making.
 
-## 1c. Acceptance bar - proposed, owner confirmation pending
+## 1c. Acceptance bar - approved by the owner (2026-09-21)
+
+**Approved.** The bar below is the owner's acceptance line for `namespace-10000`; the
+case-specific plan that executes it is
+[`issue219-namespace-10000-plan.md`](issue219-namespace-10000-plan.md).
 
 The repository declares **no rate target** for either case. Its declared targets are
 times, and both cases already sit far inside them: `PRODUCT_TARGET_NS = 15 s`
@@ -51,8 +55,8 @@ times, and both cases already sit far inside them: `PRODUCT_TARGET_NS = 15 s`
 (`docs/roadmap/0.1/0.1.3/payload-create-read.md:96`), the strict tier-100
 `pure_call_sum_ns < 1 s` assessment (#47), and the waived 2.7 s cold Init target that
 applies to `namespace-100000`, not to `namespace-10000`. So "gap" is currently
-undefined and must be fixed by the owner before the squads measure. This is the
-proposed bar; do not treat it as approved until the issue says so.
+undefined and must be fixed by the owner before the squads measure. This is the approved
+bar.
 
 1. **Reproducibility first, for `namespace-10000`.** The candidate must reproduce
    **<= 578.245 ms (>= 691.8 MB/s)** on a run with a **declared cache contract** and a
