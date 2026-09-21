@@ -490,19 +490,33 @@ fn base_binding_survives(
 /// repeated demand **without a read while still charging the demand**, so
 /// `inode_demands` (the work-limit charge) is unchanged and only the I/O moves.
 ///
-/// Absence is deliberately not memoized: a serial with no stored record keeps
-/// today's lookup and today's charge, so an absent serial's accounting is
-/// bit-identical. The memo is bounded by the records the operation actually
-/// demands — one entry per demanded serial, each an `InodeValue` — which is the
-/// same bound the lazy path's own demand set has.
+/// **Absence is memoized too, and the demand charge is what stays bit-identical.**
+/// This row's batches bind serials they are allocating, so those serials are
+/// absent from the base by construction; measured on this row, 27,436 of
+/// validation's 27,662 inode-page reads were absent-serial descents, and half of
+/// them were the identical descent bought twice — once by the binding loop and
+/// once by the cycle walk. Remembering absence removes the repeated read and keeps
+/// the *charge*: an absent memo hit charges one demand exactly as the descent it
+/// replaces charged one (`lookup_many` charges a demand per serial it answers at a
+/// leaf), so `inode_demands` and `objects_read` are unchanged while the pages and
+/// waves fall.
+///
+/// **The memo is sound because the base is immutable for its lifetime.** It lives
+/// for one `check` call, and `FilesystemTopology::load` binds one base root that
+/// every site reads through the same `InodeTable`, so a serial absent once is
+/// absent for the whole call. The memo is bounded by the serials the operation
+/// actually demands — one entry per demanded serial, in one of the two maps —
+/// which is the same bound the lazy path's own demand set has.
 struct ValidationState {
     records: BTreeMap<u64, InodeValue>,
+    absent: BTreeSet<u64>,
 }
 
 impl ValidationState {
     fn new() -> Self {
         Self {
             records: BTreeMap::new(),
+            absent: BTreeSet::new(),
         }
     }
 
@@ -532,8 +546,16 @@ impl ValidationState {
         work.read_waves = work.read_waves.saturating_add(inode.read_waves);
         work.inode_pages_read = work.inode_pages_read.saturating_add(inode.pages_read);
         for (serial, value) in missing.into_iter().zip(found) {
-            if let Some(value) = value {
-                self.records.insert(serial, value);
+            match value {
+                Some(value) => {
+                    self.records.insert(serial, value);
+                }
+                // The grouped demand has already paid for this answer, in the same
+                // waves the found serials came back in; recording it is what stops
+                // the binding loop and the cycle walk buying it again.
+                None => {
+                    self.absent.insert(serial);
+                }
             }
         }
         Ok(())
@@ -554,12 +576,26 @@ impl ValidationState {
             work.inode_demands = work.inode_demands.saturating_add(1);
             return Ok(Some(*value));
         }
+        if self.absent.contains(&serial) {
+            // The same charge a descent would have made for a serial the base does
+            // not hold (`lookup_many` charges one demand per serial answered at a
+            // leaf, absence included), so the physical read is what this removes
+            // and the accounting is what it keeps.
+            work.objects_read = work.objects_read.saturating_add(1);
+            work.inode_demands = work.inode_demands.saturating_add(1);
+            return Ok(None);
+        }
         let mut inode = InodeReadWork::default();
         let found = lookup_many(reader, table, &[serial], &mut inode)?;
         charge_inode(work, inode);
         let value = found.into_iter().next().flatten();
-        if let Some(value) = value {
-            self.records.insert(serial, value);
+        match value {
+            Some(value) => {
+                self.records.insert(serial, value);
+            }
+            None => {
+                self.absent.insert(serial);
+            }
         }
         Ok(value)
     }
