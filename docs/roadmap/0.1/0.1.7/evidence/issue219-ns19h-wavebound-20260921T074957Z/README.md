@@ -76,6 +76,22 @@ other twelve PASS. The count was read from that receipt, `tests/golden/expected.
 once, the harness was rebuilt, and the covering run H2 was taken once. **Both receipts are on disk
 and H1 is reported as red.** No other pin moved.
 
+## 4b. The two seals, stated exactly
+
+| row | `identity.source_commit` | `source_dirty` | dirty files | harness binary sha256 |
+| --- | --- | --- | --- | --- |
+| H1 (FAIL, the pin) | `5c2858b40f0961803f78b2b0569b2ef2162554df` | **False** | none | `c5d53824fb670861…` |
+| H2 (PASS, the arm) | `5c2858b40f0961803f78b2b0569b2ef2162554df` | **True** | `M core/benchmark/fs-bench-pro-storage-content/tests/golden/expected.tsv` | `5884b480c5903be8…` |
+
+**The product source is the same commit in both rows and the product tree was clean at both runs.**
+H2's dirty file is the **golden table itself** — the re-pin is by definition a harness edit made
+between the two runs, and the pin commit `a93e0c557` carries it. This is the same shape as round 3's
+own `T3b`/`T3c` pair (L64): the re-pin cannot be committed before the number it contains exists. It is
+recorded here rather than left for a reader to find in `run.json`, and **the arm's measurements do not
+read the dirty file**: `expected.tsv` is compiled into the harness binary, so the *binary* (whose hash
+is pinned in the receipt and differs between the two rows) is what graded the row, and the file on
+disk only had to agree with it at build time.
+
 ## 5. One test fixture encoded the old bound
 
 `persistence_failure::a_terminal_operation_refuses_further_work` filled the batch with 40 objects of
