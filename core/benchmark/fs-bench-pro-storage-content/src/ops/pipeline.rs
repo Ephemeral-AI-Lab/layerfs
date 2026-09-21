@@ -713,6 +713,13 @@ fn namespace_scale(
         Err(error) => return Ok(c1::unmeasured(&error, gates)),
     };
     let mut chain = TreeStore::new();
+    // One reader per batch index: the chain **as it stood before that batch**, not the
+    // complete chain. Measured, not assumed: a standalone probe passes every batch at
+    // budgets 4096, 2048 and 1024 when the reader is the chain-so-far, while the
+    // driver's timed pass returned `cycle check work limit` when it served every batch
+    // from the complete chain. A batch's base is what the *previous* batches produced,
+    // so handing it the whole chain is both wrong and more expensive.
+    let mut prefixes: Vec<TreeStore> = vec![TreeStore::new()];
     let mut planned_root: Option<FilesystemRootId> = None;
     for (index, batch) in batches.iter().enumerate() {
         let input = FilesystemInput {
@@ -750,6 +757,9 @@ fn namespace_scale(
             }
         }
         chain.absorb(&emitted);
+        let mut snapshot = TreeStore::new();
+        snapshot.absorb(&chain);
+        prefixes.push(snapshot);
     }
     let chain_objects = chain.len() as u64;
 
@@ -776,7 +786,7 @@ fn namespace_scale(
                     new_inodes: &batch.new_inodes,
                     resources: FilesystemResources::default(),
                 };
-                let reader = PairProvider::new(&chain, &empty);
+                let reader = PairProvider::new(&prefixes[index], &empty);
                 let mut objects = FilesystemObjects::new(&reader, &mut counting);
                 let ordering: Option<&mut dyn OrderingBacking> =
                     Some(&mut perf_backings[index] as &mut dyn OrderingBacking);

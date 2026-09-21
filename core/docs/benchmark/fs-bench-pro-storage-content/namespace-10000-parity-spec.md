@@ -560,6 +560,47 @@ change.
 `ADMISSION_CASES` and `tests/golden/registry.tsv` were both touched during the attempt
 and **reverted**; the frozen cardinality is 217 and the golden table is untouched.
 
+## 8h. What the probe established, and the difference that remains
+
+`tests/namespace_batch_probe.rs` reproduces the driver's batch loop outside any
+registered row. It settles the batching question and narrows the failure to one
+difference.
+
+**Result: the batched build itself is sound at every budget.** Every batch passes,
+with the reader being the chain **as it stood before that batch**:
+
+| budget | batches | bindings per batch | result |
+| ---: | ---: | --- | --- |
+| 4,096 | 3 | 4096 / 4096 / 1908 | **PASS** |
+| 2,048 | 5 | 2048 ×4 / 1908 | **PASS** |
+| 1,024 | 10 | 1024 ×9 / 884 | **PASS** |
+
+So §8g's reading — that the cycle check charges `visited` per entry examined, making
+a `D × F` visit count exceed a 4096-*binding* budget — is **refuted**. A 4,096-binding
+batch over 101 directory updates builds cleanly. `MAXIMUM_WALK_ENTRIES` is not the
+obstacle once the tree is batched.
+
+**The difference that remains, precisely.** The probe runs the batches **once**, with
+the chain-so-far as the reader. The driver runs them **twice**: an untimed pass that
+builds the chain (which succeeds for all three batches, confirmed by the labelled
+error path never firing), then a timed pass inside `super::measure` whose consumer is
+`CountingConsumer` over `SaveHandoff` instead of a `TreeStore`. The timed pass returns
+`cycle check work limit`. Making the timed pass use per-batch **prefix** chains
+(identical in content to the probe's chain-so-far, which is what the probe validates)
+did **not** change the outcome.
+
+So the remaining variable is not the batching, the budget, the backings, the reader
+contents or the inputs. It is the **second execution of the same batches with a save
+consumer attached** — either the save's acceptance changing what a later batch's base
+lookup sees, or the two-loop structure itself. **The next step is to run the probe's
+single loop with a `SaveHandoff` consumer**, which isolates the consumer as the only
+difference; if that fails, the cause is the save path, and if it passes, the cause is
+running the batches twice.
+
+The registry entry and `ADMISSION_CASES 217 -> 218` were applied and reverted again.
+`tests/namespace_batch_probe.rs` is kept: it passes, it is the evidence for the
+refutation above, and it is the instrument the next step starts from.
+
 ## 9. Not claimed
 
 - No implementation is authorized here; no harness, product or golden file was changed.
