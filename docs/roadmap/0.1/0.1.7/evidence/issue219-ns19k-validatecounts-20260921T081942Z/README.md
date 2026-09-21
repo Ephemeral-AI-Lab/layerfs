@@ -61,6 +61,23 @@ Two candidate directions, in the order the evidence supports them:
 Nothing here is a v0.1.6 comparison and nothing is claimed about correctness: every pin, every work
 counter and the root digest reproduce, and the row is PASS.
 
+## 3b. The harness's share, bounded — and the sharper anomaly
+
+The row's build reads through the **harness's** provider (`PairProvider`), so the 12.5 µs could have
+been a fixture artifact rather than a product price. It is not: `read_canonical_batch` is a
+`HashMap<ObjectId, FinalizedObject>` lookup (`TreeStore::object`, `providers.rs:81`) followed by one
+`ObjectId::for_bytes` over the object and one `to_vec()` — a hash and a copy of a few-hundred-byte
+record, sub-microsecond together, against 12.5 µs measured. **The price is on the product's side of
+the call.**
+
+**And the count is stranger than the price.** `read_waves` **27,657** against `objects_read`
+**17,777**: the read path issues **1.56 waves per object**, i.e. the grouped demand the product
+documents (`ValidationWork::read_waves`, "Grouped demand waves issued") is carrying **0.64 objects
+per wave** on this workload. Whatever a wave costs, it is being paid 27,657 times to move 17,777
+objects, and the phase's 222.15 ms is 8.03 µs per wave on that arithmetic. A wave that carries one
+object is a wave that is not grouping, and that is a product-shaped question rather than a
+fixture-shaped one.
+
 ## 4. Window, stated rather than banked
 
 K1 is uniformly slower than J1 (`span_build_ns` 323.86 vs 308.59, `operation_work_ns` 1677.00 vs
