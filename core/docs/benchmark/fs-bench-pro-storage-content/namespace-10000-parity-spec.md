@@ -272,6 +272,102 @@ Its own declared weights sum to 102,555,546 bytes and the plan is then scaled up
 the declared logical total, so a "tiny" file there is larger than 8 bytes. Sizes here
 are therefore not confined to the bands either, which is faithful rather than slack.
 
+## 8c. Worked design for steps 2-5 (recorded so the remaining work is mechanical)
+
+Every fact below was established by reading the current tree; none is a guess. The
+remaining work is transcription against this design, not further investigation.
+
+### The load-bearing discovery
+
+**`build_filesystem` emits metadata only.** It never reads or emits file content: in
+`crates/layerfs-content/src/filesystem/update.rs`, `contents` is a
+`BTreeMap<u64, ObjectId>` of **directory** roots (`contents.insert(update.parent, ...)`
+at `:295`, consumed at `:323-340`), and a file's `content_root` is copied out of the
+input `InodeValue` without being demanded from the reader. The `FilesystemObjects`
+reader is used for inode tables and directory pages (`lookup_many`, `read_batch` in
+`sorted/page.rs:259`), not for file bytes.
+
+Consequence: a parity row **cannot** get 300 MB into the Store by building a
+filesystem. The content must be constructed separately and fed to the same save
+operation. This is why §4.1's Option A is the only implementable option, and why
+Option C (construction inside the timer) would need a product change to
+`build_filesystem`, not a harness change.
+
+### Step 3 — the driver, concretely
+
+`SaveHandoff` implements `FinalizedConsumer` (`cas/store.rs:788`) and `SaveOperation`
+has `accept(object)` (`used by c2.rs:625`). So one operation takes both streams:
+
+```text
+untimed:  plan = namespace_content::plan(10_000, 100, seed, 300_000_000)
+          content = TreeStore::new(); for each planned file with size > 0:
+              construct_bytes(policy, &capacities, &fixture::noise(size, seed ^ idx),
+                              &mut content, Timing::disabled(...))   // pre-timer
+          create_and_save_untimed(&base, &TreeStore::new())
+          de_warm = c2::prepare_sample(&base, &sample)
+
+measured: Store::open(sample)
+          operation = store.begin_save(...)
+          handoff = SaveHandoff::new(&mut operation)
+          counting = CountingConsumer::new(&mut handoff)
+          objects = FilesystemObjects::new(&PairProvider::new(&empty, &empty), &mut counting)
+          build_filesystem(&mut objects, &input, None)      // metadata
+          drop(counting); drop(handoff)
+          for id in content.insertion_order():              // content
+              operation.accept(content.cloned_object(id)...)
+          outcome = operation.finish(...)
+```
+
+`CountingConsumer` must be dropped before the content loop so `handoff` is free; the
+metadata count is read from it first. `PairProvider::new(&empty, &empty)` is correct
+here because the build demands no content (above).
+
+### Step 2 — the inode binding, and its honest limit
+
+`PreparedTree`'s inodes carry label-derived `content_root`s. Binding them to the
+constructed roots means a `namespace_content`-aware variant of `Recipe::prepare` that
+takes each file's constructed root instead of `content_root(profile, seed, label)`.
+
+**It does not change the measurement** (the build never reads a file's `content_root`),
+so it is a semantic improvement, not a correctness requirement. If it is skipped, the
+row must say so: the Store would hold the 300 MB of content under identities that no
+inode references. Recommended order: land the driver and gate first, then the binding.
+
+### Step 4 — the gate
+
+`g1.o5-content-bytes`: `SaveOutcome.inserted` canonical bytes `>= 300_000_000`, and
+equal to `plan.total_bytes`. It reads `outcome.inserted` (already used at
+`pipeline.rs` as `pipeline.inserted`) — no new plumbing. Without it, a row that saved
+empty inodes passes every existing gate, which is exactly today's failure mode.
+
+### Step 5 — the registry entry
+
+`src/families/pipeline.rs` gains one row beside the existing four, following their
+`CaseSpec` chain exactly: `Shape::Pipeline(PipelineOp::NamespaceScale)`,
+`.cache(CacheState::PreparedDewarmed)`, `.store(StoreState::OpenedFromCopy)`,
+`.smoke_if(false)`, and an `entry_tier(2, 10_000, "binary")` so the tier matches
+`c1.fs.build-scale`'s own 10,000 tier. `PipelineOp::NamespaceScale` is added to the
+enum at `src/registry.rs:360-368`, and `configuration()` in `pipeline.rs` gains its arm
+with `files: 10_000, directories: 100`.
+
+### Step 6 — the blocker, restated
+
+`tests/golden/registry.tsv` and `tests/golden/expected.tsv` must both gain the row, and
+`tests/registry_golden.rs` compares them. The registry table can be regenerated from the
+binary's own `--list`. The **pins** cannot be written until §8.3 is ruled on, because
+`pipeline.commits` changed meaning with `7075f338d` and the existing
+`pipeline-filesystem-build` pin is already FAILing on it. A row landed with hand-written
+pins would violate the rule that a pin is regenerated only from a passing run.
+
+### Budget reality check for step 3
+
+300 MB of constructed content held in a `TreeStore` is held as `FinalizedObject`s in a
+`HashMap` — the canonical bytes plus their role envelope, so roughly the payload size
+again in RSS. For calibration the existing `payload-create-500m` row peaks at **527 MB**
+RSS for 500 MiB, and the host has 38 GB. The 25 s declared exception in §6 is therefore
+about the *save*, not about memory, and should be re-measured rather than assumed when
+the row first runs.
+
 ## 9. Not claimed
 
 - No implementation is authorized here; no harness, product or golden file was changed.
