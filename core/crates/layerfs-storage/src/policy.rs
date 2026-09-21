@@ -111,12 +111,34 @@ pub const CANONICAL_LIMIT: usize = 16 * 1024 * 1024;
 pub const LOOKUP_PAGE_IDS: usize = 128;
 /// Objects held by one pending batch.
 pub const BATCH_OBJECT_LIMIT: usize = 512;
-/// Canonical bytes held by one pending batch.
-pub const BATCH_CANONICAL_BYTES_LIMIT: u64 = 512 * 1024;
+/// Canonical bytes held by one pending batch, and therefore by one wave.
+///
+/// **The wave is bounded by the transaction it runs in.** A preparation wave
+/// holds the Store's arbitration for its whole duration, every seal inside it
+/// joins the one transaction the wave opened, and that transaction is
+/// acknowledged at the wave's end - so the transaction's own declared capacity is
+/// the bound that describes a wave, and this is that capacity rather than a
+/// second, smaller figure with no stated relation to it.
+///
+/// The figure it replaces was 512 KiB, eight times below the transaction: the
+/// row that motivated this bound wrote 302,406,480 canonical bytes in ~596 waves
+/// of ~507 KiB, while every wave opened a transaction declared to accept 4 MiB.
+/// The wave count is what the row paid for - one `BEGIN IMMEDIATE`, one locator
+/// query, one presence seed, one collision check and one `COMMIT` per wave - and
+/// none of those costs is proportional to the bytes the wave carries.
+pub const WAVE_CANONICAL_BYTES_LIMIT: u64 = TRANSACTION_CANONICAL_BYTES_LIMIT;
 /// Submitted rows in one open transaction.
 pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
 /// Canonical bytes submitted in one open transaction.
 pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
+/// Canonical bytes one group may hold before its lane seals it.
+///
+/// The group's own bound, and deliberately **not** the wave's. A group is a
+/// framing unit inside one pack: its canonical bytes are what the owner projects
+/// before deciding to seal (`cas::selection`), so the bound has to describe a
+/// frame rather than a transaction. The two were the same constant, which is why
+/// widening the wave's budget would otherwise have widened a frame's.
+pub const GROUP_CANONICAL_BYTES_LIMIT: u64 = 512 * 1024;
 /// Rows removed by one bounded cleanup page.
 pub const CLEANUP_PAGE_ROWS: usize = 128;
 /// Objects one authenticated read wave may demand.
@@ -388,7 +410,7 @@ impl StorageCapacities {
             chain_canonical_limit: CHAIN_CANONICAL_LIMIT,
             chain_encoded_limit: CHAIN_ENCODED_LIMIT,
             batch_objects: BATCH_OBJECT_LIMIT,
-            batch_bytes: BATCH_CANONICAL_BYTES_LIMIT,
+            batch_bytes: WAVE_CANONICAL_BYTES_LIMIT,
             transaction_rows: TRANSACTION_ROW_LIMIT,
             transaction_bytes: TRANSACTION_CANONICAL_BYTES_LIMIT,
             read_objects: READ_OBJECT_LIMIT,

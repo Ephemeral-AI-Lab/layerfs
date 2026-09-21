@@ -151,9 +151,14 @@ fn a_terminal_operation_refuses_further_work() {
     disabled(|_scope| operation.accept(leaf)).unwrap();
 
     // Fill the bounded batch so its preparation wave runs; the leaf's unresolved
-    // dependency is then reported by the operation.
+    // dependency is then reported by the operation. The count comes from the
+    // declared bound rather than a literal: a fixture that hard-codes how many
+    // objects used to fit a batch stops forcing a wave the moment the bound
+    // moves, and then asserts nothing at all.
+    const OBJECT_BYTES: u64 = 64 * 1024;
+    let needed = layerfs_storage::policy::WAVE_CANONICAL_BYTES_LIMIT / OBJECT_BYTES + 2;
     let mut error = None;
-    for index in 0..40u8 {
+    for index in 0..u8::try_from(needed).expect("the declared bound fits a byte") {
         let payload = support::repeat(64 * 1024, index);
         let object = FinalizedObject::new(
             ObjectRole::WholeFile,

@@ -15,7 +15,7 @@ use crate::encoding::delta::read::ChainCounters;
 use crate::encoding::delta::select::{select, DeltaCounters, SelectInput};
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
-use crate::policy::GROUP_TARGET;
+use crate::policy::{GROUP_CANONICAL_BYTES_LIMIT, GROUP_TARGET};
 
 impl MutationOwner {
     /// Prepares and places one missing object.
@@ -75,7 +75,7 @@ impl MutationOwner {
                 && self.groups[index]
                     .canonical_bytes
                     .saturating_add(object.canonical_len())
-                    > self.capacities.batch_bytes as usize)
+                    > GROUP_CANONICAL_BYTES_LIMIT as usize)
         {
             self.seal_group(lane, availability)?;
         }
