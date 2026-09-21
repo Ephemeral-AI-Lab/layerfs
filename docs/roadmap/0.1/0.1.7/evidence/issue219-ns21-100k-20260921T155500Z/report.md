@@ -28,8 +28,14 @@ git. **One sample per case per arm, `--verify full`, fresh `--out` per run, no r
 | `pipeline.packs_created` / `pack_appends` | 1,270 / 6,603 | 2,180 / 12,088 | 1.72× / 1.83× |
 | `pipeline.pack_bytes_written` | 301,865,004 | 509,752,317 | 1.69× |
 | complete command | 1,559,995,167 | **6,571,717,125** | 4.21× |
-| peak RSS | 529,711,104 | 1,048,805,376 | 1.98× |
+| peak RSS (**lifetime** high-water, not a phase figure) | 529,711,104 | 1,048,805,376 | 1.98× |
+| **measured-region** RSS increment (§11.1) | **27,197,440** | **37,519,360** | **1.38×** |
 | status | `PASS` 13/13 | **`PASS` 13/13** | |
+
+Every figure in the table above is from the two runs named in it, except the two RSS-increment cells,
+which come from `ns21-D2-10000-phaserss` and `ns21-D1-100000-phaserss`: the measured-region sampler was
+added to the harness **after** the C2 pair, so those runs predate it. §11 says so and §11.6 carries the
+cross-check that the instrument did not move anything else.
 
 **`pipeline.operation_work_ns` and `pipeline.accept_span_ns` are both published**, as §7 of the handoff
 requires, and so are `establishment_ns` and `teardown_ns`: `establishment_ns + operation_work_ns +
@@ -170,7 +176,7 @@ The pack layer's amortisation is flat to 1.1 %, so **the row's extra bytes cost 
 overhead** — the structural proportionality the pre-registration registered holds at the pack layer even
 though it does not hold for the row's declared figure.
 
-## 6. Two findings this row produced, and they are findings rather than this round's subject
+## 6. Three findings this row produced, and they are findings rather than this round's subject
 
 Both are **harness-shaped observations about the row and its driver**, not product defects. Neither was
 registered in §3 of the pre-registration, because the arithmetic that derived them was the ladder's —
@@ -345,6 +351,15 @@ not read "`--verify full`" on this family as a second, independent check.
   does not say what a cheaper reader would cost, and no alternative reader was built or measured.
 - **The `--verify full` caveat (§8.1) is not fixed.** It is a property of this row's driver, and changing
   it is a harness change this round was not commissioned to make.
+- **The two memory reductions in §11 are not applied.** The prefix snapshots (§11.4) are priced at
+  164,347,094 bytes and the content store (§11.3) at ~728 MB, and removing either changes the row's
+  lifetime peak and therefore its binary — a fresh measurement round, not an edit to this one.
+- **`resources.rss.process_peak_bytes` is still a lifetime high-water** and is still published as one.
+  §11.1 adds the phase peak beside it; it does not relabel the lifetime figure, which
+  `memory_cpu_space_support.md` §3.2 forbids and which other rows' receipts depend on.
+- **No memory ceiling is claimed for this row.** `memory_cpu_space_support.md` §11 is explicit that the
+  contract claims no absolute memory target; §11 measures where the bytes are and claims nothing about
+  whether 1.05 GB is acceptable.
 - **`ns21-B2-100000-bootstrap` is a PASS frame, not a receipt.** It has a `trace.jsonl` and no
   `receipt.json`; it is filed under `raw/` because §8's pins are read from it and a receipt a report
   depends on must survive `benchmark-results` not being tracked by git.
@@ -357,6 +372,9 @@ not read "`--verify full`" on this family as a second, independent check.
 # the anchor (a tree, no Store) and the row, back to back, one lock window
 python3 runner.py perf --case namespace-10000          --out <fresh> --verify full
 python3 runner.py perf --case pipeline-namespace-100000 --out <fresh> --verify full
+
+# the memory attribution of section 11 (diagnostic: registers no row, writes no receipt)
+cargo test --release --locked --test namespace_memory_probe -- --nocapture
 
 # the registry's own declaration, and the table
 fs-bench-storage-content --emit-registry-tsv tests/golden/registry.tsv
@@ -371,3 +389,149 @@ self-check failed on the tree this round started from. It now reads `6` against 
 `ADMISSION_CASES` reads `219`. **Two rows were added to the constant in one edit: the one that was
 already missing, and the new one.** The `FROZEN_CARDINALITY` defect filed in L80 is fixed here, as the
 handoff's §6 asked, because the count had to move anyway.
+
+## 11. Memory: the row's 1.05 GB is 96 % harness, and the product's measured region is 37 MB
+
+Added 2026-09-21 after the row was first filed. `resources.rss.process_peak_bytes` = 1,048,805,376 was
+published and **could not be attributed**: it is `getrusage(RUSAGE_SELF).ru_maxrss`, a **lifetime**
+high-water, and `memory_cpu_space_support.md` §3.2 says a lifetime figure is never an incremental one.
+The row had no phase peak at all, so this section first adds the missing instrument and then answers the
+question the instrument was added for.
+
+### 11.1 The instrument that was missing
+
+`namespace_scale` now starts an `RssSampler` (10 ms nominal interval, `instruments.rs:438`) immediately
+before the measured closure and stops it immediately after, and publishes the bundle the memory document
+declares: `pipeline.rss_phase_peak_bytes`, `rss_phase_baseline_bytes`, `rss_phase_incremental_bytes`,
+`rss_phase_final_bytes`, `rss_samples`, `rss_maximum_gap_ns`, `rss_sampling_interval_ns`,
+`rss_unavailable_samples`, and `rss_phase_peak_usable` — the bundle's own fail-closed rule
+(`RssBundle::peak_is_usable`: no unavailable sample, more than one sample, no gap over twice the declared
+interval) published rather than left for a reader to re-derive. None of it is pinned.
+
+Measured on `ns21-E1-100000-final-20260921T164500Z` (`PASS` 13/13, `rss_phase_peak_usable` = 1,
+335 samples, 12.55 ms maximum gap against a 20 ms limit):
+
+| | bytes |
+| --- | ---: |
+| lifetime peak RSS (`resources.rss.process_peak_bytes`) | 1,050,738,688 |
+| **measured-region baseline** | **1,013,219,328** |
+| **measured-region peak** | 1,050,738,688 |
+| **measured-region increment** | **37,519,360** |
+
+**The process's lifetime high-water was already set before the timer.** The peak and the baseline differ
+by 37.5 MB, which is everything the measured region adds: the Store's connection, its page cache, the
+batch buffers, the seven `SaveProfile` buckets and the tree build.
+
+### 11.2 The product's measured region is bounded, and it gets *better* per byte as the workload grows
+
+| | 10,000 (`ns21-D2`) | 100,000 (`ns21-D1`) |
+| --- | ---: | ---: |
+| canonical bytes accepted | 301,171,810 | 502,914,928 |
+| measured-region increment | **27,197,440** | **37,519,360** |
+| increment / canonical bytes | 9.03 % | **7.42 %** |
+
+A region that accumulated the content would show an increment near the canonical bytes. It shows
+**7–9 %**, and the share *falls* by 1.6 points when the content grows 1.67×, so the increment is a
+per-object and per-batch cost rather than a function of the dataset. **The product's measured memory is
+bounded**, which is what the row's 100,000-entry point was commissioned to test.
+
+### 11.3 Where the other 1,013 MB is, measured
+
+A diagnostic, `tests/namespace_memory_probe.rs`, stages the driver's own setup and reads current RSS and
+the counting allocator at each boundary. It registers no row and writes no receipt. On the same
+`Declaration::LARGE` fixture:
+
+| stage | RSS | live heap |
+| --- | ---: | ---: |
+| process start | 2,097,152 | 9,191 |
+| after `PreparedTree::prepare` (101,000 bindings) | 47,874,048 | 28,888,212 |
+| after `plan()` (100,000 files) | 57,491,456 | 32,088,212 |
+| **content store alone (109,373 objects)** | **783,859,712** | **558,532,327** |
+| real chain alone (4,221 objects) | — | 12,452,849 |
+| **chain + the 25 prefix snapshots** | — | **176,799,943** |
+
+`1,013,219,328` decomposes as:
+
+| | bytes | share of baseline |
+| --- | ---: | ---: |
+| the content store — the declared 500 MB, held in RAM | ~728,465,408 | **72 %** |
+| the driver's 25 per-batch prefix snapshots | **164,347,158** | **16 %** |
+| the prepared tree and the plan | ~55,394,304 | 5 % |
+| everything else, including the measured region | ~65 MB | 6 % |
+
+The probe reads two stages that RSS alone cannot separate, because macOS does not return freed pages to
+the OS — `heap_live` is the counting allocator's live bytes and is the honest axis for "what is still
+held": **558,516,171 live heap bytes for 502,912,427 canonical bytes** (11.1 % of envelope and hash
+overhead) after construction, and **12,452,785** for the chain alone against **176,799,943** with the 25
+prefix snapshots. The probe's `rss` column is reported as a delta from its own start for the same reason:
+its stages run after a first measurement in the same process, so their absolute RSS carries that
+measurement's freed-but-resident pages, which is why the report's §11.3 RSS column comes from a run of
+the probe with that first measurement absent.
+
+The content store's **558,532,327 live heap bytes for 500,000,000 canonical bytes** is 11.7 % of
+envelope and hash overhead over the payload — the store is not bloated, it is simply holding the whole
+fixture because the driver constructs it in memory before the timer.
+
+### 11.4 The prefix snapshots are pure waste, and the measurement would not notice their removal
+
+`prefixes` keeps one `TreeStore` snapshot per batch, and `TreeStore::absorb` **copies**
+(`providers.rs:100-107`). At 25 batches the snapshots retain **66,824 objects and 164,347,094 bytes** to
+serve a chain whose final state is 4,221 objects and 12,452,849 bytes — **14.2× the chain alone** — and
+each snapshot is a strict subset of the one after it, so 24 of the 25 are redundant.
+
+They exist for one reason: `prefixes[index]` is the reader for batch `index` in both the timed pass
+(`:984`) and the oracle replay (`:1100`), and a batch must be served the chain *as it stood before that
+batch* — measured in round 19, where handing a batch the complete chain returned
+`cycle check invalid work limit`. **That requirement is about which objects the reader may serve, not
+about holding a separate copy of them.** A provider that holds the one complete chain plus the
+`ObjectId` set of a batch's prefix serves exactly the same objects and fails the same way
+(`PairProvider` returns `ContentError::MissingObject` for anything absent, `providers.rs:302`), at
+12.5 MB instead of 176.8 MB.
+
+**This is filed as a finding with a priced fix, not applied.** Removing it would change the row's
+lifetime peak and its baseline, and therefore its binary — a fresh measurement round, not an edit.
+
+### 11.5 The honest comparison with v0.1.6, which is the reason the question was asked
+
+The reference harness does **not** hold its namespace in memory: it writes the scenario to disk through
+`NamespaceContentStream` over a `NAMESPACE_SCRATCH_BYTES = 1 MiB` buffer
+(`benchmark/fs-bench-pro/workload/main.rs:120`, `:936-948`). **Its fixture is bounded at 1 MiB; this
+harness's is 500 MB.** On the one axis where the two can be compared directly — the fixture's resident
+cost — v0.1.6's control is better by a factor of ~500, and that is a **harness** difference, not a
+product one:
+
+| | v0.1.6 reference harness | this row |
+| --- | --- | --- |
+| namespace generation | streamed to disk, 1 MiB scratch | 500 MB held in RAM |
+| the measured region's own memory | not published per region | **37.5 MB** (measured here) |
+| lifetime peak | container/cgroup figures only, workload-specific | 1.05 GB, 96 % pre-timer fixture |
+
+**No claim is made here that the replacement product's memory is better or worse than v0.1.6's.** The
+one comparable product-side figure is the measured region's 37.5 MB, which v0.1.6 does not publish for
+its `init_namespace` case at all, so the pair cannot be formed. What can be said is narrower and is
+measured: **the 1.05 GB is not the product's measured path, and the reference harness's equivalent
+fixture does not hold 500 MB in RAM.**
+
+### 11.6 The instrument did not move the row, and the row's own spread is now measurable
+
+Adding the sampler is a harness change, so the first thing to check is whether it moved anything. Three
+`pipeline-namespace-100000` runs, all `PASS` 13/13, all fifteen pins reproducing:
+
+| run | `operation_work_ns` | `accept_span_ns` | `teardown_ns` | complete command | phase increment |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `ns21-C2` (before the instrument) | 3,673,602,750 | 4,162,787,625 | 489,184,875 | 6,571,717,125 | — |
+| `ns21-D1` (with it) | — | — | — | — | 37,306,368 |
+| `ns21-E1` (with it) | 3,549,393,833 | 4,033,601,291 | 484,207,458 | 6,446,615,375 | 37,519,360 |
+
+No pinned counter moved in any of them, which is the check that matters: the sampler reads this process's
+own residency on its own thread and touches no product state. **The declared figure moved 124,208,917 ns
+(3.38 %) between C2 and E1 within one session and one binary's line of development**, `accept_span_ns`
+moved 129,186,334 ns, and `teardown_ns` moved only 4,977,417 ns — so this movement is **inside** the
+closure rather than across the row's declared boundary, which is a different shape of drift from the one
+§4a and §5 record and is worth saying precisely rather than loosely. The phase increment, by
+contrast, reproduced to **0.57 %** (37,306,368 against 37,519,360), which is what a per-object cost that
+does not depend on the window looks like.
+
+**§1's ratio of 3.99× is therefore a ratio between two single samples, not a ratio of two levels**, and
+the honest statement of the new row's position is: *the 100,000-entry row's declared figure is 3.99× the
+10,000-entry row's in this session's pair, with a within-session spread of 3.4 % on the larger row.*

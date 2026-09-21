@@ -114,3 +114,22 @@ would have to re-pin a row it did not intend to touch. Leaving them unpinned kee
 policy constant can move; the price, stated plainly, is that **the row's pins would not have caught
 round 20's arm** — that arm's movement was in exactly these two counters and in wall-clock terms that
 are never pinned. §7 of the round report carries this as a finding rather than a defect.
+
+## 6. Postscript, added after the first measurement round
+
+Two things were added to the harness **after** the runs registered above, and they are recorded here
+rather than folded into §3:
+
+1. **A measured-region RSS instrument.** The row published `resources.rss.process_peak_bytes`, which is
+   `getrusage(RUSAGE_SELF).ru_maxrss` — a lifetime high-water — so the row's 1.05 GB could not be
+   attributed to the product or to the fixture. `namespace_scale` now samples the measured closure at
+   the declared 10 ms interval and publishes the `RssBundle` the memory document requires, including the
+   bundle's own fail-closed rule. This is a **harness change**, it was made after the first round, and it
+   invalidates the earlier binary: the memory numbers in the round report §11 come from runs taken with
+   it, and the §1 headline row's memory line is labelled accordingly.
+2. **A diagnostic probe**, `tests/namespace_memory_probe.rs`, which stages the driver's own setup and
+   reads RSS and the counting allocator at each boundary. It registers no row and writes no receipt.
+
+Neither was pre-registered, because neither was foreseen: the round registered a *performance* prediction
+and the memory question was asked of it afterwards. §3's predictions stand as written and are scored as
+written in the report §7.
