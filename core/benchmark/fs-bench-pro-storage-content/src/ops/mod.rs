@@ -21,6 +21,7 @@ pub mod c2;
 pub mod fs;
 pub mod fs_fixture;
 pub mod history;
+pub mod namespace_content;
 pub mod pipeline;
 
 use std::path::{Path, PathBuf};

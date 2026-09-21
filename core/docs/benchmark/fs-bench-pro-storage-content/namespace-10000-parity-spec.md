@@ -240,6 +240,38 @@ Three constraints on the pairing, all already established:
    explicit amendment to that prohibition — including whether the resulting comparison
    is admission evidence or diagnostic.
 
+## 8b. Implementation progress (append-only; updated as work lands)
+
+| step | state | where |
+| --- | --- | --- |
+| 1. Byte plan for the 10,000-file / 300 MB fixture | **landed, 5 unit tests pass** | `core/benchmark/fs-bench-pro-storage-content/src/ops/namespace_content.rs` |
+| 2. Tree whose file inodes bind to constructed content roots | not started | — |
+| 3. `PipelineOp::NamespaceScale` driver (content → handoff → save) | not started | `src/ops/pipeline.rs` |
+| 4. `g1.o5-content-bytes` gate | not started | `src/gates.rs` |
+| 5. Registry entry `pipeline-namespace-10000` | not started | `src/families/pipeline.rs` |
+| 6. Golden pins regenerated from a passing run | not started — blocked on §8.3 | `tests/golden/` |
+
+**Step 1 detail, and one declared deviation.** The plan reproduces the v0.1.6
+fixture's five declared class counts (100 empty, 7,899 tiny, 1,500 small, 500
+medium, 1 anchor), its single 100,000,000-byte anchor, its 10,000-file / 100-directory
+shape, its tree serials (asserted equal to `fs_fixture::Recipe::prepare`'s), and its
+300,000,000-byte total — `plan()` returns an error rather than a different shape if
+those cannot be placed.
+
+It does **not** reproduce v0.1.6's per-path size assignment. v0.1.6 permutes class
+bands with a SHA-256 sort key; this harness has no SHA-256 dependency and `AGENTS.md`
+§4 forbids adding one, so the permutation uses the harness's own `fixture::noise`
+primitive instead. The arithmetic that turns band weights into sizes is the same
+largest-remainder pass, but individual paths do not receive v0.1.6's sizes. That is a
+declared difference in the plan, not in the measured work: the byte total, the file
+count, the directory count and the anchor are identical.
+
+A second finding from implementing it: v0.1.6's declared per-class ranges
+(`1..=8`, `32..=256`, `1_024..=8_192`) are **relative weight bands, not size caps**.
+Its own declared weights sum to 102,555,546 bytes and the plan is then scaled up to
+the declared logical total, so a "tiny" file there is larger than 8 bytes. Sizes here
+are therefore not confined to the bands either, which is faithful rather than slack.
+
 ## 9. Not claimed
 
 - No implementation is authorized here; no harness, product or golden file was changed.
