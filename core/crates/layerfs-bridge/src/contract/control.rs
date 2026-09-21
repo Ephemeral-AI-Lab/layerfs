@@ -1,4 +1,4 @@
-//! One daemon-targeted observation; service grants confer no control authority.
+//! Daemon-targeted control; service grants confer no control authority.
 use super::{Code, Failure, Root};
 
 pub const WORKSPACE_STATUS_PROFILE: u16 = 3;
@@ -7,6 +7,36 @@ pub const WORKSPACE_STATUS_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ID_BYTES: usize = 63;
 pub const WORKSPACE_STATUS_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 139;
+pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
+pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
+pub const WORKSPACE_UNMOUNT_REQUEST_BYTES: usize = 124;
+pub const WORKSPACE_UNMOUNT_RESULT_BYTES: usize = 100;
+
+/// An entered native attempt. Retained preserves its owner and is not unmount
+/// success; refusal before native admission uses the ordinary Failure terminal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceUnmountOutcome {
+    Unmounted,
+    Retained(Code),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceUnmountWire {
+    pub workspace: Vec<u8>,
+    pub incarnation: Root,
+    pub outcome: WorkspaceUnmountOutcome,
+}
+impl WorkspaceUnmountWire {
+    pub fn validate(&self) -> Result<(), Failure> {
+        check_workspace_identity(&self.workspace, &self.incarnation)?;
+        match self.outcome {
+            WorkspaceUnmountOutcome::Unmounted
+            | WorkspaceUnmountOutcome::Retained(
+                Code::Deadline | Code::Io | Code::Busy | Code::Unsupported,
+            ) => Ok(()),
+            _ => Err(Code::InvalidInput.into()),
+        }
+    }
+}
 
 /// A current local observation, never a receipt for an earlier operation.
 #[derive(Clone, Debug, PartialEq, Eq)]

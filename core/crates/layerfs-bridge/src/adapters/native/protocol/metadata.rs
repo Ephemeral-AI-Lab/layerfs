@@ -126,6 +126,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
     }
     let mut e = match r.operation {
         Operation::WorkspaceStatus { .. } => Encoder::bounded(WORKSPACE_STATUS_REQUEST_BYTES),
+        Operation::WorkspaceUnmount { .. } => Encoder::bounded(WORKSPACE_UNMOUNT_REQUEST_BYTES),
         Operation::UpdatePortableMetadata { .. } => {
             Encoder::bounded(PORTABLE_METADATA_REQUEST_BYTES)
         }
@@ -204,6 +205,10 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
         Operation::WorkspaceStatus {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceUnmount {
             workspace,
             incarnation,
         } => {
@@ -675,6 +680,9 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     if opcode == WORKSPACE_STATUS_OPCODE && b.len() > WORKSPACE_STATUS_REQUEST_BYTES {
         return Err(Code::Capacity.into());
     }
+    if opcode == WORKSPACE_UNMOUNT_OPCODE && b.len() > WORKSPACE_UNMOUNT_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
     if opcode == UPDATE_PORTABLE_METADATA_OPCODE && b.len() > PORTABLE_METADATA_REQUEST_BYTES {
         return Err(Code::Capacity.into());
     }
@@ -743,6 +751,10 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         6 => Operation::HistoryQuery(take_query(&mut d)?),
         7 => Operation::HistoryCommand(take_command(&mut d)?),
         WORKSPACE_STATUS_OPCODE => Operation::WorkspaceStatus {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_UNMOUNT_OPCODE => Operation::WorkspaceUnmount {
             workspace: d.blob(WORKSPACE_ID_BYTES)?,
             incarnation: d.root()?,
         },

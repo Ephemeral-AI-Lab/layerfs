@@ -7,6 +7,12 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Daemon lifecycle control:** [authenticated Unmount](27-control-unmount.md)
+adds operation-specific authority and exact target/incarnation matching through
+the existing native protocol. Its checked entered-attempt result distinguishes
+Unmounted from Retained; transport loss remains Unknown. Eight actual new daemon/Linux cases and the existing Status regression pass.
+Wider read/lifecycle/writable controls remain separate operations.
+
 **Next size operation:** [size SETATTR and truncating OPEN](26-mounted-resize.md)
 is implemented with eight new actual mounted proofs and one native API subset.
 It preserves the separate Linux post-reply completion order and failed-open handle

@@ -111,6 +111,8 @@ pub enum Response {
     /// not pay for the widest history record it can never carry.
     History(Box<HistoryResult>),
     WorkspaceStatus(Box<super::WorkspaceStatusWire>),
+    /// Inspect the outcome: a retained entered attempt is not a successful detach.
+    WorkspaceUnmount(Box<super::WorkspaceUnmountWire>),
     MetadataSaved {
         base: Root,
         kind: u8,

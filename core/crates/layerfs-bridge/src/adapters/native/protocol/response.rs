@@ -6,6 +6,7 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
     let mut e = match r {
         Response::History(_) => Encoder::bounded(HISTORY_RESULT_BYTES),
         Response::WorkspaceStatus(_) => Encoder::bounded(WORKSPACE_STATUS_RESULT_BYTES),
+        Response::WorkspaceUnmount(_) => Encoder::bounded(WORKSPACE_UNMOUNT_RESULT_BYTES),
         Response::MetadataSaved { .. } => Encoder::bounded(PORTABLE_METADATA_RESULT_BYTES),
         _ => Encoder::default(),
     };
@@ -123,6 +124,19 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u64(status.handles)?;
             e.u64(status.cookies)?;
             e.u64(status.consumer_accounted_bytes)?;
+        }
+        Response::WorkspaceUnmount(result) => {
+            result.validate()?;
+            e.u8(12)?;
+            e.blob(&result.workspace)?;
+            e.put(&result.incarnation)?;
+            match result.outcome {
+                WorkspaceUnmountOutcome::Unmounted => e.u8(0)?,
+                WorkspaceUnmountOutcome::Retained(code) => {
+                    e.u8(1)?;
+                    e.u8(code as u8)?;
+                }
+            }
         }
         Response::MetadataSaved {
             base,
@@ -524,6 +538,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     if b.first() == Some(&11) && b.len() > PORTABLE_METADATA_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
+    if b.first() == Some(&12) && b.len() > WORKSPACE_UNMOUNT_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let mut d = Decoder::new(b)?;
     let r = match d.u8()? {
         1 => Response::Read { length: d.u64()? },
@@ -610,6 +627,22 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             inserted: d.u64()?,
             reused: d.u64()?,
         },
+        12 => {
+            let workspace = d.blob(WORKSPACE_ID_BYTES)?;
+            let incarnation = d.root()?;
+            let outcome = match d.u8()? {
+                0 => WorkspaceUnmountOutcome::Unmounted,
+                1 => WorkspaceUnmountOutcome::Retained(code(d.u8()?)?),
+                _ => return Err(Code::InvalidInput.into()),
+            };
+            let result = WorkspaceUnmountWire {
+                workspace,
+                incarnation,
+                outcome,
+            };
+            result.validate()?;
+            Response::WorkspaceUnmount(Box::new(result))
+        }
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;

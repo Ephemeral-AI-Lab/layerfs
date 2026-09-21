@@ -2310,7 +2310,7 @@ fn complete_read_attributes_match_over_authenticated_transport() {
 }
 
 #[test]
-fn workspace_status_is_refused_by_service_even_with_every_store_grant() {
+fn daemon_control_is_refused_by_service_even_with_every_store_grant() {
     use layerfs_bridge::adapters::native::{
         client::Client,
         connection::{accept, connect, Peer},
@@ -2324,59 +2324,67 @@ fn workspace_status_is_refused_by_service_even_with_every_store_grant() {
         }
     }
     let fixture = fixture("status-refused", u8::MAX);
-    let request = Request {
-        id: 1,
-        generation: 0,
-        store: 0,
-        profile: WORKSPACE_STATUS_PROFILE,
-        deadline_ms: WORKSPACE_STATUS_MAX_MS,
-        response_bytes: 0,
-        operation: Operation::WorkspaceStatus {
+    for operation in [
+        Operation::WorkspaceStatus {
             workspace: b"mounted".to_vec(),
             incarnation: [4; 32],
         },
-    };
-    assert_eq!(permission_bit(request.operation.opcode()), None);
-    let failure = fixture
-        .service
-        .handle(&fixture.peer, &request, &mut Unread, &mut std::io::sink())
-        .0
-        .unwrap_err();
-    assert_eq!(failure.code, Code::Unsupported);
-    assert!(!failure.unknown);
-    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
-    let address = listener.local_addr().unwrap();
-    let public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
-    std::thread::scope(|threads| {
-        let server = threads.spawn(|| {
-            let (socket, _) = listener.accept().unwrap();
-            let connection = accept(
-                socket,
-                &[9; 32],
-                &[Peer {
-                    selector: 1,
-                    public: *fixture.peer.public_key(),
-                    expires_unix: u64::MAX,
-                }],
-            )
-            .unwrap();
-            let result = serve(connection, |peer, request, input, output, deadline| {
-                fixture
-                    .service
-                    .handle_until(peer, request, input, output, deadline)
-                    .0
-            });
-            assert_eq!(result.unwrap_err().code, Code::Unsupported);
-        });
-        let mut client = Client::new(connect(address, 1, &[7; 32], &public).unwrap()).unwrap();
-        let failure = client
-            .call(&request, &mut &[][..], &mut std::io::sink())
+        Operation::WorkspaceUnmount {
+            workspace: b"mounted".to_vec(),
+            incarnation: [4; 32],
+        },
+    ] {
+        let request = Request {
+            id: 1,
+            generation: 0,
+            store: 0,
+            profile: WORKSPACE_STATUS_PROFILE,
+            deadline_ms: WORKSPACE_STATUS_MAX_MS,
+            response_bytes: 0,
+            operation,
+        };
+        assert_eq!(permission_bit(request.operation.opcode()), None);
+        let failure = fixture
+            .service
+            .handle(&fixture.peer, &request, &mut Unread, &mut std::io::sink())
+            .0
             .unwrap_err();
         assert_eq!(failure.code, Code::Unsupported);
         assert!(!failure.unknown);
-        drop(client);
-        server.join().unwrap();
-    });
+        let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+        let address = listener.local_addr().unwrap();
+        let public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
+        std::thread::scope(|threads| {
+            let server = threads.spawn(|| {
+                let (socket, _) = listener.accept().unwrap();
+                let connection = accept(
+                    socket,
+                    &[9; 32],
+                    &[Peer {
+                        selector: 1,
+                        public: *fixture.peer.public_key(),
+                        expires_unix: u64::MAX,
+                    }],
+                )
+                .unwrap();
+                let result = serve(connection, |peer, request, input, output, deadline| {
+                    fixture
+                        .service
+                        .handle_until(peer, request, input, output, deadline)
+                        .0
+                });
+                assert_eq!(result.unwrap_err().code, Code::Unsupported);
+            });
+            let mut client = Client::new(connect(address, 1, &[7; 32], &public).unwrap()).unwrap();
+            let failure = client
+                .call(&request, &mut &[][..], &mut std::io::sink())
+                .unwrap_err();
+            assert_eq!(failure.code, Code::Unsupported);
+            assert!(!failure.unknown);
+            drop(client);
+            server.join().unwrap();
+        });
+    }
 }
 
 fn metadata_with_generic_keys(store: &Store) -> (Root, Root) {

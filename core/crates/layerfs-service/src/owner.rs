@@ -127,7 +127,10 @@ impl Service {
         self.recorder.run(r.id, r.operation.label(), |scope| {
             r.validate()?;
             // Daemon control has no Store permission bit or service admission.
-            if matches!(r.operation, Operation::WorkspaceStatus { .. }) {
+            if matches!(
+                r.operation,
+                Operation::WorkspaceStatus { .. } | Operation::WorkspaceUnmount { .. }
+            ) {
                 return Err(Code::Unsupported.into());
             }
             if Instant::now() >= deadline {

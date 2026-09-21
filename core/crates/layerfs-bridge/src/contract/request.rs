@@ -4,7 +4,7 @@ use super::{
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CURSOR_BYTES, HISTORY_PROFILE, LAYER_BYTES,
     MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE,
     STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE,
-    WORKSPACE_STATUS_PROFILE,
+    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_MAX_MS, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -85,6 +85,11 @@ pub enum Operation {
         workspace: Vec<u8>,
         incarnation: Root,
     },
+    /// Authenticated daemon lifecycle mutation; no Store or history mutation.
+    WorkspaceUnmount {
+        workspace: Vec<u8>,
+        incarnation: Root,
+    },
     /// Saves an updated attribute tree; does not attach it to an inode or Branch.
     UpdatePortableMetadata {
         base: Root,
@@ -143,6 +148,7 @@ impl Operation {
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
             Self::WorkspaceStatus { .. } => WORKSPACE_STATUS_OPCODE,
+            Self::WorkspaceUnmount { .. } => WORKSPACE_UNMOUNT_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
         }
     }
@@ -156,10 +162,11 @@ impl Operation {
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
             Self::WorkspaceStatus { .. } => "WorkspaceStatus",
+            Self::WorkspaceUnmount { .. } => "WorkspaceUnmount",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
         }
     }
-    /// True for an operation that changes no persistent state.
+    /// True for an operation that changes neither stored nor daemon lifecycle state.
     pub const fn read_only(&self) -> bool {
         match self {
             Self::ReadFile { .. }
@@ -170,6 +177,7 @@ impl Operation {
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
+            | Self::WorkspaceUnmount { .. }
             | Self::HistoryCommand(_) => false,
         }
     }
@@ -189,6 +197,7 @@ impl Operation {
             Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::WorkspaceStatus { .. }
+            | Self::WorkspaceUnmount { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::Fork { .. }
@@ -216,6 +225,7 @@ impl Operation {
             Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::WorkspaceStatus { .. }
+            | Self::WorkspaceUnmount { .. }
             | Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
@@ -229,9 +239,10 @@ impl Operation {
         }
     }
 
-    /// True for any operation that intends a persistent change.
+    /// True for any stored-state or daemon lifecycle mutation. Lost delivery
+    /// cannot establish that such an operation was refused or had no effect.
     pub const fn mutation(&self) -> bool {
-        self.content_mutation() || self.metadata_mutation()
+        !self.read_only()
     }
     pub fn input_length(&self) -> Result<u64, Failure> {
         match self {
@@ -248,7 +259,9 @@ impl Request {
         let invalid = || Failure::from(Code::InvalidInput);
         let profile = match &self.operation {
             Operation::HistoryQuery(_) | Operation::HistoryCommand(_) => HISTORY_PROFILE,
-            Operation::WorkspaceStatus { .. } => WORKSPACE_STATUS_PROFILE,
+            Operation::WorkspaceStatus { .. } | Operation::WorkspaceUnmount { .. } => {
+                WORKSPACE_STATUS_PROFILE
+            }
             _ => 1,
         };
         if self.profile != profile {
@@ -275,12 +288,21 @@ impl Request {
             Operation::WorkspaceStatus {
                 workspace,
                 incarnation,
+            }
+            | Operation::WorkspaceUnmount {
+                workspace,
+                incarnation,
             } => {
                 super::control::check_workspace_identity(workspace, incarnation)?;
+                let maximum = if matches!(self.operation, Operation::WorkspaceUnmount { .. }) {
+                    WORKSPACE_UNMOUNT_MAX_MS
+                } else {
+                    WORKSPACE_STATUS_MAX_MS
+                };
                 if self.store != 0
                     || self.generation != 0
                     || self.response_bytes != 0
-                    || self.deadline_ms > WORKSPACE_STATUS_MAX_MS
+                    || self.deadline_ms > maximum
                 {
                     return Err(invalid());
                 }

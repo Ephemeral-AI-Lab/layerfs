@@ -1335,3 +1335,16 @@ The single-attempt token becomes ProjectionMutationPermit for WRITE and size;
 no SDK invalidator runs inside the size callback while NOWRITE is held. Eight new mounted cases and one native-origin case pass with28 affected
 regressions, as recorded in26. Wider daemon management and retained kernel-profile
 qualification limits remain open.
+
+### R1-C authenticated Unmount
+
+[27 — Daemon Unmount](27-control-unmount.md), implementation parent
+`451a1f6bdda00482a528659489c8e4d053677e01`, selects one lifecycle mutation on
+existing profile3/opcode10. The exact result identity distinguishes pre-admission
+Failure, entered Retained outcome and checked Unmounted completion. Main/control
+share the retained native handle without a waiting queue; signal cleanup joins
+control first and preserves process/owners on an incomplete attempt. The original
+wire deadline includes100ms reserved terminal headroom, without syscall preemption
+or automatic replay. Eight new actual daemon control cases and the Status regression pass, with
+proof/check/LOC records in27; no writable management or full Pair1 qualification
+is inferred.

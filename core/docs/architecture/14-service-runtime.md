@@ -501,3 +501,20 @@ attempt, and unsupported non-size fields are refused. ATOMIC_O_TRUNC remains off
 so the existing OPEN refusal checks precede the separate truncate request.
 Actual verification/accounting status is recorded in26; daemon writable controls
 and the previous cached-size/RWF limitations remain separate.
+
+The R1-C lifecycle extension is implemented against parent
+`451a1f6bdda00482a528659489c8e4d053677e01` in
+[authenticated Unmount](proposal/fuse-workspace-snapshot-overlay/27-control-unmount.md).
+Bridge owns WorkspaceUnmount opcode10/profile3, a bounded100-byte tag12 result,
+exact identity validation and lifecycle mutation/Unknown classification. The
+result distinguishes Unmounted and entered-but-Retained; pre-admission refusal
+uses the existing Failure terminal. Service explicitly rejects it before Store
+lookup/admission and assigns it no Store permission bit. Daemon grants preserve
+Status bit1 and add Unmount bit2; keys and expiry remain independent of service
+authority. One Arc<Mutex<MountHandle>> shares native lifecycle ownership with
+main; control uses immediate try_lock, keeps Status independent and reserves100ms
+inside the original deadline for terminal delivery. No queue, worker, Source
+protocol or Workspace algorithm changes. Signal cleanup joins control first;
+incomplete cleanup retains the process/owners until another explicit signal.
+The startup profile stays read-only; wider Attach/Close/edit/Commit controls are
+not implemented by this extension. Actual results and qualifications are in27.

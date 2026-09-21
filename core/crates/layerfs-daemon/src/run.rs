@@ -10,7 +10,7 @@ use layerfs_bridge::{
 use layerfs_workspace::{OperationDelivery, WorkspaceHost};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
+    sync::{Arc, Mutex, TryLockError},
     time::{Duration, Instant},
 };
 
@@ -93,8 +93,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let incarnation = launch.attach.incarnation;
     let host = WorkspaceHost::new(launch.config, delivery)?;
     let workspace = host.attach(launch.attach, Instant::now() + Duration::from_secs(10))?;
-    let mut mount = match layerfs_fuse::mount(&workspace, Instant::now() + Duration::from_secs(10))
-    {
+    let mount = match layerfs_fuse::mount(&workspace, Instant::now() + Duration::from_secs(10)) {
         Ok(mount) => mount,
         Err(error) => {
             // A failed mount may still own resources. close_clean refuses that
@@ -105,6 +104,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             return Err(error.into());
         }
     };
+    let mount = Arc::new(Mutex::new(mount));
     let mut control = match control_config.zip(control_listener) {
         Some((config, (listener, address))) => {
             match crate::control::Control::start(
@@ -113,6 +113,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 control_private,
                 workspace.clone(),
                 incarnation,
+                Arc::clone(&mount),
             ) {
                 Ok(control) => {
                     pipe::diagnostic(&format!("workspace control ready {address}\n"));
@@ -120,14 +121,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(error) => {
                     let deadline = Instant::now() + Duration::from_secs(10);
-                    if let Err(cleanup) = mount.unmount(deadline) {
-                        pipe::diagnostic(&format!(
-                            "control startup mount cleanup retained: {cleanup}\n"
-                        ));
-                    } else if let Err(cleanup) = workspace.close_clean_until(deadline) {
-                        pipe::diagnostic(&format!(
-                            "control startup Workspace cleanup retained: {cleanup}\n"
-                        ));
+                    match mount.try_lock() {
+                        Ok(mut mount) => {
+                            if let Err(cleanup) = mount.unmount(deadline) {
+                                pipe::diagnostic(&format!(
+                                    "control startup mount cleanup retained: {cleanup}\n"
+                                ));
+                            } else if let Err(cleanup) = workspace.close_clean_until(deadline) {
+                                pipe::diagnostic(&format!(
+                                    "control startup Workspace cleanup retained: {cleanup}\n"
+                                ));
+                            }
+                        }
+                        Err(cleanup) => pipe::diagnostic(&format!(
+                            "control startup mount owner retained: {cleanup}\n"
+                        )),
                     }
                     return Err(error.into());
                 }
@@ -139,14 +147,34 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         "workspace ready {}\n",
         workspace.mount_path().display()
     ));
-    let signal = signals.wait();
-    let deadline = Instant::now() + Duration::from_secs(10);
-    if let Some(control) = &mut control {
-        control.stop(deadline)?;
+    loop {
+        if let Err(error) = signals.wait() {
+            pipe::diagnostic(&format!("signal wait retained: {error}\n"));
+            continue;
+        }
+        // Each explicit signal admits one checked cleanup attempt. An incomplete
+        // attempt retains the process and owners until another signal arrives.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let cleanup = (|| -> Result<(), Box<dyn std::error::Error>> {
+            if let Some(control) = &mut control {
+                control.stop(deadline)?;
+            }
+            // Control must have joined before native mount cleanup can begin.
+            let mut owner = mount.try_lock().map_err(|error| match error {
+                TryLockError::WouldBlock => Failure::from(Code::Busy),
+                TryLockError::Poisoned(_) => Failure::from(Code::Io),
+            })?;
+            owner.unmount(deadline)?;
+            drop(owner);
+            workspace.close_clean_until(deadline)?;
+            Ok(())
+        })();
+        match cleanup {
+            Ok(()) => {
+                pipe::diagnostic("workspace closed\n");
+                return Ok(());
+            }
+            Err(error) => pipe::diagnostic(&format!("workspace shutdown retained: {error}\n")),
+        }
     }
-    mount.unmount(deadline)?;
-    workspace.close_clean_until(deadline)?;
-    pipe::diagnostic("workspace closed\n");
-    signal?;
-    Ok(())
 }

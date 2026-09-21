@@ -24,7 +24,9 @@ pub(crate) fn dispatch(
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
     match &r.operation {
-        Operation::WorkspaceStatus { .. } => Err(Code::Unsupported.into()),
+        Operation::WorkspaceStatus { .. } | Operation::WorkspaceUnmount { .. } => {
+            Err(Code::Unsupported.into())
+        }
         Operation::HistoryQuery(query) => {
             end_input(input)?;
             history::query(catalog.ok_or(Code::Unsupported)?, query, store)

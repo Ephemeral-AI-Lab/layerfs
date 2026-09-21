@@ -93,13 +93,13 @@ pub(crate) struct WorkspaceLaunch {
 pub(crate) struct ControlConfig {
     pub listen: std::net::SocketAddr,
     pub peers: Vec<layerfs_bridge::adapters::native::connection::Peer>,
-    pub grants: Vec<StatusGrant>,
+    pub grants: Vec<ControlGrant>,
 }
 
-pub(crate) struct StatusGrant {
+pub(crate) struct ControlGrant {
     pub public: [u8; 32],
     pub expires_unix: u64,
-    pub status: bool,
+    pub operations: u8,
 }
 
 /// A separate daemon-targeted authority. Neither service grants nor a
@@ -146,7 +146,7 @@ pub(crate) fn control(
             .parse::<u8>()
             .map_err(|_| Code::InvalidInput)?;
         if fields.next().is_some()
-            || operations > 1
+            || operations & !3 != 0
             || peers
                 .iter()
                 .any(|peer: &Peer| peer.selector == selector || peer.public == public)
@@ -158,10 +158,10 @@ pub(crate) fn control(
             public,
             expires_unix,
         });
-        grants.push(StatusGrant {
+        grants.push(ControlGrant {
             public,
             expires_unix,
-            status: operations == 1,
+            operations,
         });
     }
     Ok(Some(ControlConfig {
