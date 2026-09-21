@@ -82,7 +82,8 @@ the receipt (`build_mode`, `dependency_reuse`, `clone_method`,
   lifecycle + cleanup) is **≤ 15 s**; a small declared exception list may take up to
   **25 s** (the 500 MiB and 25k members are the usual candidates). Declare the
   exception with the measured wall time in the report — no sign-off blocks the run.
-- Verification typically stays **under 15 s**, within a **60 s hard budget**.
+- Verification stays **under 10 s**, and typically takes a fraction of a second.
+  There is no 60 s allowance to grow into.
 - A selection that cannot fit is either reused from a qualifying receipt with its
   evidence cited, or recorded as `NOT_RUN` with its measured wall time and the reason.
   Never move work outside the timer, enlarge a timeout, or reduce the workload to fit.
@@ -106,6 +107,10 @@ What the harness already enforces, and where an agent must not fight it:
   cache stance; pin every identity; verify separately with those identities; and
   append the exact numbers, limits, arithmetic and reproduction command to the
   active ledger, including every non-passing line.
+- **Do not sample.** No repeat of an arm to confirm stability, characterise spread
+  or replace an inconvenient number, and no iterative verify/test loop. Diagnose an
+  anomaly from the receipts already taken, or with a labelled diagnostic that
+  measures the cause on a count-driven instrument. See root `AGENTS.md` §3.1.
 
 Worked example: `#151` B2 (ledger L18) — a 500 MiB payload written through FUSE
 was read back inside the measured Commit, so the transfer looked like 19 GB/s and

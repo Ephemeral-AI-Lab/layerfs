@@ -101,16 +101,38 @@ the report.
 
 ## 3. Running a measurement
 
-1. One sample per case per arm unless an owner-approved campaign says otherwise.
-   No n3 and no best-of selection. Diagnostics are allowed and MUST be labelled
-   as diagnostics and reported alongside the gate sample.
+1. **One sample per case per arm, and do not sample.** No n3, no best-of
+   selection, and no second run of an arm to confirm stability, to characterise
+   spread, or to replace a number that came out inconveniently. **Sampling is not
+   the method here and it is not free.** A row's spread is a property of the
+   machine and the window rather than of the code — the campaign's own record has
+   the same executable reading 16.7 s, 17.6 s and 26.0 s in three windows, and
+   this lane's own row carries a teardown term that swings 6.7-469.9 ms on
+   identical source — so repeating an arm buys a wider distribution, not a truer
+   number, while costing the wall time the work itself needed.
+
+   An anomaly is therefore diagnosed **from the receipts already taken**, or with
+   a **labelled diagnostic that measures the cause**: a count-driven instrument
+   (statements issued, calls made, bytes written, microseconds per call) that is
+   reproducible across rows, never another sample of the same arm. Diagnostics
+   are allowed and MUST be labelled as diagnostics and reported alongside the gate
+   sample. The one carve-out is the #118 material-regression rule for ordinary
+   regression screens (`docs/general/benchmark_rules.md`), which is a different
+   activity — screening a tree for a slowdown by median of prospectively declared
+   pairs — and is not a licence to repeat a treatment arm.
 2. Fresh `--output` path per run; receipts are append-only evidence and are never
    overwritten. Failures, `INELIGIBLE` rows and discarded attempts stay on disk.
 3. Pin identities: source commit/seal/tree, product, compilation and dependency
    seals, image ID, harness identity, workload-source hash. A rebuilt artifact
    needs a rebuilt matched arm; a harness change invalidates the pair.
 4. Verify separately, in verification mode, with the exact identities from the
-   performance receipt. A performance PASS is not release admission.
+   performance receipt. A performance PASS is not release admission. **Verify
+   once, with the commands that cover the change; do not verify or test
+   iteratively.** Re-running a suite in a loop to watch it turn green is not a
+   verification method: a red test is diagnosed from its output and the source,
+   the fix is applied once, and the covering commands then run once. A change
+   that needs a second verification pass to be believable was not verified the
+   first time.
 5. Respect the measurement lock: never overlap resource-sensitive work, never
    interrupt another owner's run.
 6. Record it: append an entry to the active ledger
@@ -123,8 +145,14 @@ the report.
    sample is forbidden. A performance selection's **complete command** (product
    timer + container lifecycle + cleanup) is **≤ 15 s**, with a small, declared
    exception list allowed up to **25 s** (declare it in the group report with the
-   measured wall time; no sign-off blocks the run). Verification is typically
-   **under 15 s** within a **60 s hard budget**. A selection that cannot fit is
+   measured wall time; no sign-off blocks the run). **Verification is small:
+   under 10 s, and typically a fraction of a second** — a row that spends more
+   than that on verification is spending it on something other than the question,
+   and there is no 60 s allowance to grow into. For scale: the
+   `pipeline-namespace-10000` row's complete command is **3.1-4.8 s** (a 300 MB
+   namespace written into a 302 MB Store, one sample) with verification at
+   **0.33-0.36 s**, so a case of that shape has no reason to approach the limit.
+   A selection that cannot fit is
    reused from a qualifying receipt with its evidence cited, or recorded as `NOT_RUN`
    with the measured wall time and the reason — never made to fit by moving work
    outside the timer, enlarging a timeout, or shrinking the workload.

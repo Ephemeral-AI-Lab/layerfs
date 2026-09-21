@@ -2616,3 +2616,19 @@ Status: **Shipped** in `21f09c4d7`, on top of L64's `755bfa21f`. [Report and pro
 Checks as run: `cargo test -p layerfs-storage` **33 binaries, 0 failed**; the whole core workspace `--no-fail-fast` **108 `test result: ok`, 0 failed, exit 0**; `clippy --all-targets` clean; `fmt --check` clean. **Not run and said so:** the reference `crates/` workspace's tests, any other harness case or lane, any durability run, and a pair-latency probe.
 
 Production LOC: **31318 → 31371 (delta +53)**; core 31371, reference 65417, combined 96793. Method `tools/production_loc.py`, first parent `755bfa21f` against the committed tree.
+
+## L66 — owner direction, 2026-09-21: do not sample, and keep verification small (2026-09-21)
+
+Status: **Rule change**, recorded and applied to `AGENTS.md` §3.1, §3.4, §3.7 and `benchmark/AGENTS.md` (Budgets, per-sample checklist). No product or harness line changed.
+
+**The direction.** Do not sample. Do not verify or test iteratively. Keep the verification budget small.
+
+**What the rule now says, and why it is a rule rather than a preference.** `AGENTS.md` §3.1 now forbids a second run of an arm **to confirm stability, to characterise spread, or to replace an inconvenient number** — beyond the n3/best-of prohibition that was already there — and says why: a row's spread is a property of the machine and the window, not of the code. This lane produced the evidence for that in the same session: **L62**'s archived executable read 16.739 s, 17.550 s and 26.021 s in three windows with no code change, and **L65**'s teardown term swung **6.7 → 469.9 ms on identical source**, while the row's non-teardown part drifted **+226 ms in 13 minutes**. Repeating an arm therefore buys a wider distribution rather than a truer number, and costs the wall time the work itself needed. An anomaly is diagnosed **from the receipts already taken** or with a **labelled diagnostic that measures the cause on a count-driven instrument** (statements issued, calls made, bytes written, µs per call) — never with another sample of the same arm. The one carve-out is the **#118 material-regression rule** for ordinary regression screens, which is a different activity — screening a tree for a slowdown by a prospectively declared median of pairs — and is not a licence to repeat a treatment arm.
+
+**Verification is now "once, with the commands that cover the change"** (§3.4): a red test is diagnosed from its output and the source, the fix is applied once, and the covering commands then run once. Re-running a suite in a loop to watch it turn green is not a verification method.
+
+**And the verification budget is small** (§3.7, `benchmark/AGENTS.md`): **under 10 s, typically a fraction of a second**, replacing "typically under 15 s within a 60 s hard budget". There is no 60 s allowance to grow into. The anchor is measured rather than asserted: `pipeline-namespace-10000`'s complete command is **3.1-4.8 s** for a 300 MB namespace written into a 302 MB Store, one sample, with verification at **0.33-0.36 s** (`ns19-T1c-final-…`, `ns19-D3b-fields-…`, `ns19-D4b-formula-…`).
+
+**What this changes for the work in flight.** The two places this lane was tempted to sample are now closed by rule: the release transient (bounded from six rows already on disk rather than by a seventh) and the ~27 ms query fix that was reverted as unmeasurable rather than re-run until it looked like a win.
+
+Production LOC: **31371 → 31371 (delta 0)**. Documentation only; `AGENTS.md`, `benchmark/AGENTS.md` and the ledger are not product source. Method `tools/production_loc.py --root <tree>`, first parent `a35d9aa3a` against the committed tree.
