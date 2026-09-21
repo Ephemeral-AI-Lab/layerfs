@@ -10,6 +10,7 @@ pub(crate) fn errno(error: WorkspaceError) -> Errno {
         WorkspaceError::Busy => Errno::EBUSY,
         WorkspaceError::Closed => Errno::ENODEV,
         WorkspaceError::NotFound => Errno::ENOENT,
+        WorkspaceError::Exists => Errno::EEXIST,
         WorkspaceError::NotDirectory => Errno::ENOTDIR,
         WorkspaceError::IsDirectory => Errno::EISDIR,
         WorkspaceError::WrongKind => Errno::EINVAL,

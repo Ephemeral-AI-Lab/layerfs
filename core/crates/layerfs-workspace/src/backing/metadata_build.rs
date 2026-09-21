@@ -21,7 +21,11 @@ impl RootOwner {
         let mut previous: Option<Cell> = None;
         while let Some(cell) = next(window)? {
             total += 1;
-            if total > 256 || previous.as_ref().is_some_and(|old| old.key() >= cell.key()) {
+            if total > 256
+                || cell.key_len > 17
+                || !matches!(cell.key()[0], b'D' | b'I' | b'N')
+                || previous.as_ref().is_some_and(|old| old.key() >= cell.key())
+            {
                 return Err(WorkspaceError::Io);
             }
             if cells.len() == MAX_CELLS || body + cell.size() > PAGE - HEADER {

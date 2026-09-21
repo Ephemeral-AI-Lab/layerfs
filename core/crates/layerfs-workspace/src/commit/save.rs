@@ -1,5 +1,5 @@
 //! Explicit staging; file saves, filesystem construction and C5 acknowledgement stay distinct.
-use super::source::ReplacementSource;
+use super::{lower::Dirty, source::ReplacementSource};
 use crate::{
     overlay::snapshot::{SavedInode, Submission},
     *,
@@ -41,6 +41,11 @@ impl Workspace {
             if count == captured.count {
                 return Err(WorkspaceError::Io);
             }
+            let Dirty::File(inode) = inode else {
+                after = serial;
+                count += 1;
+                continue;
+            };
             submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
             let plan = self.lower_file(submission, inode, deadline)?;
             let content = if plan.edits.is_empty() {
@@ -151,11 +156,16 @@ impl Workspace {
         if count != captured.count {
             return Err(WorkspaceError::Io);
         }
+        if first_remote.is_none() {
+            *first_remote = Some(self.begin(true, deadline)?);
+        }
         let inodes = self.prepared_inodes(submission, deadline)?;
+        let (directories, new_directories, directory_metadata) =
+            self.prepared_directories(submission, deadline)?;
         let context = &captured.context;
         let changes = PreparedChanges {
-            directory_metadata: Vec::new(),
-            new_directories: Vec::new(),
+            directory_metadata,
+            new_directories,
             workspace: self.inner.incarnation,
             branch: context.branch.branch,
             expected_head: context.branch.head_commit,
@@ -164,9 +174,22 @@ impl Workspace {
             base: context.effective_root,
             scope: context.scope,
             root_serial: context.root_serial.ok_or(WorkspaceError::Io)?,
-            directories: Vec::new(),
+            directories,
             inodes,
         };
+        let header = if changes.expected_head.is_some() {
+            228
+        } else {
+            195
+        };
+        let expected = header
+            + 73 * changes.inodes.len()
+            + 34 * captured.directories
+            + captured.name_bytes
+            + usize::from(captured.directories > 0) * 5;
+        if expected > layerfs_bridge::contract::METADATA_BYTES {
+            return Err(WorkspaceError::Io);
+        }
         Ok(changes)
     }
     fn stage_captured(
@@ -174,17 +197,21 @@ impl Workspace {
         submission: &Submission,
         deadline: Instant,
     ) -> Result<StageSelector, WorkspaceError> {
-        let changes = self.prepare_changes(submission, deadline, &mut None)?;
+        let mut first_remote = None;
+        let changes = self.prepare_changes(submission, deadline, &mut first_remote)?;
         let captured = submission.capture()?;
         submission.phase(StagePhase::StageChanges, None)?;
-        let response = self.deliver(
-            captured.generation,
+        let remote = first_remote.take().ok_or(WorkspaceError::Io)?;
+        let response = self.host.call_input(
+            (self.inner.store, captured.generation),
             Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
             &mut &[][..],
             HISTORY_RESULT_BYTES as u64,
             &mut std::io::sink(),
             deadline,
-        )?;
+        );
+        drop(remote);
+        let response = response?;
         let Response::History(result) = response else {
             return Err(WorkspaceError::InvalidInput);
         };

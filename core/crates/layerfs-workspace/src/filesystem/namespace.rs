@@ -2,7 +2,7 @@ use crate::{
     runtime::state::{Node, NODE_LIMIT, PATH_BYTES},
     *,
 };
-use layerfs_bridge::contract::{Inspect, Operation, Response, Root};
+use layerfs_bridge::contract::{Response, Root};
 use std::time::Instant;
 
 pub(crate) fn attributes(
@@ -103,7 +103,8 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<NodeAttributes, WorkspaceError> {
         let deadline = Self::callback_deadline(deadline);
-        let _operation = self.begin(true, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
+        operation.local_io()?;
         let (path, base, baseline, revision, root) = {
             let state = self.state()?;
             if scope == ReferenceScope::Projection && !state.mounted {
@@ -115,25 +116,23 @@ impl Workspace {
             }
             check_access(parent.attr, self.inner.root.uid, 1)?;
             (
-                child_path(parent.path(), name)?,
+                parent.path().to_vec(),
                 state.base,
                 state.baseline,
                 state.revision,
                 state.overlay.clone(),
             )
         };
-        let response = self.call(
-            Operation::Inspect {
-                root: base,
-                query: Inspect::Attributes { path: path.clone() },
-            },
-            0,
-            &mut std::io::sink(),
-            deadline,
-        )?;
-        let (original, content, metadata) =
-            attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
-        let attr = self.overlay_attributes(original, root.as_ref(), deadline)?;
+        let view = super::namespace_view::View { base, root };
+        let resolved = self.resolve_child(&mut operation, &view, parent, &path, name, deadline)?;
+        let super::namespace_view::Resolved {
+            original,
+            attr,
+            content,
+            metadata,
+            canonical,
+        } = resolved;
+        let path = child_path(&path, name)?;
         let mut state = self.state()?;
         if state.revision != revision || state.baseline != baseline {
             return Err(WorkspaceError::Busy);
@@ -143,7 +142,8 @@ impl Workspace {
             .iter_mut()
             .find(|node| node.attr.serial == attr.serial)
         {
-            if node.baseline == baseline
+            if canonical
+                && node.baseline == baseline
                 && (node.original != original
                     || node.content != content
                     || node.metadata != metadata)
@@ -156,7 +156,7 @@ impl Workspace {
             node.original = original;
             node.content = content;
             node.metadata = metadata;
-            node.baseline = baseline;
+            node.baseline = if canonical { baseline } else { 0 };
             node.attr = attr;
             let references = node.references(scope);
             *references = references.checked_add(1).ok_or(WorkspaceError::Capacity)?;
@@ -166,7 +166,7 @@ impl Workspace {
             }
             let mut node = Node::new(original, content, metadata, &path, parent);
             node.attr = attr;
-            node.baseline = baseline;
+            node.baseline = if canonical { baseline } else { 0 };
             *node.references(scope) = 1;
             state.nodes.push(node);
         }

@@ -2,6 +2,7 @@
 
 > **Status: implemented and verified in the declared functional scope; target v0.1.7, not released.**
 > Implementation parent: `8e01d28a1c8b7708f5d319990c1440ae682f8b44`.
+> Implementation commit: `85582e1ac2fb75761897115ec9679c59439b1efe`; [exact staged-tree confirmation](evidence/prepared-directories/commit-confirmed.json).
 > Frozen product input seal: `e635d6cc772adddf07d4908d1cde5ef0229b0ad4f78ee98ad74ca3c12d9acc75`.
 
 Native mkdir needs the shared Service to construct canonical directory pages and

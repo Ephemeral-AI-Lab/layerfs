@@ -46,6 +46,9 @@ pub(crate) struct State {
     pub generation: u64,
     pub revision: u64,
     pub dirty_inodes: usize,
+    pub dirty_directories: usize,
+    pub directory_names: usize,
+    pub directory_bytes: usize,
     pub handles: Vec<Handle>,
     pub cookies: Vec<Cookie>,
     pub next_handle: u64,
@@ -69,7 +72,7 @@ pub(crate) struct Node {
     pub projection_lookups: u64,
     pub handles: usize,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Handle {
     pub id: u64,
     pub serial: u64,
@@ -77,6 +80,9 @@ pub(crate) struct Handle {
     pub scope: ReferenceScope,
     pub options: FileOpenOptions,
     pub ready: bool,
+    // The handle pins this view and its Node. Native namespace edits only add
+    // names, so the pinned Node path remains the exact immutable locator.
+    pub view: Option<crate::filesystem::namespace_view::View>,
 }
 pub(crate) struct Cookie {
     pub id: u64,
@@ -143,8 +149,38 @@ impl State {
         self.handles
             .iter()
             .find(|handle| handle.id == id && handle.directory == directory && handle.ready)
-            .copied()
+            .cloned()
             .ok_or(WorkspaceError::BadHandle)
+    }
+    pub fn frontier_bytes(
+        &self,
+        dirty: usize,
+        directories: usize,
+        names: usize,
+        bytes: usize,
+    ) -> Result<usize, WorkspaceError> {
+        if dirty > 128 || directories > dirty || names > 128 {
+            return Err(WorkspaceError::Capacity);
+        }
+        let header = if self.submission.is_some()
+            || self
+                .branch
+                .as_ref()
+                .is_some_and(|branch| branch.branch.head_commit.is_some())
+        {
+            228
+        } else {
+            195
+        };
+        let total = header
+            + 73 * (dirty - directories)
+            + 34 * directories
+            + bytes
+            + usize::from(directories > 0) * 5;
+        if total > layerfs_bridge::contract::METADATA_BYTES {
+            return Err(WorkspaceError::Capacity);
+        }
+        Ok(total)
     }
     pub fn collect(&mut self, root: u64) {
         self.nodes.retain(|node| {
@@ -221,25 +257,6 @@ impl Workspace {
         self.host
             .call(self.inner.store, operation, bytes, output, deadline)
     }
-    pub(crate) fn deliver(
-        &self,
-        generation: u64,
-        operation: Operation,
-        input: &mut dyn layerfs_bridge::contract::Source,
-        bytes: u64,
-        output: &mut dyn Write,
-        deadline: Instant,
-    ) -> Result<Response, WorkspaceError> {
-        let _remote = self.begin(true, deadline)?;
-        self.host.call_input(
-            (self.inner.store, generation),
-            operation,
-            input,
-            bytes,
-            output,
-            deadline,
-        )
-    }
     pub(crate) fn callback_deadline(deadline: Instant) -> Instant {
         deadline.min(Instant::now() + Duration::from_secs(10))
     }
@@ -270,10 +287,21 @@ impl Workspace {
         state.node_mut(handle.serial)?.handles -= 1;
         state.cookies.retain(|cookie| cookie.handle != id);
         state.collect(self.inner.root.serial);
+        drop(state);
+        drop(handle);
         Ok(())
     }
 }
 impl OperationGuard {
+    pub fn local_io(&mut self) -> Result<(), WorkspaceError> {
+        self._charge.resize(CALL_SCRATCH)
+    }
+    pub fn release_remote(&mut self) {
+        if self.remote {
+            self.remote = false;
+            self.workspace.host.remote.store(false, Ordering::Release);
+        }
+    }
     pub fn remote(&mut self) -> Result<(), WorkspaceError> {
         if self.remote {
             return Ok(());

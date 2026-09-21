@@ -34,31 +34,29 @@ impl PageRef {
 }
 #[derive(Clone)]
 pub struct Cell {
-    key: [u8; 17],
-    value: [u8; 160],
+    bytes: [u8; 272],
     pub key_len: usize,
     pub value_len: usize,
 }
 impl Cell {
     pub fn new(key: &[u8], value: &[u8]) -> Result<Self, WorkspaceError> {
-        if key.is_empty() || key.len() > 17 || value.len() > 160 {
+        if key.is_empty() || key.len() > 256 || value.len() > 160 || key.len() + value.len() > 272 {
             return Err(WorkspaceError::Io);
         }
         let mut c = Self {
-            key: [0; 17],
-            value: [0; 160],
+            bytes: [0; 272],
             key_len: key.len(),
             value_len: value.len(),
         };
-        c.key[..key.len()].copy_from_slice(key);
-        c.value[..value.len()].copy_from_slice(value);
+        c.bytes[..key.len()].copy_from_slice(key);
+        c.bytes[key.len()..key.len() + value.len()].copy_from_slice(value);
         Ok(c)
     }
     pub fn key(&self) -> &[u8] {
-        &self.key[..self.key_len]
+        &self.bytes[..self.key_len]
     }
     pub fn value(&self) -> &[u8] {
-        &self.value[..self.value_len]
+        &self.bytes[self.key_len..self.key_len + self.value_len]
     }
     pub fn size(&self) -> usize {
         4 + self.key_len + self.value_len
@@ -191,4 +189,19 @@ pub fn result_key(inode: u64) -> [u8; 9] {
     let mut key = [b'R'; 9];
     key[1..].copy_from_slice(&inode.to_be_bytes());
     key
+}
+
+pub fn namespace_key(inode: u64) -> [u8; 9] {
+    let mut key = [b'N'; 9];
+    key[1..].copy_from_slice(&inode.to_be_bytes());
+    key
+}
+pub fn entry_key(name: &[u8]) -> Result<Vec<u8>, WorkspaceError> {
+    if name.len() > 255 {
+        return Err(WorkspaceError::InvalidInput);
+    }
+    let mut key = super::metadata_index::vector(name.len() + 1)?;
+    key.push(b'E');
+    key.extend_from_slice(name);
+    Ok(key)
 }

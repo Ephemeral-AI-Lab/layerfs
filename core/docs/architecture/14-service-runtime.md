@@ -614,3 +614,16 @@ envelope remains 32768 bytes. Empty extensions preserve legacy bytes.
 [Round 38](proposal/fuse-workspace-snapshot-overlay/38-prepared-directories.md)
 records the exact encoding, ownership, verification state and remaining namespace
 work. This extends the earlier existing-identity-only prepared surface.
+
+
+The native mkdir extension after source commit
+`85582e1ac2fb75761897115ec9679c59439b1efe` adds backed generation-local directory
+records and name deltas to Workspace's existing COW arena. Lookup consults that
+state before immutable Service data; directory handles pin their view. Creation
+uses one exact-scope C5 reservation, then atomically publishes child, binding,
+parent metadata and generation accounting. Capture/lowering/reconciliation use
+the existing prepared Service operation and retain D1 entry roots. Files and
+directories share complete-request admission; namespace scratch remains charged
+while remote admission is released between RPCs. [Round39](proposal/fuse-workspace-snapshot-overlay/39-native-mkdir.md)
+records checked bounds and native proofs. Native mkdir still refuses mounted
+mutation; kernel entry notification and the FUSE mkdir callback remain next.

@@ -5,6 +5,7 @@ use crate::{
         metadata_pages::{self, Cell},
     },
     overlay::{
+        directories::{Directory, Origin},
         pieces::{get, Inode, PieceKind},
         snapshot::Submission,
     },
@@ -12,6 +13,10 @@ use crate::{
 };
 use layerfs_bridge::contract::{Edit, InodeChange};
 use std::time::Instant;
+pub(crate) enum Dirty {
+    File(Inode),
+    Directory(Directory),
+}
 pub struct FilePlan {
     pub inode: Inode,
     pub edits: Vec<Edit>,
@@ -22,7 +27,7 @@ impl Workspace {
         submission: &Submission,
         after: u64,
         deadline: Instant,
-    ) -> Result<Option<(u64, Inode)>, WorkspaceError> {
+    ) -> Result<Option<(u64, Dirty)>, WorkspaceError> {
         let captured = submission.capture()?;
         if captured.count == 0 {
             return Ok(None);
@@ -52,24 +57,39 @@ impl Workspace {
         if serial <= after {
             return Err(WorkspaceError::Io);
         }
+        if let Some(record) = captured.root.arena.find(
+            captured.root.root()?,
+            &metadata_pages::inode_key(serial),
+            window,
+            deadline,
+        )? {
+            let inode = Inode::parse(record.value())?;
+            if inode.generation != captured.generation
+                || inode.revision > captured.revision
+                || inode.captured
+            {
+                return Err(WorkspaceError::Io);
+            }
+            return Ok(Some((serial, Dirty::File(inode))));
+        }
         let record = captured
             .root
             .arena
             .find(
                 captured.root.root()?,
-                &metadata_pages::inode_key(serial),
+                &metadata_pages::namespace_key(serial),
                 window,
                 deadline,
             )?
             .ok_or(WorkspaceError::Io)?;
-        let inode = Inode::parse(record.value())?;
-        if inode.generation != captured.generation
-            || inode.revision > captured.revision
-            || inode.captured
+        let directory = Directory::parse(record.value())?;
+        if directory.generation != captured.generation
+            || directory.revision > captured.revision
+            || matches!(directory.origin, Origin::Captured(_))
         {
             return Err(WorkspaceError::Io);
         }
-        Ok(Some((serial, inode)))
+        Ok(Some((serial, Dirty::Directory(directory))))
     }
     pub(crate) fn lower_file(
         &self,
@@ -175,7 +195,11 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<Vec<InodeChange>, WorkspaceError> {
         let captured = submission.capture()?;
-        if captured.count == 0 {
+        let files = captured
+            .count
+            .checked_sub(captured.directories)
+            .ok_or(WorkspaceError::Io)?;
+        if files == 0 {
             if submission.result_ref()? != crate::backing::metadata_pages::PageRef::NULL {
                 return Err(WorkspaceError::Io);
             }
@@ -190,7 +214,7 @@ impl Workspace {
         let _view = host.writer()?;
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-        let mut inodes = vector(captured.count)?;
+        let mut inodes = vector(files)?;
         let mut after = 0;
         while let Some(cell) = root.arena.next(
             root.root()?,
@@ -202,7 +226,7 @@ impl Workspace {
             if cell.key().len() != 9
                 || cell.key()[0] != b'R'
                 || cell.value_len != 80
-                || inodes.len() == captured.count
+                || inodes.len() == files
             {
                 return Err(WorkspaceError::Io);
             }
@@ -236,7 +260,7 @@ impl Workspace {
             });
             after = serial;
         }
-        if inodes.len() != captured.count {
+        if inodes.len() != files {
             return Err(WorkspaceError::Io);
         }
         Ok(inodes)

@@ -1,9 +1,7 @@
-use super::namespace::{attributes, child_path};
 use crate::{
     runtime::state::{Cookie, COOKIE_LIMIT},
     *,
 };
-use layerfs_bridge::contract::{Inspect, Operation, Response};
 use std::{mem::size_of, time::Instant};
 
 impl Workspace {
@@ -21,12 +19,13 @@ impl Workspace {
             return Err(WorkspaceError::InvalidInput);
         }
         let deadline = Self::callback_deadline(deadline);
-        let operation = self.begin(true, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
+        operation.local_io()?;
         let charge = self
             .host
             .budget
             .reserve(limit * (size_of::<DirectoryEntry>() + 255))?;
-        let (path, serial, parent, dots, after, base) = {
+        let (path, serial, parent, dots, after, view) = {
             let state = self.state()?;
             let found = state.handle(handle, true)?;
             let node = state.node(found.serial)?;
@@ -46,7 +45,7 @@ impl Workspace {
                 node.parent,
                 dots,
                 after,
-                state.base,
+                found.view.ok_or(WorkspaceError::Io)?,
             )
         };
         let mut entries = Vec::new();
@@ -70,59 +69,23 @@ impl Workspace {
             });
         }
         if entries.len() < limit {
-            let response = self.call(
-                Operation::Inspect {
-                    root: base,
-                    query: Inspect::List {
-                        path: path.clone(),
-                        after: after.clone(),
-                        entries: (limit - entries.len()) as u16,
-                        bytes: 16384,
-                    },
-                },
-                0,
-                &mut std::io::sink(),
+            let names = self.list_view(
+                &mut operation,
+                &view,
+                (serial, &path),
+                &after,
+                limit - entries.len(),
                 deadline,
             )?;
-            let Response::List {
-                entries: names,
-                continuation,
-            } = response
-            else {
-                return Err(WorkspaceError::InvalidInput);
-            };
-            if names.len() > limit - entries.len()
-                || names.iter().map(|(name, _)| name.len() + 10).sum::<usize>() > 16384
-                || continuation
-                    .as_ref()
-                    .is_some_and(|next| names.last().is_none_or(|(last, _)| next != last))
-            {
-                return Err(WorkspaceError::InvalidInput);
-            }
-            let mut previous = after;
             for (name, expected_serial) in names {
-                if name <= previous {
+                let resolved =
+                    self.resolve_child(&mut operation, &view, serial, &path, &name, deadline)?;
+                if resolved.attr.serial != expected_serial {
                     return Err(WorkspaceError::InvalidInput);
                 }
-                let child = child_path(&path, &name)?;
-                let response = self.call(
-                    Operation::Inspect {
-                        root: base,
-                        query: Inspect::Attributes { path: child },
-                    },
-                    0,
-                    &mut std::io::sink(),
-                    deadline,
-                )?;
-                let (attr, _, _) =
-                    attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
-                if attr.serial != expected_serial {
-                    return Err(WorkspaceError::InvalidInput);
-                }
-                previous = name.clone();
                 entries.push(DirectoryEntry {
-                    serial: attr.serial,
-                    kind: attr.kind,
+                    serial: expected_serial,
+                    kind: resolved.attr.kind,
                     name,
                     cookie: 0,
                 });

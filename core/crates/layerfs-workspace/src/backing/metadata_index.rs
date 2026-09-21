@@ -5,7 +5,10 @@ use super::{
     segments::Window,
 };
 use crate::{
-    overlay::pieces::{Inode, Piece, PieceKind},
+    overlay::{
+        directories::Directory,
+        pieces::{Inode, Piece, PieceKind},
+    },
     WorkspaceError,
 };
 use std::time::Instant;
@@ -25,6 +28,11 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
             PageRef::parse(cell.value())?
         } else if cell.key_len == 9 && cell.key()[0] == b'I' {
             Inode::parse(cell.value())?.pieces
+        } else if cell.key_len == 9 && cell.key()[0] == b'N' {
+            Directory::parse(cell.value())?.entries
+        } else if cell.key_len >= 2 && cell.key()[0] == b'E' && cell.value_len == 16 {
+            crate::overlay::directories::entry_serial(cell.value())?;
+            PageRef::NULL
         } else if cell.key_len == 8 && cell.value_len == 64 {
             let piece = Piece::parse(
                 u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?),
@@ -48,6 +56,38 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
     }
     Ok(refs)
 }
+fn index_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
+    match key.first() {
+        Some(b'E') if key.len() <= 256 => Ok(3),
+        Some(b'D') if key.len() == 17 => Ok(2),
+        Some(b'I' | b'N' | b'R') if key.len() == 9 => Ok(2),
+        _ => Err(WorkspaceError::Io),
+    }
+}
+fn check_index(cells: &[Cell], level: u8, limit: u8) -> Result<(), WorkspaceError> {
+    if level > limit {
+        return Err(WorkspaceError::Io);
+    }
+    for cell in cells {
+        if index_limit(cell.key())? != limit || (limit == 3 && cell.key_len < 2) {
+            return Err(WorkspaceError::Io);
+        }
+        if level == 0 {
+            let valid = match cell.key()[0] {
+                b'E' => cell.value_len == 16,
+                b'I' => cell.value_len == 160,
+                b'N' => cell.value_len == 128,
+                b'R' => cell.value_len == 80,
+                b'D' => cell.value() == [1],
+                _ => false,
+            };
+            if !valid {
+                return Err(WorkspaceError::Io);
+            }
+        }
+    }
+    Ok(())
+}
 impl Arena {
     pub fn find(
         &self,
@@ -59,10 +99,12 @@ impl Arena {
         if root == PageRef::NULL {
             return Ok(None);
         }
+        let limit = index_limit(key)?;
         let mut expected = None;
         let mut maximum: Option<Cell> = None;
-        for _ in 0..8 {
+        for _ in 0..=limit {
             let page = self.load(root, window, deadline)?;
+            check_index(&page.cells, page.level, limit)?;
             if expected.is_some_and(|level| level != page.level || page.body() < MIN_BODY)
                 || maximum
                     .as_ref()
@@ -271,7 +313,16 @@ impl RootOwner {
         window: &mut Window,
         deadline: Instant,
     ) -> Result<PageRef, WorkspaceError> {
-        let result = self.update_node(root, None, updates, window, deadline)?;
+        let limit = index_limit(updates.first().ok_or(WorkspaceError::InvalidInput)?.key())?;
+        if updates.len() > if limit == 3 { 1 } else { 4 }
+            || updates
+                .windows(2)
+                .any(|pair| pair[0].key() >= pair[1].key())
+        {
+            return Err(WorkspaceError::Capacity);
+        }
+        check_index(&updates, 0, limit)?;
+        let result = self.update_node(root, None, updates, limit, window, deadline)?;
         if result.len() == 1 {
             return PageRef::parse(result[0].value());
         }
@@ -281,6 +332,9 @@ impl RootOwner {
             .level
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
+        if level > limit {
+            return Err(WorkspaceError::Capacity);
+        }
         self.write_page(
             PageData {
                 level,
@@ -295,6 +349,7 @@ impl RootOwner {
         root: PageRef,
         expected: Option<u8>,
         updates: Vec<Cell>,
+        limit: u8,
         window: &mut Window,
         deadline: Instant,
     ) -> Result<Vec<Cell>, WorkspaceError> {
@@ -306,6 +361,7 @@ impl RootOwner {
         } else {
             self.arena.load(root, window, deadline)?
         };
+        check_index(&page.cells, page.level, limit)?;
         if expected.is_some_and(|n| n != page.level || page.body() < MIN_BODY) {
             return Err(WorkspaceError::Io);
         }
@@ -330,9 +386,10 @@ impl RootOwner {
             }
         } else {
             let last = page.cells.len() - 1;
+            let update_count = updates.len();
             let mut changes = updates.into_iter().peekable();
             for (index, cell) in page.cells.into_iter().enumerate() {
-                let mut subset = vector(2)?;
+                let mut subset = vector(update_count)?;
                 while changes
                     .peek()
                     .is_some_and(|change| index == last || change.key() <= cell.key())
@@ -344,7 +401,7 @@ impl RootOwner {
                 } else {
                     let child = PageRef::parse(cell.value())?;
                     for updated in
-                        self.update_node(child, Some(level - 1), subset, window, deadline)?
+                        self.update_node(child, Some(level - 1), subset, limit, window, deadline)?
                     {
                         cells.push(updated)
                     }
@@ -410,6 +467,7 @@ impl Arena {
         deadline: Instant,
     ) -> Result<Option<Cell>, WorkspaceError> {
         let page = self.load(root, window, deadline)?;
+        check_index(&page.cells, page.level, index_limit(lower)?)?;
         if parent.is_some_and(|(n, key)| {
             n != page.level
                 || page.body() < MIN_BODY

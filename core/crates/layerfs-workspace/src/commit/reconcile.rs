@@ -1,5 +1,5 @@
 //! Exact saved-version substitution and streaming construction of the live frontier.
-use super::completion::CommitAttempt;
+use super::{completion::CommitAttempt, lower::Dirty};
 use crate::{
     backing::{
         metadata::RootOwner,
@@ -7,6 +7,7 @@ use crate::{
         segments::Window,
     },
     overlay::{
+        directories::{Directory, Origin},
         pieces::{get, CapturedBase, Inode},
         snapshot::Submission,
     },
@@ -26,7 +27,7 @@ impl Current {
         after: u64,
         window: &mut Window,
         deadline: Instant,
-    ) -> Result<Option<(u64, Inode)>, WorkspaceError> {
+    ) -> Result<Option<(u64, Dirty)>, WorkspaceError> {
         let key = metadata_pages::dirty_key(self.generation, after);
         let Some(cell) =
             self.root
@@ -42,21 +43,33 @@ impl Current {
         if serial <= after || cell.value() != [1] {
             return Err(WorkspaceError::Io);
         }
+        if let Some(cell) = self.root.arena.find(
+            self.root.root()?,
+            &metadata_pages::inode_key(serial),
+            window,
+            deadline,
+        )? {
+            let inode = Inode::parse(cell.value())?;
+            if inode.generation != self.generation || inode.revision > self.revision {
+                return Err(WorkspaceError::Io);
+            }
+            return Ok(Some((serial, Dirty::File(inode))));
+        }
         let cell = self
             .root
             .arena
             .find(
                 self.root.root()?,
-                &metadata_pages::inode_key(serial),
+                &metadata_pages::namespace_key(serial),
                 window,
                 deadline,
             )?
             .ok_or(WorkspaceError::Io)?;
-        let inode = Inode::parse(cell.value())?;
-        if inode.generation != self.generation || inode.revision > self.revision {
+        let directory = Directory::parse(cell.value())?;
+        if directory.generation != self.generation || directory.revision > self.revision {
             return Err(WorkspaceError::Io);
         }
-        Ok(Some((serial, inode)))
+        Ok(Some((serial, Dirty::Directory(directory))))
     }
 }
 fn canonical_inode(
@@ -120,6 +133,49 @@ fn canonical_inode(
     // representation changes from the pinned local version to its saved root.
     Ok(inode)
 }
+fn canonical_directory(
+    submission: &Submission,
+    serial: u64,
+    mut directory: Directory,
+    root: [u8; 32],
+    window: &mut Window,
+    deadline: Instant,
+) -> Result<Directory, WorkspaceError> {
+    let captured = submission.capture()?;
+    match directory.origin {
+        Origin::Empty => return Ok(directory),
+        Origin::Canonical(base) if base == captured.context.effective_root => {}
+        Origin::Captured(reference) => {
+            if reference.root != captured.root.root()?
+                || reference.inode != serial
+                || reference.generation != captured.generation
+            {
+                return Err(WorkspaceError::Io);
+            }
+            let cell = captured
+                .root
+                .arena
+                .find(
+                    captured.root.root()?,
+                    &metadata_pages::namespace_key(serial),
+                    window,
+                    deadline,
+                )?
+                .ok_or(WorkspaceError::Io)?;
+            let prior = Directory::parse(cell.value())?;
+            if prior.generation != captured.generation
+                || prior.revision != reference.revision
+                || matches!(prior.origin, Origin::Captured(_))
+            {
+                return Err(WorkspaceError::Io);
+            }
+        }
+        _ => return Err(WorkspaceError::Io),
+    }
+    // Only origin changes. D1's E tree already contains exactly D1's names.
+    directory.origin = Origin::Canonical(root);
+    Ok(directory)
+}
 impl Workspace {
     pub(crate) fn reconcile_commit(
         &self,
@@ -171,9 +227,13 @@ impl Workspace {
         let next_baseline = baseline.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let mut lease = host.payloads.window(3, 4)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        let (head, canonical) = match outcome {
+            CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),
+            CommitOutcomeWire::UpToDate { head, root } => (*head, *root),
+        };
         let mut after = 0;
         let mut seen = 0;
-        let mut inodes = false;
+        let mut phase = 0;
         let root = attempt.root.build_ordered(
             |window| loop {
                 if let Some((serial, inode)) = current.next(after, window, deadline)? {
@@ -182,26 +242,40 @@ impl Workspace {
                     }
                     after = serial;
                     seen += 1;
-                    return if inodes {
-                        let inode = canonical_inode(submission, serial, inode, window, deadline)?;
-                        Ok(Some(Cell::new(
-                            &metadata_pages::inode_key(serial),
-                            &inode.value(),
-                        )?))
-                    } else {
-                        Ok(Some(Cell::new(
-                            &metadata_pages::dirty_key(current.generation, serial),
-                            &[1],
-                        )?))
-                    };
+                    match (phase, inode) {
+                        (0, _) => {
+                            return Ok(Some(Cell::new(
+                                &metadata_pages::dirty_key(current.generation, serial),
+                                &[1],
+                            )?))
+                        }
+                        (1, Dirty::File(inode)) => {
+                            let inode =
+                                canonical_inode(submission, serial, inode, window, deadline)?;
+                            return Ok(Some(Cell::new(
+                                &metadata_pages::inode_key(serial),
+                                &inode.value(),
+                            )?));
+                        }
+                        (2, Dirty::Directory(directory)) => {
+                            let directory = canonical_directory(
+                                submission, serial, directory, canonical, window, deadline,
+                            )?;
+                            return Ok(Some(Cell::new(
+                                &metadata_pages::namespace_key(serial),
+                                &directory.value(),
+                            )?));
+                        }
+                        _ => continue,
+                    }
                 }
                 if seen != current.count {
                     return Err(WorkspaceError::Io);
                 }
-                if inodes {
+                if phase == 2 {
                     return Ok(None);
                 }
-                inodes = true;
+                phase += 1;
                 after = 0;
                 seen = 0;
             },
@@ -215,10 +289,6 @@ impl Workspace {
             .map_err(|_| WorkspaceError::Io)?
             .take()
             .ok_or(WorkspaceError::Io)?;
-        let (head, canonical) = match outcome {
-            CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),
-            CommitOutcomeWire::UpToDate { head, root } => (*head, *root),
-        };
         next.snapshot.branch.head_commit = head;
         next.snapshot.head_root = head.map(|_| canonical);
         next.snapshot.effective_root = canonical;

@@ -1,8 +1,8 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `8e01d28a1c8b7708f5d319990c1440ae682f8b44`.
-> Frozen production input seal: `e635d6cc772adddf07d4908d1cde5ef0229b0ad4f78ee98ad74ca3c12d9acc75`.
+> Implementation parent: `85582e1ac2fb75761897115ec9679c59439b1efe`.
+> Frozen production input seal: `827e336a7493faed1a9f9121374cd5f7097711dec5d2800bcfaf8ed2d18bde6d`.
 > Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
@@ -10,7 +10,7 @@
 imports, declarations and runtime SQL. `L` means all physical lines, including
 comments and blanks. They must not be confused: the 999-file/200-entry-file ceilings
 apply to L. `N` means the recursive number of production files in a folder.
-JSON includes all 247 core and 193 reference production files separately,
+JSON includes all 251 core and 193 reference production files separately,
 plus each scope/crate and every recursive production-folder total.
 Tests, fixtures, examples, tools, docs and manifests are excluded from P; their
 folder locations are still shown in the continuation handoff.
@@ -22,9 +22,11 @@ against the frozen source snapshot. Once committed, archive that exact commit's
 `crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Current per-file machine-readable inventory](evidence/prepared-directories/source-loc.json)
+[Current per-file machine-readable inventory](evidence/native-mkdir/source-loc.json)
 records this new frozen production inventory and unchanged reference
-tree. The prior [Commit inventory](evidence/control-commit/source-loc.json) and its
+tree. The prior [prepared-directory inventory](evidence/prepared-directories/source-loc.json) and its
+[commit confirmation](evidence/prepared-directories/commit-confirmed.json), plus the
+[Commit inventory](evidence/control-commit/source-loc.json) and its
 [commit confirmation](evidence/control-commit/commit-confirmed.json), plus the
 [control-Attach inventory](evidence/control-attach/source-loc.json),
 [native attachment inventory](evidence/attachment-owner/source-loc.json),
@@ -38,8 +40,8 @@ retain their original source pins and counts. No historical receipt is relabeled
 | Core crate | P | L | Production files | Responsibility |
 | --- | ---: | ---: | ---: | --- |
 | `layerfs-daemon` | 1364 | 1458 | 8 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
-| `layerfs-fuse` | 1062 | 1155 | 4 | Linux kernel projection, replies, mount/session ownership |
-| `layerfs-workspace` | 10070 | 10255 | 38 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
+| `layerfs-fuse` | 1063 | 1156 | 4 | Linux kernel projection, replies, mount/session ownership |
+| `layerfs-workspace` | 11161 | 11359 | 42 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
 | `layerfs-bridge` | 5284 | 5800 | 25 | Logical operation contract, Source, authorization identity and native framing/delivery |
 | `layerfs-service` | 2139 | 2331 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
@@ -47,10 +49,25 @@ retain their original source pins and counts. No historical receipt is relabeled
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **45123 P / 54329 L**, across 247 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **110540 P / 145795 L**. Root `crates/` is reference-only, including its
+Core total: **46215 P / 55434 L**, across 251 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **111632 P / 146900 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Native directory overlay ownership
+
+`filesystem/mkdir.rs` owns one native namespace creation and its checked atomic
+publication. `namespace_view.rs` shares local/captured/canonical lookup and ordered
+directory merging. Handles retain a base/overlay view and pin the existing immutable
+Node locator; this relies on the current mkdir-only namespace mutation scope.
+
+`overlay/directories.rs` encodes directory origins, portable attributes and entry
+root/counts. The existing backing page index adds N/E roles and a packed Cell;
+entry values contain serials, not physical edges to child inodes. Capture and
+`commit/directories.rs` share the existing dirty frontier and lower directory rows
+through the common prepared Service operation. Reconciliation reuses D1 entry
+roots and substitutes only acknowledged canonical origins. File and directory
+publication share exact request capacity accounting. See [39](39-native-mkdir.md).
 
 ## Prepared-directory ownership
 
@@ -59,8 +76,9 @@ patches to existing directories. Its optional metadata trailer keeps old empty
 bodies unchanged, and all inode forms share the old aggregate bound. Service's
 filesystem handler reuses bootstrap metadata construction and the existing portable
 patcher under one save. Canonical directory pages remain C1's responsibility.
-Workspace currently only supplies empty new fields; namespace semantics are not
-implemented by this prerequisite. See [38](38-prepared-directories.md).
+At the shared-preparation checkpoint Workspace supplied empty new fields; native
+mkdir now supplies its captured directory declarations and patches through that
+same interface. See [38](38-prepared-directories.md).
 
 ## Commit control and codec ownership
 
@@ -75,7 +93,7 @@ mount adapter from that immutable profile.
 `run.rs` establishes the control owner before initial writable callbacks are
 published. Signal shutdown shares the lifecycle exclusion with control and keeps
 Commit/Status available if clean closure refuses a dirty or retained owner.
-Workspace and FUSE product algorithms remain unchanged in this round.
+The earlier Commit-control round left Workspace and FUSE product algorithms unchanged.
 
 Bridge `contract/workspace_commit.rs` defines the typed Commit/writable Status
 records and validates their identities and known/observed relationships.
@@ -160,26 +178,26 @@ core/crates/layerfs-daemon/  [P=1364; L=1458; N=8]
 ### layerfs-fuse
 
 ```text
-core/crates/layerfs-fuse/  [P=1062; L=1155; N=4]
-`-- src/  [P=1062; L=1155; N=4]
+core/crates/layerfs-fuse/  [P=1063; L=1156; N=4]
+`-- src/  [P=1063; L=1156; N=4]
     |-- adapter.rs  [P=568; L=605]
     |-- lib.rs  [P=7; L=10]
     |-- mount.rs  [P=390; L=435]
-    `-- replies.rs  [P=97; L=105]
+    `-- replies.rs  [P=98; L=106]
 ```
 
 ### layerfs-workspace
 
 ```text
-core/crates/layerfs-workspace/  [P=10070; L=10255; N=38]
-`-- src/  [P=10070; L=10255; N=38]
-    |-- backing/  [P=4414; L=4476; N=13]
+core/crates/layerfs-workspace/  [P=11161; L=11359; N=42]
+`-- src/  [P=11161; L=11359; N=42]
+    |-- backing/  [P=4488; L=4551; N=13]
     |   |-- budget.rs  [P=54; L=56]
     |   |-- directory.rs  [P=206; L=208]
     |   |-- metadata.rs  [P=806; L=807]
-    |   |-- metadata_build.rs  [P=72; L=73]
-    |   |-- metadata_index.rs  [P=447; L=449]
-    |   |-- metadata_pages.rs  [P=193; L=194]
+    |   |-- metadata_build.rs  [P=76; L=77]
+    |   |-- metadata_index.rs  [P=505; L=507]
+    |   |-- metadata_pages.rs  [P=205; L=207]
     |   |-- metadata_reclaim.rs  [P=505; L=511]
     |   |-- mod.rs  [P=12; L=13]
     |   |-- ownership.rs  [P=822; L=827]
@@ -187,35 +205,39 @@ core/crates/layerfs-workspace/  [P=10070; L=10255; N=38]
     |   |-- reader.rs  [P=132; L=134]
     |   |-- reclaim.rs  [P=224; L=229]
     |   `-- segments.rs  [P=323; L=355]
-    |-- commit/  [P=1306; L=1321; N=7]
+    |-- commit/  [P=1533; L=1550; N=8]
     |   |-- completion.rs  [P=340; L=343]
-    |   |-- lower.rs  [P=269; L=271]
-    |   |-- mod.rs  [P=6; L=8]
+    |   |-- directories.rs  [P=106; L=107]
+    |   |-- lower.rs  [P=293; L=295]
+    |   |-- mod.rs  [P=7; L=9]
     |   |-- operation.rs  [P=55; L=56]
-    |   |-- reconcile.rs  [P=257; L=262]
-    |   |-- save.rs  [P=224; L=225]
+    |   |-- reconcile.rs  [P=326; L=332]
+    |   |-- save.rs  [P=251; L=252]
     |   `-- source.rs  [P=155; L=156]
-    |-- filesystem/  [P=1663; L=1688; N=6]
-    |   |-- directory.rs  [P=189; L=190]
-    |   |-- mod.rs  [P=5; L=5]
+    |-- filesystem/  [P=2242; L=2273; N=8]
+    |   |-- directory.rs  [P=152; L=153]
+    |   |-- mkdir.rs  [P=313; L=317]
+    |   |-- mod.rs  [P=7; L=7]
     |   |-- namespace.rs  [P=200; L=203]
-    |   |-- open.rs  [P=185; L=191]
+    |   |-- namespace_view.rs  [P=275; L=277]
+    |   |-- open.rs  [P=190; L=196]
     |   |-- read.rs  [P=284; L=288]
-    |   `-- write.rs  [P=800; L=811]
-    |-- overlay/  [P=654; L=656; N=3]
-    |   |-- mod.rs  [P=2; L=2]
+    |   `-- write.rs  [P=821; L=832]
+    |-- overlay/  [P=835; L=839; N=4]
+    |   |-- directories.rs  [P=167; L=169]
+    |   |-- mod.rs  [P=3; L=3]
     |   |-- pieces.rs  [P=304; L=305]
-    |   `-- snapshot.rs  [P=348; L=349]
-    |-- runtime/  [P=1532; L=1589; N=6]
+    |   `-- snapshot.rs  [P=361; L=362]
+    |-- runtime/  [P=1561; L=1620; N=6]
     |   |-- attachment.rs  [P=256; L=266]
     |   |-- coherence.rs  [P=292; L=318]
-    |   |-- host.rs  [P=494; L=501]
+    |   |-- host.rs  [P=497; L=504]
     |   |-- lifecycle.rs  [P=161; L=168]
     |   |-- mod.rs  [P=5; L=5]
-    |   `-- state.rs  [P=324; L=331]
+    |   `-- state.rs  [P=350; L=359]
     |-- commit_types.rs  [P=73; L=75]
     |-- lib.rs  [P=17; L=20]
-    `-- types.rs  [P=411; L=430]
+    `-- types.rs  [P=412; L=431]
 ```
 
 ### layerfs-bridge

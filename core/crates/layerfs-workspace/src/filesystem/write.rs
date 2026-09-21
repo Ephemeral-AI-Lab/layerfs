@@ -232,6 +232,18 @@ impl Workspace {
         root: Option<&Arc<RootOwner>>,
         deadline: Instant,
     ) -> Result<NodeAttributes, WorkspaceError> {
+        if attr.kind == NodeKind::Directory {
+            return Ok(self
+                .directory_record(
+                    &super::namespace_view::View {
+                        base: [0; 32],
+                        root: root.cloned(),
+                    },
+                    attr.serial,
+                    deadline,
+                )?
+                .map_or(attr, |directory| directory.attributes(attr)));
+        }
         Ok(self
             .overlay_inode(attr.serial, root, deadline)?
             .map_or(attr, |inode| inode.attributes(attr)))
@@ -632,8 +644,17 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let already_dirty = old.is_some_and(|inode| inode.generation == generation);
-        if !already_dirty && dirty == 128 {
-            return Err(WorkspaceError::Capacity);
+        {
+            let state = self.state()?;
+            if state.revision != expected_revision || state.generation != generation {
+                return Err(WorkspaceError::Busy);
+            }
+            state.frontier_bytes(
+                dirty + usize::from(!already_dirty),
+                state.dirty_directories,
+                state.directory_names,
+                state.directory_bytes,
+            )?;
         }
         let parent = frozen
             .as_ref()

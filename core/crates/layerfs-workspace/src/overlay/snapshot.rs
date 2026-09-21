@@ -24,6 +24,9 @@ pub(crate) struct Captured {
     pub generation: u64,
     pub revision: u64,
     pub count: usize,
+    pub directories: usize,
+    pub names: usize,
+    pub name_bytes: usize,
 }
 pub(crate) type SavedInode = InodeSaveObservation;
 pub(crate) struct SubmissionState {
@@ -302,6 +305,10 @@ impl Workspace {
                 return Err(WorkspaceError::Io);
             }
             let count = state.dirty_inodes;
+            let directories = state.dirty_directories;
+            let names = state.directory_names;
+            let name_bytes = state.directory_bytes;
+            state.frontier_bytes(count, directories, names, name_bytes)?;
             {
                 let mut s = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
                 s.status.generation = generation;
@@ -323,6 +330,9 @@ impl Workspace {
                     generation,
                     revision,
                     count,
+                    directories,
+                    names,
+                    name_bytes,
                 })
                 .is_err()
             {
@@ -334,6 +344,9 @@ impl Workspace {
             state.generation = next;
             state.revision = next_revision;
             state.dirty_inodes = 0;
+            state.dirty_directories = 0;
+            state.directory_names = 0;
+            state.directory_bytes = 0;
             state.submission = Some(submission.clone());
             Ok(())
         })();

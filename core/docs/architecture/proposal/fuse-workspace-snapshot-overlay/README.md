@@ -4,13 +4,18 @@
 > Implementation planning baseline finalized 2026-09-21. The design is informed by reviewed main
 > `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`; the v0.1.6 comparison uses release
 > `44cf748486863ab7c21ca47e731bd88e2b9a7b4a`. The R1 read-only Linux implementation and functional mounted proof are recorded
-> in [08](08-readable-implementation.md). No writable, performance or durability
-> qualification is claimed.
+> in [08](08-readable-implementation.md). That R1 checkpoint does not qualify writable behavior;
+> later scoped functional proofs are linked below. Performance and durability remain unqualified.
+
+**Native namespace continuation:** [native mkdir](39-native-mkdir.md) is implemented
+and verified with maintained directory state, stable directory handles, exact
+saveability admission and G/D1 reconciliation. Mounted mkdir and entry coherence
+are the next step; full prepared upload and R6 remain open.
 
 **Shared directory prerequisite:** [prepared directory construction and metadata](38-prepared-directories.md)
 is implemented and functionally verified under the existing Service save path.
-Workspace namespace/FUSE creation and the complete prepared upload
-remain open.
+Native directory creation now uses this primitive. Mounted mkdir, file/symlink
+creation and the complete prepared upload remain open.
 
 **Current continuation:** [authenticated Commit](37-control-commit.md) and its writable
 startup/dirty-shutdown prerequisites are verified for their declared scope. [Authenticated Attach](36-control-attach.md) is verified for its declared scope,

@@ -178,6 +178,10 @@ impl Workspace {
             .ok_or(WorkspaceError::Capacity)?;
         state.next_handle = next;
         state.nodes[node].handles = references;
+        let view = directory.then(|| super::namespace_view::View {
+            base: state.base,
+            root: state.overlay.clone(),
+        });
         state.handles.push(Handle {
             id,
             serial,
@@ -185,6 +189,7 @@ impl Workspace {
             scope,
             options,
             ready,
+            view,
         });
         Ok(id)
     }

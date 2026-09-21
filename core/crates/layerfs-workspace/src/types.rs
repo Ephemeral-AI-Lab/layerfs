@@ -99,6 +99,7 @@ pub struct NodeAttributes {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WorkspaceError {
+    Exists,
     InvalidInput,
     Capacity,
     Busy,
