@@ -3568,3 +3568,27 @@ recommends B and records that the row keeps a ~500 MB in-process fixture.
 Production LOC: **97100 → 97100 (delta 0)** across all five commits of the round; scope
 `core/crates/*/src + sql` and `crates/*/src + sql`, method `tools/production_loc.py --root .`
 (core 31683 in 194 files, reference 65417 in 193 files). Harness, tests, evidence and docs only.
+
+**Correction, same day, after the page was questioned on its own recommendation.** Two defects in the
+design page's option C, both found by asking what the option actually costs rather than what the handoff
+calls it:
+
+1. **"Option C" was underspecified where it matters.** The handoff's *"build the tree twice"* does not
+   say whether the content is **streamed** into the Store or built into a `TreeStore` and then saved.
+   The page now prices them separately: **C2** (stream) bounds the fixture; **C1** (build, then save)
+   holds it exactly as today and only moves it outside the timer — and a **lifetime** peak is unaffected
+   by that move, so **C1 bounds nothing** and must not be recommended as a fix. A round that built C1
+   would report a lower measured-region figure while the process still peaked at 885 MB.
+2. **The page's claim that C needs no new cache contract was false.** `prepare_sample` byte-copies the
+   base and de-warms the **whole copy** (`c2.rs:132-146`, `instruments::de_warm` at
+   `support/instruments.rs:674`), and the row gates `g4.residency == 0` on the sample. A timed pass
+   reading its content out of that sample therefore reads it **cold**: C2 pays the same read A pays, and
+   what it avoids is the spill file and its contract, not the read.
+
+The recommendation still names **A** over C2, but for a narrower reason — A leaves the row's declared
+content drawn from exactly its 502,914,928 canonical bytes, where C2 draws them from a Store that also
+carries packs, indexes and framing. The page's §3 now also prices **what each option does to the
+harness's own complexity**, because §5's recommendation costs it: **A adds a bounded reader, a new
+declaration, a new gate, a new published term and a scratch lifecycle; C2 adds no mechanism; B removes
+one; C1 removes none because it bounds nothing.** No option lowers both the peak and the complexity, and
+a row that declines to pay for A keeps 885 MB with the attribution this campaign already published.

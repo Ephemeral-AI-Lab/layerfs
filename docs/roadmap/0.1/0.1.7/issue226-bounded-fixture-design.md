@@ -140,6 +140,25 @@ content out of that sample reads it **cold** — the same physical work as A, at
 | **what it costs** | **every existing figure for this row is invalidated** and the row's bar needs re-reading |
 | **ruling** | **yes** — and it is the *only* option that moves the timer's boundary, which `test_setup_and_cache_discipline.md` §2.2 and the handoff §4.1 both make an owner ruling rather than a harness decision |
 
+### What each option does to the harness's own complexity
+
+Priced here because §5's recommendation costs it, and a page that recommends a design without saying what
+it does to the code is not a design page. Counted in **mechanism**, not in diff size.
+
+| option | new mechanism | published surface added | mechanism removed |
+| --- | --- | --- | --- |
+| **A** | **a bounded reader** — `write_to_dir` / `load_from_dir` exist (`providers.rs:124`, `:143`) but `load_from_dir` loads the whole store, so the reader is new work — plus a serializer round trip and a scratch directory the row must create, de-warm and clean up | a new cache declaration, a `g4.device-attestation` gate against the spilled bytes, and `spill_read_ns` beside `operation_work_ns` | the in-memory content store |
+| **B** | none — one draining path into `accept`, which already takes the object by value (`cas/store.rs:504`) | none | **the `cloned_object` copy** |
+| **C2** | none — the Store's existing writer, the existing `prepare_sample` copy-and-de-warm, the existing `g4.residency` gate | none | the in-memory content store |
+| **C1** | none | none | **nothing** — it bounds no memory at all |
+| **D** | none | the boundary itself moves, and every existing figure for the row is invalidated | the fixture's exclusion from the timer |
+
+**A makes the harness more complex. C2 does not, and B simplifies it.** A's complexity is the price of
+bounding an in-process fixture; a row that declines to pay it keeps 885 MB, correctly attributed. **No
+option on this page lowers both the peak and the harness's complexity**, and that is a fact about the
+problem rather than about the options: the fixture has to live somewhere, and "somewhere" is either the
+heap, a scratch file with a contract, or a Store that already has one.
+
 ## 4. The contract A would have to satisfy
 
 A is legal only if all five of these hold. Four are satisfied by instruments that already exist; the
