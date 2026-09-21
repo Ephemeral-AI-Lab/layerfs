@@ -13,3 +13,4 @@ pub mod history;
 pub mod json;
 pub mod oracle;
 pub mod providers;
+pub mod stream;
