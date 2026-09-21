@@ -135,8 +135,8 @@ of several cores of NEON ChaCha. The route is now close to the store-only rate
    target that is not this lane's gate). A manifest that names the aarch64 profile
    could require the config file in its identity set.
 
-Items 2 and 3 change product source or harness policy, so they are **proposed
-here, not implemented**; item 1 is an invocation change for whoever builds.
+**Items 1 and 3 are now implemented and item 2 is partly so - see §9.** Item 2's
+runtime suite diagnostic remains proposed.
 
 ## 8. Gaps
 
@@ -148,3 +148,40 @@ here, not implemented**; item 1 is an invocation change for whoever builds.
   `identity.json`).
 - No measurement of the *x86_64* path was taken (there AES-NI is detected at
   runtime, so the cfg loss would not apply).
+
+## 9. What changed, and the proof it took
+
+Owner direction: aarch64 gets one AEAD profile, the fastest one, default for every
+build, with `AGENTS.md` pinning it so no later agent can pick the wrong setting.
+
+| Change | Where | Effect |
+| --- | --- | --- |
+| The build profile moved from `core/.cargo/config.toml` to the repository-root **`.cargo/config.toml`** | repo root | Cargo discovers config from the cwd upward, so the prescribed root-invoked commands (`--manifest-path core/Cargo.toml`), the `core/`-invoked ones and the `aarch64-unknown-linux-musl` image build all get the flags - without anyone remembering to `cd core` |
+| **aarch64 without the profile no longer compiles**: a `compile_error!` in `layerfs-bridge` names the flags and the reason | `core/crates/layerfs-bridge/src/adapters/native/connection.rs` | the 2-4x slower ChaCha20-Poly1305 fallback is not selectable on aarch64 at all; the refusal exempts `doc` builds, because a doc build produces no binary and `rustdoc` inherits neither `rustflags` nor a cfg-formed `rustdocflags` table (verified on cargo 1.85.1) |
+| The suite selection is now one arm per architecture | same file | AES-GCM on x86/x86_64/aarch64, ChaCha20-Poly1305 only on targets that have no accelerated AES backend |
+| **`AGENTS.md` (root §4) and `core/AGENTS.md`** state the requirement, the measurement (214 vs 802 MiB/s) and the verification (`cargo build -v | grep target-feature`) | both rule files | the wrong setting is now a documented rule violation and a compile error, not a silent slowdown |
+
+Verification of the changed build matrix, all on this tree:
+
+| Check | Result |
+| --- | --- |
+| prescribed root invocation, `--manifest-path core/Cargo.toml` | `target-feature=+aes,+sha2` and the three cfgs present |
+| `cd core && cargo build` (second config removed) | flags present once, no duplication |
+| `--target x86_64-unknown-linux-gnu` | no aarch64 flags - untouched |
+| `--target aarch64-unknown-linux-musl` (with `rust-lld`, as the image build uses) | flags present, daemon links |
+| build from **outside** the repository (cwd `/tmp`) | **refused**: `error: aarch64 builds require the ARMv8 AEAD profile: ...` |
+| `cargo test` incl. the doctest target | PASS (619-621 tests, 0 failed) |
+
+And the end-to-end proof, built with the prescribed invocation and **no explicit
+flags anywhere** (`arms/default-*`, `default-build-results.json`):
+
+| Default build (`cargo build --manifest-path core/Cargo.toml`) | before this change | now |
+| --- | ---: | ---: |
+| transport upload, 1 stream | 0.209 GB/s (214 MiB/s) | **0.821 GB/s (783 MiB/s)** |
+| transport upload, 2 streams | 0.415 GB/s (425 MiB/s) | **1.666 GB/s (1589 MiB/s)** |
+| transport download, 1 stream | 0.209 GB/s | **0.820 GB/s (782 MiB/s)** |
+
+The same binaries still need `RUSTFLAGS` repeated in full if an out-of-repository
+build sets it (an explicit `RUSTFLAGS` replaces the config table), and any identity
+set that pins build flags must now record `.cargo/config.toml` rather than
+`core/.cargo/config.toml`.
