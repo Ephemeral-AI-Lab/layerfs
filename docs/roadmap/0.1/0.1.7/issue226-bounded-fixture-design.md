@@ -244,12 +244,56 @@ less.** Two things keep that price honest rather than dismissed:
   complexity**, and a reader should not expect one. A's complexity is the price of bounding an in-process
   fixture; a row that does not pay it keeps 885 MB, correctly attributed, which is what today's row does.
 
+## 5a. A's price, measured after this page was written
+
+The page's §5 said *"A's read is unpriced in wall time"* and §6 listed that as a non-claim. It is priced
+now, by `tests/spill_read_price.rs` (registered in
+[`evidence/issue226-ns22b-spillprice-20260921T171500Z/`](evidence/issue226-ns22b-spillprice-20260921T171500Z/pre-registration.md)),
+on the row's own fixture — 109,373 objects, 502,912,427 canonical bytes. Every figure is a share of the
+row's declared figure, 3,549,393,833 ns, and every one is a share of the **whole** cold read, hashing
+included:
+
+| reader shape | time | share |
+| --- | ---: | ---: |
+| one file per object (`TreeStore::write_to_dir` as it stands) | 15,326,877,666 ns | **432 %** |
+| `mmap`, one fault per object | 1,007,319,334 ns | **28.4 %** |
+| positioned read per object into a reused buffer | 445,381,375 ns | **12.6 %** |
+| streamed 1 MiB windows, splitting objects out and hashing each | **347,960,667 ns** | **9.8 %** |
+| hash only, no read at all | 372,680,083 ns | **10.5 %** |
+
+**Read together, these four facts decide A's price, and it is not the 12 % the page first implied nor the
+1–2 % it hoped for.**
+
+1. **The bytes are nearly free; the objects are not.** A cold read of the whole fixture differs from a
+   warm read of it by **2.5 ms** (426,732,834 against 429,199,791 ns), and the device reads all 502 MB.
+   What costs is per-object work: hashing alone is 10.5 % of the figure, so any reader that hands the
+   Store authenticated objects is bounded below by roughly that.
+2. **The reader must stream, not seek, and must not `mmap`.** Streaming windows cost 9.8 % against 12.6 %
+   for positioned per-object reads and 28.4 % for `mmap` — a cold mapping pays a page fault per object.
+3. **`load_from_dir`'s shape is unusable as it stands.** One file per object costs 432 % of the figure to
+   read back. **A's spill must be one pack with an entry table**, and that is the new work the page's §3A
+   priced as "a bounded reader".
+4. **A's honest price is therefore ~10 % of the declared figure, not 1–2 %.** The page's §5 compared A
+   against today's row, which reads the fixture from a `HashMap`; the read it removes is 79,174,500 ns of
+   deep copy (2.23 %, measured, and removed by option B), while the read it adds is 348–450 ms. **A trades
+   roughly 10–12 % of the row's figure for 5.6× less peak memory**, and the trade is real rather than
+   marginal.
+
+**What that does not change.** The ruling question in §7 stands as asked and is unchanged by the price:
+whether this row may read its own fixture inside the timer, under a declared and gated cache contract.
+What changes is the number the owner is accepting — **≈ 350 ms and 10 % of the declared figure, against
+885 MB → ~160 MB of peak** — and the page says so rather than leaving the reader with the earlier
+estimate. The owner has accepted a *minor* degradation on this basis; the round that builds A must
+re-register the bound before its first locked run and is free to find the price higher or lower than
+these four readings, which are one fixture on one host.
+
 ## 6. What is not claimed
 
 * **No performance figure of its own.** Every number in §1 is from a locked run named beside it; §3's
   prices are surfaces (`file:line`) and measured inputs, and §3A's ~120 MB is labelled `[arithmetic]`.
-* **No claim that A is faster or slower than today's row.** A's read is unpriced in wall time, and §5
-  says why.
+* **No claim that A is speed-neutral.** §5a measures the read at 9.8–12.6 % of the declared figure
+  depending on the reader shape, against the 2.23 % of deep copy it replaces. The page's own earlier
+  estimate of 1–2 % was wrong and is corrected there.
 * **No claim that the reference harness's approach is portable as-is.** Its fixture is *generated* into
   the scratch window and never authenticated as a set of canonical objects; this row's fixture is
   109,414 canonical objects whose identities are pinned. A has to preserve

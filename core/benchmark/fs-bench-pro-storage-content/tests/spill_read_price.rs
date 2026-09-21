@@ -381,27 +381,37 @@ fn the_packed_fixture_read_back_cold() {
         let hash_only = started.elapsed().as_nanos() as u64;
         drop(bytes);
         // Stream the same bytes through `read` in 4 MiB windows, hashing each object out of the window.
+        // **The streaming reader, done properly this time.** One `read` per 1 MiB window over the pack's
+        // whole payload, splitting every object out of the window; the window is re-anchored to the first
+        // object that does not fit, so no object is skipped and none is read twice. The first version of
+        // this pass re-anchored to a later object and read 0.8 % of the fixture, which is why the number
+        // below is the one that counts.
         let mut file = std::fs::File::open(&pack).expect("open pack");
-        let mut window = vec![0_u8; 4 << 20];
+        const WINDOW: usize = 1 << 20;
+        let mut window = vec![0_u8; WINDOW];
         let mut streamed = 0_u64;
+        let mut objects = 0_u64;
         let started = Instant::now();
-        for chunk in entries.chunks(4 << 20) {
-            let first = chunk.first().expect("chunk").0;
-            let last = chunk.last().expect("chunk");
-            let span = last.0 + last.1 - first;
-            file.seek(SeekFrom::Start(first as u64)).expect("seek");
-            let wanted = span.min(window.len());
-            file.read_exact(&mut window[..wanted]).expect("stream read");
-            for (offset, len) in chunk {
-                if offset + len - first > window.len() {
+        let mut index = 0_usize;
+        while index < entries.len() {
+            let base = entries[index].0;
+            let read = (base + WINDOW).min(length);
+            file.seek(SeekFrom::Start(base as u64)).expect("seek");
+            file.read_exact(&mut window[..read - base]).expect("stream read");
+            while index < entries.len() {
+                let (offset, len) = entries[index];
+                if offset + len > read {
                     break;
                 }
-                let at = offset - first;
+                let at = offset - base;
                 let _ = ObjectId::for_bytes(&window[at..at + len]);
-                streamed += *len as u64;
+                streamed += len as u64;
+                objects += 1;
+                index += 1;
             }
         }
         let stream_hash = started.elapsed().as_nanos() as u64;
+        eprintln!("  streamed objects {objects} (every entry exactly once)");
         eprintln!(
             "  hash only (no read)   {count} objects  {hashed} bytes  {hash_only:>14} ns   {:.2} GB/s",
             hashed as f64 / hash_only as f64
@@ -564,4 +574,130 @@ fn the_timed_clone_of_the_content_stream() {
         clone_ns as f64 / ROW_DECLARED_FIGURE_NS as f64 * 100.0,
         cloned_bytes as f64 / clone_ns as f64
     );
+}
+
+/// **The reader A would actually build**, and what it costs without re-identifying.
+///
+/// The passes above re-identify every object they read. **Nothing downstream does that for them**, and
+/// this is the finding that decides A's price: `Store::accept` pushes the object straight into the
+/// pending batch (`cas/store.rs:504-521`) and never re-hashes it; the only re-hash on the offer path is
+/// `membership::stored_canonical` (`cas/membership.rs:32`), which runs on the **reuse** branch
+/// (`cas/save.rs:99`, `:125`) and this row takes it zero times — `pipeline.reused` is pinned at 0.
+/// So a verified reader that re-hashes every object pays for that hash **twice**, once in the reader and
+/// once in the packer, and the row's own numbers say so: 10.5 % of the declared figure for a hash the
+/// product is going to do anyway.
+///
+/// A pack stores the identity **with** the bytes, so the reader does not have to rediscover it. What
+/// that costs in verification is stated in the design page: the harness stops re-identifying the content
+/// stream per object, and the end-to-end gate becomes the pinned root digest and the pinned
+/// `content_bytes`, both of which fail if the wrong object reaches the store.
+#[test]
+fn the_packed_fixture_read_back_without_reidentifying() {
+    const CHUNK: usize = 4 << 20;
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    let declaration = Declaration::LARGE;
+    let plan = namespace_content::plan(&declaration, SEED).expect("plan");
+    let policy = ConstructionPolicy::frozen_default();
+    let capacities = policy.capacities();
+    let mut content = TreeStore::new();
+    for file in &plan.files {
+        if file.size == 0 {
+            continue;
+        }
+        let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
+            + u64::from(file.serial)
+            - (2 + u64::from(declaration.directories));
+        let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
+        let (result, _) = layerfs_telemetry::timer::Timing::disabled(
+            "setup.construct",
+            |scope: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>| {
+                construct_bytes(policy, &capacities, &bytes, &mut content, scope.child("content"))
+            },
+        );
+        result.expect("construct");
+    }
+    let ids: Vec<ObjectId> = content.insertion_order().to_vec();
+    let canonical: u64 = ids
+        .iter()
+        .filter_map(|id| content.object(*id))
+        .map(|object| object.canonical_len() as u64)
+        .sum();
+    let pack = std::env::temp_dir().join(format!("ns-spill-nohash-{}.pack", std::process::id()));
+    let _ = std::fs::remove_file(&pack);
+
+    let write_started = Instant::now();
+    {
+        let mut out = std::io::BufWriter::with_capacity(CHUNK, std::fs::File::create(&pack).expect("pack"));
+        out.write_all(b"LFSPACK1").expect("magic");
+        out.write_all(&(ids.len() as u64).to_le_bytes()).expect("count");
+        let mut offset = 16_u64 + (ids.len() as u64) * 16;
+        for id in &ids {
+            let object = content.object(*id).expect("held");
+            out.write_all(&offset.to_le_bytes()).expect("offset");
+            out.write_all(&(object.canonical_len() as u64).to_le_bytes()).expect("length");
+            offset += object.canonical_len() as u64;
+        }
+        for id in &ids {
+            let object = content.object(*id).expect("held");
+            out.write_all(object.canonical()).expect("payload");
+        }
+        out.flush().expect("flush");
+    }
+    let write_ns = write_started.elapsed().as_nanos() as u64;
+    drop(content);
+
+    let mut file = std::fs::File::open(&pack).expect("open pack");
+    let mut header = [0_u8; 16];
+    file.read_exact(&mut header).expect("header");
+    let count = u64::from_le_bytes(header[8..16].try_into().expect("count"));
+    let mut table = vec![0_u8; (count as usize) * 16];
+    file.read_exact(&mut table).expect("table");
+    let de_warmed = instruments::de_warm(&pack).expect("de-warm");
+    assert_eq!(de_warmed.resident_after, 0);
+    let before = instruments::process_usage();
+    let mut buffer = vec![0_u8; CHUNK];
+    let mut bytes = 0_u64;
+    let mut wrapped = 0_u64;
+    let started = Instant::now();
+    for entry in 0..count as usize {
+        let offset = u64::from_le_bytes(table[entry * 16..entry * 16 + 8].try_into().expect("o"));
+        let length = u64::from_le_bytes(table[entry * 16 + 8..entry * 16 + 16].try_into().expect("l"));
+        let length = usize::try_from(length).expect("length fits");
+        file.seek(SeekFrom::Start(offset)).expect("seek");
+        file.read_exact(&mut buffer[..length]).expect("read object");
+        bytes += length as u64;
+        // The identity is carried, not rediscovered: `FinalizedObject::new` re-hashes, so a reader that
+        // must hand over a `FinalizedObject` has to pay one hash it cannot avoid. What it avoids is
+        // doing it *in addition* to the packer's.
+        let object = FinalizedObject::new(ObjectRole::Chunk, buffer[..length].to_vec())
+            .expect("canonical object");
+        wrapped += 1;
+        std::hint::black_box(object);
+    }
+    let read_ns = started.elapsed().as_nanos() as u64;
+    let device = match (before, instruments::process_usage()) {
+        (Some(a), Some(b)) => b.disk_read_bytes.saturating_sub(a.disk_read_bytes),
+        _ => 0,
+    };
+    let fraction = read_ns as f64 / ROW_DECLARED_FIGURE_NS as f64;
+    eprintln!();
+    eprintln!(
+        "NO-REIDENT  pack written in {:.2} s untimed; {} objects, {} bytes read cold in {read_ns} ns = {:.2} % of the figure ({:.2} GB/s)",
+        write_ns as f64 / 1e9,
+        wrapped,
+        bytes,
+        fraction * 100.0,
+        bytes as f64 / read_ns as f64
+    );
+    eprintln!("            device bytes read: {device}");
+    let verdict = if fraction <= NEUTRAL_FRACTION {
+        "SPEED-NEUTRAL: inside the row's own 3.38 % within-session spread"
+    } else if fraction <= SLOWER_FRACTION {
+        "MINOR: above the row's spread and at or under 5 % of the declared figure"
+    } else {
+        "SLOWER: over 5 % of the declared figure"
+    };
+    eprintln!("            VERDICT {verdict}");
+    let _ = std::fs::remove_file(&pack);
 }
