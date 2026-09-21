@@ -1,0 +1,18 @@
+{
+  "source_parent": "a5bdc9f1e7e0fa4815ae356a7c5d783315fac649",
+  "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31",
+  "test_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/d2b683ab9aee1b217ba3da0545be949c28f178e2fe2657543d282ca1ff040cc3/open-test",
+  "test_binary_sha256": "d2b683ab9aee1b217ba3da0545be949c28f178e2fe2657543d282ca1ff040cc3",
+  "test_source_sha256": "5fa770c6810531169b4d708d07ac39313e625d9370f530f263d540794fa59017",
+  "helper_source_sha256": "8503ce5c94e6af65c19fef42037f0810dabb33ec466b876b9266c9cbbb47464c",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/8c066ec93033c1130573091bebde897cc92082f9a38d8df4f554b8665604e2a2/host",
+  "host_binary_sha256": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "ff0c43bbc913ef846639ba9cef7680cd70f677620ad6ae1227d81f11e4d9c8b8",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "change": "Tests explicitly forget owned lookup references before close_clean; actualUID1001permissions runtime retained; product unchanged"
+}

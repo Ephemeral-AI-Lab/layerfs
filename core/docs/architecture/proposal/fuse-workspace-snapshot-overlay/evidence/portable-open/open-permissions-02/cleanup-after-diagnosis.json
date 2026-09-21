@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "container": "layerfs-stage-df3633f182924b5d",
+  "volume": "layerfs-stage-df3633f182924b5d-data",
+  "processes_before_cleanup": "UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD\nroot                11688               11664               0                   12:00               ?                   00:00:00            sleep infinity\n",
+  "reason": "All permission assertions completed, but test attempted close_clean with live lookup references. Existing lifecycle correctly returnedBusy. Corrected tests explicitly forget their owned lookup references before clean close. Product unchanged.",
+  "no_clean_Workspace_close_claim": true
+}

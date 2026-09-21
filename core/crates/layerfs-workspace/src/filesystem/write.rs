@@ -189,7 +189,7 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let original = self.serial_original(serial, deadline)?;
-        self.mutate_file(original, FileMutation::SetLen(length), deadline)
+        self.mutate_file(original, FileMutation::SetLen(length), deadline, None)
     }
     pub fn edit_file_range(
         &self,
@@ -217,13 +217,23 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let original = self.edit_original(path, deadline)?;
-        self.mutate_file(original, FileMutation::Range(edit), deadline)
+        self.mutate_file(original, FileMutation::Range(edit), deadline, None)
+    }
+    pub(super) fn truncate_open(
+        &self,
+        reserved: &mut super::open::OpenReservation,
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
+        let original = self.serial_original(reserved.serial, deadline)?;
+        self.mutate_file(original, FileMutation::SetLen(0), deadline, Some(reserved))?;
+        Ok(())
     }
     fn mutate_file(
         &self,
         original: Original,
         mutation: FileMutation<'_>,
         deadline: Instant,
+        open: Option<&mut super::open::OpenReservation>,
     ) -> Result<MutationReceipt, WorkspaceError> {
         let (original, content, metadata, baseline) = original;
         let host = self
@@ -443,6 +453,10 @@ impl Workspace {
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
+        let ready_index = open
+            .as_ref()
+            .map(|reserved| reserved.validate(&state, original.serial))
+            .transpose()?;
         if needs_completion {
             state.completion = candidate.take_completion(generation)?;
             if state.completion.is_none() {
@@ -458,6 +472,9 @@ impl Workspace {
             if node.attr.serial == original.serial {
                 node.attr = inode.attributes(node.original);
             }
+        }
+        if let (Some(reserved), Some(index)) = (open, ready_index) {
+            reserved.publish(&mut state, index);
         }
         Ok(MutationReceipt {
             incarnation: self.inner.incarnation,

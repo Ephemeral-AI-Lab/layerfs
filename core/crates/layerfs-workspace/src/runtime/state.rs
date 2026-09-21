@@ -74,6 +74,8 @@ pub(crate) struct Handle {
     pub serial: u64,
     pub directory: bool,
     pub scope: ReferenceScope,
+    pub options: FileOpenOptions,
+    pub ready: bool,
 }
 pub(crate) struct Cookie {
     pub id: u64,
@@ -139,7 +141,7 @@ impl State {
     pub fn handle(&self, id: HandleId, directory: bool) -> Result<Handle, WorkspaceError> {
         self.handles
             .iter()
-            .find(|handle| handle.id == id && handle.directory == directory)
+            .find(|handle| handle.id == id && handle.directory == directory && handle.ready)
             .copied()
             .ok_or(WorkspaceError::BadHandle)
     }
@@ -244,45 +246,9 @@ impl Workspace {
         let handle = state
             .handles
             .iter()
-            .find(|entry| entry.id == handle)
+            .find(|entry| entry.id == handle && entry.ready)
             .ok_or(WorkspaceError::BadHandle)?;
         Ok(state.node(handle.serial)?.attr)
-    }
-    pub(crate) fn open_handle(
-        &self,
-        serial: u64,
-        directory: bool,
-        scope: ReferenceScope,
-    ) -> Result<HandleId, WorkspaceError> {
-        let mut state = self.state()?;
-        self.available(&state)?;
-        if scope == ReferenceScope::Projection && !state.mounted {
-            return Err(WorkspaceError::Busy);
-        }
-        let node = state.node(serial)?;
-        if directory && node.attr.kind != NodeKind::Directory {
-            return Err(WorkspaceError::NotDirectory);
-        }
-        if !directory && node.attr.kind == NodeKind::Directory {
-            return Err(WorkspaceError::IsDirectory);
-        }
-        if !directory && node.attr.kind != NodeKind::File {
-            return Err(WorkspaceError::WrongKind);
-        }
-        crate::filesystem::namespace::check_access(node.attr, self.inner.root.uid, 4)?;
-        if state.handles.len() == HANDLE_LIMIT {
-            return Err(WorkspaceError::Capacity);
-        }
-        let id = state.next_handle;
-        state.next_handle = id.checked_add(1).ok_or(WorkspaceError::Capacity)?;
-        state.node_mut(serial)?.handles += 1;
-        state.handles.push(Handle {
-            id,
-            serial,
-            directory,
-            scope,
-        });
-        Ok(id)
     }
     pub(crate) fn release_handle(
         &self,
@@ -293,7 +259,7 @@ impl Workspace {
         let index = state
             .handles
             .iter()
-            .position(|handle| handle.id == id && handle.directory == directory)
+            .position(|handle| handle.id == id && handle.directory == directory && handle.ready)
             .ok_or(WorkspaceError::BadHandle)?;
         let handle = state.handles.swap_remove(index);
         state.node_mut(handle.serial)?.handles -= 1;

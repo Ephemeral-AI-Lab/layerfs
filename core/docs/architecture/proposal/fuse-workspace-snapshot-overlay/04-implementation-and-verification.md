@@ -1262,3 +1262,12 @@ shared replacement bound. Native S-18 subsets now cover shrink/reextend of G and
 overwriting captured zeros before the saved root arrives. The original Q0 test-
 oracle failure remains FAIL. Writable handle/open/append and kernel coherence,
 full mounted schedules, namespace/npm and R6 remain separate open work.
+
+
+[20 — Portable open and atomic truncation](20-portable-open.md), from parent
+`a5bdc9f1e7e0fa4815ae356a7c5d783315fac649`, adds open_file with explicit portable
+read/write/append/truncate options. The existing128-slot vector contains pending
+and READY entries; pending IDs are unusable, pin their node, and become READY in
+the same publication as truncate-to-zero. Eight native cases pass with original
+owner-fixture/lookup-cleanup failures retained. Append is intent only until the
+next write operation; no writable kernel callback or mapping/coherence claim follows.

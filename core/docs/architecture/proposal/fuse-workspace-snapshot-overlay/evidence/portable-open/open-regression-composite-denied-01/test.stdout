@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::composite_denied ... COMMIT_FAILURE CommitFailure { generation: 1, phase: CompositeCommit, disposition: KnownBeforeCommit, cause: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None }), stage: None, observed_stage: None, known_outcome: None, observed_outcome: None, installed_revision: None }
+COMMIT_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 1, dirty_inodes: 1, phase: LocalBookkeeping, inode: None, saved_files: 1, saved_metadata: 1, stage_token: None, candidate_root: None, failure: None, failure_phase: None, commit: Some(CommitStatus { phase: CompositeCommit, known_root: None, known_head: None, installed_revision: None, failure: Some(KnownBeforeCommit) }) }), generation: 2, revision: 3, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 2057839 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 40960, reserved_bytes: 1699840, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 5, reusable_pages: 0, reserved_slots: 26, roots: 5, external_roots: 5, allocated_bytes: 24576, reserved_bytes: 1699840, working_bytes: 70848, accounting_complete: true, admission_stopped: false }
+COMPOSITE_CHECK composite-denial-preserves-file-acknowledgements-and-live-state PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.07s
+

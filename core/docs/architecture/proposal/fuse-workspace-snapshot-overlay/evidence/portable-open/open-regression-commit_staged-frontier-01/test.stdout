@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::commit_frontier ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 3, revision: 212, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 105, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2056858 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 2228224, reserved_bytes: 0, payloads: 208, retained_payloads: 104, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 120, reusable_pages: 228, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 524288, reserved_bytes: 0, working_bytes: 10552, accounting_complete: true, admission_stopped: false }
+COMMIT_CHECK streamed-104-inode-reconciliation-and-next-generation-save PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 15.29s
+

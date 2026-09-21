@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::open_permissions ... FAILED
+
+failures:
+
+failures:
+    linux::open_permissions
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.04s
+

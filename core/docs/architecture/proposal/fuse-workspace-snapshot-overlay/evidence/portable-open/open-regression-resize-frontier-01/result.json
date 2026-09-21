@@ -1,0 +1,100 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-resize",
+  "case": "frontier",
+  "checks": [
+    {
+      "id": "all-104-inode-shrinks-save-once-with-hardlink-sharing",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "B-21",
+    "B-28"
+  ],
+  "requirement_scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 25,
+  "commit_deadline_seconds": 25,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "writable open/handle flags and atomic append",
+    "mounted writes/truncate/extend",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound",
+    "explicit failed-state/DiscardStage disposition",
+    "full capture/prepared-mutation race schedules"
+  ],
+  "source": "a5bdc9f1e7e0fa4815ae356a7c5d783315fac649",
+  "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31",
+  "driver_sha256": "6b412e9723df585029373179253fb366b2cdb7fcefd6ccc51079e449f15ab728",
+  "test_source_sha256": "293578d503a7917aa52e34f036d962d3e80d81d4359343e520ce813ec3ccd79c",
+  "entrypoint_sha256": "f057c2f43860a94149f4fc0ec57273210bd475dba8d414ef4690a456d3cc5cf0",
+  "helper_source_sha256": "8503ce5c94e6af65c19fef42037f0810dabb33ec466b876b9266c9cbbb47464c",
+  "test_binary_sha256": "2e5ada6998162eeb11f8078abc2a96531dd1133aacf635ce47c91c9963ab4049",
+  "binaries": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "ff0c43bbc913ef846639ba9cef7680cd70f677620ad6ae1227d81f11e4d9c8b8",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "922ace202173",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence",
+    "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/2e5ada6998162eeb11f8078abc2a96531dd1133aacf635ce47c91c9963ab4049/resize-test"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/open-regression-resize-frontier-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": [
+      {
+        "pid": 33229,
+        "kind": "measurement",
+        "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+      },
+      {
+        "pid": 33232,
+        "kind": "measurement",
+        "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+      }
+    ]
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+    "receipt_sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+    "closed_store_sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "1e81fd1345ebdc3d186972e417d1344e96ea5b0c2c92db8cbba5303045b9f88f",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::resize_frontier",
+  "test_exit": 0,
+  "observations": [
+    "COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 2, revision: 106, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 105, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 1994122 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 65536, reserved_bytes: 0, payloads: 0, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 15, reusable_pages: 2, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 65536, reserved_bytes: 0, working_bytes: 8104, accounting_complete: true, admission_stopped: false }"
+  ],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 6.922552834003
+}

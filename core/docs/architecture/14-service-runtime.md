@@ -409,3 +409,14 @@ is48 bytes; the conservative596,448-byte transient accounting remains below the
 existing640 KiB reservation, with unchanged windows, FD and disk reserves.
 No writable mount, shared service operation or reference change is introduced;
 actual native results, retained failures and next dependencies are recorded in19.
+
+
+From parent `a5bdc9f1e7e0fa4815ae356a7c5d783315fac649`,
+[portable Workspace open](proposal/fuse-workspace-snapshot-overlay/20-portable-open.md)
+adds FileAccess/FileOpenOptions and open_file, preserving legacy read-only open.
+A charged pending handle pins its inode before truncate preparation; shared
+mutation publication installs inode state and READY together. All consumers
+reject pending IDs, and WriteOnly handles reject read even at EOF. The128-slot
+24-byte table remains3,072 bytes, with56 bytes of pending control charged per
+truncating open. No write API, FUSE option, daemon opcode or dependency is added;
+actual native results and narrower compatibility claims are recorded in20.

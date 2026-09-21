@@ -1,0 +1,4 @@
+
+thread 'linux::open_permissions' panicked at crates/layerfs-workspace/tests/open.rs:81:57:
+called `Result::unwrap()` on an `Err` value: Unsupported
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

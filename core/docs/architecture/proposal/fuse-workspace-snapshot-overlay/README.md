@@ -87,6 +87,13 @@ truncate/zero lowering and actual-save progress; a corrected test-oracle failure
 remains recorded. Writable open/handle semantics and kernel coherence are next
 prerequisites before enabling mount writes.
 
+**Portable open prerequisite:** [open rights and atomic truncation](20-portable-open.md)
+now reserve a pending slot/node pin before truncate preparation and publish the
+handle with the new file state. Eight native cases pass, including actual nonroot
+DAC, full/contended handle admission, forget/deadline and local failure; two test
+setup/lifecycle failures remain recorded. Handle write/append positioning and
+writable kernel coherence/binding remain open.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

@@ -305,6 +305,9 @@ impl WorkspaceHost {
             handles
                 .try_reserve_exact(HANDLE_LIMIT)
                 .map_err(|_| WorkspaceError::Capacity)?;
+            if handles.capacity() != HANDLE_LIMIT {
+                return Err(WorkspaceError::Capacity);
+            }
             cookies
                 .try_reserve_exact(COOKIE_LIMIT)
                 .map_err(|_| WorkspaceError::Capacity)?;

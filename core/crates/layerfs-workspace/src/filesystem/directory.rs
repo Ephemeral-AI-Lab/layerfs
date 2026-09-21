@@ -8,7 +8,7 @@ use std::{mem::size_of, time::Instant};
 
 impl Workspace {
     pub fn opendir(&self, serial: u64, scope: ReferenceScope) -> Result<HandleId, WorkspaceError> {
-        self.open_handle(serial, true, scope)
+        self.open_directory_handle(serial, scope)
     }
     pub fn readdir(
         &self,

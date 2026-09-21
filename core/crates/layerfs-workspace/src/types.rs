@@ -6,6 +6,19 @@ pub const DEFAULT_MEMORY_BUDGET_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_READ_BYTES: usize = 128 * 1024;
 pub const MAX_DIRECTORY_ENTRIES: usize = 128;
 pub type HandleId = u64;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FileAccess {
+    #[default]
+    ReadOnly,
+    WriteOnly,
+    ReadWrite,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FileOpenOptions {
+    pub access: FileAccess,
+    pub append: bool,
+    pub truncate: bool,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReferenceScope {
     Local,
@@ -161,6 +174,7 @@ pub struct WorkspaceStatus {
     pub closed: bool,
     pub active_operations: usize,
     pub nodes: usize,
+    /// Allocated handle slots, including pending opens.
     pub handles: usize,
     pub projection_handles: usize,
     pub cookies: usize,

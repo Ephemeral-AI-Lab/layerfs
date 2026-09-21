@@ -4,7 +4,12 @@ use std::{io::Cursor, time::Instant};
 
 impl Workspace {
     pub fn open(&self, serial: u64, scope: ReferenceScope) -> Result<HandleId, WorkspaceError> {
-        self.open_handle(serial, false, scope)
+        self.open_file(
+            serial,
+            FileOpenOptions::default(),
+            scope,
+            Instant::now() + std::time::Duration::from_secs(10),
+        )
     }
     pub fn read(
         &self,
@@ -25,6 +30,9 @@ impl Workspace {
             let state = self.state()?;
             self.available(&state)?;
             let handle = state.handle(handle, false)?;
+            if handle.options.access == FileAccess::WriteOnly {
+                return Err(WorkspaceError::BadHandle);
+            }
             let node = state.node(handle.serial)?;
             (
                 node.attr,
