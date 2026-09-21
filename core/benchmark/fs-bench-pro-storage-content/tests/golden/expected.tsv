@@ -35,6 +35,21 @@
 # g1.o3-pinned-counters on exactly this key and reproduced every other pinned
 # counter; the covering run after the re-pin is ns19-P2-repin-20260921T102900Z.
 # Every other pin for this row is untouched.
+# Re-baselined 2026-09-21 at 622eae391: pipeline-namespace-10000
+# counter:pipeline.commits 285 -> 95. The product change is 622eae391, "reserve
+# pooled ordinals in blocks, not one leaf at a time": the pooled metadata lane
+# acknowledged its ordinal reservation once per leaf, which by design clears
+# `wave_held` for one call, and the control row's own Store says how many leaves
+# that was - 10,163 ordinals over 207 catalogue groups, ~49 fresh values per leaf,
+# so ~207 of its 285 COMMITs were that one statement. A save's first four
+# reservations stay exact and the rest take a block of `fresh values x 16`, so the
+# count falls from 205 reservations to 17 and the COMMITs from 285 to 95, which is
+# the wave count (73, bounded by 4 MiB of canonical bytes) plus those reservations
+# and the two the save opens and closes with. Taken from
+# ns19-Q1-ordinalblock-20260921T114500Z, the declared-consequence run that failed
+# g1.o3-pinned-counters on exactly this key and reproduced every other pinned
+# counter; the covering run after the re-pin is ns19-Q2-repin-20260921T115200Z.
+# Every other pin for this row is untouched.
 # Regenerate with shared/pin_expected.py; never hand-edit a value.
 append-tail-4k-100m	counter:consumer.objects	4
 append-tail-4k-100m	counter:edit.base_bytes	104857600
@@ -1373,7 +1388,7 @@ pipeline-namespace-10000	counter:pipeline.chain_objects	382
 # statements 16595, packs_created, pack_appends, presence_queries 398,
 # full_records 25241, prefix_records 4, content_bytes - and the filesystem root
 # all reproduce exactly, which is what says the work did not change.
-pipeline-namespace-10000	counter:pipeline.commits	285
+pipeline-namespace-10000	counter:pipeline.commits	95
 pipeline-namespace-10000	counter:pipeline.content_bytes	301171810
 pipeline-namespace-10000	counter:pipeline.content_objects	24863
 pipeline-namespace-10000	counter:pipeline.declared_content_bytes	300000000
