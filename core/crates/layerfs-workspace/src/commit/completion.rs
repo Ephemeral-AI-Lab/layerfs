@@ -27,15 +27,15 @@ pub(crate) struct CommitAttempt {
     pub observed: OnceLock<CommitOutcomeWire>,
     received: AtomicBool,
     pub failure: OnceLock<Arc<CommitFailure>>,
-    pub stage: StageSelector,
+    pub stage: Option<StageSelector>,
     failure_charge: Mutex<Option<MetadataCharge>>,
     _charge: MetadataCharge,
 }
 impl CommitAttempt {
-    fn reserve(
+    pub(crate) fn reserve(
         workspace: &Workspace,
         submission: &Submission,
-        selector: &StageSelector,
+        selector: Option<&StageSelector>,
     ) -> Result<Arc<Self>, WorkspaceError> {
         let host = workspace
             .host
@@ -69,7 +69,7 @@ impl CommitAttempt {
         Ok(Arc::new(Self {
             root,
             next: Mutex::new(Some(next)),
-            stage: selector.clone(),
+            stage: selector.cloned(),
             status: Mutex::new(CommitStatus {
                 phase: CommitPhase::Preparing,
                 known_root: None,
@@ -98,7 +98,10 @@ impl CommitAttempt {
             .commit = Some(value);
         Ok(())
     }
-    fn fail(&self, submission: &Submission, cause: WorkspaceError) -> WorkspaceError {
+    pub(crate) fn fail(&self, submission: &Submission, cause: WorkspaceError) -> WorkspaceError {
+        let Ok(captured) = submission.capture() else {
+            return cause;
+        };
         let status = self.status.lock().map_or(
             CommitStatus {
                 phase: CommitPhase::Reconcile,
@@ -117,6 +120,7 @@ impl CommitAttempt {
                         matches!(h.stage, StageObservation::AcknowledgedUnknown(_))
                     })
             }
+            WorkspaceError::Stage(f) => f.disposition == StageFailureDisposition::Unknown,
             _ => self.received.load(Ordering::Acquire),
         };
         let disposition = if known_outcome.is_some() {
@@ -132,12 +136,24 @@ impl CommitAttempt {
         let Some(charge) = charge.take() else {
             return cause;
         };
+        let observed_stage = match &cause {
+            WorkspaceError::Service(f) => {
+                f.history.as_ref().and_then(|history| match &history.stage {
+                    StageObservation::Retained(stage)
+                    | StageObservation::AcknowledgedUnknown(stage) => Some((**stage).clone()),
+                    _ => None,
+                })
+            }
+            WorkspaceError::Stage(f) => f.observed_stage.clone(),
+            _ => None,
+        };
         let failure = Arc::new(CommitFailure {
-            generation: self.stage.stage().generation,
+            generation: captured.generation,
             phase: status.phase,
             disposition,
             cause,
             stage: self.stage.clone(),
+            observed_stage,
             known_outcome,
             observed_outcome: self.observed.get().cloned(),
             installed_revision: status.installed_revision,
@@ -200,7 +216,7 @@ impl Workspace {
                 return Err(error);
             }
         };
-        let attempt = match CommitAttempt::reserve(self, &submission, selector) {
+        let attempt = match CommitAttempt::reserve(self, &submission, Some(selector)) {
             Ok(attempt) => attempt,
             Err(error) => {
                 submission.commit_claimed.store(false, Ordering::Release);
@@ -223,7 +239,7 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<CommitReport, WorkspaceError> {
         attempt.phase(submission, CommitPhase::CommitStaged)?;
-        let stage = attempt.stage.stage();
+        let stage = attempt.stage.as_ref().ok_or(WorkspaceError::Io)?.stage();
         let response = self.host.call_input(
             (self.inner.store, stage.generation),
             Operation::HistoryCommand(HistoryCommand::CommitStaged {
@@ -236,6 +252,15 @@ impl Workspace {
             deadline,
         );
         drop(remote);
+        self.complete_commit_response(submission, attempt, response, deadline)
+    }
+    pub(crate) fn complete_commit_response(
+        &self,
+        submission: &Submission,
+        attempt: &CommitAttempt,
+        response: Result<Response, WorkspaceError>,
+        deadline: Instant,
+    ) -> Result<CommitReport, WorkspaceError> {
         let response = response?;
         attempt.received.store(true, Ordering::Release);
         let Response::History(result) = response else {
@@ -248,7 +273,7 @@ impl Workspace {
             .observed
             .set(outcome.clone())
             .map_err(|_| WorkspaceError::Io)?;
-        let (root, head) = validate_outcome(stage, &outcome)?;
+        let (root, head) = validate_outcome(submission, attempt.stage.as_ref(), &outcome)?;
         attempt
             .known
             .set(outcome.clone())
@@ -283,32 +308,39 @@ impl Workspace {
         };
         drop(retained);
         Ok(CommitReport {
-            generation: stage.generation,
-            stage_token: stage.token,
+            generation: submission.capture()?.generation,
+            stage_token: attempt
+                .stage
+                .as_ref()
+                .map(|selector| selector.stage().token),
             outcome,
             revision,
         })
     }
 }
 fn validate_outcome(
-    stage: &layerfs_bridge::contract::StageWire,
+    submission: &Submission,
+    selector: Option<&StageSelector>,
     outcome: &CommitOutcomeWire,
 ) -> Result<([u8; 32], Option<[u8; 33]>), WorkspaceError> {
+    let captured = submission.capture()?;
+    let context = &captured.context;
+    let candidate = selector.map(|selector| selector.stage().candidate_root);
     match outcome {
         CommitOutcomeWire::Committed(commit)
-            if commit.stack == stage.stack
-                && commit.parent == stage.expected_head
-                && commit.base_layer == stage.intended_commit_base
-                && commit.root == stage.candidate_root
-                && Some(commit.commit) != stage.expected_head =>
+            if commit.stack == context.branch.stack
+                && commit.parent == context.branch.head_commit
+                && commit.base_layer == context.branch.base_layer
+                && commit.root != context.effective_root
+                && candidate.is_none_or(|root| root == commit.root)
+                && Some(commit.commit) != context.branch.head_commit =>
         {
             Ok((commit.root, Some(commit.commit)))
         }
         CommitOutcomeWire::UpToDate { head, root }
-            if *head == stage.expected_head
-                && *root == stage.expected_root
-                && *root == stage.candidate_root
-                && stage.intended_commit_base == stage.expected_base =>
+            if *head == context.branch.head_commit
+                && *root == context.effective_root
+                && candidate.is_none_or(|candidate| candidate == *root) =>
         {
             Ok((*root, *head))
         }

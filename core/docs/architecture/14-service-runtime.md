@@ -384,3 +384,16 @@ survives later local failure; unknown results remain unknown. Exact staged repli
 local pre-admission, failure retention, repeated commits and current-source
 regressions are recorded in 17. FUSE maps Commit errors to EIO; no new wire opcode,
 service algorithm, writable callback or daemon Commit control is added here.
+
+
+From parent `6702e31e629ada5e78981b6854e36721e619e65b`,
+[ordinary Workspace Commit](proposal/fuse-workspace-snapshot-overlay/18-composite-commit.md)
+shares Stage's file/metadata preparation and CommitStaged's known-result
+reconciliation, using one existing HistoryCommand::Commit after preparation.
+Clean Commit pre-reserves an empty capture descriptor and 208-page escrow and
+submits empty PreparedChanges for actual C5 UpToDate. Pre-admission holds the
+remote permit only through the first logical request. Composite outcome lacks a
+token, so local Commit report/selector associations are optional and native stage
+observations remain separate. The existing shared operation, wire profile and
+one-construction-worker default are unchanged. Actual native scope and remaining
+mounted/control/failure-disposition dependencies are recorded in 18.

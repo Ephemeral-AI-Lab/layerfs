@@ -21,17 +21,18 @@ impl Workspace {
             return Err(WorkspaceError::InvalidInput);
         }
         let _operation = self.begin(false, deadline)?;
-        let submission = self.capture_stage(deadline)?;
+        let submission = self.capture_submission(false, deadline)?;
         match self.stage_captured(&submission, deadline) {
             Ok(selector) => Ok(selector),
             Err(error) => Err(submission.fail(error)),
         }
     }
-    fn stage_captured(
+    pub(crate) fn prepare_changes(
         &self,
         submission: &Submission,
         deadline: Instant,
-    ) -> Result<StageSelector, WorkspaceError> {
+        first_remote: &mut Option<crate::runtime::state::OperationGuard>,
+    ) -> Result<PreparedChanges, WorkspaceError> {
         let captured = submission.capture()?;
         let mut after = 0;
         let mut count = 0;
@@ -48,8 +49,11 @@ impl Workspace {
                 submission.phase(StagePhase::FileSave, Some(serial))?;
                 let mut source =
                     ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
-                let response = self.deliver(
-                    captured.generation,
+                let remote = first_remote
+                    .take()
+                    .map_or_else(|| self.begin(true, deadline), Ok)?;
+                let response = self.host.call_input(
+                    (self.inner.store, captured.generation),
                     Operation::EditFile {
                         root: inode.base,
                         base_length: inode.base_length,
@@ -60,6 +64,7 @@ impl Workspace {
                     &mut std::io::sink(),
                     deadline,
                 );
+                drop(remote);
                 if let Some(failure) = source.failure.take() {
                     submission
                         .state
@@ -92,8 +97,11 @@ impl Workspace {
                 });
             }
             submission.phase(StagePhase::MetadataSave, Some(serial))?;
-            let response = self.deliver(
-                captured.generation,
+            let remote = first_remote
+                .take()
+                .map_or_else(|| self.begin(true, deadline), Ok)?;
+            let response = self.host.call_input(
+                (self.inner.store, captured.generation),
                 Operation::UpdatePortableMetadata {
                     base: inode.metadata,
                     kind: 1,
@@ -105,7 +113,9 @@ impl Workspace {
                 0,
                 &mut std::io::sink(),
                 deadline,
-            )?;
+            );
+            drop(remote);
+            let response = response?;
             response.validate_metadata_saved()?;
             let Response::MetadataSaved {
                 base,
@@ -155,6 +165,15 @@ impl Workspace {
             directories: Vec::new(),
             inodes,
         };
+        Ok(changes)
+    }
+    fn stage_captured(
+        &self,
+        submission: &Submission,
+        deadline: Instant,
+    ) -> Result<StageSelector, WorkspaceError> {
+        let changes = self.prepare_changes(submission, deadline, &mut None)?;
+        let captured = submission.capture()?;
         submission.phase(StagePhase::StageChanges, None)?;
         let response = self.deliver(
             captured.generation,

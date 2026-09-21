@@ -26,7 +26,7 @@ mod linux {
             panic!("expected a new Commit")
         };
         assert_eq!(report.generation, selector.stage().generation);
-        assert_eq!(report.stage_token, selector.stage().token);
+        assert_eq!(report.stage_token, Some(selector.stage().token));
         assert_eq!(commit.root, selector.stage().candidate_root);
         assert_eq!(commit.stack, selector.stage().stack);
         assert_eq!(commit.parent, selector.stage().expected_head);

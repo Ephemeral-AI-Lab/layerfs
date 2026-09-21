@@ -224,29 +224,49 @@ impl Submission {
     }
 }
 impl Workspace {
-    pub(crate) fn capture_stage(
+    pub(crate) fn capture_submission(
         &self,
+        allow_clean: bool,
         deadline: Instant,
     ) -> Result<Arc<Submission>, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
-        {
+        let initial_clean = {
             let state = self.state()?;
             self.available(&state)?;
             if state.submission.is_some() {
                 return Err(WorkspaceError::Busy);
             }
-            if state.dirty_inodes == 0 {
+            if state.dirty_inodes == 0 && !allow_clean {
                 return Err(WorkspaceError::InvalidInput);
             }
-        }
+            (state.dirty_inodes == 0).then_some(state.generation)
+        };
         let host = self
             .host
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
         let submission = Submission::reserve(self, host)?;
+        let clean_root = match initial_clean
+            .map(|generation| {
+                host.clean_capture_root(
+                    self.inner
+                        .arena
+                        .as_ref()
+                        .ok_or(WorkspaceError::Unsupported)?,
+                    generation,
+                )
+            })
+            .transpose()
+        {
+            Ok(root) => root,
+            Err(error) => {
+                host.remove_empty_result_roots(&submission.results)?;
+                return Err(error);
+            }
+        };
         let result = (|| -> Result<(), WorkspaceError> {
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
             let mut state = self.state()?;
@@ -254,8 +274,10 @@ impl Workspace {
             if state.submission.is_some() {
                 return Err(WorkspaceError::Busy);
             }
-            if state.dirty_inodes == 0 {
-                return Err(WorkspaceError::InvalidInput);
+            if initial_clean.is_some() != (state.dirty_inodes == 0)
+                || initial_clean.is_some_and(|generation| generation != state.generation)
+            {
+                return Err(WorkspaceError::Busy);
             }
             let generation = state.generation;
             let next = generation
@@ -264,10 +286,18 @@ impl Workspace {
                 .ok_or(WorkspaceError::Capacity)?;
             let revision = state.revision;
             let next_revision = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
-            let root = state.overlay.clone().ok_or(WorkspaceError::Io)?;
+            let root = clean_root
+                .as_ref()
+                .cloned()
+                .or_else(|| state.overlay.clone())
+                .ok_or(WorkspaceError::Io)?;
             let context = state.branch.clone().ok_or(WorkspaceError::Unsupported)?;
-            let completion = state.completion.as_ref().ok_or(WorkspaceError::Io)?;
-            if completion.generation != generation || completion.bytes != ESCROW {
+            if clean_root.is_none() {
+                let completion = state.completion.as_ref().ok_or(WorkspaceError::Io)?;
+                if completion.generation != generation || completion.bytes != ESCROW {
+                    return Err(WorkspaceError::Io);
+                }
+            } else if state.completion.is_some() {
                 return Err(WorkspaceError::Io);
             }
             let count = state.dirty_inodes;
@@ -277,7 +307,12 @@ impl Workspace {
                 s.status.captured_revision = revision;
                 s.status.dirty_inodes = count;
             }
-            let completion = state.completion.take().ok_or(WorkspaceError::Io)?;
+            let completion = if let Some(root) = &clean_root {
+                root.take_completion(generation)?
+                    .ok_or(WorkspaceError::Io)?
+            } else {
+                state.completion.take().ok_or(WorkspaceError::Io)?
+            };
             submission.fund.install(completion)?;
             if submission
                 .captured
@@ -292,6 +327,9 @@ impl Workspace {
             {
                 unreachable!("one capture per reserved submission")
             }
+            if let Some(root) = &clean_root {
+                state.overlay = Some(root.clone());
+            }
             state.generation = next;
             state.revision = next_revision;
             state.dirty_inodes = 0;
@@ -299,6 +337,9 @@ impl Workspace {
             Ok(())
         })();
         if let Err(error) = result {
+            if let Some(root) = &clean_root {
+                host.release_clean_capture_root(root)?;
+            }
             host.remove_empty_result_roots(&submission.results)?;
             return Err(error);
         }

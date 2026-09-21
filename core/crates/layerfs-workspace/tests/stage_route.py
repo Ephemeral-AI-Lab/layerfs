@@ -319,7 +319,7 @@ def main():
               'checks': [{'id': key, 'status': 'NOT_RUN'} for key in CASES[args.case]],
               'packet_requirement_ids': REQUIREMENTS[args.case], 'requirement_scope': REQUIREMENT_SCOPE,
               'hard_budget_seconds': 60, 'stage_deadline_seconds': 25 if args.case == 'frontier' else 10,
-              'commit_deadline_seconds': 10 if MODE == 'functional-workspace-commit-staged' else None, 'performance_claim': False, 'cache_claim': None,
+              'commit_deadline_seconds': (25 if args.case == 'frontier' else 10) if MODE == 'functional-workspace-composite-commit' else (10 if MODE == 'functional-workspace-commit-staged' else None), 'performance_claim': False, 'cache_claim': None,
               'not_run': NOT_RUN}
     started = time.monotonic()
     def expired(_signal, _frame):

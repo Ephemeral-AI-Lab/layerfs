@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::composite_clean_successor ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 3, revision: 5, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 1994698 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 24576, reserved_bytes: 0, payloads: 1, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 0, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 16384, reserved_bytes: 0, working_bytes: 8392, accounting_complete: true, admission_stopped: false }
+COMPOSITE_CHECK clean-capture-preserves-late-D1-and-next-composite-input PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.12s
+

@@ -1240,3 +1240,15 @@ successor test-oracle failure retained separately. These are SDK subsets of the
 listed S/H/B rows, not mounted S-14 or full truncate/zero S-18 qualification.
 Composite Workspace::commit is next; actual UpToDate, explicit failed-state
 handling and the remaining mounted/control/npm/R6 prerequisites remain open.
+
+
+[18 — Ordinary composite Commit](18-composite-commit.md), from exact parent
+`6702e31e629ada5e78981b6854e36721e619e65b`, implements Workspace::commit with
+shared preparation and one existing HistoryCommand::Commit. It makes no hidden
+StageChanges/CommitStaged pair. Clean G reserves its empty descriptor and existing
+208-page escrow before capture, then sends empty PreparedChanges through the real
+service. Actual UpToDate before/after a changed Commit and clean G with late D1
+now pass, along with the selected existing-file/failure/resource SDK subsets.
+Composite success has no returned stage token; the local report/selector fields
+are optional and observed stage data remains separate. These results do not close
+full mounted, namespace, failure-disposition, npm or R6 acceptance.

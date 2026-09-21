@@ -24,6 +24,9 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<Option<(u64, Inode)>, WorkspaceError> {
         let captured = submission.capture()?;
+        if captured.count == 0 {
+            return Ok(None);
+        }
         let host = self
             .host
             .metadata
@@ -172,6 +175,12 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<Vec<InodeChange>, WorkspaceError> {
         let captured = submission.capture()?;
+        if captured.count == 0 {
+            if submission.result_ref()? != crate::backing::metadata_pages::PageRef::NULL {
+                return Err(WorkspaceError::Io);
+            }
+            return vector(0);
+        }
         let root = submission.result_root()?.ok_or(WorkspaceError::Io)?;
         let host = self
             .host

@@ -294,17 +294,17 @@ impl MetadataHost {
         roots.push(owner.clone());
         Ok(owner)
     }
-    fn funded_root(
+    fn empty_root(
         &self,
         arena: &Arc<Arena>,
-        fund: &Arc<ProgressFund>,
+        fund: Option<&Arc<ProgressFund>>,
         allowance: u64,
     ) -> Result<Arc<RootOwner>, WorkspaceError> {
         let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
         Ok(Arc::new(RootOwner {
             arena: arena.clone(),
             parent: None,
-            fund: Some(fund.clone()),
+            fund: fund.cloned(),
             allowance,
             state: Mutex::new(RootState {
                 root: PageRef::NULL,
@@ -322,6 +322,44 @@ impl MetadataHost {
             _charge: charge,
         }))
     }
+    pub fn clean_capture_root(
+        self: &Arc<Self>,
+        arena: &Arc<Arena>,
+        generation: u64,
+    ) -> Result<Arc<RootOwner>, WorkspaceError> {
+        let root = self.empty_root(arena, None, 0)?;
+        let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+        if roots.len() == MAX_ROOTS {
+            return Err(WorkspaceError::Capacity);
+        }
+        grow(&mut roots, self, &self.root_charge, MAX_ROOTS)?;
+        let mut state = root.state.lock().map_err(|_| WorkspaceError::Io)?;
+        self.reserve(ESCROW)?;
+        state.reserved = ESCROW;
+        state.completion_generation = Some(generation);
+        drop(state);
+        roots.push(root.clone());
+        Ok(root)
+    }
+    pub fn release_clean_capture_root(&self, root: &Arc<RootOwner>) -> Result<(), WorkspaceError> {
+        let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut state = root.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.root != PageRef::NULL
+            || state.pending.is_some()
+            || !state.temporary.is_empty()
+            || state.slot_credits != 0
+            || state.completion_generation.is_none()
+            || state.reserved != ESCROW
+        {
+            return Err(WorkspaceError::Io);
+        }
+        self.release(0, state.reserved)?;
+        state.reserved = 0;
+        state.completion_generation = None;
+        drop(state);
+        roots.retain(|existing| !Arc::ptr_eq(existing, root));
+        Ok(())
+    }
     pub fn reconciliation_root(
         self: &Arc<Self>,
         arena: &Arc<Arena>,
@@ -332,7 +370,7 @@ impl MetadataHost {
             identities: super::metadata_index::vector(1058)?,
             charge: ledger_charge,
         };
-        let owner = self.funded_root(arena, fund, 64 * 4096)?;
+        let owner = self.empty_root(arena, Some(fund), 64 * 4096)?;
         owner
             .state
             .lock()
@@ -386,8 +424,8 @@ impl MetadataHost {
         arena: &Arc<Arena>,
         fund: &Arc<ProgressFund>,
     ) -> Result<[Arc<RootOwner>; 2], WorkspaceError> {
-        let first = self.funded_root(arena, fund, 8 * 4096)?;
-        let second = self.funded_root(arena, fund, 8 * 4096)?;
+        let first = self.empty_root(arena, Some(fund), 8 * 4096)?;
+        let second = self.empty_root(arena, Some(fund), 8 * 4096)?;
         let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
         if roots.len() + 2 > MAX_ROOTS {
             return Err(WorkspaceError::Capacity);

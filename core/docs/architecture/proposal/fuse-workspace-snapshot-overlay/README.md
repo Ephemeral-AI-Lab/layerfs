@@ -73,6 +73,13 @@ quota, lost replies and local failure after remote success; one corrected test
 oracle failure remains recorded. Ordinary composite Commit, failure disposition,
 writable mounting, npm and R6 are still open. This is an SDK route subset.
 
+**Composite Commit update:** [ordinary Workspace Commit](18-composite-commit.md)
+now reuses the service's single composite command and the same lowering/completion
+owners. Fourteen actual native selections pass, including clean UpToDate before
+and after a changed Commit, late D1, real save progress/loss and exact failures.
+Composite replies carry no token; local result types now represent that absence.
+Writable mounting, failure disposition, full npm and R6 remain open.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

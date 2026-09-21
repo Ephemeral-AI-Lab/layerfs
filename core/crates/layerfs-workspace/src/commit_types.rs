@@ -1,11 +1,11 @@
-//! Results of one exact staged Commit and its local installation.
+//! Explicit staged and composite Commit outcomes and local installation.
 use crate::{backing::metadata::MetadataCharge, StageSelector, WorkspaceError};
 use layerfs_bridge::contract::{CommitOutcomeWire, Root};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitReport {
     pub generation: u64,
-    pub stage_token: u64,
+    pub stage_token: Option<u64>,
     pub outcome: CommitOutcomeWire,
     pub revision: u64,
 }
@@ -13,6 +13,7 @@ pub struct CommitReport {
 pub enum CommitPhase {
     Preparing,
     CommitStaged,
+    CompositeCommit,
     Reconcile,
     Cleanup,
     Complete,
@@ -36,7 +37,8 @@ pub struct CommitFailure {
     pub phase: CommitPhase,
     pub disposition: CommitFailureDisposition,
     pub cause: WorkspaceError,
-    pub stage: StageSelector,
+    pub stage: Option<StageSelector>,
+    pub observed_stage: Option<layerfs_bridge::contract::StageWire>,
     pub known_outcome: Option<CommitOutcomeWire>,
     pub observed_outcome: Option<CommitOutcomeWire>,
     pub installed_revision: Option<u64>,
@@ -50,6 +52,7 @@ impl std::fmt::Debug for CommitFailure {
             .field("disposition", &self.disposition)
             .field("cause", &self.cause)
             .field("stage", &self.stage)
+            .field("observed_stage", &self.observed_stage)
             .field("known_outcome", &self.known_outcome)
             .field("observed_outcome", &self.observed_outcome)
             .field("installed_revision", &self.installed_revision)
@@ -62,7 +65,9 @@ impl PartialEq for CommitFailure {
             && self.phase == other.phase
             && self.disposition == other.disposition
             && self.cause == other.cause
-            && self.stage.stage() == other.stage.stage()
+            && self.stage.as_ref().map(StageSelector::stage)
+                == other.stage.as_ref().map(StageSelector::stage)
+            && self.observed_stage == other.observed_stage
             && self.known_outcome == other.known_outcome
             && self.observed_outcome == other.observed_outcome
             && self.installed_revision == other.installed_revision

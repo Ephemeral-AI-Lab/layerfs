@@ -1,0 +1,23 @@
+{
+  "parent": "6702e31e629ada5e78981b6854e36721e619e65b",
+  "measured_staged_tree": "68324c6c7d12837e73e25c91b181d909f5522b0b",
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive <revision> crates core/crates; python3 tools/production_loc.py --root <archive> --json; identical nonblank/noncomment Rust/runtime SQL scope excluding inline/external tests, examples, tools, docs, manifests and generated output",
+  "combined": {
+    "before": 106670,
+    "after": 106870,
+    "delta": 200
+  },
+  "scopes": {
+    "reference": {
+      "before": 65417,
+      "after": 65417,
+      "delta": 0
+    },
+    "core": {
+      "before": 41253,
+      "after": 41453,
+      "delta": 200
+    }
+  }
+}

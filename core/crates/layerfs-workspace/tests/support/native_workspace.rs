@@ -32,6 +32,8 @@ pub enum Gate {
     CommitUnknown,
     CommitDenied,
     ReadHold,
+    CompositeBefore,
+    CompositeCompletionFailure,
 }
 #[derive(Default)]
 pub struct Observations {
@@ -94,7 +96,7 @@ impl Native {
             }
             first
         };
-        if first_save && self.gate == Gate::Delivery {
+        if first_save && matches!(self.gate, Gate::Delivery | Gate::CompositeCompletionFailure) {
             let observations = self.observations.lock().unwrap();
             let (_state, timed) = self
                 .changed
@@ -118,8 +120,25 @@ impl Native {
         }
         let is_commit = matches!(
             request.operation,
-            Operation::HistoryCommand(HistoryCommand::CommitStaged { .. })
+            Operation::HistoryCommand(
+                HistoryCommand::CommitStaged { .. } | HistoryCommand::Commit(_)
+            )
         );
+        if self.gate == Gate::CompositeBefore
+            && matches!(&request.operation, Operation::HistoryCommand(HistoryCommand::Commit(changes)) if changes.workspace == [31; 32])
+        {
+            let mut observed = self.observations.lock().unwrap();
+            observed.commit_entered = true;
+            self.changed.notify_all();
+            let (_state, timed) = self
+                .changed
+                .wait_timeout_while(observed, Duration::from_secs(5), |s| !s.commit_released)
+                .unwrap();
+            assert!(
+                !timed.timed_out(),
+                "external composite gate was not released"
+            );
+        }
         let endpoint = if is_commit && self.gate == Gate::CommitUnknown {
             std::env::var("LAYERFS_COMMIT_ENDPOINT")
                 .unwrap()
@@ -159,7 +178,10 @@ impl Native {
                         .unwrap()
                         .commits
                         .push(outcome.clone());
-                    if self.gate == Gate::CommitCompletionFailure {
+                    if matches!(
+                        self.gate,
+                        Gate::CommitCompletionFailure | Gate::CompositeCompletionFailure
+                    ) {
                         file_limit("2048");
                         println!("COMMIT_BACKING_LIMIT_APPLIED");
                     }
