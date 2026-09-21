@@ -112,3 +112,67 @@ workspace's tests, any other harness case or lane, any durability run, and a pai
 
 Production LOC: **31318 -> 31371 (delta +53)**; combined 96735 -> 96793. Method
 `python3 tools/production_loc.py --root <tree>`, first parent `755bfa21f` against the committed tree.
+
+## 6. The row's formula changed: the connection is out of it (owner direction, 2026-09-21)
+
+**Direction.** Remove the database connection's establishment and teardown from the row's formula.
+This section records what was implemented, what it costs and what it does not fix.
+
+**What the instrument now publishes** (`src/ops/pipeline.rs`), all in the row's receipt:
+
+| counter | meaning |
+| --- | --- |
+| `pipeline.establishment_ns` | the closure's start to `accept_span_ns`'s start: `Store::open` + `begin_save` — two connection opens, pragma configuration, the read-scope temp table, the save-slot reservation, the two index clones |
+| `pipeline.teardown_ns` | the save's connection close, taken from `diag_finish_drop_ns` |
+| `pipeline.operation_work_ns` | **the row's formula**: `accept_span_ns - teardown_ns` |
+| `pipeline.accept_span_ns` | unchanged, the profile's denominator |
+| `phases.operation_ns` | unchanged, the inclusive span the runner times |
+
+`establishment_ns + operation_work_ns + teardown_ns` is exactly `operation_ns`, so **the inclusive
+figure is always reconstructible from the receipt** and nothing is hidden.
+
+**Measured, `ns19-D4b-formula-20260921T071758Z`** (PASS, 13/13 gates, 14/14 pinned counters):
+
+| | ms |
+| --- | ---: |
+| inclusive `operation_ns` | 1864.9 |
+| establishment | 4.511 |
+| teardown | 39.410 |
+| **`operation_work_ns`** | **1821.0** |
+
+**What the change costs, stated plainly.** The teardown is *caused* by the phase's own writes — it is
+the operating system charging for the pages the save dirtied — so removing it means the phase no
+longer pays the full price of its own work. That is a real objection and it is recorded rather than
+argued away. Two things make it acceptable here: the term is a property of the machine and the
+window (6.7 ms to 469.9 ms on identical code), so keeping it in the phase makes the row's level
+incomparable between windows; and it is **published**, not dropped, so a reader who wants the
+inclusive figure has it.
+
+**What it does not fix.** The v0.1.6 pairing is `NOT_MEASURED` under this boundary, and **the
+comparison arm must use the same boundary on both sides** before any paired claim is made. The
+clean-tree arm A0 also predates the teardown instrument: its `accept_span_ns` is known
+(3487.313 ms) and its establishment is derivable (2.948 ms), but its teardown is not, so the
+cumulative work figure below is an upper bound rather than a like-for-like pair.
+
+**Cumulative, against this worktree's clean tree (A0):**
+
+| | A0 | now | movement |
+| --- | ---: | ---: | ---: |
+| inclusive `operation_ns` | 3490.3 ms | 1864.9 ms | **−46.6 %** |
+| `operation_work_ns` (the new formula) | <= 3487.3 ms (teardown unmeasured) | 1821.0 ms | **<= −47.8 %** |
+| CPU (user+system) | 3388.9 ms | 1835.1 ms | **−45.8 %** |
+| complete command | 4770.5 ms | 3130.7 ms | −34.4 % |
+
+Against the campaign's own baseline row (3351.0 ms inclusive) it is **−44.3 %**.
+
+**A pre-existing harness failure, reported and not repaired.** `cargo test` for the harness fails
+three cases in `registry_negative` (`the_frozen_cardinality_array_is_what_the_registry_holds`,
+`the_lane_sizes_and_admission_split_are_the_frozen_ones`, `the_registry_is_clean_under_its_own_self_check`):
+the registry holds 221 rows and a per-family cardinality of `[…, 2, 5]` where the frozen array and
+`CONTRACT.md` section 3 say 220 and `[…, 2, 4]`. The fifth row is `pipeline-namespace-10000`, added by
+the earlier campaign. **It is not caused by this round and not repaired here**: `src/registry.rs`,
+`tests/registry_negative.rs` and `tests/golden/registry.tsv` are byte-identical to `HEAD` (an empty
+`git diff HEAD` for all three), and the base commit's own `run.json` records the identical mismatch
+(`ns17-squadA-packcounters-…/run.json`, `registry_self_check`). Repairing it means editing a frozen
+expectation transcribed from a contract document, which deserves its own review rather than a quiet
+line in this commit.

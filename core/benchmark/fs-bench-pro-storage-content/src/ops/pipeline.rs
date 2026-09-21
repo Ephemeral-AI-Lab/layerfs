@@ -793,8 +793,29 @@ fn namespace_scale(
     let mut content_span_ns = 0_u64;
     let mut finish_span_ns = 0_u64;
     let mut finish_child_ns = 0_u64;
+    let mut establishment_ns = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
+        // **The row's formula excludes the connection.** The measured closure
+        // still spans everything, so nothing is hidden, but the number this row
+        // reports as its work is `accept_span_ns` minus the teardown, and the
+        // establishment that precedes `accept_span_ns` is published as its own
+        // figure. Both are counted here so a reader can reconstruct the inclusive
+        // span from the receipt: `establishment_ns + accept_span_ns` is the whole
+        // closure and `teardown_ns` is inside `accept_span_ns`.
+        //
+        // Why the boundary moved, and what it costs: the teardown is the save's
+        // connection close, which is the operating system's price for the pages
+        // the save wrote (~0.75 ms/MB, identical in every journal mode, measured
+        // with no product code in
+        // `docs/roadmap/0.1/0.1.7/evidence/issue219-ns19d-release-20260921T070000Z/close-probe.py`).
+        // It is a property of the machine and the window, not of the operation:
+        // 6.7 ms in one row and 469.9 ms in another, identical product code. Keeping
+        // it in the phase makes the row's level uncomparable between windows, which
+        // is the failure the campaign already recorded once. It is published rather
+        // than dropped, and the v0.1.6 pairing must use the same boundary on both
+        // sides.
+        let closure_started = std::time::Instant::now();
         let store = Store::open(&sample, timing.child("store.open"))?;
         let mut operation = store.begin_save(timing.child("storage.begin"))?;
         let accept_started = std::time::Instant::now();
@@ -863,6 +884,7 @@ fn namespace_scale(
         let outcome = operation.finish(finish_scope)?;
         let finish_done = std::time::Instant::now();
         accept_span_ns = accept_started.elapsed().as_nanos() as u64;
+        establishment_ns = accept_started.duration_since(closure_started).as_nanos() as u64;
         build_span_ns = build_done.duration_since(accept_started).as_nanos() as u64;
         content_span_ns = content_done.duration_since(build_done).as_nanos() as u64;
         finish_span_ns = finish_done.duration_since(content_done).as_nanos() as u64;
@@ -1059,6 +1081,22 @@ fn namespace_scale(
         ("pipeline.span_content_ns", content_span_ns),
         ("pipeline.span_finish_ns", finish_span_ns),
         ("pipeline.span_finish_child_ns", finish_child_ns),
+        // The two terms the row's formula excludes, published so the inclusive
+        // span is always reconstructible: `establishment_ns + accept_span_ns` is
+        // the whole measured closure and `teardown_ns` is the part of
+        // `accept_span_ns` that the save's own connection close accounts for.
+        ("pipeline.establishment_ns", establishment_ns),
+        (
+            "pipeline.teardown_ns",
+            outcome.profile.diag.finish_drop_ns,
+        ),
+        // The row's formula: the accept span minus the teardown. Establishment is
+        // outside the accept span already, so `establishment_ns + operation_work_ns
+        // + teardown_ns` is exactly the inclusive closure the runner times.
+        (
+            "pipeline.operation_work_ns",
+            accept_span_ns.saturating_sub(outcome.profile.diag.finish_drop_ns),
+        ),
         // DIAGNOSTIC totals of the regions the seven buckets do not charge. Each is
         // a **total** of a named region, so a region that contains a bucket contains
         // its charge too; the residue is the difference. They are published beside
