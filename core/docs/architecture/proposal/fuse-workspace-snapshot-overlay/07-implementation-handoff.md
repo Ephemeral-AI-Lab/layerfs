@@ -68,17 +68,15 @@ The source audit remains pinned to `152b9c3a2`; review its delta to the selected
 integrated tree, including [configured concurrency and schema 8](../../../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md),
 before treating any fixed limit or missing operation in this packet as current.
 
-Before editing product code, inspect HEAD, working changes and the actual
-relevant source. An implementation worktree already created at `152b9c3a2`
-does not move with main. Inspect and preserve its work before explicitly
-integrating the newer main there; do not reset it or overwrite another owner's
-changes. Select an isolated checkout when needed and record its actual base.
+Start a new implementation task from synchronized `main`, using the current
+committed proposal packet. Inspect HEAD, working changes and the actual relevant
+source before editing product code. If isolation is needed, create a fresh
+implementation worktree from that main revision and record its exact base;
+preserve unrelated work in the source checkout.
 
-Carry the committed current packet into the selected implementation tree and
-record its identity. A worktree created from an older commit does not gain these
-documents automatically. Keep the requested packet updated with design/round
-status. Historical source pins and receipts retain their original identities;
-do not relabel them as current measurements or restart completed investigations.
+Keep the requested packet updated with design/round status. Historical source
+pins and receipts retain their original identities; do not relabel them as
+current measurements or restart completed investigations.
 
 ## 3. Settled architecture and source ownership
 

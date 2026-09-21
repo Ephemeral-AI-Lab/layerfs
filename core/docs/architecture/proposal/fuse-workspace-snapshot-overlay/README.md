@@ -23,7 +23,8 @@ reviewed source basis remains `152b9c3a2`; it is not relabelled as a review of
 the later source. In particular, [the concurrency controls](../../../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md)
 include C2 schema 8 and configured writer admission. Reconcile later shared API,
 resource and namespace changes before implementing a source-pinned prerequisite.
-Existing implementation worktrees do not move when main is synchronized.
+Start a new implementation task from synchronized `main`; record the actual
+starting commit and use the current proposal packet.
 
 **Crate layout (owner update, 2026-09-21):** `layerfs-fuse` and
 `layerfs-workspace` are separate libraries under `core/crates/`.
