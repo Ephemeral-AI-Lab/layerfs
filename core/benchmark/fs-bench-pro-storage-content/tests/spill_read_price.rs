@@ -701,3 +701,108 @@ fn the_packed_fixture_read_back_without_reidentifying() {
     eprintln!("            VERDICT {verdict}");
     let _ = std::fs::remove_file(&pack);
 }
+
+/// The two candidates for A's real added cost, measured directly and against each other.
+///
+/// The streaming pass above did **more** work than the "hash only" pass and finished **faster**
+/// (347,960,667 against 372,680,083 ns), which cannot both be true if the hash is what costs. So this
+/// separates them on the same warm bytes with nothing else in the loop: a plain copy of the whole
+/// fixture, and an identity computation over it. Whichever is the floor is what A's reader costs, and the
+/// difference between them is what a wider window and a better memory layout can still buy.
+#[test]
+fn the_two_floors_for_a_reader() {
+    const MIB: usize = 1 << 20;
+    let total = 503 * MIB;
+    let source = vec![0x5a_u8; total];
+    let mut destination = vec![0_u8; total];
+
+    // A copy of every byte, which is the least any reader can do to hand over owned objects.
+    let started = Instant::now();
+    destination.copy_from_slice(&source);
+    let copy_ns = started.elapsed().as_nanos() as u64;
+    std::hint::black_box(&destination);
+
+    // An identity over every byte, in the row's own object size: 4,598 bytes is 502,912,427 / 109,373.
+    const OBJECT: usize = 4_598;
+    let started = Instant::now();
+    let mut digest = [0_u8; 32];
+    let mut at = 0;
+    while at + OBJECT <= total {
+        digest = *ObjectId::for_bytes(&source[at..at + OBJECT]).as_bytes();
+        at += OBJECT;
+    }
+    let hash_ns = started.elapsed().as_nanos() as u64;
+    std::hint::black_box(&digest);
+
+    eprintln!();
+    eprintln!(
+        "FLOORS  memcpy {total} bytes        {copy_ns:>14} ns   {:.2} GB/s   {:.2} % of the figure",
+        total as f64 / copy_ns as f64,
+        copy_ns as f64 / ROW_DECLARED_FIGURE_NS as f64 * 100.0
+    );
+    eprintln!(
+        "        blake3 over {OBJECT}-byte objects {hash_ns:>9} ns   {:.2} GB/s   {:.2} % of the figure",
+        total as f64 / hash_ns as f64,
+        hash_ns as f64 / ROW_DECLARED_FIGURE_NS as f64 * 100.0
+    );
+}
+
+/// **Does dropping the content store give its pages back?** The question option A lives or dies on.
+///
+/// macOS does not return freed allocator pages to the OS, so RSS can stay high after a large structure is
+/// dropped. The harness's own probe already recorded this once: round 21's `namespace_memory_probe`
+/// notes that its stage readings "run after a first measurement in the same process, so their absolute
+/// RSS carries that measurement's freed-but-resident pages". Option A assumes the opposite - that spilling
+/// the fixture and dropping the store lowers what the process holds - so this measures it directly rather
+/// than assuming it: hold 503 MB, drop it, and read RSS either side.
+#[test]
+fn dropping_the_content_store_and_reading_rss() {
+    let declaration = Declaration::LARGE;
+    let plan = namespace_content::plan(&declaration, SEED).expect("plan");
+    let policy = ConstructionPolicy::frozen_default();
+    let capacities = policy.capacities();
+    let rss = || {
+        instruments::process_usage()
+            .map(|usage| usage.resident_bytes)
+            .unwrap_or(0)
+    };
+    let start = rss();
+    let mut content = TreeStore::new();
+    for file in &plan.files {
+        if file.size == 0 {
+            continue;
+        }
+        let index = u64::from(file.directory) * namespace_content::FILES_PER_DIRECTORY
+            + u64::from(file.serial)
+            - (2 + u64::from(declaration.directories));
+        let bytes = fs_bench_storage_content::fixture::noise(file.size, SEED ^ index.rotate_left(13));
+        let (result, _) = layerfs_telemetry::timer::Timing::disabled(
+            "setup.construct",
+            |scope: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>| {
+                construct_bytes(policy, &capacities, &bytes, &mut content, scope.child("content"))
+            },
+        );
+        result.expect("construct");
+    }
+    let held = rss();
+    let canonical: u64 = content
+        .insertion_order()
+        .iter()
+        .filter_map(|id| content.object(*id))
+        .map(|object| object.canonical_len() as u64)
+        .sum();
+    drop(content);
+    let after_drop = rss();
+    // Re-read after a beat, in case the pages are returned lazily.
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    let later = rss();
+    eprintln!();
+    eprintln!(
+        "RSS     start {start}  after holding {canonical} canonical bytes {held}  after drop {after_drop}  +250 ms {later}"
+    );
+    eprintln!(
+        "        the drop released {} bytes; the content held {}",
+        held.saturating_sub(after_drop),
+        canonical
+    );
+}

@@ -287,13 +287,65 @@ estimate. The owner has accepted a *minor* degradation on this basis; the round 
 re-register the bound before its first locked run and is free to find the price higher or lower than
 these four readings, which are one fixture on one host.
 
+## 5b. A was built and measured, and it is refuted
+
+The owner ruled in favour of the question §7 asks, so option A was implemented and run: one pack with an
+entry table (`workload/spill.rs`), a streaming 1 MiB windowed reader, no `mmap`, no per-object
+re-identification, the fixture de-warmed before the timer with the same `msync(MS_INVALIDATE)` +
+`mincore` primitive the sample Store already goes through. It works — the row runs `PASS` and its
+filesystem root still reproduces exactly, `2412681d…fd954`. **It is refuted on its own numbers.**
+
+| | `ns22-E2` (B only) | A implemented | change |
+| --- | ---: | ---: | ---: |
+| **lifetime peak RSS** | 882,180,096 | **752,877,568** | **−129,302,528 (−14.7 %)** — not −82 % |
+| measured-region baseline | 847,052,800 | 718,569,472 | −15.2 % |
+| `pipeline.operation_work_ns` (declared) | 3,662,759,417 | **4,072,154,667** | **+409,395,250 (+11.2 %)** |
+| `pipeline.accept_span_ns` | 4,070,293,292 | 4,302,119,542 | +5.7 % |
+| `pipeline.span_content_ns` | 2,494,001,208 | 2,991,542,667 | **+497,541,459** |
+| `pipeline.content_objects_offered` | 109,414 | 109,414 | the same objects reach the store |
+
+**Why the memory did not move, measured.** The option assumed that spilling the fixture and dropping the
+store lowers what the process holds. It does not: a probe that holds the row's 503 MB of content and drops
+it releases **111,869,952 of the 502,912,427 bytes** to the OS and keeps the rest resident — macOS does not
+return freed allocator pages, which this campaign had already recorded once (round 21's probe notes its own
+stage readings carry "freed-but-resident pages"). **A fixture built in this process stays in this process.**
+That is why the peak fell 14.7 % rather than the 82 % §5a's arithmetic implied: the arithmetic priced a
+process that never holds the content, and the only way to be that process is to **stream the objects into
+the pack as they are constructed** — a different change, and one that still pays the hash below.
+
+**Why the time did move.** `span_content_ns` gained 497,541,459 ns, against §5a's measured floor of
+508,737,250 ns for hashing the fixture's bytes in its own object sizes. The reader cannot avoid that hash:
+`FinalizedObject` has exactly one constructor and it computes the identity (`object/output.rs:98`), so
+every object served is hashed once in the reader **in addition to** the hash the packer performs
+(`encoding/pool/value_group.rs:47`). The option therefore pays the fixture's hash twice, and no pack
+format, window size or read mechanism changes that.
+
+**The verdict is the page's own threshold, and it fails it.** §5 asked for a bounded fixture at a price
+the row could carry; the price is **+11.2 % of the declared figure for −14.7 % of the peak**, where the
+design's premise was ~5.6× less memory for a minor cost. Measured against the alternative already landed
+(option B, which is **faster** and removes mechanism), A is a strict loss on both axes it was meant to
+serve. **It is reverted**, and the finding is kept rather than the code.
+
+**What survives, and what would have to change for A to be reconsidered.**
+
+* The pack format, the reader and the measurement are sound and are recorded here; the reader streams
+  502,912,427 bytes through a 1 MiB window and serves all 109,414 objects in order with the row's digest
+  intact. The defects were in the premise, not the implementation.
+* A would need **streaming construction**: the content never assembled in a `TreeStore` at all, written
+  into the pack as each object is constructed and never held. That bounds the peak for real, and it is a
+  larger change than "spill after construction".
+* It would **still** pay the hash twice unless the product gains a way to offer bytes it has already
+  authenticated. Step 5 of the handoff forbids that product change in this round, and the measurement
+  above is what it would buy: **497,541,459 ns, 14 % of the row's figure.**
+
 ## 6. What is not claimed
 
 * **No performance figure of its own.** Every number in §1 is from a locked run named beside it; §3's
   prices are surfaces (`file:line`) and measured inputs, and §3A's ~120 MB is labelled `[arithmetic]`.
 * **No claim that A is speed-neutral.** §5a measures the read at 9.8–12.6 % of the declared figure
   depending on the reader shape, against the 2.23 % of deep copy it replaces. The page's own earlier
-  estimate of 1–2 % was wrong and is corrected there.
+  estimate of 1–2 % was wrong and is corrected there. §5b then built it and measured the end-to-end
+  trade: **+11.2 % of the declared figure for −14.7 % of the peak.** The recommendation is withdrawn.
 * **No claim that the reference harness's approach is portable as-is.** Its fixture is *generated* into
   the scratch window and never authenticated as a set of canonical objects; this row's fixture is
   109,414 canonical objects whose identities are pinned. A has to preserve
