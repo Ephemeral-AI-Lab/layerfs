@@ -14,9 +14,9 @@
 
 mod support;
 
-use layerfs_storage::{Store, STORE_PAGE_SIZE_BYTES};
+use layerfs_storage::{StorageError, Store, STORE_CACHE_PAGES, STORE_PAGE_SIZE_BYTES};
 use support::{
-    construct_file, create_store, open_store, patterned, read_objects, save_all, TempDir,
+    construct_file, create_store, disabled, open_store, patterned, read_objects, save_all, TempDir,
 };
 
 /// The engine's own answer for a file the product created.
@@ -90,4 +90,54 @@ fn a_store_at_another_page_size_opens_writes_and_reads() {
     let (values, _counters) = read_objects(&reopened, &[second_root]).expect("read the new object");
     assert_eq!(values[0], second_collected.objects()[0].2);
     assert!(Store::default_policy().small_file_threshold_bytes() > 0);
+}
+
+/// The page cache the save's own connection reports, through the accessor.
+fn save_cache_profile(store: &Store) -> layerfs_storage::cas::SaveConnectionProfile {
+    disabled(|scope| {
+        let operation = store.begin_save(scope.child("storage.begin"))?;
+        let profile = operation.connection_profile()?;
+        let _outcome = operation.finish(scope.child("storage.finish"))?;
+        Ok::<_, StorageError>(profile)
+    })
+    .expect("save with a profile reading")
+}
+
+#[test]
+fn the_page_cache_is_a_page_count_and_follows_the_stores_own_page_size() {
+    let dir = TempDir::new("page_cache");
+    let path = dir.store_path("wide");
+    let store = create_store(&path);
+    let profile = save_cache_profile(&store);
+
+    // The declaration is a count of pages, so the pragma is the count times the
+    // page size the file reports - never SQLite's byte default.
+    assert_eq!(
+        profile.cache_size,
+        -(STORE_CACHE_PAGES * profile.page_size / 1024),
+        "the cache is the declared page count at this store's page size"
+    );
+    assert_eq!(profile.page_size, STORE_PAGE_SIZE_BYTES as i64);
+    assert!(
+        profile.cache_size < -2_000,
+        "a wider page gets more cache than the engine's 2 MiB byte default, read {}",
+        profile.cache_size
+    );
+
+    // The same declaration on the Store every earlier build produced: 512 pages
+    // of 4096 bytes is the 2 MiB the engine defaulted to, exactly.
+    let legacy = dir.store_path("narrow");
+    let legacy_store = create_store(&legacy);
+    save_all(&legacy_store, &construct_file(&patterned(8_000)).0).expect("first save");
+    let raw = rusqlite::Connection::open(&legacy).expect("relayout connection");
+    raw.execute_batch("PRAGMA page_size = 4096; VACUUM;")
+        .expect("relayout");
+    drop(raw);
+    let reopened = open_store(&legacy);
+    let profile = save_cache_profile(&reopened);
+    assert_eq!(profile.page_size, 4_096);
+    assert_eq!(
+        profile.cache_size, -2_048,
+        "512 pages of 4096 bytes is the engine's own 2 MiB default"
+    );
 }

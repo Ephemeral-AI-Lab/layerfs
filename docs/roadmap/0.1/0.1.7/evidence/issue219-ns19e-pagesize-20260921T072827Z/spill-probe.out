@@ -1,0 +1,7 @@
+sqlite 3.51.2   (ms, summed over 800 transactions; random keys)
+  page=4096 cache=2MiB (the control)   pages  77489  commit   514.37  blob   51.40  insert   104.12 (  4.20 us/row)  signature  16.62
+  page=64KiB cache=2MiB (E1 as landed) pages   5014  commit   149.57  blob   38.67  insert   164.51 (  6.63 us/row)  signature  66.38
+  page=64KiB cache=8MiB                pages   5014  commit   194.16  blob   36.33  insert   111.14 (  4.48 us/row)  signature  45.54
+  page=64KiB cache=32MiB               pages   5014  commit   192.51  blob   36.15  insert   112.65 (  4.54 us/row)  signature  45.68
+  page=16KiB cache=2MiB                pages  19489  commit   247.21  blob   38.98  insert   111.74 (  4.51 us/row)  signature  24.71
+  page=16KiB cache=8MiB                pages  19489  commit   300.43  blob   43.85  insert   113.53 (  4.58 us/row)  signature  23.61

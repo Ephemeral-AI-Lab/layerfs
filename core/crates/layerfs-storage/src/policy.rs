@@ -78,6 +78,27 @@ pub const SCHEMA_VERSION: i64 = 9;
 /// number. See `crate::sqlite::schema::create`, the only writer of the pragma.
 pub const STORE_PAGE_SIZE_BYTES: usize = 65_536;
 
+/// Pages the connection's page cache is declared to hold.
+///
+/// **The page cache is a count of pages, and SQLite's default is a count of
+/// bytes.** The engine's own default is `cache_size = -2000` KiB, which is 512
+/// pages only because the engine also assumes a 4096-byte page; a Store created
+/// with a wider page silently kept 2 MiB and therefore a sixteenth of the pages.
+/// Measured on this row's own shape (800 transactions, 24,800 random-key row
+/// inserts, 16,800 blob appends) with no product code: at 65536-byte pages a
+/// 2 MiB cache costs 6.63 us per row insert and 66.38 ms of signature writes,
+/// while 8 MiB or 32 MiB costs 4.48-4.54 us and 45.5 ms, against 4.20 us and
+/// 16.62 ms for the 4096-byte default. The statement seeks a random leaf, so an
+/// uncached page is read, journaled and modified whole - sixteen times the bytes
+/// for the same row.
+///
+/// 512 is not a tuned value: it is SQLite's own default restated in the unit the
+/// engine charges in, so a 4096-byte Store keeps the 2 MiB it always had and a
+/// wider Store keeps the pages it needs. `connection::apply_cache_size` derives
+/// the pragma from the page size the *file* reports, so no Store is starved and
+/// no format is implied: a page cache is per connection and is never stored.
+pub const STORE_CACHE_PAGES: i64 = 512;
+
 /// Largest writer budget one Store may be configured with.
 ///
 /// It is the width of the private save-slot space: `saves.active_slot` is

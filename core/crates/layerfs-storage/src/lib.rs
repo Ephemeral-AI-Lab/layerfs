@@ -37,5 +37,6 @@ pub mod sqlite;
 pub use cas::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreProvider, StoreReadCounters};
 pub use error::{StorageError, StorageResult};
 pub use policy::{
-    SchemaIdentity, StorageCapacities, StoragePolicy, SCHEMA_IDENTITY, STORE_PAGE_SIZE_BYTES,
+    SchemaIdentity, StorageCapacities, StoragePolicy, SCHEMA_IDENTITY, STORE_CACHE_PAGES,
+    STORE_PAGE_SIZE_BYTES,
 };

@@ -1,7 +1,7 @@
 //! Embedded connection profile: no WAL, no synchronous flush, no busy waiting.
 //!
 //! The selected profile is MEMORY journal, `synchronous = OFF`, memory temporary
-//! storage and a zero busy timeout. The RAM rollback journal is retained, so a
+//! storage, a page cache declared in pages and a zero busy timeout. The RAM rollback journal is retained, so a
 //! runtime transaction still aborts atomically; nothing here adds crash
 //! durability, and no product path calls `fsync`, `fdatasync`, `sync_all` or
 //! `sync_data`. A locked Store is a definite failure, not a wait.
@@ -43,7 +43,35 @@ pub fn configure(connection: &Connection) -> StorageResult<()> {
     if foreign_keys != 1 {
         return Err(StorageError::Integrity("foreign key enforcement"));
     }
+    apply_cache_size(connection)?;
     connection.busy_timeout(Duration::ZERO)?;
+    Ok(())
+}
+
+/// Declares the page cache in the engine's own unit: pages, not bytes.
+///
+/// The engine's default (`cache_size = -2000` KiB) is a byte count that is 512
+/// pages only at the 4096-byte page the engine assumes. A Store created with a
+/// wider page keeps the same bytes and therefore a fraction of the pages, and a
+/// statement that seeks a random leaf then reads, journals and modifies a whole
+/// page instead of a row — measured at 6.63 us per row insert against 4.20 us for
+/// the narrow default, and removed by declaring the page count
+/// ([`crate::policy::STORE_CACHE_PAGES`]).
+///
+/// The value is derived from the page size the **connection's own file** reports,
+/// so a Store created at any page size gets the declared count of pages and no
+/// Store is starved by a wider page. It is read back rather than assumed, and a
+/// file whose page size the engine cannot report is refused.
+pub fn apply_cache_size(connection: &Connection) -> StorageResult<()> {
+    let page = pragma_i64(connection, Pragma::PageSize)?;
+    if page <= 0 {
+        return Err(StorageError::Integrity("page size"));
+    }
+    let kib = crate::policy::STORE_CACHE_PAGES.saturating_mul(page) / 1024;
+    connection.execute_batch(&format!("PRAGMA cache_size = -{kib}"))?;
+    if pragma_i64(connection, Pragma::CacheSize)? != -kib {
+        return Err(StorageError::Integrity("page cache size"));
+    }
     Ok(())
 }
 
@@ -67,6 +95,14 @@ pub fn verify_profile(connection: &Connection) -> StorageResult<()> {
     }
     if pragma_i64(connection, Pragma::BusyTimeout)? != 0 {
         return Err(StorageError::Integrity("busy timeout"));
+    }
+    // The cache is declared in pages and derived from this file's page size, so
+    // the check reads both back: a connection left with the engine's byte default
+    // is refused exactly as one with another journal mode is.
+    let page = pragma_i64(connection, Pragma::PageSize)?;
+    let declared = crate::policy::STORE_CACHE_PAGES.saturating_mul(page) / 1024;
+    if pragma_i64(connection, Pragma::CacheSize)? != -declared {
+        return Err(StorageError::Integrity("page cache size"));
     }
     Ok(())
 }

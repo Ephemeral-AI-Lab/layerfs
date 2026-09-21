@@ -1,0 +1,8 @@
+sqlite 3.51.2   (ms, summed over 800 transactions)
+  page=4096 cache=2MiB (the control) pages  77503  commit   482.81  blob   50.38 ( 3.00 us/app)  insert   93.80 ( 3.78 us/row)  signature  12.42
+  page=64KiB cache=2MiB (E1)         pages   5015  commit   136.51  blob   35.25 ( 2.10 us/app)  insert   78.80 ( 3.18 us/row)  signature  49.47
+  page=64KiB cache=8MiB              pages   5015  commit   133.79  blob   36.93 ( 2.20 us/app)  insert   72.43 ( 2.92 us/row)  signature  45.51
+  page=64KiB cache=32MiB             pages   5015  commit   138.26  blob   36.96 ( 2.20 us/app)  insert   74.04 ( 2.99 us/row)  signature  45.63
+  page=64KiB cache=128MiB            pages   5015  commit   137.65  blob   35.55 ( 2.12 us/app)  insert   71.60 ( 2.89 us/row)  signature  45.37
+  page=64KiB cache=2MiB mmap=256MiB  pages   5015  commit   125.11  blob   40.00 ( 2.38 us/app)  insert   77.22 ( 3.11 us/row)  signature  46.12
+  page=16KiB cache=8MiB              pages  19492  commit   190.06  blob   38.16 ( 2.27 us/app)  insert   67.91 ( 2.74 us/row)  signature  19.03

@@ -21,4 +21,6 @@ pub use owner::{OutcomeCounters, ResolveProfile, SaveProfile};
 pub use pool_lane::PoolCounters;
 pub use provider::StoreProvider;
 pub use read::ReadCounters;
-pub use store::{SaveHandoff, SaveOperation, SaveOutcome, Store, StoreReadCounters};
+pub use store::{
+    SaveConnectionProfile, SaveHandoff, SaveOperation, SaveOutcome, Store, StoreReadCounters,
+};

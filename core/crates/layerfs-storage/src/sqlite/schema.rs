@@ -143,6 +143,11 @@ fn set_page_size(connection: &Connection) -> StorageResult<()> {
     if applied != crate::policy::STORE_PAGE_SIZE_BYTES as i64 {
         return Err(StorageError::Integrity("Store page size"));
     }
+    // The profile's page cache is a page count derived from this file's page
+    // size, and the connection was configured before the page size existed, so
+    // the derivation is re-run here; the cache the file's width calls for is the
+    // one the profile declares (`connection::apply_cache_size`).
+    crate::sqlite::connection::apply_cache_size(connection)?;
     Ok(())
 }
 
