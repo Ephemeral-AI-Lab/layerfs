@@ -93,6 +93,27 @@ impl TreeStore {
         crate::support::phases::handoff(|| self.objects.get(&id).cloned())
     }
 
+    /// Takes every object out of this store, in insertion order.
+    ///
+    /// **Why this exists, and why it is not `cloned_object` in a loop.** `Store::accept` takes the
+    /// object **by value** (`cas/store.rs:504`), so a caller offering one can hand over the object it
+    /// already holds; `cloned_object` instead deep-copies it first, which measured **79,174,500 ns for
+    /// the 100,000-entry row's 502,912,427 canonical bytes** (`tests/spill_read_price.rs`,
+    /// `the_timed_clone_of_the_content_stream`) — inside the timer, because the content stream is
+    /// offered inside it. Draining moves each object out once and leaves the store empty, so the
+    /// caller's peak is the content rather than the content plus a second copy of it. The store is
+    /// reusable afterwards, which is what makes this safe to call from a borrowed context.
+    pub fn drain(&mut self) -> Vec<FinalizedObject> {
+        let mut objects: Vec<FinalizedObject> = Vec::with_capacity(self.objects.len());
+        for id in self.insertion_order.drain(..) {
+            if let Some(object) = self.objects.remove(&id) {
+                objects.push(object);
+            }
+        }
+        self.demanded.borrow_mut().clear();
+        objects
+    }
+
     /// Merges every object of `other` into this store.
     ///
     /// A filesystem operation emits only what it changed; a caller that applies

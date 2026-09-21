@@ -948,6 +948,9 @@ fn namespace_scale(
 
     let mut metadata_emitted = 0_u64;
     let mut content_bytes = 0_u64;
+    // Objects the content stream moved into the save operation. Counted here rather
+    // than read off `content.len()` afterwards, because the drain is what empties it.
+    let mut content_objects_offered = 0_u64;
     let mut batch_roots = 0_u64;
     let mut largest_batch = 0_u64;
     // The denominator `SaveProfile` is reported against. `SaveProfile` is an
@@ -1113,10 +1116,17 @@ fn namespace_scale(
         let build_done = std::time::Instant::now();
         // The content stream, on the same operation. `SaveHandoff` is dropped above
         // so the operation is free; the identities are the constructed ones.
-        for id in content.insertion_order() {
-            let object = content
-                .cloned_object(*id)
-                .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
+        //
+        // **The object is moved into the save, not copied into it.** This loop used
+        // `cloned_object`, which deep-copies every canonical object - 502,912,427
+        // bytes of copy for the 100,000-entry row, measured at 79,174,500 ns, inside
+        // this timer. `Store::accept` takes the object by value, so the copy bought
+        // nothing: the operation is handed the object the harness already held. The
+        // drain leaves `content` empty and reusable, and the object count is kept
+        // because the row publishes it and the loop is what consumes it.
+        let offered = content.drain();
+        content_objects_offered = offered.len() as u64;
+        for object in offered {
             // `SaveOutcome` carries no byte field - its `chain` is delta-base
             // acquisition work, not bytes - so the bytes the Store has to hold are
             // counted on the way in, from the objects themselves.
@@ -1389,6 +1399,18 @@ fn namespace_scale(
         "objects",
         "constructed before the timer, accepted inside it",
     )?;
+    // The stream's own count, taken where it was consumed. `pipeline.content_objects`
+    // is read off the store before the timer; this is read off the drain inside it,
+    // and the gate below is what says the stream was offered whole rather than
+    // partly - a drain that silently dropped objects would otherwise show up only as
+    // a smaller `content_bytes`.
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.content_objects_offered",
+        content_objects_offered as i128,
+        "objects",
+        "moved into the save inside the timer by the content drain",
+    )?;
     // The untimed half, published in its two named parts. Outside the row's
     // formula by construction; `construct_ns + construct_noise_ns +
     // pipeline.operation_work_ns` is the figure that can be laid against a timer
@@ -1648,6 +1670,20 @@ fn namespace_scale(
         ),
         "every batch after the first reads its base out of the chain through its own \
          prefix keys",
+    ));
+    // The drain must have offered every constructed object. This is the reading that
+    // separates "the copy was removed" from "objects stopped being offered", which
+    // `content_bytes` alone would show as a smaller number only if the last objects
+    // happened to be missing.
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g6.content-complete",
+        content_objects_offered == content_objects,
+        &format!(
+            "{content_objects_offered} objects offered inside the timer against \
+             {content_objects} constructed before it"
+        ),
+        "the content stream moves every constructed object into the save",
     ));
     gates.push(gates::require(
         GateClass::Mechanism,
