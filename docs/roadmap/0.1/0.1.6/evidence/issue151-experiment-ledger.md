@@ -2973,3 +2973,108 @@ asks the next agent to explore first and choose a direction from what it finds.
 
 Production LOC: **31426 → 31684** across the three product commits, each reported separately in its own
 message (`+132`, `+58`, `+68`); the re-pins and reports report the unchanged total and delta 0.
+
+## L76 — #219 round 17: the algorithm-gap exploration — the premise holds, H2 is settled by reading, H1 is priced at 26.6–50.0 ms (2026-09-21)
+
+Status: **Exploration.** Commissioned by
+[`issue219-ns19-algorithm-gap-handoff.md`](../../0.1.7/issue219-ns19-algorithm-gap-handoff.md), which
+asked for the v0.1.6 gap to be explored at the algorithm level before another treatment was
+commissioned. **No product line changed, no arm registered, no gate claimed, no performance claim
+made.** One labelled diagnostic ran, once. Report and pre-registration:
+[`issue219-ns19r-algogap-20260921T095811Z`](../../0.1.7/evidence/issue219-ns19r-algogap-20260921T095811Z/),
+with the diagnostic's whole stdout at `raw/locator_btree_shape.txt`. **Owner ruling carried in and
+honoured: the database page size stays 4 KiB** — read and asserted 4096 on all three arms, never set.
+
+**The commission's §1a is re-derived and it holds.** Boundary: fixture read or byte generation +
+construction + `Store::open` + the C1 build + admission. This row is `operation_work_ns` 1,218,880,166
++ `construct_ns` 449,315,829 + `construct_noise_ns` 113,830,615 = **1,782,026,610 ns of work** and
+1,228,332,000 + the same two = **1,791,478,444 ns of CPU**. The six `namespace-10000` reference rows
+are recovered from `benchmark-results/issue219/20260921-s0/inventory-raw.json` (their raw
+`perf.jsonl` are not in this worktree; the inventory embeds each row's whole sample object), and the
+three same-shape ones — 25,158 locators — are CPU **1,789,512,292 / 2,116,662,875 / 2,195,331,001
+ns**, exactly L69's and the commission's 1789.5 / 2116.7 / 2195.3 ms. Against the fastest the row is
+**−0.42 % on work and +0.11 % on CPU**. **One refinement:** the three same-shape rows are not one
+condition — row 4 read 0 B from storage inside its window and rows 5 and 6 read 337.4 MB and
+322.2 MB (`initialization_disk_read_bytes` is the process's own `/proc/self/io` `read_bytes:`
+differenced across the window, `benchmark/fs-bench-pro/src/main.rs:390-393`) — so the 1789.5→2195.3 band spans cache state, not one algorithm, and only row 4 is
+like-for-like with a row that generates its 302 MB in process. Their spread is `NOT_MEASURED` as an
+algorithm quantity; all six are `cache_contract: null`, `verification_status: NOT_RUN`, no pairing
+claimed.
+
+**H2 is settled by reading: the reference's payload reaches the pager, and direction #1 closes.**
+`crates/layerfs-layerstack-store/src/objects/admission.rs:1547` is
+`INSERT INTO object_packs(pack_id,data) VALUES (?,?),...` binding the assembled pack bytes into
+`object_packs.data` (`sql/schema/v7.sql:3-6`), reached from `initialize_layerstack` through
+`CheckedOutputAdmission` (`layerstack.rs:353`). `spill.rs` owns `DeferredObjects::Spill(SpillObjects)`
+— a candidate staging structure that bounds resident memory (`objects.rs:1316`, `:2673`) and the
+oversized RAW singleton (`admission.rs:1212-1213`) — not the published Store. The reference's write
+profile is this Store's family (`schema.rs:514-527` against `connection.rs:33-47`): **neither is
+WAL**, both `journal_mode = MEMORY` and `synchronous = OFF`, so the main file's length is what the
+pager was given. Same shape, one definition (`fs::metadata().len()`, `main.rs:2226`; `st_size`,
+`space.py:6,103`): reference **1.0092 / 1.0081 / 1.0083** database bytes per canonical byte, this row
+**1.1148**. **There is no spill to find and no third column to add.**
+
+**And the 10.6 % between them has a named mechanism.** This row's `object_packs.data` sums to
+**332,922,880 B = 1,270 × 262,144 = `packs_created` × `PACK_LIMIT`**, exactly, because
+`sqlite/write.rs:88-95` creates every pack row zero-filled at capacity — `zeroblob(?2)` with
+`capacity` = `PACK_LIMIT` 256 KiB for the ordinary/native/whole-file/pooled lanes
+(`pack/layout.rs:173-174`, `policy.rs:103`). The content written into them is 301,865,004 B
+(`pack_bytes_written`, `cas/placement.rs:249-250`), so **31,057,876 B (10.29 %)** is declared capacity
+no content reached — an average 24,455 B of unreached tail per pack, which is about half a ~50 KiB
+group and so a second reason to look at the `GROUP_LIMIT`/`PACK_LIMIT` pair together. **Whether it
+costs time is `NOT_MEASURED` and the honest reading is that it does not**: `write.rs:80-86` states the
+pages the write does not touch are never dirtied, and L74's commit arithmetic is already fully
+explained by the 302 MB actually written. Filed as a **space** finding with a time question attached.
+
+**H1 is confirmed and priced, on a count-driven instrument.** `tests/locator_btree_shape.rs` in the
+harness workspace — three arms, one difference each, 25,245 rows, the same ids and column values, the
+same 1,270 seeded packs, the same profile, the same insertion order, the product's own multi-row
+`INSERT`, one transaction per arm, release build (`runner.py:81,257-261`), one sample per arm. Measured
+`pages_dirtied` / `objects` pages / `objects_save` pages / µs per row: **reference 320 / 321 / 0 /
+1.470**; **store-unindexed 337 / 338 / 0 / 1.966**; **store-indexed 601 / 338 / 265 / 3.019**.
+`freelist_count` 0 and `page_size` 4096 on all three, so `page_count` growth is live pages; `dbstat`
+is available, so the per-B-tree split is measured. The index is **265 pages**, **43.93 %** of the pages
+written, and **34.88 %** of the replica's insert time — inside the pre-registered 30–50 %, and the
+pre-registered ≥200-page refutation did not fire. The pre-registration's µs/row bands (3.0–5.0 /
+3.2–5.5 / 5.0–8.5) were **refuted low** — the engine is faster than predicted — and its wider-key
+share band (0–15 %) was **refuted high** at **25.23 %**; both are recorded as wrong. Worth, on the
+row's own `diag_insert_objects_ns` 143.44 ms: **(3,019 − 1,966) ns × 25,245 = 26.58 ms** absolute, or
+**34.88 % × 143.44 = 50.03 ms** by ratio, so **26.6–50.0 ms**, with the wider-key 25.23 % (12.5–36.2
+ms) explicitly *not* part of it because those columns are the contract.
+
+**It is takeable, and the argument is a re-application of an owner ruling.** `objects_save` has
+exactly one consumer. Of the four SQL sites that touch `objects`, `lookup.rs:79` is driven by
+`o.object_id IN (...)` and uses the **PK prefix** — which is also why the primary key cannot be
+reordered to `(save_id, object_id)`: that would turn the hot read path into a full scan. The only
+consumer is `cleanup.rs:42`, `DELETE ... WHERE save_id=?1 AND object_id IN (SELECT ... ORDER BY
+object_id LIMIT ?2)`, which is `cleanup::abandon`, *"Removes only one definitely failed private
+save"*, called only from `cas/lifecycle.rs:65` and `:307` — the definite-failure path, which no
+measured row enters. And `schema.rs:87-94` records that **owner ruling C removed `objects_locations`
+on exactly this argument** — *"served one bounded cleanup page query"* — which is the position
+`objects_save` holds today. *(The commission's flagged discrepancy resolved: the doc comment is
+coherent and the constant beside it is stale — the comment describes the requirement as emptied by
+ruling C while `REQUIRED_INDEXES` lists three names. Neither was changed here.)*
+
+**Direction chosen: drop `objects_save` and let `abandon`'s bounded cleanup page query scan the
+primary key** — expected 26.6–50.0 ms, priced at a schema change (`sql/schema.sql:77`,
+`REQUIRED_INDEXES` at `schema.rs:95`, and every existing Store) plus a slower `abandon` on the
+failure path, `NOT_MEASURED`. Ranked behind it: the build span's uncharted ~70–100 ms, still the
+largest block with no attribution; the native lane's 2.03 records per group, now with the pack-capacity
+finding as a second reason to move `GROUP_LIMIT` and `PACK_LIMIT` together; and the insert statement
+shape, now with a second reason — the replica's 3.02 µs/row at this Store's shape against the row's
+own 5.68 µs is work the schema does not explain. **Closed by this round:** the commission's
+direction #1.
+
+Checks as run: the diagnostic `cargo +1.85.1 test --release --manifest-path
+core/benchmark/fs-bench-pro-storage-content/Cargo.toml --test locator_btree_shape -- --nocapture
+--test-threads=1` — **1 passed, 0 failed**, 0.23 s; lock parity after adding
+`rusqlite = "=0.40.2"` (the product's own pin and feature set) to the harness manifest —
+**PASS, 46 shared entries, 0 mismatches**, nothing re-resolved because the harness lock already
+carried `rusqlite` 0.40.2 / `libsqlite3-sys` 0.38.2 at the product's versions and checksums, so
+`--locked` still holds. **Not run:** the product's suites and `check_product_boundary.py` — no product
+source or manifest was touched, and the harness is not product source (`check_product_boundary.py`
+scans only `core/crates/*/src` and `core/crates/*/sql`); the harness's wider suite was not re-run
+either, this round having added one test file and one manifest line.
+
+Production LOC: **31684 → 31684 (delta 0)**. Method `tools/production_loc.py --root <tree>`; this
+round touched docs and the harness only, which the counter excludes by scope.

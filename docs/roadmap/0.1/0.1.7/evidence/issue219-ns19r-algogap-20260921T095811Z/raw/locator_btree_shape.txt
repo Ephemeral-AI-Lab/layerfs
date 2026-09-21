@@ -1,0 +1,20 @@
+# The single invocation of the registered diagnostic, and its whole stdout.
+#
+# Command:
+#   cargo +1.85.1 test --release \
+#     --manifest-path core/benchmark/fs-bench-pro-storage-content/Cargo.toml \
+#     --test locator_btree_shape -- --nocapture --test-threads=1
+#
+# Build mode: release, which is the mode the harness measures in
+# (`core/benchmark/fs-bench-pro-storage-content/runner.py:81,257-261`). Declared because the µs/row
+# column is a timing; the page, dbstat and statement columns are counts and do not depend on it.
+#
+# One sample per arm. No re-run, no best-of, no selection: the three lines below are the whole of it.
+
+DIAGNOSTIC, not a gate: 25245 rows, 1270 packs, one transaction per arm, page size read and asserted
+{"arm":"reference","rows":25245,"statements":198,"chunk_rows":128,"parameters_per_row":5,"page_size":4096,"pages_before":27,"pages_after":347,"pages_dirtied":320,"bytes_per_row":51.9,"freelist_before":0,"freelist_after":0,"elapsed_ns":37104792,"ns_per_row":1470,"file_bytes":1421312,"dbstat_after":[{"name":"object_packs","bytes":98304,"pages":24},{"name":"objects","bytes":1314816,"pages":321},{"name":"saves","bytes":4096,"pages":1},{"name":"sqlite_schema","bytes":4096,"pages":1}]}
+{"arm":"store-unindexed","rows":25245,"statements":198,"chunk_rows":128,"parameters_per_row":6,"page_size":4096,"pages_before":33,"pages_after":370,"pages_dirtied":337,"bytes_per_row":54.7,"freelist_before":0,"freelist_after":0,"elapsed_ns":49640667,"ns_per_row":1966,"file_bytes":1515520,"dbstat_after":[{"name":"object_packs","bytes":102400,"pages":25},{"name":"objects","bytes":1384448,"pages":338},{"name":"packs_save","bytes":20480,"pages":5},{"name":"saves","bytes":4096,"pages":1},{"name":"sqlite_schema","bytes":4096,"pages":1}]}
+{"arm":"store-indexed","rows":25245,"statements":198,"chunk_rows":128,"parameters_per_row":6,"page_size":4096,"pages_before":34,"pages_after":635,"pages_dirtied":601,"bytes_per_row":97.5,"freelist_before":0,"freelist_after":0,"elapsed_ns":76217417,"ns_per_row":3019,"file_bytes":2600960,"dbstat_after":[{"name":"object_packs","bytes":102400,"pages":25},{"name":"objects","bytes":1384448,"pages":338},{"name":"objects_save","bytes":1085440,"pages":265},{"name":"packs_save","bytes":20480,"pages":5},{"name":"saves","bytes":4096,"pages":1},{"name":"sqlite_schema","bytes":4096,"pages":1}]}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
