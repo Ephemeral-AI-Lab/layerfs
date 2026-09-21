@@ -1214,3 +1214,17 @@ proofs. Its wider NOT_RUN rows remain explicit. The next real operation is
 Workspace::stage: private R3c capture and the minimum R3d lowering must overlap
 as prerequisites of that one public operation, with their acceptance rows kept
 separate. A raw public freeze hook or unused capture scaffold is not selected.
+
+
+The next public operation is now implemented in
+[16 — Stage capture and shared save](16-stage-capture.md), from exact parent
+`788a63950500e6ba79c6a55dc07f7b84ca0fde89`. Its R3c/minimum-R3d subsets have
+actual native evidence: immutable G, local successor progress during an observed
+C2 write transaction, disk completion associations, one StageChanges and retained
+known/unknown failures. It does not complete the full snapshot/Commit acceptance
+matrix. The next operation is CommitStaged and known-own reconciliation, followed
+by repeated Commit. The local candidate remains 137 pages; the corrected generation
+completion reserve is 208 pages, including the explicit interleaving-safe ledger
+bound and a 64-page reconciliation reservation to validate in that next operation.
+The stage-only lifecycle retains all post-capture failures and refuses resubmission
+or clean close; it supplies no implicit retry/discard/recovery policy.

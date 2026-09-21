@@ -29,7 +29,7 @@ impl Workspace {
         } else {
             (attr.size - offset).min(size as u64) as usize
         };
-        let operation = self.begin(length > 0, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
         let charge = self.host.budget.reserve(length)?;
         let mut bytes = Vec::new();
         bytes
@@ -43,9 +43,11 @@ impl Workspace {
                     inode,
                     offset,
                     &mut bytes,
+                    &mut operation,
                     deadline,
                 )?;
             } else {
+                operation.remote()?;
                 let mut output = Cursor::new(bytes.as_mut_slice());
                 let response = self.call(
                     Operation::ReadFile {
@@ -122,6 +124,7 @@ impl Workspace {
         inode: crate::overlay::pieces::Inode,
         offset: u64,
         bytes: &mut [u8],
+        operation: &mut crate::runtime::state::OperationGuard,
         deadline: Instant,
     ) -> Result<(), WorkspaceError> {
         use layerfs_bridge::contract::Source;
@@ -150,7 +153,32 @@ impl Workspace {
             };
             let skip = position - piece.start;
             let count = (piece.length - skip).min((bytes.len() - completed) as u64) as usize;
-            if piece.payload == 0 {
+            if piece.payload == 0 && inode.captured {
+                let captured = crate::overlay::pieces::CapturedBase::parse(inode.base)?;
+                let parent = root.parent.as_ref().ok_or(WorkspaceError::Io)?;
+                if parent.root()? != captured.root {
+                    return Err(WorkspaceError::Io);
+                }
+                let inherited = self
+                    .overlay_inode(captured.inode, Some(parent), deadline)?
+                    .ok_or(WorkspaceError::Io)?;
+                if inherited.captured
+                    || inherited.generation != captured.generation
+                    || inherited.revision != captured.revision
+                    || inherited.length != inode.base_length
+                {
+                    return Err(WorkspaceError::Io);
+                }
+                self.read_overlay(
+                    parent,
+                    inherited,
+                    piece.offset + skip,
+                    &mut bytes[completed..completed + count],
+                    operation,
+                    deadline,
+                )?;
+            } else if piece.payload == 0 {
+                operation.remote()?;
                 let mut output = Cursor::new(&mut bytes[completed..completed + count]);
                 let response = self.call(
                     Operation::ReadFile {

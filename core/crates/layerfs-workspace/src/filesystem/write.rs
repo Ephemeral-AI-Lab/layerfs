@@ -5,7 +5,7 @@ use crate::{
         metadata_index::vector,
         metadata_pages::{self, Cell, PageRef},
     },
-    overlay::pieces::{self, Inode, Piece},
+    overlay::pieces::{self, CapturedBase, Inode, Piece},
     *,
 };
 use layerfs_bridge::contract::{Inspect, Operation, Root, MAX_FILE};
@@ -65,6 +65,7 @@ impl Workspace {
                 return Ok((node.original, node.content, node.metadata));
             }
         }
+        let _remote = self.begin(true, deadline)?;
         let mut parent = self.inner.root;
         let mut bytes = vector(4096)?;
         let parts = path.as_ref().split(|b| *b == b'/');
@@ -115,7 +116,7 @@ impl Workspace {
             return Err(WorkspaceError::ReadOnly);
         }
         let deadline = Self::callback_deadline(deadline);
-        let _operation = self.begin(true, deadline)?;
+        let _operation = self.begin(false, deadline)?;
         if edit.replacement.record.directory.incarnation != self.inner.incarnation
             || !Arc::ptr_eq(
                 &edit.replacement.host,
@@ -135,8 +136,8 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let _writer = host.writer()?;
         let (original, content, metadata) = self.edit_original(path, deadline)?;
+        let _writer = host.writer()?;
         if original.kind == NodeKind::Directory {
             return Err(WorkspaceError::IsDirectory);
         }
@@ -144,10 +145,17 @@ impl Workspace {
             return Err(WorkspaceError::WrongKind);
         }
         super::namespace::check_access(original, self.inner.root.uid, 2)?;
-        let (expected_revision, generation, dirty, old_root) = {
+        let (expected_revision, generation, dirty, old_root, needs_completion, frozen) = {
             let s = self.state()?;
             self.available(&s)?;
-            (s.revision, s.generation, s.dirty_inodes, s.overlay.clone())
+            (
+                s.revision,
+                s.generation,
+                s.dirty_inodes,
+                s.overlay.clone(),
+                s.completion.is_none(),
+                s.submission.clone(),
+            )
         };
         let arena = self
             .inner
@@ -180,10 +188,41 @@ impl Workspace {
         if length > MAX_FILE {
             return Err(WorkspaceError::Capacity);
         }
-        if old.is_none() && dirty == 128 {
+        let already_dirty = old.is_some_and(|inode| inode.generation == generation);
+        if !already_dirty && dirty == 128 {
             return Err(WorkspaceError::Capacity);
         }
-        let old_pieces = if old.is_some() {
+        let parent = frozen
+            .as_ref()
+            .map(|submission| submission.capture().map(|g| g.root.clone()))
+            .transpose()?;
+        let inherited_capture = match (&old, &frozen) {
+            (Some(inode), Some(submission)) => inode.generation == submission.capture()?.generation,
+            _ => false,
+        };
+        let old_pieces = if inherited_capture {
+            let frozen = frozen.as_ref().ok_or(WorkspaceError::Io)?.capture()?;
+            inode.base = CapturedBase {
+                root: frozen.root.root()?,
+                inode: original.serial,
+                generation: frozen.generation,
+                revision: inode.revision,
+            }
+            .bytes();
+            inode.captured = true;
+            inode.base_length = inode.length;
+            let mut pieces = vector(1024)?;
+            if inode.length > 0 {
+                pieces.push(Piece {
+                    start: 0,
+                    length: inode.length,
+                    offset: 0,
+                    payload: 0,
+                    custody: PageRef::NULL,
+                });
+            }
+            pieces
+        } else if old.is_some() {
             arena.pieces(inode.pieces, inode.count, inode.length, window, deadline)?
         } else {
             let mut pieces = vector(1024)?;
@@ -237,7 +276,7 @@ impl Workspace {
         inode.edits = edits;
         inode.replacement = replacement_bytes;
         inode.count = pieces.len() as u16;
-        let candidate = host.candidate(arena)?;
+        let candidate = host.candidate(arena, generation, needs_completion, parent)?;
         if !edit.replacement.is_empty() {
             replacement.custody = arena.custody(&candidate, &edit.replacement, window, deadline)?;
             for p in &mut pieces {
@@ -282,9 +321,18 @@ impl Workspace {
         {
             return Err(WorkspaceError::Busy);
         }
+        if state.completion.is_none() != needs_completion {
+            return Err(WorkspaceError::Busy);
+        }
+        if needs_completion {
+            state.completion = candidate.take_completion(generation)?;
+            if state.completion.is_none() {
+                return Err(WorkspaceError::Io);
+            }
+        }
         state.overlay = Some(candidate);
         state.revision = revision;
-        if old.is_none() {
+        if !already_dirty {
             state.dirty_inodes += 1;
         }
         for node in &mut state.nodes {

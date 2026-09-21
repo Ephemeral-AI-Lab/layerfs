@@ -42,6 +42,7 @@ impl Piece {
 }
 #[derive(Clone, Copy)]
 pub struct Inode {
+    pub captured: bool,
     pub revision: u64,
     pub length: u64,
     pub base_length: u64,
@@ -59,6 +60,7 @@ pub struct Inode {
 impl Inode {
     pub fn initial(attr: NodeAttributes, base: Root, metadata: Root) -> Self {
         Self {
+            captured: false,
             revision: 0,
             length: attr.size,
             base_length: attr.size,
@@ -76,6 +78,7 @@ impl Inode {
     }
     pub fn value(self) -> [u8; 160] {
         let mut b = [0; 160];
+        b[24] = u8::from(self.captured);
         for (at, value) in [
             (0, self.revision),
             (8, self.length),
@@ -96,10 +99,11 @@ impl Inode {
         b
     }
     pub fn parse(b: &[u8]) -> Result<Self, WorkspaceError> {
-        if b.len() != 160 || b[24..32].iter().chain(&b[140..]).any(|v| *v != 0) {
+        if b.len() != 160 || b[24] > 1 || b[25..32].iter().chain(&b[140..]).any(|v| *v != 0) {
             return Err(WorkspaceError::Io);
         }
         let i = Self {
+            captured: b[24] == 1,
             revision: get(b, 0)?,
             length: get(b, 8)?,
             base_length: get(b, 16)?,
@@ -127,6 +131,9 @@ impl Inode {
             || i.replacement > 8 * 1024 * 1024
         {
             return Err(WorkspaceError::Io);
+        }
+        if i.captured {
+            CapturedBase::parse(i.base)?;
         }
         Ok(i)
     }
@@ -232,4 +239,38 @@ pub fn splice(
         return Err(WorkspaceError::Capacity);
     }
     Ok((new, edits, bytes))
+}
+
+#[derive(Clone, Copy)]
+pub struct CapturedBase {
+    pub root: PageRef,
+    pub inode: u64,
+    pub generation: u64,
+    pub revision: u64,
+}
+impl CapturedBase {
+    pub fn bytes(self) -> Root {
+        let mut bytes = [0; 32];
+        bytes[..8].copy_from_slice(&self.root.bytes());
+        bytes[8..16].copy_from_slice(&self.inode.to_be_bytes());
+        bytes[16..24].copy_from_slice(&self.generation.to_be_bytes());
+        bytes[24..].copy_from_slice(&self.revision.to_be_bytes());
+        bytes
+    }
+    pub fn parse(bytes: Root) -> Result<Self, WorkspaceError> {
+        let value = Self {
+            root: PageRef::parse(&bytes[..8])?,
+            inode: get(&bytes, 8)?,
+            generation: get(&bytes, 16)?,
+            revision: get(&bytes, 24)?,
+        };
+        if value.root == PageRef::NULL
+            || value.inode == 0
+            || value.generation == 0
+            || value.revision == 0
+        {
+            return Err(WorkspaceError::Io);
+        }
+        Ok(value)
+    }
 }

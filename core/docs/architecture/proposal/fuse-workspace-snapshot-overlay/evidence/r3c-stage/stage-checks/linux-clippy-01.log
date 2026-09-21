@@ -1,0 +1,23 @@
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+error: this `if` has identical blocks
+  --> crates/layerfs-workspace/src/backing/metadata_index.rs:34:86
+   |
+34 |           } else if cell.key_len == 9 && cell.key()[0] == b'R' && cell.value_len == 80 {
+   |  ______________________________________________________________________________________^
+35 | |             PageRef::NULL
+36 | |         } else if cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1] {
+   | |_________^
+   |
+note: same as this
+  --> crates/layerfs-workspace/src/backing/metadata_index.rs:36:86
+   |
+36 |           } else if cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1] {
+   |  ______________________________________________________________________________________^
+37 | |             PageRef::NULL
+38 | |         } else {
+   | |_________^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#if_same_then_else
+   = note: `-D clippy::if-same-then-else` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::if_same_then_else)]`
+
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error

@@ -125,7 +125,7 @@ impl RootOwner {
                     .map_err(|error| self.failure(BackingPhase::Cleanup, error.kind()))?;
                 }
             }
-            arena.host()?.release(PAGE as u64, 0)?;
+            self.release_bytes(PAGE as u64, 0)?;
             {
                 let mut a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
                 a.pages -= 1;
@@ -211,8 +211,7 @@ impl RootOwner {
                         .map_err(|error| self.failure(BackingPhase::Cleanup, error.kind()))?;
                     }
                 }
-                let host = self.arena.host()?;
-                host.release(pending.allocated.unwrap_or(0), pending.reservation)?;
+                self.release_bytes(pending.allocated.unwrap_or(0), pending.reservation)?;
                 let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
                 a.allocated -= pending.allocated.unwrap_or(0);
                 drop(a);
@@ -337,7 +336,7 @@ impl RootOwner {
             s.reserved = 0;
             reserve
         };
-        self.arena.host()?.release(0, reserve)?;
+        self.release_bytes(0, reserve)?;
         Ok(())
     }
 }

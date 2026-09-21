@@ -9,7 +9,7 @@ use crate::{
     *,
 };
 use layerfs_bridge::contract::{
-    HistoryQuery, HistoryResult, Inspect, Operation, Request, Response,
+    HistoryQuery, HistoryResult, Inspect, Operation, Request, Response, Source,
 };
 use std::{
     fs,
@@ -31,6 +31,7 @@ pub(crate) struct Host {
     pub config: WorkspaceConfig,
     pub budget: Arc<Budget>,
     pub remote: AtomicBool,
+    pub frozen: Arc<AtomicBool>,
     pub deliver: OperationDelivery,
     pub request_id: AtomicU64,
     pub registry: Mutex<Registry>,
@@ -157,6 +158,7 @@ impl WorkspaceHost {
                 config,
                 budget,
                 remote: AtomicBool::new(false),
+                frozen: Arc::new(AtomicBool::new(false)),
                 deliver,
                 request_id: AtomicU64::new(1),
                 registry: Mutex::new(registry),
@@ -330,7 +332,7 @@ impl WorkspaceHost {
                 store: options.store,
                 base,
                 access: options.access,
-                _branch: branch_snapshot,
+                branch: branch_snapshot.map(Arc::new),
                 arena,
                 root: attr,
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
@@ -340,6 +342,8 @@ impl WorkspaceHost {
                 state: Mutex::new(State {
                     nodes,
                     overlay: None,
+                    completion: None,
+                    submission: None,
                     generation: 1,
                     revision: 0,
                     dirty_inodes: 0,
@@ -392,6 +396,17 @@ impl Host {
         output: &mut dyn Write,
         deadline: Instant,
     ) -> Result<Response, WorkspaceError> {
+        self.call_input((store, 0), operation, &mut &[][..], bytes, output, deadline)
+    }
+    pub fn call_input(
+        &self,
+        target: (u32, u64),
+        operation: Operation,
+        input: &mut dyn Source,
+        bytes: u64,
+        output: &mut dyn Write,
+        deadline: Instant,
+    ) -> Result<Response, WorkspaceError> {
         let remaining = deadline
             .checked_duration_since(Instant::now())
             .ok_or(WorkspaceError::Deadline)?;
@@ -404,22 +419,25 @@ impl Host {
             .request_id
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |id| id.checked_add(1))
             .map_err(|_| WorkspaceError::Capacity)?;
-        let profile = if matches!(operation, Operation::HistoryQuery(_)) {
+        let profile = if matches!(
+            operation,
+            Operation::HistoryQuery(_) | Operation::HistoryCommand(_)
+        ) {
             2
         } else {
             1
         };
         let request = Request {
             id,
-            generation: 0,
-            store,
+            generation: target.1,
+            store: target.0,
             profile,
             deadline_ms,
             response_bytes: bytes,
             operation,
         };
         request.validate()?;
-        (self.deliver)(&request, &mut &[][..], output, deadline).map_err(WorkspaceError::Service)
+        (self.deliver)(&request, input, output, deadline).map_err(WorkspaceError::Service)
     }
 }
 pub(crate) fn validate_id(id: &str) -> Result<(), WorkspaceError> {

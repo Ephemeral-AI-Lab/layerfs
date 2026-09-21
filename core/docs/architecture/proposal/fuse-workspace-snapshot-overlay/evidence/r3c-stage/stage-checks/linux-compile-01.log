@@ -1,0 +1,4 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.26s
+  Executable tests/stage.rs (core/target-linux/debug/deps/stage-d07f247be8978535)

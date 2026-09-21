@@ -31,7 +31,9 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
                 cell.value(),
             )?
             .custody
-        } else if cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1] {
+        } else if (cell.key_len == 9 && cell.key()[0] == b'R' && cell.value_len == 80)
+            || (cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1])
+        {
             PageRef::NULL
         } else {
             return Err(WorkspaceError::Io);
@@ -377,5 +379,67 @@ impl RootOwner {
             }
         }
         Ok(pages)
+    }
+}
+impl Arena {
+    /// Bounded successor lookup, without retaining a vector of frontier records.
+    pub fn next(
+        &self,
+        root: PageRef,
+        lower: &[u8],
+        exclusive: bool,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<Option<Cell>, WorkspaceError> {
+        if root == PageRef::NULL {
+            return Ok(None);
+        }
+        self.next_in(root, None, lower, exclusive, window, deadline)
+    }
+    fn next_in(
+        &self,
+        root: PageRef,
+        parent: Option<(u8, &[u8])>,
+        lower: &[u8],
+        exclusive: bool,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<Option<Cell>, WorkspaceError> {
+        let page = self.load(root, window, deadline)?;
+        if parent.is_some_and(|(n, key)| {
+            n != page.level
+                || page.body() < MIN_BODY
+                || page.cells.last().is_none_or(|last| last.key() != key)
+        }) {
+            return Err(WorkspaceError::Io);
+        }
+        if page.level == 0 {
+            return Ok(page.cells.into_iter().find(|cell| {
+                if exclusive {
+                    cell.key() > lower
+                } else {
+                    cell.key() >= lower
+                }
+            }));
+        }
+        for cell in page.cells.iter().filter(|cell| {
+            if exclusive {
+                cell.key() > lower
+            } else {
+                cell.key() >= lower
+            }
+        }) {
+            if let Some(found) = self.next_in(
+                PageRef::parse(cell.value())?,
+                Some((page.level - 1, cell.key())),
+                lower,
+                exclusive,
+                window,
+                deadline,
+            )? {
+                return Ok(Some(found));
+            }
+        }
+        Ok(None)
     }
 }

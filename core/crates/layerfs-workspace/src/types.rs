@@ -75,6 +75,7 @@ pub enum WorkspaceError {
     Io,
     Service(Failure),
     Backing(BackingFailure),
+    Stage(Arc<StageFailure>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,6 +151,7 @@ impl std::error::Error for WorkspaceError {}
 
 #[derive(Clone, Copy, Debug)]
 pub struct WorkspaceStatus {
+    pub submission: Option<SubmissionStatus>,
     pub generation: u64,
     pub revision: u64,
     pub dirty_inodes: usize,
@@ -260,3 +262,102 @@ pub struct MetadataStatus {
     pub accounting_complete: bool,
     pub admission_stopped: bool,
 }
+
+/// One local capture and its exact service staging operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StagePhase {
+    Captured,
+    FileSave,
+    MetadataSave,
+    StageChanges,
+    Staged,
+    Failed,
+    LocalBookkeeping,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StageFailureDisposition {
+    KnownBeforeStage,
+    Unknown,
+    KnownStageLocalFailure,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SubmissionStatus {
+    pub generation: u64,
+    pub captured_revision: u64,
+    pub dirty_inodes: usize,
+    pub phase: StagePhase,
+    pub inode: Option<u64>,
+    pub saved_files: u16,
+    pub saved_metadata: u16,
+    pub stage_token: Option<u64>,
+    pub candidate_root: Option<Root>,
+    pub failure: Option<StageFailureDisposition>,
+    pub failure_phase: Option<StagePhase>,
+}
+#[derive(Clone)]
+pub struct StageSelector {
+    pub(crate) identity: Arc<crate::overlay::snapshot::StageIdentity>,
+}
+impl StageSelector {
+    /// A service acknowledgement associated with this Workspace capture.
+    pub fn stage(&self) -> &layerfs_bridge::contract::StageWire {
+        self.identity
+            .stage
+            .get()
+            .expect("selectors follow a known stage acknowledgement")
+    }
+}
+impl std::fmt::Debug for StageSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StageSelector")
+            .field("stage", self.stage())
+            .finish()
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InodeSaveObservation {
+    pub serial: u64,
+    pub revision: u64,
+    pub length: u64,
+    pub content: Root,
+    pub metadata: Option<Root>,
+}
+pub struct StageFailure {
+    pub generation: u64,
+    pub phase: StagePhase,
+    pub disposition: StageFailureDisposition,
+    pub cause: WorkspaceError,
+    pub observed_stage: Option<layerfs_bridge::contract::StageWire>,
+    pub known_stage: Option<StageSelector>,
+    pub source_failure: Option<WorkspaceError>,
+    pub pending: Option<InodeSaveObservation>,
+    pub(crate) _charge: crate::backing::metadata::MetadataCharge,
+}
+impl std::fmt::Debug for StageFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StageFailure")
+            .field("generation", &self.generation)
+            .field("phase", &self.phase)
+            .field("disposition", &self.disposition)
+            .field("cause", &self.cause)
+            .field("observed_stage", &self.observed_stage)
+            .field("known_stage", &self.known_stage)
+            .field("source_failure", &self.source_failure)
+            .field("pending", &self.pending)
+            .finish()
+    }
+}
+impl PartialEq for StageFailure {
+    fn eq(&self, other: &Self) -> bool {
+        self.generation == other.generation
+            && self.phase == other.phase
+            && self.disposition == other.disposition
+            && self.cause == other.cause
+            && self.observed_stage == other.observed_stage
+            && self.source_failure == other.source_failure
+            && self.pending == other.pending
+            && self.known_stage.as_ref().map(StageSelector::stage)
+                == other.known_stage.as_ref().map(StageSelector::stage)
+    }
+}
+impl Eq for StageFailure {}

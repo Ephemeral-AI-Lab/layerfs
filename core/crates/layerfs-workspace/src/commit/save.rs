@@ -1,0 +1,204 @@
+//! Explicit staging; file saves, filesystem construction and C5 acknowledgement stay distinct.
+use super::source::ReplacementSource;
+use crate::{
+    overlay::snapshot::{SavedInode, Submission},
+    *,
+};
+use layerfs_bridge::contract::{
+    HistoryCommand, HistoryResult, Operation, PreparedChanges, Response, StageWire,
+    HISTORY_RESULT_BYTES, MAX_OPERATION_MS,
+};
+use std::time::Instant;
+impl Workspace {
+    pub fn stage(&self, deadline: Instant) -> Result<StageSelector, WorkspaceError> {
+        if self.inner.access != WorkspaceAccess::LocalEdit {
+            return Err(WorkspaceError::ReadOnly);
+        }
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or(WorkspaceError::Deadline)?;
+        if remaining.as_millis() == 0 || remaining.as_millis() > u128::from(MAX_OPERATION_MS) {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let _operation = self.begin(false, deadline)?;
+        let submission = self.capture_stage(deadline)?;
+        match self.stage_captured(&submission, deadline) {
+            Ok(selector) => Ok(selector),
+            Err(error) => Err(submission.fail(error)),
+        }
+    }
+    fn stage_captured(
+        &self,
+        submission: &Submission,
+        deadline: Instant,
+    ) -> Result<StageSelector, WorkspaceError> {
+        let captured = submission.capture()?;
+        let mut after = 0;
+        let mut count = 0;
+        submission.phase(StagePhase::LocalBookkeeping, None)?;
+        while let Some((serial, inode)) = self.next_dirty(submission, after, deadline)? {
+            if count == captured.count {
+                return Err(WorkspaceError::Io);
+            }
+            submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
+            let plan = self.lower_file(submission, inode, deadline)?;
+            let content = if plan.edits.is_empty() {
+                inode.base
+            } else {
+                submission.phase(StagePhase::FileSave, Some(serial))?;
+                let mut source =
+                    ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
+                let response = self.deliver(
+                    captured.generation,
+                    Operation::EditFile {
+                        root: inode.base,
+                        base_length: inode.base_length,
+                        edits: plan.edits,
+                    },
+                    &mut source,
+                    0,
+                    &mut std::io::sink(),
+                    deadline,
+                );
+                if let Some(failure) = source.failure.take() {
+                    submission
+                        .state
+                        .lock()
+                        .map_err(|_| WorkspaceError::Io)?
+                        .source_failure = Some(failure);
+                }
+                let Response::Saved { root, length, .. } = response? else {
+                    return Err(WorkspaceError::InvalidInput);
+                };
+                if length != inode.length || !source.complete() {
+                    return Err(WorkspaceError::InvalidInput);
+                }
+                submission
+                    .state
+                    .lock()
+                    .map_err(|_| WorkspaceError::Io)?
+                    .status
+                    .saved_files += 1;
+                root
+            };
+            {
+                let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
+                state.pending = Some(SavedInode {
+                    serial,
+                    revision: inode.revision,
+                    length: inode.length,
+                    content,
+                    metadata: None,
+                });
+            }
+            submission.phase(StagePhase::MetadataSave, Some(serial))?;
+            let response = self.deliver(
+                captured.generation,
+                Operation::UpdatePortableMetadata {
+                    base: inode.metadata,
+                    kind: 1,
+                    mode: inode.mode,
+                    mtime_seconds: inode.seconds,
+                    mtime_nanoseconds: inode.nanos,
+                },
+                &mut &[][..],
+                0,
+                &mut std::io::sink(),
+                deadline,
+            )?;
+            response.validate_metadata_saved()?;
+            let Response::MetadataSaved {
+                base,
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+                metadata,
+                ..
+            } = response
+            else {
+                return Err(WorkspaceError::InvalidInput);
+            };
+            if base != inode.metadata
+                || kind != 1
+                || mode != inode.mode
+                || mtime_seconds != inode.seconds
+                || mtime_nanoseconds != inode.nanos
+            {
+                return Err(WorkspaceError::InvalidInput);
+            }
+            {
+                let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
+                state.pending.as_mut().ok_or(WorkspaceError::Io)?.metadata = Some(metadata);
+                state.status.saved_metadata += 1;
+            }
+            submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
+            self.persist_saved(submission, deadline)?;
+            submission.phase(StagePhase::LocalBookkeeping, None)?;
+            after = serial;
+            count += 1;
+        }
+        if count != captured.count {
+            return Err(WorkspaceError::Io);
+        }
+        let inodes = self.prepared_inodes(submission, deadline)?;
+        let context = &captured.context;
+        let changes = PreparedChanges {
+            workspace: self.inner.incarnation,
+            branch: context.branch.branch,
+            expected_head: context.branch.head_commit,
+            expected_base: context.branch.base_layer,
+            generation: captured.generation,
+            base: context.effective_root,
+            scope: context.scope,
+            root_serial: context.root_serial.ok_or(WorkspaceError::Io)?,
+            directories: Vec::new(),
+            inodes,
+        };
+        submission.phase(StagePhase::StageChanges, None)?;
+        let response = self.deliver(
+            captured.generation,
+            Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
+            &mut &[][..],
+            HISTORY_RESULT_BYTES as u64,
+            &mut std::io::sink(),
+            deadline,
+        )?;
+        let Response::History(result) = response else {
+            return Err(WorkspaceError::InvalidInput);
+        };
+        let HistoryResult::Stage(stage) = *result else {
+            return Err(WorkspaceError::InvalidInput);
+        };
+        submission
+            .observed_stage
+            .set(stage.clone())
+            .map_err(|_| WorkspaceError::Io)?;
+        validate_stage(submission, self.inner.incarnation, &stage)?;
+        submission.acknowledged(stage)
+    }
+}
+fn validate_stage(
+    submission: &Submission,
+    incarnation: [u8; 32],
+    stage: &StageWire,
+) -> Result<(), WorkspaceError> {
+    let captured = submission.capture()?;
+    let context = &captured.context;
+    if stage.workspace != incarnation
+        || stage.token == 0
+        || stage.stack != context.branch.stack
+        || stage.branch != context.branch.branch
+        || stage.expected_head != context.branch.head_commit
+        || stage.expected_base != context.branch.base_layer
+        || stage.expected_root != context.effective_root
+        || stage.construction_base_root != context.effective_root
+        || stage.intended_commit_base != context.branch.base_layer
+        || stage.profile != context.profile
+        || stage.scope != context.scope
+        || stage.generation != captured.generation
+    {
+        return Err(WorkspaceError::InvalidInput);
+    }
+    Ok(())
+}

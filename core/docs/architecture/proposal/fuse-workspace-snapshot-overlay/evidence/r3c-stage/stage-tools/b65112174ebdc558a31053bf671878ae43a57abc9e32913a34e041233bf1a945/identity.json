@@ -1,0 +1,16 @@
+{
+  "source_sha256": "b65112174ebdc558a31053bf671878ae43a57abc9e32913a34e041233bf1a945",
+  "binary_sha256": "ed1258c9a133bffe82c46f8d0e7146bea3beb4085ae86e879e874f4ef8a797d1",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "command": [
+    "cc",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-O2",
+    "-dynamiclib",
+    "core/crates/layerfs-workspace/tests/store_lock.c",
+    "-o",
+    "core/target/pair1-evidence/stage-tools/b65112174ebdc558a31053bf671878ae43a57abc9e32913a34e041233bf1a945/store-lock.dylib"
+  ]
+}

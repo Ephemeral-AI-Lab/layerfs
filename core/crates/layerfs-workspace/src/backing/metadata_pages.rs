@@ -187,3 +187,8 @@ pub fn dirty_key(generation: u64, inode: u64) -> [u8; 17] {
     key[9..].copy_from_slice(&inode.to_be_bytes());
     key
 }
+pub fn result_key(inode: u64) -> [u8; 9] {
+    let mut key = [b'R'; 9];
+    key[1..].copy_from_slice(&inode.to_be_bytes());
+    key
+}

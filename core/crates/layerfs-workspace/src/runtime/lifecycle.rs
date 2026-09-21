@@ -29,7 +29,13 @@ impl Workspace {
     }
     pub fn status(&self) -> Result<WorkspaceStatus, WorkspaceError> {
         let state = self.state()?;
+        let submission = state
+            .submission
+            .as_ref()
+            .map(|submission| submission.status())
+            .transpose()?;
         Ok(WorkspaceStatus {
+            submission,
             generation: state.generation,
             revision: state.revision,
             dirty_inodes: state.dirty_inodes,
@@ -58,7 +64,8 @@ impl Workspace {
             if state.closed {
                 return Err(WorkspaceError::Closed);
             }
-            if state.dirty_inodes > 0
+            if state.submission.is_some()
+                || state.dirty_inodes > 0
                 || state.mounted
                 || state.active > 0
                 || !state.handles.is_empty()

@@ -1,0 +1,12 @@
+    Checking libsqlite3-sys v0.38.2
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking rusqlite v0.40.2
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Checking layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+    Checking layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+    Checking layerfs-service v0.1.6 (/work/core/crates/layerfs-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.51s

@@ -354,3 +354,18 @@ delivery boundary and makes no service mutation during a local edit. Daemon
 read-only launch selects `ReadOnly` explicitly; the existing authenticated Status
 wire remains its readable scope. LocalEdit projection reservation is refused
 until the writable kernel coherence binding exists.
+
+
+The next Pair 1 operation, implemented from
+`788a63950500e6ba79c6a55dc07f7b84ca0fde89`, is
+[Workspace Stage](proposal/fuse-workspace-snapshot-overlay/16-stage-capture.md).
+It captures one immutable local generation with a live successor, streams only
+its changed file spans, saves changed portable metadata and invokes the existing
+StageChanges once. There is no added service opcode or service/storage/history
+implementation dependency in Workspace. Disk completion associations use the
+private index; the ordinary candidate reserves 137 pages and each dirty generation
+reserves 208 pages for completion. The latter accounts for interleaved live slot
+allocation and is an explicit disk-admission increase, with unchanged RAM/window/
+FD limits. The real native save and failure proofs, narrower scope and pending
+CommitStaged/reconciliation are recorded in 16. FUSE's error conversion accepts
+the new Stage failure as EIO; no writable callback or daemon edit control is added.

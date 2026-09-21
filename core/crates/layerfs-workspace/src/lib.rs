@@ -3,6 +3,7 @@
 //! Transport and the Linux FUSE projection are assembled by their own libraries.
 #![forbid(unsafe_code)]
 mod backing;
+mod commit;
 mod filesystem;
 mod overlay;
 mod runtime;

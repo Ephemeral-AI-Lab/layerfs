@@ -59,6 +59,13 @@ open; Status does not qualify those routes.
 
 **R3b update:** [local RangeEdit and the maintained metadata index](15-local-range-edit.md) are implemented and verified through the real native service/Linux backing route, including all 104 available regular inodes and actual failure ownership. Writable mounting, capture and Commit remain open; the next public operation is stage with its required private capture/lowering.
 
+**Stage update:** [private capture, live successor and actual StageChanges](16-stage-capture.md)
+are implemented with bounded disk completion associations. Ten real native
+selections, including actual C2-save progress and failure retention, passed;
+readable-mount/Status and existing local operations also passed regression.
+The next public operation is CommitStaged with exact known-result reconciliation.
+Full writable mounting, repeated Commit and npm remain open.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

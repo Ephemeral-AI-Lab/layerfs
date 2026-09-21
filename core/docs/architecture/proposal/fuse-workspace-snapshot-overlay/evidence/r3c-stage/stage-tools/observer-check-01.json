@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "scope": "external lock observer self-check; not C2 save evidence",
+  "holder_pid": 11877,
+  "observed_pid": 11877,
+  "after_release": 0
+}

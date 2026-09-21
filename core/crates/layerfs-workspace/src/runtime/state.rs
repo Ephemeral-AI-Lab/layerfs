@@ -28,7 +28,7 @@ pub(crate) struct Inner {
     pub store: u32,
     pub base: Root,
     pub access: WorkspaceAccess,
-    pub _branch: Option<layerfs_bridge::contract::BranchSnapshotWire>,
+    pub branch: Option<Arc<layerfs_bridge::contract::BranchSnapshotWire>>,
     pub arena: Option<Arc<crate::backing::metadata::Arena>>,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
@@ -40,6 +40,8 @@ pub(crate) struct Inner {
 pub(crate) struct State {
     pub nodes: Vec<Node>,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
+    pub completion: Option<crate::backing::metadata::CompletionReserve>,
+    pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
     pub generation: u64,
     pub revision: u64,
     pub dirty_inodes: usize,
@@ -209,6 +211,25 @@ impl Workspace {
         self.host
             .call(self.inner.store, operation, bytes, output, deadline)
     }
+    pub(crate) fn deliver(
+        &self,
+        generation: u64,
+        operation: Operation,
+        input: &mut dyn layerfs_bridge::contract::Source,
+        bytes: u64,
+        output: &mut dyn Write,
+        deadline: Instant,
+    ) -> Result<Response, WorkspaceError> {
+        let _remote = self.begin(true, deadline)?;
+        self.host.call_input(
+            (self.inner.store, generation),
+            operation,
+            input,
+            bytes,
+            output,
+            deadline,
+        )
+    }
     pub(crate) fn callback_deadline(deadline: Instant) -> Instant {
         deadline.min(Instant::now() + Duration::from_secs(10))
     }
@@ -278,12 +299,33 @@ impl Workspace {
         Ok(())
     }
 }
+impl OperationGuard {
+    pub fn remote(&mut self) -> Result<(), WorkspaceError> {
+        if self.remote {
+            return Ok(());
+        }
+        self.workspace
+            .host
+            .remote
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| WorkspaceError::Busy)?;
+        if let Err(error) = self._charge.resize(CALL_SCRATCH) {
+            self.workspace.host.remote.store(false, Ordering::Release);
+            return Err(error);
+        }
+        self.remote = true;
+        Ok(())
+    }
+}
 impl Drop for OperationGuard {
     fn drop(&mut self) {
         if let Ok(mut state) = self.workspace.inner.state.lock() {
             state.active -= 1;
         }
         if self.remote {
+            self._charge
+                .resize(0)
+                .expect("shrinking a call reservation cannot fail");
             self.workspace.host.remote.store(false, Ordering::Release);
         }
     }

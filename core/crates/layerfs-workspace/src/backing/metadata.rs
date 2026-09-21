@@ -15,7 +15,8 @@ use std::{
     },
     time::Instant,
 };
-pub const ESCROW: u64 = 137 * 4096;
+pub const CANDIDATE_BYTES: u64 = 137 * 4096;
+pub const ESCROW: u64 = 208 * 4096;
 pub const WORKING: usize = 640 * 1024;
 const RETAINED: usize = 128 * 1024;
 pub type MetadataCharge = (Charge, Charge);
@@ -48,13 +49,14 @@ pub struct ArenaState {
     pub ledger_identities: Vec<(u64, u64)>,
     pub pages: usize,
     pub allocated: u64,
-    pub escrow: u64,
     pub blocked: bool,
     pub complete: bool,
     pub unrecoverable: bool,
 }
 pub struct RootOwner {
     pub arena: Arc<Arena>,
+    pub parent: Option<Arc<RootOwner>>,
+    pub fund: Option<Arc<ProgressFund>>,
     pub state: Mutex<RootState>,
     pub _charge: MetadataCharge,
 }
@@ -64,6 +66,7 @@ pub struct RootState {
     pub slot_pending: Option<PageRef>,
     pub edge_progress: Option<(PageRef, usize)>,
     pub reserved: u64,
+    pub completion_generation: Option<u64>,
     pub pending: Option<Pending>,
     pub custodies: Vec<PageRef>,
     pub cleanup: Vec<super::ownership::CleanupFrame>,
@@ -154,7 +157,6 @@ impl MetadataHost {
                 ledger_identities: Vec::new(),
                 pages: 0,
                 allocated: 0,
-                escrow: 0,
                 blocked: false,
                 complete: true,
                 unrecoverable: false,
@@ -222,6 +224,9 @@ impl MetadataHost {
     pub fn candidate(
         self: &Arc<Self>,
         arena: &Arc<Arena>,
+        generation: u64,
+        needs_completion: bool,
+        parent: Option<Arc<RootOwner>>,
     ) -> Result<Arc<RootOwner>, WorkspaceError> {
         let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
         for root in roots.iter().filter(|r| Arc::ptr_eq(&r.arena, arena)) {
@@ -254,17 +259,20 @@ impl MetadataHost {
         if a.blocked {
             return Err(WorkspaceError::Busy);
         }
-        let reservation = ESCROW + if a.escrow == 0 { ESCROW } else { 0 };
+        let reservation = CANDIDATE_BYTES + if needs_completion { ESCROW } else { 0 };
         drop(a);
         self.reserve(reservation)?;
         let owner = Arc::new(RootOwner {
             arena: arena.clone(),
+            parent,
+            fund: None,
             state: Mutex::new(RootState {
                 root: PageRef::NULL,
                 temporary,
                 slot_pending: None,
                 edge_progress: None,
                 reserved: reservation,
+                completion_generation: needs_completion.then_some(generation),
                 pending: None,
                 custodies,
                 cleanup,
@@ -273,6 +281,74 @@ impl MetadataHost {
         });
         roots.push(owner.clone());
         Ok(owner)
+    }
+    pub fn result_roots(
+        self: &Arc<Self>,
+        arena: &Arc<Arena>,
+        fund: &Arc<ProgressFund>,
+    ) -> Result<[Arc<RootOwner>; 2], WorkspaceError> {
+        let make = || -> Result<Arc<RootOwner>, WorkspaceError> {
+            let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
+            Ok(Arc::new(RootOwner {
+                arena: arena.clone(),
+                parent: None,
+                fund: Some(fund.clone()),
+                state: Mutex::new(RootState {
+                    root: PageRef::NULL,
+                    temporary: super::metadata_index::vector(128)?,
+                    slot_pending: None,
+                    edge_progress: None,
+                    reserved: 0,
+                    completion_generation: None,
+                    pending: None,
+                    custodies: super::metadata_index::vector(1)?,
+                    cleanup: super::metadata_index::vector(12)?,
+                }),
+                _charge: charge,
+            }))
+        };
+        let first = make()?;
+        let second = make()?;
+        let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+        if roots.len() + 2 > MAX_ROOTS {
+            return Err(WorkspaceError::Capacity);
+        }
+        if roots.capacity() < roots.len() + 2 {
+            let count = roots
+                .capacity()
+                .saturating_mul(2)
+                .max(roots.len() + 2)
+                .min(MAX_ROOTS);
+            let mut charge = self.memory(count * size_of::<Arc<RootOwner>>())?;
+            let mut next = super::metadata_index::vector(count)?;
+            resize_memory(&mut charge, next.capacity() * size_of::<Arc<RootOwner>>())?;
+            next.append(&mut roots);
+            drop(std::mem::replace(&mut *roots, next));
+            *self.root_charge.lock().map_err(|_| WorkspaceError::Io)? = charge;
+        }
+        roots.push(first.clone());
+        roots.push(second.clone());
+        Ok([first, second])
+    }
+    pub fn remove_empty_result_roots(
+        &self,
+        roots: &[Arc<RootOwner>; 2],
+    ) -> Result<(), WorkspaceError> {
+        for root in roots {
+            let state = root.state.lock().map_err(|_| WorkspaceError::Io)?;
+            if state.root != PageRef::NULL
+                || state.reserved != 0
+                || state.pending.is_some()
+                || !state.temporary.is_empty()
+            {
+                return Err(WorkspaceError::Busy);
+            }
+        }
+        self.roots
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .retain(|root| !roots.iter().any(|r| Arc::ptr_eq(root, r)));
+        Ok(())
     }
     pub fn status(&self) -> Result<MetadataStatus, WorkspaceError> {
         let roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
@@ -353,9 +429,7 @@ impl MetadataHost {
         for arena in arenas.iter() {
             let mut pending = false;
             let mut known = true;
-            let mut retained = false;
             for root in roots.iter().filter(|r| Arc::ptr_eq(&r.arena, arena)) {
-                retained = true;
                 let r = root.state.lock().map_err(|_| WorkspaceError::Io)?;
                 if let Some(p) = &r.pending {
                     pending = true;
@@ -365,10 +439,6 @@ impl MetadataHost {
             let mut a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
             a.blocked = a.unrecoverable || pending;
             a.complete = known && (a.complete || !a.unrecoverable);
-            if !retained && a.escrow > 0 {
-                self.release(0, a.escrow)?;
-                a.escrow = 0;
-            }
             complete &= a.complete;
             stopped |= a.blocked;
         }
@@ -428,9 +498,130 @@ fn grow<T>(
     *charge.lock().map_err(|_| WorkspaceError::Io)? = next_charge;
     Ok(())
 }
+pub struct ProgressFund {
+    pub host: Weak<MetadataHost>,
+    available: Mutex<u64>,
+    generation: Mutex<Option<u64>>,
+    _charge: MetadataCharge,
+}
+impl ProgressFund {
+    pub fn new(host: &Arc<MetadataHost>) -> Result<Arc<Self>, WorkspaceError> {
+        Ok(Arc::new(Self {
+            host: Arc::downgrade(host),
+            available: Mutex::new(0),
+            generation: Mutex::new(None),
+            _charge: host.memory(256)?,
+        }))
+    }
+    pub fn install(&self, reserve: CompletionReserve) -> Result<(), WorkspaceError> {
+        let mut generation = self.generation.lock().map_err(|_| WorkspaceError::Io)?;
+        if generation.is_some() {
+            return Err(WorkspaceError::Io);
+        }
+        *generation = Some(reserve.generation);
+        *self.available.lock().map_err(|_| WorkspaceError::Io)? = reserve.bytes;
+        Ok(())
+    }
+    pub fn take(&self, bytes: u64) -> Result<(), WorkspaceError> {
+        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        *available = available
+            .checked_sub(bytes)
+            .ok_or(WorkspaceError::Capacity)?;
+        Ok(())
+    }
+    pub fn give(&self, bytes: u64) -> Result<(), WorkspaceError> {
+        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        *available = available.checked_add(bytes).ok_or(WorkspaceError::Io)?;
+        Ok(())
+    }
+    pub fn recycle(&self, bytes: u64) -> Result<(), WorkspaceError> {
+        let host = self.host.upgrade().ok_or(WorkspaceError::Closed)?;
+        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
+        state.allocated = state
+            .allocated
+            .checked_sub(bytes)
+            .ok_or(WorkspaceError::Io)?;
+        state.metadata_allocated = state
+            .metadata_allocated
+            .checked_sub(bytes)
+            .ok_or(WorkspaceError::Io)?;
+        state.reserved = state
+            .reserved
+            .checked_add(bytes)
+            .ok_or(WorkspaceError::Io)?;
+        state.metadata_reserved = state
+            .metadata_reserved
+            .checked_add(bytes)
+            .ok_or(WorkspaceError::Io)?;
+        *available = available.checked_add(bytes).ok_or(WorkspaceError::Io)?;
+        Ok(())
+    }
+}
+impl Drop for ProgressFund {
+    fn drop(&mut self) {
+        if let (Some(host), Ok(available)) = (self.host.upgrade(), self.available.get_mut()) {
+            let _ = host.release(0, *available);
+        }
+    }
+}
+pub struct CompletionReserve {
+    pub generation: u64,
+    pub bytes: u64,
+}
 impl RootOwner {
     pub fn root(&self) -> Result<PageRef, WorkspaceError> {
         Ok(self.state.lock().map_err(|_| WorkspaceError::Io)?.root)
+    }
+    pub fn reserve_result_update(&self) -> Result<(), WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.root != PageRef::NULL
+            || state.reserved != 0
+            || state.pending.is_some()
+            || !state.temporary.is_empty()
+            || !state.cleanup.is_empty()
+        {
+            return Err(WorkspaceError::Busy);
+        }
+        let bytes = 8 * 4096;
+        self.fund.as_ref().ok_or(WorkspaceError::Io)?.take(bytes)?;
+        state.reserved = bytes;
+        Ok(())
+    }
+    pub fn release_bytes(&self, allocated: u64, reserved: u64) -> Result<(), WorkspaceError> {
+        if let Some(fund) = &self.fund {
+            if allocated > 0 {
+                fund.recycle(allocated)?;
+            }
+            if reserved > 0 {
+                fund.give(reserved)?;
+            }
+            Ok(())
+        } else {
+            self.arena
+                .host
+                .upgrade()
+                .ok_or(WorkspaceError::Closed)?
+                .release(allocated, reserved)
+        }
+    }
+    pub fn take_completion(
+        &self,
+        generation: u64,
+    ) -> Result<Option<CompletionReserve>, WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let Some(owner) = state.completion_generation else {
+            return Ok(None);
+        };
+        if owner != generation || state.reserved != ESCROW {
+            return Err(WorkspaceError::Io);
+        }
+        state.completion_generation = None;
+        state.reserved = 0;
+        Ok(Some(CompletionReserve {
+            generation,
+            bytes: ESCROW,
+        }))
     }
     pub fn seal(
         &self,
@@ -476,19 +667,19 @@ impl RootOwner {
         }
         let host = self.arena.host.upgrade().ok_or(WorkspaceError::Closed)?;
         let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
-        if a.escrow == 0 {
-            if s.reserved < ESCROW {
-                return Err(WorkspaceError::Io);
-            }
-            a.escrow = ESCROW;
-            s.reserved -= ESCROW;
-        }
-        let reserve = s.reserved;
-        s.reserved = 0;
-        drop(a);
+        let retained = if s.completion_generation.is_some() {
+            ESCROW
+        } else {
+            0
+        };
+        let reserve = s.reserved.checked_sub(retained).ok_or(WorkspaceError::Io)?;
+        s.reserved = retained;
         drop(s);
-        host.release(0, reserve)
+        if let Some(fund) = &self.fund {
+            fund.give(reserve)
+        } else {
+            host.release(0, reserve)
+        }
     }
 }
 impl Workspace {

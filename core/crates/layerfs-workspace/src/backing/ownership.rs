@@ -567,8 +567,6 @@ impl Arena {
             s.allocated -= PAGE as u64;
         }
         let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        self.host()?.release(0, s.escrow)?;
-        s.escrow = 0;
         self.host()?
             .slots
             .fetch_sub((s.next - 1) as usize, Ordering::AcqRel);
@@ -589,12 +587,16 @@ impl RootOwner {
         WorkspaceError::Backing(BackingFailure {
             phase,
             payload: 0,
-            declared_bytes: ESCROW,
+            declared_bytes: if self.fund.is_some() {
+                8 * 4096
+            } else {
+                CANDIDATE_BYTES
+            },
             completed_bytes: s.temporary.len() as u64 * PAGE as u64,
             created_segments: s.temporary.len() as u32
                 + u32::from(s.pending.as_ref().is_some_and(|p| p.identity.is_some())),
             allocated_bytes: a.allocated,
-            reserved_bytes: s.reserved + a.escrow,
+            reserved_bytes: s.reserved,
             cleanup_failed: phase == BackingPhase::Cleanup,
             accounting_complete: a.complete,
             kind,
