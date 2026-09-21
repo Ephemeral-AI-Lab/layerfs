@@ -1,0 +1,4 @@
+# Immutable raw evidence: preserve original bytes.
+*.log -text -whitespace
+*.patch -text -whitespace
+*.csv -text -whitespace

@@ -1,0 +1,34 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 250B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 15.16MB 0.2s done
+#3 DONE 0.2s
+
+#4 [1/2] COPY layerfs-daemon /layerfs-daemon
+#4 DONE 0.0s
+
+#5 [2/2] COPY --chown=65532:65532 --chmod=0700 logs /logs
+#5 DONE 0.1s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.5s done
+#6 exporting manifest sha256:df19a8be5ff3ca06ab89c76b1c0f36c80147e6efa28243c4c0f84114d0c3b073
+#6 exporting manifest sha256:df19a8be5ff3ca06ab89c76b1c0f36c80147e6efa28243c4c0f84114d0c3b073 done
+#6 exporting config sha256:1f52f2a18c36e5ca7b31be5d91c4c1c6269cb088b64b58da4c2d7c227c90cd96 done
+#6 exporting attestation manifest sha256:8dfb7f25574212eea0e43c127e8154f8edb7969fb3ce31b57b7fc81575bc74ad 0.1s done
+#6 exporting manifest list sha256:2c82dbcfcb176e91dd3fb8336c0d830c4a8dfcfd2c1a845b56ddf09b82c6a157
+#6 exporting manifest list sha256:2c82dbcfcb176e91dd3fb8336c0d830c4a8dfcfd2c1a845b56ddf09b82c6a157 done
+#6 naming to docker.io/library/layerfs-history-remediation:f2021367 done
+#6 unpacking to docker.io/library/layerfs-history-remediation:f2021367 0.1s done
+#6 DONE 0.7s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ko0v8r0zo64p7s6ag1upyjduw

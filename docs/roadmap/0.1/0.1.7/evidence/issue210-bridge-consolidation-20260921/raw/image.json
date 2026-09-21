@@ -1,0 +1,23 @@
+{
+  "image": "layerfs-history-bridge:7a6db4c2",
+  "image_id": "sha256:53a9b1bfd21b68cffbebb8bb4ab7a3dcf94a1910ed69c47316ab81d9e53bac58",
+  "architecture": "arm64",
+  "labels": {
+    "org.layerfs.binary-sha256": "8ea90c168ec177694a3e65347dca4f443edd31a9ef2808ec36b40c26beb7cf62",
+    "org.opencontainers.image.revision": "7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c"
+  },
+  "binary_sha256": "8ea90c168ec177694a3e65347dca4f443edd31a9ef2808ec36b40c26beb7cf62",
+  "command": [
+    "docker",
+    "build",
+    "--platform",
+    "linux/arm64",
+    "--build-arg",
+    "BINARY_SHA256=8ea90c168ec177694a3e65347dca4f443edd31a9ef2808ec36b40c26beb7cf62",
+    "--label",
+    "org.opencontainers.image.revision=7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c",
+    "-t",
+    "layerfs-history-bridge:7a6db4c2",
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/bridge-simplification-image"
+  ]
+}

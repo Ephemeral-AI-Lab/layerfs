@@ -21,10 +21,10 @@ use crate::policy::{StorageCapacities, METADATA_INDEX_VALUES, VALUES_PER_GROUP};
 use crate::sqlite::pool;
 
 /// Bounded ordered set of `(fingerprint, ordinal)` candidates.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PoolIndex {
     entries: BTreeSet<(i64, u32)>,
-    next: u32,
+    next: u64,
     retained_bytes: usize,
 }
 
@@ -74,7 +74,7 @@ impl PoolIndex {
         first_ordinal: u32,
         values: &[[u8; INODE_VALUE_BYTES]],
     ) -> StorageResult<()> {
-        if first_ordinal < self.next || values.is_empty() {
+        if u64::from(first_ordinal) < self.next || values.is_empty() {
             return Err(StorageError::Integrity("metadata index chronology"));
         }
         if self.entries.len() + values.len() > METADATA_INDEX_VALUES {
@@ -87,9 +87,9 @@ impl PoolIndex {
                 .ok_or(StorageError::Integrity("metadata ordinal"))?;
             self.insert(value, ordinal);
         }
-        self.next = first_ordinal
+        self.next = u64::from(first_ordinal)
             .checked_add(
-                u32::try_from(values.len())
+                u64::try_from(values.len())
                     .map_err(|_| StorageError::Integrity("metadata ordinal"))?,
             )
             .ok_or(StorageError::Integrity("metadata ordinal maximum"))?;
@@ -105,47 +105,29 @@ impl PoolIndex {
         reader: &mut PoolReader,
         workspace: &mut DecompressionWorkspace,
     ) -> StorageResult<()> {
-        let end = pool::ordinal_end(connection)?;
-        if end < u64::from(self.next) {
-            return Err(StorageError::Integrity("metadata index chronology"));
-        }
-        if end == u64::from(self.next) {
+        let start = pool::window_start(connection)?;
+        self.advance_window(start);
+        let Ok(from) = u32::try_from(self.next) else {
             return Ok(());
-        }
-        let mut cursor = self.next;
-        if cursor == 1 && end > 1 + METADATA_INDEX_VALUES as u64 {
-            // Cold start: replay the whole-group eviction recurrence from the
-            // catalogue so the payload of evicted groups is never read.
-            cursor = retained_start(connection, end)?;
-            self.next = cursor;
-            self.entries.clear();
-            self.retained_bytes = 0;
-        }
-        while u64::from(cursor) < end {
-            let row = pool::group_for(connection, cursor)?
-                .ok_or(StorageError::Integrity("metadata catalogue gap"))?;
-            if row.first_ordinal != cursor {
-                return Err(StorageError::Integrity("metadata catalogue gap"));
+        };
+        pool::for_each_group(connection, Some(from), |row| {
+            if u64::from(row.first_ordinal) < self.next
+                || row.count == 0
+                || row.count > VALUES_PER_GROUP
+            {
+                return Err(StorageError::Integrity("metadata catalogue overlap/range"));
             }
             let values = reader.group_values(connection, capacities, ceiling, workspace, &row)?;
-            if self.entries.len() + values.len() > METADATA_INDEX_VALUES {
-                self.entries.clear();
-                self.retained_bytes = 0;
-            }
-            for (position, value) in values.iter().enumerate() {
-                let ordinal = row
-                    .first_ordinal
-                    .checked_add(position as u32)
-                    .ok_or(StorageError::Integrity("metadata ordinal"))?;
-                self.insert(value, ordinal);
-            }
-            cursor = row
-                .first_ordinal
-                .checked_add(row.count as u32)
-                .ok_or(StorageError::Integrity("metadata ordinal"))?;
-            self.next = cursor;
-        }
+            self.note_group(row.first_ordinal, &values)
+        })?;
         Ok(())
+    }
+
+    /// Discards candidates below the allocator's bounded reserved-value window.
+    pub fn advance_window(&mut self, start: u32) {
+        self.entries.retain(|(_, ordinal)| *ordinal >= start);
+        self.retained_bytes = self.entries.len() * (std::mem::size_of::<(i64, u32)>() + 8);
+        self.next = self.next.max(u64::from(start));
     }
 
     fn insert(&mut self, value: &[u8; INODE_VALUE_BYTES], ordinal: u32) {
@@ -213,38 +195,6 @@ impl PoolIndex {
         }
         Ok(found)
     }
-}
-
-/// Replays the whole-group eviction recurrence to find the retained start.
-///
-/// This reproduces the reference's cold-start rule exactly: groups are counted in
-/// catalogue order and the whole window restarts whenever the next group would
-/// exceed the retained entry bound. Only the catalogue is read, never the payload
-/// of a group that would immediately be discarded.
-fn retained_start(connection: &Connection, end: u64) -> StorageResult<u32> {
-    let mut next = 1_u32;
-    let mut first = 1_u32;
-    let mut entries = 0_usize;
-    // The statement is streamed and only the three scalars above are retained, so
-    // the replay costs the window it computes and not the catalogue it walks.
-    pool::for_each_group(connection, None, |group| {
-        if group.first_ordinal != next || group.count == 0 || group.count > VALUES_PER_GROUP {
-            return Err(StorageError::Integrity("metadata catalogue gap/range"));
-        }
-        next = next
-            .checked_add(group.count as u32)
-            .ok_or(StorageError::Integrity("metadata ordinal maximum"))?;
-        if entries + group.count > METADATA_INDEX_VALUES {
-            first = group.first_ordinal;
-            entries = 0;
-        }
-        entries += group.count;
-        Ok(())
-    })?;
-    if u64::from(next) != end {
-        return Err(StorageError::Integrity("metadata catalogue endpoint"));
-    }
-    Ok(first)
 }
 
 /// Candidate filter of one value: the low eight digest bytes.

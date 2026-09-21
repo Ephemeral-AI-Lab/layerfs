@@ -1,0 +1,45 @@
+--- /Users/yifanxu/.codex/worktrees/b995/layerfs/core/tools/substitution-proof/run.py	2026-09-21 05:53:40
++++ /Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-substitution/harness/run.py	2026-09-21 06:25:31
+@@ -36,7 +36,7 @@
+ from pathlib import Path
+ 
+ HERE = Path(__file__).resolve().parent
+-REPO = HERE.parents[2]
++REPO = Path('/Users/yifanxu/.codex/worktrees/b995/layerfs')
+ CRATES = ("layerfs-telemetry", "layerfs-content", "layerfs-storage")
+ ARMS = {
+     "baseline": ("baseline", "baseline"),
+@@ -98,7 +98,7 @@
+ 
+ 
+ def commit_of(checkout: Path) -> str:
+-    return sh("git", "-C", str(checkout), "rev-parse", "HEAD").stdout.strip()
++    return "35740836f84b9ef687da2f70d785c9e6b2ed2fd2" if checkout == Path('/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-loc-before') else "f2021367e11f6433d1d9e055198cac5ad280f6c9"
+ 
+ 
+ def digest(path: Path) -> str:
+@@ -166,13 +166,13 @@
+             ]
+             arm_record[f"{crate}_differs_from_revision"] = differing
+         environment = {"CARGO_TARGET_DIR": str(root / "target")}
+-        test = sh("cargo", "+1.85.1", "test", "--manifest-path", str(manifest), env={**os.environ, **environment})
++        test = sh("cargo", "+1.85.1", "test", "--offline", "--locked", "--manifest-path", str(manifest), env={**os.environ, **environment})
+         arm_record["test"] = {
+             "exit_code": test.returncode,
+             "passed": "test result: ok" in test.stdout,
+             "tail": (test.stdout + test.stderr).strip().splitlines()[-3:],
+         }
+-        example = sh("cargo", "+1.85.1", "run", "--quiet", "--manifest-path", str(manifest),
++        example = sh("cargo", "+1.85.1", "run", "--offline", "--locked", "--quiet", "--manifest-path", str(manifest),
+                      "--example", "filesystem_primitives_candidate", "--",
+                      "--files", "2000", "--changes", "200", "--samples", "1", env={**os.environ, **environment})
+         stdout = example.stdout.strip().splitlines()
+@@ -194,7 +194,7 @@
+     workdir.mkdir(parents=True, exist_ok=True)
+ 
+     def arm_binary(arm: str, *arguments: str) -> subprocess.CompletedProcess:
+-        return sh("cargo", "+1.85.1", "run", "--quiet", "--manifest-path",
++        return sh("cargo", "+1.85.1", "run", "--offline", "--locked", "--quiet", "--manifest-path",
+                   str(HERE / "arms" / arm / "Cargo.toml"), "--bin", "cross_revision",
+                   "--", *arguments, env={**os.environ, "CARGO_TARGET_DIR": str(root / "target")})
+ 

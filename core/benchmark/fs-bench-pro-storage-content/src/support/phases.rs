@@ -35,6 +35,12 @@ use std::time::Instant;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Phases {
     /// Setup: build the fixture, or copy and de-warm a prepared one.
+    ///
+    /// A driver whose input assembly happens **between** its measured children
+    /// attributes those spans with [`add_preparation`], because they are real
+    /// invocation time that no other phase accounts for. For such a driver this
+    /// field is the close-of-preparation mark **plus** those spans, so it is not
+    /// contiguous time; the driver publishes the attributed part separately.
     pub preparation_ns: u64,
     /// The per-sample copy and de-warm inside preparation, published separately
     /// because owner decision D2 makes the acquisition cost mandatory.
@@ -110,6 +116,8 @@ struct Clock {
     measured: Option<Instant>,
     verified: Option<Instant>,
     acquisition_ns: u64,
+    /// Harness input assembly attributed to preparation by [`add_preparation`].
+    preparation_added_ns: u64,
     operation_ns: u64,
     timing_json_bytes: u64,
     /// CPU at the close of preparation, and at the close of the measured region.
@@ -140,6 +148,7 @@ fn clock() -> MutexGuard<'static, Clock> {
                 measured: None,
                 verified: None,
                 acquisition_ns: 0,
+                preparation_added_ns: 0,
                 operation_ns: 0,
                 timing_json_bytes: 0,
                 cpu_at_prepared: None,
@@ -163,6 +172,7 @@ pub fn begin(output: &Path) {
     held.measured = None;
     held.verified = None;
     held.acquisition_ns = 0;
+    held.preparation_added_ns = 0;
     held.operation_ns = 0;
     held.timing_json_bytes = 0;
     held.cpu_at_prepared = None;
@@ -252,6 +262,26 @@ pub fn add_acquisition(nanoseconds: u64) {
     clock().acquisition_ns += nanoseconds;
 }
 
+/// Attributes a span of harness **input assembly** to the preparation phase.
+///
+/// A driver whose input assembly happens *between* its measured children has real
+/// invocation time that no declared phase accounts for, and `runner.py`'s
+/// reconciliation fails closed on exactly that (`shared/phases.py`
+/// `reconcile_invocation`: the wall must be covered by the declared phases within
+/// its tolerance). `history.*` reads its corpus between the children, so it
+/// declares those spans here, and the four phases then account for the invocation
+/// instead of leaving a sixth of it unexplained.
+///
+/// The span is outside every measured child by construction, so it cannot be
+/// double-counted, and the same driver publishes it in its own right
+/// (`history.corpus_read_ns`) so a reader can subtract it rather than trust the
+/// attribution. This is a declaration of measured time, not a relaxation: it makes
+/// the budgeted complete command **larger**, never smaller.
+pub fn add_preparation(nanoseconds: u64) {
+    let mut held = clock();
+    held.preparation_added_ns = held.preparation_added_ns.saturating_add(nanoseconds);
+}
+
 /// Runs one piece of harness work, accounting it when the measured region is open.
 ///
 /// This is the per-object handoff: the harness has to hand the product an owned
@@ -317,7 +347,7 @@ pub fn snapshot() -> Phases {
         _ => None,
     };
     Phases {
-        preparation_ns: since_start(held.prepared),
+        preparation_ns: since_start(held.prepared).saturating_add(held.preparation_added_ns),
         acquisition_ns: held.acquisition_ns,
         operation_ns: held.operation_ns,
         verification_ns,

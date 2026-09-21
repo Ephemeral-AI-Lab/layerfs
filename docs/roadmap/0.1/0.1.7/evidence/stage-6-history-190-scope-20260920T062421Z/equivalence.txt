@@ -1,0 +1,30 @@
+=== history-stride10
+  every state root equal            : True
+  state changed_bytes  equal        : True
+  state changed_paths  equal        : True
+  state objects        equal        : True
+  state inserted       equal        : True
+  state root           equal        : True
+  baseline  Store sha256 : 4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487  == recorded constant
+  candidate Store sha256 : 4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487  == recorded constant
+  byte-identical between arms       : True
+  verification (sampled, INCOMPLETE) : 1,083 of 101,477 path-states, mismatches 0, missing 0, unexpected 0
+  verification equal between arms   : False (walls 4.681 s vs 2.911 s)
+  canonical/value-group inventory   : {'objects': 52032, 'packs': 255, 'pack_bytes': 45297954, 'groups': 1737, 'group_values': 48925}
+  inventory equal between arms      : True
+
+=== history-stride3
+  every state root equal            : True
+  state changed_bytes  equal        : True
+  state changed_paths  equal        : True
+  state objects        equal        : True
+  state inserted       equal        : True
+  state root           equal        : True
+  baseline  Store sha256 : f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e  == recorded constant
+  candidate Store sha256 : f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e  == recorded constant
+  byte-identical between arms       : True
+  verification (sampled, INCOMPLETE) : 3,377 of 306,861 path-states, mismatches 0, missing 0, unexpected 0
+  verification equal between arms   : False (walls 16.293 s vs 9.712 s)
+  canonical/value-group inventory   : {'objects': 72560, 'packs': 437, 'pack_bytes': 56590252, 'groups': 4225, 'group_values': 65528}
+  inventory equal between arms      : True
+

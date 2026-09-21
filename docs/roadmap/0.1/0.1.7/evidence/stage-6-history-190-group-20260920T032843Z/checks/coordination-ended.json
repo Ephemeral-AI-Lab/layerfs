@@ -1,0 +1,5 @@
+{
+  "owner_instruction": "Stop cross-task communication once resource/lock conflict is resolved; continue independently using global locks.",
+  "action": "Cross-task communication stopped. Both-global-flock plus private O_EXCL protocol retained; no resource overlap, no new handshakes.",
+  "status": "LOCK_PROTOCOL_FIXED"
+}

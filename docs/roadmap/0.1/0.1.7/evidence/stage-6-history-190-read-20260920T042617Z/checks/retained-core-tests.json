@@ -1,0 +1,18 @@
+{
+  "schema": "h190-read-lock-v1",
+  "label": "retained-core-tests",
+  "command": [
+    "bash",
+    "-c",
+    "\nset -o pipefail\ncd /Users/yifanxu/.codex/worktrees/history-data-access/layerfs\nC=docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-read-20260920T042617Z\ncargo +1.85.1 test --manifest-path core/Cargo.toml --locked > $C/checks/core-tests.log 2>&1; echo \"core-tests=$?\"\ncargo +1.85.1 test --manifest-path core/Cargo.toml --locked --examples > $C/checks/core-examples.log 2>&1; echo \"core-examples=$?\"\ncargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings > $C/checks/core-clippy.log 2>&1; echo \"core-clippy=$?\"\ncargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check > $C/checks/core-fmt.log 2>&1; echo \"core-fmt=$?\"\npython3 core/tools/check_product_boundary.py > $C/checks/boundary.log 2>&1; echo \"boundary=$?\"\npython3 -m unittest discover -s core/tools -p \"test_*.py\" > $C/checks/boundary-self-tests.log 2>&1; echo \"boundary-self-tests=$?\"\n"
+  ],
+  "utc": "2026-09-20T04:58:00Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T04:58:00Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 197469173375
+}

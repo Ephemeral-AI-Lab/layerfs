@@ -1,0 +1,19 @@
+{
+  "schema": "h190-scope-lock-v1",
+  "label": "verify-baseline-history-stride3",
+  "command": [
+    "python3",
+    "verify.py",
+    "baseline",
+    "history-stride3"
+  ],
+  "utc": "2026-09-20T06:52:50Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "acquired_utc": "2026-09-20T06:52:50Z",
+  "outcome": "COMPLETED",
+  "exit_code": 0,
+  "wall_ns": 16438083750
+}

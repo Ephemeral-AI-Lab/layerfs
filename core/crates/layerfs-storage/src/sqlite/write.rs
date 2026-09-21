@@ -67,7 +67,7 @@ pub fn rollback(connection: &Connection) -> StorageResult<()> {
 /// Inserts a newly created pack row.
 pub fn insert_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> StorageResult<()> {
     let affected = connection.execute(
-        "INSERT INTO object_packs (pack_id, data) VALUES (?1, ?2)",
+        "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))",
         rusqlite::params![pack_id, bytes],
     )?;
     if affected != 1 {
@@ -79,7 +79,7 @@ pub fn insert_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> Stora
 /// Rewrites an existing pack row with its appended groups.
 pub fn append_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> StorageResult<()> {
     let affected = connection.execute(
-        "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
+        "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
         rusqlite::params![pack_id, bytes],
     )?;
     if affected != 1 {
@@ -95,7 +95,8 @@ pub fn append_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> Stora
 const OBJECT_INSERT_PARAMETERS: usize = 6;
 /// SQL text one bound row contributes to a multi-row `INSERT`: its placeholder
 /// group `(?,?,?,?,?,?)` and the separating comma.
-const OBJECT_INSERT_ROW_SQL_BYTES: usize = 14;
+const OBJECT_INSERT_ROW_SQL_BYTES: usize =
+    b"(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),".len();
 /// Most rows this writer will ever put in one statement.
 ///
 /// Not a tuning constant: a fixed cap keeps the prepared-statement cache bounded
@@ -170,7 +171,7 @@ pub fn insert_objects(connection: &Connection, rows: &[ObjectRow]) -> StorageRes
 fn object_insert_sql(rows: usize) -> String {
     let mut sql = String::from(
         "INSERT INTO objects \
-         (object_id, object_role, canonical_length, pack_id, group_number, record_number) VALUES ",
+         (object_id, object_role, canonical_length, pack_id, group_number, record_number, save_id) VALUES ",
     );
     for index in 0..rows {
         if index > 0 {
@@ -183,7 +184,7 @@ fn object_insert_sql(rows: usize) -> String {
             }
             sql.push('?');
         }
-        sql.push(')');
+        sql.push_str(",(SELECT save_id FROM temp.layerfs_read_scope))");
     }
     sql
 }

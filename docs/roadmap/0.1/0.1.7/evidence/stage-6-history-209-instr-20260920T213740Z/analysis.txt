@@ -1,0 +1,87 @@
+== rca-instrument ==
+  binary 844a95ee2cb3f2b9  store 7ea2fe6ccf13bc5a  harness seal 6a922e39e16d  probe {'LAYERFS_STORAGE_RCA_PROBE': '1'}
+  operation 25.986 s   accept_loop 16.517 s   filesystem 6.713 s
+  charged 14.608 s   engine-measured 8.273 s   uncharged 1909004057 ns
+  commit_ns 2.912 s (63.59 us/append)   sql_ns 2.005 s   resolve_ns 6.906 s
+  Q1: pages/commit 27.839   body pages/append 24.433   excess 229788 pages (4.74/commit)
+      cache_write 1348771  spill 0  hit 6382657  miss 5989  cache_used 8332288 B  stmt_used 1161616 B
+      page_count 11687 -> 12663  freelist 46 -> 38
+  Q4: begin 9.738 us wall / 9.036 us engine, 48582 calls = 0.473 s
+      next_pack 4.283 us wall / 0.412 us engine
+      commit stmt 59.940 us wall / 56.124 us engine
+  Q2: per-statement engine counters (ms-resolution straddle estimator)
+      bucket             calls   us/call  vm/call  scan  sort  auto  repr
+      begin              48582     9.036      5.0     0     0     0     0
+      commit             48446    56.124      3.0     0     0     0     0
+      rollback             136     0.000      3.0     0     0     0     0
+      next_pack          48565     0.412      9.0     0     0     0     0
+      insert_pack          255     3.922     51.0     0     0     0     0
+      append_pack        45794    20.680     55.0     0     0     0     0
+      insert_objects     44334     8.481     96.8     0     0     0     0
+      ceiling              255     0.000     29.0     0     0     0     0
+      advance_pack         255     0.000     34.0     0     0     0     0
+      publish_policy        17     0.000     53.0     0     0     0     0
+      publish_save          17     0.000     66.0     0     0     0     0
+      ordinal_select      1737     1.151      9.0     0     0     0     0
+      ordinal_update      1737     2.879     48.0     0     0     0     0
+      value_group         1737     2.879     54.0     0     0     0     0
+      locator           297082     8.479     42.4     0     0     0     0
+      pack_bytes         19771    56.092     28.8     0     0     0     0
+      candidates_write    6605     3.482     60.0     0     0     0     0
+      scope                 17     0.000     19.0     0     0     0     0
+      other              54554     1.980     15.0     0     0     0     0
+      pack cache: not instrumented in this row (the counters were added after it was taken)
+
+== rca-packcache ==
+  binary bb1966025019cb2a  store 7ea2fe6ccf13bc5a  harness seal 3f1e58967658  probe {'LAYERFS_STORAGE_RCA_PROBE': '1'}
+  operation 17.697 s   accept_loop 11.165 s   filesystem 4.609 s
+  charged 9.915 s   engine-measured 5.491 s   uncharged 1250368422 ns
+  commit_ns 1.924 s (42.02 us/append)   sql_ns 1.319 s   resolve_ns 4.765 s
+  Q1: pages/commit 27.839   body pages/append 24.433   excess 229788 pages (4.74/commit)
+      cache_write 1348771  spill 0  hit 6382657  miss 5989  cache_used 8332288 B  stmt_used 1161616 B
+      page_count 11687 -> 12663  freelist 46 -> 38
+  Q4: begin 6.307 us wall / 5.352 us engine, 48582 calls = 0.306 s
+      next_pack 2.632 us wall / 0.288 us engine
+      commit stmt 39.621 us wall / 37.485 us engine
+  Q2: per-statement engine counters (ms-resolution straddle estimator)
+      bucket             calls   us/call  vm/call  scan  sort  auto  repr
+      begin              48582     5.352      5.0     0     0     0     0
+      commit             48446    37.485      3.0     0     0     0     0
+      rollback             136     7.353      3.0     0     0     0     0
+      next_pack          48565     0.288      9.0     0     0     0     0
+      insert_pack          255    15.686     51.0     0     0     0     0
+      append_pack        45794    14.063     55.0     0     0     0     0
+      insert_objects     44334     5.549     96.8     0     0     0     0
+      ceiling              255     0.000     29.0     0     0     0     0
+      advance_pack         255     3.922     34.0     0     0     0     0
+      publish_policy        17     0.000     53.0     0     0     0     0
+      publish_save          17     0.000     66.0     0     0     0     0
+      ordinal_select      1737     1.151      9.0     0     0     0     0
+      ordinal_update      1737     2.303     48.0     0     0     0     0
+      value_group         1737     2.303     54.0     0     0     0     0
+      locator           297082     5.493     42.4     0     0     0     0
+      pack_bytes         19771    39.553     28.8     0     0     0     0
+      candidates_write    6605     1.665     60.0     0     0     0     0
+      scope                 17     0.000     19.0     0     0     0     0
+      other              54554     1.283     15.0     0     0     0     0
+      pack cache: hits 719722 misses 19771 rate 0.9733 distinct 227 clears 560
+
+== micro-probe arms (scratch/step-cost-arms.txt, one process, round-robin) ==
+  arm                                           us per call
+  begin_immediate+rollback                            4.035
+  begin_immediate+commit                              4.321
+  begin_deferred+commit                               0.504
+  prepare pack UPDATE (fresh)                         4.782
+  prepare+bind TRANSIENT (no step)                    8.843
+  prepare+bind STATIC (no step)                       4.823
+  bind TRANSIENT only                                 3.678
+  bind STATIC only                                    0.060
+  full step (BEGIN+append+COMMIT, TRANSIENT)        117.064
+  full step (STATIC bind)                           112.938
+  next_pack (prepare+step+fresh)                      3.595
+  next_pack (step only, prepared)                     5.293
+  step with STATIC bind (repeat of 9)               109.919
+  step, prepared handle (repeat of 9)               109.467
+  step, pack text parsed per call (TRANSIENT)       121.556
+  step, pack text parsed per call (STATIC)          120.468
+  step arm: 45000 commits, 45000 rows changed, 2076195 pages written, 46.14 pages/commit, 16335495000 vm steps

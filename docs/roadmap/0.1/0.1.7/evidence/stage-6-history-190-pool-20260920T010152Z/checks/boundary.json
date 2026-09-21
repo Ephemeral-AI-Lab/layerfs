@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "core/tools/check_product_boundary.py"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "exit_code": 0,
+  "wall_ns": 60226375,
+  "cargo_target_dir": null,
+  "dependency_reuse": "existing incremental pinned-toolchain Cargo target"
+}

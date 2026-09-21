@@ -1,0 +1,10 @@
+[package]
+name="layerfs-daemon"
+description="Bounded headless native bridge client"
+version.workspace=true
+edition.workspace=true
+rust-version.workspace=true
+license.workspace=true
+[dependencies]
+layerfs-bridge={path="../layerfs-bridge"}
+layerfs-telemetry={path="../layerfs-telemetry",features=["native"]}

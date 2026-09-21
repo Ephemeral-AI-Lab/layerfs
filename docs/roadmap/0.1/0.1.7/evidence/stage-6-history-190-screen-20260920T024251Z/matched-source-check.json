@@ -1,0 +1,9 @@
+{
+  "scenario": "zero-count-filter-1s-v2",
+  "baseline_reused_without_rerun": true,
+  "harness_equal": true,
+  "dependency_locks_equal": true,
+  "product_differences": [
+    "core/crates/layerfs-content/src/filesystem/update.rs"
+  ]
+}

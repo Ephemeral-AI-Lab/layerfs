@@ -10,39 +10,18 @@
 
 Parent: [`core/docs/architecture/`](../README.md). Source pin `ce2d738ff`.
 
-## Current pair-2 recommendation — 2026-09-21
-
-The [commit/history investigation](03-history.md) now supplies the semantic half
-and the proposed implementation boundary. The older sections below retain their
-original source/concurrency analysis; their "holds today" labels refer to that
-historical pin, not the current core. Where they differ, use the new proposal:
-
-- Keep the reference's **two publications**: Commit CASes Branch head/base;
-  publishing a Layer separately CASes LayerStack head. A stage precedes Commit.
-  Different Branches in one stack still share its publication head.
-- C1/C2 stay service-local. Workspace sends bounded stable logical input; the
-  old diagram placing C1 construction in Workspace is superseded.
-- The original inspection's C2 schema 6 has **five** tables and rejects extra tables. Recommend a
-  separately versioned C5 catalog; do not inject history SQL or transaction
-  callbacks into C2. Save success followed by history failure can orphan content.
-- A complete C2 save can span bounded transactions. The physical write phase is
-  not one atomic transaction for the whole logical Commit. Save completion,
-  stage insertion, branch Commit and Layer publication have separate outcomes.
-- Different metadata rows do not remove SQLite writer contention. The later
-  pair-3/C2 implementation has **two private saves and schema 7 with six
-  tables**, as recorded in the history investigation's later-inspection section.
-  It is implemented differently from these older sketches and is not in PR #200's
-  merged schema-6 foundation; it subsequently landed on main in `eb319aaa9`.
-  Use the selected checkpoint's ownership/admission
-  and matched evidence, not an inference from #177/#178's status.
-- A stage is authoritative stored metadata with frozen expected context and an
-  exact token. No phase promises crash durability. The reference's synchronous
-  FULL allocator cannot be ported under core's policy; writable recovery needs
-  an explicit allocation-continuity contract.
-- Return stale-head failure once. No automatic rebase, retry or backoff queue.
-
-These are design recommendations, not implemented or measured behavior. See the
-new document for source findings, schema, error/portability contracts and checks.
+**Current handoff, 2026-09-21:** use the
+[pair-2 implementation specification](commit-history/implementation.md).
+The discussion below is retained as the earlier design exploration, not current
+implementation instructions. C2 now has schema 8 and the configured per-Store
+writer budget of [#216](https://github.com/Ephemeral-AI-Lab/layerfs/issues/216)
+(two by default), so the earlier fixed two-save statements in this page and in
+the documents it points at are superseded; save-owned locators/publication
+replace the old prefix-only assumptions. C1/C2
+stay service-local. Stage precedes Commit/Branch CAS; add-layer separately CASes
+LayerStack head. The new specification owns metadata placement, exact stages,
+allocation continuity, no-retry behavior and the independent service-first scope.
+Its one-attempt policy supersedes the old automatic queue/backoff sketch below.
 
 **Current sequencing:** this is pair 2's operational design input. Under the
 [2026-09-20 implementation order](README.md#implementation-order-pair-3-then-pair-1-then-pair-2),

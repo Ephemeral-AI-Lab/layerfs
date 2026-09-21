@@ -1,0 +1,88 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.07s
+     Running tests/codec_frames.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/codec_frames-466213e659021382)
+
+running 7 tests
+test a_frame_whose_checksum_no_longer_matches_is_refused ... ok
+test a_declared_length_that_contradicts_the_frame_is_refused ... ok
+test the_decode_arena_is_charged_only_when_a_frame_needs_it ... ok
+test a_forged_declared_length_inside_the_header_is_refused_by_the_call_itself ... ok
+test a_valid_frame_round_trips_through_both_decode_entry_points ... ok
+test a_frame_beyond_the_profiles_window_is_refused ... ok
+test every_truncation_of_a_valid_frame_is_refused_without_panicking ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.70s
+
+     Running tests/group_decodes.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/group_decodes-d2f86df8bdb6dbb2)
+
+running 2 tests
+test the_decode_charge_is_per_read_and_not_per_store ... ok
+test a_decode_is_charged_once_per_distinct_group ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/metadata_pool.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/metadata_pool-69a626bbaeebdf1b)
+
+running 19 tests
+test a_pooled_reader_releases_pack_bodies_when_the_store_writes ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_compressed_full_pooled_leaf_reports_its_physical_decode_work ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_pooled_delta_chain_reports_its_physical_decode_work ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test pooled_physical_groups_evict_at_the_existing_decoded_byte_bound ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.13s
+
+     Running tests/pack_locator.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/pack_locator-8fee9b2b5e6ab6f1)
+
+running 9 tests
+test a_pack_never_assembles_past_its_lane_limit ... ok
+test append_reuses_a_pack_without_changing_record_ordinals ... ok
+test a_locator_outside_the_group_directory_is_rejected ... ok
+test same_save_reads_see_accepted_objects_before_the_finish_barrier ... ok
+test a_corrupt_pack_body_is_rejected_on_read ... ok
+test a_whole_file_record_is_stored_in_its_own_compact_pack ... ok
+test a_full_lane_starts_a_new_pack_and_keeps_existing_locators ... ok
+test the_placement_fit_probe_agrees_with_the_canonical_assembled_length ... ok
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running tests/physical_formats.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/physical_formats-dce48c851f47630a)
+
+running 8 tests
+test the_lane_table_names_one_limit_per_lane ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+test an_ordinary_group_seals_on_the_framed_length_it_writes ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/storage_limits.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/storage_limits-7c4e5d9fe5262c40)
+
+running 5 tests
+test the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins ... ok
+test a_group_record_directory_is_accepted_at_its_bound_and_refused_over_it ... ok
+test the_group_count_ceiling_is_named_with_its_derivation ... ok
+test a_group_body_is_accepted_at_its_bound_and_refused_over_it ... ok
+test a_group_record_count_is_accepted_at_its_bound_and_refused_over_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

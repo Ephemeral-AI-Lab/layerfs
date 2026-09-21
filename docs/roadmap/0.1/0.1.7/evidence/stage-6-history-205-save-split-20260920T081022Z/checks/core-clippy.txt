@@ -1,0 +1,4 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/crates/layerfs-telemetry)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/crates/layerfs-storage)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.51s

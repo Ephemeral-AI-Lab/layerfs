@@ -1,0 +1,8 @@
+{
+  "source_compilation_identity": "candidate product and harness files match published worktree before staging",
+  "local_links": "PASS",
+  "core_tests_passed": 493,
+  "harness_tests_passed": 117,
+  "harness_clippy_sites_inherited": 22,
+  "harness_format": "FAIL including new tuple layout"
+}

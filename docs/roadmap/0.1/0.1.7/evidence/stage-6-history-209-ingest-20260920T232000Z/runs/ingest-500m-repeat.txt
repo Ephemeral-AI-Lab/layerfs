@@ -1,0 +1,15 @@
+payload            500.0 MiB (524288000 bytes, Repeat)
+fixture build      0.485 s (untimed, declared)
+objects emitted    32254 (32000 chunks), canonical 501.9 MiB
+root               e16f07aa41d217442cfbdd9070e3dcb81c40320d078cc20b4f0d9ffb8e7f0e2a
+
+content construct     0.571 s     876.15 MiB/s
+  store create        0.003 s
+  storage begin       0.002 s
+  accept (all)        0.205 s    2442.22 MiB/s
+  storage finish      0.001 s   (publication commit)
+save total            0.210 s    2376.61 MiB/s
+END TO END            0.781 s     640.16 MiB/s
+
+store file         270336 bytes (0.3 MiB, 0.0x the payload)
+outcome            inserted=14 reused=32240 packs_created=2 pack_appends=4 commits=8 statements=6

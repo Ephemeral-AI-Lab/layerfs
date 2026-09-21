@@ -1,0 +1,4 @@
+# Preserve raw evidence bytes.
+*.log -text -whitespace
+*.patch -text -whitespace
+*.csv -text -whitespace

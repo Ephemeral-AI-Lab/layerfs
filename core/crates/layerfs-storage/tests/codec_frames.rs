@@ -152,8 +152,12 @@ fn every_truncation_of_a_valid_frame_is_refused_without_panicking() {
     let profile = CodecProfile::whole_file(&capacities);
     let raw = support::noise(2_048);
     let frame = encode(profile, &raw);
+    // Reuse the public session workspace, retaining every byte-cut case.
+    // Reallocating its one-MiB arena for each cut tests setup, not truncation.
+    let mut decoder = DecompressionWorkspace::new().expect("decode workspace");
     for length in 0..frame.len() {
-        let error = decode(profile, &frame[..length], raw.len())
+        let error = decoder
+            .decompress(profile, &frame[..length], raw.len())
             .expect_err("a truncated frame is never accepted");
         assert!(
             matches!(
@@ -163,6 +167,12 @@ fn every_truncation_of_a_valid_frame_is_refused_without_panicking() {
             "truncation to {length} bytes produced {error}"
         );
     }
+    assert_eq!(
+        decoder
+            .decompress(profile, &frame, raw.len())
+            .expect("valid frame after errors"),
+        raw
+    );
 }
 
 #[test]

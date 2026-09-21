@@ -1,0 +1,11 @@
+{
+ "carrier": "noise",
+ "direction": "upload",
+ "streams": 1,
+ "payload_bytes": 1073741824,
+ "transfer_ns": 4947241875,
+ "payload_chunks": 65536,
+ "authentication_handshakes": 1,
+ "verified_bytes": 1073741824,
+ "admission_eligible": false
+}

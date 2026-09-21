@@ -1,0 +1,12 @@
+round 4 done: iterations=70000
+round 5 done: iterations=84000
+--- interleaved arms, 6 rounds x 2000 commits each ---
+declared             commits=12000 commit_us=   29.42 pages/commit= 15.30 ns/page= 1922.5 | cache_size=2000 cache_spill=20000 mmap_size=0 journal=memory page_size=4096
+declared-b           commits=12000 commit_us=   28.92 pages/commit= 15.30 ns/page= 1889.9 | cache_size=2000 cache_spill=20000 mmap_size=0 journal=memory page_size=4096
+cache64m             commits=12000 commit_us=   29.04 pages/commit= 15.30 ns/page= 1897.8 | cache_size=-65536 cache_spill=20000 mmap_size=0 journal=memory page_size=4096
+spilloff             commits=12000 commit_us=   28.92 pages/commit= 15.30 ns/page= 1889.9 | cache_size=2000 cache_spill=2000 mmap_size=0 journal=memory page_size=4096
+cache64m-spilloff    commits=12000 commit_us=   29.02 pages/commit= 15.30 ns/page= 1896.2 | cache_size=-65536 cache_spill=15857 mmap_size=0 journal=memory page_size=4096
+mmap256m             commits=12000 commit_us=   29.07 pages/commit= 15.30 ns/page= 1899.6 | cache_size=2000 cache_spill=20000 mmap_size=268435456 journal=memory page_size=4096
+journal-off-diag     commits=12000 commit_us=   28.98 pages/commit= 15.30 ns/page= 1893.6 | cache_size=2000 cache_spill=20000 mmap_size=0 journal=memory page_size=4096
+ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 7.38s

@@ -1,0 +1,1 @@
+fs-bench-storage-content: /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-qual/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-corpus-phase-20260920T054215Z/runs/diagnostic-history-stride10/raw already exists; receipts are append-only

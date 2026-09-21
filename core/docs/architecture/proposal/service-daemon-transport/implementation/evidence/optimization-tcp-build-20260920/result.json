@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "--test",
+    "native_connections",
+    "--no-run",
+    "--message-format=json"
+  ],
+  "class": "build only; no functional/performance qualification",
+  "head": "0819f3f39833d477d9ed6d878a50691c3c046a83",
+  "wall_seconds": 5.8074126669962425,
+  "returncode": 0,
+  "status": "PASS",
+  "source_unchanged": true
+}

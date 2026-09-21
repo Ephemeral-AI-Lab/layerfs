@@ -1,0 +1,74 @@
+//! #209 RCA: how wide one shipped step is, and what a second writer pays for it.
+//!
+//! Retained source, removed from the product tree after this round. Run it by
+//! copying it to `core/crates/layerfs-storage/tests/step_latency_probe.rs`; it
+//! adds no product code and changes no product behaviour.
+//!
+//! `A` measures the wall time of each of its own `accept` calls. In the `pair`
+//! arm `B` is already inside its own accept loop over the same payload, so each
+//! of `A`'s steps is taken while the other writer is queued on the same
+//! arbitration lock and on the same Store's write lock. Each arm writes into its
+//! own fresh Store with the same binary and the same payload.
+mod support;
+use layerfs_storage::Store;
+use support::{construct_file, create_store, disabled, noise, TempDir};
+
+fn collect(
+    store: &Store,
+    payload: &[layerfs_content::FinalizedObject],
+    name: &'static str,
+) -> Vec<u64> {
+    let mut save = disabled(|s| store.begin_save(s.child(name))).unwrap();
+    let mut calls = Vec::with_capacity(payload.len());
+    for object in payload.iter().cloned() {
+        let t = std::time::Instant::now();
+        save.accept(object).unwrap();
+        calls.push(t.elapsed().as_nanos() as u64);
+    }
+    let t = std::time::Instant::now();
+    disabled(|s| save.finish(s.child("finish"))).unwrap();
+    calls.push(t.elapsed().as_nanos() as u64);
+    calls
+}
+
+fn report(label: &str, name: &str, mut calls: Vec<u64>) {
+    calls.sort_unstable();
+    let n = calls.len();
+    let sum: u64 = calls.iter().sum();
+    let over = |us: u64| calls.iter().filter(|v| **v >= us * 1000).count();
+    println!(
+        "{label:>6} {name}: calls={n} mean={:>9.1}us p50={:>9.1}us p90={:>9.1}us p99={:>10.1}us max={:>10.1}us >=1ms={} >=10ms={}",
+        sum as f64 / n as f64 / 1000.0,
+        calls[n / 2] as f64 / 1000.0,
+        calls[n * 90 / 100] as f64 / 1000.0,
+        calls[n * 99 / 100] as f64 / 1000.0,
+        calls[n - 1] as f64 / 1000.0,
+        over(1000),
+        over(10000),
+    );
+}
+
+#[test]
+fn step_width_under_a_second_writer() {
+    let label = std::env::var("LAYERFS_STORAGE_COMMIT_EVERY").unwrap_or_else(|_| "1".into());
+    let bytes = noise(24 * 1024 * 1024);
+    let (objects, _, _) = construct_file(&bytes);
+    let payload: Vec<_> = objects.finalized();
+    println!("n={label} objects={}", payload.len());
+    for arm in ["solo", "pair"] {
+        let temp = TempDir::new("steplat");
+        let store = create_store(&temp.store_path("shared"));
+        if arm == "solo" {
+            let a = collect(&store, &payload, "a");
+            report(&label, "solo/a", a);
+        } else {
+            let (a, b) = std::thread::scope(|threads| {
+                let a = threads.spawn(|| collect(&store, &payload, "a"));
+                let b = threads.spawn(|| collect(&store, &payload, "b"));
+                (a.join().unwrap(), b.join().unwrap())
+            });
+            report(&label, "pair/a", a);
+            report(&label, "pair/b", b);
+        }
+    }
+}

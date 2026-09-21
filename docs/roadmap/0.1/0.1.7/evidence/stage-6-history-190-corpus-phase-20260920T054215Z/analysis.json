@@ -1,0 +1,134 @@
+{
+  "schema": "h190-corpus-phase-analysis-v1",
+  "cases": {
+    "history-stride10": {
+      "wall_ns": 37612922292,
+      "declared_ns": 37521095710,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "budget": {
+        "ordinary": {
+          "status": "NOT_RUN",
+          "limit_ns": 15000000000
+        },
+        "declared_exception": {
+          "status": "NOT_RUN",
+          "limit_ns": 25000000000
+        }
+      },
+      "phases": {
+        "preparation_wall_ns": 17766069750,
+        "operation_ns": 19738993418,
+        "verification_wall_ns": 16031292,
+        "cleanup_wall_ns": 1250,
+        "handoff_ns": 48778719
+      },
+      "counters": {
+        "root_ns": 37339162500,
+        "children_ns": 19738993418,
+        "operation_ns": 19738993418,
+        "invocation_ns": 37546934833
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 17588322750,
+        "history.corpus.probe.files": 45338,
+        "history.corpus.probe.bytes": 489820959,
+        "history.corpus.probe.pages": 62319,
+        "history.corpus.probe.resident_pages": 0,
+        "history.operation.disk_read_bytes": 603807744
+      },
+      "retained_candidate2_operation_ns": 19888424711
+    },
+    "history-stride3": {
+      "wall_ns": 75120626125,
+      "declared_ns": 75037813248,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "budget": {
+        "ordinary": {
+          "status": "NOT_RUN",
+          "limit_ns": 15000000000
+        },
+        "declared_exception": {
+          "status": "NOT_RUN",
+          "limit_ns": 25000000000
+        }
+      },
+      "phases": {
+        "preparation_wall_ns": 26033292210,
+        "operation_ns": 48976026830,
+        "verification_wall_ns": 28492958,
+        "cleanup_wall_ns": 1250,
+        "handoff_ns": 94326851
+      },
+      "counters": {
+        "root_ns": 74463634542,
+        "children_ns": 48976026830,
+        "operation_ns": 48976026830,
+        "invocation_ns": 75085290666
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 25462768002,
+        "history.corpus.probe.files": 78439,
+        "history.corpus.probe.bytes": 850636296,
+        "history.corpus.probe.pages": 107780,
+        "history.corpus.probe.resident_pages": 4298,
+        "history.operation.disk_read_bytes": 977244160
+      },
+      "retained_candidate2_operation_ns": 49501013748
+    },
+    "history-stride1": {
+      "wall_ns": 199025463709,
+      "declared_ns": 198876135956,
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "budget": {
+        "ordinary": {
+          "status": "NOT_RUN",
+          "limit_ns": 15000000000
+        },
+        "declared_exception": {
+          "status": "NOT_RUN",
+          "limit_ns": 25000000000
+        }
+      },
+      "phases": {
+        "preparation_wall_ns": 52664334832,
+        "operation_ns": 146177713707,
+        "verification_wall_ns": 34086709,
+        "cleanup_wall_ns": 708,
+        "handoff_ns": 212805494
+      },
+      "counters": {
+        "root_ns": 197378873459,
+        "children_ns": 146177713707,
+        "operation_ns": 146177713707,
+        "invocation_ns": 198961348167
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 51142139915,
+        "history.corpus.probe.files": 180128,
+        "history.corpus.probe.bytes": 1946359193,
+        "history.corpus.probe.pages": 245733,
+        "history.corpus.probe.resident_pages": 2933,
+        "history.operation.disk_read_bytes": 2369449984
+      },
+      "retained_candidate2_operation_ns": null
+    }
+  }
+}

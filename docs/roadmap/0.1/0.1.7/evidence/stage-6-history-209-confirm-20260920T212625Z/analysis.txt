@@ -1,0 +1,22 @@
+row               arm          operation  commit_ns  per append  resolve_ns  filesystem             store
+confirm-1a        control        17.778s     2.058s      44.94u      4.632s      4.620s  7ea2fe6ccf13bc5a
+confirm-4a        control        17.706s     2.037s      44.48u      4.642s      4.609s  7ea2fe6ccf13bc5a
+confirm-2b        treatment      17.794s     1.952s      42.62u      4.710s      4.716s  7ea2fe6ccf13bc5a
+confirm-3b        treatment      17.772s     1.951s      42.61u      4.708s      4.734s  7ea2fe6ccf13bc5a
+shipped-confirm   treatment      17.550s     1.932s      42.18u      4.665s      4.638s  7ea2fe6ccf13bc5a
+  control   operation_ns  ['17.778', '17.706']
+  control   commit_ns     ['2.058', '2.037']
+  control   resolve_ns    ['4.632', '4.642']
+  control   sql_ns        ['1.315', '1.293']
+  treatment operation_ns  ['17.794', '17.772', '17.550']
+  treatment commit_ns     ['1.952', '1.951', '1.932']
+  treatment resolve_ns    ['4.710', '4.708', '4.665']
+  treatment sql_ns        ['1.325', '1.312', '1.287']
+operation_ns   control   17.742s  treatment   17.706s  delta  -0.036s  ( -0.20 %)
+commit_ns      control    2.047s  treatment    1.945s  delta  -0.103s  ( -5.01 %)
+resolve_ns     control    4.637s  treatment    4.694s  delta  +0.057s  ( +1.22 %)
+sql_ns         control    1.304s  treatment    1.308s  delta  +0.004s  ( +0.30 %)
+
+previous window, same contrast: commit_ns 1.884 -> 1.773 s (-0.111 s, -5.90 %), operation 16.754 -> 16.517 s (-0.237 s)
+stores: ['7ea2fe6ccf13bc5a']; commits: [48446]; binaries: ['106f181b31e70808', '3a6c1c20397663c4']
+extra_environment: {'confirm-1a': {}, 'confirm-4a': {}, 'confirm-2b': {'LAYERFS_STORAGE_POLICY_REASSERT': '0'}, 'confirm-3b': {'LAYERFS_STORAGE_POLICY_REASSERT': '0'}, 'shipped-confirm': {}}

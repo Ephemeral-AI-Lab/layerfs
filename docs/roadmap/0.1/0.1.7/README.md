@@ -126,6 +126,14 @@ not a blanket canonical/format compatibility waiver, silent migration or fallbac
 authorization. Same-profile determinism, authentication and performance acceptance
 remain mandatory. No runtime setting or performance result is claimed here.
 
+## Concurrency controls
+
+[#216](https://github.com/Ephemeral-AI-Lab/layerfs/issues/216) consolidates the
+independently hard-coded concurrency limits into two operator-facing controls. The
+[concurrency controls](concurrency-controls.md) page documents them, and states
+which half is implemented (`max_concurrent_writes_per_store`, schema 8) and which
+half is blocked on pair 1 (`max_workspaces_per_sandbox`).
+
 ## Plan status
 
 **Current direction, 2026-09-20:** Stages 0–6 are closed at their recorded scope.

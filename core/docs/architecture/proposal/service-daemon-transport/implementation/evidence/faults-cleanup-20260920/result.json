@@ -1,0 +1,57 @@
+{
+  "selection": "cleanup",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "cleanup-failure-retains-original",
+      "status": "PASS",
+      "detail": {
+        "code": 10,
+        "unknown": false,
+        "cleanup_code": 8,
+        "input_sha256": "f4d8f1644a663f34bc527e8bfe53d663acf7817c2d38633c45ace441b7f514ee"
+      }
+    },
+    {
+      "name": "uninspected-store-refuses-new-mutation",
+      "status": "PASS",
+      "detail": {
+        "code": "Ownership"
+      }
+    },
+    {
+      "name": "old-root-survives-cleanup-failure",
+      "status": "PASS",
+      "detail": {
+        "bytes": 8
+      }
+    }
+  ],
+  "status": "PASS",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Failure { code: Io, unknown: false, cleanup: Some(Provider) }"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Failure { code: Ownership, unknown: false, cleanup: None }"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "image": "sha256:3bc9f14b59fdea3521580648c3223e8f55f3062cc5bc60927d45412e16677dd0"
+}

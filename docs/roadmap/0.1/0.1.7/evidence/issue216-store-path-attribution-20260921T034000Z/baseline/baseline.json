@@ -1,0 +1,22 @@
+{
+ "append_commit_each": {
+  "minutes": 11.091,
+  "stored_mib": 512.1,
+  "mib_per_s": 46.2,
+  "blobs": 990,
+  "file_mib": 514.3,
+  "file_bytes": 539291648
+ },
+ "append_one_commit_per_16": {
+  "minutes": 10.062,
+  "stored_mib": 512.1,
+  "mib_per_s": 50.9,
+  "file_mib": 514.3
+ },
+ "sequential_commit_each": {
+  "minutes": 2.108,
+  "stored_mib": 512.2,
+  "mib_per_s": 243.0,
+  "file_mib": 516.3
+ }
+}

@@ -1,0 +1,21 @@
+{
+  "case": "tdx1-tcp-upload-1",
+  "mode": "perf",
+  "admission_eligible": false,
+  "status": "FAIL",
+  "cleanup": "PASS",
+  "target_payload_bytes_per_second": 2000000000,
+  "cache_contract": "generated distinct input; every transmitted block filled inside transfer; no file-backed payload/cache/spool",
+  "scope": "bridge transport component; C1/C2 and daemon stdin/stdout excluded",
+  "error": "AssertionError()",
+  "cleanup_ns": 8125,
+  "complete_command_ns": 3628262667
+}
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/transport_diagnostic.py", line 68, in <module>
+    if __name__=='__main__':main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/transport_diagnostic.py", line 22, in main
+    assert subprocess.check_output([probe,'self-check'],text=True).strip()==oracle
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

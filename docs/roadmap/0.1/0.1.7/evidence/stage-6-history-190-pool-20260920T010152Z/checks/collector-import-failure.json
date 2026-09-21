@@ -1,0 +1,5 @@
+{
+  "status": "INFRA_FAILURE_BEFORE_COMMAND",
+  "command_not_started": true,
+  "reason": "dataclass module missing from sys.modules during dynamic import; corrected module registration; no performance sample consumed"
+}

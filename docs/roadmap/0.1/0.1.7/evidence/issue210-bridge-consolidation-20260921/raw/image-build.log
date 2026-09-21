@@ -1,0 +1,33 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 250B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 15.17MB 0.1s done
+#3 DONE 0.1s
+
+#4 [1/2] COPY layerfs-daemon /layerfs-daemon
+#4 DONE 0.0s
+
+#5 [2/2] COPY --chown=65532:65532 --chmod=0700 logs /logs
+#5 DONE 0.0s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.3s done
+#6 exporting manifest sha256:5f8cbefef6255c98c1447b7db583de2037ca7f550117946791c2088d901a9873
+#6 exporting manifest sha256:5f8cbefef6255c98c1447b7db583de2037ca7f550117946791c2088d901a9873 done
+#6 exporting config sha256:14b6ca5ee5309acb4980af5bb78a89c7162244c0069e62fc463445ced2243977 done
+#6 exporting attestation manifest sha256:85d24bc1261968cdaec3b580598fc29c6a98a05f93fc9868108f91ac9be1104e 0.0s done
+#6 exporting manifest list sha256:53a9b1bfd21b68cffbebb8bb4ab7a3dcf94a1910ed69c47316ab81d9e53bac58 done
+#6 naming to docker.io/library/layerfs-history-bridge:7a6db4c2 done
+#6 unpacking to docker.io/library/layerfs-history-bridge:7a6db4c2 0.0s done
+#6 DONE 0.4s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/va0obzc5ft6lgz9qk1v9zz1qf

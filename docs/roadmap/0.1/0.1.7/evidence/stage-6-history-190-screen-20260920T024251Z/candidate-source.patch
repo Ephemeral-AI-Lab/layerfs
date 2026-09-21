@@ -1,0 +1,58 @@
+diff --git a/core/crates/layerfs-content/src/filesystem/update.rs b/core/crates/layerfs-content/src/filesystem/update.rs
+index 5b096f857..8cd25994c 100644
+--- a/core/crates/layerfs-content/src/filesystem/update.rs
++++ b/core/crates/layerfs-content/src/filesystem/update.rs
+@@ -360,15 +360,17 @@ fn run_body<'b>(
+     if checked.topology.table.is_some() {
+         // Only an update can release descendants: a new filesystem has no base
+         // binding to lose, and its root is never released.
+-        let zero = zero_count_serials(
+-            reader,
+-            table,
+-            &mut reducer,
+-            input.resources.base_read_batch,
+-            input.root_serial,
+-            &unreachable,
+-            input.resources.maximum_touched_serials(),
+-        )?;
++        let zero = phases.phase("zero_count", || {
++            zero_count_serials(
++                reader,
++                table,
++                &mut reducer,
++                input.resources.base_read_batch,
++                input.root_serial,
++                &unreachable,
++                input.resources.maximum_touched_serials(),
++            )
++        })?;
+         counters.base_records_read = counters.base_records_read.saturating_add(zero.1);
+         counters.release = release_zero_count(
+             reader,
+@@ -525,16 +527,21 @@ fn zero_count_serials(
+     let mut zero = Vec::new();
+     let mut reads = 0_u64;
+     for wave in touched.chunks(base_batch.max(1)) {
+-        let serials = wave.iter().map(|(serial, _)| *serial).collect::<Vec<_>>();
+-        let bases = lookup_many(reader, table, &serials, &mut InodeReadWork::default())?;
+-        reads = reads.saturating_add(wave.len() as u64);
+-        for (index, (serial, carried)) in wave.iter().enumerate() {
+-            let base = bases[index];
++        let serials = wave
++            .iter()
++            .filter(|(_, state)| matches!(state, PendingState::Existing { .. }))
++            .map(|(serial, _)| *serial)
++            .collect::<Vec<_>>();
++        let mut bases =
++            lookup_many(reader, table, &serials, &mut InodeReadWork::default())?.into_iter();
++        reads = reads.saturating_add(serials.len() as u64);
++        for (serial, carried) in wave {
+             // The state travels with the serial: `touched_serials` already read
+             // every row, so re-asking the reducer here would re-find each one.
+             let count = match carried {
+                 PendingState::New { count, .. } => *count,
+                 PendingState::Existing { delta, .. } => {
++                    let base = bases.next().flatten();
+                     let base_count = base.map_or(0, |value| value.namespace_ref_count as i128);
+                     u64::try_from((base_count + i128::from(*delta)).max(0)).unwrap_or(0)
+                 }

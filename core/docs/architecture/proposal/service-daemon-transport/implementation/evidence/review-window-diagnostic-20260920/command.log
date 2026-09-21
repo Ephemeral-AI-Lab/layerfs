@@ -1,0 +1,181 @@
+
+running 1 test
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 14.51s
+
+ Sampling process 34849 for 2 seconds with 10 milliseconds of run time between samples
+Sampling completed, processing symbols...
+Sample analysis of process 34849 written to file /tmp/layerfs192-window-sample.txt
+
+Analysis of sampling metadata_window-be87e160374e3c42 (pid 34849) every 10 milliseconds
+Process:         metadata_window-be87e160374e3c42 [34849]
+Path:            /Users/USER/*/metadata_window-be87e160374e3c42
+Load Address:    0x102e58000
+Identifier:      metadata_window-be87e160374e3c42
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  Python [34848]
+Target Type:     live task
+
+Date/Time:       2026-09-20 13:23:19.793 +0800
+Launch Time:     2026-09-20 13:23:19.234 +0800
+OS Version:      macOS 26.4.1 (25E253)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         24.3M
+Physical footprint (peak):  25.3M
+Idle exit:                  untracked
+----
+
+Call graph:
+    176 Thread_1155395   DispatchQueue_1: com.apple.main-thread  (serial)
+    + 176 start  (in dyld) + 6992  [0x18f4ffda4]
+    +   176 main  (in metadata_window-be87e160374e3c42) + 36  [0x102e69644]
+    +     176 std::rt::lang_start::h9fb87c4ca6a23535  (in metadata_window-be87e160374e3c42) + 84  [0x102e696a0]  rt.rs:194
+    +       176 std::rt::lang_start_internal::hd55fd6ef897020fb  (in metadata_window-be87e160374e3c42) + 1092  [0x10315e010]
+    +         176 std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::h1a0da6c27162f47b  (in metadata_window-be87e160374e3c42) + 28  [0x102e696d4]  rt.rs:195
+    +           176 std::sys::backtrace::__rust_begin_short_backtrace::h7d93d2421e691f3e  (in metadata_window-be87e160374e3c42) + 24  [0x102e65e7c]  backtrace.rs:152
+    +             176 core::ops::function::FnOnce::call_once::h395cf9d4e51d1c03  (in metadata_window-be87e160374e3c42) + 20  [0x102e655e8]  function.rs:250
+    +               176 metadata_window::main::h8161754a8e37063b  (in metadata_window-be87e160374e3c42) + 28  [0x102e69618]  metadata_window.rs:0
+    +                 176 test::test_main_static::ha1ff046e3a811458  (in metadata_window-be87e160374e3c42) + 88  [0x102e99a58]
+    +                   176 test::test_main::h770a85e53c073b7e  (in metadata_window-be87e160374e3c42) + 1724  [0x102e992a0]
+    +                     176 test::console::run_tests_console::h44cfc9bd7f89ba2e  (in metadata_window-be87e160374e3c42) + 6356  [0x102e82480]
+    +                       176 std::sync::mpmc::list::Channel$LT$T$GT$::recv::haa8d0efdadcf8073  (in metadata_window-be87e160374e3c42) + 444  [0x102e6d418]
+    +                         176 std::sync::mpmc::list::Channel$LT$T$GT$::recv::_$u7b$$u7b$closure$u7d$$u7d$::hfa3a7f1f641debee  (in metadata_window-be87e160374e3c42) + 216  [0x102e6d808]
+    +                           176 std::thread::Thread::park_timeout::h8ec0ff952e997d7f  (in metadata_window-be87e160374e3c42) + 128  [0x10315f070]
+    +                             176 _dispatch_semaphore_wait_slow  (in libdispatch.dylib) + 76  [0x18f702ae8]
+    +                               176 _dispatch_sema4_timedwait  (in libdispatch.dylib) + 64  [0x18f735db8]
+    +                                 176 semaphore_timedwait_trap  (in libsystem_kernel.dylib) + 8  [0x18f877bc8]
+    176 Thread_1155396: crossing_the_window_evicts_early_ordinals_and_the_reopen_replay
+      176 thread_start  (in libsystem_pthread.dylib) + 8  [0x18f8b6c1c]
+        176 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x18f8bbc58]
+          176 std::sys::pal::unix::thread::Thread::new::thread_start::hdb877a8060df0ba1  (in metadata_window-be87e160374e3c42) + 52  [0x10316af74]
+            176 core::ops::function::FnOnce::call_once$u7b$$u7b$vtable.shim$u7d$$u7d$::hac4fee4518ecdefb  (in metadata_window-be87e160374e3c42) + 148  [0x102e6f4f0]
+              176 std::sys::backtrace::__rust_begin_short_backtrace::h1c2499bf0241ed29  (in metadata_window-be87e160374e3c42) + 132  [0x102e6c2e0]
+                176 test::run_test::_$u7b$$u7b$closure$u7d$$u7d$::ha42a6e253bb8588b  (in metadata_window-be87e160374e3c42) + 712  [0x102e9d010]
+                  176 test::__rust_begin_short_backtrace::h6a00e9701917ae73  (in metadata_window-be87e160374e3c42) + 24  [0x102e9dd08]
+                    176 core::ops::function::FnOnce::call_once::hd46b02babf73adb6  (in metadata_window-be87e160374e3c42) + 20  [0x102e65644]  function.rs:250
+                      176 metadata_window::crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window::_$u7b$$u7b$closure$u7d$$u7d$::h9348bf676ba1dcd0  (in metadata_window-be87e160374e3c42) + 24  [0x102e64d94]  metadata_window.rs:133
+                        176 metadata_window::crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window::hb779b8f1f484bd75  (in metadata_window-be87e160374e3c42) + 584  [0x102e678a4]  metadata_window.rs:150
+                          176 metadata_window::support::disabled::h2e6cb1660dcc9d92  (in metadata_window-be87e160374e3c42) + 52  [0x102e61d68]  mod.rs:182
+                            176 layerfs_telemetry::timer::scope::Timing::disabled::h20c1704a83aaae9c  (in metadata_window-be87e160374e3c42) + 128  [0x102e64788]  scope.rs:215
+                              165 metadata_window::crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window::_$u7b$$u7b$closure$u7d$$u7d$::h4d61d511ab08dc56  (in metadata_window-be87e160374e3c42) + 1356  [0x102e652f4]  metadata_window.rs:162
+                              ! 165 layerfs_storage::cas::store::SaveOperation::accept::he119f28544caa8b7  (in metadata_window-be87e160374e3c42) + 308  [0x102ee6988]
+                              !   165 layerfs_storage::cas::store::SaveOperation::flush::h7a2057a4ac9488a7  (in metadata_window-be87e160374e3c42) + 164  [0x102ee6a5c]
+                              !     165 layerfs_storage::cas::save::flush_batch::h8ba900279baa711a  (in metadata_window-be87e160374e3c42) + 2412  [0x102ee7ec4]
+                              !       147 layerfs_storage::cas::selection::_$LT$impl$u20$layerfs_storage..cas..owner..MutationOwner$GT$::offer::h2ca2ffe241734acc  (in metadata_window-be87e160374e3c42) + 264  [0x102eabd8c]
+                              !       : 147 layerfs_storage::cas::selection::_$LT$impl$u20$layerfs_storage..cas..owner..MutationOwner$GT$::select_record::hfd24cc62a353bab2  (in metadata_window-be87e160374e3c42) + 212  [0x102eac634]
+                              !       :   131 layerfs_storage::cas::pool_lane::_$LT$impl$u20$layerfs_storage..cas..owner..MutationOwner$GT$::select_pooled::hc64bc850fd9b1e68  (in metadata_window-be87e160374e3c42) + 1492  [0x102ea94d0]
+                              !       :   | 120 layerfs_storage::cas::pool_lane::_$LT$impl$u20$layerfs_storage..cas..owner..MutationOwner$GT$::write_value_groups::h8032580862995de2  (in metadata_window-be87e160374e3c42) + 3648  [0x102eab510]
+                              !       :   | + 117 layerfs_storage::encoding::pool::value_group::build::h75921c527ec1893a  (in metadata_window-be87e160374e3c42) + 656  [0x102eb1fcc]
+                              !       :   | + ! 117 layerfs_storage::encoding::codec::compress_group_body::he582d590f806ee9e  (in metadata_window-be87e160374e3c42) + 176  [0x102ec331c]
+                              !       :   | + !   117 layerfs_storage::encoding::codec::CompressionWorkspace::compress_group::haba27443a3ec3bfa  (in metadata_window-be87e160374e3c42) + 1064  [0x102ec1a78]
+                              !       :   | + !     117 ZSTD_compress2  (in metadata_window-be87e160374e3c42) + 144  [0x102f6bd50]
+                              !       :   | + !       117 ZSTD_compressStream2_simpleArgs  (in metadata_window-be87e160374e3c42) + 120  [0x102f6ffb0]
+                              !       :   | + !         117 ZSTD_compressStream2  (in metadata_window-be87e160374e3c42) + 956  [0x102f6ed84]
+                              !       :   | + !           117 ZSTD_compressStream_generic  (in metadata_window-be87e160374e3c42) + 844  [0x102f6f6d4]
+                              !       :   | + !             117 ZSTD_compressEnd_public  (in metadata_window-be87e160374e3c42) + 64  [0x102f6d87c]
+                              !       :   | + !               117 ZSTD_compressContinue_internal  (in metadata_window-be87e160374e3c42) + 632  [0x102f6cad8]
+                              !       :   | + !                 117 ZSTD_compress_frameChunk  (in metadata_window-be87e160374e3c42) + 944  [0x102f73b84]
+                              !       :   | + !                   115 ZSTD_compressBlock_internal  (in metadata_window-be87e160374e3c42) + 84  [0x102f73e18]
+                              !       :   | + !                   : 115 ZSTD_buildSeqStore  (in metadata_window-be87e160374e3c42) + 1680  [0x102f7563c]
+                              !       :   | + !                   :   59 ZSTD_compressBlock_btultra2  (in metadata_window-be87e160374e3c42) + 220  [0x1030a9f44]
+                              !       :   | + !                   :   | 59 ZSTD_initStats_ultra  (in metadata_window-be87e160374e3c42) + 104  [0x1030a9fd8]
+                              !       :   | + !                   :   |   21 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 720  [0x1030a852c]
+                              !       :   | + !                   :   |   + 11 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 56,128,...  [0x1030ac29c,0x1030ac2e4,...]
+                              !       :   | + !                   :   |   + 3 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 700  [0x1030ac520]
+                              !       :   | + !                   :   |   + ! 3 ZSTD_hash4Ptr  (in metadata_window-be87e160374e3c42) + 28  [0x1030aacb4]
+                              !       :   | + !                   :   |   + !   2 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 76  [0x1030aae3c]
+                              !       :   | + !                   :   |   + !   1 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 20  [0x1030aae04]
+                              !       :   | + !                   :   |   + !     1 MEM_isLittleEndian  (in metadata_window-be87e160374e3c42) + 0  [0x1030aae48]
+                              !       :   | + !                   :   |   + 3 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 2936  [0x1030acddc]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_insertAndFindFirstIndexHash3  (in metadata_window-be87e160374e3c42) + 100  [0x1030bbcf4]
+                              !       :   | + !                   :   |   + ! : 1 ZSTD_hash3Ptr  (in metadata_window-be87e160374e3c42) + 28  [0x1030bbd94]
+                              !       :   | + !                   :   |   + ! :   1 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 76  [0x1030aae3c]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_insertAndFindFirstIndexHash3  (in metadata_window-be87e160374e3c42) + 168  [0x1030bbd38]
+                              !       :   | + !                   :   |   + ! : 1 ZSTD_hash3Ptr  (in metadata_window-be87e160374e3c42) + 28  [0x1030bbd94]
+                              !       :   | + !                   :   |   + ! :   1 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 72  [0x1030aae38]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_insertAndFindFirstIndexHash3  (in metadata_window-be87e160374e3c42) + 220  [0x1030bbd6c]
+                              !       :   | + !                   :   |   + 2 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 2088  [0x1030aca8c]
+                              !       :   | + !                   :   |   + ! 2 ZSTD_readMINMATCH  (in metadata_window-be87e160374e3c42) + 20,88  [0x1030bbbc8,0x1030bbc0c]
+                              !       :   | + !                   :   |   + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 2064  [0x1030aca74]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_readMINMATCH  (in metadata_window-be87e160374e3c42) + 24  [0x1030bbbcc]
+                              !       :   | + !                   :   |   + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 3656  [0x1030ad0ac]
+                              !       :   | + !                   :   |   +   1 ZSTD_count  (in metadata_window-be87e160374e3c42) + 76  [0x1030aa938]
+                              !       :   | + !                   :   |   +     1 MEM_readST  (in metadata_window-be87e160374e3c42) + 20  [0x1030ab0ac]
+                              !       :   | + !                   :   |   17 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 3816  [0x1030a9144]
+                              !       :   | + !                   :   |   + 13 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 1884,40,...  [0x1030ac9c0,0x1030ac28c,...]
+                              !       :   | + !                   :   |   + 2 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 700  [0x1030ac520]
+                              !       :   | + !                   :   |   + ! 2 ZSTD_hash4Ptr  (in metadata_window-be87e160374e3c42) + 28  [0x1030aacb4]
+                              !       :   | + !                   :   |   + !   1 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 20  [0x1030aae04]
+                              !       :   | + !                   :   |   + !   : 1 MEM_isLittleEndian  (in metadata_window-be87e160374e3c42) + 0  [0x1030aae48]
+                              !       :   | + !                   :   |   + !   1 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 36  [0x1030aae14]
+                              !       :   | + !                   :   |   + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 1008  [0x1030ac654]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_getLowestMatchIndex  (in metadata_window-be87e160374e3c42) + 64  [0x1030aa854]
+                              !       :   | + !                   :   |   + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 3656  [0x1030ad0ac]
+                              !       :   | + !                   :   |   +   1 ZSTD_count  (in metadata_window-be87e160374e3c42) + 0  [0x1030aa8ec]
+                              !       :   | + !                   :   |   11 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4256,4716,...  [0x1030a92fc,0x1030a94c8,...]
+                              !       :   | + !                   :   |   4 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4760  [0x1030a94f4]
+                              !       :   | + !                   :   |   + 3 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 36  [0x1030bc468]
+                              !       :   | + !                   :   |   + ! 2 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 24  [0x1030bc2c4]
+                              !       :   | + !                   :   |   + ! : 2 ZSTD_countLeadingZeros32  (in metadata_window-be87e160374e3c42) + 24  [0x1030ab23c]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 32  [0x1030bc2cc]
+                              !       :   | + !                   :   |   + 1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 92  [0x1030bc4a0]
+                              !       :   | + !                   :   |   2 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4532  [0x1030a9410]
+                              !       :   | + !                   :   |   + 1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 36  [0x1030bc468]
+                              !       :   | + !                   :   |   + ! 1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 32  [0x1030bc2cc]
+                              !       :   | + !                   :   |   + 1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 84  [0x1030bc498]
+                              !       :   | + !                   :   |   2 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4672  [0x1030a949c]
+                              !       :   | + !                   :   |   + 2 ZSTD_MLcode  (in metadata_window-be87e160374e3c42) + 16,88  [0x1030bc54c,0x1030bc594]
+                              !       :   | + !                   :   |   1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 564  [0x1030a8490]
+                              !       :   | + !                   :   |   + 1 ZSTD_rescaleFreqs  (in metadata_window-be87e160374e3c42) + 1084  [0x1030ab980]
+                              !       :   | + !                   :   |   +   1 HIST_count_simple  (in metadata_window-be87e160374e3c42) + 136  [0x102f5b510]
+                              !       :   | + !                   :   |   1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4344  [0x1030a9354]
+                              !       :   | + !                   :   |     1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 32  [0x1030bc2cc]
+                              !       :   | + !                   :   56 ZSTD_compressBlock_btultra2  (in metadata_window-be87e160374e3c42) + 252  [0x1030a9f64]
+                              !       :   | + !                   :     21 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 3816  [0x1030a9144]
+                              !       :   | + !                   :     + 14 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 4084,4172,...  [0x1030ad258,0x1030ad2b0,...]
+                              !       :   | + !                   :     + 5 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 3656  [0x1030ad0ac]
+                              !       :   | + !                   :     + ! 4 ZSTD_count  (in metadata_window-be87e160374e3c42) + 48,4,...  [0x1030aa91c,0x1030aa8f0,...]
+                              !       :   | + !                   :     + ! 1 ZSTD_count  (in metadata_window-be87e160374e3c42) + 88  [0x1030aa944]
+                              !       :   | + !                   :     + !   1 MEM_readST  (in metadata_window-be87e160374e3c42) + 24  [0x1030ab0b0]
+                              !       :   | + !                   :     + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 2168  [0x1030acadc]
+                              !       :   | + !                   :     + ! 1 ZSTD_count  (in metadata_window-be87e160374e3c42) + 288  [0x1030aaa0c]
+                              !       :   | + !                   :     + !   1 ZSTD_NbCommonBytes  (in metadata_window-be87e160374e3c42) + 168  [0x1030ab164]
+                              !       :   | + !                   :     + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 3096  [0x1030ace7c]
+                              !       :   | + !                   :     +   1 ZSTD_count  (in metadata_window-be87e160374e3c42) + 88  [0x1030aa944]
+                              !       :   | + !                   :     +     1 MEM_readST  (in metadata_window-be87e160374e3c42) + 24  [0x1030ab0b0]
+                              !       :   | + !                   :     15 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4716,4308,...  [0x1030a94c8,0x1030a9330,...]
+                              !       :   | + !                   :     11 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 720  [0x1030a852c]
+                              !       :   | + !                   :     + 7 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 928,1012,...  [0x1030ac604,0x1030ac658,...]
+                              !       :   | + !                   :     + 3 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 2064  [0x1030aca74]
+                              !       :   | + !                   :     + ! 2 ZSTD_readMINMATCH  (in metadata_window-be87e160374e3c42) + 112  [0x1030bbc24]
+                              !       :   | + !                   :     + ! : 2 MEM_read32  (in metadata_window-be87e160374e3c42) + 24  [0x1030aae74]
+                              !       :   | + !                   :     + ! 1 ZSTD_readMINMATCH  (in metadata_window-be87e160374e3c42) + 148  [0x1030bbc48]
+                              !       :   | + !                   :     + 1 ZSTD_btGetAllMatches_noDict_3  (in metadata_window-be87e160374e3c42) + 700  [0x1030ac520]
+                              !       :   | + !                   :     +   1 ZSTD_hash4Ptr  (in metadata_window-be87e160374e3c42) + 28  [0x1030aacb4]
+                              !       :   | + !                   :     +     1 MEM_readLE32  (in metadata_window-be87e160374e3c42) + 76  [0x1030aae3c]
+                              !       :   | + !                   :     2 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 4760  [0x1030a94f4]
+                              !       :   | + !                   :     + 1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 36  [0x1030bc468]
+                              !       :   | + !                   :     + ! 1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 4  [0x1030bc2b0]
+                              !       :   | + !                   :     + 1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 4  [0x1030bc448]
+                              !       :   | + !                   :     1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 1288  [0x1030a8764]
+                              !       :   | + !                   :     + 1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 0  [0x1030bc2ac]
+                              !       :   | + !                   :     1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 1704  [0x1030a8904]
+                              !       :   | + !                   :     + 1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 36  [0x1030bc468]
+                              !       :   | + !                   :     +   1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 32  [0x1030bc2cc]
+                              !       :   | + !                   :     1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 1936  [0x1030a89ec]
+                              !       :   | + !                   :     + 1 ZSTD_litLengthPrice  (in metadata_window-be87e160374e3c42) + 248  [0x1030abd00]
+                              !       :   | + !                   :     +   1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 36  [0x1030bc468]
+                              !       :   | + !                   :     +     1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 24  [0x1030bc2c4]
+                              !       :   | + !                   :     +       1 ZSTD_countLeadingZeros32  (in metadata_window-be87e160374e3c42) + 24  [0x1030ab23c]
+                              !       :   | + !                   :     1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 2228  [0x1030a8b10]
+                              !       :   | + !                   :     + 1 ZSTD_litLengthPrice  (in metadata_window-be87e160374e3c42) + 248  [0x1030abd00]
+                              !       :   | + !                   :     +   1 ZSTD_fracWeight  (in metadata_window-be87e160374e3c42) + 36  [0x1030bc468]
+                              !       :   | + !                   :     +     1 ZSTD_highbit32  (in metadata_window-be87e160374e3c42) + 24  [0x1030bc2c4]
+                              !       :   | + !                   :     +       1 ZSTD_countLeadingZeros32  (in metadata_window-be87e160374e3c42) + 24  [0x1030ab23c]
+                              !       :   | + !                   :     1 ZSTD_compressBlock_opt2  (in metadata_window-be87e160374e3c42) + 2256  [0x1030a8b2c]
+                              !       

@@ -1,0 +1,5 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 15.93s
+  Executable tests/multi_writer.rs (core/target/debug/deps/multi_writer-4791483a07dffd52)

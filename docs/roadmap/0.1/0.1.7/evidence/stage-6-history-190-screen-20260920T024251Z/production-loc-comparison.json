@@ -1,0 +1,70 @@
+{
+  "first_parent": "ca13fb1709250be64711a9431146e1aceb390955",
+  "staged_tree_before_evidence_record": "567ed378d753957d262fa28d8aacb3b71abfd87f",
+  "counter_sha256": "c6e853c2280e2ee96caa6cafff4b221fa9201e1f5bf40d12e8251f70387210fc",
+  "method": "git archive exact first-parent and staged trees: crates and core/crates; tools/production_loc.py --root <extracted snapshot> --json; same unchanged counter; excludes tests/legacy inline test branches/comments/blanks/harness/docs/tools/generated; includes runtime SQL",
+  "before": {
+    "combined": 85722,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/h190-screen-loc-c1lg8k2y",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6981,
+          "layerfs-telemetry": 763
+        },
+        "files": 122,
+        "lines": 20305
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 85722,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/h190-screen-loc-fmlu9y9_",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-content": 12561,
+          "layerfs-storage": 6981,
+          "layerfs-telemetry": 763
+        },
+        "files": 122,
+        "lines": 20305
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "delta": 0,
+  "product_diff_empty": true
+}

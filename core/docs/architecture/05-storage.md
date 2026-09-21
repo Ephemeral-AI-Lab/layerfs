@@ -2,6 +2,14 @@
 
 > **Status:** Research; informative and not a product contract.
 
+The pending issue #192 schema 7 changes are described in
+[save ownership and publication](15-multi-writer-storage.md), based on
+`0819f3f39833d477d9ed6d878a50691c3c046a83`. That description supersedes the
+older exclusive-save, prefix-publication, shared-private-cache and cleanup rules
+below, and adds the returned-read byte bound and bounded ordinal window. The
+older source-pinned sections remain historical descriptions; they do not qualify
+the pending implementation or a performance change.
+
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
@@ -9,6 +17,88 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 ---
 
 ## 6. Storage (C2 — `layerfs-storage`)
+
+### #190 group compression profile (2026-09-20)
+
+This addition describes the working tree based on
+`605f6efc6a095a1b6335cbc5549dc0fda78ed9ab`; older sections retain their pins.
+`encoding::codec::GROUP_LEVEL` is 1 for ordinary and pooled value-group bodies.
+Payload records remain at level 3. The group window cap, content-size and
+checksum fields, dictionary policy, decode validation and canonical identities
+are unchanged. This is an encoding-effort choice within the existing format,
+not a schema or canonical-grammar migration.
+
+The caller-owned encode arena remains 16 MiB; this change does not resize the
+workspace, alter cache or transaction bounds, add workers, or expose a new
+configuration knob. Physical group/pack sizes and byte-based transaction cadence
+may change. Existing pooled physical-group reuse and catalogue statement reuse
+remain in place. Diagnostic time/space evidence and qualifications belong to
+[ledger L40](../../../docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md#l40--190-group-compression-level-1-live-pair-2026-09-20),
+not this architecture description.
+
+
+### #190 pooled physical-group reads (2026-09-20)
+
+This addition describes the working tree based on merged parent-batching commit
+`9d82685f39460fabec6c810184d87adcccd53dc5`; the older sections retain their source
+pin. No on-disk format, writer behavior, resource limit or release claim changes.
+
+A Store read's `Resolver` borrows the existing `ReadSession` decoded `GroupCache`
+when reconstructing pooled inode leaves. Physical leaf groups live in Ordinary
+packs. Their compressed bodies are now decoded once while retained, then reused
+across both chain passes and subsequent requests. The cache remains bounded by
+`DECODED_GROUP_CACHE_BYTES` (512 KiB) and clears wholesale on overflow; no second
+physical-group cache or broader canonical-object cache is introduced.
+
+Every extraction still fetches its current bounded pack view and checks lane,
+group boundaries, decoded length, record framing and record length. The cached
+entry refuses roots above the current publication ceiling before consulting the
+cache; dependency locations remain constrained by that same ceiling. Final
+canonical identity authentication and per-chain canonical/encoded work charges
+remain unchanged.
+
+`PoolReader` itself remains fresh per requested leaf: its value-group cache,
+pack cache and decoded-work accounting retain their previous lifetime and bounds.
+Public `leaf_body`, `leaf_canonical` and `stored_base` still take the uncached
+physical-group route, so writer-owned readers and pack invalidation are unchanged.
+Only successful Zstandard decompressions avoided by the borrowed cache count as
+`physical_group_cache_hits`; raw groups do not produce such hits.
+
+### #190 catalogue statement reuse (2026-09-20)
+
+This addition describes the working tree based on `81f4f1fef`, after the pooled
+physical-group reuse change. `sqlite::pool::group_for` now borrows its fixed
+catalogue lookup statement through the connection's existing `prepare_cached`
+mechanism. The SQL and parameters are unchanged; every call still executes the
+query and validates the returned row and ordinal coverage. Query results and
+value groups are not cached by this change. The pinned rusqlite default bound of
+16 prepared statements remains unchanged, and dropped statements release their
+bindings before returning to that cache. Missing rows, invalid ordinals, damaged
+rows and engine errors retain their existing handling. Pack BLOB acquisition and
+all cache ownership, resource policies and formats are unchanged.
+
+### #190 pooled leaf ordinal-ordered resolution (2026-09-20)
+
+This addition describes the working tree based on the catalogue statement-reuse
+change above. It changes the **order** in which one pooled leaf's rows are
+resolved, not the statement, the grammar, the caches or any bound.
+
+A pooled leaf's rows are ordered by serial, and their ordinals are scattered
+across the value-group catalogue. The covering-group memo in
+`PoolReader::leaf_canonical_with_groups` therefore only helped when two
+consecutive serial-ordered rows happened to share a group, and a leaf issued
+several catalogue statements per distinct group it touched. The rows are now
+visited in ascending ordinal order, with each resolved value written back at its
+own row's index. Ordinals inside one group are consecutive, so the memo answers
+one `sqlite::pool::group_for` statement per distinct covering group.
+
+`group_for`, its `prepare_cached` statement, its ordinal-coverage validation and
+its error handling are unchanged. The decoded-value cache, the per-chain decoded
+work charge, the pack cache, the visibility ceiling, the leaf's rebuilt canonical
+bytes and the `values` slice handed to `rebuild_leaf` are all unchanged; only the
+visit order and the index at which each value is stored differ. The sort is over
+at most `MAXIMUM_LEAF_ROWS` positions. No format, schema, cache size, limit or
+public API changes.
 
 ### 6.1 The Store handle
 

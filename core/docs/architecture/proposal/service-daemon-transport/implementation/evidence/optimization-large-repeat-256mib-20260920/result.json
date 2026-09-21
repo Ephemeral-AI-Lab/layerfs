@@ -1,0 +1,81 @@
+{
+  "selection": "large-repeat",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "large-stream-and-exact-readback",
+      "status": "PASS",
+      "detail": {
+        "size_bytes": 268435456,
+        "pattern": "large-repeat",
+        "sha256": "c52a2b825cd717b47ef380c92d85877ace5ac8c8acdc626503440bb74d5bf4e6",
+        "root": "15264b29356b1b62df604d66e65ae5fe9c5a00ffe1417b63f3ee5e18f840385b",
+        "input_buffer_bytes": 16384,
+        "whole_payload_buffer": false,
+        "performance": "NOT_RUN"
+      }
+    }
+  ],
+  "status": "PASS",
+  "artifacts": {
+    "manifest": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/optimization-release-artifacts-20260920.json",
+    "image_id": "sha256:c98d276d4d430a5f2e82af1d34cd7ef95eb947013258b0caa5baf5611d2c8071",
+    "profile": "release",
+    "runtime_sha256": "367da35d7c1089247de954035101a4759b431fc63c0628c46249a7249a9f43db",
+    "binaries": {
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/layerfs-service": "b06c8e2387896ad3549bbe19774081ef5207f17bd002705ad57b1f96f46a004f",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/layerfs-daemon": "2f8c1e10cbd230b1629aea5b5c78b371a63e7ce77cfe646b9aa014407d1d9e1b",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/prepare_store": "4f1343857237e46f4368d74b8a37b347a38faf68882cad67f5fd166644d4e6f2",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/direct": "85cd72a12dc7681b8690acc862c0ddf6d551db9392c1eb7d321f9555961f0e1d",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/fault_peer": "6b77db2bb87b11d1c377d527e4c4e440c7d6625f07a4bb5c3f968b0b45c43eb0",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/public_key": "db8a0f0960eec962b56a9de616a062c77c140d42b7aae9b46497ef7a596f245f",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/aarch64-unknown-linux-musl/release/layerfs-daemon": "b8762339afca2e2421324307581b30b83fcef61c892f4b2c1262bb1816b4dc05"
+    }
+  },
+  "setup": {
+    "master_sha256": "6f67ca6f931de849de7c36dff3f913c9ff58f0b57825d4cbde54b55a61de7a09",
+    "executable_sha256": "4f1343857237e46f4368d74b8a37b347a38faf68882cad67f5fd166644d4e6f2",
+    "reused": true,
+    "clone_method": "closed independent writable byte copy; not an OS cache claim"
+  },
+  "diagnostics": [
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":37833,\"incarnation\":1268969115248,\"user_ns\":2558000,\"source\":\"getrusage+libproc\",\"probe_ns\":14291,\"selected\":3,\"system_ns\":3457000,\"rss\":3702784}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1000413250,\"incarnation\":1268969115248,\"user_ns\":348801000,\"source\":\"getrusage+libproc\",\"probe_ns\":7417,\"selected\":3,\"system_ns\":66340000,\"rss\":25608192}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":2000601000,\"incarnation\":1268969115248,\"user_ns\":758280000,\"source\":\"getrusage+libproc\",\"probe_ns\":7083,\"selected\":3,\"system_ns\":136914000,\"rss\":25608192}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":3100109458,\"incarnation\":1268969115248,\"user_ns\":1217097000,\"source\":\"getrusage+libproc\",\"probe_ns\":19333,\"selected\":3,\"system_ns\":214398000,\"rss\":25608192}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"operation\",\"key\":1,\"timing\":{  \"name\": \"ConstructFile\",  \"elapsed_ns\": 3675901625,  \"children\": [    {\"name\": \"service.begin_save\", \"elapsed_ns\": 2217208, \"children\": []},    {      \"name\": \"service.construct\",      \"elapsed_ns\": 3671396250,      \"children\": [        {\"name\": \"content.probe\", \"elapsed_ns\": 6759584, \"children\": []},        {\"name\": \"content.chunk\", \"elapsed_ns\": 3664621792, \"children\": []},        {\"name\": \"content.emit\", \"elapsed_ns\": 9333, \"children\": []}      ]    },    {\"name\": \"service.finish\", \"elapsed_ns\": 2051042, \"children\": []}  ]},\"success\":true,\"resource_status\":\"sampled\",\"samples\":38,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":[1713338000,267054000],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":100615333,\"opened_ns\":147835916,\"closed_ns\":3823740416,\"last_ns\":3800126208,\"incarnation\":1268969115248,\"largest_gap_ns\":104097750,\"source\":\"getrusage+libproc\",\"last_probe_ns\":8458,\"selected\":3,\"sampled_max_rss\":25608192}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":4104465875,\"incarnation\":1268969115248,\"user_ns\":1879552000,\"source\":\"getrusage+libproc\",\"probe_ns\":35375,\"selected\":3,\"system_ns\":296285000,\"rss\":26918912}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":5200209791,\"incarnation\":1268969115248,\"user_ns\":2384667000,\"source\":\"getrusage+libproc\",\"probe_ns\":9209,\"selected\":3,\"system_ns\":374608000,\"rss\":27033600}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":6202201166,\"incarnation\":1268969115248,\"user_ns\":2849954000,\"source\":\"getrusage+libproc\",\"probe_ns\":12208,\"selected\":3,\"system_ns\":443082000,\"rss\":27049984}",
+        "LFT1 {\"v\":1,\"namespace\":1,\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"kind\":\"operation\",\"key\":2,\"timing\":{\"name\": \"ReadFile\", \"elapsed_ns\": 2637477083, \"incomplete\": true, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":27,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":[1229550000,186023000],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":3800126208,\"opened_ns\":3834389000,\"closed_ns\":6471876000,\"last_ns\":6400089250,\"incarnation\":1268969115248,\"largest_gap_ns\":103866167,\"source\":\"getrusage+libproc\",\"last_probe_ns\":8500,\"selected\":3,\"sampled_max_rss\":27049984}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":70955,\"role\":1,\"namespace\":1,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":134208,\"incarnation\":27492,\"user_ns\":0,\"source\":\"procfs+sysconf\",\"probe_ns\":23708,\"selected\":3,\"system_ns\":0,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":1100163292,\"incarnation\":27492,\"user_ns\":400000000,\"source\":\"procfs+sysconf\",\"probe_ns\":35000,\"selected\":3,\"system_ns\":690000000,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":2101267959,\"incarnation\":27492,\"user_ns\":730000000,\"source\":\"procfs+sysconf\",\"probe_ns\":34833,\"selected\":3,\"system_ns\":1370000000,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":3201031293,\"incarnation\":27492,\"user_ns\":1180000000,\"source\":\"procfs+sysconf\",\"probe_ns\":32583,\"selected\":3,\"system_ns\":2010000000,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":1,\"timing\":{\"name\": \"ConstructFile\", \"elapsed_ns\": 3676422835, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":37,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":[1430000000,2120000000],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":134208,\"opened_ns\":2083291,\"closed_ns\":3678507918,\"last_ns\":3601525460,\"incarnation\":27492,\"largest_gap_ns\":100980584,\"source\":\"procfs+sysconf\",\"last_probe_ns\":36167,\"selected\":3,\"sampled_max_rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":4201170210,\"incarnation\":27492,\"user_ns\":1750000000,\"source\":\"procfs+sysconf\",\"probe_ns\":32333,\"selected\":3,\"system_ns\":2370000000,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":5301170960,\"incarnation\":27492,\"user_ns\":2370000000,\"source\":\"procfs+sysconf\",\"probe_ns\":32292,\"selected\":3,\"system_ns\":2840000000,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"resource\",\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"at_ns\":6301186169,\"incarnation\":27492,\"user_ns\":2920000000,\"source\":\"procfs+sysconf\",\"probe_ns\":29667,\"selected\":3,\"system_ns\":3280000000,\"rss\":696320}",
+        "LFT1 {\"v\":1,\"namespace\":11,\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":2,\"timing\":{\"name\": \"ReadFile\", \"elapsed_ns\": 2695495627, \"children\": []},\"success\":true,\"resource_status\":\"sampled\",\"samples\":28,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":[1490000000,1160000000],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":3601525460,\"opened_ns\":3688767126,\"closed_ns\":6384264169,\"last_ns\":6301186169,\"incarnation\":27492,\"largest_gap_ns\":100902917,\"source\":\"procfs+sysconf\",\"last_probe_ns\":29667,\"selected\":3,\"sampled_max_rss\":696320}",
+        "LFT1 {\"v\":1,\"kind\":\"run-summary\",\"run\":\"000000000000000000000000000000c0\",\"pid\":1,\"role\":2,\"namespace\":11,\"dropped\":0,\"failed\":0,\"overflow\":false,\"delivery\":\"best-effort\"}"
+      ],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "0819f3f39833d477d9ed6d878a50691c3c046a83",
+  "image": "sha256:c98d276d4d430a5f2e82af1d34cd7ef95eb947013258b0caa5baf5611d2c8071"
+}

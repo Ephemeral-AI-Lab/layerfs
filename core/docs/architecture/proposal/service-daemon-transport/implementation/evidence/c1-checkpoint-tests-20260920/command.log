@@ -1,0 +1,38 @@
+   Compiling cc v1.4.5
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+   Compiling blake3 v1.8.5
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.75s
+     Running tests/filesystem_bounds.rs (core/target/debug/deps/filesystem_bounds-a189e830ad6f2595)
+
+running 17 tests
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test the_cycle_check_work_limit_is_reachable_and_reported ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.01s
+
+     Running tests/filesystem_parent_lookup.rs (core/target/debug/deps/filesystem_parent_lookup-4fb1add73044367a)
+
+running 4 tests
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+

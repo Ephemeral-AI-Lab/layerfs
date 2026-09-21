@@ -1,10 +1,11 @@
-//! Public Store handle, the exclusive save operation and the C1 handoff adapter.
+//! Public Store handle, the private save operation and the C1 handoff adapter.
 //!
-//! A Store is a path plus the policy it was opened with. `begin_save` acquires
-//! exclusive write ownership once; `accept` takes finalized canonical objects
+//! A Store is a path plus the policy it was opened with. `begin_save` reserves
+//! one private save under the Store's persisted writer budget
+//! (`max_concurrent_writes`, #216); `accept` takes finalized canonical objects
 //! under bounded batch limits; `finish` completes every remaining write and
 //! acknowledges the final transaction. Reads are independent bounded waves that
-//! capture their retained-pack ceiling once.
+//! capture publication scope and a pack range ceiling once.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -13,7 +14,7 @@ use layerfs_content::{ContentError, FinalizedConsumer, FinalizedObject, ObjectId
 use layerfs_telemetry::timer::TimingScope;
 
 use crate::cas::batch::PendingBatch;
-use crate::cas::owner::{MutationOwner, OutcomeCounters};
+use crate::cas::owner::{MutationOwner, OutcomeCounters, SaveProfile};
 use crate::cas::read::check_read_demand;
 use crate::cas::{finish, read, save};
 use crate::encoding::delta::candidates::Candidates;
@@ -26,7 +27,9 @@ use crate::policy::{StorageCapacities, StoragePolicy};
 use crate::sqlite::{connection, lookup, schema};
 
 /// Result of one completed save operation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+///
+/// Equality is deliberately manual: see [`SaveOutcome`]'s `PartialEq` below.
+#[derive(Clone, Copy, Debug)]
 pub struct SaveOutcome {
     /// Occurrences served by an exact existing row.
     pub reused: u64,
@@ -39,7 +42,7 @@ pub struct SaveOutcome {
     /// Write transactions acknowledged with `COMMIT`.
     ///
     /// Holding a `SaveOutcome` at all *is* the acknowledgement: `finish` returns
-    /// one only after the watermark transaction committed, and every other outcome
+    /// one only after its publication transaction committed, and every other outcome
     /// is a typed error. There is deliberately no boolean field for it - a field
     /// that can only ever hold one value cannot fail an assertion, and one used to
     /// sit here doing exactly that.
@@ -62,7 +65,43 @@ pub struct SaveOutcome {
     pub chain: ChainCounters,
     /// Pooled metadata lane outcomes.
     pub pool: crate::cas::PoolCounters,
+    /// Nanosecond cost split of this operation's accept path.
+    ///
+    /// Seven disjoint buckets accumulated over the whole operation; see
+    /// [`SaveProfile`]. It is reported work, not the accept span: the difference
+    /// is the remainder the instrument does not name.
+    pub profile: SaveProfile,
 }
+
+/// Two outcomes are equal when they describe the **same work**.
+///
+/// Every work counter participates; `profile` deliberately does not. It is a
+/// wall-clock observation of the accept path, not a description of what the
+/// operation did, so two runs of identical work never have equal profiles - and a
+/// comparison that included them could never assert determinism. The integrated
+/// recording-on/recording-off equality case is exactly that caller: with `profile`
+/// in the comparison it reported "recording changed the operation" for a pair whose
+/// every counter, root and read-back byte was identical, differing only in
+/// nanoseconds. Compare `profile` explicitly when the durations are the question;
+/// [`SaveProfile`] keeps its own derived equality for that.
+impl PartialEq for SaveOutcome {
+    fn eq(&self, other: &Self) -> bool {
+        self.reused == other.reused
+            && self.inserted == other.inserted
+            && self.packs_created == other.packs_created
+            && self.pack_appends == other.pack_appends
+            && self.commits == other.commits
+            && self.full_records == other.full_records
+            && self.prefix_records == other.prefix_records
+            && self.statements == other.statements
+            && self.presence_queries == other.presence_queries
+            && self.delta == other.delta
+            && self.chain == other.chain
+            && self.pool == other.pool
+    }
+}
+
+impl Eq for SaveOutcome {}
 
 impl From<OutcomeCounters> for SaveOutcome {
     fn from(counters: OutcomeCounters) -> Self {
@@ -79,6 +118,7 @@ impl From<OutcomeCounters> for SaveOutcome {
             delta: counters.delta,
             chain: counters.chain,
             pool: counters.pool,
+            profile: counters.profile,
         }
     }
 }
@@ -102,6 +142,8 @@ pub struct StoreReadCounters {
     pub canonical_bytes: u64,
     /// Ordinary-lane group bodies decompressed by this wave.
     pub group_decodes: u64,
+    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
+    pub pooled: crate::encoding::pool::PoolReadCounters,
     /// Connections this read opened.
     ///
     /// One `read_batch` call is one wave and opens one connection; a demand
@@ -152,6 +194,7 @@ pub struct Store {
     path: PathBuf,
     policy: StoragePolicy,
     capacities: StorageCapacities,
+    arbitration: Arc<Mutex<()>>,
     /// Store-owned bounded ordered set of pooled value candidates.
     ///
     /// It is disposable derivation: the catalogue is authoritative, a failed save
@@ -181,16 +224,20 @@ impl Store {
             // An unsupported policy is rejected before the database file exists.
             let policy = policy.validated()?;
             let connection = connection::open(&path, true)?;
+            let arbitration = crate::sqlite::ownership::arbitration(&path)?;
+            let guard = crate::sqlite::ownership::lock(&arbitration)?;
             let stored = schema::create(&connection, policy)?;
             let capacities = StorageCapacities::from_policy(stored)?;
             // A Store this call just created has an empty index; the read is the
             // same one `open` performs and is bounded by the table, which is empty.
             let content_index = Candidates::load(&connection)?;
             drop(connection);
+            drop(guard);
             Ok(Self {
                 path,
                 policy: stored,
                 capacities,
+                arbitration,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
                 content_index: Arc::new(Mutex::new(content_index)),
             })
@@ -202,6 +249,8 @@ impl Store {
         scope.run(|_open| {
             let path = path.as_ref().to_path_buf();
             let connection = connection::open(&path, false)?;
+            let arbitration = crate::sqlite::ownership::arbitration(&path)?;
+            let guard = crate::sqlite::ownership::lock(&arbitration)?;
             let stored = schema::validate(&connection, None)?;
             let capacities = StorageCapacities::from_policy(stored)?;
             // The bounded load: at most `candidates::SLOTS` rows of 32-byte
@@ -209,10 +258,12 @@ impl Store {
             // this handle rather than once per save.
             let content_index = Candidates::load(&connection)?;
             drop(connection);
+            drop(guard);
             Ok(Self {
                 path,
                 policy: stored,
                 capacities,
+                arbitration,
                 pool_index: Arc::new(Mutex::new(PoolIndex::new())),
                 content_index: Arc::new(Mutex::new(content_index)),
             })
@@ -225,8 +276,55 @@ impl Store {
     }
 
     /// Persisted policy of this Store.
+    ///
+    /// This is the immutable construction profile. The writer budget is a
+    /// separate persisted value: it is an admission setting, not a format
+    /// property, and it can change while the Store stays the same Store.
     pub fn policy(&self) -> StoragePolicy {
         self.policy
+    }
+
+    /// The Store's authoritative writer budget.
+    ///
+    /// It is read from the Store file, never from a process-local copy, so every
+    /// sandbox and process sharing this Store sees one number and a change is
+    /// visible to the next [`Store::begin_save`] without reopening anything.
+    pub fn max_concurrent_writes(&self) -> StorageResult<u8> {
+        let connection = connection::open(&self.path, false)?;
+        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+        schema::max_concurrent_writes(&connection)
+    }
+
+    /// Sets the Store's writer budget for every later save.
+    ///
+    /// One persisted update, and the only supported way to change the setting.
+    /// Retained private ownership is never released, rescanned or rewritten: a
+    /// save that is already recorded keeps its slot and still counts against the
+    /// new budget, so lowering the setting cannot make unresolved ownership
+    /// reusable. A value outside `1..=MAX_CONCURRENT_WRITES_LIMIT` is refused
+    /// rather than clamped.
+    pub fn set_max_concurrent_writes(
+        &self,
+        writes: u8,
+        scope: TimingScope<'_>,
+    ) -> StorageResult<u8> {
+        scope.run(|_configure| {
+            let connection = connection::open(&self.path, false)?;
+            let guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            crate::sqlite::write::begin_immediate(&connection)?;
+            match schema::set_max_concurrent_writes(&connection, writes) {
+                Ok(applied) => {
+                    crate::sqlite::write::commit(&connection)?;
+                    drop(guard);
+                    Ok(applied)
+                }
+                Err(refusal) => {
+                    crate::sqlite::write::rollback(&connection)?;
+                    drop(guard);
+                    Err(refusal)
+                }
+            }
+        })
     }
 
     /// Declared capacities of this Store.
@@ -275,13 +373,15 @@ impl Store {
             .unwrap_or(0)
     }
 
-    /// Acquires exclusive write ownership for one save operation.
+    /// Reserves private ownership for one save under the Store's writer budget;
+    /// database transactions arbitrate separately.
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
             let connection = connection::open(&self.path, false)?;
             let owner = MutationOwner::acquire(
                 connection,
                 self.capacities,
+                Arc::clone(&self.arbitration),
                 Arc::clone(&self.pool_index),
                 Arc::clone(&self.content_index),
             )?;
@@ -305,14 +405,23 @@ impl Store {
         check_read_demand(ids, self.capacities.read_objects)?;
         scope.run(|read_scope| {
             let connection = connection::open(&self.path, false)?;
-            // The ceiling is the publication watermark: the last pack belonging to
-            // a COMPLETED save. Deriving it from MAX(pack_id) would let an
-            // unfinished save's early-committed packs leak into this read.
+            // Publication scope excludes every private save. The retained-pack
+            // ceiling is an additional range check, never visibility authority.
+            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            crate::sqlite::ownership::scope(
+                &connection,
+                0,
+                crate::sqlite::ownership::publication(&connection)?,
+            )?;
             let ceiling = schema::retained_pack_ceiling(&connection)?;
             let mut workspace = read_scope
                 .child("storage.decode")
                 .run(|_| DecompressionWorkspace::new())?;
             let mut groups = crate::encoding::GroupCache::new();
+            // One independent wave owns one pooled reader: this call is its whole
+            // lifetime, so the reader is built here and dropped with the wave. The
+            // operation-scoped reader is the session's (`ReadSession`).
+            let mut pool = crate::encoding::pool::PoolReader::new();
             let (values, counters) = read_scope.child("storage.read").run(|_| {
                 read::read_objects(
                     &connection,
@@ -321,6 +430,7 @@ impl Store {
                     &self.capacities,
                     &mut workspace,
                     &mut groups,
+                    &mut pool,
                 )
             })?;
             Ok((
@@ -334,6 +444,7 @@ impl Store {
                     max_depth: counters.max_depth,
                     canonical_bytes: counters.canonical_bytes,
                     group_decodes: counters.group_decodes,
+                    pooled: counters.pooled,
                     opens: 1,
                 },
             ))
@@ -353,13 +464,19 @@ impl Store {
             // work by passing a longer slice.
             check_read_demand(ids, self.capacities.read_objects)?;
             let connection = connection::open(&self.path, false)?;
+            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            crate::sqlite::ownership::scope(
+                &connection,
+                0,
+                crate::sqlite::ownership::publication(&connection)?,
+            )?;
             let ceiling = schema::retained_pack_ceiling(&connection)?;
             lookup::present(&connection, ids, ceiling)
         })
     }
 }
 
-/// One exclusive save operation with bounded acceptance.
+/// One independently owned save operation with bounded acceptance.
 pub struct SaveOperation {
     owner: Option<MutationOwner>,
     batch: PendingBatch,
@@ -400,6 +517,7 @@ impl SaveOperation {
     /// the operation.
     pub fn connection_profile(&self) -> StorageResult<SaveConnectionProfile> {
         let owner = self.owner.as_ref().ok_or(StorageError::Aborted)?;
+        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
         let connection = owner.connection();
         Ok(SaveConnectionProfile {
             page_size: connection::pragma_i64(connection, connection::Pragma::PageSize)?,
@@ -458,6 +576,12 @@ impl SaveOperation {
         // that holds a demanded identity and the query which follows it both happen
         // inside it. There is no inner child named after the caller's own node.
         scope.run(|_read| {
+            let pending_bytes = ids
+                .iter()
+                .filter_map(|id| self.batch.pending_canonical(*id))
+                .try_fold(0usize, |total, bytes| total.checked_add(bytes.len()))
+                .ok_or(StorageError::Integrity("pending read byte accounting"))?;
+            read::check_read_bytes(pending_bytes)?;
             let pending: Vec<(ObjectId, Vec<u8>)> = ids
                 .iter()
                 .filter_map(|id| {
@@ -486,6 +610,21 @@ impl SaveOperation {
                 Vec::new()
             } else {
                 let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
+                {
+                    let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+                    let lengths: std::collections::BTreeMap<_, _> =
+                        lookup::locations(owner.connection(), &remaining, i64::MAX)?
+                            .into_iter()
+                            .map(|row| (row.object_id, row.canonical_length))
+                            .collect();
+                    let total = remaining.iter().try_fold(pending_bytes, |total, id| {
+                        let length = lengths.get(id).ok_or(StorageError::ObjectMissing(*id))?;
+                        total
+                            .checked_add(*length)
+                            .ok_or(StorageError::Integrity("read byte accounting"))
+                    })?;
+                    read::check_read_bytes(total)?;
+                }
                 owner.read_batch(&remaining)?
             };
             // Both sources are already in demand order - the pending batch is a

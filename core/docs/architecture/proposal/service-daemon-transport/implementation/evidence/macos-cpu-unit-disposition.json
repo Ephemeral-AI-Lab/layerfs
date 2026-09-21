@@ -1,0 +1,10 @@
+{
+  "status": "INELIGIBLE",
+  "scope": "macOS CPU fields only; original product/root/RSS observations retain their original scope",
+  "reason": "raw libproc ri_user_time/ri_system_time are Mach absolute-time units, not nanoseconds; external POSIX bracket regression caught the approximately 41.7x undercount",
+  "failed_check": "macos-cpu-units-before.log",
+  "affected_receipts": [
+    "docker-forward-checkpoint-20260920/result.json"
+  ],
+  "action": "use safe nix getrusage TimeVal microseconds with checked conversion; requalify native CPU and subsequent deployment; preserve old receipts byte-for-byte"
+}

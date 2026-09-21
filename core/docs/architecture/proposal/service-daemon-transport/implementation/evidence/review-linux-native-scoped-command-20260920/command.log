@@ -1,0 +1,12 @@
+
+running 6 tests
+test concurrent_final_handles_release_the_owned_writer ... ok
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.12s
+
+{"status": "PASS", "image": "sha256:a027c5b98643a5bba223de4e782545b436c1c106b8653dcd5d3d7c89040efa0e", "command": ["docker", "run", "--name", "layerfs-issue192-native-38085", "--label=io.layerfs.task=issue192", "--log-driver=none", "--cpus=1", "--memory=32m", "--memory-swap=32m", "--pids-limit=16", "--cap-drop=ALL", "sha256:a027c5b98643a5bba223de4e782545b436c1c106b8653dcd5d3d7c89040efa0e", "--nocapture", "--skip", "output_failure_is_independent_and_encoding_is_valid"], "container_id": "6d94a7b7787324b66936de55b3836a23c80b206bd6f3cd6b036de9fe8f5141b5", "mounts": [], "memory_limit": 33554432, "exit": 0, "diff": "", "omission": "One test requires a Python JSON parser absent from this scratch image. It passes on macOS; actual Linux forward/both output is independently JSON-parsed by the host deployment driver. Linux sink-failure coverage additionally comes from the maximum-envelope child.", "cleanup": "PASS"}

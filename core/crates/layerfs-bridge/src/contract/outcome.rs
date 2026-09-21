@@ -1,0 +1,100 @@
+//! Typed product outcomes, separate from transport uncertainty.
+use super::{HistoryResult, Root};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Code {
+    InvalidInput = 1,
+    Unsupported = 2,
+    Denied = 3,
+    Capacity = 4,
+    Ownership = 5,
+    MissingObject = 6,
+    PathNotFound = 7,
+    Provider = 8,
+    Integrity = 9,
+    Io = 10,
+    Deadline = 11,
+    Unknown = 12,
+    /// Immediate metadata admission was refused; retrying later is allowed.
+    Busy = 13,
+    /// A named history record does not exist.
+    NotFound = 14,
+    /// The Branch moved away from the expected head or base.
+    HeadMoved = 15,
+    /// The exact stage token does not match the stage that is present.
+    StageChanged = 16,
+    /// Writable history authority was not established by this process.
+    ContinuityUnavailable = 17,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Failure {
+    pub code: Code,
+    pub unknown: bool,
+    pub cleanup: Option<Code>,
+    /// Typed context for history-only failures.
+    pub history: Option<Box<super::HistoryFailure>>,
+}
+impl From<Code> for Failure {
+    fn from(code: Code) -> Self {
+        Self {
+            code,
+            unknown: code == Code::Unknown,
+            cleanup: None,
+            history: None,
+        }
+    }
+}
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?} unknown={} cleanup={:?} history={:?}",
+            self.code, self.unknown, self.cleanup, self.history
+        )
+    }
+}
+impl std::error::Error for Failure {}
+impl From<std::io::Error> for Failure {
+    fn from(_: std::io::Error) -> Self {
+        Code::Io.into()
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Response {
+    Read {
+        length: u64,
+    },
+    Saved {
+        root: Root,
+        length: u64,
+        inserted: u64,
+        reused: u64,
+    },
+    FilesystemSaved {
+        root: Root,
+        inserted: u64,
+        reused: u64,
+    },
+    File {
+        length: u64,
+        representation: u8,
+    },
+    Stat {
+        serial: u64,
+        kind: u8,
+        references: u64,
+        content: Root,
+        metadata: Root,
+        mode: u32,
+        mtime: i64,
+        nanoseconds: u32,
+    },
+    List {
+        entries: Vec<(Vec<u8>, u64)>,
+        continuation: Option<Vec<u8>>,
+    },
+    Link(Vec<u8>),
+    /// One history reply. The closed wire union is boxed so a legacy reply does
+    /// not pay for the widest history record it can never carry.
+    History(Box<HistoryResult>),
+}

@@ -48,7 +48,10 @@ fn resaving_the_same_object_reuses_its_row_without_a_new_pack() {
         "the occurrence was served by the existing row"
     );
     assert_eq!(second.packs_created, 0);
-    assert_eq!(second.commits, 0, "an all-reuse finish issues no COMMIT");
+    assert_eq!(
+        second.commits, 2,
+        "slot acquisition and publication, no payload writes"
+    );
 
     let (values, counters) = read_objects(&store, &[root]).unwrap();
     assert_eq!(counters.packs_read, 1);
@@ -171,7 +174,7 @@ fn repeated_identity_across_batches_reuses_without_rewriting() {
     .expect("second save");
     assert_eq!(outcome.inserted, 0);
     assert_eq!(outcome.reused, 1);
-    assert_eq!(outcome.commits, 0);
+    assert_eq!(outcome.commits, 2, "slot acquisition and publication");
     let (values, _) = read_objects(&store, &[root, chunk]).unwrap();
     assert_eq!(values.len(), 2);
 }

@@ -1,0 +1,88 @@
+{
+ "results": [
+  {
+   "binary": "root-build-no-armv8-flags",
+   "probe_sha256_prefix": "e12a3707562aeffc",
+   "direction": "upload",
+   "streams": 1,
+   "payload_gib": 1.0,
+   "transfer_s": 4.7788,
+   "gb_per_s": 0.2247,
+   "gib_per_s": 0.2093,
+   "mib_per_s": 214.28,
+   "transfer_wall_s": 4.7789,
+   "verified_bytes": 0,
+   "chunks": 65536
+  },
+  {
+   "binary": "root-build-no-armv8-flags",
+   "probe_sha256_prefix": "e12a3707562aeffc",
+   "direction": "upload",
+   "streams": 2,
+   "payload_gib": 2.0,
+   "transfer_s": 4.8225,
+   "gb_per_s": 0.4453,
+   "gib_per_s": 0.4147,
+   "mib_per_s": 424.68,
+   "transfer_wall_s": 4.8226,
+   "verified_bytes": 0,
+   "chunks": 131072
+  },
+  {
+   "binary": "root-build-no-armv8-flags",
+   "probe_sha256_prefix": "e12a3707562aeffc",
+   "direction": "download",
+   "streams": 1,
+   "payload_gib": 1.0,
+   "transfer_s": 4.7896,
+   "gb_per_s": 0.2242,
+   "gib_per_s": 0.2088,
+   "mib_per_s": 213.8,
+   "transfer_wall_s": 4.7896,
+   "verified_bytes": 0,
+   "chunks": 65536
+  },
+  {
+   "binary": "core-build-armv8-flags",
+   "probe_sha256_prefix": "df29a13a7c7d18fc",
+   "direction": "upload",
+   "streams": 1,
+   "payload_gib": 1.0,
+   "transfer_s": 1.2766,
+   "gb_per_s": 0.8411,
+   "gib_per_s": 0.7833,
+   "mib_per_s": 802.14,
+   "transfer_wall_s": 1.2766,
+   "verified_bytes": 0,
+   "chunks": 65536
+  },
+  {
+   "binary": "core-build-armv8-flags",
+   "probe_sha256_prefix": "df29a13a7c7d18fc",
+   "direction": "upload",
+   "streams": 2,
+   "payload_gib": 2.0,
+   "transfer_s": 1.3162,
+   "gb_per_s": 1.6316,
+   "gib_per_s": 1.5196,
+   "mib_per_s": 1556.02,
+   "transfer_wall_s": 1.3162,
+   "verified_bytes": 0,
+   "chunks": 131072
+  },
+  {
+   "binary": "core-build-armv8-flags",
+   "probe_sha256_prefix": "df29a13a7c7d18fc",
+   "direction": "download",
+   "streams": 1,
+   "payload_gib": 1.0,
+   "transfer_s": 1.2736,
+   "gb_per_s": 0.8431,
+   "gib_per_s": 0.7852,
+   "mib_per_s": 804.04,
+   "transfer_wall_s": 1.2736,
+   "verified_bytes": 0,
+   "chunks": 65536
+  }
+ ]
+}

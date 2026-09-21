@@ -1,0 +1,21 @@
+{
+  "schema": "h205-save-split-lock-v1",
+  "label": "v2-check",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "check",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--all-targets"
+  ],
+  "utc": "2026-09-20T08:40:11Z",
+  "locks": [
+    "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+    "/private/tmp/layerfs-infra-measurement.lock"
+  ],
+  "outcome": "DEFERRED",
+  "reason": "held: /private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-infra-measurement.lock",
+  "wall_ns": 164166
+}

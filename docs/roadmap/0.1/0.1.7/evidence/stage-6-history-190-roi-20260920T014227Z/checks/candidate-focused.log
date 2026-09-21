@@ -1,0 +1,10 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.23s
+     Running tests/catalogue_statement_reuse.rs (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/target/debug/deps/catalogue_statement_reuse-9d33b6b191f6be8e)
+
+running 1 test
+catalogue SELECT preparation events=1 for six helper queries; inserted row visible after absence
+test catalogue_preparation_preserves_current_rows_parameters_and_errors ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

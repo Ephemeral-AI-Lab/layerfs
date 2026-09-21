@@ -1,0 +1,48 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 154B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 10.78MB 0.1s done
+#3 DONE 0.1s
+
+#4 [1/2] COPY tests /tests
+#4 DONE 0.0s
+
+#5 [2/2] COPY --chown=65532:65532 --chmod=1777 tmp /tmp
+#5 DONE 0.0s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 0.3s done
+#6 exporting manifest sha256:e664555bfda97b78ba92d64d6546dea7c77881db6574085995e26e8e6c1646a4 done
+#6 exporting config sha256:9895419d8908842cc43058948f8d727912533c852cc3bcbd14a2a397f2ed777c done
+#6 exporting attestation manifest sha256:36731bee2eefe358b98529272293679d7434c814acd546b13e5243250da4fecb done
+#6 exporting manifest list sha256:6f6e3d3192b1476e3b07565a33d216181be3ea48af6ba587d056ea6b75083448 done
+#6 naming to docker.io/library/layerfs-issue192-native:f6f1bdf7632dd062 done
+#6 unpacking to docker.io/library/layerfs-issue192-native:f6f1bdf7632dd062 0.0s done
+#6 DONE 0.4s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/qw58mk20x4nminjcalgefsji6
+
+running 2 tests
+test maximum_envelope_child ... ignored, subprocess helper, invoked by maximum_owned_envelope_and_closing_producers
+test maximum_owned_envelope_and_closing_producers ... 
+running 1 test
+test maximum_envelope_child ... ENV05_SNAPSHOT heap_held=11074830 rss=13537280 virtual=20545536 threads=13 before_encoder_threads=5 closing_producers=16
+ENV05_RESULT heap_peak=11091214 heap_residual=0 producer_allowance=8388608 collector_allowance=16777216 collector_queue_allowance=8388608 recording_owners=8 encoded_owners=8 active_windows=32 collector_producers=16 telemetry_worker_stack_requests=786432 external_encoder_stack_requests=2097152 stderr_pipe_filled=65536 closing_released=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.04s
+
+ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+{"status": "PASS", "image": "sha256:6f6e3d3192b1476e3b07565a33d216181be3ea48af6ba587d056ea6b75083448", "test_binary_sha256": "f6f1bdf7632dd062dbffa3d5e6572bf298f8c16e0932acbca2e9ee671c2ed331", "command": ["docker", "run", "--name", "layerfs-issue192-envelope-37857", "--label=io.layerfs.task=issue192", "--log-driver=none", "--cpus=1", "--memory=64m", "--memory-swap=64m", "--pids-limit=16", "--cap-drop=ALL", "sha256:6f6e3d3192b1476e3b07565a33d216181be3ea48af6ba587d056ea6b75083448", "--nocapture"], "scope": "external Linux maximum ownership test; one shared sampler, producer and collector, concurrent encoders; OS counters separate from heap accounting", "container_id": "7f0e91671dd8acd24cd51c70e1d306c02662120b5ddad82ef7f29fc5085a929b", "mounts": [], "labels": {"io.layerfs.task": "issue192"}, "memory_limit": 67108864, "exit": 0, "logical_writable_layer_bytes": 4096, "diff": "", "phase_memory_peak": "unavailable; not claimed"}

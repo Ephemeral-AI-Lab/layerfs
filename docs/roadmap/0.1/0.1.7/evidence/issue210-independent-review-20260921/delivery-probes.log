@@ -1,0 +1,13 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/private/tmp/layerfs-pair2-review-92e56635-dczjaq/probe-tree/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.38s
+     Running tests/review_delivery.rs (target/debug/deps/review_delivery-5850de31f34bbeb4)
+
+running 2 tests
+codec accepts history page bytes=22918
+test review_codec_accepts_page_above_sixteen_kib ... ok
+legacy mutation output="unexpected", failure=Failure { code: InvalidInput, unknown: false, cleanup: None }
+test review_legacy_mutation_accepts_result_data_before_failure ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

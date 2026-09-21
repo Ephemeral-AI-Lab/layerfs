@@ -59,19 +59,26 @@ Read the repository [AGENTS.md](../../../../../AGENTS.md),
 
 The requested document destination is
 `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/docs/architecture/proposal/fuse-workspace-snapshot-overlay`.
-That checkout can lag the reviewed source and contains unrelated work. Before
-editing product code, inspect its HEAD, working changes and the actual relevant
-source. Select an appropriate isolated implementation checkout when needed;
-record its base and review changes from the packet's source pin. Do not reset,
-overwrite, stage or commit another owner's work.
+**Synchronization update, 2026-09-21:** the packet was committed in local
+checkpoint `81ace2778201036e9b1ca3040c63949e595f5971`. Main integration combines
+that checkpoint with upstream `b0260df3a2ffc371773cd062feafd4b5e435bf1e`, which
+contains bridge, daemon, service and history and later C1/C2 changes. The older
+three-crate checkout is no longer the intended implementation starting point.
+The source audit remains pinned to `152b9c3a2`; review its delta to the selected
+integrated tree, including [configured concurrency and schema 8](../../../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md),
+before treating any fixed limit or missing operation in this packet as current.
 
-These proposal files may be untracked. If using another checkout, deliberately
-carry the current packet into it and record that documentation input; a new
-worktree does not automatically contain uncommitted documents. Keep the requested
-packet updated with the resulting design/round status. Historical source pins
-and receipts retain their original identities; do not relabel them as current
-measurements. Recheck source-pinned gaps against the selected implementation
-tree before coding a capability that may have changed.
+Before editing product code, inspect HEAD, working changes and the actual
+relevant source. An implementation worktree already created at `152b9c3a2`
+does not move with main. Inspect and preserve its work before explicitly
+integrating the newer main there; do not reset it or overwrite another owner's
+changes. Select an isolated checkout when needed and record its actual base.
+
+Carry the committed current packet into the selected implementation tree and
+record its identity. A worktree created from an older commit does not gain these
+documents automatically. Keep the requested packet updated with design/round
+status. Historical source pins and receipts retain their original identities;
+do not relabel them as current measurements or restart completed investigations.
 
 ## 3. Settled architecture and source ownership
 

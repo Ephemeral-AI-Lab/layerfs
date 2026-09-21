@@ -1,0 +1,116 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.97s
+     Running tests/pack_locator.rs (core/target/debug/deps/pack_locator-f76228e743befa00)
+
+running 9 tests
+test a_pack_never_assembles_past_its_lane_limit ... ok
+test append_reuses_a_pack_without_changing_record_ordinals ... ok
+test a_locator_outside_the_group_directory_is_rejected ... ok
+test same_save_reads_see_accepted_objects_before_the_finish_barrier ... ok
+test a_corrupt_pack_body_is_rejected_on_read ... ok
+test a_whole_file_record_is_stored_in_its_own_compact_pack ... ok
+test a_full_lane_starts_a_new_pack_and_keeps_existing_locators ... ok
+test the_placement_fit_probe_agrees_with_the_canonical_assembled_length ... ok
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-a8b42315cae7918c)
+
+running 8 tests
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... ok
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test a_second_save_cannot_acquire_ownership_while_the_first_holds_it ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running tests/physical_formats.rs (core/target/debug/deps/physical_formats-eec44a46a8f66f3c)
+
+running 8 tests
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test the_lane_table_names_one_limit_per_lane ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+test an_ordinary_group_seals_on_the_framed_length_it_writes ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/policy_capacity.rs (core/target/debug/deps/policy_capacity-03f13c3239a2f88d)
+
+running 9 tests
+test the_minimum_supported_cutoff_is_the_published_minimum ... ok
+test a_larger_cutoff_keeps_the_chain_and_live_budgets_unchanged ... ok
+test a_deeper_configured_depth_never_widens_a_work_or_live_budget ... ok
+test the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts ... ok
+test the_pooled_metadata_depth_is_persisted_and_checked_separately ... ok
+test an_unsupported_or_conflicting_policy_is_rejected_before_mutation ... ok
+test every_supported_cutoff_is_persisted_and_reopened_unchanged ... ok
+test a_larger_incompressible_whole_file_record_uses_the_singleton_lane ... ok
+test boundaries_follow_the_configured_cutoff_not_a_frozen_one ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/provider_errors.rs (core/target/debug/deps/provider_errors-1c41f218cb65b092)
+
+running 3 tests
+test an_object_the_store_does_not_hold_is_absence ... ok
+test a_corrupt_pack_is_not_reported_as_absence ... ok
+test a_record_above_the_publication_watermark_is_not_reported_as_absence ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/statement_batching.rs (core/target/debug/deps/statement_batching-30f501434b8c549e)
+
+running 3 tests
+test the_insert_chunk_is_derived_from_the_engine_limits ... ok
+test the_statement_count_tracks_the_rows_and_not_a_constant ... ok
+test a_save_inserts_its_rows_in_bounded_statements ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+     Running tests/storage_limits.rs (core/target/debug/deps/storage_limits-53149b08f24e2794)
+
+running 5 tests
+test a_group_record_directory_is_accepted_at_its_bound_and_refused_over_it ... ok
+test a_group_body_is_accepted_at_its_bound_and_refused_over_it ... ok
+test the_group_count_ceiling_is_named_with_its_derivation ... ok
+test the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins ... ok
+test a_group_record_count_is_accepted_at_its_bound_and_refused_over_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timing.rs (core/target/debug/deps/timing-17b27e53982a5da1)
+
+running 6 tests
+test a_failed_save_returns_the_original_error_with_a_recorded_tree ... ok
+test a_save_of_many_objects_records_regions_not_objects ... ok
+test an_independent_save_reports_its_real_scopes ... ok
+test recording_and_disabled_storage_execution_agree_exactly ... ok
+test a_bounded_report_stays_inside_the_recorder_limits ... ok
+test a_content_read_attributes_its_mapping_waves_inside_the_callers_span ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/visibility.rs (core/target/debug/deps/visibility-d278a17791cc7424)
+
+running 9 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_uninspected_store_refuses_to_start_a_new_save ... ok
+test an_interrupted_save_leaves_the_store_readable_until_an_operator_decides ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+

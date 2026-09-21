@@ -1,0 +1,838 @@
+diff --git a/core/crates/layerfs-storage/examples/measure_edits.rs b/core/crates/layerfs-storage/examples/measure_edits.rs
+index 6a05fd15e..750c1f0f2 100644
+--- a/core/crates/layerfs-storage/examples/measure_edits.rs
++++ b/core/crates/layerfs-storage/examples/measure_edits.rs
+@@ -465,7 +465,7 @@ fn run_c2(options: &Options, policy: ConstructionPolicy, fixture: &Fixture) -> R
+         construction_started.elapsed().as_nanos()
+     );
+     let store_path = options.output.join("store.sqlite");
+-    let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
++    let policy_row = StoragePolicy::new(2, options.threshold, 8, 4).validated()?;
+     type SaveResult = Result<Store, StorageError>;
+     let (result, report): (SaveResult, TimingReport) = timed(options, "storage.save", |save| {
+         let store = Store::create(&store_path, policy_row, save.child("store.create"))?;
+@@ -530,7 +530,7 @@ fn run_pipeline(
+     stream: &EditStream,
+ ) -> Result<(), Failure> {
+     let store_path = options.output.join("store.sqlite");
+-    let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
++    let policy_row = StoragePolicy::new(2, options.threshold, 8, 4).validated()?;
+     // Base preparation is untimed and separate: an edit consumes an immutable
+     // *stored* base, so the base save is acknowledged before the timed scope.
+     let base_result: Result<(Store, ObjectId, layerfs_storage::SaveOutcome), StorageError> =
+diff --git a/core/crates/layerfs-storage/examples/measure_pooled.rs b/core/crates/layerfs-storage/examples/measure_pooled.rs
+index a95527b70..cf6dd846f 100644
+--- a/core/crates/layerfs-storage/examples/measure_pooled.rs
++++ b/core/crates/layerfs-storage/examples/measure_pooled.rs
+@@ -214,7 +214,7 @@ fn main() -> Result<(), Failure> {
+ fn run() -> Result<(), Failure> {
+     let options = parse_options()?;
+     let store_path = options.output.join("store.sqlite");
+-    let policy = StoragePolicy::new(1, 131_072, 8, 4).validated()?;
++    let policy = StoragePolicy::new(2, 131_072, 8, 4).validated()?;
+     println!("leaves: {}", options.leaves);
+     println!("rows-per-leaf: {}", options.rows);
+     println!("timing: {}", if options.timing { "on" } else { "off" });
+diff --git a/core/crates/layerfs-storage/sql/schema.sql b/core/crates/layerfs-storage/sql/schema.sql
+index efb86c89f..547a54dc9 100644
+--- a/core/crates/layerfs-storage/sql/schema.sql
++++ b/core/crates/layerfs-storage/sql/schema.sql
+@@ -1,12 +1,14 @@
+--- Candidate schema 7: save-owned physical data and atomic per-save publication.
+--- Canonical profile 1 and pack/codec formats are unchanged. Older schemas are
+--- rejected, never migrated. Duplicate locators and bytes are permitted.
++-- Candidate schema 8: save-owned physical data and atomic per-save publication.
++-- Canonical profile 2 reserves each lane's pack directory area at a fixed offset,
++-- records the assembled length in the pack header and pre-allocates the pack row in
++-- reservation steps. Older schemas are rejected, never migrated. Duplicate locators
++-- and bytes are permitted.
+ PRAGMA application_id = 1279677261;
+-PRAGMA user_version = 7;
++PRAGMA user_version = 8;
+ 
+ CREATE TABLE store_policy (
+     id INTEGER PRIMARY KEY CHECK (id = 1),
+-    format_profile INTEGER NOT NULL CHECK (format_profile = 1),
++    format_profile INTEGER NOT NULL CHECK (format_profile = 2),
+     small_file_threshold_bytes INTEGER NOT NULL
+         CHECK (small_file_threshold_bytes BETWEEN 131072 AND 1048576),
+     whole_file_delta_max_depth INTEGER NOT NULL
+diff --git a/core/crates/layerfs-storage/src/cas/placement.rs b/core/crates/layerfs-storage/src/cas/placement.rs
+index e1c59b287..9780d9835 100644
+--- a/core/crates/layerfs-storage/src/cas/placement.rs
++++ b/core/crates/layerfs-storage/src/cas/placement.rs
+@@ -240,7 +240,9 @@ impl MutationOwner {
+             )?;
+         }
+         self.transaction.rows += 1;
+-        self.transaction.bytes += write.bytes.len() as u64;
++        // The image is the row's reservation, so the transaction is charged the
++        // pack's own assembled length rather than the padded slice.
++        self.transaction.bytes += crate::pack::layout::image_assembled_length(&write.bytes)? as u64;
+         Ok(())
+     }
+ }
+diff --git a/core/crates/layerfs-storage/src/pack/assemble.rs b/core/crates/layerfs-storage/src/pack/assemble.rs
+index 70b89f370..d65b9c496 100644
+--- a/core/crates/layerfs-storage/src/pack/assemble.rs
++++ b/core/crates/layerfs-storage/src/pack/assemble.rs
+@@ -9,8 +9,8 @@
+ use crate::encoding::codec::{CompressionWorkspace, GROUP_LIMIT};
+ use crate::error::{StorageError, StorageResult};
+ use crate::pack::layout::{
+-    assembled_length, EncodedGroup, GroupCodec, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN,
+-    PACK_MAGIC, WHOLE_FILE_COMPACT_DROP,
++    assembled_length, body_base, reserved_length, EncodedGroup, GroupCodec, PackLane, PACK_MAGIC,
++    WHOLE_FILE_COMPACT_DROP,
+ };
+ use crate::policy::RECORD_COUNT_LIMIT;
+ 
+@@ -193,14 +193,13 @@ pub fn build_group(
+ /// releases each constituent body as it is copied.
+ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8>> {
+     let length = checked_pack_length(lane, groups)?;
+-    let mut bytes = Vec::with_capacity(length);
++    let reserved = reserved_length(lane, length);
++    let mut bytes = Vec::with_capacity(reserved);
+     write_header_and_directory(lane, groups, &mut bytes)?;
+     for group in groups {
+         append_body(lane, group, &mut bytes)?;
+     }
+-    if bytes.len() != length {
+-        return Err(StorageError::Integrity("assembled pack length"));
+-    }
++    finish_pack_image(&mut bytes, length, reserved)?;
+     Ok(bytes)
+ }
+ 
+@@ -214,17 +213,32 @@ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8
+ /// - instead of the assembly plus the whole retained tail.
+ pub fn assemble_consuming(lane: PackLane, groups: Vec<EncodedGroup>) -> StorageResult<Vec<u8>> {
+     let length = checked_pack_length(lane, &groups)?;
+-    let mut bytes = Vec::with_capacity(length);
++    let reserved = reserved_length(lane, length);
++    let mut bytes = Vec::with_capacity(reserved);
+     write_header_and_directory(lane, &groups, &mut bytes)?;
+     // Bodies are appended in group order and each group is dropped at the end of
+     // its own iteration, so the released bytes are the ones already copied.
+     for group in groups {
+         append_body(lane, &group, &mut bytes)?;
+     }
+-    if bytes.len() != length {
++    finish_pack_image(&mut bytes, length, reserved)?;
++    Ok(bytes)
++}
++
++/// Records the assembled length and pads the image out to its reservation.
++///
++/// The padded image is what the row holds, so `length(data)` is the reservation
++/// and the header carries the pack's own length. Padding is zeros and is never
++/// read: `parse_header` bounds every extent by the assembled length.
++fn finish_pack_image(bytes: &mut Vec<u8>, length: usize, reserved: usize) -> StorageResult<()> {
++    if bytes.len() != length || reserved < length {
+         return Err(StorageError::Integrity("assembled pack length"));
+     }
+-    Ok(bytes)
++    let encoded =
++        u32::try_from(length).map_err(|_| StorageError::Integrity("assembled pack length"))?;
++    bytes[16..20].copy_from_slice(&encoded.to_le_bytes());
++    bytes.resize(reserved, 0);
++    Ok(())
+ }
+ 
+ /// Validates a group set and returns the exact assembled length.
+@@ -272,9 +286,12 @@ fn write_header_and_directory(
+             .map_err(|_| StorageError::Integrity("pack group count"))?
+             .to_le_bytes(),
+     );
++    // The assembled length is patched in once every body has been written; the
++    // header is written first because the directory offsets follow it.
++    bytes.extend_from_slice(&0_u32.to_le_bytes());
+     match lane {
+         PackLane::WholeFile => {
+-            let mut offset = HEADER_LEN + 4 * groups.len();
++            let mut offset = body_base(lane);
+             for group in groups {
+                 bytes.extend_from_slice(
+                     &u32::try_from(offset)
+@@ -285,7 +302,7 @@ fn write_header_and_directory(
+             }
+         }
+         PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
+-            let mut offset = HEADER_LEN + DIRECTORY_ENTRY_LEN * groups.len();
++            let mut offset = body_base(lane);
+             for group in groups {
+                 bytes.extend_from_slice(
+                     &u32::try_from(offset)
+@@ -315,5 +332,13 @@ fn write_header_and_directory(
+             }
+         }
+     }
++    // Bodies start at the lane's reserved directory base, so the entries actually
++    // present are followed by zero padding. Reserving the whole area is what keeps
++    // every body's offset stable when the directory grows by one entry.
++    let base = body_base(lane);
++    if bytes.len() > base {
++        return Err(StorageError::Integrity("pack directory reservation"));
++    }
++    bytes.resize(base, 0);
+     Ok(())
+ }
+diff --git a/core/crates/layerfs-storage/src/pack/layout.rs b/core/crates/layerfs-storage/src/pack/layout.rs
+index 69616811b..f9e74e437 100644
+--- a/core/crates/layerfs-storage/src/pack/layout.rs
++++ b/core/crates/layerfs-storage/src/pack/layout.rs
+@@ -18,7 +18,13 @@ use crate::policy::{
+ /// Pack magic shared by every implemented framing.
+ pub const PACK_MAGIC: [u8; 8] = *b"LFPACK\0\0";
+ /// Control-area width in bytes.
+-pub const HEADER_LEN: usize = 16;
++///
++/// Sixteen bytes of control plus the assembled length, which the reserved
++/// directory makes necessary: the row is pre-allocated in reservation steps, so
++/// `length(data)` is the reservation and no longer the pack's own length.
++pub const HEADER_LEN: usize = 20;
++/// Offset of the assembled length inside the header.
++const ASSEMBLED_LEN_OFFSET: usize = 16;
+ /// Directory entry width of the ordinary and native framings.
+ pub const DIRECTORY_ENTRY_LEN: usize = 16;
+ /// Directory entry width of the compact whole-file framing.
+@@ -26,16 +32,21 @@ pub const WHOLE_FILE_ENTRY_LEN: usize = 4;
+ /// Framing bytes the compact whole-file assembly drops from each record.
+ pub const WHOLE_FILE_COMPACT_DROP: usize = 8;
+ 
++// The five framings are renumbered together: every one of them now reserves its
++// directory area at a fixed offset and records the assembled length in the header,
++// so a pack written by the previous profile cannot be read as one of these and is
++// rejected by `parse_header` rather than misread. The old numbers (1, 2, 4, 6, 7)
++// are deliberately not reused.
+ /// Ordinary framing version: canonical objects in multi-record groups.
+-pub const VERSION_ORDINARY: u32 = 1;
++pub const VERSION_ORDINARY: u32 = 8;
+ /// Native framing version: one chunk record per group entry.
+-pub const VERSION_NATIVE: u32 = 2;
++pub const VERSION_NATIVE: u32 = 9;
+ /// Compact whole-file framing version.
+-pub const VERSION_WHOLE_FILE: u32 = 4;
++pub const VERSION_WHOLE_FILE: u32 = 10;
+ /// Pooled physical-metadata framing version.
+-pub const VERSION_POOLED_METADATA: u32 = 6;
++pub const VERSION_POOLED_METADATA: u32 = 11;
+ /// Singleton framing version: one oversized record in one pack.
+-pub const VERSION_SINGLETON: u32 = 7;
++pub const VERSION_SINGLETON: u32 = 12;
+ 
+ /// One physical framing lane.
+ #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+@@ -179,6 +190,69 @@ impl EncodedGroup {
+     }
+ }
+ 
++/// Assembled length recorded in a pack image's header.
++///
++/// The image a row holds is its reservation, so a caller that needs the pack's own
++/// length reads it here rather than from the slice's length.
++pub fn image_assembled_length(bytes: &[u8]) -> StorageResult<usize> {
++    let header = bytes
++        .get(ASSEMBLED_LEN_OFFSET..HEADER_LEN)
++        .ok_or(StorageError::Integrity("pack assembled length"))?;
++    Ok(u32::from_le_bytes(
++        header
++            .try_into()
++            .map_err(|_| StorageError::Integrity("pack assembled length"))?,
++    ) as usize)
++}
++
++/// Bytes one lane reserves for its whole group directory.
++///
++/// The directory sits at the front of the pack, so a directory that grows by one
++/// entry moves every body byte and every page of the row changes - measured at
++/// 29.067 pages per commit against 3.353 for the same payload with the directory
++/// reserved. Reserving the lane's whole directory area is what makes a body's
++/// offset stable for the pack's life, and it is a constant per lane.
++pub const fn directory_reserve(lane: PackLane) -> usize {
++    lane.group_count_limit() * directory_entry_len(lane)
++}
++
++/// Offset of the first group body in `lane`: the control area plus its reserved
++/// directory. Constant for the pack's whole life, which is the point.
++pub const fn body_base(lane: PackLane) -> usize {
++    HEADER_LEN + directory_reserve(lane)
++}
++
++/// Bytes one reservation step adds for `lane`.
++///
++/// A row is pre-allocated in whole steps so that most appends keep the payload the
++/// same size, which is the only condition under which SQLite takes
++/// `btreeOverwriteCell` and its content comparison. The step is a bounded fraction
++/// of the lane's own limit, so the reservation waste is a constant per pack rather
++/// than a function of its size.
++pub const fn reservation_step(lane: PackLane) -> usize {
++    let step = lane.pack_limit() / 8;
++    if step < 32 * 1024 {
++        32 * 1024
++    } else {
++        step
++    }
++}
++
++/// Smallest reservation of `lane` that holds an assembled length of `needed`.
++///
++/// Never exceeds the lane's own pack limit: an assembled pack that does not fit is
++/// refused by the caller before a row is reserved for it.
++pub const fn reserved_length(lane: PackLane, needed: usize) -> usize {
++    let step = reservation_step(lane);
++    let rounded = needed.div_ceil(step) * step;
++    let limit = lane.pack_limit();
++    if rounded > limit {
++        limit
++    } else {
++        rounded
++    }
++}
++
+ /// Bytes one group's directory entry costs in `lane`.
+ pub const fn directory_entry_len(lane: PackLane) -> usize {
+     match lane {
+@@ -211,9 +285,9 @@ pub fn append_fits(
+         return Ok(false);
+     }
+     let body = group.body_size(lane)?;
++    // The directory is reserved, so a group adds its body and nothing else.
+     let total = assembled
+-        .checked_add(directory_entry_len(lane))
+-        .and_then(|total| total.checked_add(body))
++        .checked_add(body)
+         .ok_or(StorageError::Integrity("pack size"))?;
+     Ok(total <= lane.pack_limit())
+ }
+@@ -223,14 +297,10 @@ pub fn assembled_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResul
+     if groups.is_empty() || groups.len() > lane.group_count_limit() {
+         return Err(StorageError::Integrity("pack group count"));
+     }
+-    let directory = directory_entry_len(lane);
+-    let mut total = HEADER_LEN
+-        .checked_add(
+-            directory
+-                .checked_mul(groups.len())
+-                .ok_or(StorageError::Integrity("pack directory"))?,
+-        )
+-        .ok_or(StorageError::Integrity("pack directory"))?;
++    // Header, the lane's reserved directory area, then the bodies. The directory
++    // is charged at its reservation, not at its occupancy, because that is the
++    // offset every body is placed at.
++    let mut total = body_base(lane);
+     for group in groups {
+         total = total
+             .checked_add(group.body_size(lane)?)
+@@ -246,6 +316,11 @@ pub struct PackHeader {
+     pub lane: PackLane,
+     /// Groups in the directory.
+     pub group_count: usize,
++    /// Assembled length of the pack: where its last body ends.
++    ///
++    /// Read from the header rather than taken from `bytes.len()`, because the row
++    /// is pre-allocated in reservation steps and its length is the reservation.
++    pub assembled_len: usize,
+ }
+ 
+ /// Reads and validates the pack header before any body is touched.
+@@ -290,16 +365,33 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
+     if bytes.len() < HEADER_LEN + directory * group_count {
+         return Err(StorageError::Integrity("pack directory width"));
+     }
+-    if bytes.len() > lane.pack_limit() {
++    let assembled_len = u32::from_le_bytes(
++        header[ASSEMBLED_LEN_OFFSET..HEADER_LEN]
++            .try_into()
++            .map_err(|_| StorageError::Integrity("pack assembled length"))?,
++    ) as usize;
++    // The assembled pack fits the lane, the reservation holds it, and it covers at
++    // least the control area and the directory entries actually present.
++    if assembled_len > lane.pack_limit() {
+         return Err(StorageError::Integrity("pack length"));
+     }
++    if assembled_len < HEADER_LEN + directory * group_count || assembled_len > bytes.len() {
++        return Err(StorageError::Integrity("pack assembled length"));
++    }
++    if bytes.len() > lane.pack_limit() + reservation_step(lane) {
++        return Err(StorageError::Integrity("pack reservation length"));
++    }
+     if lane == PackLane::Singleton && group_count != 1 {
+         return Err(StorageError::Integrity("singleton pack group count"));
+     }
+     if lane == PackLane::Native && version != VERSION_NATIVE {
+         return Err(StorageError::Integrity("native framing version"));
+     }
+-    Ok(PackHeader { lane, group_count })
++    Ok(PackHeader {
++        lane,
++        group_count,
++        assembled_len,
++    })
+ }
+ 
+ /// Location of one group body inside a pack.
+@@ -329,7 +421,9 @@ pub fn group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResu
+ }
+ 
+ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResult<GroupView> {
+-    let mut offset = HEADER_LEN + DIRECTORY_ENTRY_LEN * header.group_count;
++    // Bodies start at the lane's reserved directory base, not after the entries
++    // actually present: the reservation is what keeps a body's offset stable.
++    let mut offset = body_base(header.lane);
+     let mut selected = None;
+     for index in 0..header.group_count {
+         let start = HEADER_LEN + DIRECTORY_ENTRY_LEN * index;
+@@ -360,7 +454,7 @@ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> Storag
+         let end = body_start
+             .checked_add(encoded)
+             .ok_or(StorageError::Integrity("group end"))?;
+-        if encoded == 0 || decoded == 0 || end > bytes.len() {
++        if encoded == 0 || decoded == 0 || end > header.assembled_len {
+             return Err(StorageError::Integrity("group extent"));
+         }
+         let codec = match entry[12] {
+@@ -388,7 +482,9 @@ fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> Storag
+         }
+         offset = end;
+     }
+-    if offset != bytes.len() {
++    // The bodies must end exactly at the assembled length. Bytes past it are the
++    // row's reservation and are not part of the pack.
++    if offset != header.assembled_len {
+         return Err(StorageError::Integrity("pack trailing bytes"));
+     }
+     selected.ok_or(StorageError::Integrity("group ordinal"))
+@@ -399,10 +495,7 @@ fn whole_file_group_view(
+     header: PackHeader,
+     group: usize,
+ ) -> StorageResult<GroupView> {
+-    let directory_end = HEADER_LEN + WHOLE_FILE_ENTRY_LEN * header.group_count;
+-    if bytes.len() > header.lane.pack_limit() {
+-        return Err(StorageError::Integrity("compact pack length"));
+-    }
++    let directory_end = body_base(header.lane);
+     let mut start = directory_end;
+     let mut selected = None;
+     for index in 0..header.group_count {
+@@ -421,7 +514,7 @@ fn whole_file_group_view(
+             return Err(StorageError::Integrity("compact directory continuity"));
+         }
+         let end = if index + 1 == header.group_count {
+-            bytes.len()
++            header.assembled_len
+         } else {
+             let next = bytes
+                 .get(
+@@ -437,7 +530,7 @@ fn whole_file_group_view(
+         let size = end
+             .checked_sub(start)
+             .ok_or(StorageError::Integrity("compact group range"))?;
+-        if size < 2 || end > bytes.len() {
++        if size < 2 || end > header.assembled_len {
+             return Err(StorageError::Integrity("compact group extent"));
+         }
+         if index == group {
+diff --git a/core/crates/layerfs-storage/src/pack/placement.rs b/core/crates/layerfs-storage/src/pack/placement.rs
+index 67e932661..8551a820b 100644
+--- a/core/crates/layerfs-storage/src/pack/placement.rs
++++ b/core/crates/layerfs-storage/src/pack/placement.rs
+@@ -8,7 +8,7 @@
+ 
+ use crate::error::{StorageError, StorageResult};
+ use crate::pack::assemble::{assemble, assemble_consuming};
+-use crate::pack::layout::{append_fits, directory_entry_len, EncodedGroup, PackLane, HEADER_LEN};
++use crate::pack::layout::{append_fits, body_base, EncodedGroup, PackLane};
+ 
+ /// One pack this save created and may still append to.
+ ///
+@@ -102,16 +102,16 @@ impl LanePlacement {
+                 *next_pack_id = pack_id
+                     .checked_add(1)
+                     .ok_or(StorageError::Integrity("pack identifier overflow"))?;
+-                // A fresh pack already assembles to its control area. The running
+-                // total is the canonical assembled length - header, one directory
+-                // entry per group and every body - so it starts at the header, not
+-                // at zero: a total without the header lets a pack assemble up to
+-                // `HEADER_LEN` bytes past the lane limit, which `assemble` then
++                // A fresh pack already assembles to its control area and its
++                // reserved directory. The running total is the canonical assembled
++                // length - header, the lane's whole directory reservation and every
++                // body - so it starts at that base, not at zero: a total without it
++                // lets a pack assemble past the lane limit, which `assemble` then
+                 // refuses with `CapacityExceeded { pack.assembled_length }`.
+                 self.open = Some(OpenPack {
+                     pack_id,
+                     groups: Vec::new(),
+-                    assembled: HEADER_LEN,
++                    assembled: body_base(lane),
+                 });
+                 pending = Some((pack_id, true, Vec::new()));
+             }
+@@ -131,10 +131,10 @@ impl LanePlacement {
+             let group_number = open.groups.len();
+             let records = group.records;
+             let body = group.body_size(lane)?;
++            // The directory is reserved, so a group adds its body and nothing else.
+             open.assembled = open
+                 .assembled
+-                .checked_add(directory_entry_len(lane))
+-                .and_then(|total| total.checked_add(body))
++                .checked_add(body)
+                 .ok_or(StorageError::Integrity("pack size"))?;
+             open.groups.push(group);
+             let entry = pending
+@@ -173,7 +173,7 @@ impl LanePlacement {
+             // The tail is consumed, so its running total goes with it: the caller
+             // replaces the open pack immediately after a closing assembly. What is
+             // left is an empty pack, which assembles to its header alone.
+-            open.assembled = HEADER_LEN;
++            open.assembled = body_base(lane);
+             assemble_consuming(lane, std::mem::take(&mut open.groups))?
+         } else {
+             assemble(lane, &open.groups)?
+diff --git a/core/crates/layerfs-storage/src/policy.rs b/core/crates/layerfs-storage/src/policy.rs
+index 2f42c44b1..1590f09df 100644
+--- a/core/crates/layerfs-storage/src/policy.rs
++++ b/core/crates/layerfs-storage/src/policy.rs
+@@ -12,7 +12,16 @@ use layerfs_content::{ConstructionPolicy, ContentError};
+ use crate::error::{StorageError, StorageResult};
+ 
+ /// Persisted profile identifier of this slice.
+-pub const FORMAT_PROFILE: u8 = 1;
++///
++/// Version 1 framed every pack with its group directory immediately after the
++/// control area, so the directory grew into the body region and one new entry
++/// moved every body byte. Version 2 reserves each lane's whole directory area at a
++/// fixed offset, records the assembled length in the pack header and pre-allocates
++/// the row in reservation steps, which is what lets SQLite take its same-size
++/// overwrite path and dirty only the pages an append actually changes. A version-1
++/// Store is rejected at open rather than migrated, and a version-1 pack is rejected
++/// by `parse_header` rather than misread.
++pub const FORMAT_PROFILE: u8 = 2;
+ 
+ /// SQLite application id written by the candidate schema.
+ pub const APPLICATION_ID: i64 = 1_279_677_261;
+@@ -29,8 +38,12 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
+ /// migrated, and the reader never guesses a base it cannot read from the record.
+ /// Version 6 adds `content_signatures`, the persisted cross-save content index
+ /// (`encoding/delta/candidates.rs`, the W2 section of `sql/schema.sql`).
++/// Version 8 pins `store_policy.format_profile` to profile 2: the pack directory
++/// area is reserved at a fixed offset, the pack header carries the assembled length
++/// and the pack row is pre-allocated in reservation steps. The DDL change is the
++/// CHECK that pins the profile, which is why the version moves with it.
+ /// Older Stores are rejected rather than migrated.
+-pub const SCHEMA_VERSION: i64 = 7;
++pub const SCHEMA_VERSION: i64 = 8;
+ 
+ /// Declared storage schema identifier.
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+diff --git a/core/crates/layerfs-storage/tests/cas_reuse.rs b/core/crates/layerfs-storage/tests/cas_reuse.rs
+index 8d2fb6d66..8608fbea4 100644
+--- a/core/crates/layerfs-storage/tests/cas_reuse.rs
++++ b/core/crates/layerfs-storage/tests/cas_reuse.rs
+@@ -18,7 +18,12 @@ fn tamper_pack(path: &std::path::Path) {
+             |row| Ok((row.get(0)?, row.get(1)?)),
+         )
+         .expect("a stored pack");
+-    let last = data.len() - 1;
++    // The last byte of the *pack*, not of the row: the row is pre-allocated in
++    // reservation steps, so its tail past the assembled length is padding and
++    // flipping it would corrupt nothing the reader ever looks at.
++    let assembled = layerfs_storage::pack::layout::image_assembled_length(&data)
++        .expect("the stored pack's assembled length");
++    let last = assembled - 1;
+     data[last] ^= 0x01;
+     let affected = connection
+         .execute(
+diff --git a/core/crates/layerfs-storage/tests/cas_roundtrip.rs b/core/crates/layerfs-storage/tests/cas_roundtrip.rs
+index 690136ef2..a74b9095f 100644
+--- a/core/crates/layerfs-storage/tests/cas_roundtrip.rs
++++ b/core/crates/layerfs-storage/tests/cas_roundtrip.rs
+@@ -75,11 +75,14 @@ fn fresh_store_writes_the_declared_schema_identity() {
+     let path = dir.store_path("fresh");
+     let store = create_store(&path);
+     assert_eq!(store.policy(), StoragePolicy::frozen_default());
++    // Both values are literals on purpose: this case is a change detector, and a
++    // schema bump that is not intended must fail here rather than be absorbed by
++    // reading the constant back from the crate that wrote it.
+     assert_eq!(
+         SCHEMA_IDENTITY,
+         SchemaIdentity {
+             application_id: 1_279_677_261,
+-            user_version: 7,
++            user_version: 8,
+         }
+     );
+     drop(store);
+diff --git a/core/crates/layerfs-storage/tests/codec_frames.rs b/core/crates/layerfs-storage/tests/codec_frames.rs
+index f246489c4..a9a419784 100644
+--- a/core/crates/layerfs-storage/tests/codec_frames.rs
++++ b/core/crates/layerfs-storage/tests/codec_frames.rs
+@@ -14,7 +14,13 @@ use layerfs_storage::encoding::{CodecProfile, CompressionWorkspace, Decompressio
+ use layerfs_storage::{StorageCapacities, StorageError, StoragePolicy};
+ 
+ fn capacities(cutoff: u64) -> StorageCapacities {
+-    StorageCapacities::from_policy(StoragePolicy::new(1, cutoff, 8, 4)).expect("accepted policy")
++    StorageCapacities::from_policy(StoragePolicy::new(
++        layerfs_storage::policy::FORMAT_PROFILE,
++        cutoff,
++        8,
++        4,
++    ))
++    .expect("accepted policy")
+ }
+ 
+ fn encode(profile: CodecProfile, raw: &[u8]) -> Vec<u8> {
+diff --git a/core/crates/layerfs-storage/tests/delta_chains.rs b/core/crates/layerfs-storage/tests/delta_chains.rs
+index 23151a8bd..55c83f8fd 100644
+--- a/core/crates/layerfs-storage/tests/delta_chains.rs
++++ b/core/crates/layerfs-storage/tests/delta_chains.rs
+@@ -30,7 +30,7 @@ fn with_predecessor(object: FinalizedObject, base: ObjectId) -> FinalizedObject
+ }
+ 
+ fn store_with(path: &std::path::Path, whole_depth: u8, chunk_depth: u8) -> Store {
+-    let policy = StoragePolicy::new(1, 131_072, whole_depth, chunk_depth);
++    let policy = StoragePolicy::new(2, 131_072, whole_depth, chunk_depth);
+     disabled(|scope| Store::create(path, policy, scope.child("store"))).expect("store")
+ }
+ 
+@@ -274,7 +274,7 @@ fn an_unsupported_depth_is_rejected_before_any_store_exists() {
+     let dir = TempDir::new("chain-reject");
+     let path = dir.store_path("chain");
+     for (whole_depth, chunk_depth) in [(51_u8, 4_u8), (8, 51)] {
+-        let policy = StoragePolicy::new(1, 131_072, whole_depth, chunk_depth);
++        let policy = StoragePolicy::new(2, 131_072, whole_depth, chunk_depth);
+         let error =
+             disabled(|scope| Store::create(&path, policy, scope.child("store"))).unwrap_err();
+         assert!(
+diff --git a/core/crates/layerfs-storage/tests/delta_payload.rs b/core/crates/layerfs-storage/tests/delta_payload.rs
+index 7b7a064b9..468ea851e 100644
+--- a/core/crates/layerfs-storage/tests/delta_payload.rs
++++ b/core/crates/layerfs-storage/tests/delta_payload.rs
+@@ -209,7 +209,7 @@ fn an_unrelated_candidate_loses_the_cost_comparison() {
+ fn depth_zero_disables_prospective_delta_entirely() {
+     let dir = TempDir::new("delta-depth0");
+     let path = dir.store_path("delta");
+-    let policy = layerfs_storage::StoragePolicy::new(1, 131_072, 0, 0);
++    let policy = layerfs_storage::StoragePolicy::new(2, 131_072, 0, 0);
+     let store = disabled(|scope| Store::create(&path, policy, scope.child("store")))
+         .expect("store with delta disabled");
+     let raw = patterned(70_000);
+@@ -444,7 +444,7 @@ fn the_chunk_lane_honours_its_own_depth_cap() {
+     let run = |chunk_depth: u8, label: &str| {
+         let dir = TempDir::new(label);
+         let path = dir.store_path("delta");
+-        let policy = layerfs_storage::StoragePolicy::new(1, 131_072, 8, chunk_depth);
++        let policy = layerfs_storage::StoragePolicy::new(2, 131_072, 8, chunk_depth);
+         let store =
+             disabled(|scope| Store::create(&path, policy, scope.child("store"))).expect("store");
+         assert_eq!(
+@@ -505,7 +505,7 @@ fn the_chunk_lane_honours_its_own_depth_cap() {
+ fn a_fifty_link_chunk_chain_is_admitted_and_read() {
+     let dir = TempDir::new("delta-chunk-depth50");
+     let path = dir.store_path("delta");
+-    let policy = layerfs_storage::StoragePolicy::new(1, 131_072, 8, 50);
++    let policy = layerfs_storage::StoragePolicy::new(2, 131_072, 8, 50);
+     let store =
+         disabled(|scope| Store::create(&path, policy, scope.child("store"))).expect("store");
+     assert_eq!(
+diff --git a/core/crates/layerfs-storage/tests/memory_bounds.rs b/core/crates/layerfs-storage/tests/memory_bounds.rs
+index 704134d30..ea8941d92 100644
+--- a/core/crates/layerfs-storage/tests/memory_bounds.rs
++++ b/core/crates/layerfs-storage/tests/memory_bounds.rs
+@@ -236,7 +236,7 @@ fn collected_bytes(raw: &[u8]) -> Vec<u8> {
+ fn a_store_created_with_an_unsupported_policy_is_rejected_before_work() {
+     let dir = TempDir::new("policy");
+     let path = dir.store_path("policy");
+-    let unsupported = layerfs_storage::StoragePolicy::new(1, 1_048_577, 8, 4);
++    let unsupported = layerfs_storage::StoragePolicy::new(2, 1_048_577, 8, 4);
+     let error =
+         disabled(|scope| Store::create(&path, unsupported, scope.child("store"))).unwrap_err();
+     assert!(
+diff --git a/core/crates/layerfs-storage/tests/metadata_pool.rs b/core/crates/layerfs-storage/tests/metadata_pool.rs
+index 6d159fcd8..652c86b1c 100644
+--- a/core/crates/layerfs-storage/tests/metadata_pool.rs
++++ b/core/crates/layerfs-storage/tests/metadata_pool.rs
+@@ -691,7 +691,7 @@ fn a_pooled_leaf_survives_a_store_reopen_with_its_chain() {
+ fn a_pooled_depth_of_zero_stores_every_leaf_in_full() {
+     let dir = TempDir::new("pool-depth0");
+     let path = dir.store_path("pool");
+-    let policy = StoragePolicy::new(1, 131_072, 8, 4).with_metadata_depth(0);
++    let policy = StoragePolicy::new(2, 131_072, 8, 4).with_metadata_depth(0);
+     let store =
+         disabled(|scope| Store::create(&path, policy, scope.child("store"))).expect("store");
+     let values = (0..20)
+@@ -872,7 +872,12 @@ fn a_damaged_pooled_delta_leaf_is_refused() {
+         )
+         .expect("pack row");
+     let mut damaged = pack.clone();
+-    let last = damaged.len() - 1;
++    // The last byte of the *pack*, not of the row: the row is pre-allocated in
++    // reservation steps, so its tail past the assembled length is padding and
++    // flipping it would damage nothing the reader looks at.
++    let assembled = layerfs_storage::pack::layout::image_assembled_length(&damaged)
++        .expect("the stored pack's assembled length");
++    let last = assembled - 1;
+     damaged[last] ^= 0xff;
+     assert_eq!(
+         connection
+diff --git a/core/crates/layerfs-storage/tests/pack_locator.rs b/core/crates/layerfs-storage/tests/pack_locator.rs
+index a3bc2f466..bb37202fb 100644
+--- a/core/crates/layerfs-storage/tests/pack_locator.rs
++++ b/core/crates/layerfs-storage/tests/pack_locator.rs
+@@ -217,7 +217,11 @@ fn a_corrupt_pack_body_is_rejected_on_read() {
+             |row| Ok((row.get(0)?, row.get(1)?)),
+         )
+         .unwrap();
+-    let last = data.len() - 1;
++    // The pack's own last byte, not the row's: the row is pre-allocated in
++    // reservation steps, so its tail past the assembled length is padding.
++    let assembled = layerfs_storage::pack::layout::image_assembled_length(&data)
++        .expect("the stored pack's assembled length");
++    let last = assembled - 1;
+     data[last] ^= 0xff;
+     connection
+         .execute(
+@@ -286,7 +290,7 @@ fn a_whole_file_record_is_stored_in_its_own_compact_pack() {
+     assert_eq!(&version[..8], b"LFPACK\0\0");
+     assert_eq!(
+         u32::from_le_bytes(version[8..12].try_into().unwrap()),
+-        4,
++        10,
+         "whole-file records use the compact framing"
+     );
+     assert!(length < 256 * 1024);
+diff --git a/core/crates/layerfs-storage/tests/physical_formats.rs b/core/crates/layerfs-storage/tests/physical_formats.rs
+index 9b477c1ed..bdb90fb86 100644
+--- a/core/crates/layerfs-storage/tests/physical_formats.rs
++++ b/core/crates/layerfs-storage/tests/physical_formats.rs
+@@ -14,11 +14,15 @@ use layerfs_storage::pack::layout::{
+ use layerfs_storage::StorageError;
+ 
+ /// Builds a minimal pack header for `version` with `groups` directory entries.
++///
++/// The assembled length is the slice's own length: these are synthetic packs with
++/// no reservation padding, which is the case `parse_header` must accept.
+ fn header(version: u32, groups: u32, length: usize) -> Vec<u8> {
+     let mut bytes = Vec::new();
+     bytes.extend_from_slice(&PACK_MAGIC);
+     bytes.extend_from_slice(&version.to_le_bytes());
+     bytes.extend_from_slice(&groups.to_le_bytes());
++    bytes.extend_from_slice(&u32::try_from(length).unwrap().to_le_bytes());
+     bytes.resize(length, 0);
+     bytes
+ }
+@@ -42,7 +46,9 @@ fn every_implemented_framing_is_recognized_by_its_own_version() {
+ 
+ #[test]
+ fn unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode() {
+-    for version in [0_u32, 3, 5, 8, 99] {
++    // 8..=12 are the implemented framings; the old 1, 2, 4, 6, 7 are rejected
++    // exactly like any other unknown version rather than misread.
++    for version in [0_u32, 1, 2, 3, 4, 5, 6, 7, 13, 99] {
+         let bytes = header(version, 1, 16 + 16 + 32);
+         let error = parse_header(&bytes).unwrap_err();
+         assert!(
+@@ -125,7 +131,7 @@ fn a_recipe_frame_larger_than_its_profile_is_refused() {
+         "got {error}"
+     );
+     let large = layerfs_storage::StorageCapacities::from_policy(
+-        layerfs_storage::StoragePolicy::new(1, 1_048_576, 8, 4),
++        layerfs_storage::StoragePolicy::new(2, 1_048_576, 8, 4),
+     )
+     .expect("capacities");
+     let large_profile = CodecProfile::whole_file(&large);
+@@ -207,14 +213,14 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
+     assert_eq!(
+         VERSION_ORDINARY,
+         PackLane::Ordinary.version(),
+-        "v1 is the ordinary lane"
++        "v8 is the ordinary lane"
+     );
+     assert_eq!(
+         parse_header(&group_pack).expect("group header").lane,
+         PackLane::PooledMetadata,
+         "a pooled value group is stored in the v6 pooled lane"
+     );
+-    assert_eq!(VERSION_POOLED_METADATA, 6, "the pooled lane is v6");
++    assert_eq!(VERSION_POOLED_METADATA, 11, "the pooled lane is v11");
+     assert_eq!(
+         leaf_role,
+         i64::from(ObjectRole::InodeLeaf.code()),
+diff --git a/core/crates/layerfs-storage/tests/policy_capacity.rs b/core/crates/layerfs-storage/tests/policy_capacity.rs
+index 5104ddf1c..69919d8e8 100644
+--- a/core/crates/layerfs-storage/tests/policy_capacity.rs
++++ b/core/crates/layerfs-storage/tests/policy_capacity.rs
+@@ -16,7 +16,7 @@ use support::{
+ };
+ 
+ fn policy_for(cutoff: u64, whole_depth: u8, chunk_depth: u8) -> StoragePolicy {
+-    StoragePolicy::new(1, cutoff, whole_depth, chunk_depth)
++    StoragePolicy::new(2, cutoff, whole_depth, chunk_depth)
+ }
+ 
+ fn create(path: &std::path::Path, policy: StoragePolicy) -> Store {
+@@ -57,7 +57,9 @@ fn an_unsupported_or_conflicting_policy_is_rejected_before_mutation() {
+         policy_for(196_608, 8, 4),
+         policy_for(131_072, 51, 4),
+         policy_for(131_072, 8, 51),
+-        StoragePolicy::new(2, 131_072, 8, 4),
++        // A profile this crate does not implement: expressed relative to the one it
++        // does, so the case keeps testing the rejection rather than the number.
++        StoragePolicy::new(layerfs_storage::policy::FORMAT_PROFILE + 1, 131_072, 8, 4),
+     ] {
+         let error =
+             disabled(|scope| Store::create(&path, policy, scope.child("store"))).unwrap_err();
+diff --git a/core/crates/layerfs-storage/tests/support/filesystem.rs b/core/crates/layerfs-storage/tests/support/filesystem.rs
+index 5259416b9..84e92b257 100644
+--- a/core/crates/layerfs-storage/tests/support/filesystem.rs
++++ b/core/crates/layerfs-storage/tests/support/filesystem.rs
+@@ -430,8 +430,13 @@ pub fn corrupt_pack_containing(path: &Path, id: ObjectId) {
+             |row| row.get(0),
+         )
+         .expect("the pack exists");
+-    let start = data.len() / 3;
+-    for index in (start..data.len()).step_by(23) {
++    // The pack's own extent, not the row's: the row is pre-allocated in
++    // reservation steps, so its tail past the assembled length is padding and
++    // corrupting it would leave the pack readable.
++    let assembled = layerfs_storage::pack::layout::image_assembled_length(&data)
++        .expect("the stored pack's assembled length");
++    let start = assembled / 3;
++    for index in (start..assembled).step_by(23) {
+         data[index] ^= 0xff;
+     }
+     connection
+diff --git a/core/crates/layerfs-storage/tests/support/mod.rs b/core/crates/layerfs-storage/tests/support/mod.rs
+index 090d5fb78..82cfb8da3 100644
+--- a/core/crates/layerfs-storage/tests/support/mod.rs
++++ b/core/crates/layerfs-storage/tests/support/mod.rs
+@@ -337,7 +337,12 @@ pub fn corrupt_first_pack(path: &Path) {
+         )
+         .expect("pack row");
+     let mut damaged = data.clone();
+-    let index = damaged.len() - 1;
++    // The last byte of the *pack*, not of the row: the row is pre-allocated in
++    // reservation steps, so its tail past the assembled length is padding and
++    // damaging it would corrupt nothing the reader ever looks at.
++    let assembled = layerfs_storage::pack::layout::image_assembled_length(&damaged)
++        .expect("the stored pack's assembled length");
++    let index = assembled - 1;
+     damaged[index] ^= 0xff;
+     let affected = connection
+         .execute(
+diff --git a/core/crates/layerfs-storage/tests/visibility.rs b/core/crates/layerfs-storage/tests/visibility.rs
+index d2cce1b13..1f37a94a4 100644
+--- a/core/crates/layerfs-storage/tests/visibility.rs
++++ b/core/crates/layerfs-storage/tests/visibility.rs
+@@ -334,7 +334,7 @@ fn the_watermark_survives_reopen_and_still_hides_a_later_open_save() {
+         .unwrap()
+         .0;
+     assert_eq!(values.len(), 1);
+-    assert_eq!(StoragePolicy::frozen_default().format_profile(), 1);
++    assert_eq!(StoragePolicy::frozen_default().format_profile(), 2);
+ 
+     let _ = SaveHandoff::new;
+ }

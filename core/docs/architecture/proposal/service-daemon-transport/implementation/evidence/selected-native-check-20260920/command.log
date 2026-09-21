@@ -1,0 +1,35 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.18s
+     Running tests/native.rs (core/target/debug/deps/native-b87fb1b279e92834)
+
+running 7 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test native_cpu_units_match_posix_process_counters ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test output_failure_is_independent_and_encoding_is_valid ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/observations.rs (core/target/debug/deps/observations-bb99540aa40c6556)
+
+running 2 tests
+
+thread 'optional_windows_release_on_return_error_and_unwind' panicked at crates/layerfs-telemetry/tests/observations.rs:90:51:
+original
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test optional_windows_release_on_return_error_and_unwind ... ok
+test long_shared_windows_preserve_first_and_sampled_max ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stalled_output.rs (core/target/debug/deps/stalled_output-444b3299c1ea5be3)
+
+running 2 tests
+test stalled_writer_child ... ignored, subprocess helper; invoked by blocked_native_stderr_preserves_result_and_process_exit
+test blocked_native_stderr_preserves_result_and_process_exit ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.04s
+

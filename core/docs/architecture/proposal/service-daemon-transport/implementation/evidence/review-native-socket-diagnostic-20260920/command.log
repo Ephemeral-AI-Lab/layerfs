@@ -1,0 +1,8 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running `core/target/debug/examples/socket_bounds`
+socket 45: before=(146988, 408300) after=(131072, 392384)
+socket 55: before=(146988, 408300) after=(131072, 392384)
+socket 59: before=(146988, 408300) after=(131072, 392384)
+socket 63: before=(146988, 408300) after=(131072, 392384)
+64 sockets; over-bound after successful setsockopt: 4

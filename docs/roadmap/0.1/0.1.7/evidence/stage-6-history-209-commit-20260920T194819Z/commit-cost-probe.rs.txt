@@ -1,0 +1,502 @@
+//! #209 diagnostic: what one step's `COMMIT` writes, and which declared
+//! connection profile moves it.
+//!
+//! **Diagnostic only.** Removed from the product tree after the round; source
+//! retained as `commit-cost-probe.rs.txt` in the campaign directory. It adds no
+//! product behaviour and is part of no measured arm.
+//!
+//! It replays the statement shape one step issues - an `UPDATE` that hands
+//! SQLite a whole pack body, plus the `store_policy` watermark `UPDATE` - on a
+//! copy of a measured run's own Store, under several connection profiles, and
+//! reports per-`COMMIT` time and the engine's own page-write counters.
+//!
+//! The arms are **interleaved round-robin in one process** so that machine
+//! drift over the experiment is shared by every arm instead of being charged to
+//! whichever arm ran last.
+//!
+//! Run:
+//!   PROBE_STORE=<copy of the run's sample.sqlite> PROBE_ITERS=2000 PROBE_ROUNDS=6 \
+//!   PROBE_OUT=<dir> cargo +1.85.1 test --release \
+//!     --manifest-path core/Cargo.toml --test commit_cost_probe -- --nocapture
+
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+use rusqlite::Connection;
+
+/// One arm: the profile pragmas applied *after* the product's declared profile.
+struct Arm {
+    name: &'static str,
+    pragmas: &'static [&'static str],
+}
+
+const ARMS: &[Arm] = &[
+    Arm {
+        name: "declared",
+        pragmas: &[],
+    },
+    Arm {
+        name: "declared-b",
+        pragmas: &[],
+    },
+    Arm {
+        name: "cache64m",
+        pragmas: &["PRAGMA cache_size = -65536"],
+    },
+    Arm {
+        name: "spilloff",
+        pragmas: &["PRAGMA cache_spill = 0"],
+    },
+    Arm {
+        name: "cache64m-spilloff",
+        pragmas: &["PRAGMA cache_size = -65536", "PRAGMA cache_spill = 0"],
+    },
+    Arm {
+        name: "mmap256m",
+        pragmas: &["PRAGMA mmap_size = 268435456"],
+    },
+    // Diagnostic only: sizes the journal term. Not a candidate - it removes the
+    // rollback atomicity the declared profile deliberately keeps.
+    Arm {
+        name: "journal-off-diag",
+        pragmas: &["PRAGMA journal_mode = OFF"],
+    },
+];
+
+fn soft(connection: &Connection, pragma: &str) -> String {
+    let name = pragma
+        .trim_start_matches("PRAGMA ")
+        .split('=')
+        .next()
+        .unwrap()
+        .trim();
+    if pragma.to_ascii_lowercase().contains("journal_mode") {
+        return connection
+            .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+            .unwrap_or_else(|error| format!("error: {error}"));
+    }
+    connection
+        .query_row(&format!("PRAGMA {name}"), [], |row| row.get::<_, i64>(0))
+        .map(|value| value.to_string())
+        .unwrap_or_else(|error| format!("error: {error}"))
+}
+
+unsafe fn status(connection: &Connection, op: i32) -> i64 {
+    let mut current: std::os::raw::c_int = 0;
+    let mut high: std::os::raw::c_int = 0;
+    rusqlite::ffi::sqlite3_db_status(connection.handle(), op, &mut current, &mut high, 0);
+    i64::from(current)
+}
+
+fn filler(seed: u64, len: usize) -> Vec<u8> {
+    let mut state = seed | 1;
+    let mut bytes = Vec::with_capacity(len + 8);
+    while bytes.len() < len {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        bytes.extend_from_slice(&state.to_le_bytes());
+    }
+    bytes.truncate(len);
+    bytes
+}
+
+/// The packs this probe cycles through, with their pristine bodies.
+struct Cycle {
+    packs: Vec<(i64, Vec<u8>, i64)>,
+    index: usize,
+    body: Vec<u8>,
+}
+const PACK_CAP: usize = 262_144;
+
+struct Timing {
+    commit_ns: u128,
+    step_ns: u128,
+    commits: u64,
+}
+
+fn beat(
+    connection: &Connection,
+    cycle: &mut Cycle,
+    growth: usize,
+    timing: &mut Timing,
+    iteration: u64,
+) {
+    if cycle.body.len() + growth > PACK_CAP {
+        // The product seals this pack and starts the next one small; here the
+        // same pack row is reset to its pristine body.
+        cycle.index = (cycle.index + 1) % cycle.packs.len();
+        let (_, pristine, _) = &cycle.packs[cycle.index];
+        cycle.body = pristine.clone();
+    }
+    let (pack_id, _, _) = cycle.packs[cycle.index];
+    cycle.body.extend_from_slice(&filler(iteration, growth));
+    let step = Instant::now();
+    connection.execute_batch("BEGIN IMMEDIATE").expect("begin");
+    connection
+        .execute(
+            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope)",
+            rusqlite::params![pack_id, &cycle.body],
+        )
+        .expect("append");
+    connection
+        .execute(
+            "UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_pack_id <= ?1",
+            [1_000_000 + iteration as i64],
+        )
+        .expect("watermark");
+    let started = Instant::now();
+    connection.execute_batch("COMMIT").expect("commit");
+    timing.commit_ns += started.elapsed().as_nanos();
+    timing.step_ns += step.elapsed().as_nanos();
+    timing.commits += 1;
+}
+
+#[test]
+fn one_step_commit_under_several_profiles() {
+    let pristine = PathBuf::from(std::env::var("PROBE_STORE").expect("PROBE_STORE"));
+    let iterations: usize = std::env::var("PROBE_ITERS")
+        .unwrap_or_else(|_| "2000".into())
+        .parse()
+        .unwrap();
+    let rounds: usize = std::env::var("PROBE_ROUNDS")
+        .unwrap_or_else(|_| "6".into())
+        .parse()
+        .unwrap();
+    let growth: usize = std::env::var("PROBE_GROWTH")
+        .unwrap_or_else(|_| "1450".into())
+        .parse()
+        .unwrap();
+    let scratch = PathBuf::from(std::env::var("PROBE_OUT").expect("PROBE_OUT"));
+
+    // One connection per arm, each on its own copy of the same pristine Store.
+    let mut connections = Vec::new();
+    let mut profiles = Vec::new();
+    for arm in ARMS {
+        let path = scratch.join(format!("{}.sqlite", arm.name));
+        std::fs::copy(&pristine, &path).expect("copy");
+        let connection = Connection::open(&path).expect("open");
+        layerfs_storage::sqlite::connection::configure(&connection).expect("declared profile");
+        for pragma in arm.pragmas {
+            connection
+                .execute_batch(pragma)
+                .unwrap_or_else(|error| panic!("{pragma}: {error}"));
+        }
+        connection
+            .execute_batch(
+                "CREATE TEMP TABLE layerfs_read_scope (save_id INTEGER NOT NULL, publication INTEGER NOT NULL);
+                 INSERT INTO layerfs_read_scope VALUES (0, 9223372036854775807);",
+            )
+            .expect("scope");
+        profiles.push(format!(
+            "cache_size={} cache_spill={} mmap_size={} journal={} page_size={}",
+            soft(&connection, "PRAGMA cache_size"),
+            soft(&connection, "PRAGMA cache_spill"),
+            soft(&connection, "PRAGMA mmap_size"),
+            soft(&connection, "PRAGMA journal_mode"),
+            soft(&connection, "PRAGMA page_size"),
+        ));
+        connections.push(connection);
+    }
+
+    let mut timings: Vec<Timing> = (0..ARMS.len())
+        .map(|_| Timing {
+            commit_ns: 0,
+            step_ns: 0,
+            commits: 0,
+        })
+        .collect();
+    let mut pages: Vec<i64> = vec![0; ARMS.len()];
+    // A small rotation of packs, chosen near the run's own average body size.
+    let chooser = &connections[0];
+    let mut statement = chooser
+        .prepare("SELECT pack_id, length(data) FROM object_packs ORDER BY pack_id LIMIT 4")
+        .expect("packs");
+    let chosen: Vec<(i64, i64)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("rows")
+        .map(|row| row.unwrap())
+        .collect();
+    drop(statement);
+
+    let mut iteration = 0_u64;
+    for round in 0..rounds {
+        for (index, connection) in connections.iter().enumerate() {
+            let mut cycle = Cycle {
+                packs: chosen
+                    .iter()
+                    .map(|(pack_id, _)| {
+                        let body: Vec<u8> = connection
+                            .query_row(
+                                "SELECT data FROM object_packs WHERE pack_id = ?1",
+                                [pack_id],
+                                |row| row.get(0),
+                            )
+                            .expect("body");
+                        (*pack_id, body, *pack_id)
+                    })
+                    .collect(),
+                index: 0,
+                body: Vec::new(),
+            };
+            cycle.body = cycle.packs[0].1.clone();
+            let save_id: i64 = connection
+                .query_row(
+                    "SELECT save_id FROM object_packs WHERE pack_id = ?1",
+                    [chosen[0].0],
+                    |row| row.get(0),
+                )
+                .expect("save id");
+            connection
+                .execute("UPDATE temp.layerfs_read_scope SET save_id = ?1", [save_id])
+                .expect("scope set");
+            let before = unsafe { status(connection, rusqlite::ffi::SQLITE_DBSTATUS_CACHE_WRITE) };
+            for _ in 0..iterations {
+                beat(
+                    connection,
+                    &mut cycle,
+                    growth,
+                    &mut timings[index],
+                    iteration,
+                );
+                iteration += 1;
+            }
+            pages[index] +=
+                unsafe { status(connection, rusqlite::ffi::SQLITE_DBSTATUS_CACHE_WRITE) } - before;
+        }
+        println!("round {round} done: iterations={iteration}");
+    }
+
+    println!("--- interleaved arms, {rounds} rounds x {iterations} commits each ---");
+    for (index, arm) in ARMS.iter().enumerate() {
+        let timing = &timings[index];
+        let per_commit_us = timing.commit_ns as f64 / timing.commits as f64 / 1000.0;
+        let per_page_ns = timing.commit_ns as f64 / pages[index] as f64;
+        println!(
+            "{:<20} commits={} commit_us={:>8.2} pages/commit={:>6.2} ns/page={:>7.1} | {}",
+            arm.name,
+            timing.commits,
+            per_commit_us,
+            pages[index] as f64 / timing.commits as f64,
+            per_page_ns,
+            profiles[index],
+        );
+    }
+}
+
+/// What one per-step statement costs, and what a parse costs.
+///
+/// Every arm issues the same append and `COMMIT`; the arms differ only in the
+/// one extra statement the step issues, so the difference from `append` is that
+/// statement's own cost plus the page it dirties in the commit.
+const STEP_ARMS: &[&str] = &[
+    "append",
+    "append+watermark-same",
+    "append+watermark-new",
+    "append+ceiling-same",
+    "append+nextpack-read",
+];
+
+const HOT_SQL: &[&str] = &[
+    "SELECT next_pack_id FROM store_policy WHERE id = 1",
+    "UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_pack_id <= ?1",
+    "UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save_id = ?1 AND active_slot IS NOT NULL",
+    "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
+];
+
+#[test]
+fn one_step_statement_costs() {
+    let pristine = PathBuf::from(std::env::var("PROBE_STORE").expect("PROBE_STORE"));
+    let iterations: usize = std::env::var("PROBE_ITERS")
+        .unwrap_or_else(|_| "20000".into())
+        .parse()
+        .unwrap();
+    let rounds: usize = std::env::var("PROBE_ROUNDS")
+        .unwrap_or_else(|_| "4".into())
+        .parse()
+        .unwrap();
+    let growth: usize = std::env::var("PROBE_GROWTH")
+        .unwrap_or_else(|_| "1450".into())
+        .parse()
+        .unwrap();
+    let scratch = PathBuf::from(std::env::var("PROBE_OUT").expect("PROBE_OUT"));
+
+    let mut connections = Vec::new();
+    for (index, name) in STEP_ARMS.iter().enumerate() {
+        let path = scratch.join(format!("step-{index}-{name}.sqlite"));
+        std::fs::copy(&pristine, &path).expect("copy");
+        let connection = Connection::open(&path).expect("open");
+        layerfs_storage::sqlite::connection::configure(&connection).expect("declared profile");
+        connection
+            .execute_batch(
+                "CREATE TEMP TABLE layerfs_read_scope (save_id INTEGER NOT NULL, publication INTEGER NOT NULL);
+                 INSERT INTO layerfs_read_scope VALUES (0, 9223372036854775807);",
+            )
+            .expect("scope");
+        connections.push(connection);
+    }
+
+    let chosen: Vec<i64> = {
+        let mut statement = connections[0]
+            .prepare("SELECT pack_id FROM object_packs ORDER BY pack_id LIMIT 4")
+            .expect("packs");
+        let ids: Vec<i64> = statement
+            .query_map([], |row| row.get(0))
+            .expect("rows")
+            .map(|row| row.unwrap())
+            .collect();
+        ids
+    };
+    let save_id: i64 = connections[0]
+        .query_row(
+            "SELECT save_id FROM object_packs WHERE pack_id = ?1",
+            [chosen[0]],
+            |row| row.get(0),
+        )
+        .expect("save id");
+    let watermark: i64 = connections[0]
+        .query_row(
+            "SELECT next_pack_id FROM store_policy WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("watermark");
+
+    let mut timings: Vec<Timing> = (0..STEP_ARMS.len())
+        .map(|_| Timing {
+            commit_ns: 0,
+            step_ns: 0,
+            commits: 0,
+        })
+        .collect();
+    let mut pages: Vec<i64> = vec![0; STEP_ARMS.len()];
+    let mut iteration = 0_u64;
+    for _round in 0..rounds {
+        for (index, connection) in connections.iter().enumerate() {
+            connection
+                .execute("UPDATE temp.layerfs_read_scope SET save_id = ?1", [save_id])
+                .expect("scope set");
+            let mut cycle = Cycle {
+                packs: chosen
+                    .iter()
+                    .map(|pack_id| {
+                        let body: Vec<u8> = connection
+                            .query_row(
+                                "SELECT data FROM object_packs WHERE pack_id = ?1",
+                                [pack_id],
+                                |row| row.get(0),
+                            )
+                            .expect("body");
+                        (*pack_id, body, *pack_id)
+                    })
+                    .collect(),
+                index: 0,
+                body: Vec::new(),
+            };
+            cycle.body = cycle.packs[0].1.clone();
+            let before = unsafe { status(connection, rusqlite::ffi::SQLITE_DBSTATUS_CACHE_WRITE) };
+            for _ in 0..iterations {
+                if cycle.body.len() + growth > PACK_CAP {
+                    cycle.index = (cycle.index + 1) % cycle.packs.len();
+                    cycle.body = cycle.packs[cycle.index].1.clone();
+                }
+                let (pack_id, _, _) = cycle.packs[cycle.index];
+                cycle.body.extend_from_slice(&filler(iteration, growth));
+                let step = Instant::now();
+                connection.execute_batch("BEGIN IMMEDIATE").expect("begin");
+                connection
+                    .execute(
+                        "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope)",
+                        rusqlite::params![pack_id, &cycle.body],
+                    )
+                    .expect("append");
+                match STEP_ARMS[index] {
+                    "append+watermark-same" => {
+                        connection
+                            .execute(
+                                "UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_pack_id <= ?1",
+                                [watermark],
+                            )
+                            .expect("watermark");
+                    }
+                    "append+watermark-new" => {
+                        connection
+                            .execute(
+                                "UPDATE store_policy SET next_pack_id = ?1 WHERE id = 1 AND next_pack_id <= ?1",
+                                [watermark + iteration as i64 + 1],
+                            )
+                            .expect("watermark");
+                    }
+                    "append+ceiling-same" => {
+                        connection
+                            .execute(
+                                "UPDATE saves SET pack_ceiling = MAX(pack_ceiling, ?2) WHERE save_id = ?1 AND active_slot IS NOT NULL",
+                                [save_id, pack_id],
+                            )
+                            .expect("ceiling");
+                    }
+                    "append+nextpack-read" => {
+                        let _: i64 = connection
+                            .query_row(
+                                "SELECT next_pack_id FROM store_policy WHERE id = 1",
+                                [],
+                                |row| row.get(0),
+                            )
+                            .expect("next pack");
+                    }
+                    _ => {}
+                }
+                let started = Instant::now();
+                connection.execute_batch("COMMIT").expect("commit");
+                timings[index].commit_ns += started.elapsed().as_nanos();
+                timings[index].step_ns += step.elapsed().as_nanos();
+                timings[index].commits += 1;
+                iteration += 1;
+            }
+            pages[index] +=
+                unsafe { status(connection, rusqlite::ffi::SQLITE_DBSTATUS_CACHE_WRITE) } - before;
+        }
+    }
+
+    println!("--- per-step statements, {rounds} rounds x {iterations} commits each ---");
+    let base_commit = timings[0].commit_ns as f64 / timings[0].commits as f64;
+    let base_step = timings[0].step_ns as f64 / timings[0].commits as f64;
+    for (index, name) in STEP_ARMS.iter().enumerate() {
+        let timing = &timings[index];
+        let commit = timing.commit_ns as f64 / timing.commits as f64;
+        let step = timing.step_ns as f64 / timing.commits as f64;
+        println!(
+            "{:<22} commit_us={:>7.2} (+{:>6.2}) step_us={:>7.2} (+{:>6.2}) pages/commit={:>6.2}",
+            name,
+            commit / 1000.0,
+            (commit - base_commit) / 1000.0,
+            step / 1000.0,
+            (step - base_step) / 1000.0,
+            pages[index] as f64 / timing.commits as f64,
+        );
+    }
+
+    println!("--- statement preparation, 200000 calls each, same connection ---");
+    let connection = &connections[0];
+    for sql in HOT_SQL {
+        let calls = 200_000;
+        let started = Instant::now();
+        for _ in 0..calls {
+            let statement = connection.prepare(sql).expect("prepare");
+            drop(statement);
+        }
+        let fresh = started.elapsed().as_nanos() as f64 / calls as f64;
+        let started = Instant::now();
+        for _ in 0..calls {
+            let statement = connection.prepare_cached(sql).expect("prepare_cached");
+            drop(statement);
+        }
+        let cached = started.elapsed().as_nanos() as f64 / calls as f64;
+        println!(
+            "prepare={:>7.1} ns  prepare_cached={:>7.1} ns  | {}",
+            fresh,
+            cached,
+            &sql[..sql.len().min(64)]
+        );
+    }
+}

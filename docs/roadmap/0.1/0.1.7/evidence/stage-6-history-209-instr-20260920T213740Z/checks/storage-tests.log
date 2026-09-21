@@ -1,0 +1,66 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/crates/layerfs-storage)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.27s
+     Running tests/memory_bounds.rs (core/target/debug/deps/memory_bounds-4065b9c39421ce46)
+
+running 10 tests
+test a_store_created_with_an_unsupported_policy_is_rejected_before_work ... ok
+test an_oversized_chunk_record_is_rejected_against_its_declared_limit ... ok
+test an_oversized_whole_file_record_is_rejected_against_its_declared_limit ... ok
+test repeated_read_demands_pay_their_full_returned_byte_cost_before_copying ... ok
+test the_supported_incompressible_singletons_are_stored_and_read_back ... ok
+test a_complete_file_singleton_never_creates_a_payload_file ... ok
+test a_large_input_is_reachable_only_through_its_own_singleton_path ... ok
+test the_retained_footprint_reports_pack_bodies_and_database_bytes ... ok
+test pending_ownership_stays_inside_the_declared_batch_bounds ... ok
+test an_oversized_persisted_pack_is_refused_before_blob_materialization ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/multi_writer.rs (core/target/debug/deps/multi_writer-4791483a07dffd52)
+
+running 5 tests
+test an_older_schema_is_refused_without_promotion ... ok
+test abort_removes_only_its_save_and_never_lends_a_foreign_dependency ... ok
+test unpublished_foreign_content_cannot_satisfy_a_dependency ... ok
+test separate_threads_prepare_and_finish_the_same_content_successfully ... ok
+test private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/pack_watermark.rs (core/target/debug/deps/pack_watermark-9bc51b0696ac0c0a)
+
+running 2 tests
+test two_writers_interleaved_between_steps_never_share_a_pack_identifier ... ok
+test a_step_never_leaves_the_watermark_behind_a_pack_it_wrote ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-d5f3fbf0e689f082)
+
+running 8 tests
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test two_private_saves_are_admitted_and_the_third_is_refused ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/visibility.rs (core/target/debug/deps/visibility-8a2ab73561a4582b)
+
+running 9 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test persisted_private_owners_consume_slots_without_guessing_cleanup ... ok
+test an_interrupted_save_keeps_its_slot_and_published_roots_remain_readable ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

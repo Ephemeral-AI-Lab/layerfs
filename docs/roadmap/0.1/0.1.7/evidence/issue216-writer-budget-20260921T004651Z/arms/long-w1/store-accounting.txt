@@ -1,0 +1,10 @@
+saves_total|64
+saves_private|0
+saves_published|64
+object_packs|1214
+objects|14064
+publication_sequence|64
+retained_pack_ceiling|1214
+max_concurrent_writes|1
+page_count|66712
+freelist_count|34

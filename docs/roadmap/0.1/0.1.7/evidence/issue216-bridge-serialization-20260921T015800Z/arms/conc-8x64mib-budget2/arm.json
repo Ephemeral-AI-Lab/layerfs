@@ -1,0 +1,82 @@
+{
+ "arm": "conc-8x64mib-budget2",
+ "budget": 2,
+ "concurrency": 8,
+ "operations": 8,
+ "bytes": 536870912,
+ "wall_s": 180.1159,
+ "mib_per_s": 2.84,
+ "successes": 2,
+ "refusals": 5,
+ "refusal_codes": [
+  4
+ ],
+ "daemon_cpu_s": 0.63,
+ "service_cpu_s": 1.66,
+ "effective_cores": 0.013,
+ "results": [
+  {
+   "index": 2,
+   "bytes": 67108864,
+   "kind": 7,
+   "root": null,
+   "code": 4,
+   "latency_s": 0.048893
+  },
+  {
+   "index": 3,
+   "bytes": 67108864,
+   "kind": 7,
+   "root": null,
+   "code": 4,
+   "latency_s": 0.050432
+  },
+  {
+   "index": 6,
+   "bytes": 67108864,
+   "kind": 7,
+   "root": null,
+   "code": 4,
+   "latency_s": 0.023873
+  },
+  {
+   "index": 5,
+   "bytes": 67108864,
+   "kind": 7,
+   "root": null,
+   "code": 4,
+   "latency_s": 0.039021
+  },
+  {
+   "index": 7,
+   "bytes": 67108864,
+   "kind": 7,
+   "root": null,
+   "code": 4,
+   "latency_s": 0.015281
+  },
+  {
+   "index": 0,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "1a00f18274baa0cec42a40af78dbfad043ab8f327b8da4bdf8e56fa7d5d58451",
+   "code": null,
+   "latency_s": 0.950408
+  },
+  {
+   "index": 1,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "59a305ae14fce5d3264ccad999fa00095b030e97e38b5721045eec6e2d1e1bea",
+   "code": null,
+   "latency_s": 1.048324
+  }
+ ],
+ "fixture_setup": {
+  "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+  "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+  "reused": true,
+  "clone_method": "closed independent writable byte copy; not an OS cache claim"
+ },
+ "load_before": "9:22  up 1 day,  7:24, 2 users, load averages: 6.24 6.30 6.24"
+}

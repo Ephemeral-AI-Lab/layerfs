@@ -1,0 +1,29 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 137B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 1.03MB 0.0s done
+#3 DONE 0.0s
+
+#4 [1/1] COPY transport_probe /transport_probe
+#4 DONE 0.0s
+
+#5 exporting to image
+#5 exporting layers 0.1s done
+#5 exporting manifest sha256:bcbf6e44249cff860fdbe723e000ab0174a0ba0e7ef3b4a8dbce0ec3bcb281b6 done
+#5 exporting config sha256:51e4b3b5f0c656c6fc46f23fa6d4e3cf3315b1ea23991cfcff8e2818e1418294 done
+#5 exporting attestation manifest sha256:bcd5caf96df7b26901e4fdaefa647a841f85e8482a1ebfd2836caf7db13e94fb 0.0s done
+#5 exporting manifest list sha256:e6a870be3c632b79632af9c7ce0e7d06e9b1642cc795a235493260b05bc84f86 done
+#5 naming to docker.io/library/layerfs-issue192-probe-75655:latest done
+#5 unpacking to docker.io/library/layerfs-issue192-probe-75655:latest 0.0s done
+#5 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/3d2bwhv4h6wr6dx0h1h8syxuw
+sha256:e6a870be3c632b79632af9c7ce0e7d06e9b1642cc795a235493260b05bc84f86

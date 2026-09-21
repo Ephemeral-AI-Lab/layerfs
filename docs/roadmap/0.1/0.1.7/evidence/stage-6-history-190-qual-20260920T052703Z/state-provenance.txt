@@ -1,0 +1,71 @@
+=== the read path over the operation's own states
+
+=== baseline2 history-stride10
+  states observed                                  : 17
+  states whose read counters are all zero          : [1]
+  first state returning canonical bytes            : 2
+  total returned canonical bytes over the chain    : 148,826,516
+  read-side keys observed per state                 : 8
+  state 1 read counters, all of them               :
+      filesystem.provider.failed_waves                     0
+      filesystem.provider.read_waves                       0
+      filesystem.provider.requested_objects                0
+      filesystem.provider.returned_canonical_bytes         0
+      filesystem.provider.returned_objects                 0
+      filesystem.references.rows_read                      0
+      filesystem.validation.objects_read                   0
+      filesystem.validation.read_waves                     0
+
+=== candidate2 history-stride10
+  states observed                                  : 17
+  states whose read counters are all zero          : [1]
+  first state returning canonical bytes            : 2
+  total returned canonical bytes over the chain    : 148,826,516
+  read-side keys observed per state                 : 8
+  state 1 read counters, all of them               :
+      filesystem.provider.failed_waves                     0
+      filesystem.provider.read_waves                       0
+      filesystem.provider.requested_objects                0
+      filesystem.provider.returned_canonical_bytes         0
+      filesystem.provider.returned_objects                 0
+      filesystem.references.rows_read                      0
+      filesystem.validation.objects_read                   0
+      filesystem.validation.read_waves                     0
+
+=== baseline2 history-stride3
+  states observed                                  : 53
+  states whose read counters are all zero          : [1]
+  first state returning canonical bytes            : 2
+  total returned canonical bytes over the chain    : 377,985,893
+  read-side keys observed per state                 : 8
+  state 1 read counters, all of them               :
+      filesystem.provider.failed_waves                     0
+      filesystem.provider.read_waves                       0
+      filesystem.provider.requested_objects                0
+      filesystem.provider.returned_canonical_bytes         0
+      filesystem.provider.returned_objects                 0
+      filesystem.references.rows_read                      0
+      filesystem.validation.objects_read                   0
+      filesystem.validation.read_waves                     0
+
+=== candidate2 history-stride3
+  states observed                                  : 53
+  states whose read counters are all zero          : [1]
+  first state returning canonical bytes            : 2
+  total returned canonical bytes over the chain    : 377,985,893
+  read-side keys observed per state                 : 8
+  state 1 read counters, all of them               :
+      filesystem.provider.failed_waves                     0
+      filesystem.provider.read_waves                       0
+      filesystem.provider.requested_objects                0
+      filesystem.provider.returned_canonical_bytes         0
+      filesystem.provider.returned_objects                 0
+      filesystem.references.rows_read                      0
+      filesystem.validation.objects_read                   0
+      filesystem.validation.read_waves                     0
+
+What this establishes: the read path is silent until the operation has
+written, and state 1 is the only silent state - the fingerprint of a Store
+whose bytes are the operation's own. What it does not establish: which
+backing served a read, and whether corpus pages were resident from an
+earlier run. Nothing here is a cold claim.

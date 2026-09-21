@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 243, in <module>
+    if __name__=="__main__":main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 59, in main
+    value=receive(child,45);assert value[0]==6 and value[2]==size and value[3]==expected.hexdigest(),value
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 60, in receive
+    h=read_exact(process.stdout.fileno(),20,end)
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 52, in read_exact
+    if not select.select([fd],[],[],max(0,end-time.monotonic()))[0]: raise TimeoutError("result deadline")
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 9, in <lambda>
+    signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("functional command budget")))
+                                             ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 9, in <genexpr>
+    signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("functional command budget")))
+TimeoutError: functional command budget

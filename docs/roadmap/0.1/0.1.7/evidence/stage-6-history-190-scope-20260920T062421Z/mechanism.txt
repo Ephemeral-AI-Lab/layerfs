@@ -1,0 +1,169 @@
+# The depth term: scope, structure, or neither
+
+Retained artifacts only. No new sample, no instrumentation, no product change.
+
+## history-stride10: 17 states
+
+  saved Store: /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-qual/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-corpus-phase-20260920T054215Z/runs/diagnostic-history-stride10/raw/sample.sqlite
+    packs 255  pack bytes 45,297,954  (5,901..262,112 per pack)
+    value groups 1,737 holding 48,925 values; objects 52,032
+
+  whole-row totals over the measured states
+    pooled leaf requests              11,268
+    physical record calls             55,676
+    chain edges                       16,570
+    decoded-group cache hits          52,953
+    decoded-group decodes              2,723
+    decoded-group hit rate             0.951
+    value-group decodes               65,337
+    pack fetches                      79,784
+    pack bytes copied           7,985,771,449  (7.99 GB)
+    copies of the whole pack space     176.3x
+    fetches per stored pack            312.9
+    repeat fetches (fetches - packs, >=)    79,529  (99.7% of fetches)
+
+  per state, and the matched-volume early/late split
+   st  chg MB   leaf  rec/lf  edg/rec  val/lf  fetch/lf   KiB/f  MB copied  MB/chgMB
+    1    1.50      0    0.00     0.00    0.00      0.00       0        0.0      0.00
+    2    6.54     62    2.00     0.00    1.52      2.00      10        1.2      0.19
+    3    8.86    160    2.00     0.00    1.77      2.33      27       10.3      1.16
+    4    9.74    237    2.95     0.16    2.44      3.46      31       26.2      2.69
+    5   17.15    329    3.54     0.22    3.37      4.42      34       50.5      2.95
+    6   16.08    448    3.17     0.18    3.04      3.94      56      101.3      6.30
+    7   18.40    538    3.88     0.24    3.73      4.90      60      162.2      8.82
+    8   13.50    576    4.21     0.26    4.09      5.33      73      229.2     16.97
+    9   19.53    596    5.37     0.31    5.08      6.70      68      278.6     14.26
+   10   17.71    671    6.38     0.34    5.45      7.63      69      364.0     20.55
+   11   28.17    849    7.79     0.37    5.97      8.98      69      536.0     19.03
+   12   30.32    892    6.82     0.35    6.30      8.60      82      643.8     21.24
+   13   31.33    971    5.57     0.32    6.89      8.16      93      757.1     24.17
+   14   40.15   1112    5.34     0.31    7.24      8.31     102      963.7     24.01
+   15   42.05   1210    3.84     0.24    6.85      7.23     123     1098.1     26.11
+   16   38.69   1317    4.15     0.26    6.36      7.05     139     1319.6     34.10
+   17   37.73   1300    4.46     0.28    6.75      7.64     142     1443.9     38.27
+
+     band MB   n e/l  fetch/lf e        l      x  KiB/f e       l      x  val/lf e        l      x  rec/lf e        l      x
+       14-22     3/2        4.45     7.19   1.61       52.39    68.89   1.32        3.41     5.27   1.55        3.55     5.91   1.66
+
+## history-stride3: 53 states
+
+  saved Store: /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-qual/docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-corpus-phase-20260920T054215Z/runs/diagnostic-history-stride3/raw/sample.sqlite
+    packs 437  pack bytes 56,590,252  (443..262,141 per pack)
+    value groups 4,225 holding 65,528 values; objects 72,560
+
+  whole-row totals over the measured states
+    pooled leaf requests              41,958
+    physical record calls            248,690
+    chain edges                       82,387
+    decoded-group cache hits         227,731
+    decoded-group decodes             20,959
+    decoded-group hit rate             0.916
+    value-group decodes              368,074
+    pack fetches                     427,384
+    pack bytes copied           25,105,269,671  (25.11 GB)
+    copies of the whole pack space     443.6x
+    fetches per stored pack            978.0
+    repeat fetches (fetches - packs, >=)   426,947  (99.9% of fetches)
+
+  per state, and the matched-volume early/late split
+   st  chg MB   leaf  rec/lf  edg/rec  val/lf  fetch/lf   KiB/f  MB copied  MB/chgMB
+    1    1.50      0    0.00     0.00    0.00      0.00       0        0.0      0.00
+    2    2.53     57    2.00     0.00    1.56      2.00      10        1.1      0.45
+    3    3.59     83    2.00     0.00    2.33      2.67      14        3.3      0.91
+    4    4.51    114    3.02     0.17    2.89      3.80      15        6.6      1.47
+    5    5.68    128    3.89     0.24    3.33      4.65      16        9.7      1.71
+    6    5.94    148    4.43     0.27    3.95      5.51      18       14.7      2.48
+    7    7.82    227    5.30     0.31    4.22      6.30      19       27.1      3.46
+    8    8.43    211    5.84     0.33    4.97      7.02      21       32.3      3.84
+    9    6.59    297    5.45     0.32    4.88      6.85      24       49.6      7.53
+   10    5.16    293    8.29     0.38    6.82      9.84      20       60.0     11.63
+   11   10.17   1142    4.66     0.29    6.42      7.30      19      162.7     16.00
+   12    9.83    310    5.97     0.33    5.61      7.63      21       50.8      5.17
+   13    8.21    310    3.75     0.23    5.76      6.30      28       56.5      6.88
+   14    6.74    373    4.14     0.26    6.45      6.75      29       73.8     10.95
+   15    7.10    353    5.43     0.32    6.34      7.69      30       82.8     11.66
+   16   15.26    813    4.03     0.25    8.00      7.08      27      159.9     10.48
+   17    7.85    357    6.68     0.35    6.24      8.53      33      104.1     13.26
+   18   14.06    455    7.89     0.37    6.89      9.77      32      144.9     10.31
+   19    9.27    469    5.99     0.33    6.22      8.14      43      166.5     17.97
+   20    8.50    468    6.86     0.35    7.10      9.38      43      192.9     22.69
+   21    8.91    469    7.05     0.36    7.75     10.02      42      204.0     22.91
+   22    4.19    370    6.88     0.35    7.51      9.86      44      163.4     38.98
+   23   12.67    557    7.48     0.37    8.16     10.77      41      249.6     19.70
+   24   10.13    507    9.07     0.39    8.55     12.03      42      261.9     25.85
+   25    6.04    441    9.48     0.39    8.82     12.53      42      238.8     39.51
+   26   14.37    894    9.19     0.39    9.25     12.68      41      478.4     33.29
+   27   18.33   1810    4.43     0.27    5.68      7.37      32      442.2     24.13
+   28    4.23    378    9.18     0.39    9.63     13.03      39      198.5     46.88
+   29   18.96    661    8.60     0.38    9.59     12.67      38      325.2     17.15
+   30    6.92    466    8.32     0.38    8.41     11.57      45      247.3     35.77
+   31   11.27    613    8.67     0.38    9.42     12.71      43      345.0     30.61
+   32   14.10    749    8.56     0.38    9.36     12.59      43      415.9     29.50
+   33   21.78    802    6.73     0.35    9.98     11.82      44      422.3     19.39
+   34   11.40    610    6.99     0.36    9.90     11.96      52      386.1     33.87
+   35   18.96    793    7.20     0.36   10.27     12.45      53      534.9     28.21
+   36   20.21   2283    5.98     0.33   12.03     12.85      59     1762.9     87.21
+   37   20.98   1493    5.89     0.33   11.47     12.03      53      968.0     46.13
+   38   42.42   6108    2.87     0.15    5.99      6.39      38     1513.1     35.67
+   39   12.07    735    4.62     0.28    9.55     10.24      69      533.1     44.16
+   40   15.95    821    5.85     0.33   10.12     11.43      67      642.7     40.30
+   41    9.50    754    6.64     0.35   10.75     12.44      67      640.7     67.46
+   42   34.72   1089    6.84     0.35   12.13     13.13      64      940.7     27.09
+   43   11.40    800    4.86     0.29   10.16     10.44      80      680.0     59.64
+   44   10.74    735    5.93     0.33   10.63     11.59      75      656.5     61.11
+   45   25.97   1026    6.93     0.36   10.97     12.50      73      961.4     37.02
+   46   17.93   1247    6.65     0.35   10.11     11.67      80     1191.7     66.45
+   47   38.89   1977    5.72     0.33    9.92     10.02      74     1499.6     38.56
+   48   19.44    911    6.25     0.34    9.17     10.67      91      908.3     46.73
+   49   25.09   1092    7.52     0.37    9.60     11.83      88     1166.4     46.49
+   50    7.68    734    7.89     0.37   10.43     12.61      89      839.2    109.32
+   51   24.84   1172    8.04     0.38   10.86     13.12      85     1340.8     53.98
+   52   32.60   1250    6.57     0.35   10.96     12.42      89     1420.9     43.58
+   53   12.25   1003    5.32     0.31   10.60     11.05      99     1126.2     91.91
+
+     band MB   n e/l  fetch/lf e        l      x  KiB/f e       l      x  val/lf e        l      x  rec/lf e        l      x
+         4-7     8/2        8.53    12.22   1.43       32.63    42.20   1.29        6.40     8.96   1.40        6.39     8.71   1.36
+        7-10     9/2        8.16    12.52   1.53       34.59    77.56   2.24        6.26    10.59   1.69        6.01     7.26   1.21
+       10-14     3/6        9.26    11.24   1.21       32.22    71.99   2.23        7.35    10.10   1.37        6.38     5.91   0.93
+       14-22    3/10        9.96    11.36   1.14       35.53    56.58   1.59        8.28     9.82   1.19        6.97     6.26   0.90
+
+## Reading
+
+**Source fact.** The pooled reader is constructed once per resolved inode leaf
+(`encoding/delta/read.rs`, `Resolver::resolve_charged`: `PoolReader::new()`), so
+its pack cache - bounded at `DEPENDENCY_PACK_CACHE_BYTES` - never survives a leaf.
+The decoded-group cache beside it is **operation**-scoped (`cas/read.rs`,
+`ReadSession::groups`), and the two caches have the same job for the same access
+stream: one holds decoded group bodies, the other the pack bytes those bodies
+were cut from.
+
+**Measured.** Two independent readings agree that the demands repeat:
+
+1. The decoded-group cache is consulted *after* the pack body is acquired, so
+   every hit is a demand the operation had already served for another record -
+   at 0.951 (stride10) and 0.916 (stride3) of all record calls. Each hit still
+   paid for the pack BLOB unless the same leaf had already fetched that pack.
+2. The number of distinct packs a state can fetch is at most the number of packs
+   its Store holds, so `fetches - packs` is a **floor** on fetches that re-read a
+   pack already read inside the same state: 79,529 of 79,784 (99.7%) on stride10
+   and 426,947 of 427,384 (99.9%) on stride3. The whole pack space is copied
+   176x (stride10) and 444x (stride3) over within one run.
+
+**Not a deeper-chain algorithm.** Chain edges per record call rise once, from 0
+(the first states still write FULL records) to 0.28-0.39, and then stay there:
+state 17 of stride10 reads 4.46 records per leaf against state 2's 2.00 - a 2.2x
+structural rise - while bytes copied per leaf rise 54x (20 KiB to 1,085 KiB),
+because fetches per leaf rise 3.8x and the bytes each fetch copies rise 14.2x
+(10 KiB to 142 KiB) as packs mature toward `PACK_LIMIT`.
+
+**What this does and does not establish.** It establishes that the term is
+repeated acquisition of whole committed packs, discarded at the per-leaf
+boundary, and not more algorithm per byte. It does **not** establish how much of
+that repetition an operation-scoped cache can hold at the *existing*
+`DEPENDENCY_PACK_CACHE_BYTES` bound: the repeats are many but their reuse
+distance is not published by any counter. That is the treatment's question, and
+the treatment is the experiment that separates the two readings: if the term is
+scope, the same bound over a wider lifetime removes it; if the repetition is
+wider than any bounded window, the counters move little and the reading is
+refuted rather than confirmed.
+

@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "documents": 3,
+  "local_links": 39,
+  "ascii_diagrams": 9,
+  "staged_json_files_parsed": 134,
+  "staged_files": 205,
+  "runtime_staged": false,
+  "pending_source_hashes_unchanged": true,
+  "scope": "Documentation/link/ASCII/receipt integrity only; no product tests or native qualification run.",
+  "independent_review": "Read-only bridge_contract_review: one required scope correction, fixed. O06 large-input correctness/memory proof belongs to #192; comparison campaign to #193. No other must-fix finding in reviewed scope.",
+  "whitespace": "PASS for maintained README/spec/handoff and LOC report. Raw historical receipts retained byte-for-byte; not normalized.",
+  "documents_sha256": {
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/README.md": "588ea0746221698d64a66264a89fdb11e54d95c14c800f4263f1a48c92094018",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/optimization-spec.md": "7ad672d82f11ab78eac35379a7c7096502718ee1abab84ff2c0b77a72ab05e9b",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/optimization-handoff.md": "0e0f75ae9a91247d0cd9843a888f04e91310741640fc3a170062f85f6a158448"
+  }
+}

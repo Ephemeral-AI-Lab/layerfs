@@ -1,0 +1,19 @@
+arm                writers=1 writes=64 bytes_per_write=4194304 mode=Queued
+commit             2f900ada5392017252d9cfc280f9d4036ca619bd
+host               macos aarch64 (14 logical cores)
+cache declaration  payloads built in-process before the timed phase; fresh
+                   Store inside this arm's output; no invalidation for one
+                   arm only; no cold-cache claim; one sample per arm
+preparation        0.075 s (untimed)
+setup              0.005 s (store create + budget set + service assembly)
+work               2.043 s   125.29 MiB/s   31.32 writes/s
+verification       0.524 s   64/64 saved roots read back byte-identical, 0 mismatched
+cleanup            0.000 s
+complete command   2.647 s
+peak in flight     1 (budget 1); admitted at once 1
+write shape        first half of the phase 125.29 MiB/s (32 writes), second half 125.29 MiB/s (32 writes); slowest write #59 at 0.037 s
+decisions          0.000 s to decide every oversubscribed caller
+outcomes           inserted=64 refused=0 failed=0
+store file         273252352 bytes (260.6 MiB, 1.02x the payload)
+rss                before=Some(264976) KiB after=Some(390240) KiB
+

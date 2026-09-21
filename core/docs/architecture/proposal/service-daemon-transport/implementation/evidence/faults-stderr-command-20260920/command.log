@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 144, in <module>
+    if __name__=="__main__":main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 124, in main
+    result=exchange(child,identity,1,root+struct.pack(">QQ",0,8));assert result[0]==6 and result[2]==8
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 38, in exchange
+    result=receive(process);writer.join(timeout=1);assert not writer.is_alive()
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 22, in receive
+    h=read_exact(process.stdout.fileno(),20,end)
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 14, in read_exact
+    if not select.select([fd],[],[],max(0,end-time.monotonic()))[0]: raise TimeoutError("result deadline")
+                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: result deadline

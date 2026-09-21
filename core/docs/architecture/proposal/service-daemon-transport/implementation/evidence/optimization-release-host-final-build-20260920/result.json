@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--release",
+    "-p",
+    "layerfs-service",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-bridge",
+    "--examples",
+    "--bins"
+  ],
+  "class": "build",
+  "budget_seconds": 600,
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 3.8708071660003043,
+  "head": "0819f3f39833d477d9ed6d878a50691c3c046a83",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2,
+  "construction_workers": 1,
+  "source_unchanged": true,
+  "performance_claim": false
+}

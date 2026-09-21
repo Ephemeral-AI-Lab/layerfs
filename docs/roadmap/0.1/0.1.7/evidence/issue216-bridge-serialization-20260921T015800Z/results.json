@@ -1,0 +1,1361 @@
+{
+ "commit": "c974db86345672d2dd786713ed52e80f608089b7",
+ "tree": "4f01d55bad8d7c7b0d6d09b484380716c02fdd39",
+ "topology": "host-to-host loopback: service and daemon on this host, one daemon process per operation; the frozen tdx1/issue192 routes run the daemon in a --cpus=1 container instead",
+ "frame_bytes": 16384,
+ "shape": {
+  "commit": "c974db86345672d2dd786713ed52e80f608089b7",
+  "payload_preparation_s": 1.798,
+  "payload_sha256": "2faf369341e801dcd00442dc69c1291940de8bfd9967177910922d336bee456e",
+  "topology": "host-to-host loopback; the frozen tdx1/issue192 routes run the daemon in a --cpus=1 container instead",
+  "frame_bytes": 16384,
+  "arms": [
+   {
+    "arm": "single-1x512mib",
+    "operations": 1,
+    "bytes": 536870912,
+    "wall_s": 7.3017,
+    "mib_per_s": 70.12,
+    "per_operation_ms": 7301.653,
+    "latency_first_half_s": 0,
+    "latency_second_half_s": 7.3015,
+    "daemon_cpu_s": 2.59,
+    "service_cpu_s": 6.27,
+    "service_real_s": 7.93,
+    "effective_cores": 1.213,
+    "roots": [
+     {
+      "index": 0,
+      "bytes": 536870912,
+      "root": "2b5fa51e301d1ace2e5a5f87f2c7ab3fa2d526bd500aa2871347623ab66cbfb5",
+      "latency_s": 7.301482
+     }
+    ],
+    "errors": [],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": false,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:17  up 1 day,  7:20, 2 users, load averages: 6.34 6.25 6.20"
+   },
+   {
+    "arm": "split-8x64mib",
+    "operations": 8,
+    "bytes": 536870912,
+    "wall_s": 6.9443,
+    "mib_per_s": 73.73,
+    "per_operation_ms": 868.039,
+    "latency_first_half_s": 3.5134,
+    "latency_second_half_s": 3.3634,
+    "daemon_cpu_s": 2.54,
+    "service_cpu_s": 6.51,
+    "service_real_s": 6.95,
+    "effective_cores": 1.303,
+    "roots": [
+     {
+      "index": 0,
+      "bytes": 67108864,
+      "root": "367e1b3ef325d99ad612835bd737bc0744d05bfe6ebdefa842dcf0fb64257ef2",
+      "latency_s": 0.916799
+     },
+     {
+      "index": 1,
+      "bytes": 67108864,
+      "root": "5c7faf30779ad0cb86bf925c01a6673a04fc4c184ce5ed4ef229925fb9356d61",
+      "latency_s": 0.852407
+     },
+     {
+      "index": 2,
+      "bytes": 67108864,
+      "root": "ec96b28c73177b212429dc087a663fb6d903db7a1a1718f46d1dad4632296d4b",
+      "latency_s": 0.869109
+     },
+     {
+      "index": 3,
+      "bytes": 67108864,
+      "root": "60d88603be23817a851514b0cb48fb6965a61f53ddcdcb04f3eb5e7f47a635b4",
+      "latency_s": 0.87512
+     },
+     {
+      "index": 4,
+      "bytes": 67108864,
+      "root": "45a6eccb466fb502138b8c054a9fa42cb142574083229a1f4ae22e7cb9ccff8f",
+      "latency_s": 0.876089
+     },
+     {
+      "index": 5,
+      "bytes": 67108864,
+      "root": "380d64c041502f00b581f93cd0df5e9c27a1a6fa6d2c5bcfcffe309c0afa18ff",
+      "latency_s": 0.842905
+     },
+     {
+      "index": 6,
+      "bytes": 67108864,
+      "root": "ffecac8c23122ccdd204c52c2eb12d50c3163f009b095d7572fd731fb98aedac",
+      "latency_s": 0.825367
+     },
+     {
+      "index": 7,
+      "bytes": 67108864,
+      "root": "7add2e67870604bc1b67184200f694de1b6e5f79ab9f137df4d5db356d4d9cd2",
+      "latency_s": 0.819006
+     }
+    ],
+    "errors": [],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": true,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:18  up 1 day,  7:20, 2 users, load averages: 5.97 6.18 6.18"
+   },
+   {
+    "arm": "split-64x8mib",
+    "operations": 64,
+    "bytes": 536870912,
+    "wall_s": 7.7948,
+    "mib_per_s": 65.68,
+    "per_operation_ms": 121.794,
+    "latency_first_half_s": 3.7944,
+    "latency_second_half_s": 3.9295,
+    "daemon_cpu_s": 1.96,
+    "service_cpu_s": 6.76,
+    "service_real_s": 7.8,
+    "effective_cores": 1.119,
+    "roots": [
+     {
+      "index": 0,
+      "bytes": 8388608,
+      "root": "0952f1ce1786d4123fcd067a8c841a7c60d7097372d73943d54c7eff7b282d55",
+      "latency_s": 0.120739
+     },
+     {
+      "index": 1,
+      "bytes": 8388608,
+      "root": "5de2eddf782f88abfaef2985af63c84d60b0cf7572212bbeb13d9570c1db60d4",
+      "latency_s": 0.11764
+     },
+     {
+      "index": 2,
+      "bytes": 8388608,
+      "root": "4049032b52549f2d633bcc49415e322c01d4ed3bcc46cf92d0f4d9f6f2f51bc6",
+      "latency_s": 0.116125
+     },
+     {
+      "index": 3,
+      "bytes": 8388608,
+      "root": "4441201c929e0726c31aa0e71514e34d6e645dc2e8d80965703c7d356815394b",
+      "latency_s": 0.115435
+     },
+     {
+      "index": 4,
+      "bytes": 8388608,
+      "root": "0a6e52d988020fb9f109a3bfa6496fe77f0ef05db48467fe2b96351776d305c8",
+      "latency_s": 0.119077
+     },
+     {
+      "index": 5,
+      "bytes": 8388608,
+      "root": "c58fae5348e7aa07833686e95a7e80993453658ee4df65d764cac6ec29af8200",
+      "latency_s": 0.116694
+     },
+     {
+      "index": 6,
+      "bytes": 8388608,
+      "root": "5bf59afb272e5df0afb3de7c897b629b839cc2a3742be10536af001bdf7a2ba5",
+      "latency_s": 0.129199
+     },
+     {
+      "index": 7,
+      "bytes": 8388608,
+      "root": "cf5cb3cb39530c6e1605bb7a0987551243c9fa9d83fcea1792c8eab76b23b829",
+      "latency_s": 0.132089
+     },
+     {
+      "index": 8,
+      "bytes": 8388608,
+      "root": "b15ded65c78556c96d8ee043ebd1572f00fa2a8bf268edb0f4af800e1ed5325f",
+      "latency_s": 0.111945
+     },
+     {
+      "index": 9,
+      "bytes": 8388608,
+      "root": "9b478db9c917fbe752f1c1a317033204a783c7f27dedc91965e0f41b38149dfa",
+      "latency_s": 0.110931
+     },
+     {
+      "index": 10,
+      "bytes": 8388608,
+      "root": "4a66aa421f0341267ac0158d436975c33c283701475e418cd2580c2867c59c05",
+      "latency_s": 0.107477
+     },
+     {
+      "index": 11,
+      "bytes": 8388608,
+      "root": "7b41d5b4cf4f2d897ea2bb151d14565875a632cb3d910aa39f290b85bf2a7b0f",
+      "latency_s": 0.110147
+     },
+     {
+      "index": 12,
+      "bytes": 8388608,
+      "root": "a231728f8c71d308edb257330cf33d32aa9018fc0d3066d248c787bb5bcf4a42",
+      "latency_s": 0.115205
+     },
+     {
+      "index": 13,
+      "bytes": 8388608,
+      "root": "acc6a5a3c0f3fdf535d32105325b79a201d7f40bd240c02db1cdae5b51c5e6c2",
+      "latency_s": 0.119762
+     },
+     {
+      "index": 14,
+      "bytes": 8388608,
+      "root": "2d4f13d2e03b0d6105af491890ca09fe6f504a7b3057723c961f658f5cf329fb",
+      "latency_s": 0.117108
+     },
+     {
+      "index": 15,
+      "bytes": 8388608,
+      "root": "ade599f40bd7393da7c3be998c26e03e9981edbb4261e4861846e907dc43c04a",
+      "latency_s": 0.121082
+     },
+     {
+      "index": 16,
+      "bytes": 8388608,
+      "root": "f7e02321a08be44067da99c03932770ae3016ec0153ae265d9fba50f1641293d",
+      "latency_s": 0.117454
+     },
+     {
+      "index": 17,
+      "bytes": 8388608,
+      "root": "b3436fee3e87aa12578c885ba1681846f3a90e35048ec8af565012bf4eccd328",
+      "latency_s": 0.117639
+     },
+     {
+      "index": 18,
+      "bytes": 8388608,
+      "root": "29f3d2b71182fb0806ed09fde9d8fc550051bdc983dae932a7c618c6b16ee291",
+      "latency_s": 0.120951
+     },
+     {
+      "index": 19,
+      "bytes": 8388608,
+      "root": "4602e8642c262c10ac16d321aed5556592da04b047dcdb6952c4636faec677d5",
+      "latency_s": 0.117514
+     },
+     {
+      "index": 20,
+      "bytes": 8388608,
+      "root": "83f50d21fc4a71916e4d7e50ffc4981ac81ced9525d6a4f23f3b9e2b2e045d5f",
+      "latency_s": 0.117325
+     },
+     {
+      "index": 21,
+      "bytes": 8388608,
+      "root": "3bdd880c9228338f681a68758abc838f2a75abd655dce137686cdabcdea2d925",
+      "latency_s": 0.118643
+     },
+     {
+      "index": 22,
+      "bytes": 8388608,
+      "root": "ffaedd4746653956b9b9fb3bf5c2b3e504ecf7b2bc24b82fcbcc7531077442ac",
+      "latency_s": 0.115106
+     },
+     {
+      "index": 23,
+      "bytes": 8388608,
+      "root": "76a8d3218e5f42b19e0b598532c64369aec3e35574a0a745545961e59996f768",
+      "latency_s": 0.117932
+     },
+     {
+      "index": 24,
+      "bytes": 8388608,
+      "root": "9afadf449c4ee281677b0d8724cf7ec3831fd66f183a483fb825a94b2bba9b41",
+      "latency_s": 0.11645
+     },
+     {
+      "index": 25,
+      "bytes": 8388608,
+      "root": "debc33422133dc0b0bda1af8f2d56774f245623f31ffd4271cd3936b5322e557",
+      "latency_s": 0.133677
+     },
+     {
+      "index": 26,
+      "bytes": 8388608,
+      "root": "a43adbb7b185d78cb610a1c530c5f4adb11c0776f63cedfa895116a0cd7c07c8",
+      "latency_s": 0.11104
+     },
+     {
+      "index": 27,
+      "bytes": 8388608,
+      "root": "54ab7bc7255498e800030a935b532529923c888728aca0cd4431871e3ad15967",
+      "latency_s": 0.118282
+     },
+     {
+      "index": 28,
+      "bytes": 8388608,
+      "root": "59114ec8cdf9c9569a2db7e7a4cfcb78f37a6e65f4ee2be4426b445db5b6b2ae",
+      "latency_s": 0.123384
+     },
+     {
+      "index": 29,
+      "bytes": 8388608,
+      "root": "5833f9dea3bd752615936ebdc7d0328e9c33a56d92bd36a56702fa32c34fff6d",
+      "latency_s": 0.124765
+     },
+     {
+      "index": 30,
+      "bytes": 8388608,
+      "root": "406937cc1405be774cab49964ce9ba98c68de7fb481b58babc1bf3b591d8ca26",
+      "latency_s": 0.119541
+     },
+     {
+      "index": 31,
+      "bytes": 8388608,
+      "root": "63dff81a4551e4aede6c71a87d2398023a171b4a5a4978c9c93262ed3b8cc0db",
+      "latency_s": 0.124085
+     },
+     {
+      "index": 32,
+      "bytes": 8388608,
+      "root": "ff7c2d46670e46cfa325ff5c87c2ba8f1e36327cd5ef9cc2f8db599f874604e7",
+      "latency_s": 0.119719
+     },
+     {
+      "index": 33,
+      "bytes": 8388608,
+      "root": "b75fe53bca40b6ce27447c31299e78e63267e6ed62fe1af0104955681fca40e6",
+      "latency_s": 0.123353
+     },
+     {
+      "index": 34,
+      "bytes": 8388608,
+      "root": "202024a72e6f493e03893c43b1d4f90a7b2457b9e7625eb5a1d63ddf41910af0",
+      "latency_s": 0.125265
+     },
+     {
+      "index": 35,
+      "bytes": 8388608,
+      "root": "cb0c62a9590e3dad475ac3a905e6b0989bfb4af639091a135e4a220567b06a8d",
+      "latency_s": 0.123403
+     },
+     {
+      "index": 36,
+      "bytes": 8388608,
+      "root": "455276a04d6d18f8599efa5ed299ecb1a34d8417a14936e11c2f2d44bed4dfd8",
+      "latency_s": 0.134076
+     },
+     {
+      "index": 37,
+      "bytes": 8388608,
+      "root": "f3788ddd416fa71dbe01e346a8ee95c28c1f904cb333e49634ec018659540d0a",
+      "latency_s": 0.120239
+     },
+     {
+      "index": 38,
+      "bytes": 8388608,
+      "root": "0ad9c8dc812d769ac976d95da2b5a35d647c8370649a0ad3c18acf5723e21990",
+      "latency_s": 0.118179
+     },
+     {
+      "index": 39,
+      "bytes": 8388608,
+      "root": "77bdff40a6ae575b6808fc3d12d7a6486fe7463363fb6c87e621ab414e22a03a",
+      "latency_s": 0.121514
+     },
+     {
+      "index": 40,
+      "bytes": 8388608,
+      "root": "73408d7e6c796f7613d20032201c698d6c3f310e9ad412b973ff7d5a7e6f63fb",
+      "latency_s": 0.124907
+     },
+     {
+      "index": 41,
+      "bytes": 8388608,
+      "root": "5db42d04e7ecfa2bfb70f46739e093c17cda158a4c606176ea7a816f03204f4f",
+      "latency_s": 0.119529
+     },
+     {
+      "index": 42,
+      "bytes": 8388608,
+      "root": "8acf8bcc41020118a3b5fdda9d705f18208a5b01c9b52779ef3868dc06499611",
+      "latency_s": 0.126
+     },
+     {
+      "index": 43,
+      "bytes": 8388608,
+      "root": "af17c761a14ee98ae8a4043b4625314209f06f60f46d11e6ea2c7d95ae5ce33f",
+      "latency_s": 0.130024
+     },
+     {
+      "index": 44,
+      "bytes": 8388608,
+      "root": "70541af5f10cc5a2f24e32ddb27dd017edb381e5155da8559f09f3451fe07b3e",
+      "latency_s": 0.120652
+     },
+     {
+      "index": 45,
+      "bytes": 8388608,
+      "root": "0c2adb4d0878d32bd89913eb4ceae073a40a8fc18a7c9d7f9c14babf5456d2bf",
+      "latency_s": 0.12439
+     },
+     {
+      "index": 46,
+      "bytes": 8388608,
+      "root": "1fbc3968dd3ae6b1b336c6920a595ff91a55fe72415d3fe834543214e0908fd0",
+      "latency_s": 0.119732
+     },
+     {
+      "index": 47,
+      "bytes": 8388608,
+      "root": "1187e5c9b60be08278bfe6feaab77533581456b5f3346aabbccec1ffb9e169d4",
+      "latency_s": 0.122166
+     },
+     {
+      "index": 48,
+      "bytes": 8388608,
+      "root": "0833a14478bc94a54cb98c2f72259102dbd2b551fa0d0207165d219f4494681f",
+      "latency_s": 0.121901
+     },
+     {
+      "index": 49,
+      "bytes": 8388608,
+      "root": "9ab5e92225f21a59f3e9cf7810da659bb5349dfa673bde0ef41e1ee06b9c999f",
+      "latency_s": 0.116241
+     },
+     {
+      "index": 50,
+      "bytes": 8388608,
+      "root": "a26889248bdde76306777047e2342cc32d01c787b9a02bee75e29b70f39f3e78",
+      "latency_s": 0.124843
+     },
+     {
+      "index": 51,
+      "bytes": 8388608,
+      "root": "45bf903f1222b79ad62960abaa60041f62465677abdebfd870170db60a138df1",
+      "latency_s": 0.115928
+     },
+     {
+      "index": 52,
+      "bytes": 8388608,
+      "root": "fc92b5363b00b6b4e94d77014fcfda001157344c1421cfbddd1069584fac3d01",
+      "latency_s": 0.115299
+     },
+     {
+      "index": 53,
+      "bytes": 8388608,
+      "root": "65bfdbf6d9aedc0ffb5aa40fb2bb8d7c4b5e0a5a137e4b32ad3db5ab2f7d1363",
+      "latency_s": 0.11988
+     },
+     {
+      "index": 54,
+      "bytes": 8388608,
+      "root": "219bf65ebd52761f51c58c7a306c50cfe0dd4964a5f7ba1c4763bf996a480cd3",
+      "latency_s": 0.127077
+     },
+     {
+      "index": 55,
+      "bytes": 8388608,
+      "root": "3b844533ba48e9be8c70e47d0dcd3c0891b9b6ffaa9c880298b0bbc6e6f12bca",
+      "latency_s": 0.119572
+     },
+     {
+      "index": 56,
+      "bytes": 8388608,
+      "root": "a51d75d43d23c1d7e395d7728e14d52ba3814eb81e8141890ecbed1143b2a1ac",
+      "latency_s": 0.119143
+     },
+     {
+      "index": 57,
+      "bytes": 8388608,
+      "root": "3cd1c125d6d9cdb0bbaac795c67ef2628b3b9b4c621b77b369378bc06dbd2553",
+      "latency_s": 0.118898
+     },
+     {
+      "index": 58,
+      "bytes": 8388608,
+      "root": "6e53dc55e6ccf5d5961d25cec807681ace52593661c9e70dd5f90b6ba8711521",
+      "latency_s": 0.121841
+     },
+     {
+      "index": 59,
+      "bytes": 8388608,
+      "root": "b3226bf28c8a0175ddff67213b245573a0e115ac898e69f7179b4f5ddf97cb64",
+      "latency_s": 0.119244
+     },
+     {
+      "index": 60,
+      "bytes": 8388608,
+      "root": "3e9bfa28900aa96b1baa6066ddd457adc19ca2eda7320b0d926ec23aca43dc0b",
+      "latency_s": 0.124805
+     },
+     {
+      "index": 61,
+      "bytes": 8388608,
+      "root": "2eeb1d5d7647937b2e208d0e195509b02862e04721c64dffd83bd1562373e472",
+      "latency_s": 0.142528
+     },
+     {
+      "index": 62,
+      "bytes": 8388608,
+      "root": "a8d62cd8d2be4031bcaa36bc2e0551a7075c18e88a849a414f8ff4ee20625ce8",
+      "latency_s": 0.129198
+     },
+     {
+      "index": 63,
+      "bytes": 8388608,
+      "root": "9b1a2c9de6e0a4b380c10312b57b1ebe55f2636d89056991a7c7e5e0786d533c",
+      "latency_s": 0.119977
+     }
+    ],
+    "errors": [],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": true,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:18  up 1 day,  7:20, 2 users, load averages: 5.81 6.14 6.17"
+   },
+   {
+    "arm": "connect-64x0",
+    "operations": 64,
+    "bytes": 0,
+    "wall_s": 0.7832,
+    "mib_per_s": 0.0,
+    "per_operation_ms": 12.237,
+    "latency_first_half_s": 0.3848,
+    "latency_second_half_s": 0.3875,
+    "daemon_cpu_s": 0.0,
+    "service_cpu_s": 0.11,
+    "service_real_s": 0.79,
+    "effective_cores": 0.14,
+    "roots": [
+     {
+      "index": 0,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.014004
+     },
+     {
+      "index": 1,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011336
+     },
+     {
+      "index": 2,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011101
+     },
+     {
+      "index": 3,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011403
+     },
+     {
+      "index": 4,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011128
+     },
+     {
+      "index": 5,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.01163
+     },
+     {
+      "index": 6,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.010127
+     },
+     {
+      "index": 7,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011064
+     },
+     {
+      "index": 8,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012776
+     },
+     {
+      "index": 9,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012327
+     },
+     {
+      "index": 10,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.015089
+     },
+     {
+      "index": 11,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.013454
+     },
+     {
+      "index": 12,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011925
+     },
+     {
+      "index": 13,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012347
+     },
+     {
+      "index": 14,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012125
+     },
+     {
+      "index": 15,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.01292
+     },
+     {
+      "index": 16,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012188
+     },
+     {
+      "index": 17,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012096
+     },
+     {
+      "index": 18,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012077
+     },
+     {
+      "index": 19,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012533
+     },
+     {
+      "index": 20,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.010643
+     },
+     {
+      "index": 21,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012468
+     },
+     {
+      "index": 22,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011433
+     },
+     {
+      "index": 23,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.013147
+     },
+     {
+      "index": 24,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011532
+     },
+     {
+      "index": 25,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011578
+     },
+     {
+      "index": 26,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011334
+     },
+     {
+      "index": 27,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011928
+     },
+     {
+      "index": 28,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012735
+     },
+     {
+      "index": 29,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011955
+     },
+     {
+      "index": 30,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.01097
+     },
+     {
+      "index": 31,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.01146
+     },
+     {
+      "index": 32,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012169
+     },
+     {
+      "index": 33,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012182
+     },
+     {
+      "index": 34,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012853
+     },
+     {
+      "index": 35,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012631
+     },
+     {
+      "index": 36,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.010862
+     },
+     {
+      "index": 37,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011664
+     },
+     {
+      "index": 38,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012558
+     },
+     {
+      "index": 39,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012712
+     },
+     {
+      "index": 40,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011815
+     },
+     {
+      "index": 41,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012648
+     },
+     {
+      "index": 42,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011966
+     },
+     {
+      "index": 43,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012455
+     },
+     {
+      "index": 44,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011321
+     },
+     {
+      "index": 45,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011639
+     },
+     {
+      "index": 46,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012148
+     },
+     {
+      "index": 47,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012515
+     },
+     {
+      "index": 48,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011584
+     },
+     {
+      "index": 49,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012272
+     },
+     {
+      "index": 50,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011661
+     },
+     {
+      "index": 51,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011577
+     },
+     {
+      "index": 52,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011928
+     },
+     {
+      "index": 53,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012392
+     },
+     {
+      "index": 54,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012749
+     },
+     {
+      "index": 55,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012018
+     },
+     {
+      "index": 56,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012772
+     },
+     {
+      "index": 57,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012137
+     },
+     {
+      "index": 58,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.010741
+     },
+     {
+      "index": 59,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012267
+     },
+     {
+      "index": 60,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012257
+     },
+     {
+      "index": 61,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012476
+     },
+     {
+      "index": 62,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.012586
+     },
+     {
+      "index": 63,
+      "bytes": 0,
+      "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+      "latency_s": 0.011971
+     }
+    ],
+    "errors": [],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": true,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:18  up 1 day,  7:20, 2 users, load averages: 5.81 6.14 6.17"
+   }
+  ]
+ },
+ "concurrency": {
+  "commit": "c974db86345672d2dd786713ed52e80f608089b7",
+  "topology": "host-to-host loopback, one daemon process per operation",
+  "budget_note": "prepare_store creates the Store with the default budget of 2; the budget-8 arm updates the persisted store_policy row with sqlite3, the same field the product reads",
+  "arms": [
+   {
+    "arm": "seq-8x64mib",
+    "budget": null,
+    "concurrency": 1,
+    "operations": 8,
+    "bytes": 536870912,
+    "wall_s": 7.0568,
+    "mib_per_s": 72.55,
+    "successes": 8,
+    "refusals": 0,
+    "refusal_codes": [],
+    "daemon_cpu_s": 2.57,
+    "service_cpu_s": 6.52,
+    "effective_cores": 1.288,
+    "results": [
+     {
+      "index": 0,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "1a00f18274baa0cec42a40af78dbfad043ab8f327b8da4bdf8e56fa7d5d58451",
+      "code": null,
+      "latency_s": 0.900294
+     },
+     {
+      "index": 1,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "59a305ae14fce5d3264ccad999fa00095b030e97e38b5721045eec6e2d1e1bea",
+      "code": null,
+      "latency_s": 0.89681
+     },
+     {
+      "index": 2,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "0a24c02bc852eff0a4bf3817b2c05ffac1984cb4f3742644132834ddd4af02fe",
+      "code": null,
+      "latency_s": 0.907806
+     },
+     {
+      "index": 3,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "6f07097969651925e686a13effd22965d55de21bc6161ee1e3f318dd81ca22b5",
+      "code": null,
+      "latency_s": 0.824432
+     },
+     {
+      "index": 4,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "6b26be53e1e3638f37f1f8e14f43803fb932970b5783cff2904f3cdb48465d95",
+      "code": null,
+      "latency_s": 0.864769
+     },
+     {
+      "index": 5,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "f5ab7ff9a90b302de115a471c0ebd904b4c0078ebafc936806da395d5426eefa",
+      "code": null,
+      "latency_s": 0.873063
+     },
+     {
+      "index": 6,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "c3a4b0196029b469e358d43c18fab1933e7645899f3e7bf3c2e2b3e585432971",
+      "code": null,
+      "latency_s": 0.852534
+     },
+     {
+      "index": 7,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "b661ad2bee2be8c4ef2e14c2ec345059ac5d4874851419b915c0b75cf86b37f2",
+      "code": null,
+      "latency_s": 0.860275
+     }
+    ],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": true,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:19  up 1 day,  7:21, 2 users, load averages: 6.71 6.37 6.25"
+   },
+   {
+    "arm": "conc-8x64mib-budget2",
+    "budget": 2,
+    "concurrency": 8,
+    "operations": 8,
+    "bytes": 536870912,
+    "wall_s": 180.1159,
+    "mib_per_s": 2.84,
+    "successes": 2,
+    "refusals": 5,
+    "refusal_codes": [
+     4
+    ],
+    "daemon_cpu_s": 0.63,
+    "service_cpu_s": 1.66,
+    "effective_cores": 0.013,
+    "results": [
+     {
+      "index": 2,
+      "bytes": 67108864,
+      "kind": 7,
+      "root": null,
+      "code": 4,
+      "latency_s": 0.048893
+     },
+     {
+      "index": 3,
+      "bytes": 67108864,
+      "kind": 7,
+      "root": null,
+      "code": 4,
+      "latency_s": 0.050432
+     },
+     {
+      "index": 6,
+      "bytes": 67108864,
+      "kind": 7,
+      "root": null,
+      "code": 4,
+      "latency_s": 0.023873
+     },
+     {
+      "index": 5,
+      "bytes": 67108864,
+      "kind": 7,
+      "root": null,
+      "code": 4,
+      "latency_s": 0.039021
+     },
+     {
+      "index": 7,
+      "bytes": 67108864,
+      "kind": 7,
+      "root": null,
+      "code": 4,
+      "latency_s": 0.015281
+     },
+     {
+      "index": 0,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "1a00f18274baa0cec42a40af78dbfad043ab8f327b8da4bdf8e56fa7d5d58451",
+      "code": null,
+      "latency_s": 0.950408
+     },
+     {
+      "index": 1,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "59a305ae14fce5d3264ccad999fa00095b030e97e38b5721045eec6e2d1e1bea",
+      "code": null,
+      "latency_s": 1.048324
+     }
+    ],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": true,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:22  up 1 day,  7:24, 2 users, load averages: 6.24 6.30 6.24"
+   },
+   {
+    "arm": "conc-8x64mib-budget8",
+    "budget": 8,
+    "concurrency": 8,
+    "operations": 8,
+    "bytes": 536870912,
+    "wall_s": 3.9161,
+    "mib_per_s": 130.74,
+    "successes": 8,
+    "refusals": 0,
+    "refusal_codes": [],
+    "daemon_cpu_s": 2.57,
+    "service_cpu_s": 7.4,
+    "effective_cores": 2.546,
+    "results": [
+     {
+      "index": 5,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "f5ab7ff9a90b302de115a471c0ebd904b4c0078ebafc936806da395d5426eefa",
+      "code": null,
+      "latency_s": 3.349426
+     },
+     {
+      "index": 0,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "1a00f18274baa0cec42a40af78dbfad043ab8f327b8da4bdf8e56fa7d5d58451",
+      "code": null,
+      "latency_s": 3.416082
+     },
+     {
+      "index": 4,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "6b26be53e1e3638f37f1f8e14f43803fb932970b5783cff2904f3cdb48465d95",
+      "code": null,
+      "latency_s": 3.383565
+     },
+     {
+      "index": 2,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "0a24c02bc852eff0a4bf3817b2c05ffac1984cb4f3742644132834ddd4af02fe",
+      "code": null,
+      "latency_s": 3.407765
+     },
+     {
+      "index": 1,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "59a305ae14fce5d3264ccad999fa00095b030e97e38b5721045eec6e2d1e1bea",
+      "code": null,
+      "latency_s": 3.420912
+     },
+     {
+      "index": 3,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "6f07097969651925e686a13effd22965d55de21bc6161ee1e3f318dd81ca22b5",
+      "code": null,
+      "latency_s": 3.403398
+     },
+     {
+      "index": 7,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "b661ad2bee2be8c4ef2e14c2ec345059ac5d4874851419b915c0b75cf86b37f2",
+      "code": null,
+      "latency_s": 3.369558
+     },
+     {
+      "index": 6,
+      "bytes": 67108864,
+      "kind": 6,
+      "root": "c3a4b0196029b469e358d43c18fab1933e7645899f3e7bf3c2e2b3e585432971",
+      "code": null,
+      "latency_s": 3.84601
+     }
+    ],
+    "fixture_setup": {
+     "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+     "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+     "reused": true,
+     "clone_method": "closed independent writable byte copy; not an OS cache claim"
+    },
+    "load_before": "9:22  up 1 day,  7:24, 2 users, load averages: 6.24 6.30 6.24"
+   }
+  ]
+ },
+ "sessions": {
+  "commit": "c974db86345672d2dd786713ed52e80f608089b7",
+  "arms": [
+   {
+    "arm": "conc4-budget2",
+    "budget": 2,
+    "concurrency": 4,
+    "wall_s": 1.081,
+    "results": [
+     {
+      "index": 0,
+      "bytes": 67108864,
+      "kind": 6,
+      "result": "success",
+      "code": null,
+      "daemon_exit": 0,
+      "daemon_stderr_tail": [],
+      "latency_s": 1.061523
+     },
+     {
+      "index": 1,
+      "bytes": 67108864,
+      "kind": 6,
+      "result": "success",
+      "code": null,
+      "daemon_exit": 0,
+      "daemon_stderr_tail": [],
+      "latency_s": 0.95793
+     },
+     {
+      "index": 2,
+      "bytes": 67108864,
+      "kind": 7,
+      "result": "refused",
+      "code": 4,
+      "daemon_exit": 1,
+      "daemon_stderr_tail": [
+       "Error: Capacity unknown=false cleanup=None history=None"
+      ],
+      "latency_s": 0.01593
+     },
+     {
+      "index": 3,
+      "bytes": 67108864,
+      "kind": 7,
+      "result": "refused",
+      "code": 4,
+      "daemon_exit": 1,
+      "daemon_stderr_tail": [
+       "Error: Capacity unknown=false cleanup=None history=None"
+      ],
+      "latency_s": 0.009071
+     }
+    ],
+    "outcomes": {
+     "success": 2,
+     "refused": 2,
+     "no_response": 0
+    },
+    "load_before": "9:22  up 1 day,  7:25, 2 users, load averages: 5.89 6.21 6.21"
+   },
+   {
+    "arm": "conc5-budget2",
+    "budget": 2,
+    "concurrency": 5,
+    "wall_s": 1.2918,
+    "results": [
+     {
+      "index": 0,
+      "bytes": 67108864,
+      "kind": 6,
+      "result": "success",
+      "code": null,
+      "daemon_exit": 0,
+      "daemon_stderr_tail": [],
+      "latency_s": 1.185219
+     },
+     {
+      "index": 1,
+      "bytes": 67108864,
+      "kind": 6,
+      "result": "success",
+      "code": null,
+      "daemon_exit": 0,
+      "daemon_stderr_tail": [],
+      "latency_s": 1.279119
+     },
+     {
+      "index": 2,
+      "bytes": 67108864,
+      "kind": 7,
+      "result": "refused",
+      "code": 4,
+      "daemon_exit": 1,
+      "daemon_stderr_tail": [
+       "Error: Capacity unknown=false cleanup=None history=None"
+      ],
+      "latency_s": 0.026321
+     },
+     {
+      "index": 3,
+      "bytes": 67108864,
+      "kind": 7,
+      "result": "refused",
+      "code": 4,
+      "daemon_exit": 1,
+      "daemon_stderr_tail": [
+       "Error: Capacity unknown=false cleanup=None history=None"
+      ],
+      "latency_s": 0.010356
+     },
+     {
+      "index": 4,
+      "bytes": 67108864,
+      "kind": 7,
+      "result": "refused",
+      "code": 4,
+      "daemon_exit": 1,
+      "daemon_stderr_tail": [
+       "Error: Capacity unknown=false cleanup=None history=None"
+      ],
+      "latency_s": 0.012426
+     }
+    ],
+    "outcomes": {
+     "success": 2,
+     "refused": 3,
+     "no_response": 0
+    },
+    "load_before": "9:22  up 1 day,  7:25, 2 users, load averages: 5.89 6.21 6.21"
+   }
+  ]
+ },
+ "spawn_control": {
+  "command": "64 x subprocess.run([layerfs-daemon]) with LAYERFS_ENDPOINT=127.0.0.1:1 (connection refused)",
+  "cold_first_spawn_ms": 5.6,
+  "per_spawn_ms": 5.45,
+  "note": "the protocol allows one operation per session, so a new connection per operation is inherent; a new *process* per operation is this harness's choice and its cost is charged to no product phase here"
+ },
+ "derived": {
+  "split_64_minus_single_s": 0.493,
+  "per_extra_operation_ms": 7.83,
+  "split_64_vs_single_percent": 6.75,
+  "split_8_vs_single_percent": -4.9,
+  "concurrent8_budget8_vs_sequential_speedup": 1.802,
+  "concurrent8_budget8_vs_single_op_percent": 86.45,
+  "single_op_rate_vs_store_only_rate": "70.12 MiB/s on the route against 115.16 MiB/s for construct+save alone and 212 MiB/s for the transport alone"
+ },
+ "identity": {
+  "commit": "c974db86345672d2dd786713ed52e80f608089b7",
+  "tree": "4f01d55bad8d7c7b0d6d09b484380716c02fdd39",
+  "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+  "binaries": {
+   "layerfs-service": "e218bf98db1335ffbc8588c84c56e30c03a552565690bda0a621cb6e61ee5da1",
+   "layerfs-daemon": "45d5545f35cadac614c2cf9ed7d0d23e3de2a37587632c94a3185d0612459fab",
+   "examples/prepare_store": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+   "examples/public_key": "350ea3068c05f54cc466f3d6d336f2c721d295538c63e0742f525abe23d4480c"
+  },
+  "profile": "release",
+  "payload": "pre-generated random bytes before the timed section, sliced so every operation carries distinct content; sha256 in each sequence's commands.json",
+  "cache_state": "fresh Store copy from the closed prepared master per arm, service and daemons started per arm; no invalidation applied to one arm only; no cold-cache claim",
+  "interference": "host load average ~6-7 of 14 logical cores throughout; desktop processes busy"
+ }
+}

@@ -1,0 +1,18 @@
+[package]
+name = "layerfs-history"
+description = "Immutable history metadata: LayerStacks, Branches, Commits, Layers, stages and scoped allocation (C5)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+layerfs-content = { path = "../layerfs-content" }
+rusqlite = { version = "=0.40.2", optional = true }
+
+[features]
+default = ["native"]
+# The optional native provider. Building without it proves the portable contract
+# is independent of SQLite; it makes no persistence or portability claim.
+native = ["dep:rusqlite"]

@@ -6,6 +6,7 @@
 //! the rebuilt leaf against the identity that was requested - and both charge a
 //! per-chain work allowance so a long history cannot hide behind a shallow read.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use rusqlite::Connection;
@@ -16,7 +17,8 @@ use layerfs_content::inode_leaf::{
 use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
-use crate::encoding::pool::{delta, leaf, value_group};
+use crate::encoding::pool::{delta, leaf, value_group, PoolReadCounters};
+use crate::encoding::GroupCache;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
 use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_RECORD_LIMIT};
@@ -32,12 +34,18 @@ pub struct PoolReader {
     decoded_work: u64,
     chain_encoded: u64,
     chain_canonical: u64,
+    counters: PoolReadCounters,
 }
 
 impl PoolReader {
     /// Empty reader.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Actual work accumulated over this reader's lifetime.
+    pub fn counters(&self) -> PoolReadCounters {
+        self.counters
     }
 
     /// Restarts the per-chain decoded-work allowance.
@@ -146,6 +154,7 @@ impl PoolReader {
             return Ok(());
         }
         let body = self.group_body(connection, workspace, row)?;
+        self.counters.value_group_decodes = self.counters.value_group_decodes.saturating_add(1);
         self.decoded_work = self
             .decoded_work
             .saturating_add(body.len() as u64 + row.count as u64 * INODE_VALUE_BYTES as u64);
@@ -200,6 +209,8 @@ impl PoolReader {
     fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
         if !self.packs.contains_key(&pack_id) {
             let bytes = lookup::pack_bytes(connection, pack_id)?;
+            self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
+            self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
             let retained: usize = self.packs.values().map(Vec::len).sum();
             if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
                 self.packs.clear();
@@ -221,6 +232,18 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
     ) -> StorageResult<Vec<u8>> {
+        self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, None)
+    }
+
+    fn leaf_body_with_groups(
+        &mut self,
+        connection: &Connection,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        root: ObjectLocation,
+        mut groups: Option<&mut GroupCache>,
+    ) -> StorageResult<Vec<u8>> {
         if root.role != layerfs_content::ObjectRole::InodeLeaf {
             return Err(StorageError::Integrity("pooled record role"));
         }
@@ -231,7 +254,7 @@ impl PoolReader {
         let mut current = root;
         loop {
             chain.push(current);
-            let record = self.record(connection, workspace, &current)?;
+            let record = self.record(connection, workspace, &current, groups.as_deref_mut())?;
             let Some(base) = pooled_base(&record)? else {
                 break;
             };
@@ -251,6 +274,7 @@ impl PoolReader {
             {
                 return Err(StorageError::Integrity("pooled chain chronology"));
             }
+            self.counters.chain_edges = self.counters.chain_edges.saturating_add(1);
             current = location;
         }
         let mut body: Option<Vec<u8>> = None;
@@ -262,7 +286,7 @@ impl PoolReader {
         let mut canonical_work = 0_u64;
         let mut encoded_work = 0_u64;
         for location in chain.iter().rev() {
-            let record = self.record(connection, workspace, location)?;
+            let record = self.record(connection, workspace, location, groups.as_deref_mut())?;
             canonical_work = canonical_work.saturating_add(location.canonical_length as u64);
             encoded_work = encoded_work.saturating_add(record.len() as u64);
             if canonical_work > capacities.metadata_chain_canonical_limit
@@ -309,7 +333,7 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
     ) -> StorageResult<Option<ObjectId>> {
-        let record = self.record(connection, workspace, location)?;
+        let record = self.record(connection, workspace, location, None)?;
         pooled_base(&record)
     }
 
@@ -318,31 +342,64 @@ impl PoolReader {
         connection: &Connection,
         workspace: &mut DecompressionWorkspace,
         location: &ObjectLocation,
+        groups: Option<&mut GroupCache>,
     ) -> StorageResult<Vec<u8>> {
+        self.counters.physical_record_calls = self.counters.physical_record_calls.saturating_add(1);
         if location.canonical_length > crate::policy::INODE_LEAF_LIMIT {
             return Err(StorageError::Integrity("inode leaf length"));
         }
-        let pack = self.pack(connection, location.pack_id)?;
-        let header = parse_header(pack)?;
-        if header.lane != PackLane::Ordinary {
-            return Err(StorageError::Integrity("pooled leaf lane"));
-        }
-        let view = group_view(pack, header, location.group_number)?;
-        let selected = pack
-            .get(view.start..view.end)
-            .ok_or(StorageError::Integrity("group body range"))?;
-        let body = match view.codec {
-            GroupCodec::Raw => selected.to_vec(),
-            GroupCodec::Zstandard => workspace.decompress_group(selected, view.decoded_length)?,
-        };
-        if body.len() != view.decoded_length {
-            return Err(StorageError::Integrity("group body length"));
-        }
-        let record = crate::encoding::decode::framed_record(&body, location.record_number)?;
-        if record.len() > METADATA_RECORD_LIMIT {
-            return Err(StorageError::Integrity("pooled record limit"));
-        }
-        Ok(record.to_vec())
+        let mut work = PoolReadCounters::default();
+        let result = (|| {
+            let pack = self.pack(connection, location.pack_id)?;
+            let header = parse_header(pack)?;
+            if header.lane != PackLane::Ordinary {
+                return Err(StorageError::Integrity("pooled leaf lane"));
+            }
+            let view = group_view(pack, header, location.group_number)?;
+            let selected = pack
+                .get(view.start..view.end)
+                .ok_or(StorageError::Integrity("group body range"))?;
+            let body: Cow<'_, [u8]> = match view.codec {
+                GroupCodec::Raw => Cow::Owned(selected.to_vec()),
+                GroupCodec::Zstandard => match groups {
+                    Some(groups) => {
+                        if groups
+                            .get(location.pack_id, location.group_number)
+                            .is_some()
+                        {
+                            work.physical_group_cache_hits = 1;
+                        } else {
+                            let decoded =
+                                workspace.decompress_group(selected, view.decoded_length)?;
+                            work.physical_group_decodes = 1;
+                            work.physical_group_decoded_bytes = decoded.len() as u64;
+                            groups.insert(location.pack_id, location.group_number, decoded);
+                        }
+                        Cow::Borrowed(
+                            groups
+                                .get(location.pack_id, location.group_number)
+                                .ok_or(StorageError::Integrity("decoded group cache"))?,
+                        )
+                    }
+                    None => {
+                        let decoded = workspace.decompress_group(selected, view.decoded_length)?;
+                        work.physical_group_decodes = 1;
+                        work.physical_group_decoded_bytes = decoded.len() as u64;
+                        Cow::Owned(decoded)
+                    }
+                },
+            };
+            if body.len() != view.decoded_length {
+                return Err(StorageError::Integrity("group body length"));
+            }
+            let record = crate::encoding::decode::framed_record(&body, location.record_number)?;
+            if record.len() > METADATA_RECORD_LIMIT {
+                return Err(StorageError::Integrity("pooled record limit"));
+            }
+            Ok(record.to_vec())
+        })();
+        self.counters.accumulate(work);
+        result
     }
 
     /// Rebuilds the canonical leaf of one pooled locator.
@@ -354,18 +411,50 @@ impl PoolReader {
         workspace: &mut DecompressionWorkspace,
         root: ObjectLocation,
     ) -> StorageResult<Vec<u8>> {
+        self.leaf_canonical_with_groups(connection, capacities, ceiling, workspace, root, None)
+    }
+
+    /// Borrows the read session's physical-group cache without retaining pooled values.
+    /// Save callers keep using the uncached entry point because their pack bodies mutate.
+    pub(crate) fn leaf_canonical_with_groups(
+        &mut self,
+        connection: &Connection,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        root: ObjectLocation,
+        groups: Option<&mut GroupCache>,
+    ) -> StorageResult<Vec<u8>> {
+        if groups.is_some() && root.pack_id > ceiling {
+            return Err(StorageError::VisibilityCeiling {
+                pack_id: root.pack_id,
+                ceiling,
+            });
+        }
+        self.counters.leaf_requests = self.counters.leaf_requests.saturating_add(1);
         self.begin_chain();
-        let body = self.leaf_body(connection, capacities, ceiling, workspace, root)?;
+        let body =
+            self.leaf_body_with_groups(connection, capacities, ceiling, workspace, root, groups)?;
         let (prefix, rows) = decode_pooled_body(&body)?;
         if rows.len() > MAXIMUM_LEAF_ROWS {
             return Err(StorageError::Integrity("pooled row count"));
         }
-        let mut values = Vec::with_capacity(rows.len());
-        // The rows of one leaf are in ordinal order, so the group covering a row is
-        // almost always the group that covered the row before it: the catalogue is
-        // queried when the covering group changes, not once per row.
+        let mut values: Vec<[u8; INODE_VALUE_BYTES]> = vec![[0_u8; INODE_VALUE_BYTES]; rows.len()];
+        // Resolve the rows in **ordinal** order, not in the body's serial order.
+        //
+        // The rows of a pooled leaf are ordered by serial, so their ordinals jump:
+        // the group covering a row is usually not the group that covered the row
+        // before it, and this memo then asks the catalogue for several times as
+        // many groups as the leaf actually touches. Ordinals inside one group are
+        // consecutive, so resolving in ordinal order makes the same memo answer one
+        // statement per distinct covering group. Every value is written back at its
+        // own row's index, so the rebuilt leaf and the values it is rebuilt from
+        // are unchanged.
+        let mut order: Vec<usize> = (0..rows.len()).collect();
+        order.sort_unstable_by_key(|position| rows[*position].ordinal);
         let mut covering: Option<pool::ValueGroupRow> = None;
-        for row in &rows {
+        for position in order {
+            let row = &rows[position];
             let group = match covering {
                 Some(group)
                     if row.ordinal >= group.first_ordinal
@@ -381,14 +470,14 @@ impl PoolReader {
                     group
                 }
             };
-            values.push(self.group_value(
+            values[position] = self.group_value(
                 connection,
                 capacities,
                 ceiling,
                 workspace,
                 &group,
                 row.ordinal,
-            )?);
+            )?;
         }
         let canonical = rebuild_leaf(&prefix, &rows, &values)?;
         if canonical.len() != root.canonical_length {

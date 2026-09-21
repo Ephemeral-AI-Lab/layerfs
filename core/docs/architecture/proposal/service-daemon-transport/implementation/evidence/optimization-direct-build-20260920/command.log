@@ -1,0 +1,3 @@
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.68s
+  Executable tests/direct.rs (core/target/debug/deps/direct-45e29669edfbe393)

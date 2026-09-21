@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 241, in <module>
+    if __name__=="__main__":main()
+                            ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_faults.py", line 53, in main
+    value=receive(child,45);writer.join(timeout=1)
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 60, in receive
+    h=read_exact(process.stdout.fileno(),20,end)
+  File "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-daemon/tests/docker_route.py", line 52, in read_exact
+    if not select.select([fd],[],[],max(0,end-time.monotonic()))[0]: raise TimeoutError("result deadline")
+                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: result deadline
+Exception ignored while finalizing file <_io.BufferedWriter name=6>:
+BrokenPipeError: [Errno 32] Broken pipe

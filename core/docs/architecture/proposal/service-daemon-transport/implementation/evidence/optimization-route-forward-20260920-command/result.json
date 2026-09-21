@@ -1,0 +1,26 @@
+{
+  "command": [
+    "env",
+    "LAYERFS_PROOF_PROFILE=release",
+    "LAYERFS_PROOF_IDENTITIES=core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/optimization-release-artifacts-20260920.json",
+    "python3",
+    "core/crates/layerfs-daemon/tests/docker_route.py",
+    "--image",
+    "sha256:c98d276d4d430a5f2e82af1d34cd7ef95eb947013258b0caa5baf5611d2c8071",
+    "--telemetry",
+    "forward",
+    "--output",
+    "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/optimization-route-forward-20260920"
+  ],
+  "class": "functional",
+  "budget_seconds": 60,
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 3.174891333997948,
+  "head": "0819f3f39833d477d9ed6d878a50691c3c046a83",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2,
+  "construction_workers": 1,
+  "source_unchanged": true,
+  "performance_claim": false
+}

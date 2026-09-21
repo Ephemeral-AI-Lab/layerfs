@@ -2,6 +2,15 @@
 
 > **Status:** Research; informative and not a product contract.
 
+The issue #192 schema 8 changes, including the configured per-Store writer
+budget of #216, are described in
+[save ownership and publication](15-multi-writer-storage.md), based on
+`152b9c3a2e8ec2536a1d63601b681e1f7ef34455` plus that change. That description supersedes the
+older exclusive-save, prefix-publication, shared-private-cache and cleanup rules
+below, and adds the returned-read byte bound and bounded ordinal window. The
+older source-pinned sections remain historical descriptions; they do not qualify
+the pending implementation or a performance change.
+
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
@@ -205,6 +214,10 @@ where, because a limit that is stated but not enforced is not a limit.
 | dependency pack cache | 4 MiB | `DEPENDENCY_PACK_CACHE_BYTES` |
 | values per metadata group | 165 | `VALUES_PER_GROUP` |
 | pooled leaf rows | 100 | `POOLED_LEAF_ROWS_LIMIT` |
+| private save slots (supported space) | 64 | `MAX_CONCURRENT_WRITES_LIMIT`, `saves.active_slot` CHECK |
+| concurrent writers per Store (admitted) | 2 default, 1..=64 | persisted `store_policy.max_concurrent_writes` |
+| concurrent reads per service process | 2 | `MAX_READ_OPERATIONS` |
+| sessions per Store | budget + 2, +1 refusal slot | `session_capacity` |
 | delta depth (whole-file / chunk / metadata) | 8 / 4 / 8 defaults, ≤ 50 | policy validation |
 
 ### Three bounds that are easy to misread

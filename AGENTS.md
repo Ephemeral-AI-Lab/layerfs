@@ -178,6 +178,22 @@ the report.
   registry or under `~/.cargo`, no forked dependency substituted for a published
   one. Builds stay `--locked`. If a dependency appears to need a change, stop and
   report the blocker with evidence instead of satisfying it locally.
+- **aarch64 has exactly one AEAD profile, and it is a build input.** The native
+  transport negotiates AES-GCM on the ARMv8 crypto extension; that requires the
+  `aes_armv8`/`polyval_armv8` cfgs and the `+aes,+sha2` target features, which only
+  a global flag can set. The repository-root `.cargo/config.toml` supplies them for
+  every build made from inside this repository — it is at the root, not under
+  `core/`, because cargo discovers config by walking up from the *current working
+  directory* and this repository's prescribed commands run from the root with
+  `--manifest-path core/Cargo.toml`. A build made from outside the repository must
+  pass the flags explicitly (an explicit `RUSTFLAGS` overrides the config table, so
+  repeat all four); `core/crates/layerfs-bridge` refuses to compile for aarch64
+  without them instead of silently negotiating the 2–4x slower ChaCha20-Poly1305
+  fallback (measured 214 vs 802 MiB/s on one stream, 425 vs 1556 MiB/s on two).
+  Any identity set that pins build flags must record the repository-root
+  `.cargo/config.toml` (the transport-probe manifests used to name
+  `core/.cargo/config.toml`, which no longer exists). Do not "fix" a slowdown here
+  by disabling that refusal or by patching the crates.
 - Never claim durability the contract does not provide: no `fsync`/`fdatasync`/
   `sync_data`/`sync_all` on Workspace backing, and memory hints are hints.
 - Documentation states measured facts, limits and open rulings; roadmap READMEs

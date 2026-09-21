@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--all"
+  ],
+  "class": "check",
+  "budget_seconds": 30,
+  "status": "PASS",
+  "returncode": 0,
+  "wall_seconds": 1.1063111659968854,
+  "head": "0819f3f39833d477d9ed6d878a50691c3c046a83",
+  "target": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target",
+  "jobs": 2,
+  "construction_workers": 1,
+  "source_unchanged": false,
+  "performance_claim": false
+}

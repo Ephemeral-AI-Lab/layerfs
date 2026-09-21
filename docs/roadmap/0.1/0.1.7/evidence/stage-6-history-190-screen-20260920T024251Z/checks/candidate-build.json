@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/history-parent-lookup/layerfs",
+  "exit_code": 0,
+  "wall_ns": 8058223708,
+  "cargo_target_dir": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/target",
+  "dependency_reuse": "existing incremental pinned-toolchain Cargo target"
+}

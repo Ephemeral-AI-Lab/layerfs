@@ -1,0 +1,41 @@
+# Repository build profile for the aarch64 AEAD path.
+#
+# This file sits at the repository root, not under `core/`, because cargo
+# discovers `.cargo/config.toml` by walking up from the **current working
+# directory**. The repository's prescribed commands run from this root with
+# `--manifest-path core/Cargo.toml`, which never looks inside `core/.cargo/`, so
+# the flags used to be silently absent from exactly the builds that matter.
+# It is scoped by target cfg, so x86_64 and every other target are untouched.
+#
+# Why these flags exist at all: the native transport negotiates AES-GCM wherever
+# its backend can be accelerated (`aes`/`polyval`/`ghash` gate their ARMv8
+# backends on the `aes_armv8`/`polyval_armv8` cfgs, which only a global flag can
+# set, and the AES/PMULL instructions additionally need the target features).
+# On `aarch64-apple-darwin` the `aes` and `sha2` target features are already the
+# target's defaults, so the two cfgs are the half a host build would miss; on
+# `aarch64-unknown-linux-musl` the baseline declares only `neon`, so the codegen
+# flags are needed there too. Hence all four, everywhere.
+#
+# Measured consequence of losing them (same source, same machine, same protocol):
+# 214 MiB/s against 802 MiB/s on one stream, 425 against 1556 MiB/s on two.
+# `core/crates/layerfs-bridge` now refuses to compile for aarch64 without this
+# profile instead of silently negotiating the ChaCha20-Poly1305 fallback.
+#
+# These are the crates' own documented cfg knobs plus the ARMv8 target features,
+# not patches. An explicit RUSTFLAGS environment variable overrides this table, so
+# a scripted or container build that sets RUSTFLAGS must repeat these flags.
+#
+# The reference workspace under `crates/` has no `aes`/`polyval`/`ghash` in its
+# lockfile, so these flags change nothing for it.
+[target.'cfg(target_arch = "aarch64")']
+rustflags = [
+    "--cfg", "aes_armv8",
+    "--cfg", "polyval_armv8",
+    "--cfg", "chacha20_force_neon",
+    "-C", "target-feature=+aes,+sha2",
+]
+# `rustdoc` inherits neither the flags above nor a `rustdocflags` table in a
+# cfg-formed target (verified on cargo 1.85.1: the rustdoc command line carries
+# neither), so the bridge's build-time refusal exempts documentation builds
+# (`not(doc)`) in the crate itself. A doc build produces no binary, and every
+# build that does still requires this profile.

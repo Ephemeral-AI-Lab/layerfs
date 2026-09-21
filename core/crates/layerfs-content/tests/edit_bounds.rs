@@ -4,8 +4,8 @@
 //! non-root page holds between 64 and 128 entries, the root holds at least two
 //! children when it is a branch, and the retained frontier never grows with the
 //! file length. The join cases at 63/64/127/128/129 and the streaming flush
-//! boundaries at 192/193 extents are reached by probing for inputs with exactly
-//! that many extents, not by shrinking the workload.
+//! boundaries at 192/193 extents use the exact deterministic inputs captured from
+//! the original search. Their extent counts are still checked on every run.
 
 mod support;
 
@@ -35,45 +35,27 @@ fn build(bytes: &[u8]) -> (MemoryStore, ObjectId) {
     (store, constructed.root)
 }
 
-/// Extent count of a chunked construction of `length` deterministic bytes.
-fn extents_at(length: usize) -> u64 {
+/// Exact lengths captured from the original bisection in the append-only
+/// issue192 review-boundary-input-capture-20260920 receipt. Reuse the inputs,
+/// not the result of the operation under test; keep the extent-count assertion.
+fn file_with_extents(wanted: u64) -> (Vec<u8>, MemoryStore, ObjectId) {
+    let length = match wanted {
+        40 => 723_887,
+        63 => 1_136_450,
+        64 => 1_153_312,
+        80 => 1_479_513,
+        100 => 1_876_987,
+        127 => 2_362_757,
+        128 => 2_384_497,
+        129 => 2_403_852,
+        192 => 3_654_982,
+        193 => 3_684_001,
+        _ => panic!("no frozen input with {wanted} extents"),
+    };
     let bytes = noise(length);
     let (store, root) = build(&bytes);
-    extent_count(&store, root)
-}
-
-/// Finds an input whose chunked construction has exactly `wanted` extents.
-///
-/// Bisection over a monotone-enough probe keeps this a bounded search: at most a
-/// few dozen constructions instead of a linear scan.
-fn file_with_extents(wanted: u64) -> Vec<u8> {
-    let mut low = 0_usize;
-    let mut high = (wanted as usize) * 32_768 + 65_536;
-    while extents_at(high) < wanted {
-        low = high;
-        high *= 2;
-    }
-    while low + 1 < high {
-        let middle = (low + high) / 2;
-        if extents_at(middle) >= wanted {
-            high = middle;
-        } else {
-            low = middle;
-        }
-    }
-    for candidate in [high, high + 1_024, high + 4_096, high + 16_384] {
-        if extents_at(candidate) == wanted {
-            return noise(candidate);
-        }
-    }
-    let mut candidate = high;
-    for _ in 0..512 {
-        candidate += 1_024;
-        if extents_at(candidate) == wanted {
-            return noise(candidate);
-        }
-    }
-    panic!("no input produced {wanted} extents");
+    assert_eq!(extent_count(&store, root), wanted);
+    (bytes, store, root)
 }
 
 /// Checks the canonical partition of every page under `root`.
@@ -98,15 +80,20 @@ fn assert_canonical(store: &MemoryStore, root: ObjectId, label: &str) {
     }
 }
 
-fn edit_and_check(base: &[u8], edits: Vec<Edit>, replacements: &Replacements, label: &str) {
-    let (store, root) = build(base);
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+fn edit_and_check(
+    base: (&MemoryStore, ObjectId, u64),
+    edits: Vec<Edit>,
+    replacements: &Replacements,
+    label: &str,
+) {
+    let (store, root, length) = base;
+    let stream = EditStream::new(length, edits).expect("valid stream");
     let mut result = store.merged_clone();
     let constructed = disabled_scope(|scope| {
         apply_edits(
             policy(),
             &policy().capacities(),
-            &store,
+            store,
             EditRequest {
                 root,
                 edits: &stream,
@@ -130,15 +117,14 @@ fn edit_and_check(base: &[u8], edits: Vec<Edit>, replacements: &Replacements, la
 #[test]
 fn join_occupancy_at_every_boundary() {
     for wanted in [63_u64, 64, 127, 128, 129] {
-        let base = file_with_extents(wanted);
-        let (store, root) = build(&base);
+        let (base, store, root) = file_with_extents(wanted);
         assert_eq!(extent_count(&store, root), wanted);
         assert_canonical(&store, root, &format!("base {wanted}"));
         // A deletion inside the first chunk must not force a rebuild of the whole
         // mapping, and an insertion at the front must grow it by one extent.
         let replacements = Replacements::new();
         edit_and_check(
-            &base,
+            (&store, root, base.len() as u64),
             vec![Edit::delete(10, 100)],
             &replacements,
             &format!("{wanted} delete"),
@@ -146,7 +132,7 @@ fn join_occupancy_at_every_boundary() {
         let mut insert = Replacements::new();
         insert.push(noise(9_000));
         edit_and_check(
-            &base,
+            (&store, root, base.len() as u64),
             vec![Edit::insert(0, 9_000)],
             &insert,
             &format!("{wanted} insert"),
@@ -157,21 +143,20 @@ fn join_occupancy_at_every_boundary() {
 #[test]
 fn streaming_flush_boundaries_and_height_growth() {
     for wanted in [192_u64, 193] {
-        let base = file_with_extents(wanted);
-        let (store, root) = build(&base);
+        let (base, store, root) = file_with_extents(wanted);
         assert_eq!(extent_count(&store, root), wanted);
         assert_canonical(&store, root, &format!("base {wanted}"));
         let mut insert = Replacements::new();
         insert.push(noise(40_000));
         edit_and_check(
-            &base,
+            (&store, root, base.len() as u64),
             vec![Edit::insert(base.len() as u64 / 2, 40_000)],
             &insert,
             &format!("{wanted} insert"),
         );
         let replacements = Replacements::new();
         edit_and_check(
-            &base,
+            (&store, root, base.len() as u64),
             vec![Edit::delete(0, base.len() as u64 - 1)],
             &replacements,
             &format!("{wanted} collapse"),
@@ -184,8 +169,8 @@ fn a_join_of_two_full_pages_stays_canonical() {
     // 80 + 100 extents joined into one file: individually valid leaves are not
     // automatically final, so the joined mapping must still satisfy the canonical
     // partition after the edit.
-    let left = file_with_extents(80);
-    let right = file_with_extents(100);
+    let (left, _, _) = file_with_extents(80);
+    let (right, _, _) = file_with_extents(100);
     let mut joined = left.clone();
     joined.extend_from_slice(&right);
     let (store, root) = build(&joined);
@@ -193,7 +178,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
     let mut insert = Replacements::new();
     insert.push(noise(200_000));
     edit_and_check(
-        &joined,
+        (&store, root, joined.len() as u64),
         vec![Edit::insert(left.len() as u64, 200_000)],
         &insert,
         "80+100 insert",
@@ -201,7 +186,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
     // Deleting the seam must also leave a canonical partition.
     let replacements = Replacements::new();
     edit_and_check(
-        &joined,
+        (&store, root, joined.len() as u64),
         vec![Edit::delete(
             left.len() as u64 - 1_000,
             left.len() as u64 + 1_000,
@@ -215,6 +200,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
 fn many_files_and_many_edits_stay_bounded() {
     for round in 0..8_u64 {
         let base = noise(150_000 + round as usize * 1_000);
+        let (store, root) = build(&base);
         let mut edits = Vec::new();
         let mut replacements = Replacements::new();
         let mut position = 100_u64;
@@ -229,7 +215,7 @@ fn many_files_and_many_edits_stay_bounded() {
             position += 700 + index;
         }
         edit_and_check(
-            &base,
+            (&store, root, base.len() as u64),
             edits,
             &replacements,
             &format!("round {round} many edits"),
@@ -248,9 +234,8 @@ fn many_files_and_many_edits_stay_bounded() {
 /// released, so the peak cannot grow with the edit count.
 #[test]
 fn the_retained_frontier_does_not_grow_with_the_edit_count() {
-    let base = file_with_extents(40);
+    let (base, base_store, root) = file_with_extents(40);
     let base_len = base.len() as u64;
-    let (base_store, root) = build(&base);
     let base_extents = extent_count(&base_store, root);
     let mut peaks = Vec::new();
     for edits in [1_u64, 2, 4, 8, 16] {

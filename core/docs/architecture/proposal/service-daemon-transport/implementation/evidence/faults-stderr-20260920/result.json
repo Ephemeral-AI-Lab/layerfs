@@ -1,0 +1,17 @@
+{
+  "selection": "blocked-stderr",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [],
+  "status": "FAIL",
+  "error": "TimeoutError('result deadline')",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "image": "sha256:8b0cfd81338aad96131b20c0148512b0d4a14f3f901f89d2b6ead970576af2bc"
+}

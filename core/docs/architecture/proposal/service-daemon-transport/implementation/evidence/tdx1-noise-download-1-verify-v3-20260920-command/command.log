@@ -1,0 +1,25 @@
+{
+  "case": "tdx1-noise-download-1",
+  "mode": "verify",
+  "admission_eligible": false,
+  "status": "PASS",
+  "cleanup": "PASS",
+  "target_payload_bytes_per_second": 2000000000,
+  "cache_contract": "generated distinct input; every transmitted block filled inside transfer; no file-backed payload/cache/spool",
+  "scope": "bridge transport component; C1/C2 and daemon stdin/stdout excluded",
+  "oracle_and_corruption_self_check": "PASS",
+  "setup_ns": 148211042,
+  "transfer": {
+    "carrier": "noise",
+    "direction": "download",
+    "streams": 1,
+    "payload_bytes": 1073741824,
+    "transfer_ns": 3680380042,
+    "payload_chunks": 65536,
+    "authentication_handshakes": 1,
+    "verified_bytes": 1073741824,
+    "admission_eligible": false
+  },
+  "cleanup_ns": 127324625,
+  "complete_command_ns": 4104570875
+}

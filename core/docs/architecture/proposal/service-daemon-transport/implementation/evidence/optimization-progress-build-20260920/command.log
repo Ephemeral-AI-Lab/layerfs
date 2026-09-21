@@ -1,0 +1,3 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.09s
+  Executable tests/native_connections.rs (core/target/debug/deps/native_connections-418cdfebd23ad2d6)

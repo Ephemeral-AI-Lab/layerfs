@@ -1,0 +1,10 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-7d77e0f5ab84065a)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.21s
+

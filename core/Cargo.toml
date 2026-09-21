@@ -9,8 +9,12 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/layerfs-daemon",
+    "crates/layerfs-bridge",
+    "crates/layerfs-service",
     "crates/layerfs-content",
     "crates/layerfs-storage",
+    "crates/layerfs-history",
     "crates/layerfs-telemetry",
 ]
 
@@ -19,3 +23,11 @@ edition = "2021"
 version = "0.1.6"
 rust-version = "1.85"
 license = "MIT"
+
+# Keep the large boundary fixtures cheap without removing cases or assertions.
+# Product dev/release profiles and test debug assertions stay unchanged.
+[profile.test]
+opt-level = 1
+
+[profile.test.package.zstd-sys]
+opt-level = 3

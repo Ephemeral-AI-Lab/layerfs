@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "image": "sha256:a636e7aa23d51a2aecfc101689ee96357d5d6f3929facb56edbb592b889ea4b1",
+  "test_binary_sha256": "8fdb29cd19a494db2658919a36dfbe3343bda0b2d72bcbd73bec5cefe75622a9",
+  "command": [
+    "docker",
+    "run",
+    "--name",
+    "layerfs-issue192-retention-10940",
+    "--label=io.layerfs.task=issue192",
+    "--log-driver=none",
+    "--cpus=1",
+    "--memory=32m",
+    "--memory-swap=32m",
+    "--pids-limit=16",
+    "--cap-drop=ALL",
+    "sha256:a636e7aa23d51a2aecfc101689ee96357d5d6f3929facb56edbb592b889ea4b1",
+    "retention",
+    "--nocapture"
+  ],
+  "scope": "two external Linux retention tests; optional local output configuration, not forward mode",
+  "container_id": "5869ca99b425eceb12038a6dd48a5e80a2ef5a48f528045465f658ee9ecfc635",
+  "mounts": [],
+  "labels": {
+    "io.layerfs.task": "issue192"
+  },
+  "memory_limit": 33554432,
+  "exit": 0,
+  "logical_writable_layer_bytes": 8192,
+  "diff": "",
+  "phase_memory_peak": "unavailable; not claimed"
+}

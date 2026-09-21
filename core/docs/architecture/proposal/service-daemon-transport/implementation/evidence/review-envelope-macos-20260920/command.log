@@ -1,0 +1,18 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-telemetry)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.16s
+     Running tests/owned_allocations.rs (core/target/debug/deps/owned_allocations-69e30f226198d4c5)
+
+running 2 tests
+test maximum_envelope_child ... ignored, subprocess helper, invoked by maximum_owned_envelope_and_closing_producers
+
+running 1 test
+test maximum_envelope_child ... ENV05_SNAPSHOT heap_held=13881357 rss=12845056 virtual=452836966400 threads=16 before_encoder_threads=8 closing_producers=16
+ENV05_RESULT heap_peak=13883955 heap_residual=336 producer_allowance=16777216 collector_queue_allowance=8388608 recording_owners=16 encoded_owners=16 active_windows=32 collector_producers=16 telemetry_worker_stack_requests=1572864 external_encoder_stack_requests=2097152 stderr_pipe_filled=65536 closing_released=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.05s
+
+test maximum_owned_envelope_and_closing_producers ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.06s
+

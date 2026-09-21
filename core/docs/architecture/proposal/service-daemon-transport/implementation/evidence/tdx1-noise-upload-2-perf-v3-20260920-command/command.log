@@ -1,0 +1,31 @@
+{
+  "case": "tdx1-noise-upload-2",
+  "mode": "perf",
+  "admission_eligible": false,
+  "status": "PASS",
+  "cleanup": "PASS",
+  "target_payload_bytes_per_second": 2000000000,
+  "cache_contract": "generated distinct input; every transmitted block filled inside transfer; no file-backed payload/cache/spool",
+  "scope": "bridge transport component; C1/C2 and daemon stdin/stdout excluded",
+  "oracle_and_corruption_self_check": "PASS",
+  "setup_ns": 270919959,
+  "transfer": {
+    "carrier": "noise",
+    "direction": "upload",
+    "streams": 2,
+    "payload_bytes": 2147483648,
+    "transfer_ns": 4027397500,
+    "payload_chunks": 131072,
+    "authentication_handshakes": 2,
+    "verified_bytes": 0,
+    "admission_eligible": false
+  },
+  "received_payload_bytes_per_second": 533218697.1859619,
+  "decimal_GB_per_second": 0.5332186971859619,
+  "gigabits_per_second": 4.2657495774876955,
+  "n": 1,
+  "target_met": false,
+  "verification": "REQUIRES_SEPARATE_MATCHING_RECEIPT",
+  "cleanup_ns": 251796792,
+  "complete_command_ns": 4703445542
+}

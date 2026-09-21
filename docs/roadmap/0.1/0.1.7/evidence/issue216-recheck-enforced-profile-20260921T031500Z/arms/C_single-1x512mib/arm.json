@@ -1,0 +1,17 @@
+{
+ "arm": "C_single-1x512mib",
+ "concurrency": 1,
+ "operations": 1,
+ "bytes": 536870912,
+ "wall_s": 5.21,
+ "mib_per_s": 98.27,
+ "per_operation_ms": 5209.991,
+ "store_bytes": 546033664,
+ "fixture_setup": {
+  "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+  "executable_sha256": "8a94e65e1e471e979c5888607b8dcf985eb256b96500098d500b6d49e41fae54",
+  "reused": false,
+  "clone_method": "closed independent writable byte copy; not an OS cache claim"
+ },
+ "load_before": "9:53  up 1 day,  7:55, 2 users, load averages: 4.67 6.10 6.38"
+}

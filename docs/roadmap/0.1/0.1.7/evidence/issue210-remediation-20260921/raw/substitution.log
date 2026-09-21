@@ -1,0 +1,9 @@
+baseline  test=ok example=ok
+c1-only   test=ok example=ok
+c2-only   test=ok example=ok
+combined  test=ok example=ok
+baseline-create->baseline-read     create=0 read=0 read bytes 4096 digest eeeb77cc7780d9a01f4107d035751a0b43e2b
+candidate-create->candidate-read   create=0 read=0 read bytes 4096 digest eeeb77cc7780d9a01f4107d035751a0b43e2b
+baseline-create->candidate-read    create=0 read=0 read bytes 4096 digest eeeb77cc7780d9a01f4107d035751a0b43e2b
+candidate-create->baseline-read    create=0 read=0 read bytes 4096 digest eeeb77cc7780d9a01f4107d035751a0b43e2b
+matrix -> /Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-evidence/substitution-matrix.json

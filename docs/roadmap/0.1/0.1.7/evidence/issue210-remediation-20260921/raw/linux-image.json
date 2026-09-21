@@ -1,0 +1,23 @@
+{
+  "image": "layerfs-history-remediation:f2021367",
+  "image_id": "sha256:2c82dbcfcb176e91dd3fb8336c0d830c4a8dfcfd2c1a845b56ddf09b82c6a157",
+  "architecture": "arm64",
+  "labels": {
+    "org.layerfs.binary-sha256": "ef3a3f7147a21f1af7eeed1315505b662e42d092ad2df947e97006705cec525c",
+    "org.opencontainers.image.revision": "f2021367e11f6433d1d9e055198cac5ad280f6c9"
+  },
+  "binary_sha256": "ef3a3f7147a21f1af7eeed1315505b662e42d092ad2df947e97006705cec525c",
+  "command": [
+    "docker",
+    "build",
+    "--platform",
+    "linux/arm64",
+    "--build-arg",
+    "BINARY_SHA256=ef3a3f7147a21f1af7eeed1315505b662e42d092ad2df947e97006705cec525c",
+    "--label",
+    "org.opencontainers.image.revision=f2021367e11f6433d1d9e055198cac5ad280f6c9",
+    "-t",
+    "layerfs-history-remediation:f2021367",
+    "/Users/yifanxu/.codex/worktrees/b995/layerfs/target/remediation-image"
+  ]
+}

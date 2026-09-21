@@ -1,0 +1,115 @@
+//! #209 diagnostic: what a prepared-statement cache miss costs on this Store.
+//!
+//! **Diagnostic only.** Removed from the product tree after the round; source
+//! retained as `statement-cache-probe.rs.txt` in the campaign directory. It adds
+//! no product behaviour and is part of no measured arm.
+//!
+//! The product's connection carries rusqlite's prepared-statement LRU, whose
+//! default capacity is 16. Two of the texts it caches vary with the call: the
+//! locator's carries one placeholder per page width (`LOOKUP_PAGE_IDS = 128`) and
+//! the object-insert text one per chunk size. This measures the per-call cost of
+//! the locator text when the widths vary, at the default capacity and at a
+//! capacity large enough to hold every width.
+//!
+//! Run:
+//!   PROBE_STORE=<copy of the run's sample.sqlite> cargo +1.85.1 test --release \
+//!     --manifest-path core/Cargo.toml --test statement_cache_probe -- --nocapture
+
+use rusqlite::Connection;
+use std::path::PathBuf;
+use std::time::Instant;
+
+/// The product's locator text, exactly as `sqlite::lookup::candidates` builds it.
+fn locator_sql(width: usize) -> String {
+    let placeholders = (0..width)
+        .map(|index| format!("?{}", index + 1))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "SELECT o.object_id,o.object_role,o.canonical_length,o.pack_id,o.group_number,o.record_number,o.save_id,\
+         (o.save_id = r.save_id OR s.publication <= r.publication) \
+         FROM objects o JOIN saves s USING(save_id),temp.layerfs_read_scope r \
+         WHERE o.object_id IN ({}) AND o.pack_id <= ?{}",
+        placeholders,
+        width + 1,
+    )
+}
+
+/// The per-step texts, exactly as the product issues them.
+const STEP_SQL: &[&str] = &[
+    "SELECT next_pack_id FROM store_policy WHERE id = 1",
+    "BEGIN IMMEDIATE",
+    "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
+    "COMMIT",
+];
+
+fn open(pristine: &PathBuf, capacity: usize) -> Connection {
+    let path = pristine.with_file_name(format!(
+        "cache-{capacity}-{}.sqlite",
+        std::process::id()
+    ));
+    std::fs::copy(pristine, &path).expect("copy");
+    let connection = Connection::open(&path).expect("open");
+    layerfs_storage::sqlite::connection::configure(&connection).expect("profile");
+    connection.set_prepared_statement_cache_capacity(capacity);
+    connection
+        .execute_batch(
+            "CREATE TEMP TABLE layerfs_read_scope (save_id INTEGER NOT NULL, publication INTEGER NOT NULL);
+             INSERT INTO layerfs_read_scope VALUES (0, 9223372036854775807);",
+        )
+        .expect("scope");
+    connection
+}
+
+/// One arm: `calls` lookups whose page width cycles through `widths`, with the
+/// per-step texts issued between them the way a step issues them.
+fn arm(label: &str, pristine: &PathBuf, capacity: usize, widths: &[usize], calls: usize,
+       with_step_sql: bool) {
+    let connection = open(pristine, capacity);
+    // Warm the plan so the first call is not charged to the average.
+    for width in widths {
+        let sql = locator_sql(*width);
+        drop(connection.prepare_cached(&sql).expect("warm"));
+    }
+    let started = Instant::now();
+    let mut statements = 0_u64;
+    for index in 0..calls {
+        let width = widths[index % widths.len()];
+        let sql = locator_sql(width);
+        let statement = connection.prepare_cached(&sql).expect("locator");
+        drop(statement);
+        statements += 1;
+        if with_step_sql {
+            for text in STEP_SQL {
+                let statement = connection.prepare_cached(text).expect("step");
+                drop(statement);
+                statements += 1;
+            }
+        }
+    }
+    let elapsed = started.elapsed().as_nanos() as f64;
+    println!(
+        "{label:<44} capacity={capacity:<4} widths={:<4} calls={calls:<7} \
+         statements={statements:<8} ns/statement={:>8.1}",
+        widths.len(),
+        elapsed / statements as f64,
+    );
+}
+
+#[test]
+fn what_a_cache_miss_costs() {
+    let pristine = PathBuf::from(std::env::var("PROBE_STORE").expect("PROBE_STORE"));
+    let calls: usize = std::env::var("PROBE_CALLS").unwrap_or_else(|_| "20000".into()).parse().unwrap();
+    let fixed: Vec<usize> = vec![128];
+    let all_widths: Vec<usize> = (1..=128).collect();
+    let small: Vec<usize> = (1..=16).collect();
+
+    arm("locator, one width, default capacity", &pristine, 16, &fixed, calls, false);
+    arm("locator, 128 widths, default capacity", &pristine, 16, &all_widths, calls, false);
+    arm("locator, 128 widths, capacity 192", &pristine, 192, &all_widths, calls, false);
+    arm("locator, 16 widths, default capacity", &pristine, 16, &small, calls, false);
+    arm("locator, 16 widths, capacity 192", &pristine, 192, &small, calls, false);
+    arm("locator 1 width + step texts, cap 16", &pristine, 16, &fixed, calls, true);
+    arm("locator 128 widths + step texts, cap 16", &pristine, 16, &all_widths, calls, true);
+    arm("locator 128 widths + step texts, cap 192", &pristine, 192, &all_widths, calls, true);
+}

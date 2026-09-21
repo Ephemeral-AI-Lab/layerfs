@@ -1,0 +1,359 @@
+{
+  "schema": "h190-pooled-scope-analysis-v1",
+  "runs": {
+    "baseline-history-stride10": {
+      "verification": {
+        "wall_ns": 4681167500,
+        "store_sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+        "trace_sha256_before": "d245ca762b2de77189cea220dc95ba0c4b13fb67af47b5e28ba892548c30b950",
+        "trace_sha256_after": "4e4e25480493d477b497a7f0680f237fcc75384ea0964fd0ad3290246f1c7492",
+        "compared": 1083,
+        "path_states": 101477,
+        "mismatches": 0,
+        "missing": 0,
+        "unexpected": 0,
+        "files_read": 893,
+        "file_bytes": 5619947,
+        "sampled": 1083
+      },
+      "invocations": [
+        {
+          "invocation": "perf",
+          "invocation_ns": 38799548375,
+          "declared_ns": 38769877336,
+          "reconciles": true
+        }
+      ],
+      "wall_ns": 38871434209,
+      "declared_ns": 38769877336,
+      "phases": {
+        "preparation_wall_ns": 19252162377,
+        "operation_ns": 19499660959,
+        "verification_wall_ns": 18053250,
+        "cleanup_wall_ns": 750,
+        "handoff_ns": 50901900
+      },
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "child_invocation_ns": 38799548375,
+      "child_unaccounted_ns": 29671039,
+      "outside_child_clock_ns": 71885834,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 19049843919,
+        "history.corpus.probe.files": 45338,
+        "history.corpus.probe.bytes": 489820959,
+        "history.corpus.probe.pages": 62319,
+        "history.corpus.probe.resident_pages": 0,
+        "history.operation.disk_read_bytes": 656510976
+      },
+      "root_ns": 38563067083,
+      "children_ns": 19499660959
+    },
+    "candidate-history-stride10": {
+      "verification": {
+        "wall_ns": 2910531708,
+        "store_sha256": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+        "trace_sha256_before": "e4d5e4ee27948b027c646824263c30618f71eac2db72a50956a248480aa9c087",
+        "trace_sha256_after": "a11549123d73ca9b461333f05245854b8f204a147a46073ba7835d84f2af3698",
+        "compared": 1083,
+        "path_states": 101477,
+        "mismatches": 0,
+        "missing": 0,
+        "unexpected": 0,
+        "files_read": 893,
+        "file_bytes": 5619947,
+        "sampled": 1083
+      },
+      "invocations": [
+        {
+          "invocation": "perf",
+          "invocation_ns": 33909409500,
+          "declared_ns": 33880818791,
+          "reconciles": false
+        }
+      ],
+      "wall_ns": 35792110625,
+      "declared_ns": 33880818791,
+      "phases": {
+        "preparation_wall_ns": 17102450166,
+        "operation_ns": 16745938250,
+        "verification_wall_ns": 32429416,
+        "cleanup_wall_ns": 959,
+        "handoff_ns": 54856429
+      },
+      "reconciliation": {
+        "status": "INCOMPLETE",
+        "reason": "perf: 1911291834 ns of the 35792110625 ns wall is outside every declared phase, more than the declared 965842212 ns tolerance",
+        "problems": [
+          "perf: 1911291834 ns of the 35792110625 ns wall is outside every declared phase, more than the declared 965842212 ns tolerance"
+        ],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "child_invocation_ns": 33909409500,
+      "child_unaccounted_ns": 28590709,
+      "outside_child_clock_ns": 1882701125,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 16918874125,
+        "history.corpus.probe.files": 45338,
+        "history.corpus.probe.bytes": 489820959,
+        "history.corpus.probe.pages": 62319,
+        "history.corpus.probe.resident_pages": 5141,
+        "history.operation.disk_read_bytes": 518098944
+      },
+      "root_ns": 33684380166,
+      "children_ns": 16745938250
+    },
+    "baseline-history-stride3": {
+      "verification": {
+        "wall_ns": 16292500042,
+        "store_sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+        "trace_sha256_before": "df97911bb262584ab6f05147b096b4a3b60f260804cf2d46264a021077033dd7",
+        "trace_sha256_after": "312fb51c3ac34d99c67fa7ceeffc7629fc47e9e888481a395d818a00059ad12a",
+        "compared": 3377,
+        "path_states": 306861,
+        "mismatches": 0,
+        "missing": 0,
+        "unexpected": 0,
+        "files_read": 2756,
+        "file_bytes": 18936332,
+        "sampled": 3377
+      },
+      "invocations": [
+        {
+          "invocation": "perf",
+          "invocation_ns": 74940267709,
+          "declared_ns": 74894177048,
+          "reconciles": true
+        }
+      ],
+      "wall_ns": 74979767333,
+      "declared_ns": 74894177048,
+      "phases": {
+        "preparation_wall_ns": 26055515752,
+        "operation_ns": 48812662587,
+        "verification_wall_ns": 25997542,
+        "cleanup_wall_ns": 1167,
+        "handoff_ns": 95759669
+      },
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "child_invocation_ns": 74940267709,
+      "child_unaccounted_ns": 46090661,
+      "outside_child_clock_ns": 39499624,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 25525962918,
+        "history.corpus.probe.files": 78439,
+        "history.corpus.probe.bytes": 850636296,
+        "history.corpus.probe.pages": 107780,
+        "history.corpus.probe.resident_pages": 4298,
+        "history.operation.disk_read_bytes": 984363008
+      },
+      "root_ns": 74360332334,
+      "children_ns": 48812662587
+    },
+    "candidate-history-stride3": {
+      "verification": {
+        "wall_ns": 9712129083,
+        "store_sha256": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+        "trace_sha256_before": "6ba5d1971437e492c3505f68709d43d8809edc4939cd879923c38be87f407f2f",
+        "trace_sha256_after": "83eb1c0701b50ed577ada507c9cb0b47c3dc643e61c80d33ea8b19c7995d38a5",
+        "compared": 3377,
+        "path_states": 306861,
+        "mismatches": 0,
+        "missing": 0,
+        "unexpected": 0,
+        "files_read": 2756,
+        "file_bytes": 18936332,
+        "sampled": 3377
+      },
+      "invocations": [
+        {
+          "invocation": "perf",
+          "invocation_ns": 62318314000,
+          "declared_ns": 62268193955,
+          "reconciles": true
+        }
+      ],
+      "wall_ns": 62354573625,
+      "declared_ns": 62268193955,
+      "phases": {
+        "preparation_wall_ns": 25172154833,
+        "operation_ns": 37066118372,
+        "verification_wall_ns": 29920208,
+        "cleanup_wall_ns": 542,
+        "handoff_ns": 92814978
+      },
+      "reconciliation": {
+        "status": "PASS",
+        "reason": "every declared phase reconciles with its wall",
+        "problems": [],
+        "tolerance_absolute_ns": 250000000,
+        "tolerance_fraction": "1/50 of the wall"
+      },
+      "child_invocation_ns": 62318314000,
+      "child_unaccounted_ns": 50120045,
+      "outside_child_clock_ns": 36259625,
+      "budget": {
+        "ordinary": "NOT_RUN",
+        "declared_exception": "NOT_RUN"
+      },
+      "diagnostics": {
+        "history.corpus_read_ns": 24618004458,
+        "history.corpus.probe.files": 78439,
+        "history.corpus.probe.bytes": 850636296,
+        "history.corpus.probe.pages": 107780,
+        "history.corpus.probe.resident_pages": 7022,
+        "history.operation.disk_read_bytes": 928137216
+      },
+      "root_ns": 61709160667,
+      "children_ns": 37066118372
+    }
+  },
+  "equivalence": {
+    "history-stride10": {
+      "state_roots_equal": true,
+      "state_counters_equal": {
+        "changed_bytes": true,
+        "changed_paths": true,
+        "objects": true,
+        "inserted": true,
+        "root": true
+      },
+      "store_sha256": {
+        "baseline": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487",
+        "candidate": "4af37932aa3391b12269de8130b9c66dc504f64ca78fc3e585f7afddabed8487"
+      },
+      "store_matches_recorded_constant": {
+        "baseline": true,
+        "candidate": true
+      },
+      "store_identical_between_arms": true,
+      "inventory": {
+        "baseline": {
+          "objects": 52032,
+          "packs": 255,
+          "pack_bytes": 45297954,
+          "groups": 1737,
+          "group_values": 48925
+        },
+        "candidate": {
+          "objects": 52032,
+          "packs": 255,
+          "pack_bytes": 45297954,
+          "groups": 1737,
+          "group_values": 48925
+        }
+      },
+      "inventory_equal": true,
+      "verification_equal_between_arms": false,
+      "verification_sampled": true
+    },
+    "history-stride3": {
+      "state_roots_equal": true,
+      "state_counters_equal": {
+        "changed_bytes": true,
+        "changed_paths": true,
+        "objects": true,
+        "inserted": true,
+        "root": true
+      },
+      "store_sha256": {
+        "baseline": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e",
+        "candidate": "f5c7ff5a6b4f0821aa9a21ac5250335c4c3fb889637a0c5345c5278caadc2a9e"
+      },
+      "store_matches_recorded_constant": {
+        "baseline": true,
+        "candidate": true
+      },
+      "store_identical_between_arms": true,
+      "inventory": {
+        "baseline": {
+          "objects": 72560,
+          "packs": 437,
+          "pack_bytes": 56590252,
+          "groups": 4225,
+          "group_values": 65528
+        },
+        "candidate": {
+          "objects": 72560,
+          "packs": 437,
+          "pack_bytes": 56590252,
+          "groups": 4225,
+          "group_values": 65528
+        }
+      },
+      "inventory_equal": true,
+      "verification_equal_between_arms": false,
+      "verification_sampled": true
+    }
+  },
+  "counters": {
+    "history-stride10": {
+      "baseline": {
+        "pack_fetches": 79784,
+        "pack_bytes": 7985771449,
+        "value_group_decodes": 65337,
+        "physical_record_calls": 55676,
+        "physical_group_decodes": 2723,
+        "physical_group_cache_hits": 52953,
+        "chain_edges": 16570,
+        "leaf_requests": 11268
+      },
+      "candidate": {
+        "pack_fetches": 250,
+        "pack_bytes": 16574832,
+        "value_group_decodes": 33749,
+        "physical_record_calls": 55676,
+        "physical_group_decodes": 2723,
+        "physical_group_cache_hits": 52953,
+        "chain_edges": 16570,
+        "leaf_requests": 11268
+      }
+    },
+    "history-stride3": {
+      "baseline": {
+        "pack_fetches": 427384,
+        "pack_bytes": 25105269671,
+        "value_group_decodes": 368074,
+        "physical_record_calls": 248690,
+        "physical_group_decodes": 20959,
+        "physical_group_cache_hits": 227731,
+        "chain_edges": 82387,
+        "leaf_requests": 41958
+      },
+      "candidate": {
+        "pack_fetches": 2104,
+        "pack_bytes": 80173074,
+        "value_group_decodes": 183120,
+        "physical_record_calls": 248690,
+        "physical_group_decodes": 20959,
+        "physical_group_cache_hits": 227731,
+        "chain_edges": 82387,
+        "leaf_requests": 41958
+      }
+    }
+  }
+}

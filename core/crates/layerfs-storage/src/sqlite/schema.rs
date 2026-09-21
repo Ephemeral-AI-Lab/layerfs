@@ -13,7 +13,10 @@
 use rusqlite::Connection;
 
 use crate::error::{StorageError, StorageResult};
-use crate::policy::{SchemaIdentity, StoragePolicy, SCHEMA_IDENTITY};
+use crate::policy::{
+    SchemaIdentity, StoragePolicy, DEFAULT_MAX_CONCURRENT_WRITES, MAX_CONCURRENT_WRITES_LIMIT,
+    SCHEMA_IDENTITY,
+};
 use crate::sqlite::connection::{pragma_i64, Pragma};
 
 /// Shipped schema text of this crate.
@@ -28,7 +31,7 @@ const NO_PACKS_PUBLISHED: i64 = 0;
 /// **`content_signatures` is the W2 squad's table (#188d).** It is required here
 /// because `Store::open` reads it back and a Store without it could not answer a
 /// candidate lookup at all; it is not optional and not a floor.
-const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
+const REQUIRED_TABLES: [(&str, &[&str]); 6] = [
     (
         "store_policy",
         &[
@@ -38,10 +41,20 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
             "whole_file_delta_max_depth",
             "chunk_delta_max_depth",
             "metadata_delta_max_depth",
+            "max_concurrent_writes",
+            "publication_sequence",
             "retained_pack_ceiling",
+            "next_pack_id",
+            "next_ordinal",
+            "metadata_window_start",
+            "metadata_window_values",
         ],
     ),
-    ("object_packs", &["pack_id", "data"]),
+    (
+        "saves",
+        &["save_id", "active_slot", "publication", "pack_ceiling"],
+    ),
+    ("object_packs", &["pack_id", "save_id", "data"]),
     (
         "metadata_value_groups",
         &[
@@ -56,6 +69,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
         "objects",
         &[
             "object_id",
+            "save_id",
             "object_role",
             "canonical_length",
             "pack_id",
@@ -65,7 +79,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
     ),
     (
         "content_signatures",
-        &["slot", "stamp", "object_id", "signature"],
+        &["slot", "stamp", "object_id", "signature", "save_id"],
     ),
 ];
 
@@ -78,7 +92,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 5] = [
 /// so this change does **not** invalidate an existing Store and `SCHEMA_VERSION`
 /// stays at 4. What is required is checked by [`REQUIRED_TABLES`], which is where
 /// a reader's actual dependency lives.
-const REQUIRED_INDEXES: [&str; 0] = [];
+const REQUIRED_INDEXES: [&str; 3] = ["packs_save", "objects_save", "signatures_save"];
 
 /// Creates a fresh Store with `policy` and returns the stored policy.
 pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<StoragePolicy> {
@@ -90,8 +104,9 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
     connection.execute(
         "INSERT INTO store_policy \
          (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, \
-          chunk_delta_max_depth, metadata_delta_max_depth, retained_pack_ceiling) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+          chunk_delta_max_depth, metadata_delta_max_depth, max_concurrent_writes, \
+          publication_sequence) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         rusqlite::params![
             POLICY_ROW,
             policy.format_profile(),
@@ -99,6 +114,7 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
             policy.whole_file_delta_max_depth(),
             policy.chunk_delta_max_depth(),
             policy.metadata_delta_max_depth(),
+            i64::from(DEFAULT_MAX_CONCURRENT_WRITES),
             NO_PACKS_PUBLISHED,
         ],
     )?;
@@ -128,15 +144,15 @@ pub fn validate(
         "SELECT COUNT(*) FROM sqlite_master \
          WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN \
          ('store_policy','object_packs','metadata_value_groups','objects',\
-          'content_signatures')",
+          'content_signatures','saves')",
         [],
         |row| row.get(0),
     )?;
     if unexpected != 0 {
         return Err(StorageError::Integrity("unexpected table in Store"));
     }
-    // I1: the watermark can never be ahead of storage. A Store whose watermark
-    // exceeds its highest pack id has been corrupted or written out of band.
+    // The retained range cannot be ahead of physical storage. Publication
+    // eligibility is checked separately through the save catalog.
     let ceiling = retained_pack_ceiling(connection)?;
     let highest = crate::sqlite::lookup::highest_pack_id(connection)?;
     if ceiling > highest {
@@ -145,6 +161,9 @@ pub fn validate(
         ));
     }
     let stored = load_policy(connection)?;
+    // The writer budget is read before any save is admitted, so an out-of-range
+    // persisted value is refused here rather than at the first `begin_save`.
+    max_concurrent_writes(connection)?;
     if let Some(expected) = expected {
         if expected.validated()? != stored {
             return Err(StorageError::UnsupportedPolicy {
@@ -271,36 +290,55 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
         .validated()
 }
 
-/// Highest pack id belonging to a completed save.
-pub fn retained_pack_ceiling(connection: &Connection) -> StorageResult<i64> {
-    connection
-        .query_row(
-            "SELECT retained_pack_ceiling FROM store_policy WHERE id = ?1",
-            [POLICY_ROW],
-            |row| row.get(0),
-        )
-        .map_err(|error| match error {
-            rusqlite::Error::QueryReturnedNoRows => {
-                StorageError::Integrity("policy row is missing")
-            }
-            other => StorageError::Engine(other),
+/// Persisted writer budget of this Store.
+///
+/// It is the authoritative admission limit for private saves (#216): the value
+/// lives in the Store file rather than in a process, so every sandbox and every
+/// process that opens the Store shares one budget, and a change is visible to a
+/// new save without restarting anything. It never rewrites a `saves` row.
+pub fn max_concurrent_writes(connection: &Connection) -> StorageResult<u8> {
+    let stored: i64 = connection.query_row(
+        "SELECT max_concurrent_writes FROM store_policy WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    u8::try_from(stored)
+        .ok()
+        .filter(|value| (1..=MAX_CONCURRENT_WRITES_LIMIT).contains(value))
+        .ok_or(StorageError::UnsupportedPolicy {
+            field: "max_concurrent_writes",
         })
 }
 
-/// Advances the publication watermark inside the caller's open transaction.
+/// Replaces the persisted writer budget; retained save rows are never touched.
 ///
-/// The caller must hold write ownership; the caller also decides whether the
-/// advance shares the transaction that publishes the packs it names.
-pub fn advance_retained_pack_ceiling(connection: &Connection, ceiling: i64) -> StorageResult<()> {
-    let affected = connection.execute(
-        "UPDATE store_policy SET retained_pack_ceiling = ?2 \
-         WHERE id = ?1 AND retained_pack_ceiling < ?2",
-        rusqlite::params![POLICY_ROW, ceiling],
-    )?;
-    if affected > 1 {
-        return Err(StorageError::Integrity("watermark update cardinality"));
+/// Lowering the budget is an admission change, not a claim about ownership: a
+/// private save that is already recorded keeps its slot whatever the new value
+/// is, and continues to count against the budget, so a lower setting cannot make
+/// unresolved ownership reusable. The caller supplies the transaction.
+pub fn set_max_concurrent_writes(connection: &Connection, writes: u8) -> StorageResult<u8> {
+    if writes == 0 || writes > MAX_CONCURRENT_WRITES_LIMIT {
+        return Err(StorageError::UnsupportedPolicy {
+            field: "max_concurrent_writes",
+        });
     }
-    Ok(())
+    if connection.execute(
+        "UPDATE store_policy SET max_concurrent_writes = ?1 WHERE id = 1",
+        [i64::from(writes)],
+    )? != 1
+    {
+        return Err(StorageError::Integrity("writer budget row"));
+    }
+    Ok(writes)
+}
+
+/// Highest published pack id; ownership filters still decide visibility below it.
+pub fn retained_pack_ceiling(connection: &Connection) -> StorageResult<i64> {
+    Ok(connection.query_row(
+        "SELECT retained_pack_ceiling FROM store_policy WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?)
 }
 
 /// Number of stored object rows; used to reject a non-empty create target.

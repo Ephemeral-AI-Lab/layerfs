@@ -1,0 +1,51 @@
+{
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "image": "layerfs-issue192:development",
+  "telemetry": "off",
+  "cases": [
+    {
+      "id": "V02",
+      "selection": "500000-byte construct",
+      "status": "PASS",
+      "root": "5e8a806ac5d657b041947f7f385762483e2ebc4e2980e67427b4a1dcf67a53be"
+    },
+    {
+      "id": "V03",
+      "selection": "exact full readback",
+      "status": "PASS"
+    },
+    {
+      "id": "V05",
+      "selection": "replace and readback",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "fixture": {
+    "root": "f77575c1f2bad170b11f580471d914ec78c2adb17f432e5084435eab5fe28e54",
+    "scope": "27ef987c298fe365e3637d2a85267beec50fe0b734be6f0aa2be72c9a8382574",
+    "file": "cb09a5b37b219deeceded9f45cce0bbf471e7ebedcaf4c91ed254d16e1c6562e",
+    "metadata": "312fe7a8867620f01b89e8a886d40cca367840853233e6ee7159ed3e27fdd409"
+  },
+  "service_pid": 88805,
+  "ready": "layerfs-service ready 0.0.0.0:50952",
+  "status": "FAIL",
+  "error": "AssertionError((7, b'\\x01\\x00\\x00', 0, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'))",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Failure { code: InvalidInput, unknown: false, cleanup: None }"
+      ],
+      "overflow": 0
+    }
+  ],
+  "source_head": "21f6af702919c23fafc88890361bef7bfb831140",
+  "lock_sha256": "69887e7ef623b6d21715ef1785c5e2d6da3f4c6126a8ccf58b9076a09669d64a",
+  "service_sha256": "6de1adfb5ccf83a3e3a225e68f1832392205dcb640dea8443630584d6954e70e",
+  "daemon_sha256": "23dccbc7c567e86fb4da684ee99a56d0fa23be0dff6f93477f5bca3fc0384fad"
+}

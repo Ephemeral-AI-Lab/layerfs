@@ -13,6 +13,7 @@ use layerfs_content::inode_leaf::{
 };
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::encoding::codec::DecompressionWorkspace;
+use layerfs_storage::encoding::delta::read::BodyCaches;
 use layerfs_storage::encoding::pool::{PoolIndex, PoolReader};
 use layerfs_storage::sqlite::pool::ValueGroupRow;
 use layerfs_storage::{SaveHandoff, StorageError, StoragePolicy, Store};
@@ -140,7 +141,7 @@ fn an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement
     let error = disabled(|scope| store.read_batch(&[unpublished], scope.child("storage.read")))
         .unwrap_err();
     assert!(
-        matches!(error, StorageError::VisibilityCeiling { .. }),
+        matches!(error, StorageError::Unpublished(_)),
         "expected a visibility refusal, got {error}"
     );
 
@@ -149,7 +150,7 @@ fn an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement
     assert!(
         matches!(
             error,
-            StorageError::VisibilityCeiling { .. } | StorageError::ObjectMissing(_)
+            StorageError::Unpublished(_) | StorageError::ObjectMissing(_)
         ),
         "got {error}"
     );
@@ -231,50 +232,37 @@ fn a_definite_failure_never_publishes_and_never_moves_the_watermark() {
 }
 
 #[test]
-fn an_uninspected_store_refuses_to_start_a_new_save() {
+fn persisted_private_owners_consume_slots_without_guessing_cleanup() {
     let dir = TempDir::new("visibility_uninspected");
     let path = dir.store_path("visibility_uninspected");
-    {
-        let store = create_store(&path);
-        let (objects, _, _) = construct_file(&noise(600_000));
-        save_all(&store, &objects).unwrap();
-    }
-    let (ceiling, highest) = pack_state(&path);
-    assert_eq!(ceiling, highest);
-
-    // Simulate a save whose cleanup did not complete: a pack and an object above
-    // the watermark remain, exactly as an interrupted cleanup would leave them.
-    {
-        let connection = rusqlite::Connection::open(&path).unwrap();
-        connection
-            .execute(
-                "INSERT INTO object_packs (pack_id, data) VALUES (?1, ?2)",
-                rusqlite::params![highest + 1, vec![0u8; 32]],
-            )
-            .unwrap();
-        connection
-            .execute(
-                "INSERT INTO objects \
-                 (object_id, object_role, canonical_length, pack_id, group_number, record_number) \
-                 VALUES (?1, 1, 100, ?2, 0, 0)",
-                rusqlite::params![vec![0x7eu8; 32], highest + 1],
-            )
-            .unwrap();
-    }
-
-    let store = open_store(&path);
-    let attempt = disabled(|scope| store.begin_save(scope.child("storage.begin")));
-    match attempt {
-        Err(StorageError::UninspectedState {
-            ceiling: reported,
-            highest_pack_id,
-        }) => {
-            assert_eq!(reported, ceiling);
-            assert_eq!(highest_pack_id, highest + 1);
-        }
-        Err(other) => panic!("expected an uninspected-state refusal, got {other}"),
-        Ok(_) => panic!("an uninspected Store must not accept a new save"),
-    }
+    let (objects, root, _) = construct_file(&noise(600_000));
+    let store = create_store(&path);
+    save_all(&store, &objects).unwrap();
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute("INSERT INTO saves(active_slot) VALUES(1),(2)", [])
+        .unwrap();
+    let reopened = open_store(&path);
+    assert!(matches!(
+        disabled(|s| reopened.begin_save(s.child("full"))),
+        Err(StorageError::OwnershipUnavailable)
+    ));
+    assert_eq!(
+        disabled(|s| reopened.read_batch(&[root], s.child("retained")))
+            .unwrap()
+            .0
+            .len(),
+        1
+    );
+    let active: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM saves WHERE active_slot IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(active, 2, "reopen never discards unresolved owners");
 }
 
 #[test]
@@ -339,10 +327,7 @@ fn the_watermark_survives_reopen_and_still_hides_a_later_open_save() {
     let unpublished = object_above(&path, mid_ceiling).expect("an unpublished object");
     let error =
         disabled(|scope| reopened.read_batch(&[unpublished], scope.child("read"))).unwrap_err();
-    assert!(
-        matches!(error, StorageError::VisibilityCeiling { .. }),
-        "got {error}"
-    );
+    assert!(matches!(error, StorageError::Unpublished(_)), "got {error}");
 
     disabled(|scope| operation.finish(scope.child("storage.finish"))).unwrap();
     let values = disabled(|scope| reopened.read_batch(&[second_root], scope.child("read")))
@@ -384,7 +369,13 @@ fn a_pooled_read_refuses_a_value_group_above_the_captured_ceiling() {
     );
     let row = value_group_above(&path, ceiling).expect("a catalogue row above the watermark");
     let capacities = store.capacities();
-    let connection = rusqlite::Connection::open(&path).unwrap();
+    let connection = layerfs_storage::sqlite::connection::open(&path, false).unwrap();
+    // Lower-level same-save read: explicitly select the owner of this private row.
+    // Ordinary Store readers cannot manufacture this scope.
+    connection.execute(
+        "UPDATE temp.layerfs_read_scope SET save_id=(SELECT save_id FROM object_packs WHERE pack_id=?1)",
+        [row.pack_id],
+    ).unwrap();
     let mut workspace = DecompressionWorkspace::new().expect("decode workspace");
 
     // The group read itself: refused at the watermark, served at the real ceiling.
@@ -512,6 +503,7 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
     let mut packs = std::collections::BTreeMap::new();
     let mut cache = GroupCache::new();
     let mut counters = ChainCounters::default();
+    let mut pool = PoolReader::new();
     let location = lookup::location(&connection, root, i64::MAX)
         .expect("location")
         .expect("the saved root has a locator");
@@ -521,7 +513,10 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
         &connection,
         i64::MAX,
         &capacities,
-        &mut packs,
+        BodyCaches {
+            packs: &mut packs,
+            pool: &mut pool,
+        },
         &mut cache,
         &mut workspace,
         &mut counters,
@@ -541,7 +536,10 @@ fn an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache() {
         &connection,
         hidden,
         &capacities,
-        &mut packs,
+        BodyCaches {
+            packs: &mut packs,
+            pool: &mut pool,
+        },
         &mut cache,
         &mut workspace,
         &mut counters,
@@ -597,89 +595,62 @@ fn the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site() {
     }
 }
 
-/// R40: an interrupted save leaves a readable Store and a named operator path.
-///
-/// A death between a mid-save `COMMIT` and the watermark transaction leaves packs
-/// above `retained_pack_ceiling`. Every later save is refused with
-/// `UninspectedState`, by design: writing would have to guess the ownership of
-/// packs whose save never published. The contract supplies no recovery service, so
-/// what this case pins is the half that must keep working - **reads** - and the two
-/// explicit operator choices, both taken outside the product, that end the refusal.
+/// Persisted unresolved ownership remains explicit across ordinary reopen.
 #[test]
-fn an_interrupted_save_leaves_the_store_readable_until_an_operator_decides() {
+fn an_interrupted_save_keeps_its_slot_and_published_roots_remain_readable() {
     let dir = TempDir::new("visibility_interrupted");
     let path = dir.store_path("visibility_interrupted");
     let (objects, root, _) = construct_file(&noise(600_000));
-    {
-        let store = create_store(&path);
-        save_all(&store, &objects).unwrap();
-    }
-    let (ceiling, highest) = pack_state(&path);
-    let interrupted = highest + 1;
-    {
-        let connection = rusqlite::Connection::open(&path).unwrap();
-        connection
-            .execute(
-                "INSERT INTO object_packs (pack_id, data) VALUES (?1, ?2)",
-                rusqlite::params![interrupted, vec![0u8; 32]],
-            )
-            .unwrap();
-    }
-
-    // The Store reopens, the published tree still reads, and the watermark is
-    // unchanged: the interrupted save published nothing.
+    let store = create_store(&path);
+    save_all(&store, &objects).unwrap();
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute("INSERT INTO saves(active_slot) VALUES(1)", [])
+        .unwrap();
+    let unresolved = connection.last_insert_rowid();
     let reopened = open_store(&path);
-    let (values, counters) =
-        disabled(|scope| reopened.read_batch(&[root], scope.child("read"))).unwrap();
-    assert_eq!(values.len(), 1);
     assert_eq!(
-        counters.ceiling, ceiling,
-        "reads still run under the watermark"
+        disabled(|s| reopened.read_batch(&[root], s.child("read")))
+            .unwrap()
+            .0
+            .len(),
+        1
     );
-    assert_eq!(pack_state(&path), (ceiling, interrupted));
-    // A save is refused, and the refusal names both numbers the operator needs.
-    match disabled(|scope| reopened.begin_save(scope.child("storage.begin"))) {
-        Err(StorageError::UninspectedState {
-            ceiling: reported,
-            highest_pack_id,
-        }) => {
-            assert_eq!(reported, ceiling);
-            assert_eq!(highest_pack_id, interrupted);
-        }
-        Err(other) => panic!("expected an uninspected-state refusal, got {other}"),
-        Ok(_) => panic!("an uninspected Store must not accept a new save"),
-    }
-    drop(reopened);
-
-    // Operator choice (a): discard the unpublished packs. The two statements below
-    // are the whole path - they delete only rows above the watermark, which is what
-    // the product's own cleanup does - and the next save is accepted.
-    {
-        let connection = rusqlite::Connection::open(&path).unwrap();
+    let allowed = disabled(|s| reopened.begin_save(s.child("remaining-slot"))).unwrap();
+    assert!(matches!(
+        disabled(|s| reopened.begin_save(s.child("full"))),
+        Err(StorageError::OwnershipUnavailable)
+    ));
+    disabled(|s| allowed.finish(s.child("finish"))).unwrap();
+    let state: Option<i64> = connection
+        .query_row(
+            "SELECT active_slot FROM saves WHERE save_id=?1",
+            [unresolved],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(state, Some(1));
+    // An explicit external operator decision about the named, empty save can
+    // remove it. The product never does this on reopen or by pack-id range.
+    assert_eq!(
         connection
             .execute(
-                "DELETE FROM objects WHERE pack_id > (SELECT retained_pack_ceiling FROM store_policy WHERE id = 1)",
-                [],
+                "DELETE FROM saves WHERE save_id=?1 AND active_slot=1",
+                [unresolved]
             )
-            .unwrap();
-        connection
-            .execute(
-                "DELETE FROM object_packs WHERE pack_id > (SELECT retained_pack_ceiling FROM store_policy WHERE id = 1)",
-                [],
-            )
-            .unwrap();
-    }
-    assert_eq!(pack_state(&path), (ceiling, ceiling));
-    let recovered = open_store(&path);
-    let (again, _) = disabled(|scope| recovered.read_batch(&[root], scope.child("read"))).unwrap();
-    assert_eq!(again.len(), 1);
-    let mut operation =
-        disabled(|scope| recovered.begin_save(scope.child("storage.begin"))).unwrap();
-    let (more, _, _) = construct_file(&noise(400_000));
-    for object in more.finalized() {
-        operation.accept(object).unwrap();
-    }
-    let outcome = disabled(|scope| operation.finish(scope.child("storage.finish"))).unwrap();
-    assert!(outcome.inserted > 0, "the Store accepts saves again");
-    assert_eq!(pack_state(&path).0, pack_state(&path).1);
+            .unwrap(),
+        1
+    );
+    let a = disabled(|s| reopened.begin_save(s.child("a"))).unwrap();
+    let b = disabled(|s| reopened.begin_save(s.child("b"))).unwrap();
+    disabled(|s| a.abort(s.child("abort-a"))).unwrap();
+    disabled(|s| b.abort(s.child("abort-b"))).unwrap();
+    assert_eq!(
+        disabled(|s| reopened.read_batch(&[root], s.child("read")))
+            .unwrap()
+            .0
+            .len(),
+        1
+    );
 }

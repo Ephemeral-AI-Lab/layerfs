@@ -1,0 +1,13 @@
+--- locator text alone, every text built before the timer ---
+1 width, capacity 16                                 calls=50000   statements=50000    ns/statement=    207.2
+16 widths, capacity 16                               calls=50000   statements=50000    ns/statement=    108.0
+17 widths, capacity 16                               calls=50000   statements=50000    ns/statement=  10676.6
+128 widths, capacity 16                              calls=50000   statements=50000    ns/statement=  18476.5
+128 widths, capacity 192                             calls=50000   statements=50000    ns/statement=    199.5
+--- the product's sequence: locator + the four per-step texts ---
+1 width + step texts, capacity 16                    calls=50000   statements=250000   ns/statement=    103.4
+128 widths + step texts, capacity 16                 calls=50000   statements=250000   ns/statement=   3700.5
+128 widths + step texts, capacity 192                calls=50000   statements=250000   ns/statement=    100.0
+--- what `format!` costs per call, for the record ---
+locator_sql(128) construction                        ns/call=   6751.6 (bytes 40300000)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s

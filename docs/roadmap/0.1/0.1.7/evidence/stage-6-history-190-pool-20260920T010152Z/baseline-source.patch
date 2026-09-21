@@ -1,0 +1,407 @@
+diff --git a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+index eeb666cbb..0247ab734 100644
+--- a/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
++++ b/core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs
+@@ -1109,6 +1109,7 @@ struct StateOutcome {
+     save_ns: u64,
+     commits: u64,
+     group_decodes: u64,
++    pooled_reads: layerfs_storage::encoding::pool::PoolReadCounters,
+     connection_opens: u64,
+     filesystem: FilesystemUpdateCounters,
+     filesystem_reads: ReadCounters,
+@@ -2004,6 +2005,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                         save_ns,
+                         commits: saved.commits,
+                         group_decodes: provider.inner.group_decodes(),
++                        pooled_reads: provider.inner.pooled_read_counters(),
+                         connection_opens: provider.inner.connection_opens(),
+                         filesystem_reads: provider.counters(),
+                         content_reads,
+@@ -2108,6 +2110,28 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
+                 }
+             }
+         }
++        if detailed {
++            let pooled = outcome.pooled_reads;
++            for (suffix, value, unit) in [
++                ("leaf_requests", pooled.leaf_requests, "count"),
++                ("chain_edges", pooled.chain_edges, "count"),
++                ("physical_record_calls", pooled.physical_record_calls, "count"),
++                ("physical_group_decodes", pooled.physical_group_decodes, "count"),
++                ("physical_group_decoded_bytes", pooled.physical_group_decoded_bytes, "bytes"),
++                ("physical_group_cache_hits", pooled.physical_group_cache_hits, "count"),
++                ("value_group_decodes", pooled.value_group_decodes, "count"),
++                ("pack_fetches", pooled.pack_fetches, "count"),
++                ("pack_bytes", pooled.pack_bytes, "bytes"),
++            ] {
++                context.trace.write_number(
++                    Kind::Resource,
++                    &format!("history.state.{}.filesystem.provider.pooled.{suffix}", outcome.ordinal),
++                    i128::from(value),
++                    unit,
++                    "successful provider waves; physical decodes are actual Zstd calls; value decodes include raw materialization; pack bytes are BLOB acquisitions, not disk traffic",
++                )?;
++            }
++        }
+         let fs = outcome.filesystem;
+         for (suffix, value) in [
+             ("save.commits", outcome.commits),
+diff --git a/core/crates/layerfs-storage/src/cas/provider.rs b/core/crates/layerfs-storage/src/cas/provider.rs
+index d83521064..d1d795a66 100644
+--- a/core/crates/layerfs-storage/src/cas/provider.rs
++++ b/core/crates/layerfs-storage/src/cas/provider.rs
+@@ -77,6 +77,7 @@ pub struct StoreProvider<'a> {
+     /// count, and an operation that issues many waves reads the sum here. It is
+     /// the figure a decoded-group cache is measured against.
+     group_decodes: Cell<u64>,
++    pooled: Cell<crate::encoding::pool::PoolReadCounters>,
+ }
+ 
+ impl<'a> StoreProvider<'a> {
+@@ -87,6 +88,7 @@ impl<'a> StoreProvider<'a> {
+             session: RefCell::new(None),
+             opens: Cell::new(0),
+             group_decodes: Cell::new(0),
++            pooled: Cell::new(crate::encoding::pool::PoolReadCounters::new()),
+         }
+     }
+ 
+@@ -100,6 +102,11 @@ impl<'a> StoreProvider<'a> {
+         self.group_decodes.get()
+     }
+ 
++    /// Pooled reconstruction work over every successful wave of this operation.
++    pub fn pooled_read_counters(&self) -> crate::encoding::pool::PoolReadCounters {
++        self.pooled.get()
++    }
++
+     /// Reads one wave through the operation's session.
+     ///
+     /// This is the form an adapter with a timing tree of its own uses: the
+@@ -127,6 +134,9 @@ impl<'a> StoreProvider<'a> {
+             if opened {
+                 self.opens.set(self.opens.get() + 1);
+             }
++            let mut pooled = self.pooled.get();
++            pooled.accumulate(counters.pooled);
++            self.pooled.set(pooled);
+             self.group_decodes
+                 .set(self.group_decodes.get() + counters.group_decodes);
+             Ok((
+@@ -140,6 +150,7 @@ impl<'a> StoreProvider<'a> {
+                     max_depth: counters.max_depth,
+                     canonical_bytes: counters.canonical_bytes,
+                     group_decodes: counters.group_decodes,
++                    pooled: counters.pooled,
+                     opens: u64::from(opened),
+                 },
+             ))
+diff --git a/core/crates/layerfs-storage/src/cas/read.rs b/core/crates/layerfs-storage/src/cas/read.rs
+index 34f6d91a2..274eceee6 100644
+--- a/core/crates/layerfs-storage/src/cas/read.rs
++++ b/core/crates/layerfs-storage/src/cas/read.rs
+@@ -43,6 +43,8 @@ pub struct ReadCounters {
+     /// and from `objects`: the defect this counter exists to price is one group
+     /// decompression per **record** inside a pack that is read once.
+     pub group_decodes: u64,
++    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
++    pub pooled: crate::encoding::pool::PoolReadCounters,
+ }
+ 
+ /// Reads every requested object in demand order under one ceiling.
+@@ -90,6 +92,7 @@ pub fn read_objects(
+             let resolved = resolver.resolve_at(location)?;
+             (resolved, resolver.packs_read())
+         };
++        totals.pooled.accumulate(chain.pooled);
+         totals.objects = totals.objects.saturating_add(chain.objects);
+         totals.edges = totals.edges.saturating_add(chain.edges);
+         totals.encoded_bytes = totals.encoded_bytes.saturating_add(chain.encoded_bytes);
+@@ -110,6 +113,7 @@ pub fn read_objects(
+     counters.max_depth = totals.max_depth;
+     counters.canonical_bytes = totals.canonical_bytes;
+     counters.group_decodes = totals.group_decodes;
++    counters.pooled = totals.pooled;
+     Ok((values, counters))
+ }
+ 
+diff --git a/core/crates/layerfs-storage/src/cas/store.rs b/core/crates/layerfs-storage/src/cas/store.rs
+index 4b6831b68..c3f2785ed 100644
+--- a/core/crates/layerfs-storage/src/cas/store.rs
++++ b/core/crates/layerfs-storage/src/cas/store.rs
+@@ -102,6 +102,8 @@ pub struct StoreReadCounters {
+     pub canonical_bytes: u64,
+     /// Ordinary-lane group bodies decompressed by this wave.
+     pub group_decodes: u64,
++    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
++    pub pooled: crate::encoding::pool::PoolReadCounters,
+     /// Connections this read opened.
+     ///
+     /// One `read_batch` call is one wave and opens one connection; a demand
+@@ -334,6 +336,7 @@ impl Store {
+                     max_depth: counters.max_depth,
+                     canonical_bytes: counters.canonical_bytes,
+                     group_decodes: counters.group_decodes,
++                    pooled: counters.pooled,
+                     opens: 1,
+                 },
+             ))
+diff --git a/core/crates/layerfs-storage/src/encoding/delta/read.rs b/core/crates/layerfs-storage/src/encoding/delta/read.rs
+index 37bc43d0a..515735282 100644
+--- a/core/crates/layerfs-storage/src/encoding/delta/read.rs
++++ b/core/crates/layerfs-storage/src/encoding/delta/read.rs
+@@ -42,6 +42,8 @@ pub struct ChainCounters {
+     /// counts group bodies, not record frames: every other lane decodes a
+     /// per-record frame and charges nothing here.
+     pub group_decodes: u64,
++    /// Pooled metadata reconstruction work, separate from ordinary-lane counts.
++    pub pooled: crate::encoding::pool::PoolReadCounters,
+ }
+ 
+ /// One read wave's chain resolver: shared pack cache, ceiling and counters.
+@@ -154,6 +156,7 @@ impl<'a> Resolver<'a> {
+                 .counters
+                 .canonical_bytes
+                 .saturating_add(canonical.len() as u64);
++            self.counters.pooled = pool.counters();
+             return Ok((canonical, id));
+         }
+         let role_depth = self.capacities.delta_depth_for_role(root.role);
+@@ -432,6 +435,7 @@ pub fn stored_base(
+ /// several reports their sum, so a counter named for the save is not quietly the
+ /// last chain's.
+ pub fn accumulate(total: &mut ChainCounters, chain: ChainCounters) {
++    total.pooled.accumulate(chain.pooled);
+     total.objects = total.objects.saturating_add(chain.objects);
+     total.edges = total.edges.saturating_add(chain.edges);
+     total.encoded_bytes = total.encoded_bytes.saturating_add(chain.encoded_bytes);
+diff --git a/core/crates/layerfs-storage/src/encoding/pool/mod.rs b/core/crates/layerfs-storage/src/encoding/pool/mod.rs
+index ce6e9ad3c..e1f902ca3 100644
+--- a/core/crates/layerfs-storage/src/encoding/pool/mod.rs
++++ b/core/crates/layerfs-storage/src/encoding/pool/mod.rs
+@@ -2,12 +2,14 @@
+ //!
+ //! Entry module: declarations and re-exports only.
+ 
++pub mod counters;
+ pub mod delta;
+ pub mod index;
+ pub mod leaf;
+ pub mod read;
+ pub mod value_group;
+ 
++pub use counters::PoolReadCounters;
+ pub use index::PoolIndex;
+ pub use leaf::{PooledRecord, POOLED_DELTA_TAG, POOLED_FULL_TAG};
+ pub use read::PoolReader;
+diff --git a/core/crates/layerfs-storage/src/encoding/pool/read.rs b/core/crates/layerfs-storage/src/encoding/pool/read.rs
+index 40b9f2667..e54123c26 100644
+--- a/core/crates/layerfs-storage/src/encoding/pool/read.rs
++++ b/core/crates/layerfs-storage/src/encoding/pool/read.rs
+@@ -16,7 +16,7 @@ use layerfs_content::inode_leaf::{
+ use layerfs_content::ObjectId;
+ 
+ use crate::encoding::codec::DecompressionWorkspace;
+-use crate::encoding::pool::{delta, leaf, value_group};
++use crate::encoding::pool::{delta, leaf, value_group, PoolReadCounters};
+ use crate::error::{StorageError, StorageResult};
+ use crate::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
+ use crate::policy::{StorageCapacities, METADATA_DECODED_WORK_LIMIT, METADATA_RECORD_LIMIT};
+@@ -32,6 +32,7 @@ pub struct PoolReader {
+     decoded_work: u64,
+     chain_encoded: u64,
+     chain_canonical: u64,
++    counters: PoolReadCounters,
+ }
+ 
+ impl PoolReader {
+@@ -40,6 +41,11 @@ impl PoolReader {
+         Self::default()
+     }
+ 
++    /// Actual work accumulated over this reader's lifetime.
++    pub fn counters(&self) -> PoolReadCounters {
++        self.counters
++    }
++
+     /// Restarts the per-chain decoded-work allowance.
+     ///
+     /// The decoded-value cache survives: it is bounded independently, and dropping
+@@ -146,6 +152,7 @@ impl PoolReader {
+             return Ok(());
+         }
+         let body = self.group_body(connection, workspace, row)?;
++        self.counters.value_group_decodes = self.counters.value_group_decodes.saturating_add(1);
+         self.decoded_work = self
+             .decoded_work
+             .saturating_add(body.len() as u64 + row.count as u64 * INODE_VALUE_BYTES as u64);
+@@ -200,6 +207,8 @@ impl PoolReader {
+     fn pack(&mut self, connection: &Connection, pack_id: i64) -> StorageResult<&[u8]> {
+         if !self.packs.contains_key(&pack_id) {
+             let bytes = lookup::pack_bytes(connection, pack_id)?;
++            self.counters.pack_fetches = self.counters.pack_fetches.saturating_add(1);
++            self.counters.pack_bytes = self.counters.pack_bytes.saturating_add(bytes.len() as u64);
+             let retained: usize = self.packs.values().map(Vec::len).sum();
+             if retained.saturating_add(bytes.len()) > crate::policy::DEPENDENCY_PACK_CACHE_BYTES {
+                 self.packs.clear();
+@@ -251,6 +260,7 @@ impl PoolReader {
+             {
+                 return Err(StorageError::Integrity("pooled chain chronology"));
+             }
++            self.counters.chain_edges = self.counters.chain_edges.saturating_add(1);
+             current = location;
+         }
+         let mut body: Option<Vec<u8>> = None;
+@@ -319,6 +329,7 @@ impl PoolReader {
+         workspace: &mut DecompressionWorkspace,
+         location: &ObjectLocation,
+     ) -> StorageResult<Vec<u8>> {
++        self.counters.physical_record_calls = self.counters.physical_record_calls.saturating_add(1);
+         if location.canonical_length > crate::policy::INODE_LEAF_LIMIT {
+             return Err(StorageError::Integrity("inode leaf length"));
+         }
+@@ -335,6 +346,14 @@ impl PoolReader {
+             GroupCodec::Raw => selected.to_vec(),
+             GroupCodec::Zstandard => workspace.decompress_group(selected, view.decoded_length)?,
+         };
++        if view.codec == GroupCodec::Zstandard {
++            self.counters.physical_group_decodes =
++                self.counters.physical_group_decodes.saturating_add(1);
++            self.counters.physical_group_decoded_bytes = self
++                .counters
++                .physical_group_decoded_bytes
++                .saturating_add(body.len() as u64);
++        }
+         if body.len() != view.decoded_length {
+             return Err(StorageError::Integrity("group body length"));
+         }
+@@ -354,6 +373,7 @@ impl PoolReader {
+         workspace: &mut DecompressionWorkspace,
+         root: ObjectLocation,
+     ) -> StorageResult<Vec<u8>> {
++        self.counters.leaf_requests = self.counters.leaf_requests.saturating_add(1);
+         self.begin_chain();
+         let body = self.leaf_body(connection, capacities, ceiling, workspace, root)?;
+         let (prefix, rows) = decode_pooled_body(&body)?;
+diff --git a/core/crates/layerfs-storage/tests/metadata_pool.rs b/core/crates/layerfs-storage/tests/metadata_pool.rs
+index 730d29464..443568ded 100644
+--- a/core/crates/layerfs-storage/tests/metadata_pool.rs
++++ b/core/crates/layerfs-storage/tests/metadata_pool.rs
+@@ -62,6 +62,116 @@ fn canonical_of(object: &FinalizedObject) -> Vec<u8> {
+     object.canonical().to_vec()
+ }
+ 
++/// Read the physical fixture shape without assuming every pooled delta compresses.
++fn compressed_leaf_groups(path: &std::path::Path, ids: &[ObjectId]) -> (u64, u64) {
++    use layerfs_storage::pack::layout::{group_view, parse_header, GroupCodec, PackLane};
++
++    let connection = rusqlite::Connection::open(path).expect("external connection");
++    let mut groups = std::collections::BTreeSet::new();
++    let mut compressed = 0;
++    let mut decoded_bytes = 0;
++    for id in ids {
++        let (pack_id, group_number): (i64, i64) = connection
++            .query_row(
++                "SELECT pack_id, group_number FROM objects WHERE object_id = ?1",
++                [id.as_bytes().as_slice()],
++                |row| Ok((row.get(0)?, row.get(1)?)),
++            )
++            .expect("leaf locator");
++        assert!(groups.insert((pack_id, group_number)), "distinct save groups");
++        let pack: Vec<u8> = connection
++            .query_row(
++                "SELECT data FROM object_packs WHERE pack_id = ?1",
++                [pack_id],
++                |row| row.get(0),
++            )
++            .expect("pack");
++        let header = parse_header(&pack).expect("header");
++        assert_eq!(header.lane, PackLane::Ordinary);
++        let view = group_view(
++            &pack,
++            header,
++            usize::try_from(group_number).expect("nonnegative group ordinal"),
++        )
++        .expect("leaf group");
++        if view.codec == GroupCodec::Zstandard {
++            compressed += 1;
++            decoded_bytes += view.decoded_length as u64;
++        }
++    }
++    (compressed, decoded_bytes)
++}
++
++fn observe_pooled_physical_decodes(elements: usize) {
++    use layerfs_storage::StoreProvider;
++
++    let dir = TempDir::new("pooled-physical-decodes");
++    let path = dir.store_path("pool");
++    let store = create_store(&path);
++    let mut values = (0..MAXIMUM_LEAF_ROWS as u64)
++        .map(|index| value(InodeKind::RegularFile, 1, index))
++        .collect::<Vec<_>>();
++    let mut ids = Vec::new();
++    let mut expected = Vec::new();
++    for step in 0..elements {
++        values[step] = value(InodeKind::RegularFile, 1, 10_000 + step as u64);
++        let object = match ids.last().copied() {
++            Some(base) => with_predecessor(leaf(1, &values), base),
++            None => leaf(1, &values),
++        };
++        ids.push(object.id());
++        expected = canonical_of(&object);
++        let outcome = save_one(&store, object).expect("leaf save");
++        assert_eq!(outcome.pool.full_leaves, u64::from(step == 0));
++        assert_eq!(outcome.pool.delta_leaves, u64::from(step != 0));
++    }
++    drop(store);
++    let (compressed, decoded_bytes) = compressed_leaf_groups(&path, &ids);
++    assert!(compressed > 0, "fixture must exercise physical decompression");
++    let reopened = open_store(&path);
++    let provider = StoreProvider::new(&reopened);
++    let id = *ids.last().expect("leaf");
++    for wave in 1..=2 {
++        let (read, counters) = disabled(|scope| {
++            provider.read_wave(&[id], scope.child("storage.read"))
++        })
++        .expect("canonical read");
++        assert_eq!(read, vec![expected.clone()]);
++        assert_eq!(ObjectId::for_bytes(&read[0]), id);
++        let pooled = counters.pooled;
++        assert_eq!(pooled.leaf_requests, 1);
++        assert_eq!(pooled.chain_edges, elements as u64 - 1);
++        assert_eq!(pooled.physical_record_calls, 2 * elements as u64);
++        // Baseline: discovery and reconstruction each decompress every group.
++        // The candidate will change these three exact expectations after this
++        // baseline source and output have been retained by the coordinator.
++        assert_eq!(pooled.physical_group_decodes, 2 * compressed);
++        assert_eq!(pooled.physical_group_decoded_bytes, 2 * decoded_bytes);
++        assert_eq!(pooled.physical_group_cache_hits, 0);
++        assert!(pooled.value_group_decodes > 0);
++        assert!(pooled.pack_fetches > 0);
++        assert!(pooled.pack_bytes > 0);
++        let cumulative = provider.pooled_read_counters();
++        assert_eq!(cumulative.leaf_requests, wave);
++        assert_eq!(
++            cumulative.physical_group_decodes,
++            wave * pooled.physical_group_decodes,
++            "a second wave pays its own pooled reconstruction"
++        );
++        println!("pooled physical fixture: elements={elements} wave={wave} {pooled:?}");
++    }
++}
++
++#[test]
++fn a_compressed_full_pooled_leaf_reports_its_physical_decode_work() {
++    observe_pooled_physical_decodes(1);
++}
++
++#[test]
++fn a_pooled_delta_chain_reports_its_physical_decode_work() {
++    observe_pooled_physical_decodes(4);
++}
++
+ #[test]
+ fn a_supplied_leaf_round_trips_through_sqlite_and_reopen() {
+     let dir = TempDir::new("pool-roundtrip");

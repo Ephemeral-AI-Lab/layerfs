@@ -1,0 +1,5 @@
+Retaining all successful improvements from PRs #194, #195 and #196. The owner has raised the investment threshold: **only directions capable of multi-second savings**. I am using **at least 2 seconds off stride10's measured operation** as the prospective bar, with stride3 confirmation; no threshold relaxation after results.
+
+Three subagents are screening zero-count evaluation's unnecessary base demands for new rows. Source review found a limiting detail: high new IDs already stop at the root, and mixed waves may save zero pages. Re-added paths can reuse interior IDs, so their cost is not assumed away.
+
+We will first measure the entire unchanged zero-count phase with one existing coarse timer callback. If its total is below 2 seconds, reject the direction immediately without implementing the filter or running a broad campaign. If larger, first establish the actual removable page subset before further work. Small signature, pack-statement and temporary-run cleanup directions are excluded. No product algorithm changes yet; the temporary phase patch will be archived and removed if the screen fails.

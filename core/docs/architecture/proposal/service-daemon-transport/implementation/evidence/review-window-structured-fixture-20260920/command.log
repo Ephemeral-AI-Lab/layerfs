@@ -1,0 +1,6 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/crates/layerfs-storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-7d77e0f5ab84065a)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok

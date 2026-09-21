@@ -15,6 +15,16 @@ requirements are now the planning baseline. The concrete control/backing/shared
 input decisions listed in 04's R0 are explicit first-round outputs, not silently
 assumed completed implementations or permission to skip their review.
 
+**Main synchronization, 2026-09-21:** integration combines local checkpoint
+`81ace2778201036e9b1ca3040c63949e595f5971` with upstream
+`b0260df3a2ffc371773cd062feafd4b5e435bf1e`. The local checkout now contains
+bridge, daemon, service and history alongside C1/C2/telemetry. The packet's
+reviewed source basis remains `152b9c3a2`; it is not relabelled as a review of
+the later source. In particular, [the concurrency controls](../../../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md)
+include C2 schema 8 and configured writer admission. Reconcile later shared API,
+resource and namespace changes before implementing a source-pinned prerequisite.
+Existing implementation worktrees do not move when main is synchronized.
+
 **Crate layout (owner update, 2026-09-21):** `layerfs-fuse` and
 `layerfs-workspace` are separate libraries under `core/crates/`.
 `layerfs-daemon` assembles them in one execution-side process. Workspace groups

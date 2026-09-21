@@ -1,0 +1,21 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running tests/native_connections.rs (core/target/debug/deps/native_connections-418cdfebd23ad2d6)
+
+running 1 test
+test productive_upload_keeps_the_response_wait_alive ... FAILED
+
+failures:
+
+---- productive_upload_keeps_the_response_wait_alive stdout ----
+
+thread 'productive_upload_keeps_the_response_wait_alive' panicked at crates/layerfs-bridge/tests/native_connections.rs:93:29:
+called `Result::unwrap()` on an `Err` value: Failure { code: Io, unknown: false, cleanup: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    productive_upload_keeps_the_response_wait_alive
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 6.03s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test native_connections`

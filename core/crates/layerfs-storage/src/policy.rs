@@ -29,8 +29,42 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// migrated, and the reader never guesses a base it cannot read from the record.
 /// Version 6 adds `content_signatures`, the persisted cross-save content index
 /// (`encoding/delta/candidates.rs`, the W2 section of `sql/schema.sql`).
+/// Version 7 landed the save-owned multi-writer model: a `saves` row carries
+/// either a private slot or a publication sequence, reads are
+/// publication-scoped, and pack allocation advances a Store-wide watermark.
+/// Version 8 replaces the fixed two-slot save model with the configured
+/// per-Store write admission (#216): `store_policy.max_concurrent_writes` holds
+/// the authoritative writer budget (1..=[`MAX_CONCURRENT_WRITES_LIMIT`]) and
+/// `saves.active_slot` spans the whole supported slot space instead of 1..=2, so
+/// a Store created at a higher setting keeps valid rows when the setting is
+/// lowered. A version-7 Store is rejected rather than migrated, exactly as every
+/// earlier version is, and no row is rewritten to fit the new column.
 /// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 8;
+
+/// Largest writer budget one Store may be configured with.
+///
+/// It is the width of the private save-slot space: `saves.active_slot` is
+/// constrained to `1..=MAX_CONCURRENT_WRITES_LIMIT` by the shipped schema, while
+/// the budget actually admitted at any moment is the persisted
+/// `store_policy.max_concurrent_writes`, which is at most this value. The two are
+/// deliberately different numbers: the slot space has to keep accepting rows a
+/// higher earlier setting produced.
+pub const MAX_CONCURRENT_WRITES_LIMIT: u8 = 64;
+/// Writer budget of a Store that was created without an explicit setting.
+///
+/// Two is the v0.1.6 behaviour, so an existing operator sees no change until the
+/// setting is raised on purpose. It is not a ceiling: any value up to
+/// [`MAX_CONCURRENT_WRITES_LIMIT`] is supported.
+pub const DEFAULT_MAX_CONCURRENT_WRITES: u8 = 2;
+/// Locator rows one ObjectId may own.
+///
+/// Ownership is per save, and a save inserts its own locator only while no
+/// eligible published row exists to reuse; the saves that were simultaneously
+/// private at that moment are therefore the only ones that can hold a copy. The
+/// supported slot space bounds that number, not the current setting, because
+/// rows written under a higher setting remain valid after it is lowered.
+pub const SAVE_SLOT_SPACE: usize = MAX_CONCURRENT_WRITES_LIMIT as usize;
 
 /// Declared storage schema identifier.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,6 +118,8 @@ pub const CLEANUP_PAGE_ROWS: usize = 128;
 /// demands a page's children at once. This is the declared ceiling for that
 /// demand, and the C1 provider inherits it.
 pub const READ_OBJECT_LIMIT: usize = 4_096;
+/// Total returned canonical bytes in one read wave, counting repeated demands.
+pub const READ_CANONICAL_BYTES_LIMIT: usize = 32 * 1024 * 1024;
 /// Canonical bytes a whole-file object adds over its raw payload: the 13-byte
 /// bytes-role envelope and the 10-byte whole-file value header. The chunk lane's
 /// equivalent is 21 bytes, because a chunk value carries only its eight-byte
