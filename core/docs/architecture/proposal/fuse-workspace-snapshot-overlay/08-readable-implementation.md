@@ -102,6 +102,8 @@ registry or Workspace state locks. Count reservation precedes attach; failure
 with unresolved cleanup retains the slot. Remaining exact arithmetic and
 exercised boundary observations are recorded with the R1 result below.
 
+[The subsequent registry correction](11-registry-admission.md) removes allocation proportional to MAX_COUNT. Retained capacity and failed cleanup remain accounted; the original mounted receipt below keeps its exact source and numbers.
+
 **Separate domains:** fuser allocates `16 MiB + 4096` receive bytes per event
 loop even when max_read is 128 KiB. Two loops therefore reserve **32 MiB + 8192
 bytes**, plus their thread/session state. The bridge's authentication/frame

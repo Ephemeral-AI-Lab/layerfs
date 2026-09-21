@@ -522,3 +522,72 @@ fn detach_waits_for_projection_handles_and_preserves_local_handles() {
     workspace.forget(file.serial, 1, ReferenceScope::Local);
     workspace.close_clean().unwrap();
 }
+
+#[test]
+fn registry_grows_on_demand_and_keeps_retained_capacity_charged() {
+    let huge = Fixture::new(usize::MAX);
+    let small = Fixture::new(1);
+    let first = huge.attach();
+    let only = small.attach();
+    let initial = first.status().unwrap().accounted_bytes;
+    assert_eq!(initial, only.status().unwrap().accounted_bytes);
+    assert!(initial < DEFAULT_MEMORY_BUDGET_BYTES);
+    assert!(matches!(
+        small.host.attach(small.options("second", 2), deadline()),
+        Err(WorkspaceError::Capacity)
+    ));
+    only.close_clean().unwrap();
+    small
+        .host
+        .attach(small.options("second", 2), deadline())
+        .unwrap()
+        .close_clean()
+        .unwrap();
+
+    let second = huge
+        .host
+        .attach(huge.options("second", 2), deadline())
+        .unwrap();
+    let with_two = first.status().unwrap().accounted_bytes;
+    second.close_clean().unwrap();
+    drop(second);
+    let retained = first.status().unwrap().accounted_bytes;
+    assert!(
+        retained > initial,
+        "the now-unused second registry slot remains allocated"
+    );
+    assert!(
+        retained < with_two,
+        "closed Workspace tables and its ID have been released"
+    );
+    let again = huge
+        .host
+        .attach(huge.options("second", 3), deadline())
+        .unwrap();
+    assert_eq!(first.status().unwrap().accounted_bytes, with_two);
+    again.close_clean().unwrap();
+    first.close_clean().unwrap();
+}
+
+#[test]
+fn failed_close_keeps_its_registry_count_until_cleanup_succeeds() {
+    let fixture = Fixture::new(1);
+    let workspace = fixture.attach();
+    let obstruction = workspace.mount_path().join("owned-cleanup-obstruction");
+    fs::write(&obstruction, b"retained").unwrap();
+    assert!(matches!(workspace.close_clean(), Err(WorkspaceError::Io)));
+    assert!(matches!(
+        fixture
+            .host
+            .attach(fixture.options("second", 2), deadline()),
+        Err(WorkspaceError::Capacity)
+    ));
+    fs::remove_file(obstruction).unwrap();
+    workspace.close_clean().unwrap();
+    fixture
+        .host
+        .attach(fixture.options("second", 2), deadline())
+        .unwrap()
+        .close_clean()
+        .unwrap();
+}

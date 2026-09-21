@@ -69,6 +69,7 @@ impl Workspace {
             .registry
             .lock()
             .map_err(|_| WorkspaceError::Io)?
+            .entries
             .retain(|entry| entry.incarnation != self.inner.incarnation);
         Ok(())
     }

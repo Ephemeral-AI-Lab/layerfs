@@ -39,3 +39,18 @@ impl Drop for Charge {
         self.budget.used.fetch_sub(self.bytes, Ordering::AcqRel);
     }
 }
+impl Charge {
+    /// Adjusts a reservation to the capacity the allocator actually retained.
+    pub fn resize(&mut self, bytes: usize) -> Result<(), WorkspaceError> {
+        if bytes > self.bytes {
+            let mut additional = self.budget.reserve(bytes - self.bytes)?;
+            additional.bytes = 0;
+        } else {
+            self.budget
+                .used
+                .fetch_sub(self.bytes - bytes, Ordering::AcqRel);
+        }
+        self.bytes = bytes;
+        Ok(())
+    }
+}

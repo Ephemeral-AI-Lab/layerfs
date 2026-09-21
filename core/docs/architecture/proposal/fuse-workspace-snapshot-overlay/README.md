@@ -49,6 +49,8 @@ sequence and persistent owner decisions into the next task.
 container-mounted Workspace. Remaining lifecycle/edit/Commit controls are still
 open; Status does not qualify those routes.
 
+**Readable admission correction:** [the registry now grows on demand](11-registry-admission.md), with retained capacity and failed cleanup still charged. It no longer preallocates MAX_COUNT.
+
 **R2 prerequisite:** [the attribute hierarchy correction](10-attribute-hierarchy.md) fixes shared wide-tree construction and validates bounded descent before the portable metadata operation. Existing historical roots and receipts keep their original identities.
 
 **Current writable target:** the owner includes `npm install` with large and

@@ -29,13 +29,55 @@ pub(crate) struct Host {
     pub remote: AtomicBool,
     pub deliver: OperationDelivery,
     pub request_id: AtomicU64,
-    pub registry: Mutex<Vec<Entry>>,
+    pub registry: Mutex<Registry>,
     pub _charge: Charge,
 }
 pub(crate) struct Entry {
-    pub id: String,
+    pub id: Box<str>,
     pub incarnation: [u8; 32],
     pub state: Option<Arc<Inner>>,
+    pub _name_charge: Charge,
+}
+pub(crate) struct Registry {
+    pub entries: Vec<Entry>,
+    capacity_charge: Charge,
+}
+impl Registry {
+    fn reserve_one(
+        &mut self,
+        budget: &Arc<Budget>,
+        max_count: usize,
+    ) -> Result<(), WorkspaceError> {
+        if self.entries.len() < self.entries.capacity() {
+            return Ok(());
+        }
+        let capacity = self
+            .entries
+            .capacity()
+            .checked_mul(2)
+            .unwrap_or(max_count)
+            .max(1)
+            .min(max_count);
+        let bytes = capacity
+            .checked_mul(size_of::<Entry>())
+            .ok_or(WorkspaceError::Capacity)?;
+        // Both old and replacement allocation remain charged throughout the move.
+        let mut charge = budget.reserve(bytes)?;
+        let mut entries = Vec::new();
+        entries
+            .try_reserve_exact(capacity)
+            .map_err(|_| WorkspaceError::Capacity)?;
+        charge.resize(
+            entries
+                .capacity()
+                .checked_mul(size_of::<Entry>())
+                .ok_or(WorkspaceError::Capacity)?,
+        )?;
+        entries.append(&mut self.entries);
+        drop(std::mem::replace(&mut self.entries, entries));
+        self.capacity_charge = charge;
+        Ok(())
+    }
 }
 struct Remote<'a>(&'a AtomicBool);
 impl Drop for Remote<'_> {
@@ -64,14 +106,12 @@ impl WorkspaceHost {
             return Err(WorkspaceError::InvalidInput);
         }
         let budget = Budget::new(config.memory_budget_bytes);
-        let registry_bytes = config
-            .max_count
-            .checked_mul(size_of::<Entry>() + 128)
-            .and_then(|bytes| bytes.checked_add(8192))
-            .ok_or(WorkspaceError::Capacity)?;
-        let minimum = registry_bytes
+        let minimum = 8192usize
             .checked_add(
-                8192 + CALL_SCRATCH
+                size_of::<Entry>()
+                    + 63
+                    + 8192
+                    + CALL_SCRATCH
                     + MAX_READ_BYTES
                     + NODE_LIMIT * size_of::<Node>()
                     + HANDLE_LIMIT * size_of::<Handle>()
@@ -81,11 +121,11 @@ impl WorkspaceHost {
         if minimum > config.memory_budget_bytes {
             return Err(WorkspaceError::Capacity);
         }
-        let charge = budget.reserve(registry_bytes)?;
-        let mut registry = Vec::new();
-        registry
-            .try_reserve_exact(config.max_count)
-            .map_err(|_| WorkspaceError::Capacity)?;
+        let charge = budget.reserve(8192)?;
+        let registry = Registry {
+            entries: Vec::new(),
+            capacity_charge: budget.reserve(0)?,
+        };
         secure_directory(&config.root, false)?;
         secure_directory(&config.root.join("workspace"), true)?;
         Ok(Self {
@@ -129,19 +169,21 @@ impl WorkspaceHost {
         }
         {
             let mut registry = self.inner.registry.lock().map_err(|_| WorkspaceError::Io)?;
-            if registry.len() == self.inner.config.max_count {
+            if registry.entries.len() == self.inner.config.max_count {
                 return Err(WorkspaceError::Capacity);
             }
-            if registry
-                .iter()
-                .any(|entry| entry.id == options.id || entry.incarnation == options.incarnation)
-            {
+            if registry.entries.iter().any(|entry| {
+                entry.id.as_ref() == options.id || entry.incarnation == options.incarnation
+            }) {
                 return Err(WorkspaceError::Busy);
             }
-            registry.push(Entry {
-                id: options.id.clone(),
+            let name_charge = self.inner.budget.reserve(options.id.len())?;
+            registry.reserve_one(&self.inner.budget, self.inner.config.max_count)?;
+            registry.entries.push(Entry {
+                id: options.id.as_str().into(),
                 incarnation: options.incarnation,
                 state: None,
+                _name_charge: name_charge,
             });
         }
         let path = self.inner.config.root.join("workspace").join(&options.id);
@@ -236,8 +278,9 @@ impl WorkspaceHost {
             });
             let mut registry = self.inner.registry.lock().map_err(|_| WorkspaceError::Io)?;
             registry
+                .entries
                 .iter_mut()
-                .find(|entry| entry.id == options.id)
+                .find(|entry| entry.id.as_ref() == options.id)
                 .ok_or(WorkspaceError::Io)?
                 .state = Some(inner.clone());
             Ok(Workspace {
@@ -247,7 +290,9 @@ impl WorkspaceHost {
         })();
         if result.is_err() && (!owned_directory || fs::remove_dir(&path).is_ok()) {
             if let Ok(mut registry) = self.inner.registry.lock() {
-                registry.retain(|entry| entry.id != options.id);
+                registry
+                    .entries
+                    .retain(|entry| entry.id.as_ref() != options.id);
             }
         }
         result
