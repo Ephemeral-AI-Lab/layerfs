@@ -2936,3 +2936,40 @@ alone **224 passed / 0 failed**; `clippy --all-targets` clean; `fmt --all --chec
 
 Production LOC: **31616 → 31684 (delta +68)** for the change and **31684 → 31684 (delta 0)** for the
 re-pin. Method `tools/production_loc.py --root <tree>`, first parent against each committed tree.
+
+## L75 — #219 rounds 14–16 landed, and the v0.1.6 question is re-framed as an exploration (2026-09-21)
+
+Status: **Handoff.** Rounds 14, 15 and 16 are filed as L72, L73 and L74; the row is
+`ns19-Q2-repin-20260921T115200Z`, **PASS, 13/13 gates, 14/14 pinned counters**, `operation_work_ns`
+**1218.88 ms** against a clean tree of ≤ 3487.3 ms (**−65.0 %**) and the handoff's 1473.8 ms
+(**−254.9 ms**). Evidence: `issue219-ns19o-stored-…` (L72), `issue219-ns19p-grouped-…` (L73),
+`issue219-ns19q-ordinalblock-…` (L74). Branch `codex/219-ns10000` at `d7f1d8556`, pushed.
+
+**What the three rounds cost and bought, in one line each.** L72 stored a payload the codec cannot
+shrink (−165.20 ms of codec work, −93.13 ms of row, the row claim refuted by its own clause); L73 gave
+the compact whole-file lane group boundaries (8,925 fewer statements and pack writes, −97.54 ms, and it
+had to walk around invariant 2 — only a placed row can be a delta base); L74 made the pooled ordinal
+reservation a block (74 % of the row's COMMITs were one statement; `commits` 285 → 95, −64.28 ms) and in
+doing so **priced a COMMIT at 0.21 ms**, which closes the largest term in the row as a lever: 302 MB at
+659 MB/s, ~20 ms of transaction overhead left in 458.3 ms.
+
+**Boundary-matched, the row is now level with the fastest v0.1.6 row.** `operation_work_ns` 1218.9 +
+`construct_ns` 449.3 + `construct_noise_ns` 113.8 = **1782.0 ms** (CPU + the same two = 1791.5) against
+the reference's three same-shape rows at **1789.5 / 2116.7 / 2195.3 ms of CPU**. L69 recorded the row at
+2219.4 ms on this basis and called it "1.4 % beyond the worst of the three and 24 % behind the best";
+rounds 10–16 removed **437 ms** of boundary-matched work. The premise of the v0.1.6 question is
+therefore testable now, and part of it is already refuted.
+
+**Two structural differences are visible by reading, and one of them is new here.** The reference
+(`crates/layerfs-layerstack-store`) is the same physical family — `object_packs` + a `WITHOUT ROWID`
+locator table — but its `objects` is keyed on a 32-byte `object_id` with **no secondary index anywhere
+in the schema**, where this Store keys on `(object_id, save_id)` **and** declares
+`CREATE INDEX objects_save`: two B-trees per locator insert against one, on 25,245 rows at 5.68 µs each.
+The reference also has a `spill.rs` and a coalescing batch session, and whether its payload bytes reach
+the pager at all decides whether the matched-boundary comparison is even the right frame. Both are
+readable in an afternoon. Commission:
+[`issue219-ns19-algorithm-gap-handoff.md`](../../0.1.7/issue219-ns19-algorithm-gap-handoff.md), which
+asks the next agent to explore first and choose a direction from what it finds.
+
+Production LOC: **31426 → 31684** across the three product commits, each reported separately in its own
+message (`+132`, `+58`, `+68`); the re-pins and reports report the unchanged total and delta 0.
