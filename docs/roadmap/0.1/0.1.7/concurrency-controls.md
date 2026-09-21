@@ -166,7 +166,11 @@ the real service route then refused, reads admitted while all four writers are
 busy, two sandboxes sharing one Store budget, a second Store with its own budget,
 a saturated read bound that neither blocks writers nor exceeds itself).
 
-**Gaps, stated plainly.** The Docker daemon/host routes
+**Gaps, stated plainly.** An unknown `COMMIT` outcome cannot be induced in this
+slice (no fault injection in product source), so the retained-ownership cases
+above seed the persisted state a lost acknowledgement or a failed cleanup leaves
+rather than inducing one; that induction gap is pre-existing and unchanged. The
+Docker daemon/host routes
 (`core/crates/layerfs-daemon/tests/*.py`, `core/crates/layerfs-service/tests/*.py`)
 were **not run** here; they need a Linux Docker host. No performance measurement
 was taken at any budget: raising the budget is not a throughput claim, and the

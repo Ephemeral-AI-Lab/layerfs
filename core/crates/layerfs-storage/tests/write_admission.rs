@@ -199,6 +199,31 @@ fn a_retained_owner_above_the_budget_is_never_bypassed() {
 }
 
 #[test]
+fn a_definite_failure_at_a_higher_budget_releases_only_its_own_slot() {
+    let temp = TempDir::new("admission-failure");
+    let path = temp.store_path("shared");
+    let store = create_store(&path);
+    configure(&store, 4);
+    let mut saves: Vec<_> = (0..4)
+        .map(|_| disabled(|s| store.begin_save(s.child("writer"))).unwrap())
+        .collect();
+    assert_eq!(live_slots(&path), vec![1, 2, 3, 4]);
+    // One writer ends definitely; only its own slot and rows are released.
+    let failed = saves.remove(2);
+    disabled(|s| failed.abort(s.child("abort"))).unwrap();
+    assert_eq!(live_slots(&path), vec![1, 2, 4]);
+    let replacement = disabled(|s| store.begin_save(s.child("replacement"))).unwrap();
+    assert_eq!(live_slots(&path), vec![1, 2, 3, 4]);
+    assert!(matches!(
+        disabled(|s| store.begin_save(s.child("over"))),
+        Err(StorageError::OwnershipUnavailable)
+    ));
+    drop(saves);
+    drop(replacement);
+    assert_eq!(live_owners(&path), 0);
+}
+
+#[test]
 fn content_written_under_a_higher_budget_is_readable_after_it_is_lowered() {
     let temp = TempDir::new("admission-compat");
     let path = temp.store_path("shared");
