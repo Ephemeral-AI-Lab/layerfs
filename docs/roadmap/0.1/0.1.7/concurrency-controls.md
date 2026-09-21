@@ -97,12 +97,25 @@ phase grew from 125 MiB at a budget of 1 to 253 MiB at a budget of 8, about
 service route, a budget of 2 bought 1.13x (16 writes) and 1.25x (64 writes) over
 a budget of 1; a budget of 4 bought 1.11x/1.19x and a budget of 8 bought
 0.96x/1.00x, against a 1.4% spread for a repeated budget-1 arm. The measured
-reason is the work mix: about 18% of one logical write is the construction half
-that can overlap, and about 82% is the C2 save half, which serializes on the
-Store's short write transactions. See the
+reason is the work mix - about 18% of one logical write is the construction half
+that can overlap and about 82% is the C2 save half, which serializes on the
+Store's short write transactions - and the CPU accounting says even that
+construction half barely overlaps: eight concurrent writers used **1.30 cores**
+against 0.97 at a budget of 1. See the
 [writer-budget diagnostic](evidence/issue216-writer-budget-20260921T004651Z/README.md),
 which reports the plateau, the variability control, the interference on a host
 that was not idle, and the gaps.
+
+**Measured rates and CPU.** On one host: 115-126 MiB/s through construct+save for
+incompressible bytes at any budget, 124 MiB/s for a single 256 MiB write,
+472 MiB/s for content that deduplicates, and 447-464 MiB/s for sequential
+read-back. The encrypted transport is 0.222 GB/s on one stream (0.97 cores) and
+0.441 GB/s on two (1.92 cores); nothing measured reaches multi-GB/s, and the
+repository's only multi-GB transport row is unencrypted TCP at 1.882 GB/s against
+a frozen 2 GB/s target the encrypted rows never met. The product creates no
+worker threads: the observed thread count is exactly one plus the concurrent
+callers (2 threads at a budget of 1, 9 at a budget of 8). See the
+[CPU and rate diagnostic](evidence/issue216-cpu-and-rate-20260921T011300Z/README.md).
 
 **Schema compatibility.** Schema 8 replaces the fixed two-slot model. A schema-7
 Store is **rejected, not migrated**, exactly as versions 2–7 were, and no row is

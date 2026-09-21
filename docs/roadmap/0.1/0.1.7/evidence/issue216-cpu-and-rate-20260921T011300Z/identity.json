@@ -1,0 +1,19 @@
+{
+ "commit": "d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e",
+ "tree": "8899ccfa9cc58d6bba16348104e45012229f44a3",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "binaries": {
+  "measure_admission": "472517d429638545670deb15accb229843cf52af412d3067500295e5e20e058b",
+  "measure_ingest": "6b90ea423f49ddc009f3de22ee2df849478b00caac4da11ff52428069fb732c4",
+  "transport_probe": "e12a3707562aeffcc2414e41dfa9bbe3923c7d834f87f4a7ebfafb222481d58a",
+  "public_key": "350ea3068c05f54cc466f3d6d336f2c721d295538c63e0742f525abe23d4480c"
+ },
+ "host": "Darwin 25.4.0 arm64",
+ "macos": "26.4.1",
+ "logical_cores": 14,
+ "profile": "release",
+ "cpu_accounting": "every arm ran under /usr/bin/time -l; effective cores = (user + sys) / real; thread counts sampled every 20 ms with ps -M on the arm's own pid",
+ "cache_state": "declared identical per arm: payloads built in-process before the timed phase, fresh Store per arm, no invalidation for one arm only, no cold-cache claim",
+ "transport_topology": "host-to-host loopback (server and client on this host); the frozen tdx1 selection runs the client in a --cpus=1 container instead, so these rows are not comparable as a container qualification",
+ "interference": "the host was not idle: desktop processes (WindowServer, Chrome, Codex, WeChat) used CPU throughout and the 1-minute load average was 6.8-7.1 on 14 logical cores; every arm ran under the same declared interference"
+}

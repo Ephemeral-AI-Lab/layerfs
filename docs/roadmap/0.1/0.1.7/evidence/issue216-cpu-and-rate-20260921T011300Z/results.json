@@ -1,0 +1,395 @@
+{
+ "commit": "d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e",
+ "tree": "8899ccfa9cc58d6bba16348104e45012229f44a3",
+ "arms": {
+  "cpu-w1": {
+   "arm": "cpu-w1",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/measure_admission --writers 1 --writes 64 --bytes 4194304 --mode queued --commit d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-measure/issue216-cpu-rate-run3-20260921T010400Z/cpu-w1",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 2.87,
+    "user_s": 1.71,
+    "sys_s": 1.07,
+    "max_rss_bytes": 408289280,
+    "max_threads": 0,
+    "thread_samples": 29
+   },
+   "load_before": "8:59  up 1 day,  7:01, 2 users, load averages: 5.40 5.74 5.83",
+   "receipt_lines": [
+    "arm                writers=1 writes=64 bytes_per_write=4194304 mode=Queued",
+    "commit             d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e",
+    "host               macos aarch64 (14 logical cores)",
+    "cache declaration  payloads built in-process before the timed phase; fresh",
+    "                   Store inside this arm's output; no invalidation for one",
+    "                   arm only; no cold-cache claim; one sample per arm",
+    "preparation        0.078 s (untimed)",
+    "setup              0.006 s (store create + budget set + service assembly)",
+    "work               2.223 s   115.16 MiB/s   28.79 writes/s",
+    "verification       0.548 s   64/64 saved roots read back byte-identical, 0 mismatched",
+    "cleanup            0.000 s",
+    "complete command   2.855 s",
+    "peak in flight     1 (budget 1); admitted at once 1",
+    "decisions          0.000 s to decide every oversubscribed caller",
+    "outcomes           inserted=64 refused=0 failed=0",
+    "store file         273252352 bytes (260.6 MiB, 1.02x the payload)",
+    "rss                before=Some(264928) KiB after=Some(398016) KiB"
+   ],
+   "effective_cores": 0.969
+  },
+  "cpu-w8": {
+   "arm": "cpu-w8",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/measure_admission --writers 8 --writes 64 --bytes 4194304 --mode queued --commit d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-measure/issue216-cpu-rate-run3-20260921T010400Z/cpu-w8",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 2.7,
+    "user_s": 2.12,
+    "sys_s": 1.38,
+    "max_rss_bytes": 536707072,
+    "max_threads": 0,
+    "thread_samples": 27
+   },
+   "load_before": "8:59  up 1 day,  7:01, 2 users, load averages: 5.69 5.79 5.84",
+   "receipt_lines": [
+    "arm                writers=8 writes=64 bytes_per_write=4194304 mode=Queued",
+    "commit             d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e",
+    "host               macos aarch64 (14 logical cores)",
+    "cache declaration  payloads built in-process before the timed phase; fresh",
+    "                   Store inside this arm's output; no invalidation for one",
+    "                   arm only; no cold-cache claim; one sample per arm",
+    "preparation        0.079 s (untimed)",
+    "setup              0.005 s (store create + budget set + service assembly)",
+    "work               2.031 s   126.07 MiB/s   31.52 writes/s",
+    "verification       0.565 s   64/64 saved roots read back byte-identical, 0 mismatched",
+    "cleanup            0.000 s",
+    "complete command   2.680 s",
+    "peak in flight     8 (budget 8); admitted at once 8",
+    "decisions          0.000 s to decide every oversubscribed caller",
+    "outcomes           inserted=64 refused=0 failed=0",
+    "store file         273555456 bytes (260.9 MiB, 1.02x the payload)",
+    "rss                before=Some(264928) KiB after=Some(523424) KiB"
+   ],
+   "effective_cores": 1.296
+  },
+  "one-w1-256mib": {
+   "arm": "one-w1-256mib",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/measure_admission --writers 1 --writes 1 --bytes 268435456 --mode queued --commit d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-measure/issue216-cpu-rate-run3-20260921T010400Z/one-w1-256mib",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 2.68,
+    "user_s": 1.7,
+    "sys_s": 0.9,
+    "max_rss_bytes": 576274432,
+    "max_threads": 0,
+    "thread_samples": 26
+   },
+   "load_before": "8:59  up 1 day,  7:01, 2 users, load averages: 5.69 5.79 5.84",
+   "receipt_lines": [
+    "arm                writers=1 writes=1 bytes_per_write=268435456 mode=Queued",
+    "commit             d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e",
+    "host               macos aarch64 (14 logical cores)",
+    "cache declaration  payloads built in-process before the timed phase; fresh",
+    "                   Store inside this arm's output; no invalidation for one",
+    "                   arm only; no cold-cache claim; one sample per arm",
+    "preparation        0.079 s (untimed)",
+    "setup              0.005 s (store create + budget set + service assembly)",
+    "work               2.061 s   124.23 MiB/s   0.49 writes/s",
+    "verification       0.516 s   1/1 saved roots read back byte-identical, 0 mismatched",
+    "cleanup            0.000 s",
+    "complete command   2.661 s",
+    "peak in flight     1 (budget 1); admitted at once 1",
+    "decisions          0.000 s to decide every oversubscribed caller",
+    "outcomes           inserted=1 refused=0 failed=0",
+    "store file         273092608 bytes (260.4 MiB, 1.02x the payload)",
+    "rss                before=Some(263920) KiB after=Some(557696) KiB"
+   ],
+   "effective_cores": 0.97
+  },
+  "repeat-64mib": {
+   "arm": "repeat-64mib",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/measure_ingest --bytes 67108864 --pattern repeat --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-measure/issue216-cpu-rate-run3-20260921T010400Z/repeat-64mib",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 0.23,
+    "user_s": 0.2,
+    "sys_s": 0.02,
+    "max_rss_bytes": 174014464,
+    "max_threads": 0,
+    "thread_samples": 3
+   },
+   "load_before": "8:59  up 1 day,  7:01, 2 users, load averages: 5.69 5.79 5.84",
+   "receipt_lines": [
+    "payload            64.0 MiB (67108864 bytes, Repeat)",
+    "fixture build      0.088 s (untimed, declared)",
+    "objects emitted    4130 (4096 chunks), canonical 64.2 MiB",
+    "root               65bdfe0b755c7af0fb6b9fdae75485d05d1c517b36320e490033ea448e3c7a56",
+    "content construct     0.100 s     641.99 MiB/s",
+    "  store create        0.004 s",
+    "  storage begin       0.002 s",
+    "  accept (all)        0.029 s    2213.40 MiB/s",
+    "  storage finish      0.001 s   (publication commit)",
+    "save total            0.036 s    1778.75 MiB/s",
+    "END TO END            0.136 s     471.73 MiB/s",
+    "store file         278528 bytes (0.3 MiB, 0.0x the payload)",
+    "outcome            inserted=12 reused=4118 packs_created=2 pack_appends=4 commits=8 statements=6"
+   ],
+   "effective_cores": 0.957
+  },
+  "transport-1gib-perf": {
+   "arm": "transport-1gib-perf",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/transport_probe server noise upload 1 perf",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 4.8406,
+    "max_threads": 0,
+    "thread_samples": 51,
+    "user_s": 4.55,
+    "sys_s": 0.14
+   },
+   "load_before": "8:59  up 1 day,  7:02, 2 users, load averages: 5.96 5.85 5.86",
+   "transfer": {
+    "carrier": "noise",
+    "direction": "upload",
+    "streams": 1,
+    "payload_bytes": 1073741824,
+    "transfer_ns": 4837515583,
+    "payload_chunks": 65536,
+    "authentication_handshakes": 1,
+    "verified_bytes": 0,
+    "admission_eligible": false
+   },
+   "bytes_per_second": 221961419.15766516,
+   "mib_per_second": 211.67890468374745,
+   "streams": 1,
+   "mode": "perf",
+   "topology": "host-to-host loopback; the frozen tdx1 selection runs the client in a --cpus=1 container instead",
+   "verified_bytes": 0,
+   "effective_cores": 0.969
+  },
+  "transport-2gib-perf": {
+   "arm": "transport-2gib-perf",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/transport_probe server noise upload 2 perf",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 4.867,
+    "max_threads": 0,
+    "thread_samples": 52,
+    "user_s": 9.12,
+    "sys_s": 0.24
+   },
+   "load_before": "8:59  up 1 day,  7:02, 2 users, load averages: 6.04 5.87 5.87",
+   "transfer": {
+    "carrier": "noise",
+    "direction": "upload",
+    "streams": 2,
+    "payload_bytes": 2147483648,
+    "transfer_ns": 4866673958,
+    "payload_chunks": 131072,
+    "authentication_handshakes": 2,
+    "verified_bytes": 0,
+    "admission_eligible": false
+   },
+   "bytes_per_second": 441263102.17882895,
+   "mib_per_second": 420.82128732569595,
+   "streams": 2,
+   "mode": "perf",
+   "topology": "host-to-host loopback; the frozen tdx1 selection runs the client in a --cpus=1 container instead",
+   "verified_bytes": 0,
+   "effective_cores": 1.923
+  },
+  "transport-1gib-verify": {
+   "arm": "transport-1gib-verify",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/transport_probe server noise upload 1 verify",
+   "returncode": 0,
+   "cpu": {
+    "real_s": 4.9476,
+    "max_threads": 0,
+    "thread_samples": 52,
+    "user_s": 4.56,
+    "sys_s": 0.12
+   },
+   "load_before": "8:59  up 1 day,  7:02, 2 users, load averages: 6.52 5.97 5.90",
+   "transfer": {
+    "carrier": "noise",
+    "direction": "upload",
+    "streams": 1,
+    "payload_bytes": 1073741824,
+    "transfer_ns": 4947241875,
+    "payload_chunks": 65536,
+    "authentication_handshakes": 1,
+    "verified_bytes": 1073741824,
+    "admission_eligible": false
+   },
+   "bytes_per_second": 217038473.38169613,
+   "mib_per_second": 206.98401773614515,
+   "streams": 1,
+   "mode": "verify",
+   "topology": "host-to-host loopback; the frozen tdx1 selection runs the client in a --cpus=1 container instead",
+   "verified_bytes": 1073741824,
+   "effective_cores": 0.946
+  }
+ },
+ "thread_arms": {
+  "threads-w1": {
+   "arm": "threads-w1",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/measure_admission --writers 1 --writes 64 --bytes 1048576 --mode queued --commit d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-measure/issue216-threads-run3-20260921T011100Z/threads-w1",
+   "returncode": 0,
+   "max_threads": 2,
+   "samples": 23,
+   "thread_histogram": {
+    "1": 5,
+    "2": 18
+   },
+   "load_before": "9:01  up 1 day,  7:03, 2 users, load averages: 5.88 5.92 5.89"
+  },
+  "threads-w8": {
+   "arm": "threads-w8",
+   "command": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/examples/measure_admission --writers 8 --writes 64 --bytes 1048576 --mode queued --commit d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-measure/issue216-threads-run3-20260921T011100Z/threads-w8",
+   "returncode": 0,
+   "max_threads": 9,
+   "samples": 22,
+   "thread_histogram": {
+    "1": 5,
+    "2": 1,
+    "9": 16
+   },
+   "load_before": "9:01  up 1 day,  7:03, 2 users, load averages: 5.88 5.92 5.89"
+  }
+ },
+ "derived_read_back": [
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/queued-w1",
+   "read_bytes": 67108864,
+   "verification_ns": 138484042,
+   "mib_per_s": 462.15,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/queued-w2",
+   "read_bytes": 67108864,
+   "verification_ns": 139109125,
+   "mib_per_s": 460.07,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/queued-w4",
+   "read_bytes": 67108864,
+   "verification_ns": 152726834,
+   "mib_per_s": 419.05,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/queued-w8",
+   "read_bytes": 67108864,
+   "verification_ns": 143499417,
+   "mib_per_s": 445.99,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/long-w1",
+   "read_bytes": 268435456,
+   "verification_ns": 573203083,
+   "mib_per_s": 446.61,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/long-w2",
+   "read_bytes": 268435456,
+   "verification_ns": 605874541,
+   "mib_per_s": 422.53,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/long-w4",
+   "read_bytes": 268435456,
+   "verification_ns": 605509833,
+   "mib_per_s": 422.78,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  },
+  {
+   "source": "issue216-writer-budget-20260921T004651Z/long-w8",
+   "read_bytes": 268435456,
+   "verification_ns": 645884625,
+   "mib_per_s": 396.36,
+   "note": "verification phase: one sequential read per write plus a byte comparison, single-threaded; not a dedicated read benchmark"
+  }
+ ],
+ "historical_transport_comparison": {
+  "source": "core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/tdx1-*/result.json (frozen tdx1 v3 selection, 2026-09-20, client in a --cpus=1 container)",
+  "target_payload_bytes_per_second": 2000000000,
+  "rows": [
+   {
+    "case": "tdx1-noise-upload-1-perf-v3",
+    "gb_per_s": 0.26,
+    "status": "PASS",
+    "note": "encrypted, 1 stream"
+   },
+   {
+    "case": "tdx1-noise-upload-2-perf-v3",
+    "gb_per_s": 0.533,
+    "status": "PASS",
+    "note": "encrypted, 2 streams"
+   },
+   {
+    "case": "tdx1-noise-download-1-perf-v3",
+    "gb_per_s": 0.233,
+    "status": "PASS",
+    "note": "encrypted, 1 stream"
+   },
+   {
+    "case": "tdx1-noise-download-2-perf-v3",
+    "gb_per_s": 0.614,
+    "status": "PASS",
+    "note": "encrypted, 2 streams"
+   },
+   {
+    "case": "tdx1-tcp-upload-1-perf-v2",
+    "gb_per_s": 1.882,
+    "status": "PASS",
+    "note": "plain TCP, no AEAD"
+   },
+   {
+    "case": "tdx1-tcp-download-1-perf-v3",
+    "gb_per_s": 1.001,
+    "status": "PASS",
+    "note": "plain TCP, no AEAD"
+   }
+  ],
+  "note": "the 2 GB/s target is a payload-bytes-per-second target for the transport selection; the encrypted rows never met it, and only the unencrypted TCP upload came close"
+ },
+ "identity": {
+  "commit": "d84467c4cfe0516cbc4ff0c89ca7f98cba30d00e",
+  "tree": "8899ccfa9cc58d6bba16348104e45012229f44a3",
+  "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+  "binaries": {
+   "measure_admission": "472517d429638545670deb15accb229843cf52af412d3067500295e5e20e058b",
+   "measure_ingest": "6b90ea423f49ddc009f3de22ee2df849478b00caac4da11ff52428069fb732c4",
+   "transport_probe": "e12a3707562aeffcc2414e41dfa9bbe3923c7d834f87f4a7ebfafb222481d58a",
+   "public_key": "350ea3068c05f54cc466f3d6d336f2c721d295538c63e0742f525abe23d4480c"
+  },
+  "host": "Darwin 25.4.0 arm64",
+  "macos": "26.4.1",
+  "logical_cores": 14,
+  "profile": "release",
+  "cpu_accounting": "every arm ran under /usr/bin/time -l; effective cores = (user + sys) / real; thread counts sampled every 20 ms with ps -M on the arm's own pid",
+  "cache_state": "declared identical per arm: payloads built in-process before the timed phase, fresh Store per arm, no invalidation for one arm only, no cold-cache claim",
+  "transport_topology": "host-to-host loopback (server and client on this host); the frozen tdx1 selection runs the client in a --cpus=1 container instead, so these rows are not comparable as a container qualification",
+  "interference": "the host was not idle: desktop processes (WindowServer, Chrome, Codex, WeChat) used CPU throughout and the 1-minute load average was 6.8-7.1 on 14 logical cores; every arm ran under the same declared interference"
+ },
+ "discarded": [
+  {
+   "run": "issue216-cpu-rate-20260921T005700Z",
+   "reason": "the runner's thread sampler sampled the /usr/bin/time wrapper instead of the arm, and the transport arms used private keys where the probe expects peer public keys, so every transport arm failed the handshake; both defects were in the runner, not the product",
+   "used": false
+  },
+  {
+   "run": "issue216-cpu-rate-run2-20260921T010200Z",
+   "reason": "the runner crashed while formatting its own command list (a Path passed to str.join) after the first arm; the arm itself completed and its receipt is retained",
+   "used": false
+  },
+  {
+   "run": "issue216-threads-20260921T010700Z / -run2-",
+   "reason": "the thread sampler matched command names, and macOS lists non-main threads with an empty command column, so it reported 1 thread for every process; replaced by a pid-based sampler",
+   "used": false
+  }
+ ]
+}
