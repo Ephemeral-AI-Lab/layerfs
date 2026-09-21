@@ -43,6 +43,7 @@ pub struct Arena {
 }
 pub struct ArenaState {
     pub next: u32,
+    pub reserved_slots: usize,
     pub free: PageRef,
     pub reusable: usize,
     pub ledgers: u32,
@@ -57,6 +58,7 @@ pub struct RootOwner {
     pub arena: Arc<Arena>,
     pub parent: Option<Arc<RootOwner>>,
     pub fund: Option<Arc<ProgressFund>>,
+    pub allowance: u64,
     pub state: Mutex<RootState>,
     pub _charge: MetadataCharge,
 }
@@ -66,10 +68,16 @@ pub struct RootState {
     pub slot_pending: Option<PageRef>,
     pub edge_progress: Option<(PageRef, usize)>,
     pub reserved: u64,
+    pub slot_credits: usize,
+    pub ledger_table: Option<LedgerTable>,
     pub completion_generation: Option<u64>,
     pub pending: Option<Pending>,
     pub custodies: Vec<PageRef>,
     pub cleanup: Vec<super::ownership::CleanupFrame>,
+}
+pub struct LedgerTable {
+    pub identities: Vec<(u64, u64)>,
+    pub charge: MetadataCharge,
 }
 pub struct Pending {
     pub name: String,
@@ -151,6 +159,7 @@ impl MetadataHost {
             host: Arc::downgrade(self),
             state: Mutex::new(ArenaState {
                 next: 1,
+                reserved_slots: 0,
                 free: PageRef::NULL,
                 reusable: 0,
                 ledgers: 0,
@@ -266,12 +275,15 @@ impl MetadataHost {
             arena: arena.clone(),
             parent,
             fund: None,
+            allowance: CANDIDATE_BYTES,
             state: Mutex::new(RootState {
                 root: PageRef::NULL,
                 temporary,
                 slot_pending: None,
                 edge_progress: None,
                 reserved: reservation,
+                slot_credits: 0,
+                ledger_table: None,
                 completion_generation: needs_completion.then_some(generation),
                 pending: None,
                 custodies,
@@ -282,33 +294,100 @@ impl MetadataHost {
         roots.push(owner.clone());
         Ok(owner)
     }
+    fn funded_root(
+        &self,
+        arena: &Arc<Arena>,
+        fund: &Arc<ProgressFund>,
+        allowance: u64,
+    ) -> Result<Arc<RootOwner>, WorkspaceError> {
+        let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
+        Ok(Arc::new(RootOwner {
+            arena: arena.clone(),
+            parent: None,
+            fund: Some(fund.clone()),
+            allowance,
+            state: Mutex::new(RootState {
+                root: PageRef::NULL,
+                temporary: super::metadata_index::vector(128)?,
+                slot_pending: None,
+                edge_progress: None,
+                reserved: 0,
+                slot_credits: 0,
+                ledger_table: None,
+                completion_generation: None,
+                pending: None,
+                custodies: super::metadata_index::vector(1)?,
+                cleanup: super::metadata_index::vector(12)?,
+            }),
+            _charge: charge,
+        }))
+    }
+    pub fn reconciliation_root(
+        self: &Arc<Self>,
+        arena: &Arc<Arena>,
+        fund: &Arc<ProgressFund>,
+    ) -> Result<Arc<RootOwner>, WorkspaceError> {
+        let ledger_charge = self.memory(1058 * 16)?;
+        let ledger_table = LedgerTable {
+            identities: super::metadata_index::vector(1058)?,
+            charge: ledger_charge,
+        };
+        let owner = self.funded_root(arena, fund, 64 * 4096)?;
+        owner
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .ledger_table = Some(ledger_table);
+        let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+        if roots.len() == MAX_ROOTS {
+            return Err(WorkspaceError::Capacity);
+        }
+        grow(&mut roots, self, &self.root_charge, MAX_ROOTS)?;
+        if arena.state.lock().map_err(|_| WorkspaceError::Io)?.blocked {
+            return Err(WorkspaceError::Busy);
+        }
+        for root in roots.iter().filter(|root| Arc::ptr_eq(&root.arena, arena)) {
+            if root
+                .state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .slot_pending
+                .is_some()
+            {
+                return Err(WorkspaceError::Busy);
+            }
+        }
+        let mut state = owner.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut arena_state = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if arena_state.blocked
+            || arena_state.next as usize - 1 + arena_state.reserved_slots + 26 > 65536
+        {
+            return Err(WorkspaceError::Capacity);
+        }
+        self.slots
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count.checked_add(26).filter(|total| *total <= 65536)
+            })
+            .map_err(|_| WorkspaceError::Capacity)?;
+        if let Err(error) = fund.take(64 * 4096) {
+            self.slots.fetch_sub(26, Ordering::AcqRel);
+            return Err(error);
+        }
+        state.reserved = 64 * 4096;
+        state.slot_credits = 26;
+        arena_state.reserved_slots += 26;
+        drop(arena_state);
+        drop(state);
+        roots.push(owner.clone());
+        Ok(owner)
+    }
     pub fn result_roots(
         self: &Arc<Self>,
         arena: &Arc<Arena>,
         fund: &Arc<ProgressFund>,
     ) -> Result<[Arc<RootOwner>; 2], WorkspaceError> {
-        let make = || -> Result<Arc<RootOwner>, WorkspaceError> {
-            let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
-            Ok(Arc::new(RootOwner {
-                arena: arena.clone(),
-                parent: None,
-                fund: Some(fund.clone()),
-                state: Mutex::new(RootState {
-                    root: PageRef::NULL,
-                    temporary: super::metadata_index::vector(128)?,
-                    slot_pending: None,
-                    edge_progress: None,
-                    reserved: 0,
-                    completion_generation: None,
-                    pending: None,
-                    custodies: super::metadata_index::vector(1)?,
-                    cleanup: super::metadata_index::vector(12)?,
-                }),
-                _charge: charge,
-            }))
-        };
-        let first = make()?;
-        let second = make()?;
+        let first = self.funded_root(arena, fund, 8 * 4096)?;
+        let second = self.funded_root(arena, fund, 8 * 4096)?;
         let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
         if roots.len() + 2 > MAX_ROOTS {
             return Err(WorkspaceError::Capacity);
@@ -355,15 +434,18 @@ impl MetadataHost {
         let arenas = self.arenas.lock().map_err(|_| WorkspaceError::Io)?;
         let mut pages = 0;
         let mut reusable = 0;
+        let mut reserved_slots = 0;
         for a in arenas.iter() {
             let s = a.state.lock().map_err(|_| WorkspaceError::Io)?;
             pages += s.pages;
             reusable += s.reusable;
+            reserved_slots += s.reserved_slots;
         }
         let s = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
         Ok(MetadataStatus {
             allocated_pages: pages,
             reusable_pages: reusable,
+            reserved_slots,
             roots: roots.len(),
             external_roots: roots.iter().filter(|r| Arc::strong_count(r) > 1).count(),
             allocated_bytes: s.metadata_allocated,
@@ -500,15 +582,22 @@ fn grow<T>(
 }
 pub struct ProgressFund {
     pub host: Weak<MetadataHost>,
-    available: Mutex<u64>,
+    available: Mutex<FundState>,
     generation: Mutex<Option<u64>>,
     _charge: MetadataCharge,
+}
+struct FundState {
+    bytes: u64,
+    finished: bool,
 }
 impl ProgressFund {
     pub fn new(host: &Arc<MetadataHost>) -> Result<Arc<Self>, WorkspaceError> {
         Ok(Arc::new(Self {
             host: Arc::downgrade(host),
-            available: Mutex::new(0),
+            available: Mutex::new(FundState {
+                bytes: 0,
+                finished: false,
+            }),
             generation: Mutex::new(None),
             _charge: host.memory(256)?,
         }))
@@ -519,24 +608,54 @@ impl ProgressFund {
             return Err(WorkspaceError::Io);
         }
         *generation = Some(reserve.generation);
-        *self.available.lock().map_err(|_| WorkspaceError::Io)? = reserve.bytes;
+        self.available.lock().map_err(|_| WorkspaceError::Io)?.bytes = reserve.bytes;
         Ok(())
     }
     pub fn take(&self, bytes: u64) -> Result<(), WorkspaceError> {
         let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
-        *available = available
+        if available.finished {
+            return Err(WorkspaceError::Busy);
+        }
+        available.bytes = available
+            .bytes
             .checked_sub(bytes)
             .ok_or(WorkspaceError::Capacity)?;
         Ok(())
     }
     pub fn give(&self, bytes: u64) -> Result<(), WorkspaceError> {
         let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
-        *available = available.checked_add(bytes).ok_or(WorkspaceError::Io)?;
+        if available.finished {
+            return self
+                .host
+                .upgrade()
+                .ok_or(WorkspaceError::Closed)?
+                .release(0, bytes);
+        }
+        available.bytes = available
+            .bytes
+            .checked_add(bytes)
+            .ok_or(WorkspaceError::Io)?;
+        Ok(())
+    }
+    pub fn finish(&self) -> Result<(), WorkspaceError> {
+        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        if available.finished {
+            return Err(WorkspaceError::Busy);
+        }
+        self.host
+            .upgrade()
+            .ok_or(WorkspaceError::Closed)?
+            .release(0, available.bytes)?;
+        available.bytes = 0;
+        available.finished = true;
         Ok(())
     }
     pub fn recycle(&self, bytes: u64) -> Result<(), WorkspaceError> {
         let host = self.host.upgrade().ok_or(WorkspaceError::Closed)?;
         let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        if available.finished {
+            return host.release(bytes, 0);
+        }
         let mut state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
         state.allocated = state
             .allocated
@@ -554,14 +673,17 @@ impl ProgressFund {
             .metadata_reserved
             .checked_add(bytes)
             .ok_or(WorkspaceError::Io)?;
-        *available = available.checked_add(bytes).ok_or(WorkspaceError::Io)?;
+        available.bytes = available
+            .bytes
+            .checked_add(bytes)
+            .ok_or(WorkspaceError::Io)?;
         Ok(())
     }
 }
 impl Drop for ProgressFund {
     fn drop(&mut self) {
         if let (Some(host), Ok(available)) = (self.host.upgrade(), self.available.get_mut()) {
-            let _ = host.release(0, *available);
+            let _ = host.release(0, available.bytes);
         }
     }
 }
@@ -572,6 +694,27 @@ pub struct CompletionReserve {
 impl RootOwner {
     pub fn root(&self) -> Result<PageRef, WorkspaceError> {
         Ok(self.state.lock().map_err(|_| WorkspaceError::Io)?.root)
+    }
+    pub fn release_slot_credits(&self) -> Result<(), WorkspaceError> {
+        let host = self.arena.host.upgrade().ok_or(WorkspaceError::Closed)?;
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut arena = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let remaining = arena
+            .reserved_slots
+            .checked_sub(state.slot_credits)
+            .ok_or(WorkspaceError::Io)?;
+        host.slots
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                count.checked_sub(state.slot_credits)
+            })
+            .map_err(|_| WorkspaceError::Io)?;
+        arena.reserved_slots = remaining;
+        state.slot_credits = 0;
+        let unused = state.ledger_table.take();
+        drop(arena);
+        drop(state);
+        drop(unused);
+        Ok(())
     }
     pub fn reserve_result_update(&self) -> Result<(), WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -665,6 +808,7 @@ impl RootOwner {
                 .custodies
                 .pop();
         }
+        self.release_slot_credits()?;
         let host = self.arena.host.upgrade().ok_or(WorkspaceError::Closed)?;
         let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let retained = if s.completion_generation.is_some() {

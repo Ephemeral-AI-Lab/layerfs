@@ -26,7 +26,7 @@ impl Workspace {
             .host
             .budget
             .reserve(limit * (size_of::<DirectoryEntry>() + 255))?;
-        let (path, serial, parent, dots, after) = {
+        let (path, serial, parent, dots, after, base) = {
             let state = self.state()?;
             let found = state.handle(handle, true)?;
             let node = state.node(found.serial)?;
@@ -46,6 +46,7 @@ impl Workspace {
                 node.parent,
                 dots,
                 after,
+                state.base,
             )
         };
         let mut entries = Vec::new();
@@ -71,7 +72,7 @@ impl Workspace {
         if entries.len() < limit {
             let response = self.call(
                 Operation::Inspect {
-                    root: self.inner.base,
+                    root: base,
                     query: Inspect::List {
                         path: path.clone(),
                         after: after.clone(),
@@ -106,7 +107,7 @@ impl Workspace {
                 let child = child_path(&path, &name)?;
                 let response = self.call(
                     Operation::Inspect {
-                        root: self.inner.base,
+                        root: base,
                         query: Inspect::Attributes { path: child },
                     },
                     0,

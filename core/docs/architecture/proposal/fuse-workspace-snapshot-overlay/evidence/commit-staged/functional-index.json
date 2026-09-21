@@ -1,0 +1,265 @@
+{
+  "parent": "0b2c729bdb3f026f12beb667ccdc15c52853280f",
+  "performance_claim": false,
+  "selections": [
+    {
+      "receipt": "commit-consumed-stage-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8128984170034528,
+      "case": "consumed_stage",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-cycles-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.857808083994314,
+      "case": "cycles",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.811101208004402,
+      "case": "denied",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 15.626170916992123,
+      "case": "frontier",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-head-moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8150496659945929,
+      "case": "head_moved",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8193499159970088,
+      "case": "headroom",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-lost-result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8263208330026828,
+      "case": "lost_result",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-reconcile-failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8513557499973103,
+      "case": "reconcile_failure",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-aggregate-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7400137499789707,
+      "case": "aggregate",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-corruption-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7214548750198446,
+      "case": "corruption",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 29.694967667019228,
+      "case": "frontier",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-inode_frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 4.254231999977492,
+      "case": "inode_frontier",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-large_base-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.746364040998742,
+      "case": "large_base",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-ledger_collider-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7402539169997908,
+      "case": "ledger_collider",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-ledger_write_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7040058750135358,
+      "case": "ledger_write_failure",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8396830830024555,
+      "case": "metadata_failure",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-metadata_quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8097368750022724,
+      "case": "metadata_quota",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-native_shape-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7758564169926103,
+      "case": "native_shape",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0451904580113478,
+      "case": "refusals",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-edit-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6320114580157679,
+      "case": "semantics",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-mounted-status-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 25.250047541980166,
+      "case": null,
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-payload-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9735377080214676,
+      "case": null,
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-completion_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7903789580159355,
+      "case": "completion_failure",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 9.552249291999033,
+      "case": "frontier",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8353391250129789,
+      "case": "head_moved",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9773190839914605,
+      "case": "headroom",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-lowering-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8423916659958195,
+      "case": "lowering",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-metadata_denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.823190583003452,
+      "case": "metadata_denied",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8421585420146585,
+      "case": "metadata_only",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6851637910003774,
+      "case": "native_save",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.005905416997848,
+      "case": "semantics",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-regression-stage-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3551352080248762,
+      "case": "unknown_save",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-remote-admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8200315840076655,
+      "case": "remote_admission",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 4.612481624993961,
+      "case": "repeated",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-selectors-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8174373750080122,
+      "case": "selectors",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-successor-01/result.json",
+      "status": "FAIL",
+      "wall_seconds": 0.7762336250016233,
+      "case": "successor",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    },
+    {
+      "receipt": "commit-successor-02/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.1086921250098385,
+      "case": "successor",
+      "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "mode": "independent-read-only-source-review",
+  "source_parent": "0b2c729bdb3f026f12beb667ccdc15c52853280f",
+  "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89",
+  "finding": "No concrete mixed-version/cache-publication issue found in existing-file scope; not dynamic concurrency or resource-fund proof",
+  "limits": [
+    "namespace membership, inode kind, link count and symlink targets unchanged",
+    "concurrent handle release/collection may cause stale refresh failure; no retarget success found",
+    "future namespace and portable metadata operations must revisit cache/cookie assumptions"
+  ],
+  "files": {
+    "runtime/state.rs": "7a043bcedaa6371c9e94bd6598bd16699e06f8c7e1c9cf090f62c801aa1124d9",
+    "filesystem/read.rs": "c99c7a22533a5124e9ba8b021919682997bf81fb5ac9f12373cd815f8bac34c3",
+    "filesystem/namespace.rs": "f6cdf029920603a5ce937aecb0c057a7968790bb14e80673bc9b9fcad2060c13",
+    "filesystem/directory.rs": "fa57e1bdfa386e88a33d08f4fb548c4a90c1aeff92e75d19c8257720e7f55f34",
+    "filesystem/write.rs": "2684dc39f3fec03ba819dda70a61484478ade4cfd2649f7ebcb9f8333d85a9af",
+    "commit/reconcile.rs": "c85709615c1d62c25e6362d9a3730ddec8bf1f1559bf2278d10bdf2319ede008"
+  }
+}

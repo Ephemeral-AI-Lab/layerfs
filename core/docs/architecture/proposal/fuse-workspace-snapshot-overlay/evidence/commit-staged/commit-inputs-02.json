@@ -1,0 +1,18 @@
+{
+  "source_parent": "0b2c729bdb3f026f12beb667ccdc15c52853280f",
+  "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89",
+  "test_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/c8e851d1b17d81c04778c0dfce1b016dffeae184141914bf41102495784ce961/commit-test",
+  "test_binary_sha256": "c8e851d1b17d81c04778c0dfce1b016dffeae184141914bf41102495784ce961",
+  "test_source_sha256": "07df281d7484c63bcb67c0653969e99355adc473217bd2ceab0df2c9598af4fa",
+  "helper_source_sha256": "ce6c7667b4cee3530953a1e1a1d6bb7b359f1d18fdea2f37ef0e69e70b34b5e9",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/1318da2bbe95c842981fcd8ab7bb1ad33aace00d62050290c30733dbf1188c4d/host",
+  "host_binary_sha256": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "651a21a13ced522a2366f8b7adbc88e494fa1f4932787ea8dea794ef3a7875b3",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "change": "test oracle now expects Q0 Busy for canonical bytes while C5 reply owns remote admission; full window still verified after release"
+}

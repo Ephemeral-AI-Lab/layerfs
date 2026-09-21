@@ -1,0 +1,4 @@
+
+thread 'linux::commit_successor' panicked at crates/layerfs-workspace/tests/support/native_workspace.rs:375:14:
+called `Result::unwrap()` on an `Err` value: Busy
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

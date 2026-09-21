@@ -58,13 +58,18 @@ impl Workspace {
         &self,
         path: &WorkspacePath,
         deadline: Instant,
-    ) -> Result<(NodeAttributes, Root, Root), WorkspaceError> {
-        {
+    ) -> Result<(NodeAttributes, Root, Root, u64), WorkspaceError> {
+        let (base, baseline) = {
             let state = self.state()?;
-            if let Some(node) = state.nodes.iter().find(|n| n.path() == path.as_ref()) {
-                return Ok((node.original, node.content, node.metadata));
+            if let Some(node) = state
+                .nodes
+                .iter()
+                .find(|n| n.path() == path.as_ref() && n.baseline == state.baseline)
+            {
+                return Ok((node.original, node.content, node.metadata, state.baseline));
             }
-        }
+            (state.base, state.baseline)
+        };
         let _remote = self.begin(true, deadline)?;
         let mut parent = self.inner.root;
         let mut bytes = vector(4096)?;
@@ -79,7 +84,7 @@ impl Workspace {
             bytes.extend_from_slice(name);
             let response = self.call(
                 Operation::Inspect {
-                    root: self.inner.base,
+                    root: base,
                     query: Inspect::Attributes {
                         path: {
                             let mut path = vector(bytes.len())?;
@@ -104,7 +109,9 @@ impl Workspace {
             parent = node.0;
             result = Some(node);
         }
-        result.ok_or(WorkspaceError::InvalidInput)
+        result
+            .map(|(attr, content, metadata)| (attr, content, metadata, baseline))
+            .ok_or(WorkspaceError::InvalidInput)
     }
     pub fn edit_file_range(
         &self,
@@ -136,7 +143,7 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let (original, content, metadata) = self.edit_original(path, deadline)?;
+        let (original, content, metadata, baseline) = self.edit_original(path, deadline)?;
         let _writer = host.writer()?;
         if original.kind == NodeKind::Directory {
             return Err(WorkspaceError::IsDirectory);
@@ -148,6 +155,9 @@ impl Workspace {
         let (expected_revision, generation, dirty, old_root, needs_completion, frozen) = {
             let s = self.state()?;
             self.available(&s)?;
+            if s.baseline != baseline {
+                return Err(WorkspaceError::Busy);
+            }
             (
                 s.revision,
                 s.generation,

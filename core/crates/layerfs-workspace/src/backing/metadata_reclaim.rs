@@ -330,6 +330,7 @@ impl RootOwner {
                 }
             }
         }
+        self.release_slot_credits()?;
         let reserve = {
             let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let reserve = s.reserved;

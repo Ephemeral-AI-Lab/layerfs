@@ -178,7 +178,7 @@ impl Workspace {
         submission.acknowledged(stage)
     }
 }
-fn validate_stage(
+pub(crate) fn validate_stage(
     submission: &Submission,
     incarnation: [u8; 32],
     stage: &StageWire,

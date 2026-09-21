@@ -66,6 +66,13 @@ readable-mount/Status and existing local operations also passed regression.
 The next public operation is CommitStaged with exact known-result reconciliation.
 Full writable mounting, repeated Commit and npm remain open.
 
+**CommitStaged update:** [exact completion and live-successor reconciliation](17-commit-staged.md)
+now advance the local canonical base and Branch context after known C5 success.
+Twelve native selections pass, including repeated incremental commits, occupied
+quota, lost replies and local failure after remote success; one corrected test
+oracle failure remains recorded. Ordinary composite Commit, failure disposition,
+writable mounting, npm and R6 are still open. This is an SDK route subset.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

@@ -1,4 +1,4 @@
-use crate::{backing::budget::Charge, runtime::state::OperationGuard};
+use crate::{backing::budget::Charge, runtime::state::OperationGuard, CommitFailure, CommitStatus};
 use layerfs_bridge::contract::{Failure, Request, Response, Root, Source};
 use std::{io::Write, path::PathBuf, sync::Arc, time::Instant};
 
@@ -76,6 +76,7 @@ pub enum WorkspaceError {
     Service(Failure),
     Backing(BackingFailure),
     Stage(Arc<StageFailure>),
+    Commit(Arc<CommitFailure>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -254,6 +255,7 @@ pub struct MetadataCleanupReport {
 pub struct MetadataStatus {
     pub allocated_pages: usize,
     pub reusable_pages: usize,
+    pub reserved_slots: usize,
     pub roots: usize,
     pub external_roots: usize,
     pub allocated_bytes: u64,
@@ -293,6 +295,7 @@ pub struct SubmissionStatus {
     pub candidate_root: Option<Root>,
     pub failure: Option<StageFailureDisposition>,
     pub failure_phase: Option<StagePhase>,
+    pub commit: Option<CommitStatus>,
 }
 #[derive(Clone)]
 pub struct StageSelector {

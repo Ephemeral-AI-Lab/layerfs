@@ -1228,3 +1228,15 @@ completion reserve is 208 pages, including the explicit interleaving-safe ledger
 bound and a 64-page reconciliation reservation to validate in that next operation.
 The stage-only lifecycle retains all post-capture failures and refuses resubmission
 or clean close; it supplies no implicit retry/discard/recovery policy.
+
+
+[17 — CommitStaged and reconciliation](17-commit-staged.md), based on exact parent
+`0b2c729bdb3f026f12beb667ccdc15c52853280f`, implements the next public operation.
+Known own C5 results install the exact acknowledged base while preserving live D1;
+subsequent Stage/Commit submissions use only the current frontier. The compact
+reconciliation builder reserves 64 existing fund pages, 26 slot credits and charged
+ledger capacity before C5. Twelve actual native selections pass, with the original
+successor test-oracle failure retained separately. These are SDK subsets of the
+listed S/H/B rows, not mounted S-14 or full truncate/zero S-18 qualification.
+Composite Workspace::commit is next; actual UpToDate, explicit failed-state
+handling and the remaining mounted/control/npm/R6 prerequisites remain open.

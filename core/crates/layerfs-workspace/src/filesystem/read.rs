@@ -17,12 +17,25 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let deadline = Self::callback_deadline(deadline);
-        let (attr, content, root) = {
+        let _path_charge = self
+            .host
+            .budget
+            .reserve(crate::runtime::state::PATH_BYTES)?;
+        let (attr, mut content, root, base, baseline, path, path_len, stale) = {
             let state = self.state()?;
             self.available(&state)?;
             let handle = state.handle(handle, false)?;
             let node = state.node(handle.serial)?;
-            (node.attr, node.content, state.overlay.clone())
+            (
+                node.attr,
+                node.content,
+                state.overlay.clone(),
+                state.base,
+                state.baseline,
+                node.path,
+                node.path_len,
+                node.baseline != state.baseline,
+            )
         };
         let length = if offset >= attr.size {
             0
@@ -48,6 +61,39 @@ impl Workspace {
                 )?;
             } else {
                 operation.remote()?;
+                if stale {
+                    let mut selected_path = crate::backing::metadata_index::vector(path_len)?;
+                    selected_path.extend_from_slice(&path[..path_len]);
+                    let response = self.call(
+                        Operation::Inspect {
+                            root: base,
+                            query: Inspect::Attributes {
+                                path: selected_path,
+                            },
+                        },
+                        0,
+                        &mut std::io::sink(),
+                        deadline,
+                    )?;
+                    let (original, canonical, metadata) = super::namespace::attributes(
+                        response,
+                        false,
+                        self.inner.root.uid,
+                        self.inner.root.gid,
+                    )?;
+                    if original != attr {
+                        return Err(WorkspaceError::InvalidInput);
+                    }
+                    content = canonical;
+                    let mut state = self.state()?;
+                    if state.baseline == baseline {
+                        let node = state.node_mut(attr.serial)?;
+                        node.original = original;
+                        node.content = canonical;
+                        node.metadata = metadata;
+                        node.baseline = baseline;
+                    }
+                }
                 let mut output = Cursor::new(bytes.as_mut_slice());
                 let response = self.call(
                     Operation::ReadFile {
@@ -78,17 +124,17 @@ impl Workspace {
     pub fn readlink(&self, serial: u64, deadline: Instant) -> Result<ReadReply, WorkspaceError> {
         let deadline = Self::callback_deadline(deadline);
         let operation = self.begin(true, deadline)?;
-        let (path, size) = {
+        let (path, size, base) = {
             let state = self.state()?;
             let node = state.node(serial)?;
             if node.attr.kind != NodeKind::Symlink {
                 return Err(WorkspaceError::WrongKind);
             }
-            (node.path().to_vec(), node.attr.size)
+            (node.path().to_vec(), node.attr.size, state.base)
         };
         let response = self.call(
             Operation::Inspect {
-                root: self.inner.base,
+                root: base,
                 query: Inspect::Readlink { path },
             },
             0,

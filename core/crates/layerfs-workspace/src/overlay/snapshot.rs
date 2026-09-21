@@ -6,7 +6,7 @@ use crate::{
     },
     *,
 };
-use layerfs_bridge::contract::{BranchSnapshotWire, StageObservation, StageWire};
+use layerfs_bridge::contract::{StageObservation, StageWire};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -20,7 +20,7 @@ pub(crate) struct StageIdentity {
 }
 pub(crate) struct Captured {
     pub root: Arc<RootOwner>,
-    pub context: Arc<BranchSnapshotWire>,
+    pub context: Arc<crate::runtime::state::BranchContext>,
     pub generation: u64,
     pub revision: u64,
     pub count: usize,
@@ -39,6 +39,8 @@ pub(crate) struct Submission {
     pub results: [Arc<RootOwner>; 2],
     pub fund: Arc<ProgressFund>,
     pub failure: OnceLock<Arc<StageFailure>>,
+    pub commit_claimed: AtomicBool,
+    pub commit: OnceLock<Arc<crate::commit::completion::CommitAttempt>>,
     pub observed_stage: OnceLock<StageWire>,
     failure_charge: Mutex<Option<MetadataCharge>>,
     _permit: FrozenPermit,
@@ -92,6 +94,7 @@ impl Submission {
                     candidate_root: None,
                     failure: None,
                     failure_phase: None,
+                    commit: None,
                 },
                 result_slot: None,
                 pending: None,
@@ -100,6 +103,8 @@ impl Submission {
             results,
             fund,
             failure: OnceLock::new(),
+            commit_claimed: AtomicBool::new(false),
+            commit: OnceLock::new(),
             observed_stage: OnceLock::new(),
             failure_charge: Mutex::new(Some(failure_charge)),
             _permit: permit,
@@ -260,11 +265,7 @@ impl Workspace {
             let revision = state.revision;
             let next_revision = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
             let root = state.overlay.clone().ok_or(WorkspaceError::Io)?;
-            let context = self
-                .inner
-                .branch
-                .clone()
-                .ok_or(WorkspaceError::Unsupported)?;
+            let context = state.branch.clone().ok_or(WorkspaceError::Unsupported)?;
             let completion = state.completion.as_ref().ok_or(WorkspaceError::Io)?;
             if completion.generation != generation || completion.bytes != ESCROW {
                 return Err(WorkspaceError::Io);

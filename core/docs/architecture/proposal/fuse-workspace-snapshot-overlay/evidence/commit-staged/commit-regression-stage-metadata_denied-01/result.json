@@ -1,0 +1,97 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-stage",
+  "case": "metadata_denied",
+  "checks": [
+    {
+      "id": "known-metadata-denial-retains-saved-file-G-and-D1",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "S-10",
+    "S-15",
+    "H-07"
+  ],
+  "requirement_scope": "stage-only subsets; no full Pair 1 completion",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": null,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "Workspace CommitStaged/reconciliation and repeated Commits",
+    "mounted writes",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound"
+  ],
+  "source": "0b2c729bdb3f026f12beb667ccdc15c52853280f",
+  "product_inputs_sha256": "31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89",
+  "driver_sha256": "af1647e06c84ab172ca501848022782e38a496b12e29e46fda3e3448554035f0",
+  "test_source_sha256": "1c449dc68a2bf69cf6271ecb4409038c2ed0965f30b583baa707a9547a198e95",
+  "entrypoint_sha256": "af1647e06c84ab172ca501848022782e38a496b12e29e46fda3e3448554035f0",
+  "helper_source_sha256": "ce6c7667b4cee3530953a1e1a1d6bb7b359f1d18fdea2f37ef0e69e70b34b5e9",
+  "test_binary_sha256": "0ff4440c37c1dc54746fdf0429f474392832d5d979ad78043b94abf98956d5c3",
+  "binaries": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "651a21a13ced522a2366f8b7adbc88e494fa1f4932787ea8dea794ef3a7875b3",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "922ace202173",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence",
+    "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/0ff4440c37c1dc54746fdf0429f474392832d5d979ad78043b94abf98956d5c3/stage-test"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/commit-regression-stage-metadata_denied-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": [
+      {
+        "pid": 33229,
+        "kind": "measurement",
+        "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+      },
+      {
+        "pid": 33232,
+        "kind": "measurement",
+        "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+      }
+    ]
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+    "receipt_sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+    "closed_store_sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "root_serial": 1,
+    "file_serial": 2,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::stage_metadata_denied",
+  "test_exit": 0,
+  "observations": [
+    "STAGE_FAILURE StageFailure { generation: 1, phase: MetadataSave, disposition: KnownBeforeStage, cause: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None }), observed_stage: None, known_stage: None, source_failure: None, pending: Some(InodeSaveObservation { serial: 2, revision: 1, length: 67108864, content: [156, 144, 130, 27, 253, 191, 178, 238, 187, 158, 48, 90, 168, 213, 175, 30, 239, 38, 121, 215, 58, 52, 95, 168, 160, 89, 128, 223, 202, 30, 11, 113], metadata: None }) }"
+  ],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 0.823190583003452
+}

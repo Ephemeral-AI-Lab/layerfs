@@ -226,23 +226,61 @@ impl Arena {
         self.validate_file(&file, expected, phase)?;
         Ok(file)
     }
-    fn reserve_ledger_identity(&self) -> Result<(), WorkspaceError> {
+    fn reserve_ledger_identity(&self, candidate: &RootOwner) -> Result<(), WorkspaceError> {
         let host = self.host()?;
+        let capacity = {
+            let s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            if s.ledger_identities.len() < s.ledger_identities.capacity() {
+                return Ok(());
+            }
+            let capacity = s
+                .ledger_identities
+                .capacity()
+                .saturating_mul(2)
+                .clamp(1, 1058);
+            if capacity <= s.ledger_identities.len() {
+                return Err(WorkspaceError::Capacity);
+            }
+            capacity
+        };
+        let prepared = candidate
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .ledger_table
+            .take();
+        let mut table = match prepared {
+            Some(mut table) => {
+                table.identities.shrink_to(capacity);
+                if table.identities.capacity() != capacity {
+                    candidate
+                        .state
+                        .lock()
+                        .map_err(|_| WorkspaceError::Io)?
+                        .ledger_table = Some(table);
+                    return Err(WorkspaceError::Capacity);
+                }
+                resize_memory(&mut table.charge, capacity * 16)?;
+                table
+            }
+            None if candidate.allowance == 64 * 4096 => return Err(WorkspaceError::Capacity),
+            None => LedgerTable {
+                charge: host.memory(capacity * 16)?,
+                identities: super::metadata_index::vector(capacity)?,
+            },
+        };
         let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        if s.ledger_identities.len() < s.ledger_identities.capacity() {
-            return Ok(());
+        let mut charge = self.ledger_charge.lock().map_err(|_| WorkspaceError::Io)?;
+        if table.identities.capacity() < s.ledger_identities.len() + 1 {
+            return Err(WorkspaceError::Io);
         }
-        let capacity = s
-            .ledger_identities
-            .capacity()
-            .saturating_mul(2)
-            .clamp(1, 1058);
-        let mut charge = host.memory(capacity * 16)?;
-        let mut identities = super::metadata_index::vector(capacity)?;
-        resize_memory(&mut charge, identities.capacity() * 16)?;
-        identities.append(&mut s.ledger_identities);
-        drop(std::mem::replace(&mut s.ledger_identities, identities));
-        *self.ledger_charge.lock().map_err(|_| WorkspaceError::Io)? = charge;
+        table.identities.append(&mut s.ledger_identities);
+        let old = std::mem::replace(&mut s.ledger_identities, table.identities);
+        let old_charge = std::mem::replace(&mut *charge, table.charge);
+        drop(charge);
+        drop(s);
+        drop(old);
+        drop(old_charge);
         Ok(())
     }
     pub fn read_owner(
@@ -352,25 +390,37 @@ impl Arena {
                 .slot_pending = Some(r);
             return Ok(r);
         }
-        let slot = self.state.lock().map_err(|_| WorkspaceError::Io)?.next;
-        if slot > 65536 {
-            return Err(WorkspaceError::Capacity);
-        }
-        host.slots
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
-                (count < 65536).then_some(count + 1)
-            })
-            .map_err(|_| WorkspaceError::Capacity)?;
-        self.state.lock().map_err(|_| WorkspaceError::Io)?.next = slot + 1;
-        candidate
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .slot_pending = Some(PageRef { slot, epoch: 1 });
+        let slot = {
+            let mut reserved = candidate.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let mut arena = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let slot = arena.next;
+            if slot > 65536 {
+                return Err(WorkspaceError::Capacity);
+            }
+            if reserved.slot_credits > 0 {
+                arena.reserved_slots = arena
+                    .reserved_slots
+                    .checked_sub(1)
+                    .ok_or(WorkspaceError::Io)?;
+                reserved.slot_credits -= 1;
+            } else {
+                if slot as usize + arena.reserved_slots > 65536 {
+                    return Err(WorkspaceError::Capacity);
+                }
+                host.slots
+                    .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                        (count < 65536).then_some(count + 1)
+                    })
+                    .map_err(|_| WorkspaceError::Capacity)?;
+            }
+            arena.next = slot + 1;
+            reserved.slot_pending = Some(PageRef { slot, epoch: 1 });
+            slot
+        };
         let index = (slot - 1) / RECORDS;
         let ledgers = self.state.lock().map_err(|_| WorkspaceError::Io)?.ledgers;
         if index == ledgers {
-            self.reserve_ledger_identity()?;
+            self.reserve_ledger_identity(candidate)?;
             window.0[..PAGE].fill(0);
             window.0[..8].copy_from_slice(b"LFSWOWN1");
             window.0[8..40].copy_from_slice(&self.directory.incarnation);
@@ -536,9 +586,11 @@ impl Arena {
         Ok(())
     }
     pub fn close(&self, window: &mut Window, deadline: Instant) -> Result<(), WorkspaceError> {
-        if self.state.lock().map_err(|_| WorkspaceError::Io)?.pages != 0 {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.pages != 0 || state.reserved_slots != 0 {
             return Err(WorkspaceError::Busy);
         }
+        drop(state);
         loop {
             clock(deadline).map_err(|error| self.failure(BackingPhase::Cleanup, error.kind()))?;
             let count = self.state.lock().map_err(|_| WorkspaceError::Io)?.ledgers;
@@ -587,11 +639,7 @@ impl RootOwner {
         WorkspaceError::Backing(BackingFailure {
             phase,
             payload: 0,
-            declared_bytes: if self.fund.is_some() {
-                8 * 4096
-            } else {
-                CANDIDATE_BYTES
-            },
+            declared_bytes: self.allowance,
             completed_bytes: s.temporary.len() as u64 * PAGE as u64,
             created_segments: s.temporary.len() as u32
                 + u32::from(s.pending.as_ref().is_some_and(|p| p.identity.is_some())),

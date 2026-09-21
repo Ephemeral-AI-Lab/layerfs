@@ -9,3 +9,5 @@ pub(crate) mod payload;
 pub(crate) mod reader;
 pub(crate) mod reclaim;
 pub(crate) mod segments;
+
+mod metadata_build;

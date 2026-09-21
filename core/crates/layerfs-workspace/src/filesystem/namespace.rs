@@ -104,7 +104,7 @@ impl Workspace {
     ) -> Result<NodeAttributes, WorkspaceError> {
         let deadline = Self::callback_deadline(deadline);
         let _operation = self.begin(true, deadline)?;
-        let path = {
+        let (path, base, baseline, revision, root) = {
             let state = self.state()?;
             if scope == ReferenceScope::Projection && !state.mounted {
                 return Err(WorkspaceError::Busy);
@@ -114,11 +114,17 @@ impl Workspace {
                 return Err(WorkspaceError::NotDirectory);
             }
             check_access(parent.attr, self.inner.root.uid, 1)?;
-            child_path(parent.path(), name)?
+            (
+                child_path(parent.path(), name)?,
+                state.base,
+                state.baseline,
+                state.revision,
+                state.overlay.clone(),
+            )
         };
         let response = self.call(
             Operation::Inspect {
-                root: self.inner.base,
+                root: base,
                 query: Inspect::Attributes { path: path.clone() },
             },
             0,
@@ -127,13 +133,9 @@ impl Workspace {
         )?;
         let (original, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
-        let (revision, root) = {
-            let state = self.state()?;
-            (state.revision, state.overlay.clone())
-        };
         let attr = self.overlay_attributes(original, root.as_ref(), deadline)?;
         let mut state = self.state()?;
-        if state.revision != revision {
+        if state.revision != revision || state.baseline != baseline {
             return Err(WorkspaceError::Busy);
         }
         if let Some(node) = state
@@ -141,9 +143,21 @@ impl Workspace {
             .iter_mut()
             .find(|node| node.attr.serial == attr.serial)
         {
-            if node.original != original || node.content != content || node.metadata != metadata {
+            if node.baseline == baseline
+                && (node.original != original
+                    || node.content != content
+                    || node.metadata != metadata)
+            {
                 return Err(WorkspaceError::InvalidInput);
             }
+            if node.attr.kind != original.kind || node.attr.references != original.references {
+                return Err(WorkspaceError::InvalidInput);
+            }
+            node.original = original;
+            node.content = content;
+            node.metadata = metadata;
+            node.baseline = baseline;
+            node.attr = attr;
             let references = node.references(scope);
             *references = references.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         } else {
@@ -152,6 +166,7 @@ impl Workspace {
             }
             let mut node = Node::new(original, content, metadata, &path, parent);
             node.attr = attr;
+            node.baseline = baseline;
             *node.references(scope) = 1;
             state.nodes.push(node);
         }

@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_lowering ... STAGE_CHECK normalized-splice-lowering-and-streamed-exact-input PASS
+STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 3, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 1, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([154, 70, 4, 182, 94, 41, 25, 254, 234, 64, 222, 210, 245, 215, 66, 153, 109, 178, 65, 202, 36, 130, 215, 127, 93, 111, 214, 16, 188, 134, 100, 218]), failure: None, failure_phase: None, commit: None }), generation: 2, revision: 4, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2034682 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 49152, reserved_bytes: 847872, payloads: 3, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 7, reusable_pages: 0, reserved_slots: 0, roots: 5, external_roots: 3, allocated_bytes: 32768, reserved_bytes: 847872, working_bytes: 47792, accounting_complete: true, admission_stopped: false }
+STAGE_CHECK exact-stage-and-retained-submission PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.11s
+

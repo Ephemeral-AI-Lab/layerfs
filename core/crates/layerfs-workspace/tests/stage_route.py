@@ -16,6 +16,8 @@ import re
 import select
 import shutil
 import signal
+import socket
+import threading
 import struct
 import subprocess
 import sys
@@ -57,6 +59,50 @@ REQUIREMENTS = {
     'unknown_save': ['S-10', 'S-15', 'H-07', 'H-09'],
     'metadata_denied': ['S-10', 'S-15', 'H-07'],
 }
+
+
+TEST_SOURCE = Path(__file__).with_name('stage.rs')
+ENTRY_SOURCE = Path(__file__)
+TEST_PREFIX = 'stage_'
+TEST_MARKER = 'STAGE_CHECK'
+MODE = 'functional-workspace-stage'
+REQUIREMENT_SCOPE = 'stage-only subsets; no full Pair 1 completion'
+LIMIT_CASES = ('completion_failure',)
+DENIED_COMMIT_CASE = None
+PROXY_CASE = None
+NOT_RUN = ['Workspace CommitStaged/reconciliation and repeated Commits', 'mounted writes',
+           'namespace mutations and npm', 'R6', 'hard RSS/cgroup bound']
+
+def lost_result_proxy(port):
+    """Reuse daemon/tests/docker_faults.py's opaque native result-loss pattern."""
+    listener = socket.socket(); listener.bind(('0.0.0.0', 0)); listener.listen(1); listener.settimeout(10)
+    address = listener.getsockname()[1]; result = {}; uploads = []
+    def exact(stream, count):
+        data = bytearray()
+        while len(data) < count:
+            part = stream.recv(count-len(data))
+            if not part: raise EOFError('native frame ended early')
+            data.extend(part)
+        return bytes(data)
+    def relay():
+        try:
+            with listener.accept()[0] as client, socket.create_connection(('127.0.0.1', port), timeout=5) as service:
+                client.settimeout(5)
+                def upload():
+                    try:
+                        while chunk := client.recv(16384): service.sendall(chunk)
+                    except OSError: pass
+                thread = threading.Thread(target=upload, daemon=True); thread.start(); uploads.append(thread)
+                for index in range(3):
+                    header = exact(service, 4); length = struct.unpack('>I', header)[0]; assert length <= 32804
+                    encrypted = exact(service, length)
+                    if index < 2: client.sendall(header + encrypted)
+                    else: result['withheld_ciphertext_bytes'] = length
+                client.shutdown(socket.SHUT_RDWR); service.shutdown(socket.SHUT_RDWR)
+        except BaseException as error: result['error'] = repr(error)
+        finally: listener.close()
+    controller = threading.Thread(target=relay, daemon=True); controller.start()
+    return address, controller, uploads, result
 
 
 def sha(path):
@@ -118,6 +164,7 @@ def execute(args, report, started):
                                'history': 'fresh live producer; no restarted write authority', 'cache_claim': None}
     server_key, client_key = os.urandom(32).hex(), os.urandom(32).hex()
     server_public, client_public = route.public_key(server_key), route.public_key(client_key)
+    denied_key = os.urandom(32).hex() if args.case == DENIED_COMMIT_CASE else None
     grant = 127 if args.case == 'metadata_denied' else 255
     env = os.environ.copy()
     env.update(LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=f'1,{client_public},{int(time.time())+3600},{grant}',
@@ -125,10 +172,12 @@ def execute(args, report, started):
                LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
                LAYERFS_HISTORY_BINDING='pair1-stage', LAYERFS_HISTORY_INCARNATION='1',
                LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
+    if denied_key:
+        env['LAYERFS_PEERS'] += f';2,{route.public_key(denied_key)},{int(time.time())+3600},63'
     service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-stage-' + uuid.uuid4().hex[:16]; volume = name + '-data'
-    made_volume = created = stopped = killed = False; readiness = ''; child = None
+    made_volume = created = stopped = killed = False; readiness = ''; child = None; proxy = None
     try:
         readiness = mounted.line_until(service, timeout=min(10, remaining())); assert 'ready' in readiness, readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
@@ -136,7 +185,7 @@ def execute(args, report, started):
         command(['docker', 'volume', 'create', volume]); made_volume = True
         command(['docker', 'run', '-d', '--privileged', '--name', name,
                  '--add-host', 'host.docker.internal:host-gateway',
-                 '--mount', f'type=bind,src={ROOT},dst=/work,readonly',
+                 '--mount', f'type=bind,src={args.test_binary.parent},dst=/runner,readonly',
                  '--mount', f'type=volume,src={volume},dst=/stage', args.image, 'sleep', 'infinity']); created = True
         command(['docker', 'exec', name, 'chmod', '700', '/stage'])
         report['kernel'] = command(['docker', 'exec', name, 'uname', '-srmo']).stdout.strip()
@@ -146,13 +195,20 @@ def execute(args, report, started):
                       '-e', 'LAYERFS_PRIVATE_KEY', '-e', 'LAYERFS_SERVER_KEY',
                       '-e', f'LAYERFS_STAGE_BRANCH={report["fixture"]["branch"]}',
                       '-e', 'LAYERFS_STAGE_TEST_ROOT=/stage', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', name,
-                      '/work/' + str(args.test_binary.relative_to(ROOT)), '--ignored', '--nocapture', '--test-threads=1',
-                      f'linux::stage_{args.case}', '--exact']
-        if args.case == 'completion_failure':
+                      '/runner/' + args.test_binary.name, '--ignored', '--nocapture', '--test-threads=1',
+                      f'linux::{TEST_PREFIX}{args.case}', '--exact']
+        if args.case in LIMIT_CASES:
             binary_at = invocation.index(name) + 1
             invocation[binary_at:binary_at] = ['sh', '-c', 'trap "" XFSZ; exec "$@"', 'sh']
-        report['test_selection'] = f'linux::stage_{args.case}'
+        report['test_selection'] = f'linux::{TEST_PREFIX}{args.case}'
         child_env = os.environ.copy(); child_env.update(LAYERFS_PRIVATE_KEY=client_key, LAYERFS_SERVER_KEY=server_public)
+        if denied_key:
+            child_env['LAYERFS_COMMIT_PRIVATE_KEY'] = denied_key
+            invocation[3:3] = ['-e', 'LAYERFS_COMMIT_PRIVATE_KEY']
+        if args.case == PROXY_CASE:
+            proxy = lost_result_proxy(port)
+            invocation[3:3] = ['-e', f'LAYERFS_COMMIT_ENDPOINT=host.docker.internal:{proxy[0]}']
+
         work = isolation.concurrent_work()
         for item in work:
             item['command'] = re.sub(r'(?i)([a-z_]*(?:key|secret|token|password)[a-z_]*=)[^\s]+', r'\1<redacted>', item['command'])
@@ -210,8 +266,18 @@ def execute(args, report, started):
             child.stdin.close(); child.wait(timeout=remaining()); report['test_exit'] = child.returncode
         text = output.decode(errors='replace')
         for check in report['checks']:
-            if f'STAGE_CHECK {check["id"]} PASS' in text: check['status'] = 'PASS'
-        report['observations'] = [line for line in text.splitlines() if line.startswith(('STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM '))]
+            if f'{TEST_MARKER} {check["id"]} PASS' in text: check['status'] = 'PASS'
+        report['observations'] = []
+        for line in text.splitlines():
+            for marker in ('STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
+                if marker in line:
+                    report['observations'].append(line[line.index(marker):]); break
+        if proxy:
+            proxy[1].join(timeout=min(5, remaining()))
+            for thread in proxy[2]: thread.join(timeout=min(5, remaining()))
+            report['native_result_loss'] = proxy[3] | {'scope': 'external encrypted result withheld; later queries are separate observations'}
+            assert not proxy[1].is_alive() and all(not thread.is_alive() for thread in proxy[2])
+            assert 'error' not in proxy[3] and proxy[3].get('withheld_ciphertext_bytes', 0) > 0
         assert child.returncode == 0 and all(check['status'] == 'PASS' for check in report['checks'])
         if save_started: assert report['native_save_observation']['live_progress_before_resume_or_loss']
         command(['docker', 'rm', '-f', name]); created = False
@@ -249,12 +315,12 @@ def main():
     for name in ('fixture', 'binaries', 'test_binary', 'lock_observer', 'output'):
         if getattr(args, name): setattr(args, name, getattr(args, name).resolve())
     route.BIN = args.binaries; args.output.mkdir(parents=True, exist_ok=False)
-    report = {'status': 'FAIL', 'mode': 'functional-workspace-stage', 'case': args.case,
+    report = {'status': 'FAIL', 'mode': MODE, 'case': args.case,
               'checks': [{'id': key, 'status': 'NOT_RUN'} for key in CASES[args.case]],
-              'packet_requirement_ids': REQUIREMENTS[args.case], 'requirement_scope': 'stage-only subsets; no full Pair 1 completion',
-              'hard_budget_seconds': 60, 'stage_deadline_seconds': 25 if args.case == 'frontier' else 10, 'performance_claim': False, 'cache_claim': None,
-              'not_run': ['Workspace CommitStaged/reconciliation and repeated Commits', 'mounted writes',
-                          'namespace mutations and npm', 'R6', 'hard RSS/cgroup bound']}
+              'packet_requirement_ids': REQUIREMENTS[args.case], 'requirement_scope': REQUIREMENT_SCOPE,
+              'hard_budget_seconds': 60, 'stage_deadline_seconds': 25 if args.case == 'frontier' else 10,
+              'commit_deadline_seconds': 10 if MODE == 'functional-workspace-commit-staged' else None, 'performance_claim': False, 'cache_claim': None,
+              'not_run': NOT_RUN}
     started = time.monotonic()
     def expired(_signal, _frame):
         raise TimeoutError('complete functional selection exceeded 60 seconds')
@@ -262,7 +328,8 @@ def main():
     try:
         report.update(source=payload.command(['git', 'rev-parse', 'HEAD'], cwd=ROOT).stdout.strip(),
                       product_inputs_sha256=payload.product_inputs(), driver_sha256=sha(Path(__file__)),
-                      test_source_sha256=sha(Path(__file__).with_name('stage.rs')),
+                      test_source_sha256=sha(TEST_SOURCE), entrypoint_sha256=sha(ENTRY_SOURCE),
+                      helper_source_sha256=sha(Path(__file__).parent / 'support/native_workspace.rs'),
                       test_binary_sha256=sha(args.test_binary),
                       binaries={name: sha(route.BIN / name) for name in ('layerfs-service', 'layerfs-daemon', 'examples/public_key')},
                       image=payload.command(['docker', 'image', 'inspect', args.image, '--format', '{{.Id}}']).stdout.strip())

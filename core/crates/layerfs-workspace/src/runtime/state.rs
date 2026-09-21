@@ -26,9 +26,7 @@ pub(crate) struct Inner {
     pub id: String,
     pub incarnation: Root,
     pub store: u32,
-    pub base: Root,
     pub access: WorkspaceAccess,
-    pub branch: Option<Arc<layerfs_bridge::contract::BranchSnapshotWire>>,
     pub arena: Option<Arc<crate::backing::metadata::Arena>>,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
@@ -38,6 +36,9 @@ pub(crate) struct Inner {
     pub _charge: Charge,
 }
 pub(crate) struct State {
+    pub base: Root,
+    pub branch: Option<Arc<BranchContext>>,
+    pub baseline: u64,
     pub nodes: Vec<Node>,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
@@ -57,6 +58,7 @@ pub(crate) struct State {
 pub(crate) struct Node {
     pub attr: NodeAttributes,
     pub original: NodeAttributes,
+    pub baseline: u64,
     pub metadata: Root,
     pub content: Root,
     pub path: [u8; PATH_BYTES],
@@ -99,6 +101,7 @@ impl Node {
         Self {
             attr,
             original: attr,
+            baseline: 1,
             metadata,
             content,
             path: stored,
@@ -328,5 +331,30 @@ impl Drop for OperationGuard {
                 .expect("shrinking a call reservation cannot fail");
             self.workspace.host.remote.store(false, Ordering::Release);
         }
+    }
+}
+
+/// Charged immutable Branch context; selected captures keep their exact view.
+pub(crate) struct BranchContext {
+    pub snapshot: layerfs_bridge::contract::BranchSnapshotWire,
+    pub _charge: Charge,
+}
+impl std::ops::Deref for BranchContext {
+    type Target = layerfs_bridge::contract::BranchSnapshotWire;
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
+}
+impl BranchContext {
+    pub fn new(
+        snapshot: layerfs_bridge::contract::BranchSnapshotWire,
+        budget: &Arc<crate::backing::budget::Budget>,
+    ) -> Result<Self, WorkspaceError> {
+        let charge =
+            budget.reserve(std::mem::size_of::<Self>() + snapshot.branch.name.capacity() + 64)?;
+        Ok(Self {
+            snapshot,
+            _charge: charge,
+        })
     }
 }

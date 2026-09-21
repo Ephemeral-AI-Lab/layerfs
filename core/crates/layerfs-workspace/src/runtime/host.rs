@@ -330,9 +330,7 @@ impl WorkspaceHost {
                 id: options.id.clone(),
                 incarnation: options.incarnation,
                 store: options.store,
-                base,
                 access: options.access,
-                branch: branch_snapshot.map(Arc::new),
                 arena,
                 root: attr,
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
@@ -340,6 +338,14 @@ impl WorkspaceHost {
                 stopping: AtomicBool::new(false),
                 _charge: charge,
                 state: Mutex::new(State {
+                    base,
+                    branch: branch_snapshot
+                        .map(|snapshot| {
+                            super::state::BranchContext::new(snapshot, &self.inner.budget)
+                                .map(Arc::new)
+                        })
+                        .transpose()?,
+                    baseline: 1,
                     nodes,
                     overlay: None,
                     completion: None,

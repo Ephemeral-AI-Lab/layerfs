@@ -1,0 +1,12 @@
+
+running 1 test
+test linux::local_range_edit_semantics ... LOCAL_EDIT_CHECK explicit-unmounted-access PASS
+LOCAL_EDIT_CHECK atomic-bytes-attributes-and-hardlinks PASS
+LOCAL_EDIT_CHECK current-coordinate-overlap-insert-delete PASS
+LOCAL_EDIT_CHECK node-forget-retains-dirty-index-and-branch PASS
+LOCAL_EDIT_RESOURCE semantic-end workspace=WorkspaceStatus { submission: None, generation: 1, revision: 4, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 1989432 } backing=BackingStatus { quota_bytes: 134217728, allocated_bytes: 36864, reserved_bytes: 851968, payloads: 3, retained_payloads: 3, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } metadata=MetadataStatus { allocated_pages: 2, reusable_pages: 6, reserved_slots: 0, roots: 1, external_roots: 1, allocated_bytes: 12288, reserved_bytes: 851968, working_bytes: 2544, accounting_complete: true, admission_stopped: false } native_file_allocated=36864 process_fds_at_boundary=6 fd_scope=includes_proc_enumeration_not_peak
+LOCAL_EDIT_CHECK dirty-close-preserves-owned-state PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.91s
+

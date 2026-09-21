@@ -369,3 +369,18 @@ allocation and is an explicit disk-admission increase, with unchanged RAM/window
 FD limits. The real native save and failure proofs, narrower scope and pending
 CommitStaged/reconciliation are recorded in 16. FUSE's error conversion accepts
 the new Stage failure as EIO; no writable callback or daemon edit control is added.
+
+
+The next public-operation round, based on
+`0b2c729bdb3f026f12beb667ccdc15c52853280f`, adds
+[Workspace CommitStaged and reconciliation](proposal/fuse-workspace-snapshot-overlay/17-commit-staged.md)
+through the existing C5 command. It reserves 64 completion-fund pages, 26 metadata
+slot credits and ledger replacement capacity before remote publication. A bounded
+streaming builder compacts only the current D1 frontier and reuses piece trees;
+the exact captured-version/result association governs rebasing. Local state owns
+a changing canonical base/Branch context and baseline epoch, allowing lazy
+canonical cache refresh while reads retain selected roots. A validated own result
+survives later local failure; unknown results remain unknown. Exact staged replies,
+local pre-admission, failure retention, repeated commits and current-source
+regressions are recorded in 17. FUSE maps Commit errors to EIO; no new wire opcode,
+service algorithm, writable callback or daemon Commit control is added here.
